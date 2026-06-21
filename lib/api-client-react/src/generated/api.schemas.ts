@@ -979,6 +979,139 @@ export interface AtelierAccountTeamMember {
   createdAt?: string;
 }
 
+export type AtelierAccountActionStatus =
+  (typeof AtelierAccountActionStatus)[keyof typeof AtelierAccountActionStatus];
+
+export const AtelierAccountActionStatus = {
+  open: "open",
+  in_progress: "in_progress",
+  done: "done",
+  cancelled: "cancelled",
+} as const;
+
+export type AtelierAccountActionPriority =
+  (typeof AtelierAccountActionPriority)[keyof typeof AtelierAccountActionPriority];
+
+export const AtelierAccountActionPriority = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type AtelierAccountActionSource =
+  (typeof AtelierAccountActionSource)[keyof typeof AtelierAccountActionSource];
+
+export const AtelierAccountActionSource = {
+  manual: "manual",
+  promoted: "promoted",
+} as const;
+
+export interface AtelierAccountAction {
+  id: string;
+  accountId: string;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  ownerInitials?: string | null;
+  status: AtelierAccountActionStatus;
+  priority: AtelierAccountActionPriority;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  linkedObjectiveId?: string | null;
+  /** @nullable */
+  linkedObjectiveText?: string | null;
+  /** @nullable */
+  linkedPlay?: string | null;
+  source: AtelierAccountActionSource;
+  /** @nullable */
+  sourceRef?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AtelierAccountRiskKind =
+  (typeof AtelierAccountRiskKind)[keyof typeof AtelierAccountRiskKind];
+
+export const AtelierAccountRiskKind = {
+  risk: "risk",
+  assumption: "assumption",
+  issue: "issue",
+  dependency: "dependency",
+} as const;
+
+export type AtelierAccountRiskSeverity =
+  (typeof AtelierAccountRiskSeverity)[keyof typeof AtelierAccountRiskSeverity];
+
+export const AtelierAccountRiskSeverity = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierAccountRiskStatus =
+  (typeof AtelierAccountRiskStatus)[keyof typeof AtelierAccountRiskStatus];
+
+export const AtelierAccountRiskStatus = {
+  open: "open",
+  mitigating: "mitigating",
+  closed: "closed",
+} as const;
+
+export interface AtelierAccountRisk {
+  id: string;
+  accountId: string;
+  kind: AtelierAccountRiskKind;
+  severity: AtelierAccountRiskSeverity;
+  /** @nullable */
+  ownerId?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  ownerInitials?: string | null;
+  status: AtelierAccountRiskStatus;
+  /** @nullable */
+  dueDate?: string | null;
+  description: string;
+  /** @nullable */
+  mitigation?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AtelierAccountGoalStatus =
+  (typeof AtelierAccountGoalStatus)[keyof typeof AtelierAccountGoalStatus];
+
+export const AtelierAccountGoalStatus = {
+  on_track: "on_track",
+  at_risk: "at_risk",
+  off_track: "off_track",
+  achieved: "achieved",
+} as const;
+
+export interface AtelierAccountGoalProgress {
+  objectiveId: string;
+  text: string;
+  /** @nullable */
+  targetValue?: string | null;
+  /** @nullable */
+  targetDate?: string | null;
+  /** @nullable */
+  currentValue?: string | null;
+  status: AtelierAccountGoalStatus;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
 export interface AtelierAccountWorkspace {
   account: AtelierAccountWorkspaceAccount;
   contacts: AtelierContact[];
@@ -988,6 +1121,9 @@ export interface AtelierAccountWorkspace {
   audit: AtelierAuditEventLite[];
   insights?: AtelierAccountInsight[];
   accountTeam?: AtelierAccountTeamMember[];
+  actionPlan?: AtelierAccountAction[];
+  riskRegister?: AtelierAccountRisk[];
+  goalProgress?: AtelierAccountGoalProgress[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
 }
@@ -1167,6 +1303,83 @@ export interface AtelierAddAccountTeamMemberInput {
 
 export interface AtelierUpdateAccountTeamMemberInput {
   roleOnAccount: AtelierAccountTeamRole;
+}
+
+export type AtelierCreateAccountActionInputSource =
+  (typeof AtelierCreateAccountActionInputSource)[keyof typeof AtelierCreateAccountActionInputSource];
+
+export const AtelierCreateAccountActionInputSource = {
+  manual: "manual",
+  promoted: "promoted",
+} as const;
+
+export interface AtelierCreateAccountActionInput {
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  status?: AtelierAccountActionStatus;
+  priority?: AtelierAccountActionPriority;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  linkedObjectiveId?: string | null;
+  /** @nullable */
+  linkedPlay?: string | null;
+  source?: AtelierCreateAccountActionInputSource;
+  /** @nullable */
+  sourceRef?: string | null;
+}
+
+export interface AtelierUpdateAccountActionInput {
+  title?: string;
+  /** @nullable */
+  detail?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  status?: AtelierAccountActionStatus;
+  priority?: AtelierAccountActionPriority;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  linkedObjectiveId?: string | null;
+  /** @nullable */
+  linkedPlay?: string | null;
+}
+
+export interface AtelierCreateAccountRiskInput {
+  description: string;
+  kind?: AtelierAccountRiskKind;
+  severity?: AtelierAccountRiskSeverity;
+  /** @nullable */
+  ownerId?: string | null;
+  status?: AtelierAccountRiskStatus;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  mitigation?: string | null;
+}
+
+export interface AtelierUpdateAccountRiskInput {
+  description?: string;
+  kind?: AtelierAccountRiskKind;
+  severity?: AtelierAccountRiskSeverity;
+  /** @nullable */
+  ownerId?: string | null;
+  status?: AtelierAccountRiskStatus;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  mitigation?: string | null;
+}
+
+export interface AtelierUpsertAccountGoalProgressInput {
+  /** @nullable */
+  currentValue?: string | null;
+  status?: AtelierAccountGoalStatus;
+  /** @nullable */
+  note?: string | null;
 }
 
 export interface AtelierCartographerRefreshInput {

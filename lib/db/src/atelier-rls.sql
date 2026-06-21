@@ -52,7 +52,12 @@ DECLARE
     'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs',
     -- Task #569 — human account insights + account-team membership.
     -- Org-scoped; per-account visibility is enforced in route logic.
-    'atelier_account_insights','atelier_account_team_members'
+    'atelier_account_insights','atelier_account_team_members',
+    -- Task #571 — account planning & execution layer (action plan, account
+    -- risk register, goal progress). Org-scoped; per-account visibility +
+    -- write gating are enforced in route logic.
+    'atelier_account_actions','atelier_account_risks',
+    'atelier_account_goal_progress'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

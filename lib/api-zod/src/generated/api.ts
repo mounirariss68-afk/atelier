@@ -2861,6 +2861,63 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       }),
     )
     .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   whitespacePreview: zod
     .object({
       accountId: zod.string(),
@@ -3515,6 +3572,63 @@ export const AtelierUpdateAccountResponse = zod.object({
       }),
     )
     .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   whitespacePreview: zod
     .object({
       accountId: zod.string(),
@@ -4063,6 +4177,63 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -5076,6 +5247,63 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       }),
     )
     .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   whitespacePreview: zod
     .object({
       accountId: zod.string(),
@@ -5625,6 +5853,63 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -6186,6 +6471,63 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -6751,6 +7093,63 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       }),
     )
     .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   whitespacePreview: zod
     .object({
       accountId: zod.string(),
@@ -7294,6 +7693,63 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -7849,6 +8305,63 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),
@@ -8409,6 +8922,63 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       }),
     )
     .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   whitespacePreview: zod
     .object({
       accountId: zod.string(),
@@ -8954,6 +9524,4334 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         ]),
         isOwner: zod.boolean(),
         createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Add an action to the account plan (partner/AM, audited)
+ */
+export const AtelierCreateAccountActionParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierCreateAccountActionBody = zod.object({
+  title: zod.string(),
+  detail: zod.string().nullish(),
+  ownerId: zod.string().nullish(),
+  status: zod.enum(["open", "in_progress", "done", "cancelled"]).optional(),
+  priority: zod.enum(["high", "medium", "low"]).optional(),
+  dueDate: zod.string().nullish(),
+  linkedObjectiveId: zod.string().nullish(),
+  linkedPlay: zod.string().nullish(),
+  source: zod.enum(["manual", "promoted"]).optional(),
+  sourceRef: zod.string().nullish(),
+});
+
+export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierCreateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierCreateAccountActionResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierCreateAccountActionResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierCreateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierCreateAccountActionResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierCreateAccountActionResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierCreateAccountActionResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierCreateAccountActionResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierCreateAccountActionResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierCreateAccountActionResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierCreateAccountActionResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierCreateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierCreateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierCreateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierCreateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierCreateAccountActionResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierCreateAccountActionResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierCreateAccountActionResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierCreateAccountActionResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierCreateAccountActionResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Edit an account-plan action (partner/AM, audited)
+ */
+export const AtelierUpdateAccountActionParams = zod.object({
+  accountId: zod.coerce.string(),
+  actionId: zod.coerce.string(),
+});
+
+export const AtelierUpdateAccountActionBody = zod.object({
+  title: zod.string().optional(),
+  detail: zod.string().nullish(),
+  ownerId: zod.string().nullish(),
+  status: zod.enum(["open", "in_progress", "done", "cancelled"]).optional(),
+  priority: zod.enum(["high", "medium", "low"]).optional(),
+  dueDate: zod.string().nullish(),
+  linkedObjectiveId: zod.string().nullish(),
+  linkedPlay: zod.string().nullish(),
+});
+
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierUpdateAccountActionResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierUpdateAccountActionResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierUpdateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierUpdateAccountActionResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierUpdateAccountActionResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierUpdateAccountActionResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierUpdateAccountActionResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierUpdateAccountActionResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierUpdateAccountActionResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpdateAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierUpdateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierUpdateAccountActionResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierUpdateAccountActionResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierUpdateAccountActionResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierUpdateAccountActionResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierUpdateAccountActionResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Delete an account-plan action (partner/AM, audited)
+ */
+export const AtelierDeleteAccountActionParams = zod.object({
+  accountId: zod.coerce.string(),
+  actionId: zod.coerce.string(),
+});
+
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierDeleteAccountActionResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierDeleteAccountActionResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierDeleteAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierDeleteAccountActionResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierDeleteAccountActionResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierDeleteAccountActionResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierDeleteAccountActionResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierDeleteAccountActionResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierDeleteAccountActionResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierDeleteAccountActionResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierDeleteAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierDeleteAccountActionResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierDeleteAccountActionResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierDeleteAccountActionResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierDeleteAccountActionResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierDeleteAccountActionResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Add a risk to the account risk register (partner/AM, audited)
+ */
+export const AtelierCreateAccountRiskParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierCreateAccountRiskBody = zod.object({
+  description: zod.string(),
+  kind: zod.enum(["risk", "assumption", "issue", "dependency"]).optional(),
+  severity: zod.enum(["green", "amber", "red"]).optional(),
+  ownerId: zod.string().nullish(),
+  status: zod.enum(["open", "mitigating", "closed"]).optional(),
+  dueDate: zod.string().nullish(),
+  mitigation: zod.string().nullish(),
+});
+
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierCreateAccountRiskResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierCreateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierCreateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierCreateAccountRiskResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierCreateAccountRiskResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierCreateAccountRiskResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierCreateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierCreateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierCreateAccountRiskResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierCreateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierCreateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierCreateAccountRiskResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierCreateAccountRiskResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierCreateAccountRiskResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierCreateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierCreateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Edit an account risk (partner/AM, audited)
+ */
+export const AtelierUpdateAccountRiskParams = zod.object({
+  accountId: zod.coerce.string(),
+  riskId: zod.coerce.string(),
+});
+
+export const AtelierUpdateAccountRiskBody = zod.object({
+  description: zod.string().optional(),
+  kind: zod.enum(["risk", "assumption", "issue", "dependency"]).optional(),
+  severity: zod.enum(["green", "amber", "red"]).optional(),
+  ownerId: zod.string().nullish(),
+  status: zod.enum(["open", "mitigating", "closed"]).optional(),
+  dueDate: zod.string().nullish(),
+  mitigation: zod.string().nullish(),
+});
+
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierUpdateAccountRiskResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierUpdateAccountRiskResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierUpdateAccountRiskResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierUpdateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierUpdateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierUpdateAccountRiskResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpdateAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierUpdateAccountRiskResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierUpdateAccountRiskResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierUpdateAccountRiskResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierUpdateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierUpdateAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Delete an account risk (partner/AM, audited)
+ */
+export const AtelierDeleteAccountRiskParams = zod.object({
+  accountId: zod.coerce.string(),
+  riskId: zod.coerce.string(),
+});
+
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierDeleteAccountRiskResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierDeleteAccountRiskResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierDeleteAccountRiskResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierDeleteAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierDeleteAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierDeleteAccountRiskResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierDeleteAccountRiskResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(atelierDeleteAccountRiskResponseContactsItemInfluenceScoreMax),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierDeleteAccountRiskResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierDeleteAccountRiskResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierDeleteAccountRiskResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierDeleteAccountRiskResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  whitespacePreview: zod
+    .object({
+      accountId: zod.string(),
+      offerings: zod.array(zod.string()),
+      personas: zod.array(zod.string()),
+      cells: zod.array(
+        zod.object({
+          offering: zod.string(),
+          persona: zod.string(),
+          state: zod.enum(["empty", "identified", "qualified", "won"]),
+          note: zod.string().nullish(),
+          oppId: zod.string().nullish(),
+          rationale: zod.string().nullish(),
+        }),
+      ),
+      priorityMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+  qbrPreview: zod
+    .object({
+      accountId: zod.string(),
+      periodLabel: zod.string(),
+      sections: zod.array(
+        zod.object({
+          heading: zod.string(),
+          body: zod.string(),
+        }),
+      ),
+      riskFlags: zod.array(zod.string()).optional(),
+      nextMoves: zod.array(zod.string()).optional(),
+      generatedAt: zod.string().nullish(),
+    })
+    .optional(),
+});
+
+/**
+ * @summary Upsert progress (current value + status) for a strategy objective (partner/AM, audited)
+ */
+export const AtelierUpsertAccountGoalProgressParams = zod.object({
+  accountId: zod.coerce.string(),
+  objectiveId: zod.coerce.string(),
+});
+
+export const AtelierUpsertAccountGoalProgressBody = zod.object({
+  currentValue: zod.string().nullish(),
+  status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]).optional(),
+  note: zod.string().nullish(),
+});
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax = 120;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesMax = 12;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax = 160;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneTargetServiceLinesMax = 12;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneWinHypothesisMax = 1200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneKeyPlaysItemMax = 400;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneKeyPlaysMax = 12;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemNameMax = 200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemHoldsMax = 600;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierUpsertAccountGoalProgressResponseContactsItemInfluenceScoreMax = 5;
+
+export const atelierUpsertAccountGoalProgressResponseContactsItemRelationshipStrengthMin = 0;
+export const atelierUpsertAccountGoalProgressResponseContactsItemRelationshipStrengthMax = 100;
+
+export const atelierUpsertAccountGoalProgressResponseContactsItemRelationshipTrendItemStrengthMin = 0;
+export const atelierUpsertAccountGoalProgressResponseContactsItemRelationshipTrendItemStrengthMax = 100;
+
+export const AtelierUpsertAccountGoalProgressResponse = zod.object({
+  account: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string(),
+      sector: zod.string(),
+      tier: zod.enum(["A", "B", "C", "D"]),
+      status: zod.enum(["active", "dormant", "archived"]),
+      size: zod.string().nullish(),
+      hqCity: zod.string().nullish(),
+      primaryCurrency: zod.string().optional(),
+      primaryLanguage: zod.string().optional(),
+      partnerOwnerId: zod.string().nullish(),
+      partnerOwnerName: zod.string().nullish(),
+      relationshipStrength: zod.number(),
+      openOpportunityCount: zod.number().optional(),
+      activeEngagementCount: zod.number().optional(),
+      lastTouchAt: zod.string().nullish(),
+      enrichedAt: zod.string().nullish(),
+      pendingUpdateCount: zod.number().optional(),
+      cartographerStatus: zod
+        .union([
+          zod.literal("running"),
+          zod.literal("failed"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+    })
+    .and(
+      zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        notes: zod.string().nullish(),
+        strategicPriorities: zod.array(zod.string()).optional(),
+        strategicPriorityRefs: zod
+          .array(
+            zod.object({
+              text: zod.string(),
+              sourceUrls: zod.array(zod.string()),
+            }),
+          )
+          .optional(),
+        cogniriseHypothesis: zod.string().nullish(),
+        accountStrategy: zod
+          .union([
+            zod.object({
+              objectives: zod
+                .array(
+                  zod.object({
+                    id: zod.string(),
+                    text: zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTextMax,
+                      ),
+                    targetValue: zod
+                      .string()
+                      .max(
+                        atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax,
+                      )
+                      .nullish(),
+                    targetDate: zod
+                      .string()
+                      .max(
+                        atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesItemTargetDateMax,
+                      )
+                      .nullish(),
+                  }),
+                )
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneObjectivesMax,
+                ),
+              targetServiceLines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneTargetServiceLinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneTargetServiceLinesMax,
+                ),
+              winHypothesis: zod
+                .string()
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneWinHypothesisMax,
+                ),
+              keyPlays: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneKeyPlaysItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoAccountStrategyOneKeyPlaysMax,
+                ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        competitors: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemNameMax,
+                ),
+              holds: zod
+                .string()
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemHoldsMax,
+                )
+                .nullish(),
+              displacementAngle: zod
+                .string()
+                .max(
+                  atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemDisplacementAngleMax,
+                )
+                .nullish(),
+            }),
+          )
+          .optional(),
+        researchBrief: zod
+          .union([
+            zod.object({
+              whatsChanging: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              executiveTensions: zod.array(
+                zod.object({
+                  text: zod.string(),
+                  evidence: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              serviceLineFit: zod.array(
+                zod.object({
+                  serviceLine: zod.string(),
+                  signal: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              partnerEcosystem: zod.array(
+                zod.object({
+                  partner: zod.string(),
+                  relationship: zod.string(),
+                  serviceLineGap: zod.string().nullish(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              mandateAngles: zod.array(
+                zod.object({
+                  title: zod.string(),
+                  serviceLines: zod.array(zod.string()),
+                  tension: zod.string(),
+                  whyNow: zod.string(),
+                  entryStakeholder: zod.string(),
+                  sourceUrls: zod.array(zod.string()),
+                }),
+              ),
+              whyNowHypothesis: zod.string(),
+              openQuestions: zod.array(zod.string()),
+              singleMostImportant: zod.string(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        parentAccountId: zod.string().nullish(),
+        parent: zod
+          .union([
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
+        children: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              name: zod.string(),
+              brandName: zod.string().nullish(),
+              tier: zod.enum(["A", "B", "C", "D"]).optional(),
+            }),
+          )
+          .optional(),
+        sourceSignals: zod
+          .array(
+            zod.object({
+              kind: zod.enum(["news", "linkedin", "press", "filing", "manual"]),
+              title: zod.string(),
+              url: zod.string(),
+              summary: zod.string().nullish(),
+              publishedAt: zod.string().nullish(),
+              confidence: zod
+                .union([
+                  zod.literal("green"),
+                  zod.literal("amber"),
+                  zod.literal("red"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+            }),
+          )
+          .optional(),
+        pendingProfileUpdates: zod
+          .array(
+            zod.object({
+              id: zod.string(),
+              proposedBy: zod.string(),
+              proposedAt: zod.string(),
+              field: zod.string(),
+              fromValue: zod.unknown(),
+              toValue: zod.unknown(),
+              rationale: zod.string(),
+              oppId: zod.string().nullish(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              meta: zod.record(zod.string(), zod.unknown()).nullish(),
+              editedAt: zod.string().nullish(),
+              editedBy: zod.string().nullish(),
+              originalToValue: zod.unknown().optional(),
+              decidedAt: zod.string().nullish(),
+              decidedBy: zod.string().nullish(),
+            }),
+          )
+          .optional(),
+      }),
+    ),
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod
+        .union([
+          zod.literal("c_suite"),
+          zod.literal("vp"),
+          zod.literal("director"),
+          zod.literal("manager"),
+          zod.literal("ic"),
+          zod.literal("unknown"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      email: zod.string().nullish(),
+      phone: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
+      buyerPersona: zod.string().nullish(),
+      influenceScore: zod
+        .number()
+        .min(1)
+        .max(
+          atelierUpsertAccountGoalProgressResponseContactsItemInfluenceScoreMax,
+        ),
+      disposition: zod.enum([
+        "champion",
+        "supporter",
+        "neutral",
+        "skeptic",
+        "blocker",
+        "unknown",
+      ]),
+      lastContactAt: zod.string().nullish(),
+      contactOwnerId: zod.string().nullish(),
+      contactOwnerName: zod.string().nullish(),
+      relationshipStrength: zod
+        .number()
+        .min(
+          atelierUpsertAccountGoalProgressResponseContactsItemRelationshipStrengthMin,
+        )
+        .max(
+          atelierUpsertAccountGoalProgressResponseContactsItemRelationshipStrengthMax,
+        )
+        .optional(),
+      nextTouchAt: zod.string().nullish(),
+      relationshipTrend: zod
+        .array(
+          zod.object({
+            at: zod.string().describe("ISO timestamp of the snapshot."),
+            strength: zod
+              .number()
+              .min(
+                atelierUpsertAccountGoalProgressResponseContactsItemRelationshipTrendItemStrengthMin,
+              )
+              .max(
+                atelierUpsertAccountGoalProgressResponseContactsItemRelationshipTrendItemStrengthMax,
+              ),
+            disposition: zod.string().nullish(),
+            note: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      notes: zod.string().nullish(),
+      sourceUrl: zod.string().nullish(),
+      confidence: zod
+        .enum(["verified", "inferred"])
+        .describe(
+          '\"verified\" when at least one citation directly names the\nperson; \"inferred\" when the contact came from a heuristic\n(title pattern, org chart inference) without a direct cite.\n',
+        ),
+    }),
+  ),
+  relationships: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      fromContactId: zod.string(),
+      toContactId: zod.string(),
+      type: zod.enum(["reports_to", "partners_with", "blocks"]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      plmStage: zod.enum([
+        "identify",
+        "shape",
+        "pursue",
+        "mobilize",
+        "deliver",
+        "compound",
+        "won",
+        "lost",
+        "no_go",
+        "closed",
+      ]),
+      dealValueUsd: zod.number(),
+      winProbabilityPct: zod.number().nullish(),
+      leadName: zod.string().nullish(),
+      nextMilestone: zod.string().nullish(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      leadName: zod.string().nullish(),
+      startedAt: zod.string().nullish(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorType: zod.string().optional(),
+      actorLabel: zod.string(),
+      payloadSummary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  insights: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        authorId: zod.string(),
+        authorName: zod.string(),
+        authorInitials: zod.string().nullish(),
+        body: zod.string(),
+        category: zod
+          .union([
+            zod.enum([
+              "relationship",
+              "risk",
+              "competitive",
+              "opportunity",
+              "general",
+            ]),
+            zod.null(),
+          ])
+          .optional(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+        edited: zod.boolean().optional(),
+      }),
+    )
+    .optional(),
+  accountTeam: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        userId: zod.string(),
+        userName: zod.string(),
+        userInitials: zod.string().nullish(),
+        userTitle: zod.string().nullish(),
+        roleOnAccount: zod.enum([
+          "account_manager",
+          "delivery_lead",
+          "partner",
+          "contributor",
+        ]),
+        isOwner: zod.boolean(),
+        createdAt: zod.string().optional(),
+      }),
+    )
+    .optional(),
+  actionPlan: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        title: zod.string(),
+        detail: zod.string().nullish(),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "in_progress", "done", "cancelled"]),
+        priority: zod.enum(["high", "medium", "low"]),
+        dueDate: zod.string().nullish(),
+        linkedObjectiveId: zod.string().nullish(),
+        linkedObjectiveText: zod.string().nullish(),
+        linkedPlay: zod.string().nullish(),
+        source: zod.enum(["manual", "promoted"]),
+        sourceRef: zod.string().nullish(),
+        completedAt: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        accountId: zod.string(),
+        kind: zod.enum(["risk", "assumption", "issue", "dependency"]),
+        severity: zod.enum(["green", "amber", "red"]),
+        ownerId: zod.string().nullish(),
+        ownerName: zod.string().nullish(),
+        ownerInitials: zod.string().nullish(),
+        status: zod.enum(["open", "mitigating", "closed"]),
+        dueDate: zod.string().nullish(),
+        description: zod.string(),
+        mitigation: zod.string().nullish(),
+        createdAt: zod.string(),
+        updatedAt: zod.string(),
+      }),
+    )
+    .optional(),
+  goalProgress: zod
+    .array(
+      zod.object({
+        objectiveId: zod.string(),
+        text: zod.string(),
+        targetValue: zod.string().nullish(),
+        targetDate: zod.string().nullish(),
+        currentValue: zod.string().nullish(),
+        status: zod.enum(["on_track", "at_risk", "off_track", "achieved"]),
+        note: zod.string().nullish(),
+        updatedAt: zod.string().nullish(),
       }),
     )
     .optional(),

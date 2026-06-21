@@ -129,6 +129,9 @@ async function main(): Promise<void> {
     atelierDeliverables,
     atelierRenewal,
     atelierAuditEvents,
+    atelierAccountActions,
+    atelierAccountRisks,
+    atelierAccountGoalProgress,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -140,6 +143,9 @@ async function main(): Promise<void> {
     atelierDeliverables: any;
     atelierRenewal: any;
     atelierAuditEvents: any;
+    atelierAccountActions: any;
+    atelierAccountRisks: any;
+    atelierAccountGoalProgress: any;
   };
 
   const START = new Date();
@@ -150,6 +156,9 @@ async function main(): Promise<void> {
     deliverables: new Set<string>(),
     contacts: new Set<string>(),
     renewals: new Set<string>(),
+    accountActions: new Set<string>(),
+    accountRisks: new Set<string>(),
+    accountGoalProgress: new Set<string>(),
   };
 
   // Boot an ephemeral server on a random port.
@@ -1083,9 +1092,173 @@ async function main(): Promise<void> {
         `status=${scopedWs.status} health=${JSON.stringify(scopedWs.body?.account?.health)?.slice(0, 120)}`,
       );
     }
+
+    // =====================================================================
+    group("REST \u00b7 Account plan & execution (Task #571)");
+    // Action plan + risk register + goal progress CRUD, the partner-tier
+    // management gate, NBA promotion, and the QBR PDF export. acc_tasama is
+    // in scope for the founding partner; the consultant persona is a non-
+    // owner employee → must be denied write access by canManageAccountPlan.
+    // =====================================================================
+    {
+      // ---- workspace embeds the three plan collections ----
+      const ws = await api("GET", `/accounts/${ACC}`, PERSONA.fp);
+      check(
+        "GET /accounts/:id (fp) \u2192 embeds actionPlan/riskRegister/goalProgress arrays",
+        ws.status === 200 &&
+          Array.isArray(ws.body?.actionPlan) &&
+          Array.isArray(ws.body?.riskRegister) &&
+          Array.isArray(ws.body?.goalProgress),
+        `status=${ws.status}`,
+      );
+
+      // ---- create an action (partner) ----
+      const actTitle = uniq("Action");
+      const createAct = await api("POST", `/accounts/${ACC}/actions`, PERSONA.fp, {
+        title: actTitle,
+        priority: "high",
+      });
+      const actionId = createAct.body?.actionPlan?.find?.(
+        (a: any) => a.title === actTitle,
+      )?.id;
+      if (actionId) created.accountActions.add(actionId);
+      check(
+        "POST /accounts/:id/actions (fp) \u2192 200 + action persisted",
+        createAct.status === 200 && !!actionId,
+        `status=${createAct.status}`,
+      );
+
+      // ---- create-action write gate: consultant (non-owner) \u2192 403 ----
+      const consultantAct = await api("POST", `/accounts/${ACC}/actions`, PERSONA.consultant, {
+        title: uniq("Forbidden"),
+      });
+      check(
+        "POST /accounts/:id/actions (consultant) \u2192 403 (manage gate)",
+        consultantAct.status === 403,
+        `status=${consultantAct.status}`,
+      );
+
+      // ---- update the action status ----
+      if (actionId) {
+        const patchAct = await api("PATCH", `/accounts/${ACC}/actions/${actionId}`, PERSONA.fp, {
+          status: "done",
+        });
+        const persisted = patchAct.body?.actionPlan?.find?.((a: any) => a.id === actionId);
+        check(
+          "PATCH /accounts/:id/actions/:actionId (fp) \u2192 status persisted",
+          patchAct.status === 200 && persisted?.status === "done",
+          `status=${patchAct.status} got=${persisted?.status}`,
+        );
+      }
+
+      // ---- promote an NBA into an owned action (source=promoted) ----
+      const promote = await api("POST", `/accounts/${ACC}/actions`, PERSONA.fp, {
+        title: uniq("Promoted"),
+        source: "promoted",
+        sourceRef: `nba_${STAMP}`,
+      });
+      const promotedAction = promote.body?.actionPlan?.find?.(
+        (a: any) => a.sourceRef === `nba_${STAMP}`,
+      );
+      if (promotedAction?.id) created.accountActions.add(promotedAction.id);
+      check(
+        "POST /accounts/:id/actions promote NBA \u2192 source=promoted persisted",
+        promote.status === 200 && promotedAction?.source === "promoted",
+        `status=${promote.status} source=${promotedAction?.source}`,
+      );
+
+      // ---- create a risk (partner) ----
+      const riskDesc = uniq("Risk");
+      const createRisk = await api("POST", `/accounts/${ACC}/risks`, PERSONA.fp, {
+        description: riskDesc,
+        severity: "red",
+        kind: "dependency",
+      });
+      const riskId = createRisk.body?.riskRegister?.find?.(
+        (r: any) => r.description === riskDesc,
+      )?.id;
+      if (riskId) created.accountRisks.add(riskId);
+      check(
+        "POST /accounts/:id/risks (fp) \u2192 200 + risk persisted",
+        createRisk.status === 200 && !!riskId,
+        `status=${createRisk.status}`,
+      );
+
+      // ---- risk write gate: consultant \u2192 403 ----
+      const consultantRisk = await api("POST", `/accounts/${ACC}/risks`, PERSONA.consultant, {
+        description: uniq("ForbiddenRisk"),
+      });
+      check(
+        "POST /accounts/:id/risks (consultant) \u2192 403 (manage gate)",
+        consultantRisk.status === 403,
+        `status=${consultantRisk.status}`,
+      );
+
+      // ---- goal-progress upsert against a real strategy objective ----
+      // acc_tasama's seeded strategy objective id is obj_a.
+      const goalUpsert = await api("PUT", `/accounts/${ACC}/goals/obj_a`, PERSONA.fp, {
+        currentValue: uniq("Value"),
+        status: "at_risk",
+      });
+      const goalRow = goalUpsert.body?.goalProgress?.find?.(
+        (g: any) => g.objectiveId === "obj_a",
+      );
+      created.accountGoalProgress.add("obj_a");
+      check(
+        "PUT /accounts/:id/goals/:objectiveId (fp) \u2192 progress persisted",
+        goalUpsert.status === 200 && goalRow?.status === "at_risk",
+        `status=${goalUpsert.status} got=${goalRow?.status}`,
+      );
+
+      // ---- QBR / account-plan PDF export (partner) ----
+      const pdfRes = await fetch(`${BASE}/accounts/${ACC}/plan.pdf`, {
+        headers: { cookie: `atelier_persona=${PERSONA.fp}` },
+      });
+      const pdfBuf = Buffer.from(await pdfRes.arrayBuffer());
+      check(
+        "GET /accounts/:id/plan.pdf (fp) \u2192 200 application/pdf",
+        pdfRes.status === 200 &&
+          (pdfRes.headers.get("content-type") ?? "").includes("application/pdf") &&
+          pdfBuf.length > 1000 &&
+          pdfBuf.subarray(0, 5).toString("latin1") === "%PDF-",
+        `status=${pdfRes.status} type=${pdfRes.headers.get("content-type")} size=${pdfBuf.length}`,
+      );
+
+      // ---- PDF read-gate parity with the workspace (canSeeAccount) ----
+      // A scoped consultant holds an engagement grant on acc_dge, so canSeeAccount
+      // passes and the brief renders (financial section is restricted inside the
+      // doc, but the export itself succeeds — parity with the workspace view).
+      const scopedPdf = await fetch(`${BASE}/accounts/${ACC_OOS}/plan.pdf`, {
+        headers: { cookie: `atelier_persona=${PERSONA.consultant}` },
+      });
+      const scopedPdfBuf = Buffer.from(await scopedPdf.arrayBuffer());
+      check(
+        "GET /accounts/:id/plan.pdf (scoped consultant w/ grant) \u2192 200 PDF",
+        scopedPdf.status === 200 &&
+          (scopedPdf.headers.get("content-type") ?? "").includes("application/pdf") &&
+          scopedPdfBuf.subarray(0, 5).toString("latin1") === "%PDF-",
+        `status=${scopedPdf.status} type=${scopedPdf.headers.get("content-type")} size=${scopedPdfBuf.length}`,
+      );
+
+      // ---- truly out-of-scope persona \u2192 403 ----
+      const noAccessPdf = await fetch(`${BASE}/accounts/${ACC_OOS}/plan.pdf`, {
+        headers: { cookie: `atelier_persona=${PERSONA.noAccess}` },
+      });
+      check(
+        "GET /accounts/:id/plan.pdf (no-access persona) \u2192 403 account-forbidden",
+        noAccessPdf.status === 403,
+        `status=${noAccessPdf.status}`,
+      );
+    }
   } finally {
     // -------------------- cleanup (best-effort, tagged rows) --------------
     try {
+      for (const id of created.accountActions) await db.delete(atelierAccountActions).where(eq(atelierAccountActions.id, id));
+      for (const id of created.accountRisks) await db.delete(atelierAccountRisks).where(eq(atelierAccountRisks.id, id));
+      for (const objId of created.accountGoalProgress)
+        await db
+          .delete(atelierAccountGoalProgress)
+          .where(and(eq(atelierAccountGoalProgress.accountId, ACC), eq(atelierAccountGoalProgress.objectiveId, objId)));
       for (const id of created.renewals) await db.delete(atelierRenewal).where(eq(atelierRenewal.id, id));
       for (const id of created.raids) await db.delete(atelierRaidItems).where(eq(atelierRaidItems.id, id));
       for (const id of created.deliverables) await db.delete(atelierDeliverables).where(eq(atelierDeliverables.id, id));

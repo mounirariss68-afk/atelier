@@ -29,6 +29,9 @@ import {
   atelierAuditEvents,
   atelierAccountInsights,
   atelierAccountTeamMembers,
+  atelierAccountActions,
+  atelierAccountRisks,
+  atelierAccountGoalProgress,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
@@ -39,6 +42,7 @@ import {
   buildRenewalsAndActions,
   countOpenRisks,
 } from "../../lib/atelier-account-360.js";
+import { buildAccountPlan } from "../../lib/atelier-account-plan.js";
 
 type EngAccess = Awaited<ReturnType<typeof accessibleEngagementIds>>;
 function canSeeEng(access: EngAccess, engId: string) {
@@ -52,7 +56,7 @@ function canSeeEng(access: EngAccess, engId: string) {
  * account's partnerOwner. Prevents IDOR-style reads of CRM intelligence
  * (contacts, signals, pending updates) by anyone with a valid persona.
  */
-async function canSeeAccount(
+export async function canSeeAccount(
   access: EngAccess,
   me: { id: string },
   accountId: string,
@@ -89,6 +93,11 @@ import {
   AtelierUpdateAccountInsightBody as AtelierUpdateAccountInsightInput,
   AtelierAddAccountTeamMemberBody as AtelierAddAccountTeamMemberInput,
   AtelierUpdateAccountTeamMemberBody as AtelierUpdateAccountTeamMemberInput,
+  AtelierCreateAccountActionBody as AtelierCreateAccountActionInput,
+  AtelierUpdateAccountActionBody as AtelierUpdateAccountActionInput,
+  AtelierCreateAccountRiskBody as AtelierCreateAccountRiskInput,
+  AtelierUpdateAccountRiskBody as AtelierUpdateAccountRiskInput,
+  AtelierUpsertAccountGoalProgressBody as AtelierUpsertAccountGoalProgressInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -678,6 +687,20 @@ async function buildWorkspace(
     });
   }
 
+  // Task #571 — account plan (action plan, risk register, goal progress).
+  // Goal progress is joined to the strategy objectives that live on the
+  // account record. Surfaced to anyone who can see the account (read parity
+  // with the rest of the workspace); writes are gated in the route handlers.
+  const plan = await buildAccountPlan({
+    accountId: a.id,
+    objectives: (a.accountStrategy?.objectives ?? []) as Array<{
+      id: string;
+      text: string;
+      targetValue?: string | null;
+      targetDate?: string | null;
+    }>,
+  });
+
   return {
     account: {
       ...summary,
@@ -777,6 +800,10 @@ async function buildWorkspace(
       }
       return members;
     })(),
+    // Task #571 — account planning & execution layer.
+    actionPlan: plan.actionPlan,
+    riskRegister: plan.riskRegister,
+    goalProgress: plan.goalProgress,
   };
 }
 
@@ -1342,6 +1369,560 @@ router.delete("/accounts/:accountId/team/:memberId", async (req, res) => {
   });
   const ws = await buildWorkspace(account.id, access, me);
   res.json(ws);
+});
+
+// ===================================================================
+// Account planning & execution layer (Task #571)
+// -------------------------------------------------------------------
+// Action plan, account risk register, and goal progress. Reads are
+// embedded in the workspace (gated by canSeeAccount). Writes are gated
+// to people who actively manage the account: partner-tier / senior
+// manager (CREATE_ROLES), the account's partner owner, or a member of
+// the account team whose role is account_manager / delivery_lead /
+// partner. Every mutation is audited and returns the fresh workspace.
+// ===================================================================
+const PLAN_TEAM_ROLES = new Set(["account_manager", "delivery_lead", "partner"]);
+
+async function canManageAccountPlan(
+  me: { id: string; role: string },
+  account: { id: string; partnerOwnerId: string | null },
+): Promise<boolean> {
+  if (CREATE_ROLES.has(me.role)) return true;
+  if (account.partnerOwnerId === me.id) return true;
+  const [member] = await db
+    .select({ roleOnAccount: atelierAccountTeamMembers.roleOnAccount })
+    .from(atelierAccountTeamMembers)
+    .where(
+      and(
+        eq(atelierAccountTeamMembers.accountId, account.id),
+        eq(atelierAccountTeamMembers.userId, me.id),
+        isNull(atelierAccountTeamMembers.deletedAt),
+      ),
+    );
+  return !!member && PLAN_TEAM_ROLES.has(member.roleOnAccount);
+}
+
+// Shared guard: load + access + manage permission. Returns the account row
+// or null (after sending the appropriate error response).
+async function loadManageableAccount(
+  req: Request,
+  res: Response,
+): Promise<{ me: NonNullable<ReturnType<typeof ensurePersona>>; account: NonNullable<Awaited<ReturnType<typeof loadAccount>>>; access: EngAccess } | null> {
+  const me = ensurePersona(req, res);
+  if (!me) return null;
+  const account = await loadAccount(String(req.params.accountId));
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return null;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return null;
+  }
+  if (!(await canManageAccountPlan(me, account))) {
+    res.status(403).json({
+      error: "plan-forbidden",
+      reason:
+        "Only the account team (partner-tier, the account owner, or an account manager / delivery lead) can manage the account plan.",
+    });
+    return null;
+  }
+  return { me, account, access };
+}
+
+// ---------- create action (account team only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/actions", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const parsed = AtelierCreateAccountActionInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const title = parsed.data.title.trim();
+  if (!title) {
+    res.status(400).json({ error: "title-required" });
+    return;
+  }
+  // Validate optional owner belongs to the org.
+  if (parsed.data.ownerId) {
+    const [owner] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.id, parsed.data.ownerId),
+          eq(atelierUsers.orgId, account.orgId),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (!owner) {
+      res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+      return;
+    }
+  }
+  const id = rid("aca");
+  const now = new Date();
+  const status = parsed.data.status ?? "open";
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierAccountActions).values({
+      id,
+      orgId: account.orgId,
+      accountId: account.id,
+      title,
+      detail: parsed.data.detail?.trim() || null,
+      ownerId: parsed.data.ownerId ?? null,
+      status,
+      priority: parsed.data.priority ?? "medium",
+      dueDate: parsed.data.dueDate ?? null,
+      linkedObjectiveId: parsed.data.linkedObjectiveId ?? null,
+      linkedPlay: parsed.data.linkedPlay?.trim() || null,
+      source: parsed.data.source ?? "manual",
+      sourceRef: parsed.data.sourceRef ?? null,
+      completedAt: status === "done" ? now : null,
+      createdByUserId: me.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action:
+        parsed.data.source === "promoted"
+          ? "plan.actionPromoted"
+          : "plan.actionCreated",
+      payload: { actionId: id, source: parsed.data.source ?? "manual" },
+      payloadSummary: `${me.name} ${
+        parsed.data.source === "promoted" ? "promoted an AI suggestion into" : "added"
+      } an action "${title}" on ${account.brandName ?? account.name}.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- edit action (account team only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId/actions/:actionId", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const [row] = await db
+    .select()
+    .from(atelierAccountActions)
+    .where(
+      and(
+        eq(atelierAccountActions.id, req.params.actionId),
+        eq(atelierAccountActions.accountId, account.id),
+        isNull(atelierAccountActions.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "action-not-found" });
+    return;
+  }
+  const parsed = AtelierUpdateAccountActionInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const d = parsed.data;
+  if (d.ownerId) {
+    const [owner] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.id, d.ownerId),
+          eq(atelierUsers.orgId, account.orgId),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (!owner) {
+      res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+      return;
+    }
+  }
+  const patch: Partial<typeof atelierAccountActions.$inferInsert> = {};
+  if (d.title !== undefined) {
+    const t = d.title.trim();
+    if (!t) {
+      res.status(400).json({ error: "title-required" });
+      return;
+    }
+    patch.title = t;
+  }
+  if (d.detail !== undefined) patch.detail = d.detail?.trim() || null;
+  if (d.ownerId !== undefined) patch.ownerId = d.ownerId ?? null;
+  if (d.priority !== undefined) patch.priority = d.priority;
+  if (d.dueDate !== undefined) patch.dueDate = d.dueDate ?? null;
+  if (d.linkedObjectiveId !== undefined)
+    patch.linkedObjectiveId = d.linkedObjectiveId ?? null;
+  if (d.linkedPlay !== undefined) patch.linkedPlay = d.linkedPlay?.trim() || null;
+  if (d.status !== undefined) {
+    patch.status = d.status;
+    // Stamp / clear completion when the status crosses the done boundary.
+    if (d.status === "done" && row.status !== "done") {
+      patch.completedAt = new Date();
+    } else if (d.status !== "done" && row.status === "done") {
+      patch.completedAt = null;
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: "no-op", reason: "No editable fields supplied." });
+    return;
+  }
+  patch.updatedAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountActions)
+      .set(patch)
+      .where(eq(atelierAccountActions.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.actionUpdated",
+      payload: { actionId: row.id, fields: Object.keys(patch) },
+      payloadSummary: `${me.name} updated an action on ${
+        account.brandName ?? account.name
+      }${d.status ? ` (status → ${d.status})` : ""}.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- delete action (account team only, soft delete) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/accounts/:accountId/actions/:actionId", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const [row] = await db
+    .select()
+    .from(atelierAccountActions)
+    .where(
+      and(
+        eq(atelierAccountActions.id, req.params.actionId),
+        eq(atelierAccountActions.accountId, account.id),
+        isNull(atelierAccountActions.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "action-not-found" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountActions)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierAccountActions.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.actionDeleted",
+      payload: { actionId: row.id },
+      payloadSummary: `${me.name} deleted an action on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- create risk (account team only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/risks", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const parsed = AtelierCreateAccountRiskInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const description = parsed.data.description.trim();
+  if (!description) {
+    res.status(400).json({ error: "description-required" });
+    return;
+  }
+  if (parsed.data.ownerId) {
+    const [owner] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.id, parsed.data.ownerId),
+          eq(atelierUsers.orgId, account.orgId),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (!owner) {
+      res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+      return;
+    }
+  }
+  const id = rid("acr");
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierAccountRisks).values({
+      id,
+      orgId: account.orgId,
+      accountId: account.id,
+      kind: parsed.data.kind ?? "risk",
+      severity: parsed.data.severity ?? "amber",
+      ownerId: parsed.data.ownerId ?? null,
+      status: parsed.data.status ?? "open",
+      dueDate: parsed.data.dueDate ?? null,
+      description,
+      mitigation: parsed.data.mitigation?.trim() || null,
+      createdByUserId: me.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.riskCreated",
+      payload: { riskId: id, severity: parsed.data.severity ?? "amber" },
+      payloadSummary: `${me.name} logged a ${
+        parsed.data.severity ?? "amber"
+      } risk on ${account.brandName ?? account.name}.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- edit risk (account team only) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId/risks/:riskId", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const [row] = await db
+    .select()
+    .from(atelierAccountRisks)
+    .where(
+      and(
+        eq(atelierAccountRisks.id, req.params.riskId),
+        eq(atelierAccountRisks.accountId, account.id),
+        isNull(atelierAccountRisks.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "risk-not-found" });
+    return;
+  }
+  const parsed = AtelierUpdateAccountRiskInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const d = parsed.data;
+  if (d.ownerId) {
+    const [owner] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.id, d.ownerId),
+          eq(atelierUsers.orgId, account.orgId),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (!owner) {
+      res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+      return;
+    }
+  }
+  const patch: Partial<typeof atelierAccountRisks.$inferInsert> = {};
+  if (d.description !== undefined) {
+    const t = d.description.trim();
+    if (!t) {
+      res.status(400).json({ error: "description-required" });
+      return;
+    }
+    patch.description = t;
+  }
+  if (d.kind !== undefined) patch.kind = d.kind;
+  if (d.severity !== undefined) patch.severity = d.severity;
+  if (d.ownerId !== undefined) patch.ownerId = d.ownerId ?? null;
+  if (d.status !== undefined) patch.status = d.status;
+  if (d.dueDate !== undefined) patch.dueDate = d.dueDate ?? null;
+  if (d.mitigation !== undefined) patch.mitigation = d.mitigation?.trim() || null;
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: "no-op", reason: "No editable fields supplied." });
+    return;
+  }
+  patch.updatedAt = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountRisks)
+      .set(patch)
+      .where(eq(atelierAccountRisks.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.riskUpdated",
+      payload: { riskId: row.id, fields: Object.keys(patch) },
+      payloadSummary: `${me.name} updated a risk on ${
+        account.brandName ?? account.name
+      }${d.status ? ` (status → ${d.status})` : ""}.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- delete risk (account team only, soft delete) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/accounts/:accountId/risks/:riskId", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const [row] = await db
+    .select()
+    .from(atelierAccountRisks)
+    .where(
+      and(
+        eq(atelierAccountRisks.id, req.params.riskId),
+        eq(atelierAccountRisks.accountId, account.id),
+        isNull(atelierAccountRisks.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "risk-not-found" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccountRisks)
+      .set({ deletedAt: new Date() })
+      .where(eq(atelierAccountRisks.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.riskDeleted",
+      payload: { riskId: row.id },
+      payloadSummary: `${me.name} deleted a risk on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ---------- upsert goal progress for a strategy objective ----------
+// PUT semantics: creates the progress row for the objective if absent, else
+// updates it. The objectiveId must reference an existing strategy objective.
+// @cli-skip: pending Task #340 read-parity migration
+router.put("/accounts/:accountId/goals/:objectiveId", async (req, res) => {
+  const ctx = await loadManageableAccount(req, res);
+  if (!ctx) return;
+  const { me, account, access } = ctx;
+  const objectiveId = req.params.objectiveId;
+  const objectives = (account.accountStrategy?.objectives ?? []) as Array<{
+    id: string;
+    text: string;
+  }>;
+  const objective = objectives.find((o) => o.id === objectiveId);
+  if (!objective) {
+    res.status(404).json({
+      error: "objective-not-found",
+      reason: "No strategy objective with that id on this account.",
+    });
+    return;
+  }
+  const parsed = AtelierUpsertAccountGoalProgressInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const d = parsed.data;
+  const [existing] = await db
+    .select()
+    .from(atelierAccountGoalProgress)
+    .where(
+      and(
+        eq(atelierAccountGoalProgress.accountId, account.id),
+        eq(atelierAccountGoalProgress.objectiveId, objectiveId),
+        isNull(atelierAccountGoalProgress.deletedAt),
+      ),
+    );
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    if (existing) {
+      const patch: Partial<typeof atelierAccountGoalProgress.$inferInsert> = {
+        updatedAt: now,
+      };
+      if (d.currentValue !== undefined)
+        patch.currentValue = d.currentValue?.trim() || null;
+      if (d.status !== undefined) patch.status = d.status;
+      if (d.note !== undefined) patch.note = d.note?.trim() || null;
+      await tx
+        .update(atelierAccountGoalProgress)
+        .set(patch)
+        .where(eq(atelierAccountGoalProgress.id, existing.id));
+    } else {
+      await tx.insert(atelierAccountGoalProgress).values({
+        id: rid("acg"),
+        orgId: account.orgId,
+        accountId: account.id,
+        objectiveId,
+        currentValue: d.currentValue?.trim() || null,
+        status: d.status ?? "on_track",
+        note: d.note?.trim() || null,
+        createdByUserId: me.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "plan.goalProgressUpdated",
+      payload: { objectiveId, status: d.status ?? existing?.status ?? "on_track" },
+      payloadSummary: `${me.name} updated goal progress on ${
+        account.brandName ?? account.name
+      }${d.status ? ` (${d.status})` : ""}.`,
+    });
+  });
+  res.json(await buildWorkspace(account.id, access, me));
 });
 
 // ---------- update partner-editable account fields (Task #566) ----------

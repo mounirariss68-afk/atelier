@@ -38,6 +38,7 @@ import {
 } from "./personaCookie";
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler, personAuditPdfHandler } from "./auditPdf";
+import { accountPlanPdfHandler } from "./accountPlanPdf";
 import agentRoutes from "./agentRoutes";
 import {
   STALLED_THRESHOLD_DAYS,
@@ -180,6 +181,8 @@ router.use((req, res, next) => {
 router.get("/audit/export.pdf", auditPdfHandler);
 // Task #261 — Per-Person audit pack PDF (Roster).
 router.get("/roster/people/:id/audit", personAuditPdfHandler);
+// Task #571 — One-page account-plan / QBR PDF brief.
+router.get("/accounts/:accountId/plan.pdf", accountPlanPdfHandler);
 
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

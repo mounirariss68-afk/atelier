@@ -42,6 +42,7 @@ import {
   PillButton,
 } from "@/components/ui/primitives";
 import { Account360Tab } from "@/components/tabs/Account360Tab";
+import { AccountPlanTab } from "@/components/tabs/AccountPlanTab";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
@@ -89,6 +90,7 @@ type TabKey =
   | "relationships"
   | "insights"
   | "account_360"
+  | "account_plan"
   | "whitespace"
   | "qbr"
   | "audit";
@@ -101,6 +103,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "relationships", label: "Relationships", icon: <Network className="w-3.5 h-3.5" /> },
   { key: "insights", label: "Insights", icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { key: "account_360", label: "Account 360", icon: <Gauge className="w-3.5 h-3.5" /> },
+  { key: "account_plan", label: "Account Plan", icon: <Target className="w-3.5 h-3.5" /> },
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
@@ -335,6 +338,7 @@ export default function Account() {
         )}
         {tab === "insights" && <InsightsTab ws={ws} accountId={accountId} />}
         {tab === "account_360" && <Account360Tab accountId={accountId} />}
+        {tab === "account_plan" && <AccountPlanTab ws={ws} accountId={accountId} />}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}
         {tab === "qbr" && <QbrTab accountId={accountId} />}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}

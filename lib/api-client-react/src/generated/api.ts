@@ -52,8 +52,10 @@ import type {
   AtelierContactGraph,
   AtelierContactRelationship,
   AtelierCountersignPricing200,
+  AtelierCreateAccountActionInput,
   AtelierCreateAccountInput,
   AtelierCreateAccountInsightInput,
+  AtelierCreateAccountRiskInput,
   AtelierCreateContactInput,
   AtelierCreateContactRelationshipInput,
   AtelierCreateOpportunityInput,
@@ -122,11 +124,14 @@ import type {
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierUpdateAccountActionInput,
   AtelierUpdateAccountInput,
   AtelierUpdateAccountInsightInput,
+  AtelierUpdateAccountRiskInput,
   AtelierUpdateAccountTeamMemberInput,
   AtelierUpdateContactInput,
   AtelierUpdateOpportunityInput,
+  AtelierUpsertAccountGoalProgressInput,
   AtelierWhitespaceCanvas,
   AuditEvent,
   ChatError,
@@ -6750,6 +6755,727 @@ export const useAtelierRemoveAccountTeamMember = <
   TContext
 > => {
   return useMutation(getAtelierRemoveAccountTeamMemberMutationOptions(options));
+};
+
+/**
+ * @summary Add an action to the account plan (partner/AM, audited)
+ */
+export const getAtelierCreateAccountActionUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/actions`;
+};
+
+export const atelierCreateAccountAction = async (
+  accountId: string,
+  atelierCreateAccountActionInput: AtelierCreateAccountActionInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierCreateAccountActionUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateAccountActionInput),
+    },
+  );
+};
+
+export const getAtelierCreateAccountActionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountAction>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountActionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateAccountAction>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountActionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateAccountAction"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateAccountAction>>,
+    { accountId: string; data: BodyType<AtelierCreateAccountActionInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateAccountAction(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateAccountActionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateAccountAction>>
+>;
+export type AtelierCreateAccountActionMutationBody =
+  BodyType<AtelierCreateAccountActionInput>;
+export type AtelierCreateAccountActionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add an action to the account plan (partner/AM, audited)
+ */
+export const useAtelierCreateAccountAction = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountAction>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountActionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateAccountAction>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountActionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateAccountActionMutationOptions(options));
+};
+
+/**
+ * @summary Edit an account-plan action (partner/AM, audited)
+ */
+export const getAtelierUpdateAccountActionUrl = (
+  accountId: string,
+  actionId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/actions/${actionId}`;
+};
+
+export const atelierUpdateAccountAction = async (
+  accountId: string,
+  actionId: string,
+  atelierUpdateAccountActionInput: AtelierUpdateAccountActionInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpdateAccountActionUrl(accountId, actionId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountActionInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountActionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountAction>>,
+    TError,
+    {
+      accountId: string;
+      actionId: string;
+      data: BodyType<AtelierUpdateAccountActionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountAction>>,
+  TError,
+  {
+    accountId: string;
+    actionId: string;
+    data: BodyType<AtelierUpdateAccountActionInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountAction"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountAction>>,
+    {
+      accountId: string;
+      actionId: string;
+      data: BodyType<AtelierUpdateAccountActionInput>;
+    }
+  > = (props) => {
+    const { accountId, actionId, data } = props ?? {};
+
+    return atelierUpdateAccountAction(
+      accountId,
+      actionId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountActionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountAction>>
+>;
+export type AtelierUpdateAccountActionMutationBody =
+  BodyType<AtelierUpdateAccountActionInput>;
+export type AtelierUpdateAccountActionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit an account-plan action (partner/AM, audited)
+ */
+export const useAtelierUpdateAccountAction = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountAction>>,
+    TError,
+    {
+      accountId: string;
+      actionId: string;
+      data: BodyType<AtelierUpdateAccountActionInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountAction>>,
+  TError,
+  {
+    accountId: string;
+    actionId: string;
+    data: BodyType<AtelierUpdateAccountActionInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAccountActionMutationOptions(options));
+};
+
+/**
+ * @summary Delete an account-plan action (partner/AM, audited)
+ */
+export const getAtelierDeleteAccountActionUrl = (
+  accountId: string,
+  actionId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/actions/${actionId}`;
+};
+
+export const atelierDeleteAccountAction = async (
+  accountId: string,
+  actionId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierDeleteAccountActionUrl(accountId, actionId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteAccountActionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountAction>>,
+    TError,
+    { accountId: string; actionId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteAccountAction>>,
+  TError,
+  { accountId: string; actionId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteAccountAction"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteAccountAction>>,
+    { accountId: string; actionId: string }
+  > = (props) => {
+    const { accountId, actionId } = props ?? {};
+
+    return atelierDeleteAccountAction(accountId, actionId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteAccountActionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteAccountAction>>
+>;
+
+export type AtelierDeleteAccountActionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an account-plan action (partner/AM, audited)
+ */
+export const useAtelierDeleteAccountAction = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountAction>>,
+    TError,
+    { accountId: string; actionId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteAccountAction>>,
+  TError,
+  { accountId: string; actionId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteAccountActionMutationOptions(options));
+};
+
+/**
+ * @summary Add a risk to the account risk register (partner/AM, audited)
+ */
+export const getAtelierCreateAccountRiskUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/risks`;
+};
+
+export const atelierCreateAccountRisk = async (
+  accountId: string,
+  atelierCreateAccountRiskInput: AtelierCreateAccountRiskInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierCreateAccountRiskUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateAccountRiskInput),
+    },
+  );
+};
+
+export const getAtelierCreateAccountRiskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountRisk>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountRiskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateAccountRisk>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountRiskInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateAccountRisk"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateAccountRisk>>,
+    { accountId: string; data: BodyType<AtelierCreateAccountRiskInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateAccountRisk(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateAccountRiskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateAccountRisk>>
+>;
+export type AtelierCreateAccountRiskMutationBody =
+  BodyType<AtelierCreateAccountRiskInput>;
+export type AtelierCreateAccountRiskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a risk to the account risk register (partner/AM, audited)
+ */
+export const useAtelierCreateAccountRisk = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateAccountRisk>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateAccountRiskInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateAccountRisk>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateAccountRiskInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateAccountRiskMutationOptions(options));
+};
+
+/**
+ * @summary Edit an account risk (partner/AM, audited)
+ */
+export const getAtelierUpdateAccountRiskUrl = (
+  accountId: string,
+  riskId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/risks/${riskId}`;
+};
+
+export const atelierUpdateAccountRisk = async (
+  accountId: string,
+  riskId: string,
+  atelierUpdateAccountRiskInput: AtelierUpdateAccountRiskInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpdateAccountRiskUrl(accountId, riskId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountRiskInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountRiskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountRisk>>,
+    TError,
+    {
+      accountId: string;
+      riskId: string;
+      data: BodyType<AtelierUpdateAccountRiskInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountRisk>>,
+  TError,
+  {
+    accountId: string;
+    riskId: string;
+    data: BodyType<AtelierUpdateAccountRiskInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountRisk"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountRisk>>,
+    {
+      accountId: string;
+      riskId: string;
+      data: BodyType<AtelierUpdateAccountRiskInput>;
+    }
+  > = (props) => {
+    const { accountId, riskId, data } = props ?? {};
+
+    return atelierUpdateAccountRisk(accountId, riskId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountRiskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountRisk>>
+>;
+export type AtelierUpdateAccountRiskMutationBody =
+  BodyType<AtelierUpdateAccountRiskInput>;
+export type AtelierUpdateAccountRiskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit an account risk (partner/AM, audited)
+ */
+export const useAtelierUpdateAccountRisk = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountRisk>>,
+    TError,
+    {
+      accountId: string;
+      riskId: string;
+      data: BodyType<AtelierUpdateAccountRiskInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountRisk>>,
+  TError,
+  {
+    accountId: string;
+    riskId: string;
+    data: BodyType<AtelierUpdateAccountRiskInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateAccountRiskMutationOptions(options));
+};
+
+/**
+ * @summary Delete an account risk (partner/AM, audited)
+ */
+export const getAtelierDeleteAccountRiskUrl = (
+  accountId: string,
+  riskId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/risks/${riskId}`;
+};
+
+export const atelierDeleteAccountRisk = async (
+  accountId: string,
+  riskId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierDeleteAccountRiskUrl(accountId, riskId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteAccountRiskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountRisk>>,
+    TError,
+    { accountId: string; riskId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteAccountRisk>>,
+  TError,
+  { accountId: string; riskId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteAccountRisk"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteAccountRisk>>,
+    { accountId: string; riskId: string }
+  > = (props) => {
+    const { accountId, riskId } = props ?? {};
+
+    return atelierDeleteAccountRisk(accountId, riskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteAccountRiskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteAccountRisk>>
+>;
+
+export type AtelierDeleteAccountRiskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an account risk (partner/AM, audited)
+ */
+export const useAtelierDeleteAccountRisk = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteAccountRisk>>,
+    TError,
+    { accountId: string; riskId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteAccountRisk>>,
+  TError,
+  { accountId: string; riskId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteAccountRiskMutationOptions(options));
+};
+
+/**
+ * @summary Upsert progress (current value + status) for a strategy objective (partner/AM, audited)
+ */
+export const getAtelierUpsertAccountGoalProgressUrl = (
+  accountId: string,
+  objectiveId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/goals/${objectiveId}`;
+};
+
+export const atelierUpsertAccountGoalProgress = async (
+  accountId: string,
+  objectiveId: string,
+  atelierUpsertAccountGoalProgressInput: AtelierUpsertAccountGoalProgressInput,
+  options?: RequestInit,
+): Promise<AtelierAccountWorkspace> => {
+  return customFetch<AtelierAccountWorkspace>(
+    getAtelierUpsertAccountGoalProgressUrl(accountId, objectiveId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpsertAccountGoalProgressInput),
+    },
+  );
+};
+
+export const getAtelierUpsertAccountGoalProgressMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>,
+    TError,
+    {
+      accountId: string;
+      objectiveId: string;
+      data: BodyType<AtelierUpsertAccountGoalProgressInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>,
+  TError,
+  {
+    accountId: string;
+    objectiveId: string;
+    data: BodyType<AtelierUpsertAccountGoalProgressInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpsertAccountGoalProgress"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>,
+    {
+      accountId: string;
+      objectiveId: string;
+      data: BodyType<AtelierUpsertAccountGoalProgressInput>;
+    }
+  > = (props) => {
+    const { accountId, objectiveId, data } = props ?? {};
+
+    return atelierUpsertAccountGoalProgress(
+      accountId,
+      objectiveId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpsertAccountGoalProgressMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>
+>;
+export type AtelierUpsertAccountGoalProgressMutationBody =
+  BodyType<AtelierUpsertAccountGoalProgressInput>;
+export type AtelierUpsertAccountGoalProgressMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Upsert progress (current value + status) for a strategy objective (partner/AM, audited)
+ */
+export const useAtelierUpsertAccountGoalProgress = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>,
+    TError,
+    {
+      accountId: string;
+      objectiveId: string;
+      data: BodyType<AtelierUpsertAccountGoalProgressInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpsertAccountGoalProgress>>,
+  TError,
+  {
+    accountId: string;
+    objectiveId: string;
+    data: BodyType<AtelierUpsertAccountGoalProgressInput>;
+  },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpsertAccountGoalProgressMutationOptions(options),
+  );
 };
 
 /**

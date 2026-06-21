@@ -5,6 +5,7 @@ import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { ensureAtelierV5Seed } from "./lib/atelier-seed-v5";
 import { ensureAtelierAgentsLensSeed } from "./lib/atelier-seed-agents-lens";
 import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
+import { ensureAtelierAccountPlanSeed } from "./lib/atelier-seed-account-plan";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 
@@ -46,6 +47,14 @@ app.listen(port, (err) => {
     logger.error(
       { err },
       "Wave-1 L2C demo seed bootstrap failed — workspace will show no Codex data",
+    );
+  });
+  // Task #571 — Account planning & execution demo seed: account actions,
+  // account risk register, and goal-progress rows for the demo accounts.
+  void ensureAtelierAccountPlanSeed().catch((err) => {
+    logger.error(
+      { err },
+      "Account-plan demo seed bootstrap failed — Account Plan tab will be empty",
     );
   });
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges

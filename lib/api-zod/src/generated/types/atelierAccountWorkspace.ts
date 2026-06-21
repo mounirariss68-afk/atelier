@@ -5,9 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountAction } from "./atelierAccountAction";
 import type { AtelierAccountEngagementRef } from "./atelierAccountEngagementRef";
+import type { AtelierAccountGoalProgress } from "./atelierAccountGoalProgress";
 import type { AtelierAccountInsight } from "./atelierAccountInsight";
 import type { AtelierAccountOpportunityRef } from "./atelierAccountOpportunityRef";
+import type { AtelierAccountRisk } from "./atelierAccountRisk";
 import type { AtelierAccountTeamMember } from "./atelierAccountTeamMember";
 import type { AtelierAccountWorkspaceAccount } from "./atelierAccountWorkspaceAccount";
 import type { AtelierAuditEventLite } from "./atelierAuditEventLite";
@@ -25,6 +28,9 @@ export interface AtelierAccountWorkspace {
   audit: AtelierAuditEventLite[];
   insights?: AtelierAccountInsight[];
   accountTeam?: AtelierAccountTeamMember[];
+  actionPlan?: AtelierAccountAction[];
+  riskRegister?: AtelierAccountRisk[];
+  goalProgress?: AtelierAccountGoalProgress[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
 }

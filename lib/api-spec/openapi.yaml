@@ -1585,6 +1585,172 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
 
+  # ================================================================
+  # Task #571 — account planning & execution layer.
+  # ================================================================
+  /atelier/accounts/{accountId}/actions:
+    post:
+      operationId: atelierCreateAccountAction
+      tags: [atelier]
+      summary: Add an action to the account plan (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateAccountActionInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/actions/{actionId}:
+    patch:
+      operationId: atelierUpdateAccountAction
+      tags: [atelier]
+      summary: Edit an account-plan action (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: actionId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateAccountActionInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+    delete:
+      operationId: atelierDeleteAccountAction
+      tags: [atelier]
+      summary: Delete an account-plan action (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: actionId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/risks:
+    post:
+      operationId: atelierCreateAccountRisk
+      tags: [atelier]
+      summary: Add a risk to the account risk register (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateAccountRiskInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/risks/{riskId}:
+    patch:
+      operationId: atelierUpdateAccountRisk
+      tags: [atelier]
+      summary: Edit an account risk (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: riskId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateAccountRiskInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+    delete:
+      operationId: atelierDeleteAccountRisk
+      tags: [atelier]
+      summary: Delete an account risk (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: riskId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+  /atelier/accounts/{accountId}/goals/{objectiveId}:
+    put:
+      operationId: atelierUpsertAccountGoalProgress
+      tags: [atelier]
+      summary: >-
+        Upsert progress (current value + status) for a strategy objective
+        (partner/AM, audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: objectiveId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              { $ref: "#/components/schemas/AtelierUpsertAccountGoalProgressInput" }
+      responses:
+        "200":
+          description: Updated workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
   /atelier/contacts/{contactId}/disposition:
     post:
       operationId: atelierUpdateContactDisposition
@@ -3066,6 +3232,16 @@ components:
         accountTeam:
           type: array
           items: { $ref: "#/components/schemas/AtelierAccountTeamMember" }
+        # Task #571 — account planning & execution layer.
+        actionPlan:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountAction" }
+        riskRegister:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountRisk" }
+        goalProgress:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountGoalProgress" }
         whitespacePreview:
           $ref: "#/components/schemas/AtelierWhitespaceCanvas"
         qbrPreview:
@@ -3294,6 +3470,147 @@ components:
       required: [roleOnAccount]
       properties:
         roleOnAccount: { $ref: "#/components/schemas/AtelierAccountTeamRole" }
+
+    # ================================================================
+    # Task #571 — account planning & execution layer.
+    # ================================================================
+    AtelierAccountActionStatus:
+      type: string
+      enum: [open, in_progress, done, cancelled]
+
+    AtelierAccountActionPriority:
+      type: string
+      enum: [high, medium, low]
+
+    AtelierAccountRiskKind:
+      type: string
+      enum: [risk, assumption, issue, dependency]
+
+    AtelierAccountRiskSeverity:
+      type: string
+      enum: [green, amber, red]
+
+    AtelierAccountRiskStatus:
+      type: string
+      enum: [open, mitigating, closed]
+
+    AtelierAccountGoalStatus:
+      type: string
+      enum: [on_track, at_risk, off_track, achieved]
+
+    AtelierAccountAction:
+      type: object
+      required:
+        [id, accountId, title, status, priority, source, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        ownerName: { type: ["string", "null"] }
+        ownerInitials: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountActionStatus" }
+        priority: { $ref: "#/components/schemas/AtelierAccountActionPriority" }
+        dueDate: { type: ["string", "null"] }
+        linkedObjectiveId: { type: ["string", "null"] }
+        linkedObjectiveText: { type: ["string", "null"] }
+        linkedPlay: { type: ["string", "null"] }
+        source: { type: string, enum: [manual, promoted] }
+        sourceRef: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AtelierAccountRisk:
+      type: object
+      required:
+        [id, accountId, kind, severity, status, description, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        kind: { $ref: "#/components/schemas/AtelierAccountRiskKind" }
+        severity: { $ref: "#/components/schemas/AtelierAccountRiskSeverity" }
+        ownerId: { type: ["string", "null"] }
+        ownerName: { type: ["string", "null"] }
+        ownerInitials: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountRiskStatus" }
+        dueDate: { type: ["string", "null"] }
+        description: { type: string }
+        mitigation: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AtelierAccountGoalProgress:
+      type: object
+      required: [objectiveId, text, status]
+      properties:
+        objectiveId: { type: string }
+        text: { type: string }
+        targetValue: { type: ["string", "null"] }
+        targetDate: { type: ["string", "null"] }
+        currentValue: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountGoalStatus" }
+        note: { type: ["string", "null"] }
+        updatedAt: { type: ["string", "null"] }
+
+    AtelierCreateAccountActionInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountActionStatus" }
+        priority: { $ref: "#/components/schemas/AtelierAccountActionPriority" }
+        dueDate: { type: ["string", "null"] }
+        linkedObjectiveId: { type: ["string", "null"] }
+        linkedPlay: { type: ["string", "null"] }
+        # When promoting an AI next-best-action into an owned action.
+        source: { type: string, enum: [manual, promoted] }
+        sourceRef: { type: ["string", "null"] }
+
+    AtelierUpdateAccountActionInput:
+      type: object
+      properties:
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountActionStatus" }
+        priority: { $ref: "#/components/schemas/AtelierAccountActionPriority" }
+        dueDate: { type: ["string", "null"] }
+        linkedObjectiveId: { type: ["string", "null"] }
+        linkedPlay: { type: ["string", "null"] }
+
+    AtelierCreateAccountRiskInput:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string }
+        kind: { $ref: "#/components/schemas/AtelierAccountRiskKind" }
+        severity: { $ref: "#/components/schemas/AtelierAccountRiskSeverity" }
+        ownerId: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountRiskStatus" }
+        dueDate: { type: ["string", "null"] }
+        mitigation: { type: ["string", "null"] }
+
+    AtelierUpdateAccountRiskInput:
+      type: object
+      properties:
+        description: { type: string }
+        kind: { $ref: "#/components/schemas/AtelierAccountRiskKind" }
+        severity: { $ref: "#/components/schemas/AtelierAccountRiskSeverity" }
+        ownerId: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountRiskStatus" }
+        dueDate: { type: ["string", "null"] }
+        mitigation: { type: ["string", "null"] }
+
+    AtelierUpsertAccountGoalProgressInput:
+      type: object
+      properties:
+        currentValue: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierAccountGoalStatus" }
+        note: { type: ["string", "null"] }
 
     AtelierCartographerRefreshInput:
       type: object

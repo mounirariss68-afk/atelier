@@ -363,6 +363,126 @@ export const atelierAccountTeamMembers = pgTable(
 );
 
 // ============================================================
+// ACCOUNT ACTION PLAN (Task #571)
+// ============================================================
+// The account-level execution backlog: discrete actions the account team
+// owns to advance the account strategy. Distinct from the engagement-scoped
+// task/burn surfaces — these are account-management actions (next steps,
+// plays, follow-ups). Each action may link to a strategy objective (by id
+// inside atelier_accounts.account_strategy.objectives) and/or a named play.
+// `source` distinguishes a manually-authored action from one PROMOTED from
+// an AI next-best-action; `sourceRef` carries the originating NBA id so the
+// UI can mark that suggestion as actioned.
+export const atelierAccountActions = pgTable(
+  "atelier_account_actions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    // FK → atelier_users. The person accountable for the action. Nullable
+    // (an action can be unassigned in the backlog).
+    ownerId: text("owner_id"),
+    // open | in_progress | done | cancelled (free text at DB layer; API/UI
+    // constrain the set).
+    status: text("status").notNull().default("open"),
+    // high | medium | low.
+    priority: text("priority").notNull().default("medium"),
+    // ISO date string (text, mirrors atelier_raid_items.due_date). Nullable.
+    dueDate: text("due_date"),
+    // Optional link to a strategy objective id (inside the account's
+    // account_strategy.objectives array). Null = not tied to a goal.
+    linkedObjectiveId: text("linked_objective_id"),
+    // Optional free-text link to a named play/move from the strategy.
+    linkedPlay: text("linked_play"),
+    // manual | promoted. `promoted` actions originated from an AI
+    // next-best-action that a human accepted.
+    source: text("source").notNull().default("manual"),
+    // For promoted actions, the originating next-best-action id.
+    sourceRef: text("source_ref"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_account_actions_org").on(t.orgId),
+    index("idx_atelier_account_actions_account").on(t.accountId),
+    index("idx_atelier_account_actions_owner").on(t.ownerId),
+  ],
+);
+
+// ============================================================
+// ACCOUNT RISK REGISTER (Task #571)
+// ============================================================
+// Account-level RAID, DISTINCT from atelier_raid_items (which is engagement-
+// scoped). Captures strategic/commercial/relationship risks that live above
+// any single engagement: severity, owner, mitigation, status. Mirrors the
+// engagement RAID column shape so the two can be presented consistently.
+export const atelierAccountRisks = pgTable(
+  "atelier_account_risks",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    // risk | assumption | issue | dependency (RAID), default risk.
+    kind: text("kind").notNull().default("risk"),
+    // green | amber | red.
+    severity: text("severity").notNull().default("amber"),
+    ownerId: text("owner_id"), // FK → atelier_users. Nullable.
+    // open | mitigating | closed.
+    status: text("status").notNull().default("open"),
+    dueDate: text("due_date"),
+    description: text("description").notNull(),
+    mitigation: text("mitigation"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_account_risks_org").on(t.orgId),
+    index("idx_atelier_account_risks_account").on(t.accountId),
+  ],
+);
+
+// ============================================================
+// ACCOUNT GOAL PROGRESS (Task #571)
+// ============================================================
+// Progress tracking for the measurable objectives defined inside
+// atelier_accounts.account_strategy.objectives (each has an id + targetValue +
+// targetDate). This table holds the LIVE current value + status for each
+// objective so the plan can show current-vs-target and on-track/at-risk
+// without mutating the strategy JSONB. One row per (accountId, objectiveId)
+// among non-deleted rows (upserted by route logic).
+export const atelierAccountGoalProgress = pgTable(
+  "atelier_account_goal_progress",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    accountId: text("account_id").notNull(),
+    // The strategy objective id this progress row tracks.
+    objectiveId: text("objective_id").notNull(),
+    // The current measured value (free text — mirrors targetValue which is
+    // also free text, e.g. "AED 4.2M", "3 deployments").
+    currentValue: text("current_value"),
+    // on_track | at_risk | off_track | achieved.
+    status: text("status").notNull().default("on_track"),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_account_goal_progress_org").on(t.orgId),
+    index("idx_atelier_account_goal_progress_account").on(t.accountId),
+  ],
+);
+
+// ============================================================
 // CREDENTIALS (v2 — PRD §1.1, first-class case-study workspace)
 // Extends the v1 Atelier asset with structured credential metadata.
 // ============================================================
