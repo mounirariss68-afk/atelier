@@ -7,3 +7,4 @@
 - [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss run/approve/override use global db (not withRls) on purpose: withRls pins a pg conn across long LLM runs; org isolation still holds via connection-default + RLS policies.
 - [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
 - [CLI action-turn UX](cli-action-turn-ux.md) — write turns render via `shape:"write_success"`; deletes carry `diff.impact` + parent nav; one useCli nav test is stale-failing (not yours).
+- [Account strategy objectives not seeded](atelier-account-strategy-objectives.md) — accountStrategy.objectives is agent-generated, empty on cold/test DB; goal-progress upsert 404s unless obj ids are backfilled.

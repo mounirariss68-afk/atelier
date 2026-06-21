@@ -7,10 +7,11 @@
  * Mirrors the upsertById pattern in atelier-seed-l2c.ts; safe to call on
  * every cold start.
  */
-import { type InferInsertModel } from "drizzle-orm";
+import { eq, type InferInsertModel } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import {
   db,
+  atelierAccounts,
   atelierAccountActions,
   atelierAccountRisks,
   atelierAccountGoalProgress,
@@ -128,11 +129,64 @@ const GOAL_PROGRESS: Array<
   },
 ];
 
+// Strategy objectives that the goal-progress rows above are tied to. The
+// `accountStrategy` field is normally authored by a partner or proposed by the
+// Account Cartographer agent, so it is empty on a cold/test seed. Without an
+// objective record the goal-progress upsert route (PUT /accounts/:id/goals/
+// :objectiveId) cannot resolve obj_a and returns "objective-not-found" (404).
+// We backfill the referenced objective here so the linked goal-progress rows
+// (and the CRM harness check) resolve against a real strategy objective.
+const STRATEGY_OBJECTIVES: Array<{
+  accountId: string;
+  objective: {
+    id: string;
+    text: string;
+    targetValue?: string | null;
+    targetDate?: string | null;
+  };
+}> = [
+  {
+    accountId: "acc_tasama",
+    objective: {
+      id: "obj_a",
+      text: "Secure a multi-year Phase 2 renewal and expand the agentic BPO footprint.",
+      targetValue: "SAR 4M ARR",
+      targetDate: "2026-12-31",
+    },
+  },
+];
+
+async function ensureStrategyObjectives(): Promise<void> {
+  for (const { accountId, objective } of STRATEGY_OBJECTIVES) {
+    const [account] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, accountId));
+    if (!account) continue;
+    const strategy = account.accountStrategy ?? {
+      objectives: [],
+      targetServiceLines: [],
+      winHypothesis: "",
+      keyPlays: [],
+    };
+    const objectives = strategy.objectives ?? [];
+    if (objectives.some((o) => o.id === objective.id)) continue;
+    await db
+      .update(atelierAccounts)
+      .set({
+        accountStrategy: { ...strategy, objectives: [...objectives, objective] },
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAccounts.id, accountId));
+  }
+}
+
 let accountPlanSeedPromise: Promise<void> | null = null;
 
 export async function ensureAtelierAccountPlanSeed(): Promise<void> {
   if (accountPlanSeedPromise) return accountPlanSeedPromise;
   accountPlanSeedPromise = (async () => {
+    await ensureStrategyObjectives();
     await upsertById(atelierAccountActions, ACTIONS);
     await upsertById(atelierAccountRisks, RISKS);
     await upsertById(atelierAccountGoalProgress, GOAL_PROGRESS);
