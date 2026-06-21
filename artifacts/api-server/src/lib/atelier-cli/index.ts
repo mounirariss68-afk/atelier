@@ -37,6 +37,7 @@ import {
   atelierEngagementAccess,
 } from "@workspace/db";
 import { and, desc, eq, gte, ilike, isNull, or, inArray } from "drizzle-orm";
+import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
 import type { Response } from "express";
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
 // inside getToolsForPersona() so tests / sandbox tooling can stub
@@ -387,6 +388,12 @@ export interface ToolContext {
   sessionId: string;
   /** Step index used for idempotency keys + partial-success bookkeeping. */
   stepIdx: number;
+  /**
+   * Emit a live progress update for the current turn. Set by `runTurn` so any
+   * tool — and any agent it dispatches (via the ambient progress sink) — can
+   * stream a growing step list to the UI instead of a frozen "Thinking…".
+   */
+  progress?: (pct: number, message: string) => void;
 }
 
 export interface ToolDef {
@@ -2613,6 +2620,7 @@ export async function runTurn(
           turnId,
           sessionId: session.id,
           stepIdx: 0,
+          progress: (pct, message) => record({ type: "progress", data: { pct, message } }),
         };
         record({
           type: "tool_call",
@@ -2620,7 +2628,10 @@ export async function runTurn(
         });
         let cont: ToolResult;
         try {
-          cont = await tool.run(mergedInput, ctx0);
+          cont = await runWithProgressSink(
+            (pct, message) => ctx0.progress?.(pct, message),
+            () => tool.run(mergedInput, ctx0),
+          );
         } catch (err) {
           cont = {
             ok: false,
@@ -2915,7 +2926,9 @@ export async function runTurn(
         turnId,
         sessionId: session.id,
         stepIdx: step,
+        progress: (pct, message) => record({ type: "progress", data: { pct, message } }),
       };
+      const progressSink = (pct: number, message: string) => ctx.progress?.(pct, message);
       const isCommit = tool.isWrite && tc.input.confirm === true;
       const idemKey = `${turnId}:${step}`;
       if (isCommit) {
@@ -2927,10 +2940,10 @@ export async function runTurn(
           userId: persona.id,
           kind: tc.name,
           input: tc.input,
-          run: () => tool.run(tc.input, ctx),
+          run: () => runWithProgressSink(progressSink, () => tool.run(tc.input, ctx)),
         });
       } else {
-        toolResult = await tool.run(tc.input, ctx);
+        toolResult = await runWithProgressSink(progressSink, () => tool.run(tc.input, ctx));
       }
 
       toolCalls.push({

@@ -10,5 +10,10 @@ description: How write/action turns render in the Atelier chat assistant and a k
 - Client treats a turn as an "action turn" (hides trace/breadcrumbs + single-step plan) when `status==="needs_confirmation" || turn.pending || toolResults has a propose_write`.
 
 ## Known-stale test (pre-existing, NOT a regression)
-- `useCli.test.ts` "tool_result for a different tool does not lift navigateTo" FAILS. Reason: the read-side navigateTo lift (Task #499 generalization) lifts `data.navigateTo` for ANY tool, not just `propose_write`. The test predates #499 and was never updated.
+- `useCli.test.ts` "tool_result for a different tool does not lift navigateTo" FAILS. Reason: the client now lifts `data.navigateTo` for ANY tool's result, not just `propose_write`; the test predates that generalization and was never updated.
 - **Why it matters:** if you see this 1 failure after editing CLI render code, it is not yours — confirm `useCli.ts` is untouched before chasing it.
+
+## Live agent progress streaming into chat
+- Every chat-dispatched agent streams live step breadcrumbs + a ticking mm:ss timer into the turn, replacing a static "Thinking…". Mechanism is an ambient AsyncLocalStorage sink (`atelier-agents/progress-sink.ts`): `runWithProgressSink(sink, fn)` wraps tool execution in the CLI; `reportProgress(pct,msg)` anywhere inside flows to the active sink → a `{type:"progress"}` SSE CliFrame.
+- **Why ALS:** one chokepoint covers all agents with no per-capability plumbing; harness agents emit via `ctx.progress`→`progressRun`, direct callers via `progressRun`, and the cartographer's single atomic web_search emits sub-steps because `callClaudeJsonWithWebSearch` uses `anthropic.messages.stream`.
+- **Double-emit pitfall:** `reportProgress` lives in exactly ONE place per path — inside `progressRun`. Do NOT also call `reportProgress` from `runAgent`'s `ctx.progress` (it calls `progressRun`), or every harness step emits twice. Only call `reportProgress` directly where `progressRun` is NOT also invoked (e.g. research_only / `runId` null).

@@ -20,6 +20,7 @@ export type CliFrameType =
   | "refusal"
   | "async_dispatched"
   | "partial_success"
+  | "progress"
   | "final"
   | "error"
   | "budget_exceeded";

@@ -1187,6 +1187,27 @@ function TurnBody({
     turn.status === "needs_confirmation" ||
     !!turn.pending ||
     (turn.toolResults?.some((t) => t.tool === "propose_write") ?? false);
+
+  // Live mm:ss elapsed timer while the turn streams, so a multi-minute
+  // agent run never looks frozen. Re-ticks once a second; stops as soon as
+  // the turn leaves the streaming state.
+  const isStreaming = turn.status === "streaming";
+  const [nowMs, setNowMs] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!isStreaming) return;
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isStreaming]);
+  const elapsedSec = turn.startedAt
+    ? Math.max(0, Math.floor((nowMs - turn.startedAt) / 1000))
+    : 0;
+  const elapsedLabel = `${String(Math.floor(elapsedSec / 60)).padStart(2, "0")}:${String(
+    elapsedSec % 60,
+  ).padStart(2, "0")}`;
+  // Latest live step (progress / plan / tool breadcrumb) becomes the
+  // streaming caption instead of a static "Thinking…".
+  const latestStep = [...turn.trace].reverse().find((l) => l.kind === "step");
+  const streamingCaption = latestStep?.text?.trim() || s("thinking", locale);
   return (
     <div className="space-y-2.5">
       {!isActionTurn && turn.trace.length > 0 && (() => {
@@ -1226,7 +1247,12 @@ function TurnBody({
             )}
             aria-hidden
           />
-          {s("thinking", locale)}
+          <span className="truncate max-w-[28ch]" data-testid="cli-streaming-caption">
+            {streamingCaption}
+          </span>
+          <span className="font-mono tabular-nums text-text-mute" data-testid="cli-streaming-timer">
+            {elapsedLabel}
+          </span>
           {isCurrent && (
             <button
               type="button"

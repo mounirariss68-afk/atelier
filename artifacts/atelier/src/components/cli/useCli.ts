@@ -180,6 +180,18 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         trace: [...turn.trace, { kind: "tool", text: `→ ${d.tool ?? "tool"}`, at: frame.receivedAt }],
       };
     }
+    case "progress": {
+      // Live sub-step from an agent the orchestrator dispatched (web search,
+      // pricing phases, etc.). Render as a breadcrumb step.
+      const d = frame.data as { pct?: number; message?: string };
+      const message = String(d.message ?? "").trim();
+      if (!message) return { ...turn, status: "streaming" };
+      return {
+        ...turn,
+        status: "streaming",
+        trace: [...turn.trace, { kind: "step", text: message, at: frame.receivedAt }],
+      };
+    }
     case "tool_result": {
       const d = frame.data as {
         tool?: string;

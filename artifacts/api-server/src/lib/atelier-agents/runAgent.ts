@@ -122,6 +122,8 @@ export async function runAgent<TInput, TOutput>(
     const ctx: RunAgentContext<TInput> = {
       runId,
       input: args.input,
+      // progressRun forwards to the ambient progress sink internally, so a
+      // single call here yields exactly one CLI progress frame (no double-emit).
       progress: (pct, message) => progressRun(runId, pct, message),
     };
 

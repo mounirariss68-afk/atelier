@@ -28,6 +28,7 @@ import { eq, and, gte, isNull } from "drizzle-orm";
 import { getAgent } from "@workspace/agents";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
+import { reportProgress } from "./progress-sink.js";
 import {
   STALLED_THRESHOLD_DAYS,
   SALES_STAGE_DEFAULT_PROB,
@@ -221,6 +222,7 @@ export async function progressRun(
   message: string,
   step?: { name: string; durationMs: number; tokensIn?: number; tokensOut?: number },
 ): Promise<void> {
+  reportProgress(pct, message);
   if (step) {
     const [existing] = await db
       .select()
@@ -1919,8 +1921,15 @@ async function callClaudeJsonWithWebSearch<T>(
   const ac = new AbortController();
   const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90_000);
   const timer = setTimeout(() => ac.abort(), timeoutMs);
-  const resp = await anthropic.messages
-    .create(
+  // Stream rather than `.create(...)` so the web-search agent's otherwise
+  // opaque multi-minute call surfaces granular progress (search queries,
+  // sources read, drafting) to the ambient progress sink. The final parsed
+  // message is recovered via `stream.finalMessage()`.
+  let searchCount = 0;
+  let sourcesRead = 0;
+  let draftingAnnounced = false;
+  const resp = await (async () => {
+    const stream = anthropic.messages.stream(
       {
         model,
         max_tokens: 8192,
@@ -1935,8 +1944,38 @@ async function callClaudeJsonWithWebSearch<T>(
         ],
       },
       { signal: ac.signal },
-    )
-    .finally(() => clearTimeout(timer));
+    );
+    try {
+      for await (const event of stream) {
+        // A server tool (web_search) is being invoked — announce the query.
+        if (
+          event.type === "content_block_start" &&
+          event.content_block.type === "server_tool_use" &&
+          event.content_block.name === "web_search"
+        ) {
+          searchCount += 1;
+          reportProgress(35, `Searching the web (${searchCount})`);
+        } else if (
+          event.type === "content_block_start" &&
+          event.content_block.type === "web_search_tool_result"
+        ) {
+          const result = event.content_block.content as unknown;
+          if (Array.isArray(result)) sourcesRead += result.length;
+          reportProgress(60, `Read ${sourcesRead} source${sourcesRead === 1 ? "" : "s"}`);
+        } else if (
+          !draftingAnnounced &&
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          draftingAnnounced = true;
+          reportProgress(80, "Drafting findings");
+        }
+      }
+      return await stream.finalMessage();
+    } finally {
+      clearTimeout(timer);
+    }
+  })();
   // Find the last text block (Claude returns interleaved tool-use,
   // tool-result, and text blocks; the final text is the answer).
   const textBlocks = resp.content.filter(
@@ -2011,7 +2050,10 @@ export async function runAccountCartographer(args: {
       : null;
   try {
     const system = loadPrompt("account_cartographer");
+    // progressRun forwards to the ambient sink in live mode; in research_only
+    // (runId null) emit the same breadcrumb directly so chat still shows it.
     if (runId) await progressRun(runId, 25, "Searching the public web");
+    else reportProgress(25, "Searching the public web");
     const { value, costUsd, citationUrls } =
       await callClaudeJsonWithWebSearch<CartographerOutput>(
         "claude-sonnet-4-5",
