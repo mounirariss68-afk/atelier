@@ -59,6 +59,29 @@ function openSse(res: Response): void {
   if (typeof res.flushHeaders === "function") res.flushHeaders();
 }
 
+/**
+ * SSE comment heartbeat — keeps the Replit proxy (and any intermediary
+ * load balancer) from dropping an idle connection during long agent runs.
+ * A chat turn that dispatches a web-search agent (e.g. the account
+ * cartographer) can go ~60–90s with no SSE frames while Anthropic performs
+ * the actual search server-side; without a heartbeat the proxy closes the
+ * socket ("request aborted") and the turn's result never reaches the client.
+ * Mirrors the pattern in routes/chat.ts. Returns a stop function.
+ */
+function startHeartbeat(res: Response): () => void {
+  const interval = setInterval(() => {
+    try {
+      res.write(": ping\n\n");
+      const flush = (res as unknown as { flush?: () => void }).flush;
+      if (typeof flush === "function") flush.call(res);
+    } catch {
+      // socket closed — the handler's finally will clear this interval.
+    }
+  }, 15_000);
+  interval.unref?.();
+  return () => clearInterval(interval);
+}
+
 const router: IRouter = Router();
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -110,12 +133,14 @@ router.post("/cli/turn", async (req, res) => {
   const sessionId = reset ? null : (body.sessionId ?? null);
 
   openSse(res);
+  const stopHeartbeat = startHeartbeat(res);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
   const emit = (frame: CliFrame) => writeSseFrame(res, frame);
 
   let closed = false;
   req.on("close", () => {
     closed = true;
+    stopHeartbeat();
   });
 
   try {
@@ -147,6 +172,7 @@ router.post("/cli/turn", async (req, res) => {
       });
     }
   } finally {
+    stopHeartbeat();
     res.end();
   }
 });
@@ -156,6 +182,8 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   openSse(res);
+  const stopHeartbeat = startHeartbeat(res);
+  req.on("close", stopHeartbeat);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
   const emit = (frame: CliFrame) => writeSseFrame(res, frame);
   // Task #332 — irreversible ops require the client to retype the
@@ -181,6 +209,7 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
       data: { message: err instanceof Error ? err.message : String(err) },
     });
   } finally {
+    stopHeartbeat();
     res.end();
   }
 });
