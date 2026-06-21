@@ -26,3 +26,26 @@ non-account-wide readers who could already see the account in the workspace).
 `canSeeAccount`; gate any financial section separately with the account-wide +
 not-restricted/board check. Write/mutation endpoints use `canManageAccountPlan`
 (partner-tier + account team/AM + owner), not the read gate.
+
+## Boundary makes the financial gate's restricted/board terms uneven to test
+
+The financial gate's `!isRestrictedPersona && !isBoardObserver` terms behave very
+differently over HTTP because of the central non-employee boundary middleware in
+`routes/atelier/index.ts`:
+
+- **Restricted personas** (contractor / partner_firm_resource / recruiter) are
+  rejected by that boundary BEFORE any `/accounts/*` handler (incl. `plan.pdf`)
+  runs — they may only hit engagement-scoped routes. So the in-handler
+  `!isRestrictedPersona` term is unreachable defense-in-depth: a restricted
+  persona can never produce a 200 brief, only a 403. Test it as a 403 (no brief
+  = strictly stronger than redaction), not as a redacted PDF.
+- **Board observers** are NOT on that boundary, so they DO reach the handler;
+  `attachRls` only sets a deny sentinel and calls `next()` (never 403s), and the
+  PDF handler reads the global `db`, so RLS doesn't block it. To make
+  `isBoardObserver` the *deciding* factor in `canSeeFinancials` (not `accountWide`),
+  give the observer account-wide authority by making it the account
+  `partnerOwnerId` — then the brief renders 200 but redacts the financial block.
+
+**Why:** Writing "restricted persona exports a redacted PDF" tests will fail — the
+route is unreachable for them. Seed has no board_observer user, so board tests
+must create one (cleanup the user + owned account).

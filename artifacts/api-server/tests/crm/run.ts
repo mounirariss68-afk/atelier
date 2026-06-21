@@ -223,6 +223,7 @@ async function main(): Promise<void> {
   const START = new Date();
   const created = {
     accounts: new Set<string>(),
+    users: new Set<string>(),
     opps: new Set<string>(),
     raids: new Set<string>(),
     deliverables: new Set<string>(),
@@ -1352,6 +1353,81 @@ async function main(): Promise<void> {
         noAccessPdf.status === 403,
         `status=${noAccessPdf.status}`,
       );
+
+      // ---- money-free brief for the BOARD-OBSERVER persona (Task #576) ----
+      // The financial gate also excludes board observers
+      // (`!isBoardObserver(me.role)`), but no PDF test exercised that branch.
+      // A board observer is NOT stopped by the non-employee boundary, so it
+      // can reach the handler. To make `isBoardObserver` the DECIDING factor
+      // (rather than the account-wide-authority check), we give the observer
+      // account-wide authority the only honest way available: it OWNS the
+      // account (partnerOwnerId === me.id), so `accountWide` is true and
+      // `canSeeAccount` passes. canSeeFinancials then collapses to false
+      // solely because of `!isBoardObserver`, and the brief must redact the
+      // financial summary to the placeholder with no labels / figures.
+      const boardId = `u_board_obs_${STAMP}`;
+      const boardAcctId = `acc_board_obs_${STAMP}`;
+      await db.insert(atelierUsers).values({
+        id: boardId,
+        orgId: ORG,
+        email: `board.observer.${STAMP}@aico.example`,
+        name: "Board Observer (t576)",
+        initials: "BO",
+        role: "board_observer",
+        roleLabel: "Board Observer",
+        title: "Independent Board Observer",
+      });
+      created.users.add(boardId);
+      await db.insert(atelierAccounts).values({
+        id: boardAcctId,
+        orgId: ORG,
+        name: uniq("Board Observer Owned Acct"),
+        country: "United Arab Emirates",
+        sector: "Financial Services",
+        partnerOwnerId: boardId,
+      });
+      created.accounts.add(boardAcctId);
+
+      const boardPdf = await fetch(`${BASE}/accounts/${boardAcctId}/plan.pdf`, {
+        headers: { cookie: `atelier_persona=${boardId}` },
+      });
+      const boardPdfBuf = Buffer.from(await boardPdf.arrayBuffer());
+      check(
+        "GET /accounts/:id/plan.pdf (board observer, owns account) \u2192 200 PDF",
+        boardPdf.status === 200 &&
+          (boardPdf.headers.get("content-type") ?? "").includes("application/pdf") &&
+          boardPdfBuf.subarray(0, 5).toString("latin1") === "%PDF-",
+        `status=${boardPdf.status} type=${boardPdf.headers.get("content-type")} size=${boardPdfBuf.length}`,
+      );
+      const boardText = extractPdfText(boardPdfBuf);
+      check(
+        "plan.pdf (board observer) redacts financial summary (placeholder, no labels/figures)",
+        boardText.includes(FINANCIAL_PLACEHOLDER) &&
+          FINANCIAL_LABELS.every((l) => !boardText.includes(l)) &&
+          !USD_FIGURE_RE.test(boardText),
+        `placeholder=${boardText.includes(FINANCIAL_PLACEHOLDER)} ` +
+          `leakedLabels=${FINANCIAL_LABELS.filter((l) => boardText.includes(l)).join("|") || "none"} ` +
+          `usd=${USD_FIGURE_RE.exec(boardText)?.[0] ?? "none"}`,
+      );
+
+      // ---- money-free brief for the RESTRICTED persona (Task #576) ----
+      // The financial gate also excludes restricted personas
+      // (`!isRestrictedPersona(me.role)`). In practice that in-handler branch
+      // is unreachable over HTTP: every restricted persona (contractor /
+      // partner_firm_resource / recruiter) is stopped by the central
+      // non-employee boundary BEFORE the plan.pdf handler runs — they may only
+      // hit engagement-scoped routes. PERSONA.restricted (partner_firm_resource)
+      // can see acc_tasama in the workspace via an engagement grant, yet its
+      // account-plan export is denied outright. A 403 (no brief at all) is a
+      // strictly stronger money-free guarantee than a redacted brief.
+      const restrictedPdf = await fetch(`${BASE}/accounts/${ACC}/plan.pdf`, {
+        headers: { cookie: `atelier_persona=${PERSONA.restricted}` },
+      });
+      check(
+        "GET /accounts/:id/plan.pdf (restricted persona) \u2192 403 (no money brief at all)",
+        restrictedPdf.status === 403,
+        `status=${restrictedPdf.status} body=${JSON.stringify(restrictedPdf.body ?? null)?.slice(0, 120)}`,
+      );
     }
   } finally {
     // -------------------- cleanup (best-effort, tagged rows) --------------
@@ -1371,10 +1447,12 @@ async function main(): Promise<void> {
         await db.execute(sql`delete from atelier_agent_runs where target_id = ${id}`).catch(() => undefined);
         await db.delete(atelierAccounts).where(eq(atelierAccounts.id, id));
       }
+      // Users created by this run (e.g. the Task #576 board-observer persona).
+      for (const id of created.users) await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
       // Audit cleanup is scoped to BOTH the entities this run touched AND the
       // actor personas it acted as, so concurrent activity by any other actor
       // (possible on a shared, non-isolated DB) is never deleted.
-      const auditActors = [PERSONA.fp, PERSONA.sm, PERSONA.consultant, PERSONA.restricted];
+      const auditActors = [PERSONA.fp, PERSONA.sm, PERSONA.consultant, PERSONA.restricted, ...created.users];
       const auditTargets = new Set<string>([
         ...created.accounts,
         ...created.opps,
