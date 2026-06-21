@@ -1023,6 +1023,66 @@ async function main(): Promise<void> {
       check("GET /accounts: founding_partner sees a non-empty firm-wide list", fpCount > 0, `fp=${fpCount}`);
       check("GET /accounts: restricted persona is denied with 403 (non-employee boundary)", restrictedAccounts.status === 403, `status=${restrictedAccounts.status} body=${JSON.stringify(restrictedAccounts.body)?.slice(0, 120)}`);
     }
+
+    // =====================================================================
+    group("REST \u00b7 Account 360 financial-rollup gate (Task #570)");
+    // Account 360 is an account-WIDE financial intelligence rollup (account
+    // AR/invoices, full pipeline, every engagement's P&L). canSeeAccount alone
+    // is too permissive \u2014 a single engagement grant lets a scoped consultant
+    // reach it \u2014 so the endpoint AND the workspace header health embed are gated
+    // to account-wide authority: firm-wide partners (access.all) or the account's
+    // partner owner. p_omar_najjar (consultant) holds an active grant on
+    // eng_dge_effortless_v1 (acc_dge), so it CAN see the account, but is neither
+    // firm-wide nor acc_dge's partner owner \u2014 exactly the persona the gate targets.
+    // =====================================================================
+    {
+      const fp360 = await api("GET", `/accounts/${ACC_OOS}/account-360`, PERSONA.fp);
+      check(
+        "GET /accounts/:id/account-360 (founding_partner) \u2192 200 + full rollup",
+        fp360.status === 200 &&
+          !!fp360.body?.financials &&
+          !!fp360.body?.health &&
+          typeof fp360.body?.health?.score === "number" &&
+          Array.isArray(fp360.body?.timeline) &&
+          Array.isArray(fp360.body?.renewals) &&
+          Array.isArray(fp360.body?.nextBestActions),
+        `status=${fp360.status} body=${JSON.stringify(fp360.body)?.slice(0, 160)}`,
+      );
+
+      // Scoped consultant: canSeeAccount passes (engagement grant) but is NOT
+      // account-wide \u2192 403 account-financials-forbidden (the new gate).
+      const scoped360 = await api("GET", `/accounts/${ACC_OOS}/account-360`, PERSONA.consultant);
+      check(
+        "GET /accounts/:id/account-360 (scoped consultant) \u2192 403 account-financials-forbidden",
+        scoped360.status === 403 && scoped360.body?.error === "account-financials-forbidden",
+        `status=${scoped360.status} body=${JSON.stringify(scoped360.body)?.slice(0, 160)}`,
+      );
+
+      // Employee with no grant on the account: blocked earlier, at canSeeAccount.
+      const noAccess360 = await api("GET", `/accounts/${ACC_OOS}/account-360`, PERSONA.noAccess);
+      check(
+        "GET /accounts/:id/account-360 (no-access employee) \u2192 403 account-forbidden",
+        noAccess360.status === 403 && noAccess360.body?.error === "account-forbidden",
+        `status=${noAccess360.status} body=${JSON.stringify(noAccess360.body)?.slice(0, 160)}`,
+      );
+
+      // Workspace header health embed mirrors the same account-wide gate:
+      // present for the firm-wide partner, null for the scoped consultant.
+      const fpWs = await api("GET", `/accounts/${ACC_OOS}`, PERSONA.fp);
+      check(
+        "GET /accounts/:id (founding_partner) \u2192 workspace.account.health present",
+        fpWs.status === 200 &&
+          !!fpWs.body?.account?.health &&
+          typeof fpWs.body.account.health.score === "number",
+        `status=${fpWs.status} health=${JSON.stringify(fpWs.body?.account?.health)?.slice(0, 120)}`,
+      );
+      const scopedWs = await api("GET", `/accounts/${ACC_OOS}`, PERSONA.consultant);
+      check(
+        "GET /accounts/:id (scoped consultant) \u2192 workspace.account.health is null",
+        scopedWs.status === 200 && (scopedWs.body?.account?.health ?? null) === null,
+        `status=${scopedWs.status} health=${JSON.stringify(scopedWs.body?.account?.health)?.slice(0, 120)}`,
+      );
+    }
   } finally {
     // -------------------- cleanup (best-effort, tagged rows) --------------
     try {

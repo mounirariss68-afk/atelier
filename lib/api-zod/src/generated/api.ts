@@ -2359,6 +2359,15 @@ export const AtelierGetAccountWorkspaceParams = zod.object({
   accountId: zod.coerce.string(),
 });
 
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierGetAccountWorkspaceResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierGetAccountWorkspaceResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -2426,6 +2435,50 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierGetAccountWorkspaceResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -2968,6 +3021,15 @@ export const AtelierUpdateAccountBody = zod
     "Partner-editable account fields. Only the keys present are written\n(PATCH semantics). `parentAccountId: null` unlinks the parent.\n",
   );
 
+export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierUpdateAccountResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -3035,6 +3097,46 @@ export const AtelierUpdateAccountResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(atelierUpdateAccountResponseAccountTwoHealthOneScoreMin)
+                .max(atelierUpdateAccountResponseAccountTwoHealthOneScoreMax),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpdateAccountResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -3460,6 +3562,15 @@ export const AtelierRefreshAccountCartographerBody = zod.object({
   focusOpportunityId: zod.string().nullish(),
 });
 
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierRefreshAccountCartographerResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierRefreshAccountCartographerResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -3527,6 +3638,50 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierRefreshAccountCartographerResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -4290,6 +4445,122 @@ export const AtelierGetAccountQbrResponse = zod.object({
 });
 
 /**
+ * @summary Account financials, relationship history & health (Task #570) — read-only rollup of existing engagement / invoice / opportunity data.
+ */
+export const AtelierGetAccount360Params = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const atelierGetAccount360ResponseHealthScoreMin = 0;
+export const atelierGetAccount360ResponseHealthScoreMax = 100;
+
+export const atelierGetAccount360ResponseHealthFactorsItemScoreMin = 0;
+export const atelierGetAccount360ResponseHealthFactorsItemScoreMax = 100;
+
+export const atelierGetAccount360ResponseHealthFactorsItemWeightMin = 0;
+export const atelierGetAccount360ResponseHealthFactorsItemWeightMax = 1;
+
+export const AtelierGetAccount360Response = zod.object({
+  accountId: zod.string(),
+  financials: zod.object({
+    contractValueUsd: zod.number(),
+    activeEngagementValueUsd: zod.number(),
+    recognisedRevenueUsd: zod.number(),
+    billedUsd: zod.number(),
+    collectedUsd: zod.number(),
+    costToDateUsd: zod.number(),
+    grossMarginPct: zod.number().describe("0–1 fraction."),
+    openPipelineUsd: zod.number(),
+    weightedPipelineUsd: zod.number(),
+    arOutstandingUsd: zod.number(),
+    arOverdueUsd: zod.number(),
+    aging: zod.object({
+      current: zod.number(),
+      d30: zod.number(),
+      d60: zod.number(),
+      d90: zod.number(),
+      d90plus: zod.number(),
+    }),
+    invoiceCount: zod.number(),
+    overdueInvoiceCount: zod.number(),
+    engagementCount: zod.number(),
+    activeEngagementCount: zod.number(),
+    openOpportunityCount: zod.number(),
+  }),
+  health: zod.object({
+    score: zod
+      .number()
+      .min(atelierGetAccount360ResponseHealthScoreMin)
+      .max(atelierGetAccount360ResponseHealthScoreMax),
+    band: zod.enum(["green", "amber", "red"]),
+    factors: zod.array(
+      zod.object({
+        key: zod.enum(["relationship", "financial", "engagement", "risk"]),
+        label: zod.string(),
+        score: zod
+          .number()
+          .min(atelierGetAccount360ResponseHealthFactorsItemScoreMin)
+          .max(atelierGetAccount360ResponseHealthFactorsItemScoreMax),
+        weight: zod
+          .number()
+          .min(atelierGetAccount360ResponseHealthFactorsItemWeightMin)
+          .max(atelierGetAccount360ResponseHealthFactorsItemWeightMax),
+        detail: zod.string(),
+      }),
+    ),
+  }),
+  timeline: zod.array(
+    zod.object({
+      id: zod.string(),
+      date: zod.string().describe("ISO timestamp."),
+      kind: zod.enum(["engagement", "deal", "milestone"]),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      tone: zod.enum(["default", "gold", "green", "amber", "red"]),
+      refKind: zod
+        .union([
+          zod.literal("engagement"),
+          zod.literal("opportunity"),
+          zod.literal("account"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  renewals: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum(["renewal", "expansion"]),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      valueUsd: zod.number(),
+      dueDate: zod.string().nullish(),
+      refKind: zod.enum(["engagement", "opportunity"]),
+      refId: zod.string(),
+    }),
+  ),
+  nextBestActions: zod.array(
+    zod.object({
+      id: zod.string(),
+      label: zod.string(),
+      detail: zod.string().nullish(),
+      priority: zod.enum(["high", "medium", "low"]),
+      source: zod.enum(["derived", "action_queue"]),
+      refKind: zod
+        .union([
+          zod.literal("engagement"),
+          zod.literal("opportunity"),
+          zod.literal("account"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Approve (optionally with an edited value) or reject an AI-proposed profile delta
  */
 export const AtelierDecideProfileUpdateParams = zod.object({
@@ -4302,6 +4573,15 @@ export const AtelierDecideProfileUpdateBody = zod.object({
   note: zod.string().nullish(),
   editedValue: zod.unknown().optional(),
 });
+
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
 
 export const atelierDecideProfileUpdateResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
@@ -4370,6 +4650,50 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierDecideProfileUpdateResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -4800,6 +5124,15 @@ export const AtelierBulkDecideProfileUpdatesBody = zod.object({
   updateIds: zod.array(zod.string()).optional(),
 });
 
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -4867,6 +5200,50 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -5310,6 +5687,15 @@ export const AtelierCreateAccountInsightBody = zod.object({
     .optional(),
 });
 
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierCreateAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierCreateAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -5377,6 +5763,50 @@ export const AtelierCreateAccountInsightResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierCreateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -5819,6 +6249,15 @@ export const AtelierUpdateAccountInsightBody = zod.object({
     .optional(),
 });
 
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierUpdateAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -5886,6 +6325,50 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpdateAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -6312,6 +6795,15 @@ export const AtelierDeleteAccountInsightParams = zod.object({
   insightId: zod.coerce.string(),
 });
 
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierDeleteAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierDeleteAccountInsightResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -6379,6 +6871,50 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierDeleteAccountInsightResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -6814,6 +7350,15 @@ export const AtelierAddAccountTeamMemberBody = zod.object({
   ]),
 });
 
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierAddAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierAddAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -6881,6 +7426,50 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierAddAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -7316,6 +7905,15 @@ export const AtelierUpdateAccountTeamMemberBody = zod.object({
   ]),
 });
 
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierUpdateAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -7383,6 +7981,50 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod
@@ -7811,6 +8453,15 @@ export const AtelierRemoveAccountTeamMemberParams = zod.object({
   memberId: zod.coerce.string(),
 });
 
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
+
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax = 100;
+
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax = 1;
+
 export const atelierRemoveAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTextMax = 400;
 
 export const atelierRemoveAccountTeamMemberResponseAccountTwoAccountStrategyOneObjectivesItemTargetValueMax = 200;
@@ -7878,6 +8529,50 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
     })
     .and(
       zod.object({
+        health: zod
+          .union([
+            zod.object({
+              score: zod
+                .number()
+                .min(
+                  atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMin,
+                )
+                .max(
+                  atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMax,
+                ),
+              band: zod.enum(["green", "amber", "red"]),
+              factors: zod.array(
+                zod.object({
+                  key: zod.enum([
+                    "relationship",
+                    "financial",
+                    "engagement",
+                    "risk",
+                  ]),
+                  label: zod.string(),
+                  score: zod
+                    .number()
+                    .min(
+                      atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMin,
+                    )
+                    .max(
+                      atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemScoreMax,
+                    ),
+                  weight: zod
+                    .number()
+                    .min(
+                      atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMin,
+                    )
+                    .max(
+                      atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneFactorsItemWeightMax,
+                    ),
+                  detail: zod.string(),
+                }),
+              ),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         notes: zod.string().nullish(),
         strategicPriorities: zod.array(zod.string()).optional(),
         strategicPriorityRefs: zod

@@ -41,6 +41,7 @@ import {
   SectionLabel,
   PillButton,
 } from "@/components/ui/primitives";
+import { Account360Tab } from "@/components/tabs/Account360Tab";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
@@ -77,6 +78,7 @@ import {
   Trash2,
   Crown,
   Send,
+  Gauge,
 } from "lucide-react";
 
 type TabKey =
@@ -86,6 +88,7 @@ type TabKey =
   | "engagements"
   | "relationships"
   | "insights"
+  | "account_360"
   | "whitespace"
   | "qbr"
   | "audit";
@@ -97,6 +100,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "engagements", label: "Engagements", icon: <Layers className="w-3.5 h-3.5" /> },
   { key: "relationships", label: "Relationships", icon: <Network className="w-3.5 h-3.5" /> },
   { key: "insights", label: "Insights", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { key: "account_360", label: "Account 360", icon: <Gauge className="w-3.5 h-3.5" /> },
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
@@ -212,6 +216,27 @@ export default function Account() {
               Tier {a.tier}
             </MonoChip>
             <MonoChip>{a.status}</MonoChip>
+            {a.health && (
+              <button
+                onClick={() => setTab("account_360")}
+                className="appearance-none"
+                data-testid="chip-account-health"
+                title={`Account health ${a.health.score}/100`}
+              >
+                <MonoChip
+                  tone={
+                    a.health.band === "green"
+                      ? "green"
+                      : a.health.band === "amber"
+                        ? "amber"
+                        : "red"
+                  }
+                >
+                  <Gauge className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />
+                  Health {a.health.score}
+                </MonoChip>
+              </button>
+            )}
             {a.cartographerStatus === "running" ? (
               <span
                 className="pill-btn pill-btn-ghost text-xs cursor-default"
@@ -309,6 +334,7 @@ export default function Account() {
           />
         )}
         {tab === "insights" && <InsightsTab ws={ws} accountId={accountId} />}
+        {tab === "account_360" && <Account360Tab accountId={accountId} />}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}
         {tab === "qbr" && <QbrTab accountId={accountId} />}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}

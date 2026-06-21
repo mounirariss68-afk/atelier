@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAccountCompetitor } from "./atelierAccountCompetitor";
+import type { AtelierAccountHealth } from "./atelierAccountHealth";
 import type { AtelierAccountHierarchyRef } from "./atelierAccountHierarchyRef";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
@@ -15,6 +16,7 @@ import type { AtelierResearchBrief } from "./atelierResearchBrief";
 import type { AtelierSourceSignal } from "./atelierSourceSignal";
 
 export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
+  health?: AtelierAccountHealth | null;
   /** @nullable */
   notes?: string | null;
   strategicPriorities?: string[];

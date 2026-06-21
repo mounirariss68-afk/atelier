@@ -1385,6 +1385,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierQbrCanvas" }
+  /atelier/accounts/{accountId}/account-360:
+    get:
+      operationId: atelierGetAccount360
+      tags: [atelier]
+      summary: >-
+        Account financials, relationship history & health (Task #570) —
+        read-only rollup of existing engagement / invoice / opportunity data.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Account 360 rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccount360" }
   /atelier/accounts/{accountId}/profile-updates/{updateId}/decision:
     post:
       operationId: atelierDecideProfileUpdate
@@ -2971,6 +2989,12 @@ components:
             - $ref: "#/components/schemas/AtelierAccountSummary"
             - type: object
               properties:
+                # Task #570 — compact composite account health for the record
+                # header. Null for personas not allowed to see financials.
+                health:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountHealth"
+                    - type: "null"
                 notes: { type: ["string", "null"] }
                 strategicPriorities:
                   type: array
@@ -3046,6 +3070,155 @@ components:
           $ref: "#/components/schemas/AtelierWhitespaceCanvas"
         qbrPreview:
           $ref: "#/components/schemas/AtelierQbrCanvas"
+
+    # ================================================================
+    # Task #570 — Account 360: financials, history & health.
+    # Read-only rollup of existing engagement / invoice / opportunity data.
+    # ================================================================
+    AtelierAccountFinancials:
+      type: object
+      required:
+        - contractValueUsd
+        - activeEngagementValueUsd
+        - recognisedRevenueUsd
+        - billedUsd
+        - collectedUsd
+        - costToDateUsd
+        - grossMarginPct
+        - openPipelineUsd
+        - weightedPipelineUsd
+        - arOutstandingUsd
+        - arOverdueUsd
+        - aging
+        - invoiceCount
+        - overdueInvoiceCount
+        - engagementCount
+        - activeEngagementCount
+        - openOpportunityCount
+      properties:
+        contractValueUsd: { type: number }
+        activeEngagementValueUsd: { type: number }
+        recognisedRevenueUsd: { type: number }
+        billedUsd: { type: number }
+        collectedUsd: { type: number }
+        costToDateUsd: { type: number }
+        grossMarginPct: { type: number, description: "0–1 fraction." }
+        openPipelineUsd: { type: number }
+        weightedPipelineUsd: { type: number }
+        arOutstandingUsd: { type: number }
+        arOverdueUsd: { type: number }
+        aging:
+          type: object
+          required: [current, d30, d60, d90, d90plus]
+          properties:
+            current: { type: number }
+            d30: { type: number }
+            d60: { type: number }
+            d90: { type: number }
+            d90plus: { type: number }
+        invoiceCount: { type: integer }
+        overdueInvoiceCount: { type: integer }
+        engagementCount: { type: integer }
+        activeEngagementCount: { type: integer }
+        openOpportunityCount: { type: integer }
+
+    AtelierAccountHealthBand:
+      type: string
+      enum: [green, amber, red]
+
+    AtelierAccountHealthFactor:
+      type: object
+      required: [key, label, score, weight, detail]
+      properties:
+        key:
+          type: string
+          enum: [relationship, financial, engagement, risk]
+        label: { type: string }
+        score: { type: number, minimum: 0, maximum: 100 }
+        weight: { type: number, minimum: 0, maximum: 1 }
+        detail: { type: string }
+
+    AtelierAccountHealth:
+      type: object
+      required: [score, band, factors]
+      properties:
+        score: { type: number, minimum: 0, maximum: 100 }
+        band: { $ref: "#/components/schemas/AtelierAccountHealthBand" }
+        factors:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountHealthFactor" }
+
+    AtelierAccountTimelineItem:
+      type: object
+      required: [id, date, kind, title, tone]
+      properties:
+        id: { type: string }
+        date: { type: string, description: ISO timestamp. }
+        kind:
+          type: string
+          enum: [engagement, deal, milestone]
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        tone:
+          type: string
+          enum: [default, gold, green, amber, red]
+        refKind:
+          type: ["string", "null"]
+          enum: [engagement, opportunity, account, null]
+        refId: { type: ["string", "null"] }
+
+    AtelierAccountRenewal:
+      type: object
+      required: [id, kind, title, valueUsd, refKind, refId]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [renewal, expansion]
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        valueUsd: { type: number }
+        dueDate: { type: ["string", "null"] }
+        refKind:
+          type: string
+          enum: [engagement, opportunity]
+        refId: { type: string }
+
+    AtelierAccountNextBestAction:
+      type: object
+      required: [id, label, priority, source]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        detail: { type: ["string", "null"] }
+        priority:
+          type: string
+          enum: [high, medium, low]
+        source:
+          type: string
+          enum: [derived, action_queue]
+        refKind:
+          type: ["string", "null"]
+          enum: [engagement, opportunity, account, null]
+        refId: { type: ["string", "null"] }
+
+    AtelierAccount360:
+      type: object
+      required:
+        [accountId, financials, health, timeline, renewals, nextBestActions]
+      properties:
+        accountId: { type: string }
+        financials: { $ref: "#/components/schemas/AtelierAccountFinancials" }
+        health: { $ref: "#/components/schemas/AtelierAccountHealth" }
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountTimelineItem" }
+        renewals:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountRenewal" }
+        nextBestActions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountNextBestAction" }
 
     # Task #569 — human account insight + account team.
     AtelierAccountInsightCategory:

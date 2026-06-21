@@ -31,6 +31,14 @@ import {
   atelierAccountTeamMembers,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
+import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
+import {
+  computeAccountFinancials,
+  computeAccountHealth,
+  buildRelationshipTimeline,
+  buildRenewalsAndActions,
+  countOpenRisks,
+} from "../../lib/atelier-account-360.js";
 
 type EngAccess = Awaited<ReturnType<typeof accessibleEngagementIds>>;
 function canSeeEng(access: EngAccess, engId: string) {
@@ -454,7 +462,11 @@ router.post("/accounts", async (req, res) => {
 });
 
 // ---------- workspace ----------
-async function buildWorkspace(accountId: string, access: EngAccess, me: { id: string }) {
+async function buildWorkspace(
+  accountId: string,
+  access: EngAccess,
+  me: { id: string; role?: string | null },
+) {
   const a = await loadAccount(accountId);
   if (!a) return null;
   const summary = await summariseAccount(a, access);
@@ -634,9 +646,42 @@ async function buildWorkspace(accountId: string, access: EngAccess, me: { id: st
         .where(inArray(atelierUsers.id, teamUserIds))
     : [];
 
+  // Task #570 — compact composite health for the record header. Computed
+  // from the account's full engagement/opportunity set for accurate totals,
+  // but only surfaced to personas allowed to see financial signals (mirrors
+  // the engagement Financials gate). Restricted / board personas get null.
+  // Mirror the account-360 gate: the header health chip is a financial-
+  // intelligence signal derived from account-wide totals, so only surface it
+  // to firm-wide partners (access.all) or the account's partner owner — never
+  // to a consultant scoped to a single engagement on the account.
+  const accountWide = access.all || a.partnerOwnerId === me.id;
+  const canSeeFinancials =
+    accountWide &&
+    !isRestrictedPersona(me.role ?? null) &&
+    !isBoardObserver(me.role ?? null);
+  let health: Awaited<ReturnType<typeof computeAccountHealth>> | null = null;
+  if (canSeeFinancials) {
+    const financials = await computeAccountFinancials({
+      orgId: a.orgId,
+      accountId: a.id,
+      engagements: allEngsWs,
+      opportunities: allOppsWs,
+    });
+    const openRisks = await countOpenRisks({
+      orgId: a.orgId,
+      engagementIds: allEngsWs.map((e) => e.id),
+    });
+    health = computeAccountHealth({
+      relationshipStrength: Number(a.relationshipStrength ?? 0),
+      financials,
+      openRisks,
+    });
+  }
+
   return {
     account: {
       ...summary,
+      health,
       notes: a.notes ?? null,
       strategicPriorities: a.strategicPriorities ?? [],
       strategicPriorityRefs: (a.strategicPriorityRefs ?? []) as Array<{
@@ -750,6 +795,104 @@ router.get("/accounts/:accountId", async (req, res) => {
     return;
   }
   res.json(ws);
+});
+
+// ---------- Account 360: financials, history & health (Task #570) ----------
+// Read-only rollup of EXISTING engagement / invoice / opportunity data onto
+// the account record. Gated by canSeeAccount; financial signals are blocked
+// for restricted / board personas (mirrors the engagement Financials gate).
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/accounts/:accountId/account-360", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (isRestrictedPersona(me.role) || isBoardObserver(me.role)) {
+    res.status(403).json({ error: "financials-forbidden" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const a = await loadAccount(req.params.accountId);
+  if (!a) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  // Account 360 is an account-WIDE financial intelligence rollup (account-level
+  // AR/invoices, full pipeline, every engagement's P&L). canSeeAccount alone is
+  // too permissive here — it grants access to anyone holding a single
+  // engagement-grant on the account, who would then see firm-wide totals for
+  // engagements they are not authorised to view. Gate the rollup to account-wide
+  // authority: firm-wide partners (access.all) or the account's partner owner.
+  // Scoped consultants use the per-engagement Financials screens instead.
+  const accountWide = access.all || a.partnerOwnerId === me.id;
+  if (!accountWide) {
+    res
+      .status(403)
+      .json({
+        error: "account-financials-forbidden",
+        reason:
+          "Account 360 rollup requires firm-wide or account-owner access.",
+      });
+    return;
+  }
+  const engagements = await db
+    .select()
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.accountId, a.id),
+        isNull(atelierEngagements.deletedAt),
+      ),
+    );
+  const opportunities = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.accountId, a.id),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  const financials = await computeAccountFinancials({
+    orgId: a.orgId,
+    accountId: a.id,
+    engagements,
+    opportunities,
+  });
+  const openRisks = await countOpenRisks({
+    orgId: a.orgId,
+    engagementIds: engagements.map((e) => e.id),
+  });
+  const health = computeAccountHealth({
+    relationshipStrength: Number(a.relationshipStrength ?? 0),
+    financials,
+    openRisks,
+  });
+  const timeline = await buildRelationshipTimeline({
+    orgId: a.orgId,
+    accountId: a.id,
+    engagements,
+    opportunities,
+  });
+  const { renewals, nextBestActions } = await buildRenewalsAndActions({
+    orgId: a.orgId,
+    accountId: a.id,
+    relationshipStrength: Number(a.relationshipStrength ?? 0),
+    financials,
+    engagements,
+    opportunities,
+    openRisks,
+  });
+  res.json({
+    accountId: a.id,
+    financials,
+    health,
+    timeline,
+    renewals,
+    nextBestActions,
+  });
 });
 
 // ===================================================================

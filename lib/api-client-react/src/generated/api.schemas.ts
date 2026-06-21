@@ -866,7 +866,53 @@ export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
   sourceUrls: string[];
 };
 
+export type AtelierAccountHealthBand =
+  (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
+
+export const AtelierAccountHealthBand = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierAccountHealthFactorKey =
+  (typeof AtelierAccountHealthFactorKey)[keyof typeof AtelierAccountHealthFactorKey];
+
+export const AtelierAccountHealthFactorKey = {
+  relationship: "relationship",
+  financial: "financial",
+  engagement: "engagement",
+  risk: "risk",
+} as const;
+
+export interface AtelierAccountHealthFactor {
+  key: AtelierAccountHealthFactorKey;
+  label: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  weight: number;
+  detail: string;
+}
+
+export interface AtelierAccountHealth {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  band: AtelierAccountHealthBand;
+  factors: AtelierAccountHealthFactor[];
+}
+
 export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
+  health?: AtelierAccountHealth | null;
   /** @nullable */
   notes?: string | null;
   strategicPriorities?: string[];
@@ -944,6 +990,164 @@ export interface AtelierAccountWorkspace {
   accountTeam?: AtelierAccountTeamMember[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
+}
+
+export type AtelierAccountFinancialsAging = {
+  current: number;
+  d30: number;
+  d60: number;
+  d90: number;
+  d90plus: number;
+};
+
+export interface AtelierAccountFinancials {
+  contractValueUsd: number;
+  activeEngagementValueUsd: number;
+  recognisedRevenueUsd: number;
+  billedUsd: number;
+  collectedUsd: number;
+  costToDateUsd: number;
+  /** 0–1 fraction. */
+  grossMarginPct: number;
+  openPipelineUsd: number;
+  weightedPipelineUsd: number;
+  arOutstandingUsd: number;
+  arOverdueUsd: number;
+  aging: AtelierAccountFinancialsAging;
+  invoiceCount: number;
+  overdueInvoiceCount: number;
+  engagementCount: number;
+  activeEngagementCount: number;
+  openOpportunityCount: number;
+}
+
+export type AtelierAccountTimelineItemKind =
+  (typeof AtelierAccountTimelineItemKind)[keyof typeof AtelierAccountTimelineItemKind];
+
+export const AtelierAccountTimelineItemKind = {
+  engagement: "engagement",
+  deal: "deal",
+  milestone: "milestone",
+} as const;
+
+export type AtelierAccountTimelineItemTone =
+  (typeof AtelierAccountTimelineItemTone)[keyof typeof AtelierAccountTimelineItemTone];
+
+export const AtelierAccountTimelineItemTone = {
+  default: "default",
+  gold: "gold",
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierAccountTimelineItemRefKind =
+  | (typeof AtelierAccountTimelineItemRefKind)[keyof typeof AtelierAccountTimelineItemRefKind]
+  | null;
+
+export const AtelierAccountTimelineItemRefKind = {
+  engagement: "engagement",
+  opportunity: "opportunity",
+  account: "account",
+} as const;
+
+export interface AtelierAccountTimelineItem {
+  id: string;
+  /** ISO timestamp. */
+  date: string;
+  kind: AtelierAccountTimelineItemKind;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  tone: AtelierAccountTimelineItemTone;
+  /** @nullable */
+  refKind?: AtelierAccountTimelineItemRefKind;
+  /** @nullable */
+  refId?: string | null;
+}
+
+export type AtelierAccountRenewalKind =
+  (typeof AtelierAccountRenewalKind)[keyof typeof AtelierAccountRenewalKind];
+
+export const AtelierAccountRenewalKind = {
+  renewal: "renewal",
+  expansion: "expansion",
+} as const;
+
+export type AtelierAccountRenewalRefKind =
+  (typeof AtelierAccountRenewalRefKind)[keyof typeof AtelierAccountRenewalRefKind];
+
+export const AtelierAccountRenewalRefKind = {
+  engagement: "engagement",
+  opportunity: "opportunity",
+} as const;
+
+export interface AtelierAccountRenewal {
+  id: string;
+  kind: AtelierAccountRenewalKind;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  valueUsd: number;
+  /** @nullable */
+  dueDate?: string | null;
+  refKind: AtelierAccountRenewalRefKind;
+  refId: string;
+}
+
+export type AtelierAccountNextBestActionPriority =
+  (typeof AtelierAccountNextBestActionPriority)[keyof typeof AtelierAccountNextBestActionPriority];
+
+export const AtelierAccountNextBestActionPriority = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type AtelierAccountNextBestActionSource =
+  (typeof AtelierAccountNextBestActionSource)[keyof typeof AtelierAccountNextBestActionSource];
+
+export const AtelierAccountNextBestActionSource = {
+  derived: "derived",
+  action_queue: "action_queue",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierAccountNextBestActionRefKind =
+  | (typeof AtelierAccountNextBestActionRefKind)[keyof typeof AtelierAccountNextBestActionRefKind]
+  | null;
+
+export const AtelierAccountNextBestActionRefKind = {
+  engagement: "engagement",
+  opportunity: "opportunity",
+  account: "account",
+} as const;
+
+export interface AtelierAccountNextBestAction {
+  id: string;
+  label: string;
+  /** @nullable */
+  detail?: string | null;
+  priority: AtelierAccountNextBestActionPriority;
+  source: AtelierAccountNextBestActionSource;
+  /** @nullable */
+  refKind?: AtelierAccountNextBestActionRefKind;
+  /** @nullable */
+  refId?: string | null;
+}
+
+export interface AtelierAccount360 {
+  accountId: string;
+  financials: AtelierAccountFinancials;
+  health: AtelierAccountHealth;
+  timeline: AtelierAccountTimelineItem[];
+  renewals: AtelierAccountRenewal[];
+  nextBestActions: AtelierAccountNextBestAction[];
 }
 
 export interface AtelierCreateAccountInsightInput {

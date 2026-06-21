@@ -19,6 +19,7 @@ import type {
 import type {
   AgentActivityItem,
   AgentCatalogEntry,
+  AtelierAccount360,
   AtelierAccountDuplicateError,
   AtelierAccountSummary,
   AtelierAccountWorkspace,
@@ -5837,6 +5838,95 @@ export function useAtelierGetAccountQbr<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetAccountQbrQueryOptions(accountId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Account financials, relationship history & health (Task #570) — read-only rollup of existing engagement / invoice / opportunity data.
+ */
+export const getAtelierGetAccount360Url = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/account-360`;
+};
+
+export const atelierGetAccount360 = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierAccount360> => {
+  return customFetch<AtelierAccount360>(getAtelierGetAccount360Url(accountId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetAccount360QueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/account-360`] as const;
+};
+
+export const getAtelierGetAccount360QueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccount360>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccount360>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccount360QueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccount360>>
+  > = ({ signal }) =>
+    atelierGetAccount360(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccount360>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccount360QueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccount360>>
+>;
+export type AtelierGetAccount360QueryError = ErrorType<unknown>;
+
+/**
+ * @summary Account financials, relationship history & health (Task #570) — read-only rollup of existing engagement / invoice / opportunity data.
+ */
+
+export function useAtelierGetAccount360<
+  TData = Awaited<ReturnType<typeof atelierGetAccount360>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccount360>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccount360QueryOptions(accountId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
