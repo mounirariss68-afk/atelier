@@ -70,10 +70,12 @@ export default function Crm() {
     return (
       <div className="animate-in fade-in" data-testid="page-crm-renewals">
         <LensPageHeader headline="Renewals & NRR" lede="Open renewal motions, risk tier, and net-revenue-retention delta." />
-        <TabNav>
-          <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("accounts"); }}>Accounts</TabNavLink>
-          <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Renewals</TabNavLink>
-        </TabNav>
+        <div className="container-atelier">
+          <TabNav>
+            <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("accounts"); }}>Accounts</TabNavLink>
+            <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Renewals</TabNavLink>
+          </TabNav>
+        </div>
         <div className="container-atelier py-10">
           <RenewalsTab />
         </div>
@@ -114,10 +116,12 @@ export default function Crm() {
           </Card>
         </div>
       </div>
-      <TabNav>
-        <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Accounts</TabNavLink>
-        <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("renewals"); }}>Renewals</TabNavLink>
-      </TabNav>
+      <div className="container-atelier">
+        <TabNav>
+          <TabNavLink href="#" active onClick={(e) => e.preventDefault()}>Accounts</TabNavLink>
+          <TabNavLink href="#" active={false} onClick={(e) => { e.preventDefault(); setView("renewals"); }}>Renewals</TabNavLink>
+        </TabNav>
+      </div>
 
       <div className="container-atelier py-10 space-y-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
