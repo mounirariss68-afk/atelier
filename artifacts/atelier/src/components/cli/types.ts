@@ -120,6 +120,10 @@ export interface CliTurn {
     /** Optional expandable detail behind a step (e.g. the source titles/URLs
      * read during a web-search agent's "Read N sources" breadcrumb). */
     sources?: Array<{ url: string; title?: string }>;
+    /** Optional phase tag for a progress step (e.g. "synthesis"). Consecutive
+     * same-phase heartbeats collapse into a single updating row so the long
+     * "Synthesising the brief…" tail doesn't flood the trace. */
+    phase?: string;
   }>;
   proposedPlan?: CliPlanStep[];
   disambig?: { kind: string; options: CliDisambigOption[] };

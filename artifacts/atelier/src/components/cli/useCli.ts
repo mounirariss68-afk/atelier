@@ -200,10 +200,12 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
       const d = frame.data as {
         pct?: number;
         message?: string;
+        phase?: string;
         sources?: Array<{ url?: string; title?: string }>;
       };
       const message = String(d.message ?? "").trim();
       if (!message) return { ...turn, status: "streaming" };
+      const phase = typeof d.phase === "string" ? d.phase : undefined;
       const sources = Array.isArray(d.sources)
         ? d.sources
             .filter((s): s is { url: string; title?: string } => typeof s?.url === "string")
@@ -213,18 +215,29 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
             // can never become a clickable anchor downstream.
             .filter((s) => isSafeHttpUrl(s.url))
         : undefined;
+      const newStep = {
+        kind: "step" as const,
+        text: message,
+        at: frame.receivedAt,
+        ...(phase ? { phase } : {}),
+        ...(sources && sources.length ? { sources } : {}),
+      };
+      // Heartbeat phases (e.g. the long "Synthesising the brief… (Ns)" tail)
+      // emit a fresh line every couple seconds. Collapse consecutive
+      // same-phase heartbeats into one updating row instead of flooding the
+      // breadcrumb trace — the row text + timer still tick live.
+      const last = turn.trace[turn.trace.length - 1];
+      if (phase && last && last.kind === "step" && last.phase === phase) {
+        return {
+          ...turn,
+          status: "streaming",
+          trace: [...turn.trace.slice(0, -1), newStep],
+        };
+      }
       return {
         ...turn,
         status: "streaming",
-        trace: [
-          ...turn.trace,
-          {
-            kind: "step",
-            text: message,
-            at: frame.receivedAt,
-            ...(sources && sources.length ? { sources } : {}),
-          },
-        ],
+        trace: [...turn.trace, newStep],
       };
     }
     case "tool_result": {

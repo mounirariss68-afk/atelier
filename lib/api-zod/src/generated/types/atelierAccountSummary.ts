@@ -44,4 +44,15 @@ resolves successfully and `enrichedAt` is set.
    * @nullable
    */
   cartographerStatus?: AtelierAccountSummaryCartographerStatus;
+  /**
+   * Current live phase label of an in-flight Account Cartographer run
+(e.g. "Searching the web (2)", "Read 7 sources",
+"Synthesising the brief… (42s)"). Present only while
+`cartographerStatus` is `running`; `null` otherwise. Lets the
+account page show a meaningful, updating status instead of a bare
+spinner during the long background research run.
+
+   * @nullable
+   */
+  cartographerPhase?: string | null;
 }

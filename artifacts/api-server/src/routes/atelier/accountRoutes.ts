@@ -134,9 +134,12 @@ async function loadAccount(id: string) {
 
 async function loadCartographerStatus(
   accountId: string,
-): Promise<"running" | "failed" | null> {
+): Promise<{ status: "running" | "failed" | null; phase: string | null }> {
   const [latest] = await db
-    .select({ status: atelierAgentRuns.status })
+    .select({
+      status: atelierAgentRuns.status,
+      statusMessage: atelierAgentRuns.statusMessage,
+    })
     .from(atelierAgentRuns)
     .where(
       and(
@@ -147,10 +150,15 @@ async function loadCartographerStatus(
     )
     .orderBy(desc(atelierAgentRuns.createdAt))
     .limit(1);
-  if (!latest) return null;
-  if (latest.status === "running") return "running";
-  if (latest.status === "failed") return "failed";
-  return null;
+  if (!latest) return { status: null, phase: null };
+  if (latest.status === "running") {
+    // Surface the latest live phase (e.g. "Synthesising the brief… (42s)")
+    // so the account page shows a meaningful, updating label rather than a
+    // bare indefinite spinner.
+    return { status: "running", phase: latest.statusMessage ?? null };
+  }
+  if (latest.status === "failed") return { status: "failed", phase: null };
+  return { status: null, phase: null };
 }
 
 async function summariseAccount(
@@ -200,7 +208,8 @@ async function summariseAccount(
   const pending = (a.pendingProfileUpdates ?? []).filter(
     (u) => u.status === "pending",
   );
-  const cartographerStatus = await loadCartographerStatus(a.id);
+  const { status: cartographerStatus, phase: cartographerPhase } =
+    await loadCartographerStatus(a.id);
   return {
     id: a.id,
     name: a.name,
@@ -222,6 +231,7 @@ async function summariseAccount(
     enrichedAt: a.enrichedAt ? new Date(a.enrichedAt).toISOString() : null,
     pendingUpdateCount: pending.length,
     cartographerStatus,
+    cartographerPhase,
   };
 }
 

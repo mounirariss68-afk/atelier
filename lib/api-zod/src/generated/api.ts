@@ -2266,6 +2266,12 @@ export const AtelierListAccountsResponseItem = zod.object({
     .describe(
       "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
     ),
+  cartographerPhase: zod
+    .string()
+    .nullish()
+    .describe(
+      'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+    ),
 });
 export const AtelierListAccountsResponse = zod.array(
   AtelierListAccountsResponseItem,
@@ -2616,6 +2622,12 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -3336,6 +3348,12 @@ export const AtelierUpdateAccountResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -3933,6 +3951,12 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -5003,6 +5027,12 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -5609,6 +5639,12 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -6230,6 +6266,12 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -6849,6 +6891,12 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -7451,6 +7499,12 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -8064,6 +8118,12 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -8676,6 +8736,12 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -9280,6 +9346,12 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -9898,6 +9970,12 @@ export const AtelierCreateAccountActionResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -10512,6 +10590,12 @@ export const AtelierUpdateAccountActionResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -11114,6 +11198,12 @@ export const AtelierDeleteAccountActionResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -11726,6 +11816,12 @@ export const AtelierCreateAccountRiskResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -12340,6 +12436,12 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
         ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
     })
     .and(
       zod.object({
@@ -12942,6 +13044,12 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(
@@ -13551,6 +13659,12 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
         .nullish()
         .describe(
           "Transient flag set while an auto-triggered Account Cartographer\nrun is in flight (or after it has failed). `null` once the run\nresolves successfully and `enrichedAt` is set.\n",
+        ),
+      cartographerPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
     })
     .and(

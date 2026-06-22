@@ -244,9 +244,12 @@ export default function Account() {
               <span
                 className="pill-btn pill-btn-ghost text-xs cursor-default"
                 data-testid="banner-cartographer-running"
+                title="Account Cartographer is researching this account"
               >
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                Cartographer researching…
+                <span data-testid="cartographer-phase">
+                  {a.cartographerPhase || "Cartographer researching…"}
+                </span>
               </span>
             ) : (
               <button

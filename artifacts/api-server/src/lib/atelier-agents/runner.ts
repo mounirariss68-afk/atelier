@@ -1910,13 +1910,46 @@ export interface CartographerOutput {
 async function callClaudeJsonWithWebSearch<T>(
   model: string,
   systemPrompt: string,
-  userPrompt: string): Promise<{
+  userPrompt: string,
+  opts?: {
+    /**
+     * When set, phase updates (search / read / synthesis heartbeat) are also
+     * persisted to this agent_run row's `statusMessage` + `progressPct` so a
+     * background (non-chat) run surfaces a live phase on the account page,
+     * not just an indefinite spinner. Omitted for research-only chat runs,
+     * where the ambient progress sink already streams to the transcript.
+     */
+    progressRunId?: string | null;
+  }): Promise<{
   value: T;
   costUsd: number;
   tokensIn: number;
   tokensOut: number;
   citationUrls: Array<{ url: string; title?: string }>;
 }> {
+  const progressRunId = opts?.progressRunId ?? null;
+  // Phase emitter — always streams to the ambient sink (chat transcript) and,
+  // for a persisted run, also updates the agent_run row so the account page
+  // can show the same phase. DB write is best-effort; a failure must never
+  // break research.
+  const emitPhase = (
+    pct: number,
+    message: string,
+    data?: Record<string, unknown>,
+  ) => {
+    reportProgress(pct, message, data);
+    if (progressRunId) {
+      void db
+        .update(atelierAgentRuns)
+        .set({
+          progressPct: Math.round(pct),
+          statusMessage: message.slice(0, 240),
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierAgentRuns.id, progressRunId))
+        .then(undefined, () => {});
+    }
+  };
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
   // Web-search research legitimately spends minutes when a heavy account
@@ -1935,7 +1968,28 @@ async function callClaudeJsonWithWebSearch<T>(
   // sources read, drafting) to the ambient progress sink. The final parsed
   // message is recovered via `stream.finalMessage()`.
   let searchCount = 0;
-  let draftingAnnounced = false;
+  // The model's final answer is one large JSON object that streams out over
+  // 60–90s+ after web search ends. The first text delta used to emit a single
+  // "Drafting findings" line and then go silent while the elapsed timer kept
+  // climbing — looking frozen. Instead, start a heartbeat on the first text
+  // delta that keeps emitting a fresh "Synthesising the brief… (Ns)" phase so
+  // the activity indicator stays live to completion.
+  let synthesisStarted = false;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const startSynthesisHeartbeat = () => {
+    if (synthesisStarted) return;
+    synthesisStarted = true;
+    const startedAt = Date.now();
+    emitPhase(80, "Synthesising the brief…", { phase: "synthesis" });
+    heartbeat = setInterval(() => {
+      const secs = Math.round((Date.now() - startedAt) / 1000);
+      emitPhase(
+        Math.min(80 + Math.floor(secs / 5), 96),
+        `Synthesising the brief… (${secs}s)`,
+        { phase: "synthesis" },
+      );
+    }, 2500);
+  };
   // Accumulate the actual sources read (deduped by URL) so the live
   // "Read N sources" progress step can be expanded to reveal the titles.
   const readSources: Array<{ url: string; title?: string }> = [];
@@ -1966,7 +2020,7 @@ async function callClaudeJsonWithWebSearch<T>(
           event.content_block.name === "web_search"
         ) {
           searchCount += 1;
-          reportProgress(35, `Searching the web (${searchCount})`);
+          emitPhase(35, `Searching the web (${searchCount})`);
         } else if (
           event.type === "content_block_start" &&
           event.content_block.type === "web_search_tool_result"
@@ -1992,23 +2046,23 @@ async function callClaudeJsonWithWebSearch<T>(
             }
           }
           const sourcesRead = readSources.length;
-          reportProgress(
+          emitPhase(
             60,
             `Read ${sourcesRead} source${sourcesRead === 1 ? "" : "s"}`,
             { sources: readSources.slice(0, 40) },
           );
         } else if (
-          !draftingAnnounced &&
+          !synthesisStarted &&
           event.type === "content_block_delta" &&
           event.delta.type === "text_delta"
         ) {
-          draftingAnnounced = true;
-          reportProgress(80, "Drafting findings");
+          startSynthesisHeartbeat();
         }
       }
       return await stream.finalMessage();
     } finally {
       clearTimeout(timer);
+      if (heartbeat) clearInterval(heartbeat);
     }
   })();
   // Find the last text block (Claude returns interleaved tool-use,
@@ -2098,7 +2152,11 @@ export async function runAccountCartographer(args: {
           accountCountry: args.accountCountry,
           accountSector: args.accountSector,
           accountHqCity: args.accountHqCity ?? null,
-        }));
+        }),
+        // Live runs persist phase to the run row so the account page shows a
+        // current phase, not a bare spinner. research_only (runId null) relies
+        // solely on the ambient sink streaming to the chat transcript.
+        { progressRunId: runId });
     if (runId) {
       await progressRun(runId, 80, "Triangulating sources", {
         name: "cart.synth",
