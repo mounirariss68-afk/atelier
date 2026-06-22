@@ -2331,6 +2331,12 @@ export const atelierCreateAccountBodyResearchOneDecisionMakersItemReportsToNameM
 
 export const atelierCreateAccountBodyResearchOneDecisionMakersItemRationaleMax = 2000;
 
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemTimeInRoleMax = 120;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemCareerHistoryMax = 12;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemEducationMax = 12;
+
 export const atelierCreateAccountBodyResearchOneDecisionMakersMax = 12;
 
 export const AtelierCreateAccountBody = zod.object({
@@ -2476,6 +2482,27 @@ export const AtelierCreateAccountBody = zod.object({
                 whyNowHypothesis: zod.string(),
                 openQuestions: zod.array(zod.string()),
                 singleMostImportant: zod.string(),
+                stressTest: zod
+                  .object({
+                    failureScenarios: zod.array(zod.string()),
+                    assumptions: zod.object({
+                      evidenced: zod.array(zod.string()),
+                      untestedButLikely: zod.array(zod.string()),
+                      uncertain: zod.array(zod.string()),
+                    }),
+                    likelyObjections: zod.array(zod.string()),
+                    evidenceToStrengthen: zod.array(
+                      zod.object({
+                        evidence: zod.string(),
+                        whereToFind: zod.string(),
+                      }),
+                    ),
+                    revisedHypothesis: zod.string(),
+                  })
+                  .optional()
+                  .describe(
+                    "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                  ),
               }),
               zod.null(),
             ])
@@ -2530,6 +2557,37 @@ export const AtelierCreateAccountBody = zod.object({
                     atelierCreateAccountBodyResearchOneDecisionMakersItemRationaleMax,
                   )
                   .nullish(),
+                timeInRole: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemTimeInRoleMax,
+                  )
+                  .nullish(),
+                careerHistory: zod
+                  .array(
+                    zod.object({
+                      role: zod.string(),
+                      company: zod.string(),
+                      period: zod.string().nullish(),
+                      highlight: zod.string().nullish(),
+                    }),
+                  )
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemCareerHistoryMax,
+                  )
+                  .optional(),
+                education: zod
+                  .array(
+                    zod.object({
+                      institution: zod.string(),
+                      programme: zod.string().nullish(),
+                      year: zod.string().nullish(),
+                    }),
+                  )
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemEducationMax,
+                  )
+                  .optional(),
               }),
             )
             .max(atelierCreateAccountBodyResearchOneDecisionMakersMax)
@@ -2820,6 +2878,27 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -2952,6 +3031,26 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -3541,6 +3640,27 @@ export const AtelierUpdateAccountResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -3669,6 +3789,26 @@ export const AtelierUpdateAccountResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -4149,6 +4289,27 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -4283,6 +4444,26 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -4559,6 +4740,26 @@ export const AtelierListAccountContactsResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -4748,6 +4949,26 @@ export const AtelierUpdateContactResponse = zod.object({
     )
     .optional(),
   notes: zod.string().nullish(),
+  timeInRole: zod.string().nullish(),
+  careerHistory: zod
+    .array(
+      zod.object({
+        role: zod.string(),
+        company: zod.string(),
+        period: zod.string().nullish(),
+        highlight: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  education: zod
+    .array(
+      zod.object({
+        institution: zod.string(),
+        programme: zod.string().nullish(),
+        year: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   sourceUrl: zod.string().nullish(),
   confidence: zod
     .enum(["verified", "inferred"])
@@ -5224,6 +5445,27 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -5356,6 +5598,26 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -5837,6 +6099,27 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -5971,6 +6254,26 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -6463,6 +6766,27 @@ export const AtelierCreateAccountInsightResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -6595,6 +6919,26 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -7088,6 +7432,27 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -7220,6 +7585,26 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -7697,6 +8082,27 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -7829,6 +8235,26 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -8315,6 +8741,27 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -8447,6 +8894,26 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -8933,6 +9400,27 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -9067,6 +9555,26 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -9544,6 +10052,27 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -9678,6 +10207,26 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -10167,6 +10716,27 @@ export const AtelierCreateAccountActionResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -10299,6 +10869,26 @@ export const AtelierCreateAccountActionResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -10787,6 +11377,27 @@ export const AtelierUpdateAccountActionResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -10919,6 +11530,26 @@ export const AtelierUpdateAccountActionResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -11396,6 +12027,27 @@ export const AtelierDeleteAccountActionResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -11528,6 +12180,26 @@ export const AtelierDeleteAccountActionResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -12014,6 +12686,27 @@ export const AtelierCreateAccountRiskResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -12146,6 +12839,26 @@ export const AtelierCreateAccountRiskResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -12633,6 +13346,27 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -12765,6 +13499,26 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -13242,6 +13996,27 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -13374,6 +14149,26 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -13857,6 +14652,27 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
               whyNowHypothesis: zod.string(),
               openQuestions: zod.array(zod.string()),
               singleMostImportant: zod.string(),
+              stressTest: zod
+                .object({
+                  failureScenarios: zod.array(zod.string()),
+                  assumptions: zod.object({
+                    evidenced: zod.array(zod.string()),
+                    untestedButLikely: zod.array(zod.string()),
+                    uncertain: zod.array(zod.string()),
+                  }),
+                  likelyObjections: zod.array(zod.string()),
+                  evidenceToStrengthen: zod.array(
+                    zod.object({
+                      evidence: zod.string(),
+                      whereToFind: zod.string(),
+                    }),
+                  ),
+                  revisedHypothesis: zod.string(),
+                })
+                .optional()
+                .describe(
+                  "Step 3 of the Cognirise account-research method — a stress-test of the\norigination hypothesis. Optional; absent on briefs created before the\n4-step method shipped.\n",
+                ),
             }),
             zod.null(),
           ])
@@ -13991,6 +14807,26 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
         )
         .optional(),
       notes: zod.string().nullish(),
+      timeInRole: zod.string().nullish(),
+      careerHistory: zod
+        .array(
+          zod.object({
+            role: zod.string(),
+            company: zod.string(),
+            period: zod.string().nullish(),
+            highlight: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      education: zod
+        .array(
+          zod.object({
+            institution: zod.string(),
+            programme: zod.string().nullish(),
+            year: zod.string().nullish(),
+          }),
+        )
+        .optional(),
       sourceUrl: zod.string().nullish(),
       confidence: zod
         .enum(["verified", "inferred"])
@@ -14276,6 +15112,26 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
     )
     .optional(),
   notes: zod.string().nullish(),
+  timeInRole: zod.string().nullish(),
+  careerHistory: zod
+    .array(
+      zod.object({
+        role: zod.string(),
+        company: zod.string(),
+        period: zod.string().nullish(),
+        highlight: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  education: zod
+    .array(
+      zod.object({
+        institution: zod.string(),
+        programme: zod.string().nullish(),
+        year: zod.string().nullish(),
+      }),
+    )
+    .optional(),
   sourceUrl: zod.string().nullish(),
   confidence: zod
     .enum(["verified", "inferred"])

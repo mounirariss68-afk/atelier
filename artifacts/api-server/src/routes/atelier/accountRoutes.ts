@@ -345,6 +345,9 @@ async function persistReviewedResearch(args: {
           seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
         disposition: "unknown",
         notes: dm.rationale ?? null,
+        timeInRole: dm.timeInRole ?? null,
+        careerHistory: dm.careerHistory ?? [],
+        education: dm.education ?? [],
         sourceUrl: dm.sourceUrl ?? null,
         confidence: dm.confidence === "verified" ? "verified" : "inferred",
         createdByUserId: actorId,
@@ -594,6 +597,9 @@ router.post("/accounts", async (req, res) => {
             title: d.title ?? null,
             seniority: d.seniority ?? null,
             buyerPersona: d.buyerPersona ?? null,
+            timeInRole: d.timeInRole ?? null,
+            careerHistory: d.careerHistory ?? [],
+            education: d.education ?? [],
             sourceUrl: d.sourceUrl ?? null,
             confidence: d.confidence === "verified" ? "verified" : "inferred",
             notes: d.rationale ?? null,
@@ -2499,6 +2505,18 @@ async function applyProfileUpdateDecisions(args: {
             confidence?: string | null;
             reportsToName?: string | null;
             rationale?: string | null;
+            timeInRole?: string | null;
+            careerHistory?: Array<{
+              role: string;
+              company: string;
+              period?: string | null;
+              highlight?: string | null;
+            }>;
+            education?: Array<{
+              institution: string;
+              programme?: string | null;
+              year?: string | null;
+            }>;
           };
           if (dm.fullName && dm.fullName.trim()) {
             const map = await loadContacts();
@@ -2513,6 +2531,9 @@ async function applyProfileUpdateDecisions(args: {
                   title: dm.title ?? null,
                   seniority,
                   buyerPersona: dm.buyerPersona ?? null,
+                  timeInRole: dm.timeInRole ?? null,
+                  careerHistory: dm.careerHistory ?? [],
+                  education: dm.education ?? [],
                   sourceUrl: dm.sourceUrl ?? null,
                   confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
                   updatedAt: now,
@@ -2527,6 +2548,9 @@ async function applyProfileUpdateDecisions(args: {
                 title: dm.title ?? null,
                 seniority,
                 buyerPersona: dm.buyerPersona ?? null,
+                timeInRole: dm.timeInRole ?? null,
+                careerHistory: dm.careerHistory ?? [],
+                education: dm.education ?? [],
                 influenceScore: seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
                 disposition: "unknown",
                 notes: dm.rationale ?? null,
@@ -2792,6 +2816,19 @@ function toContactWire(
       note: p.note ?? null,
     })),
     notes: c.notes ?? null,
+    // Task #589 — deep stakeholder profile.
+    timeInRole: c.timeInRole ?? null,
+    careerHistory: (c.careerHistory ?? []).map((h) => ({
+      role: h.role,
+      company: h.company,
+      period: h.period ?? null,
+      highlight: h.highlight ?? null,
+    })),
+    education: (c.education ?? []).map((e) => ({
+      institution: e.institution,
+      programme: e.programme ?? null,
+      year: e.year ?? null,
+    })),
     sourceUrl: c.sourceUrl ?? null,
     confidence: (c.confidence ?? "inferred") as "verified" | "inferred",
   };

@@ -5,8 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierContactCareerEntry } from "./atelierContactCareerEntry";
 import type { AtelierContactConfidence } from "./atelierContactConfidence";
 import type { AtelierContactDisposition } from "./atelierContactDisposition";
+import type { AtelierContactEducationEntry } from "./atelierContactEducationEntry";
 import type { AtelierContactSeniorityProperty } from "./atelierContactSeniorityProperty";
 import type { AtelierContactTrendPoint } from "./atelierContactTrendPoint";
 
@@ -48,6 +50,10 @@ export interface AtelierContact {
   relationshipTrend?: AtelierContactTrendPoint[];
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  timeInRole?: string | null;
+  careerHistory?: AtelierContactCareerEntry[];
+  education?: AtelierContactEducationEntry[];
   /** @nullable */
   sourceUrl?: string | null;
   /** "verified" when at least one citation directly names the

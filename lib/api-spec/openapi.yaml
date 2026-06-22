@@ -2769,6 +2769,23 @@ components:
             - $ref: "#/components/schemas/AtelierCreateAccountResearch"
             - type: "null"
 
+    AtelierContactCareerEntry:
+      type: object
+      required: [role, company]
+      properties:
+        role: { type: string }
+        company: { type: string }
+        period: { type: ["string", "null"] }
+        highlight: { type: ["string", "null"] }
+
+    AtelierContactEducationEntry:
+      type: object
+      required: [institution]
+      properties:
+        institution: { type: string }
+        programme: { type: ["string", "null"] }
+        year: { type: ["string", "null"] }
+
     AtelierResearchDecisionMaker:
       type: object
       required: [fullName, confidence]
@@ -2785,6 +2802,16 @@ components:
         # after the contacts are seeded.
         reportsToName: { type: ["string", "null"], maxLength: 200 }
         rationale: { type: ["string", "null"], maxLength: 2000 }
+        # Task #589 — deeper person profile (Step 4 of the research method).
+        timeInRole: { type: ["string", "null"], maxLength: 120 }
+        careerHistory:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AtelierContactCareerEntry" }
+        education:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AtelierContactEducationEntry" }
 
     AtelierCreateAccountResearch:
       type: object
@@ -2931,6 +2958,46 @@ components:
           type: array
           items: { type: string }
         singleMostImportant: { type: string }
+        stressTest:
+          $ref: "#/components/schemas/AtelierResearchStressTest"
+
+    AtelierResearchStressTest:
+      type: object
+      description: |
+        Step 3 of the Cognirise account-research method — a stress-test of the
+        origination hypothesis. Optional; absent on briefs created before the
+        4-step method shipped.
+      required:
+        [failureScenarios, assumptions, likelyObjections, evidenceToStrengthen, revisedHypothesis]
+      properties:
+        failureScenarios:
+          type: array
+          items: { type: string }
+        assumptions:
+          type: object
+          required: [evidenced, untestedButLikely, uncertain]
+          properties:
+            evidenced:
+              type: array
+              items: { type: string }
+            untestedButLikely:
+              type: array
+              items: { type: string }
+            uncertain:
+              type: array
+              items: { type: string }
+        likelyObjections:
+          type: array
+          items: { type: string }
+        evidenceToStrengthen:
+          type: array
+          items:
+            type: object
+            required: [evidence, whereToFind]
+            properties:
+              evidence: { type: string }
+              whereToFind: { type: string }
+        revisedHypothesis: { type: string }
 
     AtelierAccountHierarchyRef:
       type: object
@@ -3036,6 +3103,14 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AtelierContactTrendPoint" }
         notes: { type: ["string", "null"] }
+        # Task #589 — deep stakeholder profile (account-research Step 4).
+        timeInRole: { type: ["string", "null"] }
+        careerHistory:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactCareerEntry" }
+        education:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactEducationEntry" }
         # Task #275 — cartographer provenance.
         sourceUrl: { type: ["string", "null"] }
         confidence:

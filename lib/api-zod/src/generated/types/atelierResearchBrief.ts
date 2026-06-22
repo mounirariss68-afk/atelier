@@ -9,6 +9,7 @@ import type { AtelierResearchBriefFact } from "./atelierResearchBriefFact";
 import type { AtelierResearchBriefMandateAnglesItem } from "./atelierResearchBriefMandateAnglesItem";
 import type { AtelierResearchBriefPartnerEcosystemItem } from "./atelierResearchBriefPartnerEcosystemItem";
 import type { AtelierResearchBriefServiceLineFitItem } from "./atelierResearchBriefServiceLineFitItem";
+import type { AtelierResearchStressTest } from "./atelierResearchStressTest";
 
 export interface AtelierResearchBrief {
   whatsChanging: AtelierResearchBriefFact[];
@@ -19,4 +20,5 @@ export interface AtelierResearchBrief {
   whyNowHypothesis: string;
   openQuestions: string[];
   singleMostImportant: string;
+  stressTest?: AtelierResearchStressTest;
 }

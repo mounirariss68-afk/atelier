@@ -792,6 +792,9 @@ export function buildCartographerProposals(args: {
         confidence: dm.confidence,
         reportsToName: dm.reportsToName ?? null,
         rationale: dm.rationale ?? null,
+        timeInRole: dm.timeInRole ?? null,
+        careerHistory: dm.careerHistory ?? [],
+        education: dm.education ?? [],
       },
       `Account Cartographer ${isNew ? "discovered" : "re-confirmed"} decision-maker ${dm.fullName}${dm.title ? ` (${dm.title})` : ""}.`,
       { reportsToName: dm.reportsToName ?? null },
@@ -1772,6 +1775,25 @@ export interface CartographerResearchBrief {
   openQuestions: string[];
   // Closing line — "the single most important thing to understand …".
   singleMostImportant: string;
+  // Step 3 (Task #589) — stress-test of the origination hypothesis.
+  stressTest: CartographerStressTest;
+}
+
+export interface CartographerStressTest {
+  // What would make the hypothesis irrelevant or wrong (2–3 scenarios).
+  failureScenarios: string[];
+  // Hidden assumptions bucketed by how grounded they are.
+  assumptions: {
+    evidenced: string[];
+    untestedButLikely: string[];
+    uncertain: string[];
+  };
+  // The 3 most likely objections a skeptical first buyer would raise.
+  likelyObjections: string[];
+  // 2–3 pieces of evidence that would most strengthen the hypothesis.
+  evidenceToStrengthen: Array<{ evidence: string; whereToFind: string }>;
+  // The tightened one-sentence hypothesis after stress-testing.
+  revisedHypothesis: string;
 }
 
 const EVIDENCE_LABELS: EvidenceLabel[] = ["evidenced", "inferred", "hypothesis"];
@@ -1850,6 +1872,31 @@ function normaliseResearchBrief(v: unknown): CartographerResearchBrief {
     whyNowHypothesis: asTrimmed(r.whyNowHypothesis),
     openQuestions: asStringList(r.openQuestions),
     singleMostImportant: asTrimmed(r.singleMostImportant),
+    stressTest: normaliseStressTest(r.stressTest),
+  };
+}
+
+// Task #589 — coerce the Step-3 stress-test into the typed shape; never
+// throw on a missing/malformed section so older briefs and partial model
+// output stay safe to persist and render.
+function normaliseStressTest(v: unknown): CartographerStressTest {
+  const r = asRecord(v);
+  const a = asRecord(r.assumptions);
+  return {
+    failureScenarios: asStringList(r.failureScenarios),
+    assumptions: {
+      evidenced: asStringList(a.evidenced),
+      untestedButLikely: asStringList(a.untestedButLikely),
+      uncertain: asStringList(a.uncertain),
+    },
+    likelyObjections: asStringList(r.likelyObjections),
+    evidenceToStrengthen: (Array.isArray(r.evidenceToStrengthen) ? r.evidenceToStrengthen : [])
+      .map((raw) => {
+        const o = asRecord(raw);
+        return { evidence: asTrimmed(o.evidence), whereToFind: asTrimmed(o.whereToFind) };
+      })
+      .filter((e) => e.evidence.length > 0),
+    revisedHypothesis: asTrimmed(r.revisedHypothesis),
   };
 }
 
@@ -1890,6 +1937,15 @@ export interface CartographerOutput {
     confidence: "verified" | "inferred";
     reportsToName?: string | null;
     rationale?: string;
+    // Task #589 — deep stakeholder profile (Step 4 "Person profile").
+    timeInRole?: string | null;
+    careerHistory?: Array<{
+      role: string;
+      company: string;
+      period?: string | null;
+      highlight?: string | null;
+    }>;
+    education?: Array<{ institution: string; programme?: string | null; year?: string | null }>;
   }>;
   // Task #560 — structured research brief (Cognirise account-research
   // method, Steps 1–3). Always present after normalisation; empty arrays
@@ -2229,6 +2285,26 @@ export async function runAccountCartographer(args: {
               confidence: d.confidence === "verified" ? "verified" : "inferred",
               reportsToName: d.reportsToName ?? null,
               rationale: d.rationale ?? undefined,
+              timeInRole: typeof d.timeInRole === "string" ? d.timeInRole.trim() || null : null,
+              careerHistory: Array.isArray(d.careerHistory)
+                ? d.careerHistory
+                    .map((h) => ({
+                      role: String(h?.role ?? "").trim(),
+                      company: String(h?.company ?? "").trim(),
+                      period: typeof h?.period === "string" ? h.period.trim() || null : null,
+                      highlight: typeof h?.highlight === "string" ? h.highlight.trim() || null : null,
+                    }))
+                    .filter((h) => h.role.length > 0 || h.company.length > 0)
+                : [],
+              education: Array.isArray(d.education)
+                ? d.education
+                    .map((e) => ({
+                      institution: String(e?.institution ?? "").trim(),
+                      programme: typeof e?.programme === "string" ? e.programme.trim() || null : null,
+                      year: typeof e?.year === "string" ? e.year.trim() || null : null,
+                    }))
+                    .filter((e) => e.institution.length > 0)
+                : [],
             }))
         : [],
       researchBrief: normaliseResearchBrief(

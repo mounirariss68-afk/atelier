@@ -5,6 +5,8 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierContactCareerEntry } from "./atelierContactCareerEntry";
+import type { AtelierContactEducationEntry } from "./atelierContactEducationEntry";
 import type { AtelierResearchDecisionMakerConfidence } from "./atelierResearchDecisionMakerConfidence";
 import type { AtelierResearchDecisionMakerSeniority } from "./atelierResearchDecisionMakerSeniority";
 
@@ -42,4 +44,13 @@ export interface AtelierResearchDecisionMaker {
    * @nullable
    */
   rationale?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  timeInRole?: string | null;
+  /** @maxItems 12 */
+  careerHistory?: AtelierContactCareerEntry[];
+  /** @maxItems 12 */
+  education?: AtelierContactEducationEntry[];
 }

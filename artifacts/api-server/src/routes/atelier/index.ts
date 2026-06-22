@@ -39,6 +39,7 @@ import {
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler, personAuditPdfHandler } from "./auditPdf";
 import { accountPlanPdfHandler } from "./accountPlanPdf";
+import { accountPrepCardHandler } from "./accountPrepCard";
 import agentRoutes from "./agentRoutes";
 import {
   STALLED_THRESHOLD_DAYS,
@@ -183,6 +184,8 @@ router.get("/audit/export.pdf", auditPdfHandler);
 router.get("/roster/people/:id/audit", personAuditPdfHandler);
 // Task #571 — One-page account-plan / QBR PDF brief.
 router.get("/accounts/:accountId/plan.pdf", accountPlanPdfHandler);
+// Task #589 — Self-contained first-meeting prep card (HTML).
+router.get("/accounts/:accountId/meeting-prep.html", accountPrepCardHandler);
 
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

@@ -1120,6 +1120,63 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+function ContactDeepProfile({ contact }: { contact: AtelierContact }) {
+  const career = contact.careerHistory ?? [];
+  const education = contact.education ?? [];
+  const timeInRole = contact.timeInRole ?? null;
+  if (!timeInRole && career.length === 0 && education.length === 0) return null;
+  return (
+    <div
+      className="border-t border-border-soft pt-3 mt-3 space-y-3"
+      data-testid={`contact-deep-profile-${contact.id}`}
+    >
+      {timeInRole && (
+        <div className="text-xs font-mono text-text-mute">
+          <Eyebrow>Time in role</Eyebrow>
+          <div className="mt-1 text-text">{timeInRole}</div>
+        </div>
+      )}
+      {career.length > 0 && (
+        <div>
+          <Eyebrow>Career history</Eyebrow>
+          <ul className="mt-1 space-y-1.5">
+            {career.map((h, i) => (
+              <li key={i} className="text-xs text-text leading-snug">
+                <span className="font-semibold">{h.role}</span>
+                <span className="text-text-mute"> · {h.company}</span>
+                {h.period && (
+                  <span className="font-mono text-text-mute"> ({h.period})</span>
+                )}
+                {h.highlight && (
+                  <span className="block text-text-mute">{h.highlight}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {education.length > 0 && (
+        <div>
+          <Eyebrow>Education</Eyebrow>
+          <ul className="mt-1 space-y-1">
+            {education.map((e, i) => (
+              <li key={i} className="text-xs text-text leading-snug">
+                <span className="font-semibold">{e.institution}</span>
+                {e.programme && (
+                  <span className="text-text-mute"> · {e.programme}</span>
+                )}
+                {e.year && (
+                  <span className="font-mono text-text-mute"> ({e.year})</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DecisionMakersTab({
   contacts,
   relationships,
@@ -1178,14 +1235,24 @@ function DecisionMakersTab({
       )}
       <div className="flex items-center justify-between">
         <SectionLabel>Decision-makers</SectionLabel>
-        <CreateContactDialog
-          accountId={accountId}
-          trigger={
-            <PillButton variant="primary" data-testid="button-add-contact">
-              + Add contact
-            </PillButton>
-          }
-        />
+        <div className="flex items-center gap-2">
+          <a
+            href={`${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/meeting-prep.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-testid="link-meeting-prep-card"
+          >
+            <PillButton variant="ghost">Meeting prep card ↗</PillButton>
+          </a>
+          <CreateContactDialog
+            accountId={accountId}
+            trigger={
+              <PillButton variant="primary" data-testid="button-add-contact">
+                + Add contact
+              </PillButton>
+            }
+          />
+        </div>
       </div>
       <CoverageGapCard contacts={contacts} />
       <DecisionMakersGraph
@@ -1284,6 +1351,18 @@ function DecisionMakersTab({
               {selected.notes}
             </p>
           )}
+          <ContactDeepProfile contact={selected} />
+          <div className="border-t border-border-soft pt-3 mt-3">
+            <a
+              href={`${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/meeting-prep.html?contactId=${encodeURIComponent(selected.id)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-mono text-gold hover:underline"
+              data-testid={`link-contact-prep-card-${selected.id}`}
+            >
+              Open prep card for {selected.fullName} ↗
+            </a>
+          </div>
         </Card>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

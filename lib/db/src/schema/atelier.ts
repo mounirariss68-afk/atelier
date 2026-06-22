@@ -143,6 +143,27 @@ export const atelierAccounts = pgTable(
       whyNowHypothesis: string;
       openQuestions: string[];
       singleMostImportant: string;
+      // Task #589 — Step 3 stress-test of the origination hypothesis.
+      // Optional so previously-researched accounts (brief without a
+      // stress-test) keep validating; always written by the cartographer
+      // going forward.
+      stressTest?: {
+        // 2–3 scenarios in which the hypothesis collapses / becomes moot.
+        failureScenarios: string[];
+        // Hidden assumptions, bucketed by how grounded they are.
+        assumptions: {
+          evidenced: string[];
+          untestedButLikely: string[];
+          uncertain: string[];
+        };
+        // The 3 most likely objections a skeptical first buyer would raise.
+        likelyObjections: string[];
+        // 2–3 pieces of evidence that would most strengthen the hypothesis,
+        // each with where to find it.
+        evidenceToStrengthen: Array<{ evidence: string; whereToFind: string }>;
+        // The tightened one-sentence hypothesis after stress-testing.
+        revisedHypothesis: string;
+      };
     }>(),
     // Task #566 — Cognirise-authored account strategy. Distinct from the
     // AI-generated `cogniriseHypothesis`/`researchBrief`: this is the
@@ -257,6 +278,32 @@ export const atelierContacts = pgTable(
       .notNull()
       .default([]),
     notes: text("notes"),
+    // Task #589 — deep stakeholder profile (account-research skill Step 4,
+    // "Person profile"). Populated by the Cartographer from LinkedIn / public
+    // sources; surfaced in the Decision-Makers tab and the meeting-prep card.
+    // All nullable / defaulted-empty so existing contacts keep validating.
+    timeInRole: text("time_in_role"), // e.g. "16 months", "since 2022"
+    careerHistory: jsonb("career_history")
+      .$type<
+        Array<{
+          role: string;
+          company: string;
+          period?: string | null; // e.g. "2018–2022"
+          highlight?: string | null; // what they built / owned there
+        }>
+      >()
+      .notNull()
+      .default([]),
+    education: jsonb("education")
+      .$type<
+        Array<{
+          institution: string;
+          programme?: string | null; // degree / notable programme
+          year?: string | null;
+        }>
+      >()
+      .notNull()
+      .default([]),
     // Task #275 — provenance for cartographer-sourced contacts.
     // sourceUrl is the canonical citation (e.g. LinkedIn profile, press
     // release, leadership page). confidence is 'verified' when at least

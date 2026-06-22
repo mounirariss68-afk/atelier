@@ -279,6 +279,31 @@ export interface AtelierResearchBriefFact {
   sourceUrls: string[];
 }
 
+export type AtelierResearchStressTestAssumptions = {
+  evidenced: string[];
+  untestedButLikely: string[];
+  uncertain: string[];
+};
+
+export type AtelierResearchStressTestEvidenceToStrengthenItem = {
+  evidence: string;
+  whereToFind: string;
+};
+
+/**
+ * Step 3 of the Cognirise account-research method — a stress-test of the
+origination hypothesis. Optional; absent on briefs created before the
+4-step method shipped.
+
+ */
+export interface AtelierResearchStressTest {
+  failureScenarios: string[];
+  assumptions: AtelierResearchStressTestAssumptions;
+  likelyObjections: string[];
+  evidenceToStrengthen: AtelierResearchStressTestEvidenceToStrengthenItem[];
+  revisedHypothesis: string;
+}
+
 export type AtelierResearchBriefServiceLineFitItem = {
   serviceLine: string;
   signal: string;
@@ -311,6 +336,7 @@ export interface AtelierResearchBrief {
   whyNowHypothesis: string;
   openQuestions: string[];
   singleMostImportant: string;
+  stressTest?: AtelierResearchStressTest;
 }
 
 /**
@@ -335,6 +361,23 @@ export const AtelierResearchDecisionMakerConfidence = {
   verified: "verified",
   inferred: "inferred",
 } as const;
+
+export interface AtelierContactCareerEntry {
+  role: string;
+  company: string;
+  /** @nullable */
+  period?: string | null;
+  /** @nullable */
+  highlight?: string | null;
+}
+
+export interface AtelierContactEducationEntry {
+  institution: string;
+  /** @nullable */
+  programme?: string | null;
+  /** @nullable */
+  year?: string | null;
+}
 
 export interface AtelierResearchDecisionMaker {
   /**
@@ -370,6 +413,15 @@ export interface AtelierResearchDecisionMaker {
    * @nullable
    */
   rationale?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  timeInRole?: string | null;
+  /** @maxItems 12 */
+  careerHistory?: AtelierContactCareerEntry[];
+  /** @maxItems 12 */
+  education?: AtelierContactEducationEntry[];
 }
 
 export type AtelierCreateAccountResearchStrategicPriorityRefsItem = {
@@ -701,6 +753,10 @@ export interface AtelierContact {
   relationshipTrend?: AtelierContactTrendPoint[];
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  timeInRole?: string | null;
+  careerHistory?: AtelierContactCareerEntry[];
+  education?: AtelierContactEducationEntry[];
   /** @nullable */
   sourceUrl?: string | null;
   /** "verified" when at least one citation directly names the
