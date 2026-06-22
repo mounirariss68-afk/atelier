@@ -196,6 +196,7 @@ async function main(): Promise<void> {
     atelierUsers,
     atelierAccounts,
     atelierContacts,
+    atelierContactRelationships,
     atelierOpportunities,
     atelierRaidItems,
     atelierDeliverables,
@@ -210,6 +211,7 @@ async function main(): Promise<void> {
     atelierUsers: any;
     atelierAccounts: any;
     atelierContacts: any;
+    atelierContactRelationships: any;
     atelierOpportunities: any;
     atelierRaidItems: any;
     atelierDeliverables: any;
@@ -313,6 +315,90 @@ async function main(): Promise<void> {
 
       const forbidden = await api("POST", "/accounts", PERSONA.consultant, { ...validBody, name: uniq("Forbidden") });
       check("POST /accounts (consultant) \u2192 403 partner-only", forbidden.status === 403 && forbidden.body?.error === "partner-only", `status=${forbidden.status}`);
+
+      // Task #587 — reviewed-research create: persists the reviewed Cartographer
+      // payload verbatim, seeds contacts + reports_to edges, and SKIPS the
+      // background Cartographer run (no agent_run row → no banner).
+      {
+        const rName = uniq("Researched");
+        const ceo = `Lena Park ${rName}`;
+        const vp = `Omar Diaz ${rName}`;
+        const researchBody = {
+          ...validBody,
+          name: rName,
+          research: {
+            refreshedSummary: "Mid-market logistics firm modernising its TMS stack.",
+            industryCode: "4885",
+            subIndustryCode: "488510",
+            strategicPriorityRefs: [
+              { text: "Cut last-mile cost 12%", sourceUrls: ["https://example.com/a"] },
+            ],
+            sourceSignals: [],
+            researchBrief: null,
+            decisionMakers: [
+              { fullName: ceo, title: "CEO", seniority: "c_suite", confidence: "verified" },
+              { fullName: vp, title: "VP Ops", seniority: "vp", confidence: "inferred", reportsToName: ceo },
+            ],
+          },
+        };
+        const rc = await api("POST", "/accounts", PERSONA.fp, researchBody);
+        check(
+          "POST /accounts (reviewed research) \u2192 201",
+          rc.status === 201,
+          `status=${rc.status} body=${JSON.stringify(rc.body)?.slice(0, 160)}`,
+        );
+        const [rRow] = await db
+          .select({ id: atelierAccounts.id, industryCode: atelierAccounts.industryCode, notes: atelierAccounts.notes, enrichedAt: atelierAccounts.enrichedAt })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.name, rName));
+        if (rRow?.id) created.accounts.add(rRow.id);
+        check(
+          "reviewed research persisted on account (industryCode + notes + enrichedAt)",
+          rRow?.industryCode === "4885" &&
+            rRow?.notes === "Mid-market logistics firm modernising its TMS stack." &&
+            !!rRow?.enrichedAt,
+          `industry=${rRow?.industryCode} enrichedAt=${rRow?.enrichedAt}`,
+        );
+        const rContacts = rRow?.id
+          ? await db
+              .select({ id: atelierContacts.id, fullName: atelierContacts.fullName, inf: atelierContacts.influenceScore })
+              .from(atelierContacts)
+              .where(eq(atelierContacts.accountId, rRow.id))
+          : [];
+        for (const c of rContacts) created.contacts.add(c.id);
+        check(
+          "reviewed research seeded 2 contacts (CEO influence=5)",
+          rContacts.length === 2 && rContacts.some((c: any) => c.fullName === ceo && c.inf === 5),
+          `count=${rContacts.length}`,
+        );
+        const ceoId = rContacts.find((c: any) => c.fullName === ceo)?.id;
+        const vpId = rContacts.find((c: any) => c.fullName === vp)?.id;
+        const edges = rRow?.id
+          ? await db
+              .select({ from: atelierContactRelationships.fromContactId, to: atelierContactRelationships.toContactId })
+              .from(atelierContactRelationships)
+              .where(eq(atelierContactRelationships.accountId, rRow.id))
+          : [];
+        check(
+          "reviewed research seeded reports_to edge (VP \u2192 CEO)",
+          edges.length === 1 && edges[0]?.from === vpId && edges[0]?.to === ceoId,
+          `edges=${JSON.stringify(edges)}`,
+        );
+        const runs = rRow?.id
+          ? await db.execute(sql`select count(*)::int as n from atelier_agent_runs where target_id = ${rRow.id}`)
+          : { rows: [{ n: 0 }] };
+        const runCount = Number((runs as any).rows?.[0]?.n ?? 0);
+        check(
+          "reviewed research create did NOT trigger a Cartographer agent run",
+          runCount === 0,
+          `agentRuns=${runCount}`,
+        );
+        // Clean up the relationship rows this block created (contacts/account
+        // are handled by the shared cleanup; relationships have no set there).
+        if (rRow?.id) {
+          await db.delete(atelierContactRelationships).where(eq(atelierContactRelationships.accountId, rRow.id)).catch(() => undefined);
+        }
+      }
 
       // read (R of CRUD)
       if (acctRow?.id) {

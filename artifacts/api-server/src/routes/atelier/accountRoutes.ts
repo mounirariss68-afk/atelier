@@ -15,6 +15,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { z } from "zod";
 import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import {
   db,
@@ -257,6 +258,131 @@ router.get("/accounts", async (req, res) => {
 // Task #292 — CRM account creation: partner-tier + senior_manager.
 const CREATE_ROLES = new Set(["founding_partner", "partner", "senior_manager"]);
 
+type ReviewedResearch = NonNullable<
+  z.infer<typeof AtelierCreateAccountInput>["research"]
+>;
+
+/**
+ * Task #587 — persist reviewed Cartographer research directly onto a freshly
+ * created account, seeding contacts (and reports_to edges) from the supplied
+ * decision-makers. DB-only: no LLM/web call. Mirrors the persistence the
+ * fire-and-forget auto-run did, but consumes the partner-reviewed payload
+ * verbatim instead of re-researching from scratch.
+ */
+async function persistReviewedResearch(args: {
+  account: typeof atelierAccounts.$inferSelect;
+  research: ReviewedResearch;
+  actorId: string;
+}): Promise<void> {
+  const { account, research, actorId } = args;
+  const priorityRefs = (research.strategicPriorityRefs ?? [])
+    .map((p) => ({ text: (p.text ?? "").trim(), sourceUrls: p.sourceUrls ?? [] }))
+    .filter((p) => p.text.length > 0);
+  // Respect any strategic priorities the partner entered on the dialog; only
+  // fall back to the reviewed refs when the account has none yet.
+  const mergedPriorities =
+    (account.strategicPriorities ?? []).length > 0
+      ? account.strategicPriorities
+      : priorityRefs.map((p) => p.text);
+  const signals = (research.sourceSignals ?? []).slice(-50);
+  // Refreshed summary maps to `notes`; only write it when the partner left
+  // notes blank, so a hand-typed note is never clobbered.
+  const refreshedSummary = (research.refreshedSummary ?? "").trim();
+  const notes =
+    account.notes && account.notes.trim().length > 0
+      ? account.notes
+      : refreshedSummary || account.notes;
+
+  const decisionMakers = (research.decisionMakers ?? []).filter(
+    (d) => d.fullName && d.fullName.trim().length > 0,
+  );
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccounts)
+      .set({
+        industryCode: research.industryCode ?? account.industryCode ?? null,
+        subIndustryCode:
+          research.subIndustryCode ?? account.subIndustryCode ?? null,
+        notes,
+        sourceSignals: signals as typeof account.sourceSignals,
+        strategicPriorities: mergedPriorities,
+        strategicPriorityRefs: priorityRefs,
+        researchBrief:
+          (research.researchBrief as typeof account.researchBrief) ??
+          account.researchBrief ??
+          null,
+        enrichedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAccounts.id, account.id));
+
+    // Seed contacts, building a name→id map for reports_to resolution.
+    const nameToId = new Map<string, string>();
+    for (const dm of decisionMakers) {
+      const seniority = (dm.seniority ?? null) as
+        | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+      const id = rid("con");
+      await tx.insert(atelierContacts).values({
+        id,
+        orgId: account.orgId,
+        accountId: account.id,
+        fullName: dm.fullName.trim(),
+        title: dm.title ?? null,
+        seniority,
+        buyerPersona: dm.buyerPersona ?? null,
+        influenceScore:
+          seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
+        disposition: "unknown",
+        notes: dm.rationale ?? null,
+        sourceUrl: dm.sourceUrl ?? null,
+        confidence: dm.confidence === "verified" ? "verified" : "inferred",
+        createdByUserId: actorId,
+      });
+      nameToId.set(dm.fullName.trim().toLowerCase(), id);
+    }
+
+    // Resolve reports_to edges now that every contact has an id. We only link
+    // when the named manager is also in the seeded set (no dangling edges).
+    let edgeCount = 0;
+    for (const dm of decisionMakers) {
+      const reportsToName = (dm.reportsToName ?? "").trim();
+      if (!reportsToName) continue;
+      const fromId = nameToId.get(dm.fullName.trim().toLowerCase());
+      const toId = nameToId.get(reportsToName.toLowerCase());
+      if (fromId && toId && fromId !== toId) {
+        await tx.insert(atelierContactRelationships).values({
+          id: rid("cr"),
+          orgId: account.orgId,
+          accountId: account.id,
+          fromContactId: fromId,
+          toContactId: toId,
+          type: "reports_to",
+        });
+        edgeCount += 1;
+      }
+    }
+
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: account.id,
+      actorType: "agent",
+      actorId: "ag_account_cartographer",
+      actorLabel: "Account Cartographer",
+      action: "account.cartographer_run",
+      payload: {
+        trigger: "reviewed_on_create",
+        signalCount: signals.length,
+        contactsSeeded: decisionMakers.length,
+        reportsToEdges: edgeCount,
+        mandateAngles: research.researchBrief?.mandateAngles?.length ?? 0,
+      },
+      payloadSummary: `Persisted reviewed Cartographer research and seeded ${decisionMakers.length} contact(s) for ${account.brandName ?? account.name}.`,
+    });
+  });
+}
+
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -345,8 +471,44 @@ router.post("/accounts", async (req, res) => {
     return row;
   });
 
+  // Task #587 — reviewed research carried over from the chat proposal card.
+  // The partner already reviewed the Cartographer's findings, so we persist
+  // them verbatim and seed contacts directly — SKIPPING the wasteful second
+  // full Cartographer run (which previously re-searched the web from scratch
+  // and discarded the reviewed payload). This is awaited (DB-only, no LLM)
+  // so the account is fully enriched by the time the response returns.
+  if (input.research) {
+    try {
+      await persistReviewedResearch({
+        account: inserted,
+        research: input.research,
+        actorId: me.id,
+      });
+    } catch (err) {
+      // The account row + created audit event are already committed, but the
+      // reviewed research did not persist. Surface this rather than returning a
+      // misleading 201 — Task #587's contract is "persist exactly what was
+      // reviewed", so a partial create must not look like a success.
+      console.error("[atelier] persist reviewed research failed", err);
+      res.status(500).json({
+        error: "research-persist-failed",
+        accountId: inserted.id,
+        message:
+          "The account was created but its reviewed research could not be saved.",
+      });
+      return;
+    }
+    const fresh = (await loadAccount(inserted.id)) ?? inserted;
+    const access = await accessibleEngagementIds(me);
+    const summary = await summariseAccount(fresh, access);
+    res.status(201).json(summary);
+    return;
+  }
+
   // Fire-and-forget Cartographer auto-run. We do not await so the HTTP
-  // response stays snappy; the Profile tab polls for completion.
+  // response stays snappy; the Profile tab polls for completion. Only taken
+  // when no reviewed research accompanied the create request (e.g. the CRM
+  // "New account" button rather than the chat "Review & Create" flow).
   void (async () => {
     try {
       // Task #560 — use the Cartographer's returned v2 output directly

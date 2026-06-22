@@ -643,6 +643,40 @@ function AccountProposalCard({
     { label: ar ? "الفئة" : "Tier", value: tier },
   ].filter((f) => f.value.trim().length > 0);
 
+  // Task #587 — carry the FULL reviewed research through the dialog so create
+  // persists exactly what's shown here (no second Cartographer run). The
+  // decision-makers become the editable "Proposed stakeholders" list.
+  const decisionMakers = asArr(draft.decisionMakers)
+    .map((d) => asObj(d))
+    .filter((d) => asStr(d.fullName).trim().length > 0)
+    .map((d) => ({
+      fullName: asStr(d.fullName).trim(),
+      title: asStr(d.title) || null,
+      seniority: (asStr(d.seniority) || null) as
+        | "c_suite" | "vp" | "director" | "manager" | "ic" | null,
+      buyerPersona: asStr(d.buyerPersona) || null,
+      sourceUrl: asStr(d.sourceUrl) || null,
+      confidence: asStr(d.confidence) === "verified" ? "verified" : "inferred",
+      reportsToName: asStr(d.reportsToName) || null,
+      rationale: asStr(d.rationale) || null,
+    })) as Array<{
+      fullName: string;
+      title: string | null;
+      seniority: "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+      buyerPersona: string | null;
+      sourceUrl: string | null;
+      confidence: "verified" | "inferred";
+      reportsToName: string | null;
+      rationale: string | null;
+    }>;
+  const strategicPriorityRefs = asArr(draft.strategicPriorities)
+    .map((p) => asObj(p))
+    .map((p) => ({
+      text: asStr(p.text),
+      sourceUrls: asArr(p.sourceUrls).map((u) => asStr(u)).filter(Boolean),
+    }))
+    .filter((p) => p.text.trim().length > 0);
+
   const onReview = () =>
     openWithPrefill({
       name: asStr(draft.name),
@@ -654,6 +688,15 @@ function AccountProposalCard({
         { text?: string; sourceUrls?: string[] } | string
       >,
       cogniriseHypothesis: asStr(draft.cogniriseHypothesis) || null,
+      research: {
+        refreshedSummary: summary || null,
+        industryCode: asStr(draft.industryCode) || null,
+        subIndustryCode: asStr(draft.subIndustryCode) || null,
+        strategicPriorityRefs,
+        sourceSignals: asArr(draft.sourceSignals),
+        researchBrief: Object.keys(brief).length > 0 ? brief : null,
+        decisionMakers,
+      },
     });
 
   return (

@@ -27,8 +27,29 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 /**
+ * Task #587 — a single reviewed decision-maker carried over from the chat
+ * research card. `fullName` / `title` are partner-editable in the dialog; the
+ * remaining fields ride along untouched so the server can persist them and
+ * resolve the reporting (`reportsToName`) edges verbatim.
+ */
+export interface Stakeholder {
+  fullName: string;
+  title?: string | null;
+  seniority?: "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+  buyerPersona?: string | null;
+  sourceUrl?: string | null;
+  confidence?: "verified" | "inferred";
+  reportsToName?: string | null;
+  rationale?: string | null;
+}
+
+/**
  * Task #560 — prefill payload from the chat `account_proposal` card. Mirrors
  * the Cartographer draft so "Review & Create" can hydrate the form verbatim.
+ *
+ * Task #587 — extended to carry the full reviewed research (decision-makers,
+ * signals, brief, industry codes, refreshed summary, priority refs) so create
+ * persists exactly what the partner saw instead of re-running the Cartographer.
  */
 export interface AccountPrefill {
   name?: string | null;
@@ -39,6 +60,16 @@ export interface AccountPrefill {
   tier?: string | null;
   strategicPriorities?: Array<{ text?: string; sourceUrls?: string[] } | string>;
   cogniriseHypothesis?: string | null;
+  // Task #587 — reviewed research blob (present only on the chat flow).
+  research?: {
+    refreshedSummary?: string | null;
+    industryCode?: string | null;
+    subIndustryCode?: string | null;
+    strategicPriorityRefs?: Array<{ text: string; sourceUrls: string[] }>;
+    sourceSignals?: unknown[];
+    researchBrief?: unknown;
+    decisionMakers?: Stakeholder[];
+  } | null;
 }
 
 interface Props {
@@ -178,6 +209,13 @@ export function CreateAccountDialog({
     makeInitial({ partnerOwnerId: defaultPartnerId }),
   );
   const [duplicate, setDuplicate] = React.useState<AtelierAccountDuplicateError | null>(null);
+  // Task #587 — the reviewed research blob (sans decision-makers, which are
+  // edited separately in `stakeholders`). Null on the plain CRM-form flow, in
+  // which case create falls back to the background Cartographer run.
+  const [research, setResearch] = React.useState<NonNullable<AccountPrefill["research"]> | null>(
+    null,
+  );
+  const [stakeholders, setStakeholders] = React.useState<Stakeholder[]>([]);
 
   // Hydrate only on the closed→open transition so prefilled values and any
   // edits the partner makes are never clobbered by an async re-render.
@@ -186,6 +224,13 @@ export function CreateAccountDialog({
     if (open && !wasOpen.current) {
       setForm(makeInitial({ partnerOwnerId: defaultPartnerId, prefill: initialData }));
       setDuplicate(null);
+      const r = initialData?.research ?? null;
+      setResearch(r);
+      setStakeholders(
+        (r?.decisionMakers ?? [])
+          .filter((d) => (d?.fullName ?? "").trim().length > 0)
+          .map((d) => ({ ...d, fullName: d.fullName.trim() })),
+      );
     }
     wasOpen.current = open;
   }, [open, defaultPartnerId, initialData]);
@@ -234,6 +279,23 @@ export function CreateAccountDialog({
     e.preventDefault();
     if (!isValid) return;
     setDuplicate(null);
+    // Task #587 — when the dialog was opened from a chat research card, forward
+    // the reviewed research (with the partner's edited stakeholder list) so the
+    // server persists it verbatim and skips a second Cartographer run.
+    const cleanStakeholders = stakeholders
+      .map((s) => ({ ...s, fullName: s.fullName.trim(), title: s.title?.trim() || null }))
+      .filter((s) => s.fullName.length > 0);
+    const researchPayload = research
+      ? {
+          refreshedSummary: research.refreshedSummary ?? null,
+          industryCode: research.industryCode ?? null,
+          subIndustryCode: research.subIndustryCode ?? null,
+          strategicPriorityRefs: research.strategicPriorityRefs ?? [],
+          sourceSignals: research.sourceSignals ?? [],
+          researchBrief: research.researchBrief ?? null,
+          decisionMakers: cleanStakeholders,
+        }
+      : null;
     try {
       const res = await create.mutateAsync({
         data: {
@@ -252,12 +314,16 @@ export function CreateAccountDialog({
           strategicPriorities: form.strategicPriorities,
           cogniriseHypothesis: form.cogniriseHypothesis.trim() || null,
           notes: form.notes.trim() || null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ...(researchPayload ? { research: researchPayload as any } : {}),
         },
       });
       qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
       toast({
         title: "Account created",
-        description: "Cartographer is researching this account…",
+        description: researchPayload
+          ? `Saved with ${cleanStakeholders.length} reviewed stakeholder${cleanStakeholders.length === 1 ? "" : "s"}.`
+          : "Cartographer is researching this account…",
       });
       setOpen(false);
       setLocation(`/accounts/${res.id}`);
@@ -521,6 +587,70 @@ export function CreateAccountDialog({
               data-testid="input-account-notes"
             />
           </Field>
+
+          {research && (
+            <Field
+              label={`Proposed stakeholders${stakeholders.length ? ` (${stakeholders.length})` : ""}`}
+            >
+              <p className="text-xs text-text-mute -mt-0.5 mb-1">
+                Reviewed from the research card. Edit names/titles or remove any
+                before creating; reporting lines are preserved.
+              </p>
+              {stakeholders.length === 0 ? (
+                <p className="text-xs text-text-faint font-mono py-1">
+                  No stakeholders — Cognirise contacts can be added later.
+                </p>
+              ) : (
+                <div className="grid gap-2" data-testid="stakeholder-editor">
+                  {stakeholders.map((s, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2"
+                      data-testid={`stakeholder-row-${i}`}
+                    >
+                      <Input
+                        value={s.fullName}
+                        onChange={(e) =>
+                          setStakeholders((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, fullName: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        placeholder="Full name"
+                        className="bg-bg-deep border-border text-text flex-1"
+                        data-testid={`input-stakeholder-name-${i}`}
+                      />
+                      <Input
+                        value={s.title ?? ""}
+                        onChange={(e) =>
+                          setStakeholders((prev) =>
+                            prev.map((x, j) =>
+                              j === i ? { ...x, title: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        placeholder="Title"
+                        className="bg-bg-deep border-border text-text flex-1"
+                        data-testid={`input-stakeholder-title-${i}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStakeholders((prev) => prev.filter((_, j) => j !== i))
+                        }
+                        className="text-text-mute hover:text-danger px-1"
+                        aria-label={`Remove ${s.fullName || "stakeholder"}`}
+                        data-testid={`button-remove-stakeholder-${i}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Field>
+          )}
 
           {duplicate && (
             <div

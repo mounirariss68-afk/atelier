@@ -273,6 +273,141 @@ export const AtelierCreateAccountInputPrimaryLanguage = {
   ar: "ar",
 } as const;
 
+export interface AtelierResearchBriefFact {
+  text: string;
+  evidence: string;
+  sourceUrls: string[];
+}
+
+export type AtelierResearchBriefServiceLineFitItem = {
+  serviceLine: string;
+  signal: string;
+  sourceUrls: string[];
+};
+
+export type AtelierResearchBriefPartnerEcosystemItem = {
+  partner: string;
+  relationship: string;
+  /** @nullable */
+  serviceLineGap?: string | null;
+  sourceUrls: string[];
+};
+
+export type AtelierResearchBriefMandateAnglesItem = {
+  title: string;
+  serviceLines: string[];
+  tension: string;
+  whyNow: string;
+  entryStakeholder: string;
+  sourceUrls: string[];
+};
+
+export interface AtelierResearchBrief {
+  whatsChanging: AtelierResearchBriefFact[];
+  executiveTensions: AtelierResearchBriefFact[];
+  serviceLineFit: AtelierResearchBriefServiceLineFitItem[];
+  partnerEcosystem: AtelierResearchBriefPartnerEcosystemItem[];
+  mandateAngles: AtelierResearchBriefMandateAnglesItem[];
+  whyNowHypothesis: string;
+  openQuestions: string[];
+  singleMostImportant: string;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierResearchDecisionMakerSeniority =
+  | (typeof AtelierResearchDecisionMakerSeniority)[keyof typeof AtelierResearchDecisionMakerSeniority]
+  | null;
+
+export const AtelierResearchDecisionMakerSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+} as const;
+
+export type AtelierResearchDecisionMakerConfidence =
+  (typeof AtelierResearchDecisionMakerConfidence)[keyof typeof AtelierResearchDecisionMakerConfidence];
+
+export const AtelierResearchDecisionMakerConfidence = {
+  verified: "verified",
+  inferred: "inferred",
+} as const;
+
+export interface AtelierResearchDecisionMaker {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  fullName: string;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierResearchDecisionMakerSeniority;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  buyerPersona?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  sourceUrl?: string | null;
+  confidence: AtelierResearchDecisionMakerConfidence;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  reportsToName?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  rationale?: string | null;
+}
+
+export type AtelierCreateAccountResearchStrategicPriorityRefsItem = {
+  text: string;
+  sourceUrls: string[];
+};
+
+/**
+ * Reviewed Account Cartographer output captured in chat. All fields are
+optional; the server persists whatever is supplied and seeds contacts
+from `decisionMakers`.
+
+ */
+export interface AtelierCreateAccountResearch {
+  /**
+   * @maxLength 4000
+   * @nullable
+   */
+  refreshedSummary?: string | null;
+  /**
+   * @maxLength 64
+   * @nullable
+   */
+  industryCode?: string | null;
+  /**
+   * @maxLength 64
+   * @nullable
+   */
+  subIndustryCode?: string | null;
+  /** @maxItems 5 */
+  strategicPriorityRefs?: AtelierCreateAccountResearchStrategicPriorityRefsItem[];
+  /** @maxItems 50 */
+  sourceSignals?: AtelierSourceSignal[];
+  researchBrief?: AtelierResearchBrief | null;
+  /** @maxItems 12 */
+  decisionMakers?: AtelierResearchDecisionMaker[];
+}
+
 export interface AtelierCreateAccountInput {
   /**
    * Legal name (stored in `name`).
@@ -328,6 +463,7 @@ export interface AtelierCreateAccountInput {
    * @nullable
    */
   notes?: string | null;
+  research?: AtelierCreateAccountResearch | null;
 }
 
 export interface AtelierAccountObjective {
@@ -377,46 +513,6 @@ export interface AtelierAccountCompetitor {
    * @nullable
    */
   displacementAngle?: string | null;
-}
-
-export interface AtelierResearchBriefFact {
-  text: string;
-  evidence: string;
-  sourceUrls: string[];
-}
-
-export type AtelierResearchBriefServiceLineFitItem = {
-  serviceLine: string;
-  signal: string;
-  sourceUrls: string[];
-};
-
-export type AtelierResearchBriefPartnerEcosystemItem = {
-  partner: string;
-  relationship: string;
-  /** @nullable */
-  serviceLineGap?: string | null;
-  sourceUrls: string[];
-};
-
-export type AtelierResearchBriefMandateAnglesItem = {
-  title: string;
-  serviceLines: string[];
-  tension: string;
-  whyNow: string;
-  entryStakeholder: string;
-  sourceUrls: string[];
-};
-
-export interface AtelierResearchBrief {
-  whatsChanging: AtelierResearchBriefFact[];
-  executiveTensions: AtelierResearchBriefFact[];
-  serviceLineFit: AtelierResearchBriefServiceLineFitItem[];
-  partnerEcosystem: AtelierResearchBriefPartnerEcosystemItem[];
-  mandateAngles: AtelierResearchBriefMandateAnglesItem[];
-  whyNowHypothesis: string;
-  openQuestions: string[];
-  singleMostImportant: string;
 }
 
 export interface AtelierAccountHierarchyRef {

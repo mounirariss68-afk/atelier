@@ -2759,6 +2759,71 @@ components:
         notes:
           type: ["string", "null"]
           maxLength: 2000
+        # Task #587 — reviewed Cartographer research carried over verbatim from
+        # the chat `account_proposal` card. When present, the server persists
+        # this research directly (firmographic codes, refreshed summary, brief,
+        # signals, priority refs) and seeds contacts from the supplied
+        # decision-makers, SKIPPING the wasteful second full Cartographer run.
+        research:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierCreateAccountResearch"
+            - type: "null"
+
+    AtelierResearchDecisionMaker:
+      type: object
+      required: [fullName, confidence]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 200 }
+        title: { type: ["string", "null"], maxLength: 200 }
+        seniority:
+          type: ["string", "null"]
+          enum: [c_suite, vp, director, manager, ic, null]
+        buyerPersona: { type: ["string", "null"], maxLength: 120 }
+        sourceUrl: { type: ["string", "null"], maxLength: 2000 }
+        confidence: { type: string, enum: [verified, inferred] }
+        # Manager's full name as researched; resolved to a reports_to edge
+        # after the contacts are seeded.
+        reportsToName: { type: ["string", "null"], maxLength: 200 }
+        rationale: { type: ["string", "null"], maxLength: 2000 }
+
+    AtelierCreateAccountResearch:
+      type: object
+      description: |
+        Reviewed Account Cartographer output captured in chat. All fields are
+        optional; the server persists whatever is supplied and seeds contacts
+        from `decisionMakers`.
+      properties:
+        # Refreshed one-paragraph firm summary; written to `notes` only when the
+        # account has none.
+        refreshedSummary: { type: ["string", "null"], maxLength: 4000 }
+        industryCode: { type: ["string", "null"], maxLength: 64 }
+        subIndustryCode: { type: ["string", "null"], maxLength: 64 }
+        # Sourced strategic priorities (text + citation URLs). Matches the DB
+        # `strategic_priority_refs` shape — NOT a research-brief fact (no
+        # `evidence`), so a reviewed payload validates without one.
+        strategicPriorityRefs:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required: [text, sourceUrls]
+            properties:
+              text: { type: string }
+              sourceUrls:
+                type: array
+                items: { type: string }
+        sourceSignals:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/AtelierSourceSignal" }
+        researchBrief:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierResearchBrief"
+            - type: "null"
+        decisionMakers:
+          type: array
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AtelierResearchDecisionMaker" }
 
     AtelierAccountObjective:
       type: object

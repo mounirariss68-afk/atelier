@@ -2303,6 +2303,30 @@ export const atelierCreateAccountBodyCogniriseHypothesisMax = 600;
 
 export const atelierCreateAccountBodyNotesMax = 2000;
 
+export const atelierCreateAccountBodyResearchOneRefreshedSummaryMax = 4000;
+
+export const atelierCreateAccountBodyResearchOneIndustryCodeMax = 64;
+
+export const atelierCreateAccountBodyResearchOneSubIndustryCodeMax = 64;
+
+export const atelierCreateAccountBodyResearchOneStrategicPriorityRefsMax = 5;
+
+export const atelierCreateAccountBodyResearchOneSourceSignalsMax = 50;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemFullNameMax = 200;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemTitleMax = 200;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemBuyerPersonaMax = 120;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemSourceUrlMax = 2000;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemReportsToNameMax = 200;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemRationaleMax = 2000;
+
+export const atelierCreateAccountBodyResearchOneDecisionMakersMax = 12;
+
 export const AtelierCreateAccountBody = zod.object({
   name: zod
     .string()
@@ -2350,6 +2374,167 @@ export const AtelierCreateAccountBody = zod.object({
     .max(atelierCreateAccountBodyCogniriseHypothesisMax)
     .nullish(),
   notes: zod.string().max(atelierCreateAccountBodyNotesMax).nullish(),
+  research: zod
+    .union([
+      zod
+        .object({
+          refreshedSummary: zod
+            .string()
+            .max(atelierCreateAccountBodyResearchOneRefreshedSummaryMax)
+            .nullish(),
+          industryCode: zod
+            .string()
+            .max(atelierCreateAccountBodyResearchOneIndustryCodeMax)
+            .nullish(),
+          subIndustryCode: zod
+            .string()
+            .max(atelierCreateAccountBodyResearchOneSubIndustryCodeMax)
+            .nullish(),
+          strategicPriorityRefs: zod
+            .array(
+              zod.object({
+                text: zod.string(),
+                sourceUrls: zod.array(zod.string()),
+              }),
+            )
+            .max(atelierCreateAccountBodyResearchOneStrategicPriorityRefsMax)
+            .optional(),
+          sourceSignals: zod
+            .array(
+              zod.object({
+                kind: zod.enum([
+                  "news",
+                  "linkedin",
+                  "press",
+                  "filing",
+                  "manual",
+                ]),
+                title: zod.string(),
+                url: zod.string(),
+                summary: zod.string().nullish(),
+                publishedAt: zod.string().nullish(),
+                confidence: zod
+                  .union([
+                    zod.literal("green"),
+                    zod.literal("amber"),
+                    zod.literal("red"),
+                    zod.literal(null),
+                  ])
+                  .nullish(),
+              }),
+            )
+            .max(atelierCreateAccountBodyResearchOneSourceSignalsMax)
+            .optional(),
+          researchBrief: zod
+            .union([
+              zod.object({
+                whatsChanging: zod.array(
+                  zod.object({
+                    text: zod.string(),
+                    evidence: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                ),
+                executiveTensions: zod.array(
+                  zod.object({
+                    text: zod.string(),
+                    evidence: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                ),
+                serviceLineFit: zod.array(
+                  zod.object({
+                    serviceLine: zod.string(),
+                    signal: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                ),
+                partnerEcosystem: zod.array(
+                  zod.object({
+                    partner: zod.string(),
+                    relationship: zod.string(),
+                    serviceLineGap: zod.string().nullish(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                ),
+                mandateAngles: zod.array(
+                  zod.object({
+                    title: zod.string(),
+                    serviceLines: zod.array(zod.string()),
+                    tension: zod.string(),
+                    whyNow: zod.string(),
+                    entryStakeholder: zod.string(),
+                    sourceUrls: zod.array(zod.string()),
+                  }),
+                ),
+                whyNowHypothesis: zod.string(),
+                openQuestions: zod.array(zod.string()),
+                singleMostImportant: zod.string(),
+              }),
+              zod.null(),
+            ])
+            .optional(),
+          decisionMakers: zod
+            .array(
+              zod.object({
+                fullName: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemFullNameMax,
+                  ),
+                title: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemTitleMax,
+                  )
+                  .nullish(),
+                seniority: zod
+                  .union([
+                    zod.literal("c_suite"),
+                    zod.literal("vp"),
+                    zod.literal("director"),
+                    zod.literal("manager"),
+                    zod.literal("ic"),
+                    zod.literal(null),
+                  ])
+                  .nullish(),
+                buyerPersona: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemBuyerPersonaMax,
+                  )
+                  .nullish(),
+                sourceUrl: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemSourceUrlMax,
+                  )
+                  .nullish(),
+                confidence: zod.enum(["verified", "inferred"]),
+                reportsToName: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemReportsToNameMax,
+                  )
+                  .nullish(),
+                rationale: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemRationaleMax,
+                  )
+                  .nullish(),
+              }),
+            )
+            .max(atelierCreateAccountBodyResearchOneDecisionMakersMax)
+            .optional(),
+        })
+        .describe(
+          "Reviewed Account Cartographer output captured in chat. All fields are\noptional; the server persists whatever is supplied and seeds contacts\nfrom `decisionMakers`.\n",
+        ),
+      zod.null(),
+    ])
+    .optional(),
 });
 
 /**

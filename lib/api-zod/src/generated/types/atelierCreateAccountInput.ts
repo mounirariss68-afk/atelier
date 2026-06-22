@@ -9,6 +9,7 @@ import type { AtelierAccountStatus } from "./atelierAccountStatus";
 import type { AtelierAccountTier } from "./atelierAccountTier";
 import type { AtelierCreateAccountInputPrimaryLanguage } from "./atelierCreateAccountInputPrimaryLanguage";
 import type { AtelierCreateAccountInputSize } from "./atelierCreateAccountInputSize";
+import type { AtelierCreateAccountResearch } from "./atelierCreateAccountResearch";
 
 export interface AtelierCreateAccountInput {
   /**
@@ -65,4 +66,5 @@ export interface AtelierCreateAccountInput {
    * @nullable
    */
   notes?: string | null;
+  research?: AtelierCreateAccountResearch | null;
 }
