@@ -1998,6 +1998,11 @@ async function callClaudeJsonWithWebSearch<T>(
   // for a persisted run, also updates the agent_run row so the account page
   // can show the same phase. DB write is best-effort; a failure must never
   // break research.
+  // Persisted run-row progress is kept monotonic (high-water mark) so the
+  // account-page bar never visibly backsteps when phases interleave (e.g. the
+  // heartbeat ramps to 96 during a lull, then a later search would emit 35).
+  // The chat caption is unaffected — it shows the live status message, not pct.
+  let maxPersistedPct = 0;
   const emitPhase = (
     pct: number,
     message: string,
@@ -2005,10 +2010,11 @@ async function callClaudeJsonWithWebSearch<T>(
   ) => {
     reportProgress(pct, message, data);
     if (progressRunId) {
+      maxPersistedPct = Math.max(maxPersistedPct, Math.round(pct));
       void db
         .update(atelierAgentRuns)
         .set({
-          progressPct: Math.round(pct),
+          progressPct: maxPersistedPct,
           statusMessage: message.slice(0, 240),
           updatedAt: new Date(),
         })
@@ -2035,26 +2041,44 @@ async function callClaudeJsonWithWebSearch<T>(
   // message is recovered via `stream.finalMessage()`.
   let searchCount = 0;
   // The model's final answer is one large JSON object that streams out over
-  // 60–90s+ after web search ends. The first text delta used to emit a single
-  // "Drafting findings" line and then go silent while the elapsed timer kept
-  // climbing — looking frozen. Instead, start a heartbeat on the first text
-  // delta that keeps emitting a fresh "Synthesising the brief… (Ns)" phase so
-  // the activity indicator stays live to completion.
-  let synthesisStarted = false;
+  // 60–90s+ after web search ends. TWO windows used to look frozen: (a) the
+  // silent gap between the last source read and the first answer token while
+  // the model composes internally, and (b) the long answer stream itself.
+  // A single live heartbeat covers both: it starts as "Analysing sources…"
+  // once the model goes quiet after a search, then flips to "Synthesising the
+  // brief…" the moment answer text begins. Both share the "synthesis" phase
+  // key so the chat caption coalesces into ONE row that re-emits a fresh
+  // elapsed label every 2.5s — the activity indicator never stalls.
   let heartbeat: ReturnType<typeof setInterval> | null = null;
-  const startSynthesisHeartbeat = () => {
-    if (synthesisStarted) return;
-    synthesisStarted = true;
-    const startedAt = Date.now();
-    emitPhase(80, "Synthesising the brief…", { phase: "synthesis" });
-    heartbeat = setInterval(() => {
-      const secs = Math.round((Date.now() - startedAt) / 1000);
-      emitPhase(
-        Math.min(80 + Math.floor(secs / 5), 96),
-        `Synthesising the brief… (${secs}s)`,
-        { phase: "synthesis" },
-      );
-    }, 2500);
+  let heartbeatBase = "Analysing sources…";
+  let heartbeatStartedAt = 0;
+  let synthesisPending: ReturnType<typeof setTimeout> | null = null;
+  const emitHeartbeat = () => {
+    const secs = Math.round((Date.now() - heartbeatStartedAt) / 1000);
+    emitPhase(
+      Math.min(80 + Math.floor(secs / 5), 96),
+      secs > 0 ? `${heartbeatBase} (${secs}s)` : heartbeatBase,
+      { phase: "synthesis" },
+    );
+  };
+  const startHeartbeat = (base: string) => {
+    if (heartbeat && base === heartbeatBase) return; // already ticking this phase
+    heartbeatBase = base;
+    heartbeatStartedAt = Date.now(); // reset elapsed for the new phase label
+    emitHeartbeat(); // instant transition, no 2.5s wait
+    if (!heartbeat) heartbeat = setInterval(emitHeartbeat, 2500);
+  };
+  const stopHeartbeat = () => {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+  };
+  const cancelSynthesisPending = () => {
+    if (synthesisPending) {
+      clearTimeout(synthesisPending);
+      synthesisPending = null;
+    }
   };
   // Accumulate the actual sources read (deduped by URL) so the live
   // "Read N sources" progress step can be expanded to reveal the titles.
@@ -2086,6 +2110,10 @@ async function callClaudeJsonWithWebSearch<T>(
           event.content_block.name === "web_search"
         ) {
           searchCount += 1;
+          // A fresh search means we are not yet composing — cancel any pending
+          // "Analysing…" promotion and pause the heartbeat for the search.
+          cancelSynthesisPending();
+          stopHeartbeat();
           emitPhase(35, `Searching the web (${searchCount})`);
         } else if (
           event.type === "content_block_start" &&
@@ -2117,18 +2145,29 @@ async function callClaudeJsonWithWebSearch<T>(
             `Read ${sourcesRead} source${sourcesRead === 1 ? "" : "s"}`,
             { sources: readSources.slice(0, 40) },
           );
+          // If the model goes quiet after this read (no new search within a
+          // beat), it has moved on to composing — promote to a live
+          // "Analysing sources…" heartbeat so the caption never freezes during
+          // the silent pre-answer compose gap. A subsequent search cancels it.
+          cancelSynthesisPending();
+          synthesisPending = setTimeout(
+            () => startHeartbeat("Analysing sources…"),
+            2000,
+          );
         } else if (
-          !synthesisStarted &&
           event.type === "content_block_delta" &&
           event.delta.type === "text_delta"
         ) {
-          startSynthesisHeartbeat();
+          // Answer tokens are streaming — flip the live caption to synthesis.
+          cancelSynthesisPending();
+          startHeartbeat("Synthesising the brief…");
         }
       }
       return await stream.finalMessage();
     } finally {
       clearTimeout(timer);
-      if (heartbeat) clearInterval(heartbeat);
+      cancelSynthesisPending();
+      stopHeartbeat();
     }
   })();
   // Find the last text block (Claude returns interleaved tool-use,
