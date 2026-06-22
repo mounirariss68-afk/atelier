@@ -318,6 +318,13 @@ export type AtelierResearchBriefPartnerEcosystemItem = {
   sourceUrls: string[];
 };
 
+export type AtelierResearchBriefBusinessUnitsItem = {
+  name: string;
+  brands: string[];
+  /** @nullable */
+  note?: string | null;
+};
+
 export type AtelierResearchBriefMandateAnglesItem = {
   title: string;
   serviceLines: string[];
@@ -332,6 +339,7 @@ export interface AtelierResearchBrief {
   executiveTensions: AtelierResearchBriefFact[];
   serviceLineFit: AtelierResearchBriefServiceLineFitItem[];
   partnerEcosystem: AtelierResearchBriefPartnerEcosystemItem[];
+  businessUnits?: AtelierResearchBriefBusinessUnitsItem[];
   mandateAngles: AtelierResearchBriefMandateAnglesItem[];
   whyNowHypothesis: string;
   openQuestions: string[];

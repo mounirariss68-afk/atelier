@@ -268,6 +268,7 @@ export * from "./atelierRateCardRowInput";
 export * from "./atelierRateCardStatus";
 export * from "./atelierRejectProposalSectionInput";
 export * from "./atelierResearchBrief";
+export * from "./atelierResearchBriefBusinessUnitsItem";
 export * from "./atelierResearchBriefFact";
 export * from "./atelierResearchBriefMandateAnglesItem";
 export * from "./atelierResearchBriefPartnerEcosystemItem";

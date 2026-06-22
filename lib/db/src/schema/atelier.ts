@@ -132,6 +132,9 @@ export const atelierAccounts = pgTable(
         serviceLineGap?: string | null;
         sourceUrls: string[];
       }>;
+      // Task #589 — Step 4 group / business-unit structure for the prep card
+      // map. Optional so briefs created before the 4-step method keep validating.
+      businessUnits?: Array<{ name: string; brands: string[]; note?: string | null }>;
       mandateAngles: Array<{
         title: string;
         serviceLines: string[];

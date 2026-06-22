@@ -2469,6 +2469,15 @@ export const AtelierCreateAccountBody = zod.object({
                     sourceUrls: zod.array(zod.string()),
                   }),
                 ),
+                businessUnits: zod
+                  .array(
+                    zod.object({
+                      name: zod.string(),
+                      brands: zod.array(zod.string()),
+                      note: zod.string().nullish(),
+                    }),
+                  )
+                  .optional(),
                 mandateAngles: zod.array(
                   zod.object({
                     title: zod.string(),
@@ -2865,6 +2874,15 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -3627,6 +3645,15 @@ export const AtelierUpdateAccountResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -4276,6 +4303,15 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -5432,6 +5468,15 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -6086,6 +6131,15 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -6753,6 +6807,15 @@ export const AtelierCreateAccountInsightResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -7419,6 +7482,15 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -8069,6 +8141,15 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -8728,6 +8809,15 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -9387,6 +9477,15 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -10039,6 +10138,15 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -10703,6 +10811,15 @@ export const AtelierCreateAccountActionResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -11364,6 +11481,15 @@ export const AtelierUpdateAccountActionResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -12014,6 +12140,15 @@ export const AtelierDeleteAccountActionResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -12673,6 +12808,15 @@ export const AtelierCreateAccountRiskResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -13333,6 +13477,15 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -13983,6 +14136,15 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),
@@ -14639,6 +14801,15 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
                   sourceUrls: zod.array(zod.string()),
                 }),
               ),
+              businessUnits: zod
+                .array(
+                  zod.object({
+                    name: zod.string(),
+                    brands: zod.array(zod.string()),
+                    note: zod.string().nullish(),
+                  }),
+                )
+                .optional(),
               mandateAngles: zod.array(
                 zod.object({
                   title: zod.string(),

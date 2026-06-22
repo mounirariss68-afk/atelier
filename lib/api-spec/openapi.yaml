@@ -2937,6 +2937,17 @@ components:
               sourceUrls:
                 type: array
                 items: { type: string }
+        businessUnits:
+          type: array
+          items:
+            type: object
+            required: [name, brands]
+            properties:
+              name: { type: string }
+              brands:
+                type: array
+                items: { type: string }
+              note: { type: ["string", "null"] }
         mandateAngles:
           type: array
           items:

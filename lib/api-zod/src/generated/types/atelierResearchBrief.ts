@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierResearchBriefBusinessUnitsItem } from "./atelierResearchBriefBusinessUnitsItem";
 import type { AtelierResearchBriefFact } from "./atelierResearchBriefFact";
 import type { AtelierResearchBriefMandateAnglesItem } from "./atelierResearchBriefMandateAnglesItem";
 import type { AtelierResearchBriefPartnerEcosystemItem } from "./atelierResearchBriefPartnerEcosystemItem";
@@ -16,6 +17,7 @@ export interface AtelierResearchBrief {
   executiveTensions: AtelierResearchBriefFact[];
   serviceLineFit: AtelierResearchBriefServiceLineFitItem[];
   partnerEcosystem: AtelierResearchBriefPartnerEcosystemItem[];
+  businessUnits?: AtelierResearchBriefBusinessUnitsItem[];
   mandateAngles: AtelierResearchBriefMandateAnglesItem[];
   whyNowHypothesis: string;
   openQuestions: string[];

@@ -10,19 +10,23 @@
 // logo (Brandfetch CDN), which degrades gracefully to a text
 // wordmark via an inline onerror handler.
 //
-// The 9 sections mirror the research method end-to-end:
-//   1. Cover / at-a-glance
-//   2. Client Present Brief — what's changing
-//   3. Executive tensions
-//   4. Service-line fit (with typical deal-size ranges)
-//   5. Partner ecosystem & white space
-//   6. Origination hypothesis (why now)
-//   7. Mandate angles
-//   8. Stress-test
-//   9. Key people (deep profiles) + open questions
+// The 9 sections follow the account-research skill's prep-card spec:
+//   1. Header with client logo (+ Cognirise wordmark)
+//   2. Account snapshot
+//   3. Group / business-unit structure (visual map)
+//   4. What's changing right now
+//   5. Their pressure
+//   6. Person profile — who you're meeting
+//   7. Our angle
+//   8. Priority project areas (with service-line tags + deal size)
+//   9. Watch-outs
 // ============================================================
 
 const COGNIRISE_TAGLINE = "Intelligence that Elevates.";
+
+// Distinct accent colors for the business-unit map cards, cycled by index so
+// each division reads as its own block at a glance.
+const BU_ACCENTS = ["#E89E2C", "#3B82C4", "#2E7D5B", "#8E5BB8", "#C4553B", "#11808F"];
 
 // Typical first-mandate deal-size ranges per Cognirise service line.
 // Mirrors the table in prompts/account_cartographer/v1.md — kept here so
@@ -69,6 +73,7 @@ export interface PrepCardResearchBrief {
     serviceLineGap?: string | null;
     sourceUrls?: string[];
   }>;
+  businessUnits?: Array<{ name: string; brands?: string[]; note?: string | null }>;
   mandateAngles?: Array<{
     title: string;
     serviceLines?: string[];
@@ -242,23 +247,42 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
     ? `https://cdn.brandfetch.io/${domain}/w/600/h/200/theme/dark/logo.png`
     : "";
 
-  // ---- Section 1: cover / at-a-glance ----
+  // ---- Section 2: account snapshot (4 data points + a strategic-interest line) ----
   const facts = [
     ["Sector", input.sector],
     ["Country", input.country],
     input.hqCity ? ["HQ", input.hqCity] : null,
     input.tier ? ["Tier", input.tier] : null,
   ].filter(Boolean) as Array<[string, string]>;
-  const single = rb.singleMostImportant?.trim();
-  const coverInner = `
+  const single = rb.singleMostImportant?.trim() || input.cogniriseHypothesis?.trim() || "";
+  const snapshotInner = `
     <div class="glance">${facts
       .map(([k, v]) => `<div class="glance-cell"><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`)
       .join("")}</div>
-    ${single ? `<div class="headline"><span class="headline-label">The single most important thing</span>${escapeHtml(single)}</div>` : ""}
-    ${input.cogniriseHypothesis ? `<div class="rtw"><span class="rtw-label">Cognirise right-to-win</span>${escapeHtml(input.cogniriseHypothesis)}</div>` : ""}`;
+    ${single ? `<div class="headline"><span class="headline-label">Why they're interesting right now</span>${escapeHtml(single)}</div>` : ""}`;
 
-  // ---- Section 2: what's changing ----
-  const changing = rb.whatsChanging ?? [];
+  // ---- Section 3: group / business-unit structure (visual map) ----
+  const units = rb.businessUnits ?? [];
+  const unitsInner = units.length
+    ? `<div class="bu-grid">${units
+        .map((u, i) => {
+          const accent = BU_ACCENTS[i % BU_ACCENTS.length];
+          const brands = (u.brands ?? []).filter((b) => b && b.trim().length > 0);
+          const brandHtml = brands.length
+            ? `<div class="bu-brands">${brands.map((b) => escapeHtml(b)).join(" · ")}</div>`
+            : "";
+          const note = u.note ? `<div class="bu-note">${escapeHtml(u.note)}</div>` : "";
+          return `<div class="bu-card" style="border-top:3px solid ${accent}">
+            <div class="bu-name">${escapeHtml(u.name)}</div>
+            ${note}
+            ${brandHtml}
+          </div>`;
+        })
+        .join("")}</div>`
+    : emptyNote("No business-unit map captured yet — re-run the Account Cartographer.");
+
+  // ---- Section 4: what's changing right now (3 max) ----
+  const changing = (rb.whatsChanging ?? []).slice(0, 3);
   const changingInner = changing.length
     ? `<ul class="rows">${changing
         .map(
@@ -268,8 +292,8 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
         .join("")}</ul>`
     : emptyNote("No change signals captured yet.");
 
-  // ---- Section 3: executive tensions ----
-  const tensions = rb.executiveTensions ?? [];
+  // ---- Section 5: their pressure — what the meeting contact is accountable for ----
+  const tensions = (rb.executiveTensions ?? []).slice(0, 3);
   const tensionsInner = tensions.length
     ? `<ul class="rows">${tensions
         .map(
@@ -277,119 +301,78 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
             `<li>${escapeHtml(x.text)} ${evidencePill(x.evidence)} ${sourceLinks(x.sourceUrls)}</li>`,
         )
         .join("")}</ul>`
-    : emptyNote("No executive tensions captured yet.");
+    : emptyNote("No executive pressures captured yet.");
 
-  // ---- Section 4: service-line fit + deal sizes ----
-  const slFit = rb.serviceLineFit ?? [];
-  const slInner = slFit.length
-    ? `<table class="grid"><thead><tr><th>Service line</th><th>Signal</th><th>Typical deal size</th><th></th></tr></thead><tbody>${slFit
-        .map((s) => {
-          const meta = SERVICE_LINE_META[s.serviceLine];
-          const slLabel = meta ? `${escapeHtml(s.serviceLine)} · ${escapeHtml(meta.name)}` : escapeHtml(s.serviceLine);
-          const deal = meta ? escapeHtml(meta.dealSize) : "—";
-          return `<tr><td class="sl">${slLabel}</td><td>${escapeHtml(s.signal)}</td><td class="deal">${deal}</td><td>${sourceLinks(s.sourceUrls)}</td></tr>`;
-        })
-        .join("")}</tbody></table>`
-    : emptyNote("No service-line fit captured yet.");
+  // ---- Section 6: person profile — who you're meeting ----
+  const focus = input.focusContact ?? input.contacts[0] ?? null;
+  const others = focus
+    ? input.contacts.filter((c) => c.fullName.toLowerCase() !== focus.fullName.toLowerCase())
+    : input.contacts;
+  const personInner = focus
+    ? `${renderContactProfile(focus, true)}${
+        others.length
+          ? `<div class="profile-block"><div class="profile-label">Other stakeholders</div>${others
+              .map((c) => renderContactProfile(c, false))
+              .join("")}</div>`
+          : ""
+      }`
+    : emptyNote("No decision-makers captured yet.");
 
-  // ---- Section 5: partner ecosystem ----
-  const partners = rb.partnerEcosystem ?? [];
-  const partnersInner = partners.length
-    ? `<ul class="rows">${partners
-        .map((p) => {
-          const gap = p.serviceLineGap ? `<div class="gap">White space: ${escapeHtml(p.serviceLineGap)}</div>` : "";
-          return `<li><b>${escapeHtml(p.partner)}</b> — ${escapeHtml(p.relationship)} ${sourceLinks(p.sourceUrls)}${gap}</li>`;
-        })
-        .join("")}</ul>`
-    : emptyNote("No partner ecosystem captured yet.");
+  // ---- Section 7: our angle (1–2 sentences, issue-led) ----
+  const angle = input.cogniriseHypothesis?.trim() || rb.whyNowHypothesis?.trim() || "";
+  const angleInner = angle
+    ? `<p class="prose">${escapeHtml(angle)}</p>`
+    : emptyNote("No origination angle captured yet.");
 
-  // ---- Section 6: why now ----
-  const whyNow = rb.whyNowHypothesis?.trim();
-  const whyNowInner = whyNow
-    ? `<p class="prose">${escapeHtml(whyNow)}</p>`
-    : emptyNote("No origination hypothesis captured yet.");
-
-  // ---- Section 7: mandate angles ----
-  const angles = rb.mandateAngles ?? [];
+  // ---- Section 8: priority project areas (up to 5) ----
+  const angles = (rb.mandateAngles ?? []).slice(0, 5);
   const anglesInner = angles.length
     ? angles
         .map((a) => {
-          const sls = (a.serviceLines ?? []).map((s) => `<span class="sl-tag">${escapeHtml(s)}</span>`).join(" ");
+          const sls = (a.serviceLines ?? [])
+            .map((s) => {
+              const meta = SERVICE_LINE_META[s];
+              const label = meta ? `${escapeHtml(s)} · ${escapeHtml(meta.dealSize)}` : escapeHtml(s);
+              return `<span class="sl-tag">${label}</span>`;
+            })
+            .join(" ");
+          const whyLive = a.whyNow || a.tension;
           return `<div class="angle">
             <div class="angle-title">${escapeHtml(a.title)} ${sls}</div>
-            <div class="kv"><span>Tension</span><b>${escapeHtml(a.tension)}</b></div>
-            <div class="kv"><span>Why now</span><b>${escapeHtml(a.whyNow)}</b></div>
-            <div class="kv"><span>Enter via</span><b>${escapeHtml(a.entryStakeholder)}</b></div>
+            ${whyLive ? `<div class="kv"><span>Why live</span><b>${escapeHtml(whyLive)}</b></div>` : ""}
+            ${a.entryStakeholder ? `<div class="kv"><span>Owner</span><b>${escapeHtml(a.entryStakeholder)}</b></div>` : ""}
             ${sourceLinks(a.sourceUrls)}
           </div>`;
         })
         .join("")
-    : emptyNote("No mandate angles captured yet.");
+    : emptyNote("No priority project areas captured yet.");
 
-  // ---- Section 8: stress-test ----
+  // ---- Section 9: watch-outs (distilled from the stress-test) ----
   const st = rb.stressTest ?? null;
-  const stInner = st
-    ? `
-      ${st.revisedHypothesis ? `<div class="rtw"><span class="rtw-label">Revised hypothesis</span>${escapeHtml(st.revisedHypothesis)}</div>` : ""}
-      ${
-        (st.failureScenarios ?? []).length
-          ? `<div class="profile-block"><div class="profile-label">How it could be wrong</div><ul>${(st.failureScenarios ?? [])
-              .map((x) => `<li>${escapeHtml(x)}</li>`)
-              .join("")}</ul></div>`
-          : ""
-      }
-      ${
-        st.assumptions
-          ? `<div class="assume">
-              ${(st.assumptions.evidenced ?? []).length ? `<div class="assume-col"><div class="profile-label">Evidenced</div><ul>${(st.assumptions.evidenced ?? []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
-              ${(st.assumptions.untestedButLikely ?? []).length ? `<div class="assume-col"><div class="profile-label">Untested but likely</div><ul>${(st.assumptions.untestedButLikely ?? []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
-              ${(st.assumptions.uncertain ?? []).length ? `<div class="assume-col"><div class="profile-label">Uncertain</div><ul>${(st.assumptions.uncertain ?? []).map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : ""}
-            </div>`
-          : ""
-      }
-      ${
-        (st.likelyObjections ?? []).length
-          ? `<div class="profile-block"><div class="profile-label">Likely objections</div><ul>${(st.likelyObjections ?? [])
-              .map((x) => `<li>${escapeHtml(x)}</li>`)
-              .join("")}</ul></div>`
-          : ""
-      }
-      ${
-        (st.evidenceToStrengthen ?? []).length
-          ? `<div class="profile-block"><div class="profile-label">Evidence to strengthen</div><ul>${(st.evidenceToStrengthen ?? [])
-              .map((e) => `<li>${escapeHtml(e.evidence)} <span class="muted">— ${escapeHtml(e.whereToFind)}</span></li>`)
-              .join("")}</ul></div>`
-          : ""
-      }`
-    : emptyNote("This hypothesis has not been stress-tested yet. Re-run the Account Cartographer to generate it.");
-
-  // ---- Section 9: people + open questions ----
-  const focus = input.focusContact ?? null;
-  const others = focus
-    ? input.contacts.filter((c) => c.fullName.toLowerCase() !== focus.fullName.toLowerCase())
-    : input.contacts;
-  const peopleHtml =
-    input.contacts.length || focus
-      ? `${focus ? renderContactProfile(focus, true) : ""}${others.map((c) => renderContactProfile(c, false)).join("")}`
-      : emptyNote("No decision-makers captured yet.");
-  const openQ = rb.openQuestions ?? [];
-  const openInner = openQ.length
-    ? `<div class="profile-block"><div class="profile-label">Open questions to resolve</div><ul>${openQ
-        .map((q) => `<li>${escapeHtml(q)}</li>`)
-        .join("")}</ul></div>`
-    : "";
-  const peopleInner = `${peopleHtml}${openInner}`;
+  const watchItems: string[] = [
+    ...(st?.likelyObjections ?? []),
+    ...(st?.failureScenarios ?? []),
+    ...(st?.assumptions?.uncertain ?? []),
+  ];
+  const watchInner =
+    watchItems.length || st?.revisedHypothesis
+      ? `${st?.revisedHypothesis ? `<div class="rtw"><span class="rtw-label">Sharpened hypothesis</span>${escapeHtml(st.revisedHypothesis)}</div>` : ""}
+        ${
+          watchItems.length
+            ? `<ul class="rows">${watchItems.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+            : ""
+        }`
+      : emptyNote("This hypothesis has not been stress-tested yet — re-run the Account Cartographer to surface watch-outs.");
 
   const sections = [
-    sectionShell(1, "At a glance", coverInner),
-    sectionShell(2, "What's changing", changingInner),
-    sectionShell(3, "Executive tensions", tensionsInner),
-    sectionShell(4, "Service-line fit", slInner),
-    sectionShell(5, "Partner ecosystem & white space", partnersInner),
-    sectionShell(6, "Why now — origination hypothesis", whyNowInner),
-    sectionShell(7, "Mandate angles", anglesInner),
-    sectionShell(8, "Stress-test", stInner),
-    sectionShell(9, "Key people & open questions", peopleInner),
+    sectionShell(2, "Account snapshot", snapshotInner),
+    sectionShell(3, "Group / business-unit structure", unitsInner),
+    sectionShell(4, "What's changing right now", changingInner),
+    sectionShell(5, "Their pressure", tensionsInner),
+    sectionShell(6, "Who you're meeting", personInner),
+    sectionShell(7, "Our angle", angleInner),
+    sectionShell(8, "Priority project areas", anglesInner),
+    sectionShell(9, "Watch-outs", watchInner),
   ].join("");
 
   const preparedLine = [
@@ -450,6 +433,12 @@ export function renderPrepCardHtml(input: RenderPrepCardInput): string {
   td.sl { font-weight:600; color:var(--navy); white-space:nowrap; }
   td.deal { white-space:nowrap; color:var(--navy); font-weight:600; }
   .gap { margin-top:4px; font-size:12.5px; color:#b07a14; }
+  .bu-grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .bu-card { flex:1 1 160px; min-width:150px; background:var(--soft); border:1px solid var(--rule);
+    border-radius:10px; padding:12px 14px; }
+  .bu-name { font-weight:700; color:var(--navy); font-size:14px; }
+  .bu-note { color:var(--mute); font-size:12px; margin-top:3px; }
+  .bu-brands { color:var(--ink); font-size:12.5px; margin-top:7px; }
   .angle { padding:14px 16px; border:1px solid var(--rule); border-radius:8px; margin-bottom:12px; }
   .angle:last-child { margin-bottom:0; }
   .angle-title { font-weight:700; color:var(--navy); font-size:15px; margin-bottom:8px; }

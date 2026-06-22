@@ -1760,6 +1760,9 @@ export interface CartographerResearchBrief {
     serviceLineGap?: string | null;
     sourceUrls: string[];
   }>;
+  // Step 4 input — group / business-unit structure for the prep-card map.
+  // Each unit names a major division plus 2–3 subsidiary / brand names.
+  businessUnits: Array<{ name: string; brands: string[]; note?: string | null }>;
   // F — mandate-creation angles with service-line tags + why-now.
   mandateAngles: Array<{
     title: string;
@@ -1856,6 +1859,13 @@ function normaliseResearchBrief(v: unknown): CartographerResearchBrief {
         return { partner: asTrimmed(o.partner), relationship: asTrimmed(o.relationship), serviceLineGap: gap.length > 0 ? gap : null, sourceUrls: asUrlList(o.sourceUrls) };
       })
       .filter((p) => p.partner.length > 0),
+    businessUnits: (Array.isArray(r.businessUnits) ? r.businessUnits : [])
+      .map((raw) => {
+        const o = asRecord(raw);
+        const note = asTrimmed(o.note);
+        return { name: asTrimmed(o.name), brands: asStringList(o.brands), note: note.length > 0 ? note : null };
+      })
+      .filter((b) => b.name.length > 0),
     mandateAngles: (Array.isArray(r.mandateAngles) ? r.mandateAngles : [])
       .map((raw) => {
         const o = asRecord(raw);
