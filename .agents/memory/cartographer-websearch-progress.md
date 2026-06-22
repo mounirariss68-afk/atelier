@@ -1,44 +1,47 @@
 ---
-name: Cartographer web-search live progress
-description: Why the Account Cartographer chat caption freezes mid-run and how the heartbeat must be shaped to avoid it.
+name: Cartographer web-search live progress & token budget
+description: Two durable traps in the Account Cartographer web_search run — frozen live caption, and a token budget shared with web search that truncates the JSON.
 ---
 
-# Cartographer web-search live progress (chat caption never freezes)
+# Cartographer web_search run — durable traps
 
-`callClaudeJsonWithWebSearch` (atelier-agents/runner.ts) streams an Anthropic
-web_search run. It emits live phases via `emitPhase` → `reportProgress`
-(ambient AsyncLocalStorage sink) → chat SSE `progress` frames → CommandBar
-caption. The caption shows the latest trace entry of `kind:"step"`.
+The Account Cartographer makes one Anthropic `web_search` streaming call whose
+final answer is one large JSON brief. Two non-obvious failure modes:
 
-**The trap:** there are TWO silent windows where the model emits NO stream
-events, so a caption that only updates on events freezes while the elapsed
-timer keeps ticking:
-1. Between the last `web_search_tool_result` and the first answer `text_delta`,
-   the model composes the large JSON answer internally — can be tens of seconds.
-2. The long answer stream tail itself.
+## 1. Live caption freezes during the silent compose gap
+The chat caption shows the latest live-progress step. The model emits NO stream
+events in two windows, so a caption that only updates on events freezes while
+the elapsed timer keeps ticking:
+- between the last source read and the first answer token (model composing the
+  JSON internally — can be tens of seconds);
+- the long answer stream tail.
 
-**Rule:** the live heartbeat must NOT wait for the first `text_delta`. After each
-search result, arm a short (~2s) timer that promotes the caption to a live
-"Analysing sources… (Ns)" heartbeat if no new search starts; a new search must
-cancel that timer AND pause the heartbeat; the first `text_delta` flips the
-label to "Synthesising the brief… (Ns)". Always clear timer + interval in the
-stream's `finally`.
+**Rule:** the heartbeat must NOT wait for the first answer token. After a source
+read, if the model goes quiet, promote to a live "Analysing sources…" heartbeat;
+a new search cancels/pauses it; the first answer token flips it to
+"Synthesising the brief…". Backend + frontend must share ONE stable phase key so
+the caption coalesces consecutive same-phase steps into one updating row —
+otherwise interleaving heartbeat ticks with discrete breadcrumbs floods the
+trace, so pause the heartbeat during active search.
+**Why:** users reported "after reading sources the counter increases but doesn't
+show what is happening" — the compose gap was uncovered.
 
-**Why:** users reported "after reading the sources, the seconds counter
-increases but doesn't show what is happening" — window 1 was uncovered.
+Also: persisted run-row progress (drives the account-page bar) must be clamped
+to a monotonic high-water max, because phases interleave non-monotonically and
+the bar would visibly backstep. The chat caption is unaffected (shows the status
+message, not pct).
 
-**How to apply (two coupling constraints):**
-- Backend and frontend must agree on a stable `phase` key (`"synthesis"`). The
-  CommandBar coalesces *consecutive* same-phase steps into ONE updating row.
-  Different keys (or none) append distinct rows; interleaving heartbeat ticks
-  with discrete breadcrumbs floods the trace — so pause the heartbeat during
-  active search, only run it in the quiet compose/stream tail.
-- Persisted run-row `progressPct` (atelier_agent_runs, drives the account-page
-  bar) MUST be clamped to a high-water max inside `emitPhase`. Phases
-  interleave non-monotonically (heartbeat 80–96, then a later search emits 35),
-  which would visibly backstep the bar. The chat caption is unaffected (it
-  shows the status message, not pct).
+AsyncLocalStorage note: timer callbacks created inside the progress-sink
+`store.run(...)` DO inherit the sink, so emitting progress from a heartbeat
+interval works.
 
-AsyncLocalStorage note: timer callbacks (`setTimeout`/`setInterval`) created
-inside `runWithProgressSink`'s `store.run(...)` DO inherit the sink, so emitting
-progress from a heartbeat interval works.
+## 2. Token budget is shared with web search → truncated JSON
+`max_tokens` is shared between the web_search tool-use blocks + search-query
+tokens AND the final JSON brief. A budget sized only for the brief gets
+exhausted by the searches and truncates the JSON mid-array → `JSON.parse` throws
+"Expected ',' or ']' after array element".
+**Rule:** keep generous output headroom (Sonnet 4.5 allows 64K output; unused
+tokens are not billed). Parse first, and only if parse fails AND
+`resp.stop_reason === "max_tokens"` throw an actionable truncation error — a
+response that completes exactly at the cap is still valid and must not be
+rejected.

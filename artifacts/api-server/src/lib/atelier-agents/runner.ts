@@ -2088,7 +2088,13 @@ async function callClaudeJsonWithWebSearch<T>(
     const stream = anthropic.messages.stream(
       {
         model,
-        max_tokens: 8192,
+        // The web-search tool-use blocks AND search-query tokens count toward
+        // output_tokens, so this budget is shared between (up to 6) searches and
+        // the large final JSON brief. 8192 was too tight: heavy accounts blew
+        // the ceiling and the JSON truncated mid-array, failing JSON.parse
+        // ("Expected ',' or ']' after array element"). Sonnet 4.5 allows 64K
+        // output; give generous headroom. Unused tokens are not billed.
+        max_tokens: 32000,
         system: `${systemPrompt}\n\nIMPORTANT: After your research is complete, your FINAL message MUST contain ONLY one JSON object that matches the schema. No prose, no code fences.`,
         messages: [{ role: "user", content: userPrompt }],
         tools: [
@@ -2188,7 +2194,22 @@ async function callClaudeJsonWithWebSearch<T>(
     firstBrace >= 0 && lastBrace > firstBrace
       ? stripped.slice(firstBrace, lastBrace + 1)
       : stripped;
-  const value = JSON.parse(json) as T;
+  let value: T;
+  try {
+    value = JSON.parse(json) as T;
+  } catch (parseErr) {
+    // If the model hit the output ceiling the JSON is truncated and parse
+    // fails with a cryptic position error. Surface the real cause so the
+    // failure is actionable (raise max_tokens / tighten the schema). Parse
+    // first so a response that happens to complete exactly at the cap still
+    // succeeds.
+    if (resp.stop_reason === "max_tokens") {
+      throw new Error(
+        "Cartographer output exceeded the token budget and was truncated before the JSON brief completed. Increase max_tokens or reduce the requested detail.",
+      );
+    }
+    throw parseErr;
+  }
   const citationUrls: Array<{ url: string; title?: string }> = [];
   for (const block of resp.content) {
     const b = block as {
