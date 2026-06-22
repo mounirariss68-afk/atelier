@@ -10,3 +10,4 @@
 - [Account strategy objectives not seeded](atelier-account-strategy-objectives.md) — accountStrategy.objectives is agent-generated, empty on cold/test DB; goal-progress upsert 404s unless obj ids are backfilled.
 - [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk account/engagement scope stamped at ingest-LINK time (not upload); engagements only close (purge rides on account delete); retrieval fail-loud; model sees chunk text only via inert safeBlocks.
 - [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.
+- [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.

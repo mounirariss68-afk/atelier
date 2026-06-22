@@ -60,6 +60,28 @@ const LANGS = [
 ] as const;
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "EGP", "TRY"];
 
+// Server-enforced caps (see `atelierCreateAccountBody*` in the generated zod
+// schema). The Cartographer's "Review & Create" prefill is AI-generated and
+// routinely overflows these — strategic priorities run 250-320 chars and the
+// hypothesis 700+ — which the form never re-validated, so "Create account"
+// POSTed an over-length body and the server rejected it with 400 invalid-body.
+// We clamp on hydration (and cap manual entry) so the payload is always valid.
+const PRIORITY_MAX = 200;
+const HYPOTHESIS_MAX = 600;
+const NAME_MAX = 200; // also brandName
+const LOCATION_MAX = 120; // sector, country, hqCity
+
+/** Trim `value` to at most `max` chars, backing off to the last word boundary
+ *  and appending an ellipsis when truncation occurs. Guarantees length ≤ max. */
+function clampText(value: string, max: number): string {
+  const t = value.trim();
+  if (t.length <= max) return t;
+  const head = t.slice(0, max - 1);
+  const lastSpace = head.lastIndexOf(" ");
+  const body = lastSpace > Math.floor(max * 0.6) ? head.slice(0, lastSpace) : head;
+  return `${body.trimEnd()}…`;
+}
+
 const selectCls = `${fieldControlCls} bg-bg-deep border border-border rounded text-sm text-text`;
 // Task #290 — the legacy hard-coded country list and free-text "Other…" /
 // "__custom__" sector branches were removed when this dialog was migrated
@@ -98,13 +120,14 @@ function makeInitial(opts: {
     .map((x) => (typeof x === "string" ? x : x?.text ?? ""))
     .map((t) => t.trim())
     .filter((t) => t.length > 0)
+    .map((t) => clampText(t, PRIORITY_MAX))
     .slice(0, 5);
   return {
-    name: p?.name ?? "",
-    brandName: p?.brandName ?? "",
-    sector: p?.sector ?? "",
-    country: p?.country || "United Arab Emirates",
-    hqCity: p?.hqCity ?? "",
+    name: clampText(p?.name ?? "", NAME_MAX),
+    brandName: clampText(p?.brandName ?? "", NAME_MAX),
+    sector: clampText(p?.sector ?? "", LOCATION_MAX),
+    country: clampText(p?.country || "United Arab Emirates", LOCATION_MAX),
+    hqCity: clampText(p?.hqCity ?? "", LOCATION_MAX),
     size: "",
     tier,
     status: "active",
@@ -114,7 +137,7 @@ function makeInitial(opts: {
     parentAccountId: "",
     strategicPriorities: priorities,
     prioritiesDraft: "",
-    cogniriseHypothesis: p?.cogniriseHypothesis ?? "",
+    cogniriseHypothesis: clampText(p?.cogniriseHypothesis ?? "", HYPOTHESIS_MAX),
     notes: "",
   };
 }
@@ -437,6 +460,7 @@ export function CreateAccountDialog({
                   }
                 }}
                 disabled={form.strategicPriorities.length >= 5}
+                maxLength={PRIORITY_MAX}
                 placeholder="Add a priority and press Enter"
                 className="bg-bg-deep border-border text-text"
                 data-testid="input-account-priority-draft"
@@ -481,7 +505,7 @@ export function CreateAccountDialog({
             <Textarea
               value={form.cogniriseHypothesis}
               onChange={(e) => update("cogniriseHypothesis", e.target.value)}
-              maxLength={500}
+              maxLength={HYPOTHESIS_MAX}
               className="bg-bg-deep border-border text-text min-h-[80px] text-sm"
               placeholder="Why is Cognirise well-positioned to help this firm?"
               data-testid="input-account-hypothesis"
