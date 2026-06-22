@@ -1919,7 +1919,16 @@ async function callClaudeJsonWithWebSearch<T>(
 }> {
   const { anthropic } = await import("@workspace/integrations-anthropic-ai");
   const ac = new AbortController();
-  const timeoutMs = Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 90_000);
+  // Web-search research legitimately spends minutes when a heavy account
+  // (e.g. a large conglomerate) drives the full 6-search / dozens-of-sources
+  // ceiling. It gets its OWN, larger budget than the generic agent timeout
+  // (ATELIER_AGENT_TIMEOUT_MS, default 90s) — otherwise the abort timer fires
+  // mid-research and the cartographer prefill fails with "Request was aborted".
+  const timeoutMs = Number(
+    process.env.ATELIER_WEBSEARCH_TIMEOUT_MS ??
+      process.env.ATELIER_AGENT_TIMEOUT_MS ??
+      180_000,
+  );
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   // Stream rather than `.create(...)` so the web-search agent's otherwise
   // opaque multi-minute call surfaces granular progress (search queries,
