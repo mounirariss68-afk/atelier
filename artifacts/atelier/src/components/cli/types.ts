@@ -113,7 +113,14 @@ export interface CliTurn {
   status: CliTurnStatus;
   startedAt: number;
   /** Streamed narration lines + tool-call breadcrumbs in arrival order. */
-  trace: Array<{ kind: "narration" | "step" | "tool"; text: string; at: number }>;
+  trace: Array<{
+    kind: "narration" | "step" | "tool";
+    text: string;
+    at: number;
+    /** Optional expandable detail behind a step (e.g. the source titles/URLs
+     * read during a web-search agent's "Read N sources" breadcrumb). */
+    sources?: Array<{ url: string; title?: string }>;
+  }>;
   proposedPlan?: CliPlanStep[];
   disambig?: { kind: string; options: CliDisambigOption[] };
   pending?: CliPendingConfirmation;

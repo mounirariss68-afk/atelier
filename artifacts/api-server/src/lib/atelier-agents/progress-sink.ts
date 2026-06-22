@@ -16,7 +16,16 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-export type ProgressSink = (pct: number, message: string) => void;
+export type ProgressSink = (
+  pct: number,
+  message: string,
+  /**
+   * Optional structured payload riding alongside the human-readable message
+   * (e.g. the list of source titles/URLs behind a "Read N sources" step) so
+   * the UI can render an expandable detail view. Advisory only.
+   */
+  data?: Record<string, unknown>,
+) => void;
 
 const store = new AsyncLocalStorage<ProgressSink>();
 
@@ -33,11 +42,15 @@ export function runWithProgressSink<T>(sink: ProgressSink, fn: () => Promise<T>)
  * Best-effort report of progress to the ambient sink, if one is active.
  * Never throws — a broken sink must never break an agent run.
  */
-export function reportProgress(pct: number, message: string): void {
+export function reportProgress(
+  pct: number,
+  message: string,
+  data?: Record<string, unknown>,
+): void {
   const sink = store.getStore();
   if (!sink) return;
   try {
-    sink(pct, message);
+    sink(pct, message, data);
   } catch {
     // Swallow — progress reporting is advisory only.
   }

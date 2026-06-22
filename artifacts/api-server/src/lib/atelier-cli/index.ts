@@ -393,7 +393,11 @@ export interface ToolContext {
    * tool — and any agent it dispatches (via the ambient progress sink) — can
    * stream a growing step list to the UI instead of a frozen "Thinking…".
    */
-  progress?: (pct: number, message: string) => void;
+  progress?: (
+    pct: number,
+    message: string,
+    data?: Record<string, unknown>,
+  ) => void;
 }
 
 export interface ToolDef {
@@ -2620,7 +2624,8 @@ export async function runTurn(
           turnId,
           sessionId: session.id,
           stepIdx: 0,
-          progress: (pct, message) => record({ type: "progress", data: { pct, message } }),
+          progress: (pct, message, data) =>
+            record({ type: "progress", data: { pct, message, ...(data ?? {}) } }),
         };
         record({
           type: "tool_call",
@@ -2629,7 +2634,7 @@ export async function runTurn(
         let cont: ToolResult;
         try {
           cont = await runWithProgressSink(
-            (pct, message) => ctx0.progress?.(pct, message),
+            (pct, message, data) => ctx0.progress?.(pct, message, data),
             () => tool.run(mergedInput, ctx0),
           );
         } catch (err) {
@@ -2926,9 +2931,14 @@ export async function runTurn(
         turnId,
         sessionId: session.id,
         stepIdx: step,
-        progress: (pct, message) => record({ type: "progress", data: { pct, message } }),
+        progress: (pct, message, data) =>
+          record({ type: "progress", data: { pct, message, ...(data ?? {}) } }),
       };
-      const progressSink = (pct: number, message: string) => ctx.progress?.(pct, message);
+      const progressSink = (
+        pct: number,
+        message: string,
+        data?: Record<string, unknown>,
+      ) => ctx.progress?.(pct, message, data);
       const isCommit = tool.isWrite && tc.input.confirm === true;
       const idemKey = `${turnId}:${step}`;
       if (isCommit) {

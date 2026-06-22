@@ -45,7 +45,7 @@ import {
   Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCli } from "./useCli";
+import { useCli, isSafeHttpUrl } from "./useCli";
 import { CliContext } from "./cli-context";
 import { useAutoNavEnabled } from "./autoNav";
 import { toast as showToast } from "@/hooks/use-toast";
@@ -1129,6 +1129,70 @@ function Transcript({
   );
 }
 
+/** Short, human-friendly host label for a source link fallback. */
+function sourceHost(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url.slice(0, 24);
+  }
+}
+
+/**
+ * A single trace breadcrumb. When the step carries `sources` (e.g. a
+ * web-search agent's "Read N sources" step), it renders as a toggle that
+ * expands to reveal the source titles, each linking out to the page.
+ */
+function BreadcrumbRow({
+  line,
+}: {
+  line: { text: string; sources?: Array<{ url: string; title?: string }> };
+}) {
+  const [open, setOpen] = React.useState(false);
+  // Defense in depth: only ever render http(s) sources as clickable links,
+  // even though useCli already filters at ingest.
+  const sources = (line.sources ?? []).filter((src) => isSafeHttpUrl(src.url));
+  if (sources.length === 0) {
+    return <div className="leading-snug">{line.text}</div>;
+  }
+  return (
+    <div className="leading-snug">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 text-left hover:text-text"
+        aria-expanded={open}
+        data-testid="cli-sources-toggle"
+      >
+        {open ? (
+          <ChevronUp className="w-3 h-3 shrink-0" aria-hidden />
+        ) : (
+          <ChevronDown className="w-3 h-3 shrink-0" aria-hidden />
+        )}
+        <span>{line.text}</span>
+      </button>
+      {open && (
+        <ul className="mt-1 ms-4 space-y-0.5 border-s border-border ps-2" data-testid="cli-sources-list">
+          {sources.map((src, j) => (
+            <li key={j} className="truncate">
+              <a
+                href={src.url}
+                target="_blank"
+                rel="noreferrer"
+                title={src.title || src.url}
+                className="inline-flex items-center gap-1 text-gold/80 hover:text-gold"
+              >
+                <ExternalLink className="w-2.5 h-2.5 shrink-0" aria-hidden />
+                <span className="truncate">{src.title || sourceHost(src.url)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function TurnBody({
   turn,
   isCurrent,
@@ -1222,9 +1286,7 @@ function TurnBody({
             {breadcrumbs.length > 0 && (
               <div className="text-[11px] font-mono text-text-mute space-y-0.5">
                 {breadcrumbs.slice(-6).map((line, i) => (
-                  <div key={`b${i}`} className="leading-snug">
-                    {line.text}
-                  </div>
+                  <BreadcrumbRow key={`b${i}`} line={line} />
                 ))}
               </div>
             )}

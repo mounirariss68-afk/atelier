@@ -37,6 +37,20 @@ function uuid(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Only http(s) URLs are safe to render as clickable anchors. Source URLs
+ * arrive from untrusted web-search results, so any other scheme (notably
+ * `javascript:`) must be rejected before it can become an `href`.
+ */
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const proto = new URL(url).protocol;
+    return proto === "http:" || proto === "https:";
+  } catch {
+    return false;
+  }
+}
+
 interface SubmitArgs {
   prompt: string;
   attachmentIds?: string[];
@@ -183,13 +197,34 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
     case "progress": {
       // Live sub-step from an agent the orchestrator dispatched (web search,
       // pricing phases, etc.). Render as a breadcrumb step.
-      const d = frame.data as { pct?: number; message?: string };
+      const d = frame.data as {
+        pct?: number;
+        message?: string;
+        sources?: Array<{ url?: string; title?: string }>;
+      };
       const message = String(d.message ?? "").trim();
       if (!message) return { ...turn, status: "streaming" };
+      const sources = Array.isArray(d.sources)
+        ? d.sources
+            .filter((s): s is { url: string; title?: string } => typeof s?.url === "string")
+            .map((s) => ({ url: s.url, title: typeof s.title === "string" ? s.title : undefined }))
+            // Source URLs come from untrusted web-search results — only keep
+            // safe http(s) links so a malicious scheme (e.g. javascript:)
+            // can never become a clickable anchor downstream.
+            .filter((s) => isSafeHttpUrl(s.url))
+        : undefined;
       return {
         ...turn,
         status: "streaming",
-        trace: [...turn.trace, { kind: "step", text: message, at: frame.receivedAt }],
+        trace: [
+          ...turn.trace,
+          {
+            kind: "step",
+            text: message,
+            at: frame.receivedAt,
+            ...(sources && sources.length ? { sources } : {}),
+          },
+        ],
       };
     }
     case "tool_result": {

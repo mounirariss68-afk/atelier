@@ -1926,8 +1926,11 @@ async function callClaudeJsonWithWebSearch<T>(
   // sources read, drafting) to the ambient progress sink. The final parsed
   // message is recovered via `stream.finalMessage()`.
   let searchCount = 0;
-  let sourcesRead = 0;
   let draftingAnnounced = false;
+  // Accumulate the actual sources read (deduped by URL) so the live
+  // "Read N sources" progress step can be expanded to reveal the titles.
+  const readSources: Array<{ url: string; title?: string }> = [];
+  const seenSourceUrls = new Set<string>();
   const resp = await (async () => {
     const stream = anthropic.messages.stream(
       {
@@ -1960,8 +1963,31 @@ async function callClaudeJsonWithWebSearch<T>(
           event.content_block.type === "web_search_tool_result"
         ) {
           const result = event.content_block.content as unknown;
-          if (Array.isArray(result)) sourcesRead += result.length;
-          reportProgress(60, `Read ${sourcesRead} source${sourcesRead === 1 ? "" : "s"}`);
+          if (Array.isArray(result)) {
+            for (const item of result as Array<{
+              type?: string;
+              url?: string;
+              title?: string;
+            }>) {
+              if (
+                item?.type === "web_search_result" &&
+                typeof item.url === "string" &&
+                !seenSourceUrls.has(item.url)
+              ) {
+                seenSourceUrls.add(item.url);
+                readSources.push({
+                  url: item.url,
+                  title: typeof item.title === "string" ? item.title : undefined,
+                });
+              }
+            }
+          }
+          const sourcesRead = readSources.length;
+          reportProgress(
+            60,
+            `Read ${sourcesRead} source${sourcesRead === 1 ? "" : "s"}`,
+            { sources: readSources.slice(0, 40) },
+          );
         } else if (
           !draftingAnnounced &&
           event.type === "content_block_delta" &&
