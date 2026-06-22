@@ -108,6 +108,42 @@ uri = "file://artifacts/maven-ai/public/images/riser-bot.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "nEBm6OAfw1mlV0mLbOXYQ"
+uri = "file://artifacts/launch/public/images/scenes/formula-01.png"
+type = "image"
+title = "innovate focused use case"
+
+[[generated]]
+id = "SKvzdT8nNKVH5UxNktxmJ"
+uri = "file://artifacts/launch/public/images/scenes/formula-02.png"
+type = "image"
+title = "demonstrate rapid prototype"
+
+[[generated]]
+id = "JepvLdXgF7KAEivCT3s3k"
+uri = "file://artifacts/launch/public/images/scenes/formula-03.png"
+type = "image"
+title = "activate human plus agents"
+
+[[generated]]
+id = "ypUaTHyyDcCNLfRi_gp7z"
+uri = "file://artifacts/launch/public/images/scenes/formula-04.png"
+type = "image"
+title = "generate own and scale platform"
+
+[[generated]]
+id = "NWW2loSEdjl5bw4tv5eC9"
+uri = "file://artifacts/launch/public/images/scenes/service-lines-hero.png"
+type = "image"
+title = "service lines energy ribbon"
+
+[[generated]]
+id = "G8ON2X86mMulcx31XEw6t"
+uri = "file://artifacts/launch/public/images/scenes/guild-hub.png"
+type = "image"
+title = "guild radial hub five nodes"
+
 [[outputs]]
 id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"

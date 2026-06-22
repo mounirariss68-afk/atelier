@@ -1,0 +1,168 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@plugin "@tailwindcss/typography";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+
+  --color-navy: #0A1230;
+  --color-navydeep: #070B22;
+  --color-navylight: #141E45;
+  --color-cogblue: #5B7CFF;
+  --color-cogpurple: #8A5BD6;
+  --color-cogmagenta: #C45BB8;
+  --color-cogcoral: #FF7B5A;
+  --color-accentblue: #5B7CFF;
+  --color-lightband: #F5F5F3;
+  --color-offwhite: #EFEFEF;
+  --color-mutedgrey: #9AA6CC;
+  --color-darkbody: #1A1A2E;
+
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-serif: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'Plus Jakarta Sans', Menlo, monospace;
+}
+
+:root {
+  --background: #0A1230;
+  --foreground: #EFEFEF;
+  --border: rgba(239, 239, 239, 0.08);
+  --card: #141E45;
+  --card-foreground: #EFEFEF;
+  --primary: #5B7CFF;
+  --primary-foreground: #FFFFFF;
+  --cog-grad: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+  --cog-grad-diag: linear-gradient(135deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: #8A5BD6; color: #fff; }
+}
+
+/* Brand gradient text */
+.text-gradient {
+  background: linear-gradient(90deg, #5B7CFF 0%, #8A5BD6 35%, #C45BB8 65%, #FF7B5A 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+.bg-cog-grad { background: var(--cog-grad); }
+.bg-cog-grad-diag { background: var(--cog-grad-diag); }
+
+/* Gradient hairline divider */
+.grad-rule {
+  height: 3px;
+  width: 56px;
+  border-radius: 2px;
+  background: var(--cog-grad);
+}
+
+/* Gradient-border card (mask technique) */
+.grad-border {
+  position: relative;
+  border-radius: 16px;
+}
+.grad-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: var(--cog-grad-diag);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.35;
+  transition: opacity 0.4s ease;
+}
+.grad-border:hover::before { opacity: 1; }
+
+/* Animated nav underline */
+.nav-link { position: relative; }
+.nav-link::after {
+  content: '';
+  position: absolute;
+  bottom: -6px; left: 0;
+  width: 0; height: 2px;
+  background: var(--cog-grad);
+  transition: width 0.3s ease;
+}
+.nav-link:hover::after { width: 100%; }
+
+/* Keyframes */
+@keyframes gradientShift {
+  0% { background-position: 0% center; }
+  50% { background-position: 100% center; }
+  100% { background-position: 0% center; }
+}
+@keyframes floatGlow {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.55; }
+  50% { transform: translate(20px, -28px) scale(1.12); opacity: 0.8; }
+}
+@keyframes floatGlow2 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.45; }
+  50% { transform: translate(-26px, 22px) scale(1.18); opacity: 0.7; }
+}
+@keyframes spinSlow { to { transform: rotate(360deg); } }
+@keyframes pulseRing {
+  0% { transform: scale(0.85); opacity: 0.7; }
+  70% { transform: scale(1.25); opacity: 0; }
+  100% { transform: scale(1.25); opacity: 0; }
+}
+@keyframes shimmerLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Service card hover motif (animated network — hover-video fallback) */
+@keyframes dashFlow { to { stroke-dashoffset: -48; } }
+@keyframes nodePulse {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+.motif { opacity: 0; transition: opacity 0.55s ease; }
+.group:hover .motif { opacity: 0.85; }
+.motif .ln {
+  stroke-dasharray: 6 8;
+  animation: dashFlow 1.3s linear infinite;
+  animation-play-state: paused;
+}
+.group:hover .motif .ln { animation-play-state: running; }
+.motif .nd {
+  animation: nodePulse 2.2s ease-in-out infinite;
+  animation-play-state: paused;
+}
+.group:hover .motif .nd { animation-play-state: running; }
+
+.glow-a { animation: floatGlow 11s ease-in-out infinite; }
+.glow-b { animation: floatGlow2 14s ease-in-out infinite; }
+.spin-slow { animation: spinSlow 22s linear infinite; }
+.pulse-ring { animation: pulseRing 3s ease-out infinite; }
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 32s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-gradient, .glow-a, .glow-b, .spin-slow, .pulse-ring, .marquee-track,
+  .motif .ln, .motif .nd { animation: none !important; }
+  html { scroll-behavior: auto; }
+}
