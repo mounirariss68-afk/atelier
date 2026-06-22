@@ -2158,7 +2158,10 @@ export async function runAccountCartographer(args: {
         // solely on the ambient sink streaming to the chat transcript.
         { progressRunId: runId });
     if (runId) {
-      await progressRun(runId, 80, "Triangulating sources", {
+      // Runs AFTER the synthesis heartbeat (which ramps to ~96%) — keep the
+      // pct monotonic so the phase never visibly backsteps. This is the true
+      // terminal post-processing step before the run is marked complete.
+      await progressRun(runId, 98, "Finalising the brief", {
         name: "cart.synth",
         durationMs: Date.now() - t0,
       });
