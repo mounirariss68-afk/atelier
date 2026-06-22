@@ -141,7 +141,7 @@ export function TopNav() {
         <Link href="/" className="flex items-center gap-3">
           <Logo size="sm" />
           <span className="hidden sm:inline font-mono text-[10px] tracking-wider text-text-faint normal-case">
-            The Atelier · Employee Portal
+            Atelier
           </span>
         </Link>
         
