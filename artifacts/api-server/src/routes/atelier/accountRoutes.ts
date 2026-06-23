@@ -239,6 +239,10 @@ async function summariseAccount(
     employeeCount: a.employeeCount ?? null,
     annualRevenue: canSeeFinancials ? a.annualRevenue ?? null : null,
     annualRevenueRedacted: !canSeeFinancials && a.annualRevenue != null,
+    // Task #613 — the revenue figure VIEW and EDIT gate are identical, so the
+    // client can use this to hide the revenue inputs in the edit dialog for
+    // personas without account-wide financial authority.
+    canEditFinancials: canSeeFinancials,
     holdingStructure: a.holdingStructure ?? null,
     countryPresence: a.countryPresence ?? [],
     entityRole: (a.entityRole ?? null) as
@@ -929,10 +933,14 @@ async function buildWorkspace(
       children: childRows.map(hierarchyRef),
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
-      // Task #608 — firmographic enrichment, surfaced so the account edit
-      // dialog can prefill the same fields the create dialog exposes.
+      // Task #608/#613 — firmographic enrichment, surfaced so the account edit
+      // dialog can prefill the same fields the create dialog exposes. These come
+      // from `...summary` already; the firmographic facts are non-financial and
+      // ungated. annualRevenue / annualRevenueRedacted / canEditFinancials are
+      // intentionally NOT overridden here so the summary's financials gate
+      // stands (a previous override re-exposed the raw revenue to every
+      // workspace reader, defeating the gate).
       employeeCount: a.employeeCount ?? null,
-      annualRevenue: a.annualRevenue ?? null,
       holdingStructure: a.holdingStructure ?? null,
       countryPresence: a.countryPresence ?? [],
       entityRole: (a.entityRole ?? null) as
@@ -2266,6 +2274,23 @@ router.patch("/accounts/:accountId", async (req, res) => {
     changed.push("employeeCount");
   }
   if ("annualRevenue" in input) {
+    // Task #613 — annual revenue is a money surface, so editing it honours the
+    // SAME account-financials gate as viewing it (account-wide authority and not
+    // a restricted / board persona). Mirrors summariseAccount's canSeeFinancials
+    // so a persona who cannot see the figure can never silently overwrite it.
+    const accountWide = access.all || a.partnerOwnerId === me.id;
+    const canEditFinancials =
+      accountWide &&
+      !isRestrictedPersona(me.role ?? null) &&
+      !isBoardObserver(me.role ?? null);
+    if (!canEditFinancials) {
+      res.status(403).json({
+        error: "financials-forbidden",
+        reason:
+          "Only personas with account-wide financial authority can edit annual revenue.",
+      });
+      return;
+    }
     update.annualRevenue = input.annualRevenue ?? null;
     changed.push("annualRevenue");
   }

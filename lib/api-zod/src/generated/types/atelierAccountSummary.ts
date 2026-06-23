@@ -36,6 +36,7 @@ export interface AtelierAccountSummary {
   employeeCount?: number | null;
   annualRevenue?: AtelierAccountAnnualRevenue | null;
   annualRevenueRedacted?: boolean;
+  canEditFinancials?: boolean;
   holdingStructure?: AtelierAccountHoldingStructure | null;
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */

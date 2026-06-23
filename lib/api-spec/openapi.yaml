@@ -3158,6 +3158,11 @@ components:
         # True when annualRevenue was withheld by the financials gate
         # (distinguishes "redacted" from "unknown / not disclosed").
         annualRevenueRedacted: { type: boolean }
+        # True when the current persona has account-wide financial authority
+        # and may therefore VIEW and EDIT the annual revenue figure (same gate
+        # that governs annualRevenue visibility). Lets the edit dialog hide the
+        # revenue inputs for personas who cannot change money surfaces.
+        canEditFinancials: { type: boolean }
         holdingStructure:
           oneOf:
             - $ref: "#/components/schemas/AtelierAccountHoldingStructure"
@@ -3495,6 +3500,12 @@ components:
                 entityRole:
                   type: ["string", "null"]
                   enum: [hq, subsidiary, branch, office, null]
+                # Task #607/#613 — true when annualRevenue was withheld by the
+                # financials gate (so the card can show "Restricted").
+                annualRevenueRedacted: { type: boolean }
+                # Task #613 — true when the persona may view AND edit the
+                # revenue figure; the edit dialog hides revenue inputs when false.
+                canEditFinancials: { type: boolean }
         contacts:
           type: array
           items: { $ref: "#/components/schemas/AtelierContact" }

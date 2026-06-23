@@ -43,4 +43,6 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
   entityRole?: AtelierAccountWorkspaceAccountEntityRole;
+  annualRevenueRedacted?: boolean;
+  canEditFinancials?: boolean;
 };

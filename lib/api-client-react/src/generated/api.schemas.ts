@@ -796,6 +796,7 @@ export interface AtelierAccountSummary {
   employeeCount?: number | null;
   annualRevenue?: AtelierAccountAnnualRevenue | null;
   annualRevenueRedacted?: boolean;
+  canEditFinancials?: boolean;
   holdingStructure?: AtelierAccountHoldingStructure | null;
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
@@ -1270,6 +1271,8 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
   entityRole?: AtelierAccountWorkspaceAccountEntityRole;
+  annualRevenueRedacted?: boolean;
+  canEditFinancials?: boolean;
 };
 
 export type AtelierAccountInsightCategory =

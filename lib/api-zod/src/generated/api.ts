@@ -2308,6 +2308,7 @@ export const AtelierListAccountsResponseItem = zod.object({
     ])
     .optional(),
   annualRevenueRedacted: zod.boolean().optional(),
+  canEditFinancials: zod.boolean().optional(),
   holdingStructure: zod
     .union([
       zod.object({
@@ -2990,6 +2991,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -3469,6 +3471,8 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -4142,6 +4146,7 @@ export const AtelierUpdateAccountResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -4617,6 +4622,8 @@ export const AtelierUpdateAccountResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -5057,6 +5064,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -5536,6 +5544,8 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -6483,6 +6493,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -6962,6 +6973,8 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -7407,6 +7420,7 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -7886,6 +7900,8 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -8344,6 +8360,7 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -8823,6 +8840,8 @@ export const AtelierCreateAccountInsightResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -9280,6 +9299,7 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -9759,6 +9779,8 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -10200,6 +10222,7 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -10679,6 +10702,8 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -11129,6 +11154,7 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -11608,6 +11634,8 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -12058,6 +12086,7 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -12537,6 +12566,8 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -12980,6 +13011,7 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -13459,6 +13491,8 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -13914,6 +13948,7 @@ export const AtelierCreateAccountActionResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -14393,6 +14428,8 @@ export const AtelierCreateAccountActionResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -14845,6 +14882,7 @@ export const AtelierUpdateAccountActionResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -15324,6 +15362,8 @@ export const AtelierUpdateAccountActionResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -15765,6 +15805,7 @@ export const AtelierDeleteAccountActionResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -16244,6 +16285,8 @@ export const AtelierDeleteAccountActionResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -16694,6 +16737,7 @@ export const AtelierCreateAccountRiskResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -17173,6 +17217,8 @@ export const AtelierCreateAccountRiskResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -17624,6 +17670,7 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -18103,6 +18150,8 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -18544,6 +18593,7 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -19023,6 +19073,8 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
@@ -19470,6 +19522,7 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
         ])
         .optional(),
       annualRevenueRedacted: zod.boolean().optional(),
+      canEditFinancials: zod.boolean().optional(),
       holdingStructure: zod
         .union([
           zod.object({
@@ -19949,6 +20002,8 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
             zod.literal(null),
           ])
           .nullish(),
+        annualRevenueRedacted: zod.boolean().optional(),
+        canEditFinancials: zod.boolean().optional(),
       }),
     ),
   contacts: zod.array(
