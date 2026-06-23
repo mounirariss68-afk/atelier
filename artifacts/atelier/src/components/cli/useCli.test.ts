@@ -126,6 +126,59 @@ test("applyFrame preserves an already-lifted navigateTo across noisy frames", ()
   assert.deepEqual(next.navigateTo, { path: "/accounts/acc_1", when: "on_propose" });
 });
 
+console.log("\napplyFrame — progress sources");
+
+test("progress frame attaches safe http(s) sources to the step", () => {
+  const next = applyFrame(seedTurn(), {
+    type: "progress",
+    receivedAt: 1,
+    data: {
+      pct: 60,
+      message: "Read 2 sources",
+      sources: [
+        { url: "https://example.com/a", title: "Source A" },
+        { url: "http://example.org/b" },
+      ],
+    },
+  });
+  const step = next.trace[next.trace.length - 1];
+  assert.equal(step.kind, "step");
+  assert.equal(step.text, "Read 2 sources");
+  assert.deepEqual(step.sources, [
+    { url: "https://example.com/a", title: "Source A" },
+    { url: "http://example.org/b", title: undefined },
+  ]);
+});
+
+test("progress frame drops unsafe-scheme and malformed sources", () => {
+  const next = applyFrame(seedTurn(), {
+    type: "progress",
+    receivedAt: 1,
+    data: {
+      pct: 60,
+      message: "Read 1 source",
+      sources: [
+        { url: "javascript:alert(1)", title: "evil" },
+        { title: "no url" },
+        { url: "https://ok.example/x", title: "Good" },
+      ],
+    },
+  });
+  const step = next.trace[next.trace.length - 1];
+  assert.deepEqual(step.sources, [{ url: "https://ok.example/x", title: "Good" }]);
+});
+
+test("progress frame with no sources leaves the step without a sources field", () => {
+  const next = applyFrame(seedTurn(), {
+    type: "progress",
+    receivedAt: 1,
+    data: { pct: 35, message: "Searching the web (1)" },
+  });
+  const step = next.trace[next.trace.length - 1];
+  assert.equal(step.text, "Searching the web (1)");
+  assert.equal(step.sources, undefined);
+});
+
 console.log("\ntryFireNavigation — stream-consumer gate");
 
 test("fires onNavigate exactly once per unique destination", () => {
