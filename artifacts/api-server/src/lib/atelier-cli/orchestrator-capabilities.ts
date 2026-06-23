@@ -472,55 +472,158 @@ defineCapability({
             "prefill_from_specialist: input.name is required when targetId is absent (verb=create).",
         };
       }
+      // Task #601 — when a prior turn paused on the branch-vs-HQ clarification,
+      // the full researched draft rides back in `input.__researchedDraft`, and
+      // the partner's HQ/branch answer in top-level `entityRole` (merged by the
+      // clarification continuation). Reuse the cached draft so we do NOT re-run
+      // the (slow, costly) Cartographer just to attach one answer.
+      const cachedDraft =
+        inp.__researchedDraft &&
+        typeof inp.__researchedDraft === "object" &&
+        !Array.isArray(inp.__researchedDraft)
+          ? (inp.__researchedDraft as Record<string, unknown>)
+          : null;
+      const entityRoleAnswerRaw =
+        typeof input.entityRole === "string"
+          ? input.entityRole
+          : typeof inp.entityRole === "string"
+            ? inp.entityRole
+            : "";
+      const VALID_ENTITY_ROLES = ["hq", "subsidiary", "branch", "office"];
+      const entityRoleAnswer = (() => {
+        const t = entityRoleAnswerRaw.trim().toLowerCase();
+        if (VALID_ENTITY_ROLES.includes(t)) return t;
+        // Tolerate free-text answers ("it's the headquarters", "a local branch").
+        if (/\b(hq|head ?quarter)/.test(t)) return "hq";
+        if (/\bsubsidiar/.test(t)) return "subsidiary";
+        if (/\bbranch\b/.test(t)) return "branch";
+        if (/\boffice\b/.test(t)) return "office";
+        return "";
+      })();
       try {
-        const result = await runAccountCartographer({
-          accountId: null,
-          accountName: rawName,
-          accountSector: typeof inp.sector === "string" ? inp.sector : "",
-          accountCountry: typeof inp.country === "string" ? inp.country : "",
-          accountHqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
-          triggeredByUserId: ctx.persona.id,
-          actorLabel: "Chat Orchestrator (prefill)",
-          mode: "research_only",
-        });
-        const out = result.output;
-        const sourceSignals = (out.sourceSignals ?? []).slice(0, 6).map((s) => ({
-          kind: s.kind,
-          title: s.title,
-          url: s.url,
-          summary: s.summary,
-          publishedAt: s.publishedAt,
-          confidence: s.confidence ?? "amber",
-        }));
-        const decisionMakers = (out.decisionMakers ?? []).slice(0, 7).map((d) => ({
-          fullName: d.fullName,
-          title: d.title ?? null,
-          seniority: d.seniority ?? null,
-          buyerPersona: d.buyerPersona ?? null,
-          sourceUrl: d.sourceUrl ?? null,
-          confidence: d.confidence,
-        }));
-        const draft: Record<string, unknown> = {
-          name: out.account.canonicalName || rawName,
-          country:
-            out.account.country ||
-            (typeof inp.country === "string" ? inp.country : null),
-          sector: out.account.sector ?? null,
-          hqCity: out.account.hqCity ?? null,
-          tier: out.account.tier ?? null,
-          industryCode: out.account.industryCode ?? null,
-          subIndustryCode: out.account.subIndustryCode ?? null,
-          strategicPriorities: (out.account.strategicPriorities ?? [])
-            .slice(0, 5)
-            .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls })),
-          cogniriseHypothesis: out.account.cogniriseHypothesis ?? "",
-          refreshedSummary: out.account.refreshedSummary ?? "",
-          sourceSignals,
-          decisionMakers,
-          // Task #560 — full structured research brief carried onto the
-          // proposal card (display-only) and persisted post-create.
-          researchBrief: out.researchBrief,
-        };
+        let draft: Record<string, unknown>;
+        let costUsd = 0;
+        if (cachedDraft) {
+          draft = cachedDraft;
+        } else {
+          const result = await runAccountCartographer({
+            accountId: null,
+            accountName: rawName,
+            accountSector: typeof inp.sector === "string" ? inp.sector : "",
+            accountCountry: typeof inp.country === "string" ? inp.country : "",
+            accountHqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
+            triggeredByUserId: ctx.persona.id,
+            actorLabel: "Chat Orchestrator (prefill)",
+            mode: "research_only",
+          });
+          costUsd = result.costUsd;
+          const out = result.output;
+          const sourceSignals = (out.sourceSignals ?? []).slice(0, 6).map((s) => ({
+            kind: s.kind,
+            title: s.title,
+            url: s.url,
+            summary: s.summary,
+            publishedAt: s.publishedAt,
+            confidence: s.confidence ?? "amber",
+          }));
+          const decisionMakers = (out.decisionMakers ?? []).slice(0, 7).map((d) => ({
+            fullName: d.fullName,
+            title: d.title ?? null,
+            seniority: d.seniority ?? null,
+            buyerPersona: d.buyerPersona ?? null,
+            sourceUrl: d.sourceUrl ?? null,
+            confidence: d.confidence,
+          }));
+          draft = {
+            name: out.account.canonicalName || rawName,
+            // Task #601 — brand/display name defaults to the legal name when the
+            // firm has no distinct brand.
+            brandName:
+              out.account.brandName ||
+              out.account.canonicalName ||
+              rawName,
+            country:
+              out.account.country ||
+              (typeof inp.country === "string" ? inp.country : null),
+            sector: out.account.sector ?? null,
+            hqCity: out.account.hqCity ?? null,
+            tier: out.account.tier ?? null,
+            // Task #601 — firmographic enrichment carried onto the proposal card
+            // and through "Review & Create".
+            size: out.account.size ?? null,
+            employeeCount: out.account.employeeCount ?? null,
+            primaryCurrency: out.account.primaryCurrency ?? null,
+            annualRevenue: out.account.annualRevenue ?? null,
+            holdingStructure: out.account.holdingStructure ?? null,
+            countryPresence: out.account.countryPresence ?? [],
+            industryCode: out.account.industryCode ?? null,
+            subIndustryCode: out.account.subIndustryCode ?? null,
+            strategicPriorities: (out.account.strategicPriorities ?? [])
+              .slice(0, 5)
+              .map((p) => ({ text: p.text, sourceUrls: p.sourceUrls })),
+            cogniriseHypothesis: out.account.cogniriseHypothesis ?? "",
+            refreshedSummary: out.account.refreshedSummary ?? "",
+            sourceSignals,
+            decisionMakers,
+            // Task #560 — full structured research brief carried onto the
+            // proposal card (display-only) and persisted post-create.
+            researchBrief: out.researchBrief,
+          };
+        }
+
+        // Task #601 — branch-vs-HQ conversational question. When the firm has a
+        // multinational footprint and the partner has not yet told us which
+        // entity they're onboarding, pause and ask. The full researched draft
+        // rides in `partial` so the answer turn skips the Cartographer.
+        const presence = Array.isArray(draft.countryPresence)
+          ? (draft.countryPresence as Array<Record<string, unknown>>)
+          : [];
+        const presenceCountries = presence
+          .map((p) => (typeof p?.country === "string" ? p.country.trim() : ""))
+          .filter((c) => c.length > 0);
+        const isMultinational =
+          presenceCountries.length > 1 ||
+          presence.some(
+            (p) =>
+              typeof p?.role === "string" &&
+              p.role.length > 0 &&
+              p.role !== "hq",
+          );
+        if (isMultinational && !entityRoleAnswer) {
+          const displayName =
+            (typeof draft.brandName === "string" && draft.brandName) ||
+            (typeof draft.name === "string" && draft.name) ||
+            rawName;
+          const countryList =
+            presenceCountries.length > 0
+              ? presenceCountries.slice(0, 6).join(", ")
+              : "multiple countries";
+          return {
+            ok: true,
+            data: { clarificationPending: true },
+            clarification: {
+              field: "entityRole",
+              tool: "prefill_from_specialist",
+              question:
+                `${displayName} has a presence across multiple markets (${countryList}). ` +
+                `Is the account you're creating the global headquarters, or a specific ` +
+                `branch/subsidiary? This sets the entity's role on the record.`,
+              partial: {
+                kind: "account",
+                input: { ...inp, __researchedDraft: draft },
+              },
+              suggestions: [
+                { id: "hq", label: "Global headquarters" },
+                { id: "subsidiary", label: "A subsidiary" },
+                { id: "branch", label: "A branch / local office" },
+              ],
+            },
+          };
+        }
+        // Stamp the resolved role (if any) onto the draft so it carries through
+        // "Review & Create" into the account record.
+        if (entityRoleAnswer) draft.entityRole = entityRoleAnswer;
+
         const required = ["sector", "country"];
         const missingRequiredFields = required.filter((k) => {
           const v = draft[k];
@@ -543,7 +646,7 @@ defineCapability({
               id: "ag_account_cartographer",
               name: "Account Cartographer",
               mode: "research_only",
-              costUsd: result.costUsd,
+              costUsd,
             },
             draft,
             missingRequiredFields,

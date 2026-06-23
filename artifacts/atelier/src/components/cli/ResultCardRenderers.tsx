@@ -677,13 +677,66 @@ function AccountProposalCard({
     }))
     .filter((p) => p.text.trim().length > 0);
 
+  // Task #601 — firmographic enrichment carried onto the dialog so the
+  // partner reviews/edits real values instead of blank defaults.
+  const annualRevenueObj = asObj(draft.annualRevenue);
+  const annualRevenue =
+    Object.keys(annualRevenueObj).length > 0
+      ? {
+          amount:
+            typeof annualRevenueObj.amount === "number"
+              ? annualRevenueObj.amount
+              : null,
+          currency: asStr(annualRevenueObj.currency) || null,
+          asOf: asStr(annualRevenueObj.asOf) || null,
+          sourceUrl: asStr(annualRevenueObj.sourceUrl) || null,
+          note: asStr(annualRevenueObj.note) || null,
+        }
+      : null;
+  const holdingObj = asObj(draft.holdingStructure);
+  const holdingStructure =
+    Object.keys(holdingObj).length > 0
+      ? {
+          isHoldingCompany: holdingObj.isHoldingCompany === true,
+          isMultiBrand: holdingObj.isMultiBrand === true,
+          brands: asArr(holdingObj.brands)
+            .map((b) => asStr(b))
+            .filter((b) => b.trim().length > 0),
+          note: asStr(holdingObj.note) || null,
+        }
+      : null;
+  const countryPresence = asArr(draft.countryPresence)
+    .map((c) => asObj(c))
+    .map((c) => ({
+      country: asStr(c.country).trim(),
+      role: (asStr(c.role) || null) as
+        | "hq" | "subsidiary" | "branch" | "office" | null,
+      note: asStr(c.note) || null,
+    }))
+    .filter((c) => c.country.length > 0);
+
   const onReview = () =>
     openWithPrefill({
       name: asStr(draft.name),
+      brandName: asStr(draft.brandName) || null,
       sector: sector || null,
       country: country || null,
       hqCity: hqCity || null,
       tier: tier || null,
+      size: asStr(draft.size) || null,
+      employeeCount:
+        typeof draft.employeeCount === "number" ? draft.employeeCount : null,
+      primaryCurrency: asStr(draft.primaryCurrency) || null,
+      annualRevenue,
+      holdingStructure,
+      countryPresence,
+      // Task #601 — carry the branch-vs-HQ answer (stamped on the draft by the
+      // orchestrator's clarification flow) so it survives into the dialog.
+      entityRole:
+        (asStr(draft.entityRole) || null) as
+          | "hq" | "subsidiary" | "branch" | "office" | null,
+      industryCode: asStr(draft.industryCode) || null,
+      subIndustryCode: asStr(draft.subIndustryCode) || null,
       strategicPriorities: asArr(draft.strategicPriorities) as Array<
         { text?: string; sourceUrls?: string[] } | string
       >,

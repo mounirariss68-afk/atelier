@@ -11,7 +11,13 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PillButton } from "./ui/primitives";
-import { ReferenceCombobox } from "@/components/ReferenceCombobox";
+import { ReferenceCombobox, useReferenceBootstrap } from "@/components/ReferenceCombobox";
+import {
+  resolveCountry,
+  localizedIndustryName,
+  type IndustryRow,
+  type SubIndustryRow,
+} from "@/lib/reference-data";
 import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -58,6 +64,34 @@ export interface AccountPrefill {
   country?: string | null;
   hqCity?: string | null;
   tier?: string | null;
+  // Task #601 — firmographic enrichment so the dialog opens pre-filled rather
+  // than blank/defaulted.
+  size?: string | null;
+  employeeCount?: number | null;
+  primaryCurrency?: string | null;
+  annualRevenue?: {
+    amount?: number | null;
+    currency?: string | null;
+    asOf?: string | null;
+    sourceUrl?: string | null;
+    note?: string | null;
+  } | null;
+  holdingStructure?: {
+    isHoldingCompany: boolean;
+    isMultiBrand: boolean;
+    brands: string[];
+    note?: string | null;
+  } | null;
+  countryPresence?: Array<{
+    country: string;
+    role?: "hq" | "subsidiary" | "branch" | "office" | null;
+    note?: string | null;
+  }>;
+  // Task #601 — branch-vs-HQ answer resolved conversationally in chat and
+  // carried onto the proposal draft; hydrates the dialog's entity-role select.
+  entityRole?: "hq" | "subsidiary" | "branch" | "office" | null;
+  industryCode?: string | null;
+  subIndustryCode?: string | null;
   strategicPriorities?: Array<{ text?: string; sourceUrls?: string[] } | string>;
   cogniriseHypothesis?: string | null;
   // Task #587 — reviewed research blob (present only on the chat flow).
@@ -91,6 +125,13 @@ const LANGS = [
 ] as const;
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "EGP", "TRY"];
 
+/** Validate/normalise a 3-letter ISO-4217 code; returns null when unusable. */
+function normaliseCurrencyCode(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(t) ? t : null;
+}
+
 // Server-enforced caps (see `atelierCreateAccountBody*` in the generated zod
 // schema). The Cartographer's "Review & Create" prefill is AI-generated and
 // routinely overflows these — strategic priorities run 250-320 chars and the
@@ -119,6 +160,8 @@ const selectCls = `${fieldControlCls} bg-bg-deep border border-border rounded te
 // to <ReferenceCombobox/>. The reference-data API is now the single source
 // of truth for both lookups.
 
+const ENTITY_ROLES = ["", "hq", "subsidiary", "branch", "office"] as const;
+
 type FormState = {
   name: string;
   brandName: string;
@@ -136,6 +179,20 @@ type FormState = {
   prioritiesDraft: string;
   cogniriseHypothesis: string;
   notes: string;
+  // Task #601 — firmographic enrichment.
+  industryCode: string;
+  subIndustryCode: string;
+  employeeCount: string; // numeric text; "" = unknown
+  revenueAmount: string; // numeric text; "" = unknown
+  revenueCurrency: string;
+  revenueAsOf: string;
+  revenueSourceUrl: string;
+  revenueNote: string;
+  isHoldingCompany: boolean;
+  isMultiBrand: boolean;
+  holdingBrands: string; // comma-separated
+  holdingNote: string;
+  entityRole: (typeof ENTITY_ROLES)[number];
 };
 
 function makeInitial(opts: {
@@ -153,16 +210,36 @@ function makeInitial(opts: {
     .filter((t) => t.length > 0)
     .map((t) => clampText(t, PRIORITY_MAX))
     .slice(0, 5);
+  const country = clampText(p?.country || "United Arab Emirates", LOCATION_MAX);
+  // Task #601 — brand defaults to the legal name; size hydrates from research;
+  // currency prefers the researched HQ-country currency over a hard-coded USD.
+  const sizeRaw = (p?.size ?? "").toLowerCase();
+  const size = (SIZES as readonly string[]).includes(sizeRaw)
+    ? (sizeRaw as (typeof SIZES)[number])
+    : "";
+  // Cartographer currency wins; otherwise placeholder "USD" until the
+  // country→currency effect resolves the HQ-country default.
+  const currency = normaliseCurrencyCode(p?.primaryCurrency) ?? "USD";
+  const rev = p?.annualRevenue ?? null;
+  const holding = p?.holdingStructure ?? null;
+  // Task #601 — hydrate the entity role from the branch-vs-HQ answer resolved
+  // in chat; only accept a known role, else leave blank for manual selection.
+  const entityRoleCandidate = (p?.entityRole ?? "").toLowerCase();
+  const entityRoleRaw = (ENTITY_ROLES as readonly string[]).includes(
+    entityRoleCandidate,
+  )
+    ? (entityRoleCandidate as (typeof ENTITY_ROLES)[number])
+    : "";
   return {
     name: clampText(p?.name ?? "", NAME_MAX),
-    brandName: clampText(p?.brandName ?? "", NAME_MAX),
+    brandName: clampText(p?.brandName || p?.name || "", NAME_MAX),
     sector: clampText(p?.sector ?? "", LOCATION_MAX),
-    country: clampText(p?.country || "United Arab Emirates", LOCATION_MAX),
+    country,
     hqCity: clampText(p?.hqCity ?? "", LOCATION_MAX),
-    size: "",
+    size,
     tier,
     status: "active",
-    primaryCurrency: "USD",
+    primaryCurrency: currency,
     primaryLanguage: "en",
     partnerOwnerId: opts.partnerOwnerId ?? "",
     parentAccountId: "",
@@ -170,6 +247,26 @@ function makeInitial(opts: {
     prioritiesDraft: "",
     cogniriseHypothesis: clampText(p?.cogniriseHypothesis ?? "", HYPOTHESIS_MAX),
     notes: "",
+    industryCode: clampText(p?.industryCode ?? "", LOCATION_MAX),
+    subIndustryCode: clampText(p?.subIndustryCode ?? "", LOCATION_MAX),
+    employeeCount:
+      typeof p?.employeeCount === "number" && p.employeeCount > 0
+        ? String(Math.round(p.employeeCount))
+        : "",
+    revenueAmount:
+      typeof rev?.amount === "number" && rev.amount > 0
+        ? String(rev.amount)
+        : "",
+    revenueCurrency:
+      normaliseCurrencyCode(rev?.currency) ?? currency,
+    revenueAsOf: clampText(rev?.asOf ?? "", LOCATION_MAX),
+    revenueSourceUrl: clampText(rev?.sourceUrl ?? "", 500),
+    revenueNote: clampText(rev?.note ?? "", PRIORITY_MAX),
+    isHoldingCompany: holding?.isHoldingCompany === true,
+    isMultiBrand: holding?.isMultiBrand === true,
+    holdingBrands: clampText((holding?.brands ?? []).join(", "), 600),
+    holdingNote: clampText(holding?.note ?? "", PRIORITY_MAX),
+    entityRole: entityRoleRaw,
   };
 }
 
@@ -216,6 +313,17 @@ export function CreateAccountDialog({
     null,
   );
   const [stakeholders, setStakeholders] = React.useState<Stakeholder[]>([]);
+  // Task #601 — multinational footprint, partner-editable in the dialog.
+  const [countryPresence, setCountryPresence] = React.useState<
+    Array<{ country: string; role: string; note: string }>
+  >([]);
+  const { data: referenceData } = useReferenceBootstrap();
+  // True once the partner manually edits the currency, so the country→currency
+  // effect stops auto-resolving. Reset on each open.
+  const currencyTouched = React.useRef(false);
+  // Whether the prefill supplied an explicit (researched) currency — when it
+  // did, the country effect must not override it.
+  const hadPrefillCurrency = React.useRef(false);
 
   // Hydrate only on the closed→open transition so prefilled values and any
   // edits the partner makes are never clobbered by an async re-render.
@@ -224,6 +332,9 @@ export function CreateAccountDialog({
     if (open && !wasOpen.current) {
       setForm(makeInitial({ partnerOwnerId: defaultPartnerId, prefill: initialData }));
       setDuplicate(null);
+      currencyTouched.current = false;
+      hadPrefillCurrency.current =
+        normaliseCurrencyCode(initialData?.primaryCurrency) != null;
       const r = initialData?.research ?? null;
       setResearch(r);
       setStakeholders(
@@ -231,9 +342,59 @@ export function CreateAccountDialog({
           .filter((d) => (d?.fullName ?? "").trim().length > 0)
           .map((d) => ({ ...d, fullName: d.fullName.trim() })),
       );
+      setCountryPresence(
+        (initialData?.countryPresence ?? [])
+          .map((c) => ({
+            country: (c?.country ?? "").trim(),
+            role: c?.role ?? "",
+            note: c?.note ?? "",
+          }))
+          .filter((c) => c.country.length > 0),
+      );
     }
     wasOpen.current = open;
   }, [open, defaultPartnerId, initialData]);
+
+  // Task #601 — resolve the HQ-country default currency (e.g. UAE→AED, Türkiye
+  // →TRY) instead of a hard-coded USD. Skips when the partner edited the
+  // currency or the Cartographer already supplied one.
+  React.useEffect(() => {
+    if (!open) return;
+    if (currencyTouched.current || hadPrefillCurrency.current) return;
+    const rows = referenceData?.countries;
+    if (!rows || rows.length === 0) return;
+    const match = resolveCountry(form.country, rows);
+    const cur = normaliseCurrencyCode(match?.primaryCurrency);
+    if (cur && cur !== form.primaryCurrency) {
+      setForm((f) => ({ ...f, primaryCurrency: cur }));
+    }
+  }, [open, referenceData, form.country, form.primaryCurrency]);
+
+  // Task #601 — the sector combobox runs in display mode, so a Cartographer
+  // free-text sector never matches a canonical row and the field shows
+  // "Select industry…". Resolve the researched industryCode to its canonical
+  // display name once the reference data loads so the researched industry shows
+  // as selected.
+  const industryResolved = React.useRef(false);
+  React.useEffect(() => {
+    if (!open) {
+      industryResolved.current = false;
+      return;
+    }
+    if (industryResolved.current) return;
+    const code = form.industryCode.trim();
+    if (!code) return;
+    const rows = referenceData?.industries;
+    if (!rows || rows.length === 0) return;
+    const row = rows.find((r: IndustryRow) => r.code === code);
+    if (row) {
+      const display = localizedIndustryName(row, "en");
+      industryResolved.current = true;
+      setForm((f) =>
+        f.sector === display ? f : { ...f, sector: display },
+      );
+    }
+  }, [open, referenceData, form.industryCode]);
 
   // Backfill the partner owner once personas resolve, if still unset (covers
   // the trigger path opened before `me`/personas loaded).
@@ -296,6 +457,55 @@ export function CreateAccountDialog({
           decisionMakers: cleanStakeholders,
         }
       : null;
+    // Task #601 — firmographic enrichment. Coerce empty/invalid inputs to null
+    // (never fabricate) and clamp so the body stays within server caps.
+    const employeeCount = (() => {
+      const n = Number.parseInt(form.employeeCount.trim(), 10);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })();
+    const revenueAmount = (() => {
+      const n = Number.parseFloat(form.revenueAmount.trim());
+      return Number.isFinite(n) && n > 0 ? n : null;
+    })();
+    const annualRevenue =
+      revenueAmount != null ||
+      form.revenueAsOf.trim() ||
+      form.revenueSourceUrl.trim() ||
+      form.revenueNote.trim()
+        ? {
+            amount: revenueAmount,
+            currency: normaliseCurrencyCode(form.revenueCurrency),
+            asOf: clampText(form.revenueAsOf, LOCATION_MAX) || null,
+            sourceUrl: form.revenueSourceUrl.trim().slice(0, 500) || null,
+            note: clampText(form.revenueNote, PRIORITY_MAX) || null,
+          }
+        : null;
+    const brands = form.holdingBrands
+      .split(",")
+      .map((b) => b.trim())
+      .filter((b) => b.length > 0)
+      .slice(0, 24);
+    const holdingStructure =
+      form.isHoldingCompany ||
+      form.isMultiBrand ||
+      brands.length > 0 ||
+      form.holdingNote.trim()
+        ? {
+            isHoldingCompany: form.isHoldingCompany,
+            isMultiBrand: form.isMultiBrand || brands.length > 1,
+            brands,
+            note: clampText(form.holdingNote, PRIORITY_MAX) || null,
+          }
+        : null;
+    const cleanCountryPresence = countryPresence
+      .map((c) => ({
+        country: clampText(c.country, LOCATION_MAX),
+        role: (c.role || null) as
+          | "hq" | "subsidiary" | "branch" | "office" | null,
+        note: clampText(c.note, PRIORITY_MAX) || null,
+      }))
+      .filter((c) => c.country.length > 0)
+      .slice(0, 40);
     try {
       const res = await create.mutateAsync({
         data: {
@@ -314,6 +524,15 @@ export function CreateAccountDialog({
           strategicPriorities: form.strategicPriorities,
           cogniriseHypothesis: form.cogniriseHypothesis.trim() || null,
           notes: form.notes.trim() || null,
+          // Task #601 — firmographic enrichment fields.
+          employeeCount,
+          annualRevenue,
+          holdingStructure,
+          countryPresence: cleanCountryPresence,
+          entityRole: form.entityRole || null,
+          // researchPayload is built from loosely-typed chat prefill (its
+          // sourceSignals widen to unknown[]); cast to the generated research
+          // shape. The firmographic fields above are now fully typed.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ...(researchPayload ? { research: researchPayload as any } : {}),
         },
@@ -462,11 +681,19 @@ export function CreateAccountDialog({
             <Field label="Primary currency" required error={errors.primaryCurrency}>
               <select
                 value={form.primaryCurrency}
-                onChange={(e) => update("primaryCurrency", e.target.value)}
+                onChange={(e) => {
+                  currencyTouched.current = true;
+                  update("primaryCurrency", e.target.value);
+                }}
                 className={`${selectCls} font-mono`}
                 data-testid="select-account-currency"
               >
-                {CURRENCIES.map((c) => (
+                {Array.from(
+                  new Set([
+                    ...CURRENCIES,
+                    ...(form.primaryCurrency ? [form.primaryCurrency] : []),
+                  ]),
+                ).map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -513,6 +740,209 @@ export function CreateAccountDialog({
               </select>
             </Field>
           </div>
+
+          {/* Task #601 — firmographic enrichment, partner-reviewable. */}
+          <div className="grid grid-cols-3 gap-4">
+            <Field label="Employees">
+              <Input
+                type="number"
+                min={0}
+                value={form.employeeCount}
+                onChange={(e) => update("employeeCount", e.target.value)}
+                className="bg-bg-deep border-border text-text font-mono"
+                placeholder="e.g. 4500"
+                data-testid="input-account-employees"
+              />
+            </Field>
+            <Field label="Annual revenue">
+              <Input
+                type="number"
+                min={0}
+                value={form.revenueAmount}
+                onChange={(e) => update("revenueAmount", e.target.value)}
+                className="bg-bg-deep border-border text-text font-mono"
+                placeholder="amount"
+                data-testid="input-account-revenue-amount"
+              />
+            </Field>
+            <Field label="Revenue currency">
+              <select
+                value={form.revenueCurrency}
+                onChange={(e) => update("revenueCurrency", e.target.value)}
+                className={`${selectCls} font-mono`}
+                data-testid="select-account-revenue-currency"
+              >
+                {Array.from(
+                  new Set([
+                    ...CURRENCIES,
+                    ...(form.revenueCurrency ? [form.revenueCurrency] : []),
+                  ]),
+                ).map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Revenue as-of">
+              <Input
+                value={form.revenueAsOf}
+                onChange={(e) => update("revenueAsOf", e.target.value)}
+                className="bg-bg-deep border-border text-text"
+                placeholder="e.g. FY2024"
+                maxLength={LOCATION_MAX}
+                data-testid="input-account-revenue-asof"
+              />
+            </Field>
+            <Field label="Revenue source URL">
+              <Input
+                value={form.revenueSourceUrl}
+                onChange={(e) => update("revenueSourceUrl", e.target.value)}
+                className="bg-bg-deep border-border text-text"
+                placeholder="https://…"
+                maxLength={500}
+                data-testid="input-account-revenue-source"
+              />
+            </Field>
+          </div>
+
+          <Field label="Revenue / financials note">
+            <Input
+              value={form.revenueNote}
+              onChange={(e) => update("revenueNote", e.target.value)}
+              className="bg-bg-deep border-border text-text"
+              placeholder="Key financials context (no fabricated figures)"
+              maxLength={PRIORITY_MAX}
+              data-testid="input-account-revenue-note"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Entity role">
+              <select
+                value={form.entityRole}
+                onChange={(e) =>
+                  update("entityRole", e.target.value as FormState["entityRole"])
+                }
+                className={selectCls}
+                data-testid="select-account-entity-role"
+              >
+                <option value="">—</option>
+                <option value="hq">Headquarters</option>
+                <option value="subsidiary">Subsidiary</option>
+                <option value="branch">Branch</option>
+                <option value="office">Office</option>
+              </select>
+            </Field>
+            <Field label="Group structure">
+              <div className="flex flex-col gap-1.5 pt-1">
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={form.isHoldingCompany}
+                    onChange={(e) => update("isHoldingCompany", e.target.checked)}
+                    data-testid="checkbox-account-holding"
+                  />
+                  Holding company
+                </label>
+                <label className="flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="checkbox"
+                    checked={form.isMultiBrand}
+                    onChange={(e) => update("isMultiBrand", e.target.checked)}
+                    data-testid="checkbox-account-multibrand"
+                  />
+                  Multi-brand
+                </label>
+              </div>
+            </Field>
+          </div>
+
+          <Field label="Operating brands (comma-separated)">
+            <Input
+              value={form.holdingBrands}
+              onChange={(e) => update("holdingBrands", e.target.value)}
+              className="bg-bg-deep border-border text-text"
+              placeholder="e.g. Brand A, Brand B, Brand C"
+              maxLength={600}
+              data-testid="input-account-brands"
+            />
+          </Field>
+
+          <Field
+            label={`Country presence${countryPresence.length ? ` (${countryPresence.length})` : ""}`}
+          >
+            <p className="text-xs text-text-mute -mt-0.5 mb-1">
+              Markets where the firm operates, tagged by role. Helps with the
+              HQ-vs-branch question.
+            </p>
+            <div className="grid gap-2" data-testid="country-presence-editor">
+              {countryPresence.map((c, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2"
+                  data-testid={`country-presence-row-${i}`}
+                >
+                  <Input
+                    value={c.country}
+                    onChange={(e) =>
+                      setCountryPresence((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, country: e.target.value } : x,
+                        ),
+                      )
+                    }
+                    placeholder="Country"
+                    className="bg-bg-deep border-border text-text flex-1"
+                    data-testid={`input-country-presence-country-${i}`}
+                  />
+                  <select
+                    value={c.role}
+                    onChange={(e) =>
+                      setCountryPresence((prev) =>
+                        prev.map((x, j) =>
+                          j === i ? { ...x, role: e.target.value } : x,
+                        ),
+                      )
+                    }
+                    className={selectCls}
+                    data-testid={`select-country-presence-role-${i}`}
+                  >
+                    <option value="">— role —</option>
+                    <option value="hq">HQ</option>
+                    <option value="subsidiary">Subsidiary</option>
+                    <option value="branch">Branch</option>
+                    <option value="office">Office</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCountryPresence((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="text-text-mute hover:text-danger px-1"
+                    aria-label={`Remove ${c.country || "country"}`}
+                    data-testid={`button-remove-country-presence-${i}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <PillButton
+                type="button"
+                variant="ghost"
+                onClick={() =>
+                  setCountryPresence((prev) => [
+                    ...prev,
+                    { country: "", role: "", note: "" },
+                  ])
+                }
+                data-testid="button-add-country-presence"
+              >
+                + Add country
+              </PillButton>
+            </div>
+          </Field>
 
           <Field label="Strategic priorities (up to 5)">
             <div className="flex gap-2">

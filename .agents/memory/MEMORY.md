@@ -13,3 +13,5 @@
 - [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.
 - [Atelier research priority-refs shape](atelier-research-priority-refs-shape.md) — account strategicPriorityRefs is {text,sourceUrls} (NO evidence); don't reuse AtelierResearchBriefFact for it or create 400s.
 - [Launch deck-graphics policy](launch-deck-graphics.md) — `launch` site: recreate investor-deck infographics as interactive components (not pasted images+redundant text); client-facing, no investor framing.
+- [CLI clarification protocol](atelier-cli-clarification-protocol.md) — continuation merges answer at TOP-LEVEL args (not input.input); stash expensive draft in partial.input.__researchedDraft to skip re-running specialist.
+- [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors (dup resolveNavPath import, role enums, ToolResult shapes); not a clean signal — diff against HEAD to attribute.

@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountAnnualRevenue } from "./atelierAccountAnnualRevenue";
+import type { AtelierAccountCountryPresence } from "./atelierAccountCountryPresence";
+import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
 import type { AtelierAccountStatus } from "./atelierAccountStatus";
 import type { AtelierAccountTier } from "./atelierAccountTier";
+import type { AtelierCreateAccountInputEntityRole } from "./atelierCreateAccountInputEntityRole";
 import type { AtelierCreateAccountInputPrimaryLanguage } from "./atelierCreateAccountInputPrimaryLanguage";
 import type { AtelierCreateAccountInputSize } from "./atelierCreateAccountInputSize";
 import type { AtelierCreateAccountResearch } from "./atelierCreateAccountResearch";
@@ -66,5 +70,21 @@ export interface AtelierCreateAccountInput {
    * @nullable
    */
   notes?: string | null;
+  /**
+   * Total headcount; null when unknown (never inferred blindly).
+   * @minimum 0
+   * @maximum 100000000
+   * @nullable
+   */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  /** @maxItems 40 */
+  countryPresence?: AtelierAccountCountryPresence[];
+  /**
+   * Role of this legal entity within its group (HQ vs branch).
+   * @nullable
+   */
+  entityRole?: AtelierCreateAccountInputEntityRole;
   research?: AtelierCreateAccountResearch | null;
 }

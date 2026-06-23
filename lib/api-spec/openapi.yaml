@@ -2759,6 +2759,30 @@ components:
         notes:
           type: ["string", "null"]
           maxLength: 2000
+        # Task #601 — firmographic enrichment captured from the Cartographer
+        # research/Review-&-Create flow. All optional; figures are never
+        # fabricated (blank when unknown).
+        employeeCount:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 100000000
+          description: Total headcount; null when unknown (never inferred blindly).
+        annualRevenue:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountAnnualRevenue"
+            - type: "null"
+        holdingStructure:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountHoldingStructure"
+            - type: "null"
+        countryPresence:
+          type: array
+          maxItems: 40
+          items: { $ref: "#/components/schemas/AtelierAccountCountryPresence" }
+        entityRole:
+          type: ["string", "null"]
+          enum: [hq, subsidiary, branch, office, null]
+          description: Role of this legal entity within its group (HQ vs branch).
         # Task #587 — reviewed Cartographer research carried over verbatim from
         # the chat `account_proposal` card. When present, the server persists
         # this research directly (firmographic codes, refreshed summary, brief,
@@ -2768,6 +2792,44 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AtelierCreateAccountResearch"
             - type: "null"
+
+    # Task #601 — firmographic enrichment value objects.
+    AtelierAccountAnnualRevenue:
+      type: object
+      properties:
+        amount:
+          type: ["number", "null"]
+          minimum: 0
+        currency:
+          type: ["string", "null"]
+          minLength: 3
+          maxLength: 3
+          pattern: "^[A-Z]{3}$"
+        asOf: { type: ["string", "null"], maxLength: 120 }
+        sourceUrl: { type: ["string", "null"], maxLength: 500 }
+        note: { type: ["string", "null"], maxLength: 200 }
+
+    AtelierAccountHoldingStructure:
+      type: object
+      required: [isHoldingCompany, isMultiBrand, brands]
+      properties:
+        isHoldingCompany: { type: boolean }
+        isMultiBrand: { type: boolean }
+        brands:
+          type: array
+          maxItems: 24
+          items: { type: string, minLength: 1, maxLength: 200 }
+        note: { type: ["string", "null"], maxLength: 200 }
+
+    AtelierAccountCountryPresence:
+      type: object
+      required: [country]
+      properties:
+        country: { type: string, minLength: 1, maxLength: 120 }
+        role:
+          type: ["string", "null"]
+          enum: [hq, subsidiary, branch, office, null]
+        note: { type: ["string", "null"], maxLength: 200 }
 
     AtelierContactCareerEntry:
       type: object

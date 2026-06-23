@@ -273,6 +273,92 @@ export const AtelierCreateAccountInputPrimaryLanguage = {
   ar: "ar",
 } as const;
 
+/**
+ * Role of this legal entity within its group (HQ vs branch).
+ * @nullable
+ */
+export type AtelierCreateAccountInputEntityRole =
+  | (typeof AtelierCreateAccountInputEntityRole)[keyof typeof AtelierCreateAccountInputEntityRole]
+  | null;
+
+export const AtelierCreateAccountInputEntityRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
+export interface AtelierAccountAnnualRevenue {
+  /**
+   * @minimum 0
+   * @nullable
+   */
+  amount?: number | null;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   * @nullable
+   * @pattern ^[A-Z]{3}$
+   */
+  currency?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  asOf?: string | null;
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  sourceUrl?: string | null;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  note?: string | null;
+}
+
+export interface AtelierAccountHoldingStructure {
+  isHoldingCompany: boolean;
+  isMultiBrand: boolean;
+  /** @maxItems 24 */
+  brands: string[];
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  note?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierAccountCountryPresenceRole =
+  | (typeof AtelierAccountCountryPresenceRole)[keyof typeof AtelierAccountCountryPresenceRole]
+  | null;
+
+export const AtelierAccountCountryPresenceRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
+export interface AtelierAccountCountryPresence {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  country: string;
+  /** @nullable */
+  role?: AtelierAccountCountryPresenceRole;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  note?: string | null;
+}
+
 export interface AtelierResearchBriefFact {
   text: string;
   evidence: string;
@@ -523,6 +609,22 @@ export interface AtelierCreateAccountInput {
    * @nullable
    */
   notes?: string | null;
+  /**
+   * Total headcount; null when unknown (never inferred blindly).
+   * @minimum 0
+   * @maximum 100000000
+   * @nullable
+   */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  /** @maxItems 40 */
+  countryPresence?: AtelierAccountCountryPresence[];
+  /**
+   * Role of this legal entity within its group (HQ vs branch).
+   * @nullable
+   */
+  entityRole?: AtelierCreateAccountInputEntityRole;
   research?: AtelierCreateAccountResearch | null;
 }
 

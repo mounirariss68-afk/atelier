@@ -445,6 +445,14 @@ router.post("/accounts", async (req, res) => {
         parentAccountId: input.parentAccountId ?? null,
         size: input.size ?? null,
         hqCity: input.hqCity?.trim() || null,
+        // Task #601 — firmographic enrichment. Figures are persisted only when
+        // the partner/researcher supplied them; nulls/empties stay blank (never
+        // fabricated). entityRole only set for branch/HQ-classified entities.
+        employeeCount: input.employeeCount ?? null,
+        annualRevenue: input.annualRevenue ?? null,
+        holdingStructure: input.holdingStructure ?? null,
+        countryPresence: input.countryPresence ?? [],
+        entityRole: input.entityRole ?? null,
         primaryCurrency: input.primaryCurrency.toUpperCase(),
         primaryLanguage: input.primaryLanguage,
         tier: input.tier,

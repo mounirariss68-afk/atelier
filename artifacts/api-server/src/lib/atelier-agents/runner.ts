@@ -1910,6 +1910,63 @@ function normaliseStressTest(v: unknown): CartographerStressTest {
   };
 }
 
+// Task #601 — coerce the firmographic enrichment blocks. Never fabricate:
+// a missing/non-numeric figure becomes null and the whole block becomes null
+// when it carries no usable signal.
+function normaliseAnnualRevenue(
+  v: unknown,
+): CartographerOutput["account"]["annualRevenue"] {
+  const r = asRecord(v);
+  const amount =
+    typeof r.amount === "number" && Number.isFinite(r.amount) && r.amount > 0
+      ? r.amount
+      : null;
+  const currency =
+    typeof r.currency === "string" && /^[A-Za-z]{3}$/.test(r.currency.trim())
+      ? r.currency.trim().toUpperCase()
+      : null;
+  const asOf = asTrimmed(r.asOf) || null;
+  const sourceUrl =
+    typeof r.sourceUrl === "string" && /^https?:\/\//.test(r.sourceUrl.trim())
+      ? r.sourceUrl.trim()
+      : null;
+  const note = asTrimmed(r.note) || null;
+  if (amount == null && !asOf && !note && !currency && !sourceUrl) return null;
+  return { amount, currency, asOf, sourceUrl, note };
+}
+
+function normaliseHoldingStructure(
+  v: unknown,
+): CartographerOutput["account"]["holdingStructure"] {
+  const r = asRecord(v);
+  const brands = asStringList(r.brands).slice(0, 24);
+  const isHoldingCompany = r.isHoldingCompany === true;
+  const isMultiBrand = r.isMultiBrand === true || brands.length > 1;
+  const note = asTrimmed(r.note) || null;
+  if (!isHoldingCompany && !isMultiBrand && brands.length === 0 && !note)
+    return null;
+  return { isHoldingCompany, isMultiBrand, brands, note };
+}
+
+function normaliseCountryPresence(
+  v: unknown,
+): CartographerOutput["account"]["countryPresence"] {
+  if (!Array.isArray(v)) return [];
+  const roles = ["hq", "subsidiary", "branch", "office"] as const;
+  return v
+    .map((raw) => {
+      const o = asRecord(raw);
+      const country = asTrimmed(o.country);
+      const role = roles.includes(o.role as (typeof roles)[number])
+        ? (o.role as (typeof roles)[number])
+        : null;
+      const note = asTrimmed(o.note) || null;
+      return { country, role, note };
+    })
+    .filter((c) => c.country.length > 0)
+    .slice(0, 40);
+}
+
 export interface CartographerOutput {
   account: {
     refreshedSummary: string;
@@ -1917,10 +1974,35 @@ export interface CartographerOutput {
     // input (e.g. chat "create account" prefill). Always present, may be
     // empty strings / null when the model could not resolve them.
     canonicalName?: string;
+    // Task #601 — short brand/display name (defaults to legal name).
+    brandName?: string | null;
     country?: string;
     sector?: string;
     hqCity?: string | null;
     tier?: "A" | "B" | "C" | null;
+    // Task #601 — firmographic enrichment. All optional / nullable; the model
+    // leaves them blank rather than fabricating.
+    size?: "enterprise" | "large" | "mid" | "small" | null;
+    employeeCount?: number | null;
+    primaryCurrency?: string | null;
+    annualRevenue?: {
+      amount?: number | null;
+      currency?: string | null;
+      asOf?: string | null;
+      sourceUrl?: string | null;
+      note?: string | null;
+    } | null;
+    holdingStructure?: {
+      isHoldingCompany: boolean;
+      isMultiBrand: boolean;
+      brands: string[];
+      note?: string | null;
+    } | null;
+    countryPresence?: Array<{
+      country: string;
+      role?: "hq" | "subsidiary" | "branch" | "office" | null;
+      note?: string | null;
+    }>;
     industryCode?: string | null;
     subIndustryCode?: string | null;
     // Sourced strategic priorities. `text` mirrors the v1 string list,
@@ -2390,6 +2472,11 @@ export async function runAccountCartographer(args: {
           typeof value?.account?.canonicalName === "string"
             ? value.account.canonicalName.trim()
             : undefined,
+        brandName:
+          typeof value?.account?.brandName === "string" &&
+          value.account.brandName.trim().length > 0
+            ? value.account.brandName.trim()
+            : null,
         country:
           typeof value?.account?.country === "string"
             ? value.account.country.trim()
@@ -2408,6 +2495,33 @@ export async function runAccountCartographer(args: {
           value?.account?.tier === "C"
             ? value.account.tier
             : null,
+        // Task #601 — firmographic enrichment. Coerce defensively; never
+        // fabricate (a non-numeric/absent figure stays null).
+        size:
+          value?.account?.size === "enterprise" ||
+          value?.account?.size === "large" ||
+          value?.account?.size === "mid" ||
+          value?.account?.size === "small"
+            ? value.account.size
+            : null,
+        employeeCount:
+          typeof value?.account?.employeeCount === "number" &&
+          Number.isFinite(value.account.employeeCount) &&
+          value.account.employeeCount > 0
+            ? Math.round(value.account.employeeCount)
+            : null,
+        primaryCurrency:
+          typeof value?.account?.primaryCurrency === "string" &&
+          /^[A-Za-z]{3}$/.test(value.account.primaryCurrency.trim())
+            ? value.account.primaryCurrency.trim().toUpperCase()
+            : null,
+        annualRevenue: normaliseAnnualRevenue(value?.account?.annualRevenue),
+        holdingStructure: normaliseHoldingStructure(
+          value?.account?.holdingStructure,
+        ),
+        countryPresence: normaliseCountryPresence(
+          value?.account?.countryPresence,
+        ),
         industryCode:
           typeof value?.account?.industryCode === "string"
             ? value.account.industryCode.trim()

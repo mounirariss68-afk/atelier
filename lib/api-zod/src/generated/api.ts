@@ -2309,6 +2309,34 @@ export const atelierCreateAccountBodyCogniriseHypothesisMax = 600;
 
 export const atelierCreateAccountBodyNotesMax = 2000;
 
+export const atelierCreateAccountBodyEmployeeCountMin = 0;
+export const atelierCreateAccountBodyEmployeeCountMax = 100000000;
+
+export const atelierCreateAccountBodyAnnualRevenueOneAmountMin = 0;
+
+export const atelierCreateAccountBodyAnnualRevenueOneCurrencyMin = 3;
+export const atelierCreateAccountBodyAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierCreateAccountBodyAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierCreateAccountBodyAnnualRevenueOneAsOfMax = 120;
+
+export const atelierCreateAccountBodyAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierCreateAccountBodyAnnualRevenueOneNoteMax = 200;
+
+export const atelierCreateAccountBodyHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierCreateAccountBodyHoldingStructureOneBrandsMax = 24;
+
+export const atelierCreateAccountBodyHoldingStructureOneNoteMax = 200;
+
+export const atelierCreateAccountBodyCountryPresenceItemCountryMax = 120;
+
+export const atelierCreateAccountBodyCountryPresenceItemNoteMax = 200;
+
+export const atelierCreateAccountBodyCountryPresenceMax = 40;
+
 export const atelierCreateAccountBodyResearchOneRefreshedSummaryMax = 4000;
 
 export const atelierCreateAccountBodyResearchOneIndustryCodeMax = 64;
@@ -2386,6 +2414,96 @@ export const AtelierCreateAccountBody = zod.object({
     .max(atelierCreateAccountBodyCogniriseHypothesisMax)
     .nullish(),
   notes: zod.string().max(atelierCreateAccountBodyNotesMax).nullish(),
+  employeeCount: zod
+    .number()
+    .min(atelierCreateAccountBodyEmployeeCountMin)
+    .max(atelierCreateAccountBodyEmployeeCountMax)
+    .nullish()
+    .describe("Total headcount; null when unknown (never inferred blindly)."),
+  annualRevenue: zod
+    .union([
+      zod.object({
+        amount: zod
+          .number()
+          .min(atelierCreateAccountBodyAnnualRevenueOneAmountMin)
+          .nullish(),
+        currency: zod
+          .string()
+          .min(atelierCreateAccountBodyAnnualRevenueOneCurrencyMin)
+          .max(atelierCreateAccountBodyAnnualRevenueOneCurrencyMax)
+          .regex(atelierCreateAccountBodyAnnualRevenueOneCurrencyRegExp)
+          .nullish(),
+        asOf: zod
+          .string()
+          .max(atelierCreateAccountBodyAnnualRevenueOneAsOfMax)
+          .nullish(),
+        sourceUrl: zod
+          .string()
+          .max(atelierCreateAccountBodyAnnualRevenueOneSourceUrlMax)
+          .nullish(),
+        note: zod
+          .string()
+          .max(atelierCreateAccountBodyAnnualRevenueOneNoteMax)
+          .nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  holdingStructure: zod
+    .union([
+      zod.object({
+        isHoldingCompany: zod.boolean(),
+        isMultiBrand: zod.boolean(),
+        brands: zod
+          .array(
+            zod
+              .string()
+              .min(1)
+              .max(atelierCreateAccountBodyHoldingStructureOneBrandsItemMax),
+          )
+          .max(atelierCreateAccountBodyHoldingStructureOneBrandsMax),
+        note: zod
+          .string()
+          .max(atelierCreateAccountBodyHoldingStructureOneNoteMax)
+          .nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  countryPresence: zod
+    .array(
+      zod.object({
+        country: zod
+          .string()
+          .min(1)
+          .max(atelierCreateAccountBodyCountryPresenceItemCountryMax),
+        role: zod
+          .union([
+            zod.literal("hq"),
+            zod.literal("subsidiary"),
+            zod.literal("branch"),
+            zod.literal("office"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        note: zod
+          .string()
+          .max(atelierCreateAccountBodyCountryPresenceItemNoteMax)
+          .nullish(),
+      }),
+    )
+    .max(atelierCreateAccountBodyCountryPresenceMax)
+    .optional(),
+  entityRole: zod
+    .union([
+      zod.literal("hq"),
+      zod.literal("subsidiary"),
+      zod.literal("branch"),
+      zod.literal("office"),
+      zod.literal(null),
+    ])
+    .nullish()
+    .describe("Role of this legal entity within its group (HQ vs branch)."),
   research: zod
     .union([
       zod

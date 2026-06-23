@@ -118,6 +118,44 @@ export const atelierAccounts = pgTable(
       .notNull()
       .default([]),
     cogniriseHypothesis: text("cognirise_hypothesis"),
+    // Task #601 — firmographic enrichment captured on create. All nullable so
+    // existing rows keep validating; the Account Cartographer populates them on
+    // the chat "Review & Create" flow, and the partner can edit on the dialog.
+    // Approximate full-time headcount of the client firm (group-wide).
+    employeeCount: integer("employee_count"),
+    // Headline annual revenue + key financials. Never fabricated — left null
+    // when not publicly disclosed. `currency` is the ISO-4217 code the figure
+    // is reported in (may differ from the account's primaryCurrency).
+    annualRevenue: jsonb("annual_revenue").$type<{
+      amount?: number | null;
+      currency?: string | null;
+      asOf?: string | null; // fiscal year / "as of" label, e.g. "FY2025"
+      sourceUrl?: string | null;
+      note?: string | null; // free text for additional key financials
+    }>(),
+    // Multi-brand / holding-company structure. `brands` lists the key operating
+    // brands/subsidiaries the partner should recognise.
+    holdingStructure: jsonb("holding_structure").$type<{
+      isHoldingCompany: boolean;
+      isMultiBrand: boolean;
+      brands: string[];
+      note?: string | null;
+    }>(),
+    // Country footprint for multinationals. `role` flags whether the country
+    // hosts the HQ, a subsidiary, or a branch/office.
+    countryPresence: jsonb("country_presence")
+      .$type<
+        Array<{
+          country: string;
+          role?: "hq" | "subsidiary" | "branch" | "office" | null;
+          note?: string | null;
+        }>
+      >()
+      .notNull()
+      .default([]),
+    // Whether THIS account row represents the group HQ, a subsidiary, or a
+    // branch — answered via the branch-vs-HQ chat clarification. Null until set.
+    entityRole: text("entity_role"), // 'hq' | 'subsidiary' | 'branch'
     // Task #560 — structured research brief from the Account Cartographer
     // (Cognirise account-research method, Steps 1–3). Display-only blob that
     // sits alongside the typed firmographic fields; nullable until the
