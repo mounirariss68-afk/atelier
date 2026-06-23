@@ -69,30 +69,35 @@ const services = [
     title: "Agentic Enterprise Transformation",
     desc: "An end-to-end overhaul that embeds autonomous AI agents across strategy, operations, and delivery — engineered into how you run, not bolted on after.",
     deliverables: ["Agentic operating model design", "Cross-functional agent deployment", "Workflow re-architecture"],
+    video: "images/scenes/service-line-01.mp4",
   },
   {
     icon: Database, short: "Data & AI Foundations",
     title: "Data & AI Foundations",
     desc: "The data and AI backbone — resilient pipelines, governance, and infrastructure that make scalable, trustworthy AI deployment possible.",
     deliverables: ["Data platform & pipelines", "AI governance & guardrails", "Scalable cloud infrastructure"],
+    video: "images/scenes/service-line-02.mp4",
   },
   {
     icon: Cpu, short: "Engineering with AI",
     title: "Engineering with AI",
     desc: "Senior-led teams working alongside AI agents to build, iterate, and ship production-grade systems at a speed traditional delivery can't match.",
     deliverables: ["Production-grade builds", "Senior + agent pairing", "Rapid iteration cycles"],
+    video: "images/scenes/service-line-03.mp4",
   },
   {
     icon: ShieldCheck, short: "Sovereign Agentic AI",
     title: "Sovereign Agentic AI",
     desc: "Compliance-first, sovereign-capable deployments built for highly regulated sectors across MENAT — security and control by design.",
     deliverables: ["In-region & sovereign hosting", "Regulatory compliance", "Security & privacy by design"],
+    video: "images/scenes/service-line-04.mp4",
   },
   {
     icon: Layers, short: "AI-Native Platforms",
     title: "AI-Native Platforms",
     desc: "Intelligent platforms that redefine market engagement, customer experience, and enterprise loyalty — owned by you, built to evolve.",
     deliverables: ["Custom AI platforms", "Market & CX intelligence", "Owned IP & roadmap"],
+    video: "images/scenes/service-line-05.mp4",
   },
 ];
 
@@ -152,6 +157,40 @@ function ServiceNodeButton({ i, active, onActivate }: { i: number; active: numbe
       <span className="mt-3 text-[11px] font-bold tracking-[2px]" style={{ color: on ? "#fff" : "rgba(239,239,239,0.45)" }}>0{i + 1}</span>
       <span className="text-[12px] leading-tight max-w-[8.5rem] mt-0.5 font-medium" style={{ color: on ? "#fff" : "rgba(239,239,239,0.5)" }}>{sv.short}</span>
     </button>
+  );
+}
+
+function ServiceClip({ src, color, Icon }: { src: string; color: string; Icon: typeof Activity }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [src]);
+  return (
+    <div
+      className="relative w-full aspect-video rounded-xl overflow-hidden mb-6 border border-white/10 bg-navydeep"
+      style={{ boxShadow: `inset 0 0 50px ${color}26` }}
+    >
+      {!failed ? (
+        <video
+          key={src}
+          src={asset(src)}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="none"
+          aria-hidden="true"
+          onError={() => setFailed(true)}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--cog-grad-diag)" }}>
+          <Icon className="w-10 h-10 text-white" />
+        </div>
+      )}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "linear-gradient(to top, rgba(7,11,34,0.6), rgba(7,11,34,0) 55%)" }}
+      />
+    </div>
   );
 }
 
@@ -219,9 +258,7 @@ function ServiceLines() {
         <motion.div key={active} {...panelMotion} className="grad-border bg-navylight/30 p-8 md:p-10" style={{ boxShadow: `0 0 50px -24px ${activeColor}99` }}>
           <div className="grid md:grid-cols-[1.1fr_1fr] gap-8 md:gap-10 items-start">
             <div>
-              <div className="inline-flex w-12 h-12 rounded-xl items-center justify-center mb-5 shadow-lg" style={{ background: "var(--cog-grad-diag)" }}>
-                <s.icon className="w-6 h-6 text-white" />
-              </div>
+              <ServiceClip src={s.video} color={activeColor} Icon={s.icon} />
               <h3 className="text-2xl md:text-[32px] font-bold text-white mb-3 tracking-[-0.5px] leading-snug">{s.title}</h3>
               <p className="text-offwhite/65 leading-relaxed">{s.desc}</p>
             </div>
