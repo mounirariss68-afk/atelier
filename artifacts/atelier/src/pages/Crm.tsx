@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Plus } from "lucide-react";
+import { Globe, Plus, Users, Building2, MapPin } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
 // Task #292 — Account creation: partner-tier + senior_manager.
@@ -27,6 +27,17 @@ const TIER_LABEL: Record<string, string> = {
   B: "Tier B · Active",
   C: "Tier C · Watch",
   D: "Tier D · Dormant",
+};
+
+// Task #614 — compact firmographic readout on the account cards so partners
+// can size accounts at a glance. annualRevenue stays off the list (it is a
+// gated money surface, shown only on the account page behind the
+// account-financials gate).
+const ENTITY_ROLE_LABEL: Record<string, string> = {
+  hq: "Global HQ",
+  subsidiary: "Subsidiary",
+  branch: "Branch",
+  office: "Office",
 };
 
 export default function Crm() {
@@ -198,6 +209,43 @@ export default function Crm() {
                   </div>
                   <MonoChip tone={TIER_TONE[a.tier] ?? "default"}>{a.tier}</MonoChip>
                 </div>
+                {(a.employeeCount != null ||
+                  a.entityRole ||
+                  (a.countryPresence?.length ?? 0) > 0) && (
+                  <div
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-text-mute"
+                    data-testid={`firmographics-${a.id}`}
+                  >
+                    {a.employeeCount != null && (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        data-testid={`firmo-employees-${a.id}`}
+                      >
+                        <Users className="w-3 h-3" />
+                        {a.employeeCount.toLocaleString()} emp
+                      </span>
+                    )}
+                    {a.entityRole && (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        data-testid={`firmo-role-${a.id}`}
+                      >
+                        <Building2 className="w-3 h-3" />
+                        {ENTITY_ROLE_LABEL[a.entityRole] ?? a.entityRole}
+                      </span>
+                    )}
+                    {(a.countryPresence?.length ?? 0) > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1"
+                        data-testid={`firmo-countries-${a.id}`}
+                      >
+                        <MapPin className="w-3 h-3" />
+                        {a.countryPresence!.length}{" "}
+                        {a.countryPresence!.length === 1 ? "country" : "countries"}
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {a.partnerOwnerName && (
                     <MonoChip>Partner: {a.partnerOwnerName}</MonoChip>

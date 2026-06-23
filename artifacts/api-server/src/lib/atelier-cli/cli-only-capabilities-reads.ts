@@ -40,6 +40,10 @@ import {
 } from "./capability-catalog.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
+import {
+  isRestrictedPersona,
+  isBoardObserver,
+} from "../../routes/atelier/personaRoles.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -654,7 +658,7 @@ defineCapability({
   module: "account",
   toolName: "account_dossier",
   description:
-    "Snapshot of one account: identity (name/country/sector), contact count, open opportunity count, and active engagement count.",
+    "Snapshot of one account: identity (name/country/sector), firmographics (employees, entity role, multi-country footprint, holding / multi-brand structure, annual revenue), contact count, open opportunity count, and active engagement count.",
   slashAliases: { en: ["/dossier", "/account-summary"] },
   inputSchema: {
     type: "object",
@@ -736,6 +740,54 @@ defineCapability({
           ),
         ),
     ]);
+    // Task #614 — surface the captured firmographics in the dossier so the
+    // CLI summary is as useful as the account page. annualRevenue is a money
+    // surface, so it honours the same account-financials gate as the rest of
+    // the workspace: account-wide authority (firm-wide partner OR the
+    // account's partner owner) AND a non-restricted / non-board persona.
+    // Restricted callers see "Restricted" rather than the figure; blanks are
+    // simply omitted so the card never shows fabricated zeros.
+    const acl = await accessibleEngagementIds({
+      id: ctx.persona.id,
+      role: ctx.persona.role,
+    } as Parameters<typeof accessibleEngagementIds>[0]);
+    const canSeeFinancials =
+      (acl.all === true || acc.partnerOwnerId === ctx.persona.id) &&
+      !isRestrictedPersona(ctx.persona.role) &&
+      !isBoardObserver(ctx.persona.role);
+
+    const ENTITY_ROLE_LABELS: Record<string, string> = {
+      hq: "Global HQ",
+      subsidiary: "Subsidiary",
+      branch: "Branch",
+      office: "Office",
+    };
+    const rev = acc.annualRevenue ?? null;
+    const fmtRevenue = (r: NonNullable<typeof rev>): string | null => {
+      if (r.amount == null) return null;
+      const n = r.amount;
+      const abs = Math.abs(n);
+      let body: string;
+      if (abs >= 1_000_000_000) body = `${(n / 1_000_000_000).toFixed(1)}B`;
+      else if (abs >= 1_000_000) body = `${(n / 1_000_000).toFixed(1)}M`;
+      else if (abs >= 1_000) body = `${(n / 1_000).toFixed(0)}K`;
+      else body = `${Math.round(n)}`;
+      const ccy = r.currency ? `${r.currency} ` : "";
+      const asOf = r.asOf ? ` (${r.asOf})` : "";
+      return `${ccy}${body}${asOf}`;
+    };
+    const annualRevenue =
+      rev && rev.amount != null
+        ? canSeeFinancials
+          ? fmtRevenue(rev)
+          : "Restricted"
+        : null;
+    const holding = acc.holdingStructure ?? null;
+    const structureFlags: string[] = [];
+    if (holding?.isHoldingCompany) structureFlags.push("Holding company");
+    if (holding?.isMultiBrand) structureFlags.push("Multi-brand");
+    const countriesPresent = (acc.countryPresence ?? []).length;
+
     return {
       ok: true,
       data: {
@@ -744,6 +796,16 @@ defineCapability({
         country: acc.country,
         sector: acc.sector,
         href: `/accounts/${acc.id}`,
+        // Task #614 — firmographic block (nullable fields are omitted by the
+        // entity_card renderer, so no fabricated zeros).
+        employeeCount: acc.employeeCount ?? null,
+        annualRevenue,
+        entityRole: acc.entityRole
+          ? ENTITY_ROLE_LABELS[acc.entityRole] ?? acc.entityRole
+          : null,
+        countriesPresent: countriesPresent > 0 ? countriesPresent : null,
+        structure:
+          structureFlags.length > 0 ? structureFlags.join(" · ") : null,
         contactCount: contacts.length,
         openOpportunityCount: opps.filter(
           (o) => !["won", "lost", "no_go"].includes(o.plmStage),
