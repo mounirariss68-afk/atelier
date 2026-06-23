@@ -1965,6 +1965,38 @@ export interface CartographerOutput {
 
 
 /**
+ * Synthesis sub-steps — the cartographer's final answer is ONE large JSON
+ * object that streams out over a long window (observed ~155s). Rather than
+ * holding a single "Synthesising the brief…" caption for the whole duration,
+ * we watch the accumulating answer text for each top-level JSON key as it
+ * first appears and advance the progress caption to a friendly label for the
+ * section currently being written. Order mirrors the strict output schema in
+ * `prompts/account_cartographer/v1.md`, so detection only ever moves forward.
+ * `pct` climbs monotonically across the synthesis window (80→96, matching the
+ * heartbeat ramp ceiling). The marker is the quoted key (e.g. `"mandateAngles"`)
+ * — camelCase keys don't realistically collide with prose inside values.
+ */
+const CARTOGRAPHER_SYNTH_SECTIONS: Array<{
+  key: string;
+  pct: number;
+  label: string;
+}> = [
+  { key: '"account"', pct: 80, label: "Profiling the company…" },
+  { key: '"sourceSignals"', pct: 82, label: "Cataloguing source signals…" },
+  { key: '"decisionMakers"', pct: 84, label: "Mapping decision-makers…" },
+  { key: '"whatsChanging"', pct: 86, label: "Mapping what's changing…" },
+  { key: '"executiveTensions"', pct: 88, label: "Surfacing executive tensions…" },
+  { key: '"serviceLineFit"', pct: 89, label: "Assessing service-line fit…" },
+  { key: '"partnerEcosystem"', pct: 90, label: "Mapping the partner ecosystem…" },
+  { key: '"businessUnits"', pct: 91, label: "Charting business units…" },
+  { key: '"mandateAngles"', pct: 92, label: "Drafting mandate angles…" },
+  { key: '"whyNowHypothesis"', pct: 93, label: "Forming the why-now hypothesis…" },
+  { key: '"openQuestions"', pct: 94, label: "Noting open questions…" },
+  { key: '"singleMostImportant"', pct: 95, label: "Distilling the key takeaway…" },
+  { key: '"stressTest"', pct: 96, label: "Stress-testing the hypothesis…" },
+];
+
+/**
  * Task #275 — Anthropic web_search-grounded JSON call.
  *
  * Wires Anthropic's server-side `web_search_20250305` tool so the model
@@ -2052,18 +2084,23 @@ async function callClaudeJsonWithWebSearch<T>(
   let heartbeat: ReturnType<typeof setInterval> | null = null;
   let heartbeatBase = "Analysing sources…";
   let heartbeatStartedAt = 0;
+  // Floor for the heartbeat pct, raised as synthesis sub-steps are detected so
+  // the bar climbs section-by-section instead of restarting its 80→96 ramp at
+  // each transition (each new section resets `heartbeatStartedAt`).
+  let heartbeatFloorPct = 80;
   let synthesisPending: ReturnType<typeof setTimeout> | null = null;
   const emitHeartbeat = () => {
     const secs = Math.round((Date.now() - heartbeatStartedAt) / 1000);
     emitPhase(
-      Math.min(80 + Math.floor(secs / 5), 96),
+      Math.min(Math.max(heartbeatFloorPct, 80 + Math.floor(secs / 5)), 96),
       secs > 0 ? `${heartbeatBase} (${secs}s)` : heartbeatBase,
       { phase: "synthesis" },
     );
   };
-  const startHeartbeat = (base: string) => {
+  const startHeartbeat = (base: string, floorPct = 80) => {
     if (heartbeat && base === heartbeatBase) return; // already ticking this phase
     heartbeatBase = base;
+    heartbeatFloorPct = Math.max(heartbeatFloorPct, floorPct); // monotonic floor
     heartbeatStartedAt = Date.now(); // reset elapsed for the new phase label
     emitHeartbeat(); // instant transition, no 2.5s wait
     if (!heartbeat) heartbeat = setInterval(emitHeartbeat, 2500);
@@ -2084,6 +2121,11 @@ async function callClaudeJsonWithWebSearch<T>(
   // "Read N sources" progress step can be expanded to reveal the titles.
   const readSources: Array<{ url: string; title?: string }> = [];
   const seenSourceUrls = new Set<string>();
+  // Accumulated answer text + the furthest synthesis sub-step detected so far.
+  // Used to advance the progress caption through the brief's sections as the
+  // single streaming JSON object is written.
+  let answerText = "";
+  let synthSectionIdx = -1;
   const resp = await (async () => {
     const stream = anthropic.messages.stream(
       {
@@ -2164,9 +2206,30 @@ async function callClaudeJsonWithWebSearch<T>(
           event.type === "content_block_delta" &&
           event.delta.type === "text_delta"
         ) {
-          // Answer tokens are streaming — flip the live caption to synthesis.
+          // Answer tokens are streaming — flip the live caption to synthesis
+          // and, as each top-level JSON section key first appears, advance the
+          // caption to the friendly sub-step for the section being written.
           cancelSynthesisPending();
-          startHeartbeat("Synthesising the brief…");
+          answerText += event.delta.text;
+          // Find the furthest-along section whose key has now appeared. Scan
+          // from the end so a chunk that reveals several keys at once jumps
+          // straight to the latest; never moves backward.
+          let detected = synthSectionIdx;
+          for (let i = CARTOGRAPHER_SYNTH_SECTIONS.length - 1; i > synthSectionIdx; i--) {
+            if (answerText.includes(CARTOGRAPHER_SYNTH_SECTIONS[i].key)) {
+              detected = i;
+              break;
+            }
+          }
+          if (detected > synthSectionIdx) {
+            synthSectionIdx = detected;
+            const section = CARTOGRAPHER_SYNTH_SECTIONS[synthSectionIdx];
+            startHeartbeat(section.label, section.pct);
+          } else if (synthSectionIdx < 0) {
+            // No section key detected yet — fall back to the generic synthesis
+            // heartbeat so the indicator never freezes before the first key.
+            startHeartbeat("Synthesising the brief…");
+          }
         }
       }
       return await stream.finalMessage();
