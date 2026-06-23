@@ -2240,6 +2240,29 @@ export const AtelierListAccountsQueryParams = zod.object({
   ownerId: zod.coerce.string().optional(),
 });
 
+export const atelierListAccountsResponseAnnualRevenueOneAmountMin = 0;
+
+export const atelierListAccountsResponseAnnualRevenueOneCurrencyMin = 3;
+export const atelierListAccountsResponseAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierListAccountsResponseAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierListAccountsResponseAnnualRevenueOneAsOfMax = 120;
+
+export const atelierListAccountsResponseAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierListAccountsResponseAnnualRevenueOneNoteMax = 200;
+
+export const atelierListAccountsResponseHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierListAccountsResponseHoldingStructureOneBrandsMax = 24;
+
+export const atelierListAccountsResponseHoldingStructureOneNoteMax = 200;
+
+export const atelierListAccountsResponseCountryPresenceItemCountryMax = 120;
+
+export const atelierListAccountsResponseCountryPresenceItemNoteMax = 200;
+
 export const AtelierListAccountsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
@@ -2254,6 +2277,90 @@ export const AtelierListAccountsResponseItem = zod.object({
   primaryLanguage: zod.string().optional(),
   partnerOwnerId: zod.string().nullish(),
   partnerOwnerName: zod.string().nullish(),
+  employeeCount: zod.number().nullish(),
+  annualRevenue: zod
+    .union([
+      zod.object({
+        amount: zod
+          .number()
+          .min(atelierListAccountsResponseAnnualRevenueOneAmountMin)
+          .nullish(),
+        currency: zod
+          .string()
+          .min(atelierListAccountsResponseAnnualRevenueOneCurrencyMin)
+          .max(atelierListAccountsResponseAnnualRevenueOneCurrencyMax)
+          .regex(atelierListAccountsResponseAnnualRevenueOneCurrencyRegExp)
+          .nullish(),
+        asOf: zod
+          .string()
+          .max(atelierListAccountsResponseAnnualRevenueOneAsOfMax)
+          .nullish(),
+        sourceUrl: zod
+          .string()
+          .max(atelierListAccountsResponseAnnualRevenueOneSourceUrlMax)
+          .nullish(),
+        note: zod
+          .string()
+          .max(atelierListAccountsResponseAnnualRevenueOneNoteMax)
+          .nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  annualRevenueRedacted: zod.boolean().optional(),
+  holdingStructure: zod
+    .union([
+      zod.object({
+        isHoldingCompany: zod.boolean(),
+        isMultiBrand: zod.boolean(),
+        brands: zod
+          .array(
+            zod
+              .string()
+              .min(1)
+              .max(atelierListAccountsResponseHoldingStructureOneBrandsItemMax),
+          )
+          .max(atelierListAccountsResponseHoldingStructureOneBrandsMax),
+        note: zod
+          .string()
+          .max(atelierListAccountsResponseHoldingStructureOneNoteMax)
+          .nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  countryPresence: zod
+    .array(
+      zod.object({
+        country: zod
+          .string()
+          .min(1)
+          .max(atelierListAccountsResponseCountryPresenceItemCountryMax),
+        role: zod
+          .union([
+            zod.literal("hq"),
+            zod.literal("subsidiary"),
+            zod.literal("branch"),
+            zod.literal("office"),
+            zod.literal(null),
+          ])
+          .nullish(),
+        note: zod
+          .string()
+          .max(atelierListAccountsResponseCountryPresenceItemNoteMax)
+          .nullish(),
+      }),
+    )
+    .optional(),
+  entityRole: zod
+    .union([
+      zod.literal("hq"),
+      zod.literal("subsidiary"),
+      zod.literal("branch"),
+      zod.literal("office"),
+      zod.literal(null),
+    ])
+    .nullish(),
   relationshipStrength: zod.number(),
   openOpportunityCount: zod.number().optional(),
   activeEngagementCount: zod.number().optional(),
@@ -2735,6 +2842,29 @@ export const AtelierGetAccountWorkspaceParams = zod.object({
   accountId: zod.coerce.string(),
 });
 
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -2815,6 +2945,114 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -3756,6 +3994,29 @@ export const AtelierUpdateAccountBody = zod
     "Partner-editable account fields. Only the keys present are written\n(PATCH semantics). `parentAccountId: null` unlinks the parent.\n",
   );
 
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpdateAccountResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpdateAccountResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpdateAccountResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpdateAccountResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpdateAccountResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpdateAccountResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -3836,6 +4097,114 @@ export const AtelierUpdateAccountResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateAccountResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpdateAccountResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateAccountResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -4540,6 +4909,29 @@ export const AtelierRefreshAccountCartographerBody = zod.object({
   focusOpportunityId: zod.string().nullish(),
 });
 
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierRefreshAccountCartographerResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierRefreshAccountCartographerResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -4620,6 +5012,114 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierRefreshAccountCartographerResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -5835,6 +6335,29 @@ export const AtelierDecideProfileUpdateBody = zod.object({
   editedValue: zod.unknown().optional(),
 });
 
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -5915,6 +6438,114 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -6628,6 +7259,29 @@ export const AtelierBulkDecideProfileUpdatesBody = zod.object({
   updateIds: zod.array(zod.string()).optional(),
 });
 
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -6708,6 +7362,114 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -7434,6 +8196,29 @@ export const AtelierCreateAccountInsightBody = zod.object({
     .optional(),
 });
 
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierCreateAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierCreateAccountInsightResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierCreateAccountInsightResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierCreateAccountInsightResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierCreateAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -7514,6 +8299,114 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountInsightResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierCreateAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierCreateAccountInsightResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountInsightResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierCreateAccountInsightResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountInsightResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -8239,6 +9132,29 @@ export const AtelierUpdateAccountInsightBody = zod.object({
     .optional(),
 });
 
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -8319,6 +9235,114 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -9028,6 +10052,29 @@ export const AtelierDeleteAccountInsightParams = zod.object({
   insightId: zod.coerce.string(),
 });
 
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -9108,6 +10155,114 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -9826,6 +10981,29 @@ export const AtelierAddAccountTeamMemberBody = zod.object({
   ]),
 });
 
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -9906,6 +11084,114 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -10624,6 +11910,29 @@ export const AtelierUpdateAccountTeamMemberBody = zod.object({
   ]),
 });
 
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -10704,6 +12013,114 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -11415,6 +12832,29 @@ export const AtelierRemoveAccountTeamMemberParams = zod.object({
   memberId: zod.coerce.string(),
 });
 
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -11495,6 +12935,114 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -12218,6 +13766,29 @@ export const AtelierCreateAccountActionBody = zod.object({
   sourceRef: zod.string().nullish(),
 });
 
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierCreateAccountActionResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierCreateAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierCreateAccountActionResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierCreateAccountActionResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierCreateAccountActionResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierCreateAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -12298,6 +13869,114 @@ export const AtelierCreateAccountActionResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountActionResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierCreateAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierCreateAccountActionResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountActionResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierCreateAccountActionResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountActionResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -13018,6 +14697,29 @@ export const AtelierUpdateAccountActionBody = zod.object({
   linkedPlay: zod.string().nullish(),
 });
 
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpdateAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpdateAccountActionResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpdateAccountActionResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpdateAccountActionResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpdateAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -13098,6 +14800,114 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountActionResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpdateAccountActionResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountActionResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateAccountActionResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountActionResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -13807,6 +15617,29 @@ export const AtelierDeleteAccountActionParams = zod.object({
   actionId: zod.coerce.string(),
 });
 
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierDeleteAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierDeleteAccountActionResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierDeleteAccountActionResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierDeleteAccountActionResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierDeleteAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -13887,6 +15720,114 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountActionResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierDeleteAccountActionResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierDeleteAccountActionResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountActionResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierDeleteAccountActionResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountActionResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -14605,6 +16546,29 @@ export const AtelierCreateAccountRiskBody = zod.object({
   mitigation: zod.string().nullish(),
 });
 
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierCreateAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierCreateAccountRiskResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierCreateAccountRiskResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierCreateAccountRiskResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierCreateAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -14685,6 +16649,114 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountRiskResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierCreateAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierCreateAccountRiskResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountRiskResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierCreateAccountRiskResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierCreateAccountRiskResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -15404,6 +17476,29 @@ export const AtelierUpdateAccountRiskBody = zod.object({
   mitigation: zod.string().nullish(),
 });
 
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -15484,6 +17579,114 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -16193,6 +18396,29 @@ export const AtelierDeleteAccountRiskParams = zod.object({
   riskId: zod.coerce.string(),
 });
 
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -16273,6 +18499,114 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),
@@ -16988,6 +19322,29 @@ export const AtelierUpsertAccountGoalProgressBody = zod.object({
   note: zod.string().nullish(),
 });
 
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneAmountMin = 0;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyMin = 3;
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyMax = 3;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyRegExp =
+  new RegExp("^[A-Z]{3}$");
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneAsOfMax = 120;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneSourceUrlMax = 500;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneNoteMax = 200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneBrandsItemMax = 200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneBrandsMax = 24;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneNoteMax = 200;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceItemCountryMax = 120;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceItemNoteMax = 200;
+
 export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -17068,6 +19425,114 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       primaryLanguage: zod.string().optional(),
       partnerOwnerId: zod.string().nullish(),
       partnerOwnerName: zod.string().nullish(),
+      employeeCount: zod.number().nullish(),
+      annualRevenue: zod
+        .union([
+          zod.object({
+            amount: zod
+              .number()
+              .min(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneAmountMin,
+              )
+              .nullish(),
+            currency: zod
+              .string()
+              .min(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyMin,
+              )
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyMax,
+              )
+              .regex(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneCurrencyRegExp,
+              )
+              .nullish(),
+            asOf: zod
+              .string()
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneAsOfMax,
+              )
+              .nullish(),
+            sourceUrl: zod
+              .string()
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneSourceUrlMax,
+              )
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneAnnualRevenueOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      annualRevenueRedacted: zod.boolean().optional(),
+      holdingStructure: zod
+        .union([
+          zod.object({
+            isHoldingCompany: zod.boolean(),
+            isMultiBrand: zod.boolean(),
+            brands: zod
+              .array(
+                zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneBrandsItemMax,
+                  ),
+              )
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneBrandsMax,
+              ),
+            note: zod
+              .string()
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneHoldingStructureOneNoteMax,
+              )
+              .nullish(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      countryPresence: zod
+        .array(
+          zod.object({
+            country: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceItemCountryMax,
+              ),
+            role: zod
+              .union([
+                zod.literal("hq"),
+                zod.literal("subsidiary"),
+                zod.literal("branch"),
+                zod.literal("office"),
+                zod.literal(null),
+              ])
+              .nullish(),
+            note: zod
+              .string()
+              .max(
+                atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceItemNoteMax,
+              )
+              .nullish(),
+          }),
+        )
+        .optional(),
+      entityRole: zod
+        .union([
+          zod.literal("hq"),
+          zod.literal("subsidiary"),
+          zod.literal("branch"),
+          zod.literal("office"),
+          zod.literal(null),
+        ])
+        .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
       activeEngagementCount: zod.number().optional(),

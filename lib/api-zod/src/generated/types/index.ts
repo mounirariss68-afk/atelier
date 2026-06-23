@@ -53,6 +53,7 @@ export * from "./atelierAccountStatus";
 export * from "./atelierAccountStrategy";
 export * from "./atelierAccountSummary";
 export * from "./atelierAccountSummaryCartographerStatus";
+export * from "./atelierAccountSummaryEntityRole";
 export * from "./atelierAccountTeamMember";
 export * from "./atelierAccountTeamRole";
 export * from "./atelierAccountTier";

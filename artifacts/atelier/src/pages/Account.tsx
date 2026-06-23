@@ -865,6 +865,9 @@ function ProfileTab({
             </Card>
           )}
 
+          {/* Company details (Task #601/#607) */}
+          <CompanyDetailsCard account={a} />
+
           {/* Ownership */}
           <Card className="p-6 space-y-4">
             <SectionLabel>Ownership</SectionLabel>
@@ -1240,6 +1243,176 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       <dt className="font-mono uppercase tracking-wider text-xs text-text-mute">{label}</dt>
       <dd className="text-right text-text">{value}</dd>
     </div>
+  );
+}
+
+// Task #601/#607 — firmographic facts captured on create (headcount, annual
+// revenue & key financials, holding / multi-brand structure, country presence
+// + HQ-vs-branch role). Every figure is nullable; blanks render as "—" /
+// "Not available" rather than fabricated zeros. Annual revenue honours the
+// account-financials gate (server sends null + annualRevenueRedacted=true to
+// personas not allowed to see money surfaces).
+const ENTITY_ROLE_LABEL: Record<string, string> = {
+  hq: "Global HQ",
+  subsidiary: "Subsidiary",
+  branch: "Branch",
+  office: "Office",
+};
+
+function fmtRevenue(r: NonNullable<AtelierAccountWorkspace["account"]["annualRevenue"]>): string {
+  if (r.amount == null) return "—";
+  const ccy = r.currency ?? "";
+  const n = r.amount;
+  const abs = Math.abs(n);
+  let body: string;
+  if (abs >= 1_000_000_000) body = `${(n / 1_000_000_000).toFixed(1)}B`;
+  else if (abs >= 1_000_000) body = `${(n / 1_000_000).toFixed(1)}M`;
+  else if (abs >= 1_000) body = `${(n / 1_000).toFixed(0)}K`;
+  else body = `${Math.round(n)}`;
+  return ccy ? `${ccy} ${body}` : body;
+}
+
+function CompanyDetailsCard({ account }: { account: AtelierAccountWorkspace["account"] }) {
+  const a = account;
+  const rev = a.annualRevenue ?? null;
+  const revRedacted = a.annualRevenueRedacted === true;
+  const holding = a.holdingStructure ?? null;
+  const countries = a.countryPresence ?? [];
+  const employeeCount = a.employeeCount ?? null;
+  const entityRole = a.entityRole ?? null;
+
+  const brands = (holding?.brands ?? []).filter((b) => b.trim().length > 0);
+  const structureFlags: string[] = [];
+  if (holding?.isHoldingCompany) structureFlags.push("Holding company");
+  if (holding?.isMultiBrand) structureFlags.push("Multi-brand");
+
+  // Nothing captured yet — skip the card entirely to avoid an all-"—" block.
+  const hasAnything =
+    employeeCount != null ||
+    rev != null ||
+    revRedacted ||
+    !!holding ||
+    countries.length > 0 ||
+    !!entityRole;
+  if (!hasAnything) return null;
+
+  return (
+    <Card className="p-6 space-y-4" data-testid="card-company-details">
+      <SectionLabel>
+        <span className="inline-flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-gold" /> Company details
+        </span>
+      </SectionLabel>
+
+      <dl className="space-y-2 text-sm">
+        <Row
+          label="Employees"
+          value={
+            employeeCount != null ? (
+              <span data-testid="text-employee-count">
+                {employeeCount.toLocaleString()}
+              </span>
+            ) : (
+              "—"
+            )
+          }
+        />
+        <Row
+          label="Annual revenue"
+          value={
+            revRedacted ? (
+              <span className="text-text-mute italic" data-testid="text-annual-revenue">
+                Restricted
+              </span>
+            ) : rev && rev.amount != null ? (
+              <span data-testid="text-annual-revenue">{fmtRevenue(rev)}</span>
+            ) : (
+              <span data-testid="text-annual-revenue">—</span>
+            )
+          }
+        />
+        {!revRedacted && rev?.asOf && (
+          <Row label="As of" value={rev.asOf} />
+        )}
+        <Row
+          label="Entity role"
+          value={
+            entityRole ? (
+              <span data-testid="text-entity-role">
+                {ENTITY_ROLE_LABEL[entityRole] ?? entityRole}
+              </span>
+            ) : (
+              "—"
+            )
+          }
+        />
+      </dl>
+
+      {/* Revenue source + key financials note */}
+      {!revRedacted && rev && (rev.sourceUrl || rev.note) && (
+        <div className="border-t border-border-soft pt-3 space-y-2">
+          {rev.note && (
+            <p className="text-text-mute text-xs leading-relaxed">{rev.note}</p>
+          )}
+          {rev.sourceUrl && (
+            <SourceLinks urls={[rev.sourceUrl]} testid="link-revenue-source" />
+          )}
+        </div>
+      )}
+
+      {/* Holding / multi-brand structure */}
+      {holding && (structureFlags.length > 0 || brands.length > 0 || holding.note) && (
+        <div className="border-t border-border-soft pt-3 space-y-2">
+          <Eyebrow>Structure</Eyebrow>
+          {structureFlags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {structureFlags.map((f) => (
+                <MonoChip key={f} tone="gold">
+                  {f}
+                </MonoChip>
+              ))}
+            </div>
+          )}
+          {brands.length > 0 && (
+            <div className="flex flex-wrap gap-1.5" data-testid="list-brands">
+              {brands.map((b, i) => (
+                <MonoChip key={i}>{b}</MonoChip>
+              ))}
+            </div>
+          )}
+          {holding.note && (
+            <p className="text-text-mute text-xs leading-relaxed">{holding.note}</p>
+          )}
+        </div>
+      )}
+
+      {/* Country presence */}
+      {countries.length > 0 && (
+        <div className="border-t border-border-soft pt-3 space-y-2">
+          <Eyebrow>Country presence</Eyebrow>
+          <ul className="space-y-1.5" data-testid="list-country-presence">
+            {countries.map((c, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 text-sm text-text"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  {c.country}
+                  {c.note && (
+                    <span className="text-text-faint text-xs">— {c.note}</span>
+                  )}
+                </span>
+                {c.role && (
+                  <MonoChip tone={c.role === "hq" ? "gold" : "default"}>
+                    {ENTITY_ROLE_LABEL[c.role] ?? c.role}
+                  </MonoChip>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }
 

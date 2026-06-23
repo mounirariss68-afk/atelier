@@ -744,6 +744,20 @@ export interface AtelierAccountDuplicateError {
 }
 
 /**
+ * @nullable
+ */
+export type AtelierAccountSummaryEntityRole =
+  | (typeof AtelierAccountSummaryEntityRole)[keyof typeof AtelierAccountSummaryEntityRole]
+  | null;
+
+export const AtelierAccountSummaryEntityRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
+/**
  * Transient flag set while an auto-triggered Account Cartographer
 run is in flight (or after it has failed). `null` once the run
 resolves successfully and `enrichedAt` is set.
@@ -778,6 +792,14 @@ export interface AtelierAccountSummary {
   partnerOwnerId?: string | null;
   /** @nullable */
   partnerOwnerName?: string | null;
+  /** @nullable */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  annualRevenueRedacted?: boolean;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierAccountSummaryEntityRole;
   relationshipStrength: number;
   openOpportunityCount?: number;
   activeEngagementCount?: number;

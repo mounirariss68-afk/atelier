@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountAnnualRevenue } from "./atelierAccountAnnualRevenue";
+import type { AtelierAccountCountryPresence } from "./atelierAccountCountryPresence";
+import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
 import type { AtelierAccountStatus } from "./atelierAccountStatus";
 import type { AtelierAccountSummaryCartographerStatus } from "./atelierAccountSummaryCartographerStatus";
+import type { AtelierAccountSummaryEntityRole } from "./atelierAccountSummaryEntityRole";
 import type { AtelierAccountTier } from "./atelierAccountTier";
 
 export interface AtelierAccountSummary {
@@ -28,6 +32,14 @@ export interface AtelierAccountSummary {
   partnerOwnerId?: string | null;
   /** @nullable */
   partnerOwnerName?: string | null;
+  /** @nullable */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  annualRevenueRedacted?: boolean;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierAccountSummaryEntityRole;
   relationshipStrength: number;
   openOpportunityCount?: number;
   activeEngagementCount?: number;

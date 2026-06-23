@@ -164,6 +164,7 @@ async function loadCartographerStatus(
 async function summariseAccount(
   a: typeof atelierAccounts.$inferSelect,
   access: EngAccess,
+  me: { id: string; role?: string | null },
 ) {
   const [partner] = a.partnerOwnerId
     ? await db.select().from(atelierUsers).where(eq(atelierUsers.id, a.partnerOwnerId))
@@ -210,6 +211,16 @@ async function summariseAccount(
   );
   const { status: cartographerStatus, phase: cartographerPhase } =
     await loadCartographerStatus(a.id);
+  // Task #607 — the company's headline revenue is a money surface, so it
+  // honours the same account-financials gate as the rest of the financial
+  // signals (account-wide authority + not a restricted / board persona).
+  // Restricted personas get null + annualRevenueRedacted=true so the UI can
+  // distinguish "withheld" from "not disclosed".
+  const accountWide = access.all || a.partnerOwnerId === me.id;
+  const canSeeFinancials =
+    accountWide &&
+    !isRestrictedPersona(me.role ?? null) &&
+    !isBoardObserver(me.role ?? null);
   return {
     id: a.id,
     name: a.name,
@@ -224,6 +235,18 @@ async function summariseAccount(
     primaryLanguage: a.primaryLanguage ?? "en",
     partnerOwnerId: a.partnerOwnerId ?? null,
     partnerOwnerName: partner?.name ?? null,
+    // Task #601/#607 — firmographic enrichment surfaced on the account page.
+    employeeCount: a.employeeCount ?? null,
+    annualRevenue: canSeeFinancials ? a.annualRevenue ?? null : null,
+    annualRevenueRedacted: !canSeeFinancials && a.annualRevenue != null,
+    holdingStructure: a.holdingStructure ?? null,
+    countryPresence: a.countryPresence ?? [],
+    entityRole: (a.entityRole ?? null) as
+      | "hq"
+      | "subsidiary"
+      | "branch"
+      | "office"
+      | null,
     relationshipStrength: Number(a.relationshipStrength ?? 0),
     openOpportunityCount: openOpps.length,
     activeEngagementCount: activeEngs.length,
@@ -260,7 +283,7 @@ router.get("/accounts", async (req, res) => {
     filtered.map(async (r) => ((await canSeeAccount(access, me, r.id)) ? r : null)),
   );
   const allowed = visible.filter((r): r is NonNullable<typeof r> => r !== null);
-  const out = await Promise.all(allowed.map((a) => summariseAccount(a, access)));
+  const out = await Promise.all(allowed.map((a) => summariseAccount(a, access, me)));
   res.json(out);
 });
 
@@ -521,7 +544,7 @@ router.post("/accounts", async (req, res) => {
     }
     const fresh = (await loadAccount(inserted.id)) ?? inserted;
     const access = await accessibleEngagementIds(me);
-    const summary = await summariseAccount(fresh, access);
+    const summary = await summariseAccount(fresh, access, me);
     res.status(201).json(summary);
     return;
   }
@@ -652,7 +675,7 @@ router.post("/accounts", async (req, res) => {
   })();
 
   const access = await accessibleEngagementIds(me);
-  const summary = await summariseAccount(inserted, access);
+  const summary = await summariseAccount(inserted, access, me);
   res.status(201).json(summary);
 });
 
@@ -664,7 +687,7 @@ async function buildWorkspace(
 ) {
   const a = await loadAccount(accountId);
   if (!a) return null;
-  const summary = await summariseAccount(a, access);
+  const summary = await summariseAccount(a, access, me);
   const contacts = await db
     .select()
     .from(atelierContacts)

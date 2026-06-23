@@ -3145,6 +3145,31 @@ components:
         primaryLanguage: { type: string }
         partnerOwnerId: { type: ["string", "null"] }
         partnerOwnerName: { type: ["string", "null"] }
+        # Task #601/#607 — firmographic enrichment surfaced on the account
+        # page. All nullable; figures are never fabricated (blank when unknown).
+        employeeCount: { type: ["integer", "null"] }
+        # Headline annual revenue + key financials. Honours the account-
+        # financials access gate: `null` (with annualRevenueRedacted=true) for
+        # personas not allowed to see money surfaces.
+        annualRevenue:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountAnnualRevenue"
+            - type: "null"
+        # True when annualRevenue was withheld by the financials gate
+        # (distinguishes "redacted" from "unknown / not disclosed").
+        annualRevenueRedacted: { type: boolean }
+        holdingStructure:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountHoldingStructure"
+            - type: "null"
+        countryPresence:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountCountryPresence" }
+        # Whether THIS account row represents the group HQ, a subsidiary, or a
+        # branch. Null until set.
+        entityRole:
+          type: ["string", "null"]
+          enum: [hq, subsidiary, branch, office, null]
         relationshipStrength: { type: number }
         openOpportunityCount: { type: integer }
         activeEngagementCount: { type: integer }
