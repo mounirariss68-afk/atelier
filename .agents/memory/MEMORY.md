@@ -15,3 +15,4 @@
 - [Launch deck-graphics policy](launch-deck-graphics.md) — `launch` site: recreate investor-deck infographics as interactive components (not pasted images+redundant text); client-facing, no investor framing.
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — continuation merges answer at TOP-LEVEL args (not input.input); stash expensive draft in partial.input.__researchedDraft to skip re-running specialist.
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors (dup resolveNavPath import, role enums, ToolResult shapes); not a clean signal — diff against HEAD to attribute.
+- [Atelier firmographic columns need push](atelier-firmographics-db.md) — atelier_accounts firmographic cols are in Drizzle schema but may be absent in a fresh isolated DB → 500s on account reads; run `@workspace/db push`.

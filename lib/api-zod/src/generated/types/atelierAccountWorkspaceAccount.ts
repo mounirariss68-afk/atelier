@@ -5,11 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountAnnualRevenue } from "./atelierAccountAnnualRevenue";
 import type { AtelierAccountCompetitor } from "./atelierAccountCompetitor";
+import type { AtelierAccountCountryPresence } from "./atelierAccountCountryPresence";
 import type { AtelierAccountHealth } from "./atelierAccountHealth";
 import type { AtelierAccountHierarchyRef } from "./atelierAccountHierarchyRef";
+import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
+import type { AtelierAccountWorkspaceAccountEntityRole } from "./atelierAccountWorkspaceAccountEntityRole";
 import type { AtelierAccountWorkspaceAccountStrategicPriorityRefsItem } from "./atelierAccountWorkspaceAccountStrategicPriorityRefsItem";
 import type { AtelierProfileUpdateProposal } from "./atelierProfileUpdateProposal";
 import type { AtelierResearchBrief } from "./atelierResearchBrief";
@@ -32,4 +36,11 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   children?: AtelierAccountHierarchyRef[];
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
+  /** @nullable */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierAccountWorkspaceAccountEntityRole;
 };

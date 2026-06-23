@@ -5,8 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountAnnualRevenue } from "./atelierAccountAnnualRevenue";
 import type { AtelierAccountCompetitor } from "./atelierAccountCompetitor";
+import type { AtelierAccountCountryPresence } from "./atelierAccountCountryPresence";
+import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
+import type { AtelierUpdateAccountInputEntityRole } from "./atelierUpdateAccountInputEntityRole";
 
 /**
  * Partner-editable account fields. Only the keys present are written
@@ -24,4 +28,16 @@ export interface AtelierUpdateAccountInput {
   accountStrategy?: AtelierAccountStrategy | null;
   /** @maxItems 25 */
   competitors?: AtelierAccountCompetitor[];
+  /**
+   * @minimum 0
+   * @maximum 100000000
+   * @nullable
+   */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  /** @maxItems 40 */
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierUpdateAccountInputEntityRole;
 }

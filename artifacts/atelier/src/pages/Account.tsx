@@ -47,6 +47,7 @@ import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
+import { EditAccountProfileDialog } from "@/components/EditAccountProfileDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Collapsible,
@@ -479,6 +480,7 @@ function ProfileTab({
 }) {
   const a = ws.account;
   const [editStrategy, setEditStrategy] = useState(false);
+  const [editProfile, setEditProfile] = useState(false);
   const brief = a.researchBrief ?? null;
   const strat = a.accountStrategy ?? null;
   const competitors = a.competitors ?? [];
@@ -496,6 +498,13 @@ function ProfileTab({
         accountId={a.id}
         open={editStrategy}
         onOpenChange={setEditStrategy}
+      />
+
+      <EditAccountProfileDialog
+        account={a}
+        accountId={a.id}
+        open={editProfile}
+        onOpenChange={setEditProfile}
       />
 
       {/* At-a-glance callout */}
@@ -869,6 +878,120 @@ function ProfileTab({
               <Row label="Last touch" value={a.lastTouchAt ? new Date(a.lastTouchAt).toLocaleDateString() : "—"} />
               <Row label="Last enriched" value={a.enrichedAt ? new Date(a.enrichedAt).toLocaleDateString() : "—"} />
             </dl>
+          </Card>
+
+          {/* Company details — firmographics (Task #608) */}
+          <Card className="p-6 space-y-4" data-testid="card-company-details">
+            <div className="flex items-center justify-between">
+              <SectionLabel>
+                <span className="inline-flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-gold" /> Company details
+                </span>
+              </SectionLabel>
+              <PillButton
+                variant="ghost"
+                onClick={() => setEditProfile(true)}
+                className="text-xs"
+                data-testid="button-edit-company-details"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </PillButton>
+            </div>
+            {(() => {
+              const rev = a.annualRevenue ?? null;
+              const holding = a.holdingStructure ?? null;
+              const presence = a.countryPresence ?? [];
+              const ENTITY_ROLE_LABELS: Record<string, string> = {
+                hq: "Headquarters",
+                subsidiary: "Subsidiary",
+                branch: "Branch",
+                office: "Office",
+              };
+              const revText =
+                rev && (rev.amount != null || rev.asOf || rev.note)
+                  ? [
+                      rev.amount != null
+                        ? `${rev.currency ?? a.primaryCurrency} ${rev.amount.toLocaleString()}`
+                        : null,
+                      rev.asOf ? `(${rev.asOf})` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ") || rev.note || "—"
+                  : "—";
+              const hasAny =
+                a.employeeCount != null ||
+                revText !== "—" ||
+                a.entityRole ||
+                (holding &&
+                  (holding.isHoldingCompany ||
+                    holding.isMultiBrand ||
+                    (holding.brands ?? []).length > 0)) ||
+                presence.length > 0;
+              if (!hasAny) {
+                return (
+                  <p className="text-text-mute italic text-sm">
+                    No firmographics recorded yet — click Edit to add headcount,
+                    revenue, group structure, and country presence.
+                  </p>
+                );
+              }
+              return (
+                <div className="space-y-3">
+                  <dl className="space-y-2 text-sm">
+                    <Row
+                      label="Employees"
+                      value={
+                        a.employeeCount != null
+                          ? a.employeeCount.toLocaleString()
+                          : "—"
+                      }
+                    />
+                    <Row label="Revenue" value={revText} />
+                    <Row
+                      label="Entity role"
+                      value={a.entityRole ? ENTITY_ROLE_LABELS[a.entityRole] ?? a.entityRole : "—"}
+                    />
+                    <Row
+                      label="Group"
+                      value={
+                        holding &&
+                        (holding.isHoldingCompany || holding.isMultiBrand)
+                          ? [
+                              holding.isHoldingCompany ? "Holding" : null,
+                              holding.isMultiBrand ? "Multi-brand" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : "—"
+                      }
+                    />
+                  </dl>
+                  {holding && (holding.brands ?? []).length > 0 && (
+                    <div>
+                      <Eyebrow>Operating brands</Eyebrow>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {(holding.brands ?? []).map((b, i) => (
+                          <MonoChip key={i}>{b}</MonoChip>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {presence.length > 0 && (
+                    <div>
+                      <Eyebrow>Country presence</Eyebrow>
+                      <ul className="space-y-1 mt-1.5 text-sm text-text">
+                        {presence.map((c, i) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span>{c.country}</span>
+                            {c.role && <MonoChip>{c.role}</MonoChip>}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </Card>
 
           {/* AI proposals — partner review queue */}

@@ -3097,6 +3097,28 @@ components:
           type: array
           maxItems: 25
           items: { $ref: "#/components/schemas/AtelierAccountCompetitor" }
+        # Task #608 — firmographic enrichment, partner-editable after create so
+        # stale research can be corrected by hand. Mirrors the create dialog's
+        # firmographic block; all optional, figures never fabricated.
+        employeeCount:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 100000000
+        annualRevenue:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountAnnualRevenue"
+            - type: "null"
+        holdingStructure:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountHoldingStructure"
+            - type: "null"
+        countryPresence:
+          type: array
+          maxItems: 40
+          items: { $ref: "#/components/schemas/AtelierAccountCountryPresence" }
+        entityRole:
+          type: ["string", "null"]
+          enum: [hq, subsidiary, branch, office, null]
 
     AtelierAccountDuplicateError:
       type: object
@@ -3431,6 +3453,23 @@ components:
                   type: array
                   items:
                     $ref: "#/components/schemas/AtelierProfileUpdateProposal"
+                # Task #608 — firmographic enrichment surfaced so the account
+                # edit dialog can prefill and partners can correct stale data.
+                employeeCount: { type: ["integer", "null"] }
+                annualRevenue:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountAnnualRevenue"
+                    - type: "null"
+                holdingStructure:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountHoldingStructure"
+                    - type: "null"
+                countryPresence:
+                  type: array
+                  items: { $ref: "#/components/schemas/AtelierAccountCountryPresence" }
+                entityRole:
+                  type: ["string", "null"]
+                  enum: [hq, subsidiary, branch, office, null]
         contacts:
           type: array
           items: { $ref: "#/components/schemas/AtelierContact" }

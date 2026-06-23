@@ -906,6 +906,18 @@ async function buildWorkspace(
       children: childRows.map(hierarchyRef),
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
+      // Task #608 — firmographic enrichment, surfaced so the account edit
+      // dialog can prefill the same fields the create dialog exposes.
+      employeeCount: a.employeeCount ?? null,
+      annualRevenue: a.annualRevenue ?? null,
+      holdingStructure: a.holdingStructure ?? null,
+      countryPresence: a.countryPresence ?? [],
+      entityRole: (a.entityRole ?? null) as
+        | "hq"
+        | "subsidiary"
+        | "branch"
+        | "office"
+        | null,
     },
     contacts: contacts.map((c) => toContactWire(c, ownerName(c.contactOwnerId))),
     relationships: rels.map((r) => ({
@@ -2221,6 +2233,30 @@ router.patch("/accounts/:accountId", async (req, res) => {
       displacementAngle: c.displacementAngle ?? null,
     }));
     changed.push("competitors");
+  }
+  // Task #608 — firmographic enrichment, partner-editable after create. Each
+  // key is written only when present (PATCH semantics) and is coerced/cleaned
+  // exactly like the create flow so values stay within server caps and figures
+  // are never fabricated (null/empty inputs persist as null/empty).
+  if ("employeeCount" in input) {
+    update.employeeCount = input.employeeCount ?? null;
+    changed.push("employeeCount");
+  }
+  if ("annualRevenue" in input) {
+    update.annualRevenue = input.annualRevenue ?? null;
+    changed.push("annualRevenue");
+  }
+  if ("holdingStructure" in input) {
+    update.holdingStructure = input.holdingStructure ?? null;
+    changed.push("holdingStructure");
+  }
+  if ("countryPresence" in input) {
+    update.countryPresence = input.countryPresence ?? [];
+    changed.push("countryPresence");
+  }
+  if ("entityRole" in input) {
+    update.entityRole = input.entityRole ?? null;
+    changed.push("entityRole");
   }
 
   if (changed.length === 0) {

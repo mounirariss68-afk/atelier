@@ -686,6 +686,20 @@ export interface AtelierAccountHierarchyRef {
 }
 
 /**
+ * @nullable
+ */
+export type AtelierUpdateAccountInputEntityRole =
+  | (typeof AtelierUpdateAccountInputEntityRole)[keyof typeof AtelierUpdateAccountInputEntityRole]
+  | null;
+
+export const AtelierUpdateAccountInputEntityRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
+/**
  * Partner-editable account fields. Only the keys present are written
 (PATCH semantics). `parentAccountId: null` unlinks the parent.
 
@@ -701,6 +715,18 @@ export interface AtelierUpdateAccountInput {
   accountStrategy?: AtelierAccountStrategy | null;
   /** @maxItems 25 */
   competitors?: AtelierAccountCompetitor[];
+  /**
+   * @minimum 0
+   * @maximum 100000000
+   * @nullable
+   */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  /** @maxItems 40 */
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierUpdateAccountInputEntityRole;
 }
 
 export type AtelierAccountDuplicateErrorError =
@@ -1139,6 +1165,20 @@ export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
   sourceUrls: string[];
 };
 
+/**
+ * @nullable
+ */
+export type AtelierAccountWorkspaceAccountEntityRole =
+  | (typeof AtelierAccountWorkspaceAccountEntityRole)[keyof typeof AtelierAccountWorkspaceAccountEntityRole]
+  | null;
+
+export const AtelierAccountWorkspaceAccountEntityRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
 export type AtelierAccountHealthBand =
   (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
 
@@ -1201,6 +1241,13 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   children?: AtelierAccountHierarchyRef[];
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
+  /** @nullable */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierAccountWorkspaceAccountEntityRole;
 };
 
 export type AtelierAccountInsightCategory =
