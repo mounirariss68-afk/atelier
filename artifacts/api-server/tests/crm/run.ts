@@ -400,6 +400,123 @@ async function main(): Promise<void> {
         }
       }
 
+      // Task #609 — firmographic auto-fill persistence (Task #601 behaviour).
+      // The smarter account auto-fill threads employeeCount, annualRevenue,
+      // holdingStructure, countryPresence and entityRole from the chat
+      // "Review & Create" draft into POST /accounts. Assert each lands on the
+      // row verbatim so future changes can't silently drop them.
+      {
+        const fName = uniq("Firmographic");
+        const annualRevenue = {
+          amount: 1_200_000_000,
+          currency: "AED",
+          asOf: "FY2025",
+          sourceUrl: "https://example.com/annual-report",
+          note: "Group consolidated revenue.",
+        };
+        const holdingStructure = {
+          isHoldingCompany: true,
+          isMultiBrand: true,
+          brands: ["Brand Alpha", "Brand Beta"],
+          note: "Diversified group.",
+        };
+        const countryPresence = [
+          { country: "AE", role: "hq" as const, note: "Group HQ" },
+          { country: "SA", role: "branch" as const },
+        ];
+        const firmoBody = {
+          ...validBody,
+          name: fName,
+          employeeCount: 4200,
+          annualRevenue,
+          holdingStructure,
+          countryPresence,
+          entityRole: "hq" as const,
+        };
+        const fc = await api("POST", "/accounts", PERSONA.fp, firmoBody);
+        check(
+          "POST /accounts (firmographics) \u2192 200/201",
+          fc.status === 200 || fc.status === 201,
+          `status=${fc.status} body=${JSON.stringify(fc.body)?.slice(0, 160)}`,
+        );
+        const [fRow] = await db
+          .select({
+            id: atelierAccounts.id,
+            employeeCount: atelierAccounts.employeeCount,
+            annualRevenue: atelierAccounts.annualRevenue,
+            holdingStructure: atelierAccounts.holdingStructure,
+            countryPresence: atelierAccounts.countryPresence,
+            entityRole: atelierAccounts.entityRole,
+          })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.name, fName));
+        if (fRow?.id) created.accounts.add(fRow.id);
+        check(
+          "firmographics persisted: employeeCount + entityRole",
+          fRow?.employeeCount === 4200 && fRow?.entityRole === "hq",
+          `employeeCount=${fRow?.employeeCount} entityRole=${fRow?.entityRole}`,
+        );
+        check(
+          "firmographics persisted: annualRevenue (amount + currency)",
+          fRow?.annualRevenue?.amount === 1_200_000_000 && fRow?.annualRevenue?.currency === "AED",
+          `annualRevenue=${JSON.stringify(fRow?.annualRevenue)?.slice(0, 120)}`,
+        );
+        check(
+          "firmographics persisted: holdingStructure (flags + brands)",
+          fRow?.holdingStructure?.isHoldingCompany === true &&
+            fRow?.holdingStructure?.isMultiBrand === true &&
+            Array.isArray(fRow?.holdingStructure?.brands) &&
+            fRow?.holdingStructure?.brands.length === 2,
+          `holdingStructure=${JSON.stringify(fRow?.holdingStructure)?.slice(0, 120)}`,
+        );
+        check(
+          "firmographics persisted: countryPresence (2 markets w/ roles)",
+          Array.isArray(fRow?.countryPresence) &&
+            fRow?.countryPresence.length === 2 &&
+            fRow?.countryPresence.some((p: any) => p?.country === "AE" && p?.role === "hq") &&
+            fRow?.countryPresence.some((p: any) => p?.country === "SA" && p?.role === "branch"),
+          `countryPresence=${JSON.stringify(fRow?.countryPresence)?.slice(0, 160)}`,
+        );
+      }
+
+      // Task #609 — blank/unknown figures must be stored as null/empty, never
+      // fabricated. A create with no firmographic fields (the common case when
+      // figures aren't publicly disclosed) leaves the typed columns blank.
+      {
+        const bName = uniq("BlankFirmographic");
+        const blankBody = { ...validBody, name: bName };
+        const bc = await api("POST", "/accounts", PERSONA.fp, blankBody);
+        check(
+          "POST /accounts (no firmographics) \u2192 200/201",
+          bc.status === 200 || bc.status === 201,
+          `status=${bc.status}`,
+        );
+        const [bRow] = await db
+          .select({
+            id: atelierAccounts.id,
+            employeeCount: atelierAccounts.employeeCount,
+            annualRevenue: atelierAccounts.annualRevenue,
+            holdingStructure: atelierAccounts.holdingStructure,
+            countryPresence: atelierAccounts.countryPresence,
+            entityRole: atelierAccounts.entityRole,
+          })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.name, bName));
+        if (bRow?.id) created.accounts.add(bRow.id);
+        check(
+          "blank figures stored null/empty (never fabricated)",
+          bRow?.employeeCount === null &&
+            bRow?.annualRevenue === null &&
+            bRow?.holdingStructure === null &&
+            bRow?.entityRole === null &&
+            Array.isArray(bRow?.countryPresence) &&
+            bRow?.countryPresence.length === 0,
+          `employeeCount=${bRow?.employeeCount} annualRevenue=${JSON.stringify(bRow?.annualRevenue)} ` +
+            `holding=${JSON.stringify(bRow?.holdingStructure)} entityRole=${bRow?.entityRole} ` +
+            `presence=${JSON.stringify(bRow?.countryPresence)}`,
+        );
+      }
+
       // read (R of CRUD)
       if (acctRow?.id) {
         const read = await api("GET", `/accounts/${acctRow.id}`, PERSONA.fp);
@@ -1041,6 +1158,95 @@ async function main(): Promise<void> {
           makeCtx(PERSONA.consultant, "consultant", "Omar Najjar"),
         );
         check("account_create (consultant) \u2192 ok:false forbidden", denied.ok === false, JSON.stringify(denied).slice(0, 120));
+      }
+
+      // Task #609 — branch-vs-HQ clarification on the smarter auto-fill
+      // (prefill_from_specialist). When the researched draft shows a
+      // multinational footprint and the partner hasn't said which entity they
+      // are onboarding, the capability pauses and asks. The full researched
+      // draft rides back in `clarification.partial.input.__researchedDraft` so
+      // the follow-up answer turn reuses it instead of re-running the (slow,
+      // costly) Account Cartographer. We seed `__researchedDraft` directly to
+      // keep the test deterministic and avoid a live LLM call; reuse is proven
+      // by `specialist.costUsd === 0` on the continuation (a fresh Cartographer
+      // run would report a non-zero cost).
+      const prefillCap = catalog.findByToolName("prefill_from_specialist");
+      check("capability prefill_from_specialist registered", !!prefillCap);
+      if (prefillCap) {
+        const researchedDraft = {
+          name: uniq("Globex Group"),
+          brandName: "Globex",
+          sector: "Logistics",
+          country: "AE",
+          hqCity: "Dubai",
+          countryPresence: [
+            { country: "AE", role: "hq" },
+            { country: "SA", role: "branch" },
+          ],
+          strategicPriorities: [] as Array<{ text: string; sourceUrls: string[] }>,
+          decisionMakers: [] as unknown[],
+          sourceSignals: [] as unknown[],
+          researchBrief: null,
+        };
+        const baseInput = {
+          name: researchedDraft.name,
+          sector: "Logistics",
+          country: "AE",
+          __researchedDraft: researchedDraft,
+        };
+
+        // Turn 1 — multinational draft, no entityRole answer → clarification.
+        const clarifyTurn = await prefillCap.run(
+          { kind: "account", input: baseInput },
+          ctx,
+        );
+        const clar = (clarifyTurn as any).clarification;
+        check(
+          "prefill (multinational, no role) \u2192 entityRole clarification",
+          clarifyTurn.ok === true &&
+            !!clar &&
+            clar.field === "entityRole" &&
+            clar.tool === "prefill_from_specialist",
+          JSON.stringify(clarifyTurn).slice(0, 200),
+        );
+        const carriedDraft = clar?.partial?.input?.__researchedDraft;
+        check(
+          "clarification carries the researched draft in partial (no re-research)",
+          !!carriedDraft && carriedDraft.name === researchedDraft.name,
+          `partial=${JSON.stringify(clar?.partial)?.slice(0, 160)}`,
+        );
+
+        // Turn 2 — index.ts merges the answer at TOP-LEVEL args (sibling to
+        // kind/input). Reuse the clarification's `partial` verbatim so the
+        // cached draft rides back, and append the HQ answer.
+        const continuation = await prefillCap.run(
+          { ...clar.partial, entityRole: "hq" },
+          ctx,
+        );
+        const proposal = (continuation.data as any) ?? {};
+        check(
+          "prefill continuation (answer=hq) \u2192 account_proposal w/ entityRole stamped",
+          continuation.ok === true &&
+            proposal.shape === "account_proposal" &&
+            proposal.draft?.entityRole === "hq",
+          JSON.stringify(continuation).slice(0, 200),
+        );
+        check(
+          "prefill continuation reused cached draft (Cartographer NOT re-run; costUsd=0)",
+          proposal.specialist?.costUsd === 0,
+          `costUsd=${proposal.specialist?.costUsd}`,
+        );
+
+        // Free-text answers are tolerated (regex-mapped to the enum).
+        const freeText = await prefillCap.run(
+          { ...clar.partial, entityRole: "it's a local branch office" },
+          ctx,
+        );
+        check(
+          "prefill continuation tolerates free-text role answer (\u2192 branch)",
+          freeText.ok === true && (freeText.data as any)?.draft?.entityRole === "branch",
+          JSON.stringify(freeText).slice(0, 160),
+        );
       }
 
       // account_update + account_delete: the U and D of account CRUD via capabilities.
