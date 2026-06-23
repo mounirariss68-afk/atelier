@@ -1976,11 +1976,7 @@ export interface CartographerOutput {
  * heartbeat ramp ceiling). The marker is the quoted key (e.g. `"mandateAngles"`)
  * — camelCase keys don't realistically collide with prose inside values.
  */
-const CARTOGRAPHER_SYNTH_SECTIONS: Array<{
-  key: string;
-  pct: number;
-  label: string;
-}> = [
+const CARTOGRAPHER_SYNTH_SECTIONS = [
   { key: '"account"', pct: 80, label: "Profiling the company…" },
   { key: '"sourceSignals"', pct: 82, label: "Cataloguing source signals…" },
   { key: '"decisionMakers"', pct: 84, label: "Mapping decision-makers…" },
@@ -1994,7 +1990,35 @@ const CARTOGRAPHER_SYNTH_SECTIONS: Array<{
   { key: '"openQuestions"', pct: 94, label: "Noting open questions…" },
   { key: '"singleMostImportant"', pct: 95, label: "Distilling the key takeaway…" },
   { key: '"stressTest"', pct: 96, label: "Stress-testing the hypothesis…" },
-];
+] as const satisfies readonly { key: string; pct: number; label: string }[];
+
+/**
+ * Drift guard (Task #604) — the synthesis sub-step list above is hand-kept in
+ * lockstep with the cartographer output schema. These are compile-time checks
+ * (no runtime cost / behaviour change): if someone adds or renames a
+ * `researchBrief` section without adding a matching sub-step entry — or adds a
+ * sub-step key that isn't a real output/brief section — typecheck fails loudly.
+ *
+ * `researchBrief` itself is intentionally absent from the list (it's the
+ * wrapper object, not a streamed leaf section), so it's exempted below.
+ */
+type Unquote<S extends string> = S extends `"${infer Inner}"` ? Inner : S;
+type SynthSectionKey = Unquote<(typeof CARTOGRAPHER_SYNTH_SECTIONS)[number]["key"]>;
+// Every researchBrief section must have a sub-step caption.
+type ResearchBriefKeysMissingSubStep = Exclude<
+  keyof CartographerResearchBrief,
+  SynthSectionKey
+>;
+// Every sub-step key must map to a real CartographerOutput or researchBrief
+// section (the `researchBrief` wrapper key itself is not a streamed section).
+type SubStepKeysWithoutSection = Exclude<
+  SynthSectionKey,
+  Exclude<keyof CartographerOutput, "researchBrief"> | keyof CartographerResearchBrief
+>;
+type AssertNever<T extends never> = T;
+// These will fail to compile if either set above is non-empty.
+type _AssertEveryBriefSectionHasSubStep = AssertNever<ResearchBriefKeysMissingSubStep>;
+type _AssertEverySubStepHasSection = AssertNever<SubStepKeysWithoutSection>;
 
 /**
  * Task #275 — Anthropic web_search-grounded JSON call.
