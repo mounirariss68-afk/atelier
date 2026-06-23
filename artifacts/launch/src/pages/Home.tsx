@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { Link } from "wouter";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import {
-  ArrowRight, ArrowUpRight, ChevronDown, Check, X,
+  ArrowRight, ArrowUpRight, ChevronDown, Check,
   Activity, Database, Cpu, ShieldCheck, Layers,
+  FileText, Presentation, Hourglass, Link2, Target, Settings, Rocket, Lock,
 } from "lucide-react";
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
@@ -107,16 +108,229 @@ const agentCards = [
   { src: "images/deck/img37.webp", name: "CogniSignal", role: "Competitive Intelligence" },
 ];
 
-const compare = {
-  old: {
-    label: "Traditional consulting",
-    items: ["Endless decks & discovery phases", "Man-day billing for effort", "Multi-month pilots that stall", "Vendor lock-in & black boxes", "Activity measured — not outcomes"],
+/* The transformation map — each row pairs an old-world cost (left) with the
+   Cognirise outcome it becomes (right), wired through the central "new model"
+   node. Used by <TransformationMap />. */
+const transformPairs = [
+  {
+    old: { icon: FileText, title: "Man-days", lines: ["People tied up.", "Slow and expensive."] },
+    cog: { icon: Target, title: "Outcomes", lines: ["Measured impact.", "Business results that matter."] },
   },
-  cog: {
-    label: "The Cognirise way",
-    items: ["48-hour working prototypes", "Outcome-based delivery", "Production-ready from day one", "You own the IP, platform & outcomes", "Measured, real business impact"],
+  {
+    old: { icon: Presentation, title: "PowerPoints", lines: ["Endless decks.", "No real progress."] },
+    cog: { icon: Settings, title: "Working solutions", lines: ["Production-ready.", "Built for scale."] },
   },
-};
+  {
+    old: { icon: Hourglass, title: "Long pilots", lines: ["Months of pilots.", "Uncertain results."] },
+    cog: { icon: Rocket, title: "48-hour prototype", lines: ["From idea to prototype", "in 48 hours."] },
+  },
+  {
+    old: { icon: Link2, title: "Vendor lock-in", lines: ["Locked in.", "Hard to change."] },
+    cog: { icon: Lock, title: "You own the platform", lines: ["No lock-in.", "Full transparency & control."] },
+  },
+];
+
+/* ===================== INTERACTIVE: TRANSFORMATION MAP ===================== */
+/* Replaces the old two-card "Traditional vs Cognirise" comparison. Old-world
+   costs (left) flow through the central "new model" node into the Cognirise
+   outcome they become (right). One pair is spotlit at a time: it auto-cycles,
+   and hovering any row takes over (pausing the cycle). Respects reduced motion. */
+function TransformationMap() {
+  const rowsY = [105, 235, 365, 495]; // viewBox y-centres (0..600)
+  const [auto, setAuto] = useState(0);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [reduce, setReduce] = useState(false);
+
+  useEffect(() => {
+    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduce(m.matches);
+    sync();
+    m.addEventListener("change", sync);
+    return () => m.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (reduce || hovered !== null) return;
+    const id = setInterval(
+      () => setAuto((a) => (a + 1) % transformPairs.length),
+      2800,
+    );
+    return () => clearInterval(id);
+  }, [reduce, hovered]);
+
+  const active = hovered ?? auto;
+
+  return (
+    <div className="relative">
+      {/* Column headers */}
+      <div className="hidden md:flex items-start justify-between mb-6">
+        <div>
+          <h3 className="text-xl font-semibold text-offwhite/85">Traditional vendor</h3>
+          <p className="text-sm text-offwhite/45 mt-1">Activity-based. Time-consuming. Uncertain outcomes.</p>
+        </div>
+        <div className="text-right">
+          <h3 className="text-xl font-semibold text-gradient">cognirise</h3>
+          <p className="text-sm text-offwhite/55 mt-1">Outcome-focused. Fast. Scalable. Measurable impact.</p>
+        </div>
+      </div>
+
+      {/* ---- Desktop interactive map ---- */}
+      <div
+        className="hidden md:block relative w-full"
+        style={{ height: 600 }}
+        onMouseLeave={() => setHovered(null)}
+      >
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 1000 600"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="tmLeft" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#5B7CFF" />
+              <stop offset="1" stopColor="#8A5BD6" />
+            </linearGradient>
+            <linearGradient id="tmRight" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="#8A5BD6" />
+              <stop offset="1" stopColor="#FF7B5A" />
+            </linearGradient>
+          </defs>
+          {rowsY.map((y, i) => {
+            const on = active === i;
+            const flow =
+              on && !reduce
+                ? { strokeDasharray: "4 7", animation: "dashFlow 1s linear infinite" }
+                : undefined;
+            return (
+              <g key={i}>
+                <path
+                  d={`M 305 ${y} C 370 ${y}, 360 300, 400 300`}
+                  fill="none"
+                  stroke={on ? "url(#tmLeft)" : "#6B7AA8"}
+                  strokeWidth={on ? 2.5 : 1.25}
+                  strokeOpacity={on ? 0.95 : 0.16}
+                  strokeLinecap="round"
+                  style={flow}
+                />
+                <path
+                  d={`M 600 300 C 640 300, 630 ${y}, 695 ${y}`}
+                  fill="none"
+                  stroke={on ? "url(#tmRight)" : "#6B7AA8"}
+                  strokeWidth={on ? 2.5 : 1.25}
+                  strokeOpacity={on ? 0.95 : 0.16}
+                  strokeLinecap="round"
+                  style={flow}
+                />
+              </g>
+            );
+          })}
+        </svg>
+
+        {transformPairs.map((p, i) => {
+          const on = active === i;
+          const OldIcon = p.old.icon;
+          const CogIcon = p.cog.icon;
+          const top = `${rowsY[i] / 6}%`;
+          return (
+            <Fragment key={i}>
+              {/* left — old world */}
+              <div
+                onMouseEnter={() => setHovered(i)}
+                className="absolute left-0 w-[30%] flex items-center gap-4 transition-all duration-300"
+                style={{ top, transform: "translateY(-50%)", opacity: on ? 1 : 0.45 }}
+              >
+                <div
+                  className="shrink-0 w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-300"
+                  style={
+                    on
+                      ? { borderColor: "#5B7CFF", background: "rgba(91,124,255,0.12)", boxShadow: "0 0 26px -6px #5B7CFF" }
+                      : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)" }
+                  }
+                >
+                  <OldIcon className="w-6 h-6" strokeWidth={1.6} style={{ color: on ? "#9CB0FF" : "rgba(239,239,239,0.45)" }} />
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold uppercase tracking-[1.5px]" style={{ color: on ? "#EFEFEF" : "rgba(239,239,239,0.7)" }}>{p.old.title}</p>
+                  <p className="text-[13px] text-offwhite/45 leading-snug mt-1">{p.old.lines[0]}<br />{p.old.lines[1]}</p>
+                </div>
+              </div>
+
+              {/* right — Cognirise outcome */}
+              <div
+                onMouseEnter={() => setHovered(i)}
+                className="absolute right-0 w-[30%] flex flex-row-reverse items-center gap-4 text-right transition-all duration-300"
+                style={{ top, transform: "translateY(-50%)", opacity: on ? 1 : 0.45 }}
+              >
+                <div
+                  className="shrink-0 w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-300"
+                  style={
+                    on
+                      ? { borderColor: "#FF7B5A", background: "rgba(255,123,90,0.12)", boxShadow: "0 0 26px -6px #FF7B5A" }
+                      : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)" }
+                  }
+                >
+                  <CogIcon className="w-6 h-6" strokeWidth={1.6} style={{ color: on ? "#FF9E7A" : "rgba(239,239,239,0.45)" }} />
+                </div>
+                <div>
+                  <p className={`text-[13px] font-semibold uppercase tracking-[1.5px] ${on ? "text-gradient" : ""}`} style={on ? undefined : { color: "rgba(239,239,239,0.7)" }}>{p.cog.title}</p>
+                  <p className="text-[13px] text-offwhite/45 leading-snug mt-1">{p.cog.lines[0]}<br />{p.cog.lines[1]}</p>
+                </div>
+              </div>
+            </Fragment>
+          );
+        })}
+
+        {/* center — the new model */}
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[20%] text-center pointer-events-none">
+          <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
+            <span className="absolute inset-0 rounded-full pulse-ring" style={{ background: "radial-gradient(circle, rgba(138,91,214,0.45), transparent 70%)" }} />
+            <img src={asset("images/logo-mark.png")} alt="" className="relative w-16 h-16 object-contain spin-slow opacity-95" />
+          </div>
+          <p className="mt-4 text-[11px] uppercase tracking-[2px] text-offwhite/45">The new model</p>
+          <p className="text-[15px] font-semibold text-gradient leading-tight mt-1">Human + Agent + Shared Intelligence</p>
+          <p className="text-[12px] text-offwhite/45 mt-2 leading-snug">Economies the old model simply can't reach.</p>
+        </div>
+      </div>
+
+      {/* ---- Mobile stacked fallback ---- */}
+      <div className="md:hidden">
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <h3 className="text-base font-semibold text-offwhite/80">Traditional vendor</h3>
+          <h3 className="text-base font-semibold text-gradient text-right">cognirise</h3>
+        </div>
+        <div className="space-y-3">
+          {transformPairs.map((p, i) => {
+            const OldIcon = p.old.icon;
+            const CogIcon = p.cog.icon;
+            return (
+              <div key={i} className="grid grid-cols-2 gap-3 items-stretch">
+                <div className="rounded-xl border border-white/10 bg-navydeep/50 p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <OldIcon className="w-4 h-4 text-offwhite/40 shrink-0" strokeWidth={1.6} />
+                    <p className="text-[11px] font-semibold uppercase tracking-[1px] text-offwhite/70">{p.old.title}</p>
+                  </div>
+                  <p className="text-[12px] text-offwhite/45 leading-snug">{p.old.lines.join(" ")}</p>
+                </div>
+                <div className="grad-border bg-navylight/40 p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <CogIcon className="w-4 h-4 shrink-0" strokeWidth={1.6} style={{ color: "#FF9E7A" }} />
+                    <p className="text-[11px] font-semibold uppercase tracking-[1px] text-offwhite/90">{p.cog.title}</p>
+                  </div>
+                  <p className="text-[12px] text-offwhite/55 leading-snug">{p.cog.lines.join(" ")}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center justify-center gap-3 mt-6">
+          <img src={asset("images/logo-mark.png")} alt="" className="w-8 h-8 object-contain opacity-90" />
+          <p className="text-[13px] text-offwhite/55">The new model — <span className="text-gradient font-semibold">Human + Agent + Shared Intelligence</span></p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* Measured node centers as % of the cropped service-lines deck graphic (for hotspot overlays) */
 const SERVICE_NODES = [
@@ -418,7 +632,7 @@ export default function Home() {
       </section>
 
       {/* ===== From selling effort to outcomes (interactive comparison) ===== */}
-      <section className="relative py-32">
+      <section id="model" className="relative py-32">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-a absolute top-1/3 left-1/4 w-[28rem] h-[28rem] rounded-full bg-cogpurple/15 blur-[130px]" />
         </div>
@@ -438,38 +652,9 @@ export default function Home() {
             </Reveal>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-5">
-            <Reveal>
-              <div className="rounded-2xl border border-white/10 bg-navydeep/50 p-8 h-full">
-                <p className="text-[11px] uppercase tracking-[2px] text-offwhite/40 mb-6">{compare.old.label}</p>
-                <ul className="space-y-4">
-                  {compare.old.items.map((t) => (
-                    <li key={t} className="flex items-start gap-3 text-offwhite/50 text-[15px]">
-                      <span className="mt-0.5 w-5 h-5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
-                        <X className="w-3 h-3 text-offwhite/40" strokeWidth={3} />
-                      </span>
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-            <Reveal delay={0.08}>
-              <div className="grad-border bg-navylight/40 p-8 h-full">
-                <p className="text-[11px] uppercase tracking-[2px] text-gradient font-semibold mb-6">{compare.cog.label}</p>
-                <ul className="space-y-4">
-                  {compare.cog.items.map((t) => (
-                    <li key={t} className="flex items-start gap-3 text-offwhite/90 text-[15px]">
-                      <span className="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: "var(--cog-grad-diag)" }}>
-                        <Check className="w-3 h-3 text-white" strokeWidth={3} />
-                      </span>
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          </div>
+          <Reveal>
+            <TransformationMap />
+          </Reveal>
         </div>
       </section>
 
