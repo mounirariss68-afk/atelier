@@ -94,6 +94,50 @@ export interface CommandBarProps {
   embedded?: boolean;
 }
 
+/**
+ * Task #626 — decide whether the auto-nav toast may offer a "Go back"
+ * action that restores `prev` (the route the user was on before the
+ * assistant moved them).
+ *
+ * It is unsafe when the assistant navigated the user UP to a parent/list
+ * surface: that is exactly the pattern `resolveNavPath` uses after a
+ * delete (it sends deletes to the parent precisely because the entity's
+ * own detail page is gone). In that case `prev` is the just-deleted
+ * detail page and restoring it would 404 — so we suppress the return
+ * action and leave the user on the safe page the assistant chose. All
+ * other navigations (creates, edits, sideways jumps) leave `prev` valid,
+ * so "Go back" is offered.
+ */
+export function isSafeAutoNavReturn(prev: string, dest: string): boolean {
+  const prevPath = prev.split(/[?#]/)[0];
+  const destPath = dest.split(/[?#]/)[0];
+  if (!prevPath || !destPath) return false;
+  // Same page — nothing to return to.
+  if (prevPath === destPath) return false;
+  // Root is an ancestor of everything; never treat a jump to "/" as a
+  // delete-style "moved up" navigation.
+  if (destPath === "/") return true;
+  const destPrefix = destPath.endsWith("/") ? destPath : destPath + "/";
+  // `prev` is a strict descendant of the destination → the assistant
+  // moved the user up to a parent/list (delete pattern). Restoring the
+  // child risks a 404.
+  if (prevPath.startsWith(destPrefix)) return false;
+  return true;
+}
+
+/**
+ * Task #626 — a guaranteed-valid fallback for the auto-nav "Go back"
+ * action. Collapses any route to its top-level listing surface (e.g.
+ * `/accounts/123/contacts/9` → `/accounts`), which is always a real,
+ * non-detail page. Used at click time when the captured `prev` is no
+ * longer safe to restore, so the user never lands on a 404.
+ */
+export function autoNavReturnFallback(prev: string): string {
+  const prevPath = prev.split(/[?#]/)[0] ?? "";
+  const seg = prevPath.split("/").filter(Boolean)[0];
+  return seg ? `/${seg}` : "/";
+}
+
 export function CommandBar(props: CommandBarProps) {
   const { triggerRef, embedded = false } = props;
   const _cliCtxForProps = React.useContext(CliContext);
@@ -151,19 +195,59 @@ export function CommandBar(props: CommandBarProps) {
       setLocation(path);
       const lc = localeRef.current;
       const label = (navLabelRef.current ?? path).slice(0, 80);
+      // Task #626 — only offer "Go back" when restoring `prev` is safe.
+      // When the assistant moved the user UP to a parent/list (the
+      // pattern the server uses after a delete, since the entity's own
+      // detail page is gone), restoring `prev` would land on a 404, so
+      // we suppress the return action and only let the user stay.
+      const canReturn = !!prev && isSafeAutoNavReturn(prev, path);
+      const btnBase =
+        "inline-flex h-8 shrink-0 items-center justify-center rounded px-3 text-xs font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-gold";
       try {
         showToast({
+          // Solid, fully-opaque surface so the underlying chat input
+          // never bleeds through (works in both light and dark themes).
+          className: "border-border bg-bg-elevate text-text shadow-lg",
           title: sFmt("autoNavToastTitle", lc, { label }),
           description: s("autoNavToastDescription", lc),
-          action: prev ? (
-            <ToastAction
-              altText={s("autoNavStayHere", lc)}
-              onClick={() => setLocation(prev)}
-              data-testid="cli-autonav-stay-here"
-            >
-              {s("autoNavStayHere", lc)}
-            </ToastAction>
-          ) : undefined,
+          action: (
+            <div className="flex shrink-0 flex-col gap-2">
+              {canReturn ? (
+                <ToastAction
+                  altText={s("autoNavGoBack", lc)}
+                  onClick={() => {
+                    // Re-validate at click time: the user may have moved
+                    // on since the toast appeared, or the entity at `prev`
+                    // may now be gone. If returning is no longer safe,
+                    // fall back to a guaranteed-valid listing page so the
+                    // return action can never 404.
+                    const here =
+                      typeof window !== "undefined"
+                        ? window.location.pathname +
+                          window.location.search +
+                          window.location.hash
+                        : null;
+                    const target =
+                      here && !isSafeAutoNavReturn(prev!, here)
+                        ? autoNavReturnFallback(prev!)
+                        : prev!;
+                    setLocation(target);
+                  }}
+                  data-testid="cli-autonav-go-back"
+                  className={`${btnBase} border border-border bg-bg-elevate-2 text-text hover:bg-bg-deep`}
+                >
+                  {s("autoNavGoBack", lc)}
+                </ToastAction>
+              ) : null}
+              <ToastAction
+                altText={s("autoNavStayHere", lc)}
+                data-testid="cli-autonav-stay-here"
+                className={`${btnBase} bg-gold text-bg-deep hover:bg-gold-soft`}
+              >
+                {s("autoNavStayHere", lc)}
+              </ToastAction>
+            </div>
+          ),
         });
       } catch {
         /* swallow — UI feedback must never break the stream */

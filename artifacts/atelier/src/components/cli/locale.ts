@@ -141,6 +141,9 @@ export const STRINGS = {
     en: "The assistant moved you here based on your last request.",
     ar: "نقلك المساعد إلى هنا بناءً على طلبك الأخير.",
   },
+  // Task #626 — two clearly-worded outcomes: return to the previous
+  // screen, or keep (stay on) the screen the assistant navigated to.
+  autoNavGoBack: { en: "Go back", ar: "العودة" },
   autoNavStayHere: { en: "Stay here", ar: "ابقَ هنا" },
   // Task #573 — dependency-impact summary for destructive deletes.
   impactTitle: { en: "What this affects", ar: "ما الذي سيتأثّر" },
