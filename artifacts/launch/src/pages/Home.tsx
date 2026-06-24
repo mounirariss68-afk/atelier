@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, Fragment } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "wouter";
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import {
@@ -131,170 +131,56 @@ const transformPairs = [
 ];
 
 /* ===================== INTERACTIVE: TRANSFORMATION MAP ===================== */
-/* Replaces the old two-card "Traditional vs Cognirise" comparison. Old-world
-   costs (left) flow through the central "new model" node into the Cognirise
-   outcome they become (right). One pair is spotlit at a time: it auto-cycles,
-   and hovering any row takes over (pausing the cycle). Respects reduced motion. */
+/* The "Traditional vs Cognirise" comparison. On large screens it renders the
+   uploaded rendered artwork as four layered images (old-world costs on the left,
+   the "new model" node in the centre, the Cognirise outcomes on the right),
+   revealed in sequence. Below lg it falls back to legible hand-coded cards. */
 function TransformationMap() {
-  const rowsY = [105, 235, 365, 495]; // viewBox y-centres (0..600)
-  const [auto, setAuto] = useState(0);
-  const [hovered, setHovered] = useState<number | null>(null);
-  const [reduce, setReduce] = useState(false);
-
-  useEffect(() => {
-    const m = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => setReduce(m.matches);
-    sync();
-    m.addEventListener("change", sync);
-    return () => m.removeEventListener("change", sync);
-  }, []);
-
-  useEffect(() => {
-    if (reduce || hovered !== null) return;
-    const id = setInterval(
-      () => setAuto((a) => (a + 1) % transformPairs.length),
-      2800,
-    );
-    return () => clearInterval(id);
-  }, [reduce, hovered]);
-
-  const active = hovered ?? auto;
+  /* The diagram ships as four transparent layers (rendered artwork). Stacking them
+     rebuilds the full comparison; revealing them in sequence walks the eye from the
+     old-world model (left) through the new model (centre) to the outcomes (right). */
+  const layers = [
+    { src: "images/model/traditional.png", from: { opacity: 0, x: -28 }, delay: 0 },
+    { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.32 },
+    { src: "images/model/center.png", from: { opacity: 0, y: 16 }, delay: 0.46 },
+    { src: "images/model/outcomes.png", from: { opacity: 0, x: 28 }, delay: 0.58 },
+  ];
 
   return (
     <div className="relative">
-      {/* Column headers */}
-      <div className="hidden md:flex items-start justify-between mb-6">
-        <div>
-          <h3 className="text-xl font-semibold text-offwhite/85">Traditional vendor</h3>
-          <p className="text-sm text-offwhite/45 mt-1">Activity-based. Time-consuming. Uncertain outcomes.</p>
-        </div>
-        <div className="text-right">
-          <h3 className="text-xl font-semibold text-gradient">cognirise</h3>
-          <p className="text-sm text-offwhite/55 mt-1">Outcome-focused. Fast. Scalable. Measurable impact.</p>
-        </div>
-      </div>
-
-      {/* ---- Desktop interactive map ---- */}
+      {/* ---- Large screens: the actual rendered diagram, revealed in sequence.
+              Gated at lg so the baked-in text stays crisp (native artwork is 952px). ---- */}
       <div
-        className="hidden md:block relative w-full"
-        style={{ height: 600 }}
-        onMouseLeave={() => setHovered(null)}
+        className="hidden lg:block relative w-full max-w-5xl mx-auto"
+        style={{ aspectRatio: "952 / 481" }}
       >
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 1000 600"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="tmLeft" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#5B7CFF" />
-              <stop offset="1" stopColor="#8A5BD6" />
-            </linearGradient>
-            <linearGradient id="tmRight" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stopColor="#8A5BD6" />
-              <stop offset="1" stopColor="#FF7B5A" />
-            </linearGradient>
-          </defs>
-          {rowsY.map((y, i) => {
-            const on = active === i;
-            const flow =
-              on && !reduce
-                ? { strokeDasharray: "4 7", animation: "dashFlow 1s linear infinite" }
-                : undefined;
-            return (
-              <g key={i}>
-                <path
-                  d={`M 305 ${y} C 370 ${y}, 360 300, 400 300`}
-                  fill="none"
-                  stroke={on ? "url(#tmLeft)" : "#6B7AA8"}
-                  strokeWidth={on ? 2.5 : 1.25}
-                  strokeOpacity={on ? 0.95 : 0.16}
-                  strokeLinecap="round"
-                  style={flow}
-                />
-                <path
-                  d={`M 600 300 C 640 300, 630 ${y}, 695 ${y}`}
-                  fill="none"
-                  stroke={on ? "url(#tmRight)" : "#6B7AA8"}
-                  strokeWidth={on ? 2.5 : 1.25}
-                  strokeOpacity={on ? 0.95 : 0.16}
-                  strokeLinecap="round"
-                  style={flow}
-                />
-              </g>
-            );
-          })}
-        </svg>
-
-        {transformPairs.map((p, i) => {
-          const on = active === i;
-          const OldIcon = p.old.icon;
-          const CogIcon = p.cog.icon;
-          const top = `${rowsY[i] / 6}%`;
-          return (
-            <Fragment key={i}>
-              {/* left — old world */}
-              <div
-                onMouseEnter={() => setHovered(i)}
-                className="absolute left-0 w-[30%] flex items-center gap-4 transition-all duration-300"
-                style={{ top, transform: "translateY(-50%)", opacity: on ? 1 : 0.45 }}
-              >
-                <div
-                  className="shrink-0 w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-300"
-                  style={
-                    on
-                      ? { borderColor: "#5B7CFF", background: "rgba(91,124,255,0.12)", boxShadow: "0 0 26px -6px #5B7CFF" }
-                      : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)" }
-                  }
-                >
-                  <OldIcon className="w-6 h-6" strokeWidth={1.6} style={{ color: on ? "#9CB0FF" : "rgba(239,239,239,0.45)" }} />
-                </div>
-                <div>
-                  <p className="text-[13px] font-semibold uppercase tracking-[1.5px]" style={{ color: on ? "#EFEFEF" : "rgba(239,239,239,0.7)" }}>{p.old.title}</p>
-                  <p className="text-[13px] text-offwhite/45 leading-snug mt-1">{p.old.lines[0]}<br />{p.old.lines[1]}</p>
-                </div>
-              </div>
-
-              {/* right — Cognirise outcome */}
-              <div
-                onMouseEnter={() => setHovered(i)}
-                className="absolute right-0 w-[30%] flex flex-row-reverse items-center gap-4 text-right transition-all duration-300"
-                style={{ top, transform: "translateY(-50%)", opacity: on ? 1 : 0.45 }}
-              >
-                <div
-                  className="shrink-0 w-14 h-14 rounded-full border flex items-center justify-center transition-all duration-300"
-                  style={
-                    on
-                      ? { borderColor: "#FF7B5A", background: "rgba(255,123,90,0.12)", boxShadow: "0 0 26px -6px #FF7B5A" }
-                      : { borderColor: "rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)" }
-                  }
-                >
-                  <CogIcon className="w-6 h-6" strokeWidth={1.6} style={{ color: on ? "#FF9E7A" : "rgba(239,239,239,0.45)" }} />
-                </div>
-                <div>
-                  <p className={`text-[13px] font-semibold uppercase tracking-[1.5px] ${on ? "text-gradient" : ""}`} style={on ? undefined : { color: "rgba(239,239,239,0.7)" }}>{p.cog.title}</p>
-                  <p className="text-[13px] text-offwhite/45 leading-snug mt-1">{p.cog.lines[0]}<br />{p.cog.lines[1]}</p>
-                </div>
-              </div>
-            </Fragment>
-          );
-        })}
-
-        {/* center — the new model */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[20%] text-center pointer-events-none">
-          <div className="relative mx-auto w-24 h-24 flex items-center justify-center">
-            <span className="absolute inset-0 rounded-full pulse-ring" style={{ background: "radial-gradient(circle, rgba(138,91,214,0.45), transparent 70%)" }} />
-            <img src={asset("images/logo-mark.png")} alt="" className="relative w-16 h-16 object-contain spin-slow opacity-95" />
-          </div>
-          <p className="mt-4 text-[11px] uppercase tracking-[2px] text-offwhite/45">The new model</p>
-          <p className="text-[15px] font-semibold text-gradient leading-tight mt-1">Human + Agent + Shared Intelligence</p>
-          <p className="text-[12px] text-offwhite/45 mt-2 leading-snug">Economies the old model simply can't reach.</p>
-        </div>
+        {layers.map((l) => (
+          <motion.img
+            key={l.src}
+            src={asset(l.src)}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            draggable={false}
+            initial={l.from}
+            whileInView={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+            viewport={{ once: true, margin: "-80px" }}
+            transition={{ duration: 0.9, delay: l.delay, ease: [0.21, 0.6, 0.35, 1] }}
+            className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
+          />
+        ))}
       </div>
 
-      {/* ---- Mobile stacked fallback ---- */}
-      <div className="md:hidden">
+      {/* Screen-reader equivalent of the diagram's baked-in text */}
+      <p className="sr-only">
+        From the traditional vendor model — man-days, PowerPoints, long pilots and
+        vendor lock-in — to the Cognirise model: measured outcomes, working solutions,
+        a 48-hour prototype and full platform ownership, powered by human and agent
+        shared intelligence.
+      </p>
+
+      {/* ---- Phone & tablet stacked fallback (baked-in artwork text is too small below lg) ---- */}
+      <div className="lg:hidden">
         <div className="grid grid-cols-2 gap-3 mb-4">
           <h3 className="text-base font-semibold text-offwhite/80">Traditional vendor</h3>
           <h3 className="text-base font-semibold text-gradient text-right">cognirise</h3>

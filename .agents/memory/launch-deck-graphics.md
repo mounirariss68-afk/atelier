@@ -38,3 +38,14 @@ service titles to the deck's own node labels (deck says "Engineering with AI", "
 Verify mid-page graphics via a temp `/verify` route (hero is min-h-[100dvh] so hash anchors won't scroll
 in screenshots; temporarily `export` ServiceLines/GuildSystem from Home.tsx, render them in a throwaway
 Verify.tsx, screenshot at viewport ~1280x1500, then revert all scaffolding).
+
+## "From selling effort to outcomes" / TransformationMap section
+The `#model` section's diagram is now the USER-UPLOADED rendered artwork, not hand-coded. The
+graphic ships as 4 transparent positional layers → `public/images/model/{traditional,logo,center,
+outcomes}.png` (left = Traditional Vendor muted icons, center = logo + "Human·Agent·Shared
+Intelligence", right = glowing outcomes). Stacking all four in an aspect-[952/481] box rebuilds the
+full comparison; revealing them in sequence animates "old model → new model → outcomes".
+**Same fidelity rule as the deck graphics:** desktop (md+) uses the real image layers; MOBILE keeps
+the existing hand-coded stacked cards because the baked-in text is illegible at phone width. Source
+uploads live in `attached_assets/launch_graphics/` (also has heavy 6MB Illustrator SVGs — skip them,
+the small PNGs are crisp and fast).
