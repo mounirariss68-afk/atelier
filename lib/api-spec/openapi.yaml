@@ -1128,6 +1128,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierAccountDuplicateError"
+  /atelier/accounts/check-duplicates:
+    post:
+      operationId: atelierCheckAccountDuplicates
+      tags: [atelier]
+      summary: Fuzzy duplicate-account check (warn before create)
+      description: |
+        Returns likely-duplicate accounts (fuzzy name/brand match, dampened by
+        country mismatch) so the create dialog can warn the partner before they
+        add a record that already exists. Org-scoped; gated to the same
+        Partner / Engagement Lead personas that may create accounts. Never
+        mutates or merges — purely advisory.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCheckAccountDuplicatesInput"
+      responses:
+        "200":
+          description: Candidate duplicates (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAccountDuplicateCandidates"
+        "403":
+          description: Not allowed (non-partner / non-lead persona)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/accounts/{accountId}:
     get:
       operationId: atelierGetAccountWorkspace
@@ -1251,6 +1281,46 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/accounts/{accountId}/contacts/check-duplicates:
+    post:
+      operationId: atelierCheckContactDuplicates
+      tags: [atelier]
+      summary: Fuzzy duplicate-contact check within an account (warn before create)
+      description: |
+        Returns likely-duplicate contacts (fuzzy name match) already on this
+        account, so the add-contact dialog can warn before creating a second
+        record for the same person. Scoped to the account; gated by the same
+        visibility check as creating a contact. Advisory only.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCheckContactDuplicatesInput"
+      responses:
+        "200":
+          description: Candidate duplicate contacts (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContactDuplicateCandidates"
+        "403":
+          description: Account not visible to this persona
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/contacts/{contactId}:
     patch:
       operationId: atelierUpdateContact
@@ -3242,6 +3312,86 @@ components:
         existingAccountId: { type: string }
         message: { type: ["string", "null"] }
 
+    # Task #632 — fuzzy duplicate detection (warn-and-link, never merges).
+    AtelierDuplicateConfidence:
+      type: string
+      enum: [high, medium, low]
+
+    AtelierCheckAccountDuplicatesInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        brandName: { type: ["string", "null"], maxLength: 200 }
+        country: { type: ["string", "null"], maxLength: 120 }
+        # When editing an existing account, exclude it from its own matches.
+        excludeAccountId: { type: ["string", "null"] }
+
+    AtelierAccountDuplicateCandidate:
+      type: object
+      required: [id, name, confidence, score]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        brandName: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        tier: { type: ["string", "null"] }
+        confidence: { $ref: "#/components/schemas/AtelierDuplicateConfidence" }
+        score: { type: number, minimum: 0, maximum: 1 }
+
+    AtelierAccountDuplicateCandidates:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountDuplicateCandidate" }
+
+    AtelierCheckContactDuplicatesInput:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 160 }
+        excludeContactId: { type: ["string", "null"] }
+
+    AtelierContactDuplicateCandidate:
+      type: object
+      required: [id, fullName, confidence, score]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        title: { type: ["string", "null"] }
+        seniority: { type: ["string", "null"] }
+        confidence: { $ref: "#/components/schemas/AtelierDuplicateConfidence" }
+        score: { type: number, minimum: 0, maximum: 1 }
+
+    AtelierContactDuplicateCandidates:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContactDuplicateCandidate" }
+
+    # Task #632 — rolled-up family metrics across an account + its subsidiaries.
+    AtelierAccountHierarchyRollup:
+      type: object
+      required:
+        [accountCount, subsidiaryCount, openOpportunityCount, financialsRedacted]
+      properties:
+        accountCount: { type: integer, description: Family size incl. this account. }
+        subsidiaryCount: { type: integer, description: Descendant accounts only. }
+        openOpportunityCount: { type: integer }
+        # Monetary figures + health honour the account-financials gate; null
+        # (with financialsRedacted=true) for personas without financial authority.
+        openPipelineUsd: { type: ["number", "null"] }
+        totalRevenueUsd: { type: ["number", "null"] }
+        health:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierAccountHealth"
+            - type: "null"
+        financialsRedacted: { type: boolean }
+
     AtelierAccountSummary:
       type: object
       required: [id, name, country, sector, tier, status, relationshipStrength]
@@ -3620,6 +3770,12 @@ components:
                 children:
                   type: array
                   items: { $ref: "#/components/schemas/AtelierAccountHierarchyRef" }
+                # Task #632 — rolled-up metrics across this account + its
+                # subsidiaries. Null for leaf accounts (no subsidiaries).
+                hierarchyRollup:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountHierarchyRollup"
+                    - type: "null"
                 sourceSignals:
                   type: array
                   items: { $ref: "#/components/schemas/AtelierSourceSignal" }

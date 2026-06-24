@@ -14,8 +14,10 @@ import { PillButton } from "./ui/primitives";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateContact,
+  useAtelierCheckContactDuplicates,
   getAtelierGetAccountWorkspaceQueryKey,
   type AtelierContactDisposition,
+  type AtelierContactDuplicateCandidate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -44,6 +46,7 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const create = useAtelierCreateContact();
+  const checkDup = useAtelierCheckContactDuplicates();
 
   const [fullName, setFullName] = React.useState("");
   const [title, setTitle] = React.useState("");
@@ -55,9 +58,15 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
   const [influenceScore, setInfluenceScore] = React.useState("3");
   const [disposition, setDisposition] = React.useState<AtelierContactDisposition>("unknown");
   const [notes, setNotes] = React.useState("");
+  // Task #632 — fuzzy duplicate warnings (non-blocking) for an existing contact
+  // with a similar name on the same account.
+  const [dupCandidates, setDupCandidates] = React.useState<
+    AtelierContactDuplicateCandidate[]
+  >([]);
 
   React.useEffect(() => {
     if (!open) return;
+    setDupCandidates([]);
     setFullName("");
     setTitle("");
     setSeniority("");
@@ -69,6 +78,34 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
     setDisposition("unknown");
     setNotes("");
   }, [open]);
+
+  // Task #632 — debounced fuzzy duplicate check, scoped to this account. Fires
+  // once a meaningful name is entered. Non-blocking advisory only.
+  const dupName = fullName.trim();
+  React.useEffect(() => {
+    if (!open) return;
+    if (dupName.length < 3) {
+      setDupCandidates([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await checkDup.mutateAsync({
+          accountId,
+          data: { fullName: dupName },
+        });
+        if (!cancelled) setDupCandidates(res.candidates ?? []);
+      } catch {
+        if (!cancelled) setDupCandidates([]);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, accountId, dupName]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -248,6 +285,39 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
               data-testid="input-contact-notes"
             />
           </div>
+          {dupCandidates.length > 0 && (
+            <div
+              className="border border-warn/40 bg-warn/10 rounded p-3 text-sm grid gap-2"
+              data-testid="warning-duplicate-contacts"
+            >
+              <div className="font-medium text-warn">
+                {dupCandidates.length === 1
+                  ? "A contact with a similar name already exists on this account"
+                  : `${dupCandidates.length} contacts with similar names already exist on this account`}
+              </div>
+              <ul className="grid gap-1">
+                {dupCandidates.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center gap-2"
+                    data-testid={`warning-duplicate-contact-${c.id}`}
+                  >
+                    <span className="truncate">{c.fullName}</span>
+                    {c.title ? (
+                      <span className="text-text-faint truncate">· {c.title}</span>
+                    ) : null}
+                    <span className="ml-auto text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                      {c.confidence} match
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-text-faint">
+                You can still add this contact if they are a different person.
+              </p>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-1 border-t border-border-soft">
             <PillButton type="button" variant="ghost" onClick={() => setOpen(false)}>
               Cancel

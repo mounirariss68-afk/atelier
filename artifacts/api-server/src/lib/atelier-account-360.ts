@@ -23,6 +23,7 @@
 import { and, eq, isNull, inArray, desc } from "drizzle-orm";
 import {
   db,
+  atelierAccounts,
   atelierEngagementBudget,
   atelierEngagementCostToDate,
   atelierInvoice,
@@ -747,4 +748,210 @@ export async function countOpenRisks(args: {
     else if (r.severity === "amber") amber += 1;
   }
   return { red, amber };
+}
+
+// ============================================================
+// HIERARCHY ROLL-UP (Task #632)
+// ============================================================
+
+/**
+ * Aggregated view across an account and every subsidiary beneath it. Counts
+ * (account/subsidiary/opportunity) are always populated. The monetary figures
+ * (`openPipelineUsd`, `totalRevenueUsd`) and the composite `health` honour the
+ * account-financials gate: they are `null` (with `financialsRedacted: true`)
+ * for personas without account-wide financial authority.
+ */
+export interface AccountHierarchyRollup {
+  accountCount: number; // family size incl. the root account
+  subsidiaryCount: number; // descendants only
+  openOpportunityCount: number;
+  openPipelineUsd: number | null;
+  totalRevenueUsd: number | null; // recognised revenue-to-date across the family
+  health: AccountHealth | null; // composite over the combined book of business
+  financialsRedacted: boolean;
+}
+
+function emptyFinancials(): AccountFinancials {
+  return {
+    contractValueUsd: 0,
+    activeEngagementValueUsd: 0,
+    recognisedRevenueUsd: 0,
+    billedUsd: 0,
+    collectedUsd: 0,
+    costToDateUsd: 0,
+    grossMarginPct: 0,
+    openPipelineUsd: 0,
+    weightedPipelineUsd: 0,
+    arOutstandingUsd: 0,
+    arOverdueUsd: 0,
+    aging: { current: 0, d30: 0, d60: 0, d90: 0, d90plus: 0 },
+    invoiceCount: 0,
+    overdueInvoiceCount: 0,
+    engagementCount: 0,
+    activeEngagementCount: 0,
+    openOpportunityCount: 0,
+  };
+}
+
+function sumFinancials(list: AccountFinancials[]): AccountFinancials {
+  const agg = emptyFinancials();
+  for (const f of list) {
+    agg.contractValueUsd += f.contractValueUsd;
+    agg.activeEngagementValueUsd += f.activeEngagementValueUsd;
+    agg.recognisedRevenueUsd += f.recognisedRevenueUsd;
+    agg.billedUsd += f.billedUsd;
+    agg.collectedUsd += f.collectedUsd;
+    agg.costToDateUsd += f.costToDateUsd;
+    agg.openPipelineUsd += f.openPipelineUsd;
+    agg.weightedPipelineUsd += f.weightedPipelineUsd;
+    agg.arOutstandingUsd += f.arOutstandingUsd;
+    agg.arOverdueUsd += f.arOverdueUsd;
+    agg.aging.current += f.aging.current;
+    agg.aging.d30 += f.aging.d30;
+    agg.aging.d60 += f.aging.d60;
+    agg.aging.d90 += f.aging.d90;
+    agg.aging.d90plus += f.aging.d90plus;
+    agg.invoiceCount += f.invoiceCount;
+    agg.overdueInvoiceCount += f.overdueInvoiceCount;
+    agg.engagementCount += f.engagementCount;
+    agg.activeEngagementCount += f.activeEngagementCount;
+    agg.openOpportunityCount += f.openOpportunityCount;
+  }
+  agg.grossMarginPct =
+    agg.recognisedRevenueUsd > 0
+      ? (agg.recognisedRevenueUsd - agg.costToDateUsd) / agg.recognisedRevenueUsd
+      : 0;
+  return agg;
+}
+
+/**
+ * Walk `parentAccountId` edges downward from `rootAccountId` to collect the
+ * account itself plus every descendant subsidiary, org-scoped and excluding
+ * soft-deleted rows. A visited-set guards against accidental cycles in the
+ * (DB-unenforced) reporting graph.
+ */
+async function collectAccountFamily(
+  orgId: string,
+  rootAccountId: string,
+): Promise<string[]> {
+  const visited = new Set<string>([rootAccountId]);
+  let frontier = [rootAccountId];
+  while (frontier.length > 0) {
+    const rows = await db
+      .select({ id: atelierAccounts.id })
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.orgId, orgId),
+          inArray(atelierAccounts.parentAccountId, frontier),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      );
+    const next: string[] = [];
+    for (const r of rows) {
+      if (!visited.has(r.id)) {
+        visited.add(r.id);
+        next.push(r.id);
+      }
+    }
+    frontier = next;
+  }
+  return [...visited];
+}
+
+export async function computeAccountHierarchyRollup(args: {
+  orgId: string;
+  rootAccountId: string;
+  canSeeFinancials: boolean;
+}): Promise<AccountHierarchyRollup> {
+  const { orgId, rootAccountId, canSeeFinancials } = args;
+
+  const familyIds = await collectAccountFamily(orgId, rootAccountId);
+  const subsidiaryCount = Math.max(0, familyIds.length - 1);
+
+  const [accounts, engagements, opportunities] = await Promise.all([
+    db
+      .select()
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.orgId, orgId),
+          inArray(atelierAccounts.id, familyIds),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      ),
+    db
+      .select()
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.orgId, orgId),
+          inArray(atelierEngagements.accountId, familyIds),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      ),
+    db
+      .select()
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.orgId, orgId),
+          inArray(atelierOpportunities.accountId, familyIds),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      ),
+  ]);
+
+  const openOpportunityCount = opportunities.filter(isOpenOpp).length;
+
+  if (!canSeeFinancials) {
+    return {
+      accountCount: familyIds.length,
+      subsidiaryCount,
+      openOpportunityCount,
+      openPipelineUsd: null,
+      totalRevenueUsd: null,
+      health: null,
+      financialsRedacted: true,
+    };
+  }
+
+  const perAccount = await Promise.all(
+    accounts.map((acc) =>
+      computeAccountFinancials({
+        orgId,
+        accountId: acc.id,
+        engagements: engagements.filter((e) => e.accountId === acc.id),
+        opportunities: opportunities.filter((o) => o.accountId === acc.id),
+      }),
+    ),
+  );
+  const agg = sumFinancials(perAccount);
+
+  const openRisks = await countOpenRisks({
+    orgId,
+    engagementIds: engagements.map((e) => e.id),
+  });
+  const avgRelationship =
+    accounts.length > 0
+      ? accounts.reduce(
+          (s, a) => s + clamp(Number(a.relationshipStrength ?? 0)),
+          0,
+        ) / accounts.length
+      : 0;
+  const health = computeAccountHealth({
+    relationshipStrength: avgRelationship,
+    financials: agg,
+    openRisks,
+  });
+
+  return {
+    accountCount: familyIds.length,
+    subsidiaryCount,
+    openOpportunityCount,
+    openPipelineUsd: agg.openPipelineUsd,
+    totalRevenueUsd: agg.recognisedRevenueUsd,
+    health,
+    financialsRedacted: false,
+  };
 }

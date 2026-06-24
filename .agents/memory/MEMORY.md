@@ -12,7 +12,7 @@
 - [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.
 - [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.
 - [Atelier API types are codegen'd](atelier-api-types-codegen.md) — AtelierContact/cartographer types are orval-generated from lib/api-spec/openapi.yaml; edit the spec + run codegen, never hand-edit generated files.
-- [api-client-react barrel is hand-maintained](api-client-react-barrel.md) — orval regenerates generated/api.ts hooks but NOT src/index.ts; hand-add new hook names there or consumers fail tsc (types flow via wildcard, hooks don't).
+- [api-client-react new-hook wiring](api-client-react-barrel.md) — orval regenerates generated/api.ts hooks but NOT the hand-maintained src/index.ts barrel; add new hook names there + run `tsc -b …/api-client-react --force` (types flow via wildcard, hooks don't).
 - [Cartographer entity-scope](cartographer-entity-scope.md) — chair/owner-led groups have NO group CEO; deterministic guardCartographerEntityScope() (not the prompt) is the regression-proof safety net.
 - [Atelier research priority-refs shape](atelier-research-priority-refs-shape.md) — account strategicPriorityRefs is {text,sourceUrls} (NO evidence); don't reuse AtelierResearchBriefFact for it or create 400s.
 - [Launch deck-graphics policy](launch-deck-graphics.md) — `launch` site: recreate investor-deck infographics as interactive components (not pasted images+redundant text); client-facing, no investor framing.

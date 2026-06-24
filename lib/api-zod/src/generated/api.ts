@@ -2860,6 +2860,54 @@ export const AtelierCreateAccountBody = zod.object({
 });
 
 /**
+ * Returns likely-duplicate accounts (fuzzy name/brand match, dampened by
+country mismatch) so the create dialog can warn the partner before they
+add a record that already exists. Org-scoped; gated to the same
+Partner / Engagement Lead personas that may create accounts. Never
+mutates or merges — purely advisory.
+
+ * @summary Fuzzy duplicate-account check (warn before create)
+ */
+export const atelierCheckAccountDuplicatesBodyNameMax = 200;
+
+export const atelierCheckAccountDuplicatesBodyBrandNameMax = 200;
+
+export const atelierCheckAccountDuplicatesBodyCountryMax = 120;
+
+export const AtelierCheckAccountDuplicatesBody = zod.object({
+  name: zod.string().min(1).max(atelierCheckAccountDuplicatesBodyNameMax),
+  brandName: zod
+    .string()
+    .max(atelierCheckAccountDuplicatesBodyBrandNameMax)
+    .nullish(),
+  country: zod
+    .string()
+    .max(atelierCheckAccountDuplicatesBodyCountryMax)
+    .nullish(),
+  excludeAccountId: zod.string().nullish(),
+});
+
+export const atelierCheckAccountDuplicatesResponseCandidatesItemScoreMin = 0;
+export const atelierCheckAccountDuplicatesResponseCandidatesItemScoreMax = 1;
+
+export const AtelierCheckAccountDuplicatesResponse = zod.object({
+  candidates: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      brandName: zod.string().nullish(),
+      country: zod.string().nullish(),
+      tier: zod.string().nullish(),
+      confidence: zod.enum(["high", "medium", "low"]),
+      score: zod
+        .number()
+        .min(atelierCheckAccountDuplicatesResponseCandidatesItemScoreMin)
+        .max(atelierCheckAccountDuplicatesResponseCandidatesItemScoreMax),
+    }),
+  ),
+});
+
+/**
  * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
  */
 export const AtelierGetAccountWorkspaceParams = zod.object({
@@ -2921,6 +2969,15 @@ export const atelierGetAccountWorkspaceResponseAccountTwoCompetitorsItemNameMax 
 export const atelierGetAccountWorkspaceResponseAccountTwoCompetitorsItemHoldsMax = 600;
 
 export const atelierGetAccountWorkspaceResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
 
 export const atelierGetAccountWorkspaceResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
@@ -3346,6 +3403,67 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierGetAccountWorkspaceResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -4105,6 +4223,15 @@ export const atelierUpdateAccountResponseAccountTwoCompetitorsItemHoldsMax = 600
 
 export const atelierUpdateAccountResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpdateAccountResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -4525,6 +4652,67 @@ export const AtelierUpdateAccountResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpdateAccountResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -5051,6 +5239,15 @@ export const atelierRefreshAccountCartographerResponseAccountTwoCompetitorsItemH
 
 export const atelierRefreshAccountCartographerResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierRefreshAccountCartographerResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierRefreshAccountCartographerResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -5475,6 +5672,67 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierRefreshAccountCartographerResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -6119,6 +6377,47 @@ export const AtelierCreateContactBody = zod.object({
 });
 
 /**
+ * Returns likely-duplicate contacts (fuzzy name match) already on this
+account, so the add-contact dialog can warn before creating a second
+record for the same person. Scoped to the account; gated by the same
+visibility check as creating a contact. Advisory only.
+
+ * @summary Fuzzy duplicate-contact check within an account (warn before create)
+ */
+export const AtelierCheckContactDuplicatesParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const atelierCheckContactDuplicatesBodyFullNameMax = 160;
+
+export const AtelierCheckContactDuplicatesBody = zod.object({
+  fullName: zod
+    .string()
+    .min(1)
+    .max(atelierCheckContactDuplicatesBodyFullNameMax),
+  excludeContactId: zod.string().nullish(),
+});
+
+export const atelierCheckContactDuplicatesResponseCandidatesItemScoreMin = 0;
+export const atelierCheckContactDuplicatesResponseCandidatesItemScoreMax = 1;
+
+export const AtelierCheckContactDuplicatesResponse = zod.object({
+  candidates: zod.array(
+    zod.object({
+      id: zod.string(),
+      fullName: zod.string(),
+      title: zod.string().nullish(),
+      seniority: zod.string().nullish(),
+      confidence: zod.enum(["high", "medium", "low"]),
+      score: zod
+        .number()
+        .min(atelierCheckContactDuplicatesResponseCandidatesItemScoreMin)
+        .max(atelierCheckContactDuplicatesResponseCandidatesItemScoreMax),
+    }),
+  ),
+});
+
+/**
  * @summary Edit a contact's profile fields (audited)
  */
 export const AtelierUpdateContactParams = zod.object({
@@ -6527,6 +6826,15 @@ export const atelierDecideProfileUpdateResponseAccountTwoCompetitorsItemNameMax 
 export const atelierDecideProfileUpdateResponseAccountTwoCompetitorsItemHoldsMax = 600;
 
 export const atelierDecideProfileUpdateResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
+
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
 
 export const atelierDecideProfileUpdateResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
@@ -6952,6 +7260,67 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierDecideProfileUpdateResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -7483,6 +7852,15 @@ export const atelierBulkDecideProfileUpdatesResponseAccountTwoCompetitorsItemHol
 
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -7907,6 +8285,67 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierBulkDecideProfileUpdatesResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -8451,6 +8890,15 @@ export const atelierCreateAccountInsightResponseAccountTwoCompetitorsItemHoldsMa
 
 export const atelierCreateAccountInsightResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierCreateAccountInsightResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierCreateAccountInsightResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -8875,6 +9323,67 @@ export const AtelierCreateAccountInsightResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierCreateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -9418,6 +9927,15 @@ export const atelierUpdateAccountInsightResponseAccountTwoCompetitorsItemHoldsMa
 
 export const atelierUpdateAccountInsightResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountInsightResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpdateAccountInsightResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -9842,6 +10360,67 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpdateAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -10369,6 +10948,15 @@ export const atelierDeleteAccountInsightResponseAccountTwoCompetitorsItemHoldsMa
 
 export const atelierDeleteAccountInsightResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierDeleteAccountInsightResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierDeleteAccountInsightResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -10793,6 +11381,67 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierDeleteAccountInsightResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -11329,6 +11978,15 @@ export const atelierAddAccountTeamMemberResponseAccountTwoCompetitorsItemHoldsMa
 
 export const atelierAddAccountTeamMemberResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierAddAccountTeamMemberResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierAddAccountTeamMemberResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -11753,6 +12411,67 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierAddAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -12289,6 +13008,15 @@ export const atelierUpdateAccountTeamMemberResponseAccountTwoCompetitorsItemHold
 
 export const atelierUpdateAccountTeamMemberResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountTeamMemberResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpdateAccountTeamMemberResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -12713,6 +13441,67 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpdateAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -13242,6 +14031,15 @@ export const atelierRemoveAccountTeamMemberResponseAccountTwoCompetitorsItemHold
 
 export const atelierRemoveAccountTeamMemberResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierRemoveAccountTeamMemberResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierRemoveAccountTeamMemberResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -13666,6 +14464,67 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierRemoveAccountTeamMemberResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -14207,6 +15066,15 @@ export const atelierCreateAccountActionResponseAccountTwoCompetitorsItemHoldsMax
 
 export const atelierCreateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierCreateAccountActionResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierCreateAccountActionResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -14631,6 +15499,67 @@ export const AtelierCreateAccountActionResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierCreateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -15169,6 +16098,15 @@ export const atelierUpdateAccountActionResponseAccountTwoCompetitorsItemHoldsMax
 
 export const atelierUpdateAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountActionResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpdateAccountActionResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -15593,6 +16531,67 @@ export const AtelierUpdateAccountActionResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpdateAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -16120,6 +17119,15 @@ export const atelierDeleteAccountActionResponseAccountTwoCompetitorsItemHoldsMax
 
 export const atelierDeleteAccountActionResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierDeleteAccountActionResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierDeleteAccountActionResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -16544,6 +17552,67 @@ export const AtelierDeleteAccountActionResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierDeleteAccountActionResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -17080,6 +18149,15 @@ export const atelierCreateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax =
 
 export const atelierCreateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierCreateAccountRiskResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierCreateAccountRiskResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -17504,6 +18582,67 @@ export const AtelierCreateAccountRiskResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierCreateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -18041,6 +19180,15 @@ export const atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemHoldsMax =
 
 export const atelierUpdateAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpdateAccountRiskResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpdateAccountRiskResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -18465,6 +19613,67 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpdateAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -18992,6 +20201,15 @@ export const atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemHoldsMax =
 
 export const atelierDeleteAccountRiskResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierDeleteAccountRiskResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierDeleteAccountRiskResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -19416,6 +20634,67 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierDeleteAccountRiskResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(
@@ -19949,6 +21228,15 @@ export const atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemHo
 
 export const atelierUpsertAccountGoalProgressResponseAccountTwoCompetitorsItemDisplacementAngleMax = 600;
 
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneScoreMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneScoreMax = 100;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax = 100;
+
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin = 0;
+export const atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax = 1;
+
 export const atelierUpsertAccountGoalProgressResponseAccountTwoAnnualRevenueOneAmountMin = 0;
 
 export const atelierUpsertAccountGoalProgressResponseAccountTwoAnnualRevenueOneCurrencyMin = 3;
@@ -20373,6 +21661,67 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
               tier: zod.enum(["A", "B", "C", "D"]).optional(),
             }),
           )
+          .optional(),
+        hierarchyRollup: zod
+          .union([
+            zod.object({
+              accountCount: zod
+                .number()
+                .describe("Family size incl. this account."),
+              subsidiaryCount: zod
+                .number()
+                .describe("Descendant accounts only."),
+              openOpportunityCount: zod.number(),
+              openPipelineUsd: zod.number().nullish(),
+              totalRevenueUsd: zod.number().nullish(),
+              health: zod
+                .union([
+                  zod.object({
+                    score: zod
+                      .number()
+                      .min(
+                        atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneScoreMin,
+                      )
+                      .max(
+                        atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneScoreMax,
+                      ),
+                    band: zod.enum(["green", "amber", "red"]),
+                    factors: zod.array(
+                      zod.object({
+                        key: zod.enum([
+                          "relationship",
+                          "financial",
+                          "engagement",
+                          "risk",
+                        ]),
+                        label: zod.string(),
+                        score: zod
+                          .number()
+                          .min(
+                            atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMin,
+                          )
+                          .max(
+                            atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemScoreMax,
+                          ),
+                        weight: zod
+                          .number()
+                          .min(
+                            atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMin,
+                          )
+                          .max(
+                            atelierUpsertAccountGoalProgressResponseAccountTwoHierarchyRollupOneHealthOneFactorsItemWeightMax,
+                          ),
+                        detail: zod.string(),
+                      }),
+                    ),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              financialsRedacted: zod.boolean(),
+            }),
+            zod.null(),
+          ])
           .optional(),
         sourceSignals: zod
           .array(

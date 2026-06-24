@@ -20,6 +20,7 @@ import type {
   AgentActivityItem,
   AgentCatalogEntry,
   AtelierAccount360,
+  AtelierAccountDuplicateCandidates,
   AtelierAccountDuplicateError,
   AtelierAccountSummary,
   AtelierAccountTimeline,
@@ -45,11 +46,14 @@ import type {
   AtelierCharterApproveInput,
   AtelierCharterRedraftInput,
   AtelierCharterVersion,
+  AtelierCheckAccountDuplicatesInput,
+  AtelierCheckContactDuplicatesInput,
   AtelierComposeProposalInput,
   AtelierConciergeSearchInput,
   AtelierConciergeSearchResult,
   AtelierContact,
   AtelierContactDispositionInput,
+  AtelierContactDuplicateCandidates,
   AtelierContactGraph,
   AtelierContactRelationship,
   AtelierCountersignPricing200,
@@ -4862,6 +4866,103 @@ export const useAtelierCreateAccount = <
 };
 
 /**
+ * Returns likely-duplicate accounts (fuzzy name/brand match, dampened by
+country mismatch) so the create dialog can warn the partner before they
+add a record that already exists. Org-scoped; gated to the same
+Partner / Engagement Lead personas that may create accounts. Never
+mutates or merges — purely advisory.
+
+ * @summary Fuzzy duplicate-account check (warn before create)
+ */
+export const getAtelierCheckAccountDuplicatesUrl = () => {
+  return `/api/atelier/accounts/check-duplicates`;
+};
+
+export const atelierCheckAccountDuplicates = async (
+  atelierCheckAccountDuplicatesInput: AtelierCheckAccountDuplicatesInput,
+  options?: RequestInit,
+): Promise<AtelierAccountDuplicateCandidates> => {
+  return customFetch<AtelierAccountDuplicateCandidates>(
+    getAtelierCheckAccountDuplicatesUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCheckAccountDuplicatesInput),
+    },
+  );
+};
+
+export const getAtelierCheckAccountDuplicatesMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>,
+    TError,
+    { data: BodyType<AtelierCheckAccountDuplicatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>,
+  TError,
+  { data: BodyType<AtelierCheckAccountDuplicatesInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCheckAccountDuplicates"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>,
+    { data: BodyType<AtelierCheckAccountDuplicatesInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCheckAccountDuplicates(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCheckAccountDuplicatesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>
+>;
+export type AtelierCheckAccountDuplicatesMutationBody =
+  BodyType<AtelierCheckAccountDuplicatesInput>;
+export type AtelierCheckAccountDuplicatesMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Fuzzy duplicate-account check (warn before create)
+ */
+export const useAtelierCheckAccountDuplicates = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>,
+    TError,
+    { data: BodyType<AtelierCheckAccountDuplicatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCheckAccountDuplicates>>,
+  TError,
+  { data: BodyType<AtelierCheckAccountDuplicatesInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCheckAccountDuplicatesMutationOptions(options));
+};
+
+/**
  * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
  */
 export const getAtelierGetAccountWorkspaceUrl = (accountId: string) => {
@@ -5319,6 +5420,103 @@ export const useAtelierCreateContact = <
   TContext
 > => {
   return useMutation(getAtelierCreateContactMutationOptions(options));
+};
+
+/**
+ * Returns likely-duplicate contacts (fuzzy name match) already on this
+account, so the add-contact dialog can warn before creating a second
+record for the same person. Scoped to the account; gated by the same
+visibility check as creating a contact. Advisory only.
+
+ * @summary Fuzzy duplicate-contact check within an account (warn before create)
+ */
+export const getAtelierCheckContactDuplicatesUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/contacts/check-duplicates`;
+};
+
+export const atelierCheckContactDuplicates = async (
+  accountId: string,
+  atelierCheckContactDuplicatesInput: AtelierCheckContactDuplicatesInput,
+  options?: RequestInit,
+): Promise<AtelierContactDuplicateCandidates> => {
+  return customFetch<AtelierContactDuplicateCandidates>(
+    getAtelierCheckContactDuplicatesUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCheckContactDuplicatesInput),
+    },
+  );
+};
+
+export const getAtelierCheckContactDuplicatesMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCheckContactDuplicates>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCheckContactDuplicatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCheckContactDuplicates>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCheckContactDuplicatesInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCheckContactDuplicates"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCheckContactDuplicates>>,
+    { accountId: string; data: BodyType<AtelierCheckContactDuplicatesInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCheckContactDuplicates(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCheckContactDuplicatesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCheckContactDuplicates>>
+>;
+export type AtelierCheckContactDuplicatesMutationBody =
+  BodyType<AtelierCheckContactDuplicatesInput>;
+export type AtelierCheckContactDuplicatesMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Fuzzy duplicate-contact check within an account (warn before create)
+ */
+export const useAtelierCheckContactDuplicates = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCheckContactDuplicates>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCheckContactDuplicatesInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCheckContactDuplicates>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCheckContactDuplicatesInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCheckContactDuplicatesMutationOptions(options));
 };
 
 /**

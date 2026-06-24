@@ -22,12 +22,14 @@ import { fieldControlCls } from "./ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
 import {
   useAtelierCreateAccount,
+  useAtelierCheckAccountDuplicates,
   useAtelierListPersonas,
   useAtelierGetMe,
   useAtelierListAccounts,
   getAtelierListAccountsQueryKey,
   type AtelierAccountSummary,
   type AtelierAccountDuplicateError,
+  type AtelierAccountDuplicateCandidate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -290,6 +292,7 @@ export function CreateAccountDialog({
   const qc = useQueryClient();
   const { toast } = useToast();
   const create = useAtelierCreateAccount();
+  const checkDup = useAtelierCheckAccountDuplicates();
   const { data: me } = useAtelierGetMe();
   const { data: personas } = useAtelierListPersonas();
   const { data: accounts } = useAtelierListAccounts();
@@ -306,6 +309,11 @@ export function CreateAccountDialog({
     makeInitial({ partnerOwnerId: defaultPartnerId }),
   );
   const [duplicate, setDuplicate] = React.useState<AtelierAccountDuplicateError | null>(null);
+  // Task #632 — fuzzy duplicate warnings (non-blocking; the partner can still
+  // proceed). Debounced against the legal name / brand / country fields.
+  const [dupCandidates, setDupCandidates] = React.useState<
+    AtelierAccountDuplicateCandidate[]
+  >([]);
   // Task #587 — the reviewed research blob (sans decision-makers, which are
   // edited separately in `stakeholders`). Null on the plain CRM-form flow, in
   // which case create falls back to the background Cartographer run.
@@ -352,8 +360,43 @@ export function CreateAccountDialog({
           .filter((c) => c.country.length > 0),
       );
     }
+    if (open && !wasOpen.current) setDupCandidates([]);
     wasOpen.current = open;
   }, [open, defaultPartnerId, initialData]);
+
+  // Task #632 — debounced fuzzy duplicate check. Fires on the legal name /
+  // brand / country fields once a meaningful name is entered. Non-blocking:
+  // it only populates the advisory warning banner; the partner may proceed.
+  const dupName = form.name.trim();
+  const dupBrand = form.brandName.trim();
+  const dupCountry = form.country.trim();
+  React.useEffect(() => {
+    if (!open) return;
+    if (dupName.length < 3) {
+      setDupCandidates([]);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const res = await checkDup.mutateAsync({
+          data: {
+            name: dupName,
+            brandName: dupBrand || null,
+            country: dupCountry || null,
+          },
+        });
+        if (!cancelled) setDupCandidates(res.candidates ?? []);
+      } catch {
+        if (!cancelled) setDupCandidates([]);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, dupName, dupBrand, dupCountry]);
 
   // Task #601 — resolve the HQ-country default currency (e.g. UAE→AED, Türkiye
   // →TRY) instead of a hard-coded USD. Skips when the partner edited the
@@ -1080,6 +1123,51 @@ export function CreateAccountDialog({
                 </div>
               )}
             </Field>
+          )}
+
+          {!duplicate && dupCandidates.length > 0 && (
+            <div
+              className="border border-warn/40 bg-warn/10 rounded p-3 text-sm grid gap-2"
+              data-testid="warning-duplicate-accounts"
+            >
+              <div className="font-medium text-warn">
+                {dupCandidates.length === 1
+                  ? "A similar account may already exist"
+                  : `${dupCandidates.length} similar accounts may already exist`}
+              </div>
+              <ul className="grid gap-1.5">
+                {dupCandidates.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-3"
+                    data-testid={`warning-duplicate-account-${c.id}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="truncate">{c.brandName ?? c.name}</span>
+                      {c.country ? (
+                        <span className="text-text-faint"> · {c.country}</span>
+                      ) : null}
+                      <span className="ml-2 text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                        {c.confidence} match
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        setLocation(`/accounts/${c.id}`);
+                      }}
+                      className="text-gold hover:underline whitespace-nowrap"
+                    >
+                      Open →
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-text-faint">
+                You can still create this account if it is genuinely different.
+              </p>
+            </div>
           )}
 
           {duplicate && (

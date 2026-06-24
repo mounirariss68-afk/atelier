@@ -764,6 +764,144 @@ export interface AtelierAccountDuplicateError {
   message?: string | null;
 }
 
+export type AtelierDuplicateConfidence =
+  (typeof AtelierDuplicateConfidence)[keyof typeof AtelierDuplicateConfidence];
+
+export const AtelierDuplicateConfidence = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export interface AtelierCheckAccountDuplicatesInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  brandName?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  country?: string | null;
+  /** @nullable */
+  excludeAccountId?: string | null;
+}
+
+export interface AtelierAccountDuplicateCandidate {
+  id: string;
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  tier?: string | null;
+  confidence: AtelierDuplicateConfidence;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  score: number;
+}
+
+export interface AtelierAccountDuplicateCandidates {
+  candidates: AtelierAccountDuplicateCandidate[];
+}
+
+export interface AtelierCheckContactDuplicatesInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  fullName: string;
+  /** @nullable */
+  excludeContactId?: string | null;
+}
+
+export interface AtelierContactDuplicateCandidate {
+  id: string;
+  fullName: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: string | null;
+  confidence: AtelierDuplicateConfidence;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  score: number;
+}
+
+export interface AtelierContactDuplicateCandidates {
+  candidates: AtelierContactDuplicateCandidate[];
+}
+
+export type AtelierAccountHealthBand =
+  (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
+
+export const AtelierAccountHealthBand = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierAccountHealthFactorKey =
+  (typeof AtelierAccountHealthFactorKey)[keyof typeof AtelierAccountHealthFactorKey];
+
+export const AtelierAccountHealthFactorKey = {
+  relationship: "relationship",
+  financial: "financial",
+  engagement: "engagement",
+  risk: "risk",
+} as const;
+
+export interface AtelierAccountHealthFactor {
+  key: AtelierAccountHealthFactorKey;
+  label: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  weight: number;
+  detail: string;
+}
+
+export interface AtelierAccountHealth {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  band: AtelierAccountHealthBand;
+  factors: AtelierAccountHealthFactor[];
+}
+
+export interface AtelierAccountHierarchyRollup {
+  /** Family size incl. this account. */
+  accountCount: number;
+  /** Descendant accounts only. */
+  subsidiaryCount: number;
+  openOpportunityCount: number;
+  /** @nullable */
+  openPipelineUsd?: number | null;
+  /** @nullable */
+  totalRevenueUsd?: number | null;
+  health?: AtelierAccountHealth | null;
+  financialsRedacted: boolean;
+}
+
 /**
  * @nullable
  */
@@ -1258,51 +1396,6 @@ export const AtelierAccountWorkspaceAccountEntityRole = {
   office: "office",
 } as const;
 
-export type AtelierAccountHealthBand =
-  (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
-
-export const AtelierAccountHealthBand = {
-  green: "green",
-  amber: "amber",
-  red: "red",
-} as const;
-
-export type AtelierAccountHealthFactorKey =
-  (typeof AtelierAccountHealthFactorKey)[keyof typeof AtelierAccountHealthFactorKey];
-
-export const AtelierAccountHealthFactorKey = {
-  relationship: "relationship",
-  financial: "financial",
-  engagement: "engagement",
-  risk: "risk",
-} as const;
-
-export interface AtelierAccountHealthFactor {
-  key: AtelierAccountHealthFactorKey;
-  label: string;
-  /**
-   * @minimum 0
-   * @maximum 100
-   */
-  score: number;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  weight: number;
-  detail: string;
-}
-
-export interface AtelierAccountHealth {
-  /**
-   * @minimum 0
-   * @maximum 100
-   */
-  score: number;
-  band: AtelierAccountHealthBand;
-  factors: AtelierAccountHealthFactor[];
-}
-
 export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   health?: AtelierAccountHealth | null;
   /** @nullable */
@@ -1318,6 +1411,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   parentAccountId?: string | null;
   parent?: AtelierAccountHierarchyRef | null;
   children?: AtelierAccountHierarchyRef[];
+  hierarchyRollup?: AtelierAccountHierarchyRollup | null;
   sourceSignals?: AtelierSourceSignal[];
   pendingProfileUpdates?: AtelierProfileUpdateProposal[];
   /** @nullable */

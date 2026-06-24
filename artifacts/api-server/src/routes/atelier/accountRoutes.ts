@@ -48,7 +48,12 @@ import {
   buildRelationshipTimeline,
   buildRenewalsAndActions,
   countOpenRisks,
+  computeAccountHierarchyRollup,
 } from "../../lib/atelier-account-360.js";
+import {
+  findAccountDuplicates,
+  findContactDuplicates,
+} from "../../lib/atelier-dedupe.js";
 import { buildAccountPlan } from "../../lib/atelier-account-plan.js";
 import {
   buildAccountTimeline,
@@ -112,6 +117,8 @@ import {
   AtelierUpsertAccountGoalProgressBody as AtelierUpsertAccountGoalProgressInput,
   AtelierCreateActivityBody as AtelierCreateActivityInput,
   AtelierUpdateActivityBody as AtelierUpdateActivityInput,
+  AtelierCheckAccountDuplicatesBody as AtelierCheckAccountDuplicatesInput,
+  AtelierCheckContactDuplicatesBody as AtelierCheckContactDuplicatesInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -758,6 +765,49 @@ router.post("/accounts", async (req, res) => {
   res.status(201).json(summary);
 });
 
+// ---------- duplicate detection (Task #632) ----------
+// Fuzzy duplicate check used to WARN partners before they create an account
+// that probably already exists (warn-and-link, never blocking or merging).
+// Org-scoped and gated to the same CREATE_ROLES that own account creation.
+// Like the exact-name 409 on create, candidates are surfaced org-wide (not
+// visibility-filtered) so a scoped creator is still warned about a clashing
+// account they cannot otherwise see — the warning carries only id/name/brand/
+// country/tier, and opening it still goes through the normal account ACL.
+router.post("/accounts/check-duplicates", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Engagement Lead personas can create accounts.",
+    });
+    return;
+  }
+  const parsed = AtelierCheckAccountDuplicatesInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const input = parsed.data;
+  const orgId = me.orgId ?? "aico";
+  const rows = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      brandName: atelierAccounts.brandName,
+      country: atelierAccounts.country,
+      tier: atelierAccounts.tier,
+    })
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.orgId, orgId), isNull(atelierAccounts.deletedAt)));
+  const candidates = findAccountDuplicates(
+    { name: input.name, brandName: input.brandName, country: input.country },
+    rows,
+    { excludeId: input.excludeAccountId ?? undefined },
+  );
+  res.json({ candidates });
+});
+
 // ---------- workspace ----------
 // Task #617 — firmographic fields whose edits are tracked in the change
 // history surfaced on the Company Details card. Labels mirror the edit dialog.
@@ -1098,6 +1148,21 @@ async function buildWorkspace(
     });
   }
 
+  // Task #632 — hierarchy roll-up. Only computed when the account actually has
+  // subsidiaries (children) — there is nothing to roll up for a leaf account.
+  // Aggregates open pipeline / opp count / revenue-to-date / composite health
+  // across this account + every descendant. Monetary figures + health honour
+  // the same account-financials gate (null + financialsRedacted when withheld);
+  // the counts stay visible to any workspace reader.
+  const hierarchyRollup =
+    childRows.length > 0
+      ? await computeAccountHierarchyRollup({
+          orgId: a.orgId,
+          rootAccountId: a.id,
+          canSeeFinancials,
+        })
+      : null;
+
   // Task #571 — account plan (action plan, risk register, goal progress).
   // Goal progress is joined to the strategy objectives that live on the
   // account record. Surfaced to anyone who can see the account (read parity
@@ -1129,6 +1194,8 @@ async function buildWorkspace(
       parentAccountId: a.parentAccountId ?? null,
       parent: parentRow ? hierarchyRef(parentRow) : null,
       children: childRows.map(hierarchyRef),
+      // Task #632 — rolled-up family metrics (null for leaf accounts).
+      hierarchyRollup,
       sourceSignals: a.sourceSignals ?? [],
       pendingProfileUpdates: a.pendingProfileUpdates ?? [],
       // Task #608/#613 — firmographic enrichment, surfaced so the account edit
@@ -3739,6 +3806,48 @@ function makeTrendPoint(
 
 // Create a decision-maker contact on an account.
 // @cli-skip: pending Task #340 read-parity migration
+// Fuzzy duplicate check for contacts, scoped to a single account (Task #632).
+// Warns before adding a decision-maker who probably already exists on the same
+// account. Gated by the same canSeeAccount check as creating a contact.
+router.post("/accounts/:accountId/contacts/check-duplicates", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierCheckContactDuplicatesInput.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const input = parsed.data;
+  const rows = await db
+    .select({
+      id: atelierContacts.id,
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      seniority: atelierContacts.seniority,
+    })
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.accountId, account.id),
+        isNull(atelierContacts.deletedAt),
+      ),
+    );
+  const candidates = findContactDuplicates(input.fullName, rows, {
+    excludeId: input.excludeContactId ?? undefined,
+  });
+  res.json({ candidates });
+});
+
 router.post("/accounts/:accountId/contacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

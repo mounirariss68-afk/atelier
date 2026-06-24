@@ -1035,6 +1035,57 @@ function ProfileTab({
                   </ul>
                 </div>
               )}
+              {a.hierarchyRollup && (
+                <div data-testid="hierarchy-rollup">
+                  <Eyebrow>Group roll-up</Eyebrow>
+                  <p className="text-[11px] text-text-faint mt-0.5">
+                    Across this account and {a.hierarchyRollup.subsidiaryCount}{" "}
+                    {a.hierarchyRollup.subsidiaryCount === 1
+                      ? "subsidiary"
+                      : "subsidiaries"}
+                    .
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 mt-2">
+                    <RollupStat
+                      label="Open pipeline"
+                      value={
+                        a.hierarchyRollup.financialsRedacted
+                          ? null
+                          : a.hierarchyRollup.openPipelineUsd ?? null
+                      }
+                      redacted={a.hierarchyRollup.financialsRedacted}
+                      money
+                      testid="rollup-open-pipeline"
+                    />
+                    <RollupStat
+                      label="Open opps"
+                      value={a.hierarchyRollup.openOpportunityCount}
+                      testid="rollup-open-opps"
+                    />
+                    <RollupStat
+                      label="Revenue to date"
+                      value={
+                        a.hierarchyRollup.financialsRedacted
+                          ? null
+                          : a.hierarchyRollup.totalRevenueUsd ?? null
+                      }
+                      redacted={a.hierarchyRollup.financialsRedacted}
+                      money
+                      testid="rollup-revenue"
+                    />
+                    <RollupStat
+                      label="Aggregate health"
+                      value={
+                        a.hierarchyRollup.financialsRedacted
+                          ? null
+                          : a.hierarchyRollup.health?.score ?? null
+                      }
+                      redacted={a.hierarchyRollup.financialsRedacted}
+                      testid="rollup-health"
+                    />
+                  </div>
+                </div>
+              )}
             </Card>
           )}
 
@@ -1307,6 +1358,54 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div className="flex justify-between gap-4">
       <dt className="font-mono uppercase tracking-wider text-xs text-text-mute">{label}</dt>
       <dd className="text-right text-text">{value}</dd>
+    </div>
+  );
+}
+
+// Task #632 — a single rolled-up metric tile in the Account hierarchy card.
+// `value` is a number (money in USD when `money`, otherwise a plain count or a
+// 0-100 health score) or null when the figure is financially redacted for this
+// persona.
+function fmtCompactUsd(n: number): string {
+  const abs = Math.abs(n);
+  let body: string;
+  if (abs >= 1_000_000_000) body = `${(n / 1_000_000_000).toFixed(1)}B`;
+  else if (abs >= 1_000_000) body = `${(n / 1_000_000).toFixed(1)}M`;
+  else if (abs >= 1_000) body = `${(n / 1_000).toFixed(0)}K`;
+  else body = `${Math.round(n)}`;
+  return `USD ${body}`;
+}
+
+function RollupStat({
+  label,
+  value,
+  redacted,
+  money,
+  testid,
+}: {
+  label: string;
+  value: number | null;
+  redacted?: boolean;
+  money?: boolean;
+  testid?: string;
+}) {
+  const display =
+    redacted || value == null
+      ? "—"
+      : money
+        ? fmtCompactUsd(value)
+        : value.toLocaleString();
+  return (
+    <div className="rounded border border-border-soft bg-bg-deep px-3 py-2" data-testid={testid}>
+      <div className="font-mono uppercase tracking-wider text-[10px] text-text-mute">
+        {label}
+      </div>
+      <div
+        className="mt-0.5 text-sm font-semibold text-text"
+        title={redacted ? "Hidden — you do not have access to financials on this account" : undefined}
+      >
+        {display}
+      </div>
     </div>
   );
 }
