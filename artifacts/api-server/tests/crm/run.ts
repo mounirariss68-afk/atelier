@@ -1553,6 +1553,106 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
+    group("REST \u00b7 Annual-revenue create gate (Task #619)");
+    // The PATCH /accounts/:id gate (Task #618) is meaningless if revenue can be
+    // seeded at CREATE time, so POST /accounts honours the same financials gate.
+    // PERSONA.sm (senior_manager p_layla_haddad) is in CREATE_ROLES \u2014 she may
+    // create accounts \u2014 but she is not firm-wide and not the would-be partner
+    // owner, so canEditFinancials is false. She must be blocked from seeding
+    // annualRevenue at create (no row persisted) while a revenue-free create
+    // still succeeds; an account-wide partner (PERSONA.fp) can set it.
+    // =====================================================================
+    {
+      const baseBody = {
+        country: "AE",
+        sector: "Logistics",
+        tier: "C" as const,
+        status: "active" as const,
+        primaryCurrency: "USD",
+        primaryLanguage: "en" as const,
+      };
+      const revenuePayload = {
+        amount: 555_000_000,
+        currency: "USD",
+        asOf: uniq("FY-create-gate"),
+        sourceUrl: "https://example.com/create-gate",
+        note: uniq("create revenue note"),
+      };
+
+      // 1) senior_manager (scoped, not account-wide) creating WITH revenue \u2192 403.
+      const smName = uniq("CreateGateRevenue");
+      const smCreate = await api("POST", "/accounts", PERSONA.sm, {
+        ...baseBody,
+        name: smName,
+        annualRevenue: revenuePayload,
+      });
+      check(
+        "POST /accounts annualRevenue (scoped senior_manager) \u2192 403 financials-forbidden",
+        smCreate.status === 403 && smCreate.body?.error === "financials-forbidden",
+        `status=${smCreate.status} body=${JSON.stringify(smCreate.body)?.slice(0, 160)}`,
+      );
+
+      // 2) the blocked create must NOT have persisted a row at all (no account,
+      //    so certainly no stored revenue figure).
+      const blockedRows = await db
+        .select({ id: atelierAccounts.id, annualRevenue: atelierAccounts.annualRevenue })
+        .from(atelierAccounts)
+        .where(eq(atelierAccounts.name, smName));
+      for (const r of blockedRows) created.accounts.add(r.id); // safety-net cleanup
+      check(
+        "blocked revenue create persisted no account row",
+        blockedRows.length === 0,
+        `rows=${JSON.stringify(blockedRows)?.slice(0, 160)}`,
+      );
+
+      // 3) the SAME persona CAN create an account with NON-financial fields when
+      //    revenue is omitted \u2014 the gate locks money, not account creation.
+      const smOkName = uniq("CreateGateNoRevenue");
+      const smOk = await api("POST", "/accounts", PERSONA.sm, {
+        ...baseBody,
+        name: smOkName,
+      });
+      check(
+        "POST /accounts (scoped senior_manager, no revenue) \u2192 200/201",
+        smOk.status === 200 || smOk.status === 201,
+        `status=${smOk.status} body=${JSON.stringify(smOk.body)?.slice(0, 160)}`,
+      );
+      const [smOkRow] = await db
+        .select({ id: atelierAccounts.id, annualRevenue: atelierAccounts.annualRevenue })
+        .from(atelierAccounts)
+        .where(eq(atelierAccounts.name, smOkName));
+      if (smOkRow?.id) created.accounts.add(smOkRow.id);
+      check(
+        "revenue-free create persisted with null annualRevenue",
+        !!smOkRow?.id && (smOkRow?.annualRevenue ?? null) === null,
+        `id=${smOkRow?.id} annualRevenue=${JSON.stringify(smOkRow?.annualRevenue ?? null)}`,
+      );
+
+      // 4) Positive control: an account-wide partner CAN set revenue at create.
+      const fpName = uniq("CreateGateRevenueFp");
+      const fpCreate = await api("POST", "/accounts", PERSONA.fp, {
+        ...baseBody,
+        name: fpName,
+        annualRevenue: revenuePayload,
+      });
+      check(
+        "POST /accounts annualRevenue (firm-wide partner) \u2192 200/201",
+        fpCreate.status === 200 || fpCreate.status === 201,
+        `status=${fpCreate.status} body=${JSON.stringify(fpCreate.body)?.slice(0, 160)}`,
+      );
+      const [fpRow] = await db
+        .select({ id: atelierAccounts.id, annualRevenue: atelierAccounts.annualRevenue })
+        .from(atelierAccounts)
+        .where(eq(atelierAccounts.name, fpName));
+      if (fpRow?.id) created.accounts.add(fpRow.id);
+      check(
+        "account-wide partner revenue create persisted (amount written)",
+        fpRow?.annualRevenue?.amount === 555_000_000 && fpRow?.annualRevenue?.asOf === revenuePayload.asOf,
+        `annualRevenue=${JSON.stringify(fpRow?.annualRevenue)?.slice(0, 160)}`,
+      );
+    }
+
+    // =====================================================================
     group("REST \u00b7 Account plan & execution (Task #571)");
     // Action plan + risk register + goal progress CRUD, the partner-tier
     // management gate, NBA promotion, and the QBR PDF export. acc_tasama is

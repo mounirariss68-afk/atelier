@@ -437,6 +437,36 @@ router.post("/accounts", async (req, res) => {
     return;
   }
   const input = parsed.data;
+
+  // Task #619 — annual revenue is a money surface, so SETTING it at creation
+  // honours the SAME account-financials gate as PATCH /accounts/:id and viewing
+  // the figure: only account-WIDE authority (firm-wide partner via access.all,
+  // or the would-be partner owner) and not a restricted / board persona may
+  // write it. Without this, a non-financial creator in CREATE_ROLES (e.g. a
+  // scoped senior_manager) could seed revenue at create time and bypass the
+  // Edit Company Details gate entirely. Omitting / nulling revenue is not a
+  // financial write, so non-financial creates still succeed.
+  if (input.annualRevenue != null) {
+    const access = await accessibleEngagementIds(me);
+    const wouldBeOwner =
+      input.partnerOwnerId ??
+      (me.role === "partner" || me.role === "founding_partner" ? me.id : null);
+    const accountWide =
+      access.all || (wouldBeOwner != null && wouldBeOwner === me.id);
+    const canEditFinancials =
+      accountWide &&
+      !isRestrictedPersona(me.role ?? null) &&
+      !isBoardObserver(me.role ?? null);
+    if (!canEditFinancials) {
+      res.status(403).json({
+        error: "financials-forbidden",
+        reason:
+          "Only personas with account-wide financial authority can set annual revenue.",
+      });
+      return;
+    }
+  }
+
   const orgId = me.orgId ?? "aico";
   const trimmedName = input.name.trim();
   const normalisedName = trimmedName.toLowerCase();
