@@ -1459,6 +1459,100 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
+    group("REST \u00b7 Annual-revenue edit gate (Task #618)");
+    // Editing annual revenue is a money write, so PATCH /accounts/:id honours
+    // the SAME account-financials gate as viewing the figure: the caller must
+    // be account-WIDE (firm-wide partner or the account's partner owner) and
+    // not a restricted / board persona. PERSONA.sm (senior_manager
+    // p_layla_haddad) is the engagement LEAD on ENG (eng_tasama_bpo_phase1 on
+    // ACC=acc_tasama) but is NOT acc_tasama's partner owner and is not
+    // firm-wide \u2014 so canSeeAccount passes (she can PATCH non-financial fields)
+    // yet canEditFinancials is false. Exactly the persona this gate targets:
+    // she must be blocked from overwriting revenue while other edits still save.
+    // =====================================================================
+    {
+      const readAcc = async () => {
+        const [row] = await db
+          .select({ notes: atelierAccounts.notes, annualRevenue: atelierAccounts.annualRevenue })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.id, ACC));
+        return row as { notes: string | null; annualRevenue: any } | undefined;
+      };
+
+      const before = await readAcc();
+      check("seed account acc_tasama present for revenue-gate test", !!before, `before=${JSON.stringify(before)}`);
+      const originalNotes = before?.notes ?? null;
+      const originalRevenue = before?.annualRevenue ?? null;
+
+      const revenuePayload = {
+        annualRevenue: {
+          amount: 987_654_321,
+          currency: "USD",
+          asOf: uniq("FY-gate"),
+          sourceUrl: "https://example.com/revenue-gate",
+          note: uniq("revenue note"),
+        },
+      };
+
+      // 1) senior_manager (scoped, not account-wide) editing revenue \u2192 403.
+      const smRev = await api("PATCH", `/accounts/${ACC}`, PERSONA.sm, revenuePayload);
+      check(
+        "PATCH /accounts/:id annualRevenue (scoped senior_manager) \u2192 403 financials-forbidden",
+        smRev.status === 403 && smRev.body?.error === "financials-forbidden",
+        `status=${smRev.status} body=${JSON.stringify(smRev.body)?.slice(0, 160)}`,
+      );
+
+      // 2) the blocked PATCH must NOT have mutated the stored revenue figure.
+      const afterDenied = await readAcc();
+      check(
+        "blocked revenue PATCH did not overwrite annualRevenue",
+        JSON.stringify(afterDenied?.annualRevenue ?? null) === JSON.stringify(originalRevenue),
+        `before=${JSON.stringify(originalRevenue)?.slice(0, 120)} after=${JSON.stringify(afterDenied?.annualRevenue ?? null)?.slice(0, 120)}`,
+      );
+
+      // 3) the SAME persona can still save a NON-financial field (notes). The
+      //    gate locks money, not the whole account, so other edits go through.
+      const smNotesValue = uniq("notes-from-sm");
+      const smNotes = await api("PATCH", `/accounts/${ACC}`, PERSONA.sm, { notes: smNotesValue });
+      check(
+        "PATCH /accounts/:id notes (scoped senior_manager) \u2192 200 (non-financial edit allowed)",
+        smNotes.status === 200,
+        `status=${smNotes.status} body=${JSON.stringify(smNotes.body)?.slice(0, 160)}`,
+      );
+      const afterNotes = await readAcc();
+      check(
+        "non-financial edit persisted (notes saved by senior_manager)",
+        afterNotes?.notes === smNotesValue,
+        `notes=${JSON.stringify(afterNotes?.notes)?.slice(0, 120)}`,
+      );
+
+      // 4) Positive control: an account-wide partner CAN edit annual revenue.
+      const fpRevValue = uniq("FY-fp");
+      const fpRev = await api("PATCH", `/accounts/${ACC}`, PERSONA.fp, {
+        annualRevenue: { ...revenuePayload.annualRevenue, asOf: fpRevValue },
+      });
+      check(
+        "PATCH /accounts/:id annualRevenue (firm-wide partner) \u2192 200 (financial edit allowed)",
+        fpRev.status === 200,
+        `status=${fpRev.status} body=${JSON.stringify(fpRev.body)?.slice(0, 160)}`,
+      );
+      const afterFp = await readAcc();
+      check(
+        "account-wide partner revenue edit persisted (asOf written)",
+        afterFp?.annualRevenue?.asOf === fpRevValue && afterFp?.annualRevenue?.amount === 987_654_321,
+        `annualRevenue=${JSON.stringify(afterFp?.annualRevenue)?.slice(0, 160)}`,
+      );
+
+      // Restore the seed account to its original notes + revenue so this run
+      // leaves no durable mutation behind (the harness shares the live seed DB).
+      await db
+        .update(atelierAccounts)
+        .set({ notes: originalNotes, annualRevenue: originalRevenue, updatedAt: new Date() })
+        .where(eq(atelierAccounts.id, ACC))
+        .catch(() => undefined);
+    }
+
+    // =====================================================================
     group("REST \u00b7 Account plan & execution (Task #571)");
     // Action plan + risk register + goal progress CRUD, the partner-tier
     // management gate, NBA promotion, and the QBR PDF export. acc_tasama is

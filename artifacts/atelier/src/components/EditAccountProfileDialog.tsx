@@ -223,96 +223,21 @@ export function EditAccountProfileDialog({ account, accountId, open, onOpenChang
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="grid gap-5 py-3">
-          <div className={canEditFinancials ? "grid grid-cols-3 gap-4" : "grid grid-cols-1 gap-4"}>
-            <Field label="Employees">
-              <Input
-                type="number"
-                min={0}
-                value={employeeCount}
-                onChange={(e) => setEmployeeCount(e.target.value)}
-                className="bg-bg-deep border-border text-text font-mono"
-                placeholder="e.g. 4500"
-                data-testid="input-edit-account-employees"
-              />
-            </Field>
-            {canEditFinancials && (
-              <>
-                <Field label="Annual revenue">
-                  <Input
-                    type="number"
-                    min={0}
-                    value={revenueAmount}
-                    onChange={(e) => setRevenueAmount(e.target.value)}
-                    className="bg-bg-deep border-border text-text font-mono"
-                    placeholder="amount"
-                    data-testid="input-edit-account-revenue-amount"
-                  />
-                </Field>
-                <Field label="Revenue currency">
-                  <select
-                    value={revenueCurrency}
-                    onChange={(e) => setRevenueCurrency(e.target.value)}
-                    className={`${selectCls} font-mono`}
-                    data-testid="select-edit-account-revenue-currency"
-                  >
-                    {Array.from(
-                      new Set([...CURRENCIES, ...(revenueCurrency ? [revenueCurrency] : [])]),
-                    ).map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              </>
-            )}
-          </div>
-
-          {canEditFinancials ? (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Revenue as-of">
-                  <Input
-                    value={revenueAsOf}
-                    onChange={(e) => setRevenueAsOf(e.target.value)}
-                    className="bg-bg-deep border-border text-text"
-                    placeholder="e.g. FY2024"
-                    maxLength={LOCATION_MAX}
-                    data-testid="input-edit-account-revenue-asof"
-                  />
-                </Field>
-                <Field label="Revenue source URL">
-                  <Input
-                    value={revenueSourceUrl}
-                    onChange={(e) => setRevenueSourceUrl(e.target.value)}
-                    className="bg-bg-deep border-border text-text"
-                    placeholder="https://…"
-                    maxLength={500}
-                    data-testid="input-edit-account-revenue-source"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Revenue / financials note">
-                <Input
-                  value={revenueNote}
-                  onChange={(e) => setRevenueNote(e.target.value)}
-                  className="bg-bg-deep border-border text-text"
-                  placeholder="Key financials context (no fabricated figures)"
-                  maxLength={NOTE_MAX}
-                  data-testid="input-edit-account-revenue-note"
-                />
-              </Field>
-            </>
-          ) : (
-            <p
-              className="text-xs text-text-mute italic -mt-1"
-              data-testid="text-revenue-edit-restricted"
-            >
-              Annual revenue is restricted — you don't have financial authority on
-              this account, so the revenue figure can't be edited here.
-            </p>
-          )}
+          <RevenueProfileFields
+            canEditFinancials={canEditFinancials}
+            employeeCount={employeeCount}
+            setEmployeeCount={setEmployeeCount}
+            revenueAmount={revenueAmount}
+            setRevenueAmount={setRevenueAmount}
+            revenueCurrency={revenueCurrency}
+            setRevenueCurrency={setRevenueCurrency}
+            revenueAsOf={revenueAsOf}
+            setRevenueAsOf={setRevenueAsOf}
+            revenueSourceUrl={revenueSourceUrl}
+            setRevenueSourceUrl={setRevenueSourceUrl}
+            revenueNote={revenueNote}
+            setRevenueNote={setRevenueNote}
+          />
 
           <div className="grid grid-cols-2 gap-4">
             <Field label="Entity role">
@@ -455,6 +380,142 @@ export function EditAccountProfileDialog({ account, accountId, open, onOpenChang
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Task #613 — the revenue-gated portion of the firmographics form, extracted
+ * as a pure presentational component so the financial-authority gate is unit
+ * testable in isolation (no Dialog portal / react-query providers needed).
+ *
+ * When `canEditFinancials` is false the revenue inputs are NOT rendered at all
+ * and a "restricted" note (data-testid="text-revenue-edit-restricted") takes
+ * their place — mirroring the server-side 403 gate so a persona without
+ * financial authority can neither see nor silently overwrite the figure.
+ */
+type SetStr = React.Dispatch<React.SetStateAction<string>>;
+export function RevenueProfileFields({
+  canEditFinancials,
+  employeeCount,
+  setEmployeeCount,
+  revenueAmount,
+  setRevenueAmount,
+  revenueCurrency,
+  setRevenueCurrency,
+  revenueAsOf,
+  setRevenueAsOf,
+  revenueSourceUrl,
+  setRevenueSourceUrl,
+  revenueNote,
+  setRevenueNote,
+}: {
+  canEditFinancials: boolean;
+  employeeCount: string;
+  setEmployeeCount: SetStr;
+  revenueAmount: string;
+  setRevenueAmount: SetStr;
+  revenueCurrency: string;
+  setRevenueCurrency: SetStr;
+  revenueAsOf: string;
+  setRevenueAsOf: SetStr;
+  revenueSourceUrl: string;
+  setRevenueSourceUrl: SetStr;
+  revenueNote: string;
+  setRevenueNote: SetStr;
+}) {
+  return (
+    <>
+      <div className={canEditFinancials ? "grid grid-cols-3 gap-4" : "grid grid-cols-1 gap-4"}>
+        <Field label="Employees">
+          <Input
+            type="number"
+            min={0}
+            value={employeeCount}
+            onChange={(e) => setEmployeeCount(e.target.value)}
+            className="bg-bg-deep border-border text-text font-mono"
+            placeholder="e.g. 4500"
+            data-testid="input-edit-account-employees"
+          />
+        </Field>
+        {canEditFinancials && (
+          <>
+            <Field label="Annual revenue">
+              <Input
+                type="number"
+                min={0}
+                value={revenueAmount}
+                onChange={(e) => setRevenueAmount(e.target.value)}
+                className="bg-bg-deep border-border text-text font-mono"
+                placeholder="amount"
+                data-testid="input-edit-account-revenue-amount"
+              />
+            </Field>
+            <Field label="Revenue currency">
+              <select
+                value={revenueCurrency}
+                onChange={(e) => setRevenueCurrency(e.target.value)}
+                className={`${selectCls} font-mono`}
+                data-testid="select-edit-account-revenue-currency"
+              >
+                {Array.from(
+                  new Set([...CURRENCIES, ...(revenueCurrency ? [revenueCurrency] : [])]),
+                ).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
+      </div>
+
+      {canEditFinancials ? (
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Revenue as-of">
+              <Input
+                value={revenueAsOf}
+                onChange={(e) => setRevenueAsOf(e.target.value)}
+                className="bg-bg-deep border-border text-text"
+                placeholder="e.g. FY2024"
+                maxLength={LOCATION_MAX}
+                data-testid="input-edit-account-revenue-asof"
+              />
+            </Field>
+            <Field label="Revenue source URL">
+              <Input
+                value={revenueSourceUrl}
+                onChange={(e) => setRevenueSourceUrl(e.target.value)}
+                className="bg-bg-deep border-border text-text"
+                placeholder="https://…"
+                maxLength={500}
+                data-testid="input-edit-account-revenue-source"
+              />
+            </Field>
+          </div>
+
+          <Field label="Revenue / financials note">
+            <Input
+              value={revenueNote}
+              onChange={(e) => setRevenueNote(e.target.value)}
+              className="bg-bg-deep border-border text-text"
+              placeholder="Key financials context (no fabricated figures)"
+              maxLength={NOTE_MAX}
+              data-testid="input-edit-account-revenue-note"
+            />
+          </Field>
+        </>
+      ) : (
+        <p
+          className="text-xs text-text-mute italic -mt-1"
+          data-testid="text-revenue-edit-restricted"
+        >
+          Annual revenue is restricted — you don't have financial authority on
+          this account, so the revenue figure can't be edited here.
+        </p>
+      )}
+    </>
   );
 }
 
