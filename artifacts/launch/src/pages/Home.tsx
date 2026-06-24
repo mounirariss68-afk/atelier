@@ -136,15 +136,42 @@ const transformPairs = [
    the "new model" node in the centre, the Cognirise outcomes on the right),
    revealed in sequence. Below lg it falls back to legible hand-coded cards. */
 function TransformationMap() {
-  /* The diagram ships as four transparent layers (rendered artwork). Stacking them
-     rebuilds the full comparison; revealing them in sequence walks the eye from the
-     old-world model (left) through the new model (centre) to the outcomes (right). */
+  /* The diagram ships as a glowing connector backdrop plus four transparent layers
+     (rendered artwork). Stacking them rebuilds the full comparison; revealing them in
+     sequence walks the eye from the old-world model (left) through the new model
+     (centre) to the outcomes (right). Each old cost is wired to the outcome it becomes,
+     so hovering a row lights up that full transformation path. */
   const layers = [
-    { src: "images/model/traditional.png", from: { opacity: 0, x: -28 }, delay: 0 },
-    { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.32 },
-    { src: "images/model/center.png", from: { opacity: 0, y: 16 }, delay: 0.46 },
-    { src: "images/model/outcomes.png", from: { opacity: 0, x: 28 }, delay: 0.58 },
+    { src: "images/model/background.webp", from: { opacity: 0, scale: 1.04 }, delay: 0 },
+    { src: "images/model/traditional.png", from: { opacity: 0, x: -28 }, delay: 0.18 },
+    { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.4 },
+    { src: "images/model/center.png", from: { opacity: 0, y: 16 }, delay: 0.54 },
+    { src: "images/model/outcomes.png", from: { opacity: 0, x: 28 }, delay: 0.66 },
   ];
+
+  /* Connector geometry traced over the backdrop (viewBox 952×481): each flow runs
+     from a left node, through the central node, out to its paired outcome on the right. */
+  const flows = [
+    { id: 0, d: "M253,132 C 345,138 395,232 452,240 C 510,232 590,140 671,134", label: "Man-days become measured outcomes" },
+    { id: 1, d: "M265,216 C 345,220 400,236 452,240 C 520,236 600,213 666,211", label: "PowerPoints become working solutions" },
+    { id: 2, d: "M262,311 C 345,308 400,246 452,240 C 520,246 600,305 662,311", label: "Long pilots become a 48-hour prototype" },
+    { id: 3, d: "M253,383 C 350,380 410,255 452,240 C 515,256 590,375 669,388", label: "Vendor lock-in becomes platform ownership" },
+  ];
+
+  /* Invisible hover targets over each labelled item (4 left + 4 right), mapped to the
+     flow they light up. Percentages are relative to the aspect-locked diagram box. */
+  const hotspots: { flow: number; pos: React.CSSProperties }[] = [
+    { flow: 0, pos: { left: "3%", top: "21%", width: "27%", height: "16%" } },
+    { flow: 1, pos: { left: "3%", top: "39%", width: "27%", height: "16%" } },
+    { flow: 2, pos: { left: "3%", top: "58%", width: "27%", height: "16%" } },
+    { flow: 3, pos: { left: "3%", top: "74%", width: "27%", height: "16%" } },
+    { flow: 0, pos: { right: "2%", top: "21%", width: "30%", height: "16%" } },
+    { flow: 1, pos: { right: "2%", top: "39%", width: "30%", height: "16%" } },
+    { flow: 2, pos: { right: "2%", top: "58%", width: "30%", height: "16%" } },
+    { flow: 3, pos: { right: "2%", top: "74%", width: "30%", height: "16%" } },
+  ];
+
+  const [activeFlow, setActiveFlow] = useState<number | null>(null);
 
   return (
     <div className="relative">
@@ -169,6 +196,66 @@ function TransformationMap() {
             className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
           />
         ))}
+
+        {/* Highlight overlay — the hovered transformation path lights up and a pulse travels it */}
+        <svg
+          viewBox="0 0 952 481"
+          preserveAspectRatio="xMidYMid meet"
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          aria-hidden="true"
+        >
+          <defs>
+            <linearGradient id="flowGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#5273f5" />
+              <stop offset="50%" stopColor="#b95ac9" />
+              <stop offset="100%" stopColor="#e75a60" />
+            </linearGradient>
+            <filter id="flowGlow" x="-20%" y="-60%" width="140%" height="220%">
+              <feGaussianBlur stdDeviation="3.2" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          {flows.map((f) => {
+            const on = activeFlow === f.id;
+            return (
+              <g key={f.id} style={{ opacity: on ? 1 : 0, transition: "opacity .3s ease" }}>
+                <path
+                  d={f.d}
+                  fill="none"
+                  stroke="url(#flowGrad)"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  filter="url(#flowGlow)"
+                />
+                {on && (
+                  <circle r="4.5" fill="#ffffff" filter="url(#flowGlow)" className="flow-pulse">
+                    <animateMotion dur="1.2s" repeatCount="indefinite" path={f.d} />
+                  </circle>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Invisible hover targets over the labelled items */}
+        <div className="absolute inset-0">
+          {hotspots.map((h, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={flows[h.flow].label}
+              onMouseEnter={() => setActiveFlow(h.flow)}
+              onMouseLeave={() => setActiveFlow(null)}
+              onFocus={() => setActiveFlow(h.flow)}
+              onBlur={() => setActiveFlow(null)}
+              className="absolute rounded-lg cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              style={h.pos}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Screen-reader equivalent of the diagram's baked-in text */}

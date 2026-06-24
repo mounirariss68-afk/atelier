@@ -49,3 +49,16 @@ full comparison; revealing them in sequence animates "old model → new model �
 the existing hand-coded stacked cards because the baked-in text is illegible at phone width. Source
 uploads live in `attached_assets/launch_graphics/` (also has heavy 6MB Illustrator SVGs — skip them,
 the small PNGs are crisp and fast).
+
+### Backdrop + hover-highlight on the TransformationMap
+**The uploaded `background.svg` connector artwork is a particle RASTER, not strokable
+vectors** — it's a ~6MB Illustrator export of thousands of unnamed tiny paths, so you
+CANNOT extract per-line geometry from it.
+**Why:** the user wanted the glowing connector lines as a backdrop AND a hover-highlight
+that lights the path under the cursor.
+**How to apply:** ship the SVG rasterized to a small WebP backdrop layer (the raw SVG and
+a full-res PNG are multi-MB — never ship them). For the hover highlight, hand-trace the
+connector curves as a separate bezier SVG overlay that is invisible by default and only
+the hovered flow fades in (no competing static line); re-fit the control points against a
+throwaway /verify screenshot if the artwork is ever re-exported. Highlight respects
+prefers-reduced-motion (the traveling pulse is suppressed, the line still lights).

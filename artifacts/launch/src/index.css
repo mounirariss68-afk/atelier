@@ -164,5 +164,6 @@
 @media (prefers-reduced-motion: reduce) {
   .text-gradient, .glow-a, .glow-b, .spin-slow, .pulse-ring, .marquee-track,
   .motif .ln, .motif .nd { animation: none !important; }
+  .flow-pulse { display: none; }
   html { scroll-behavior: auto; }
 }
