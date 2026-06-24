@@ -142,20 +142,22 @@ function TransformationMap() {
      (centre) to the outcomes (right). Each old cost is wired to the outcome it becomes,
      so hovering a row lights up that full transformation path. */
   const layers = [
-    { src: "images/model/background.webp", from: { opacity: 0, scale: 1.04 }, delay: 0 },
-    { src: "images/model/traditional.png", from: { opacity: 0, x: -28 }, delay: 0.18 },
-    { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.4 },
-    { src: "images/model/center.png", from: { opacity: 0, y: 16 }, delay: 0.54 },
-    { src: "images/model/outcomes.png", from: { opacity: 0, x: 28 }, delay: 0.66 },
+    { src: "images/model/background.webp", from: { opacity: 0, scale: 1.04 }, delay: 0, z: 0 },
+    { src: "images/model/traditional.png", from: { opacity: 0, x: -28 }, delay: 0.18, z: 1 },
+    { src: "images/model/outcomes.png", from: { opacity: 0, x: 28 }, delay: 0.66, z: 1 },
+    { src: "images/model/center.png", from: { opacity: 0, y: 16 }, delay: 0.54, z: 3 },
+    { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.4, z: 4 },
   ];
 
-  /* Connector geometry traced over the backdrop (viewBox 952×481): each flow runs
-     from a left node, through the central node, out to its paired outcome on the right. */
+  /* Connector geometry traced over the backdrop (viewBox 952×481): each flow runs from a
+     left node, through the centre, out to its paired outcome. The path is drawn BELOW the
+     logo/centre layers (z 2 < z 3/4) so it disappears behind the central logo circle, just
+     like the baked-in streams. Node tangents are horizontal (the dashed lead-ins). */
   const flows = [
-    { id: 0, d: "M253,132 C 345,138 395,232 452,240 C 510,232 590,140 671,134", label: "Man-days become measured outcomes" },
-    { id: 1, d: "M265,216 C 345,220 400,236 452,240 C 520,236 600,213 666,211", label: "PowerPoints become working solutions" },
-    { id: 2, d: "M262,311 C 345,308 400,246 452,240 C 520,246 600,305 662,311", label: "Long pilots become a 48-hour prototype" },
-    { id: 3, d: "M253,383 C 350,380 410,255 452,240 C 515,256 590,375 669,388", label: "Vendor lock-in becomes platform ownership" },
+    { id: 0, d: "M256,166 C 330,166 360,196 452,238 C 540,196 600,166 672,166", label: "Man-days become measured outcomes" },
+    { id: 1, d: "M256,238 C 330,238 380,243 452,243 C 524,243 596,238 672,238", label: "PowerPoints become working solutions" },
+    { id: 2, d: "M256,310 C 330,310 380,300 452,248 C 524,300 596,310 672,310", label: "Long pilots become a 48-hour prototype" },
+    { id: 3, d: "M256,388 C 340,388 388,300 452,252 C 516,300 564,388 672,388", label: "Vendor lock-in becomes platform ownership" },
   ];
 
   /* Invisible hover targets over each labelled item (4 left + 4 right), mapped to the
@@ -193,14 +195,17 @@ function TransformationMap() {
             whileInView={{ opacity: 1, x: 0, y: 0, scale: 1 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.9, delay: l.delay, ease: [0.21, 0.6, 0.35, 1] }}
+            style={{ zIndex: l.z }}
             className="absolute inset-0 w-full h-full object-contain select-none pointer-events-none"
           />
         ))}
 
-        {/* Highlight overlay — the hovered transformation path lights up and a pulse travels it */}
+        {/* Highlight overlay — sits below the logo/centre (zIndex 2) so the lit path passes
+            behind the central circle; the hovered path lights up and a pulse travels it */}
         <svg
           viewBox="0 0 952 481"
           preserveAspectRatio="xMidYMid meet"
+          style={{ zIndex: 2 }}
           className="absolute inset-0 w-full h-full pointer-events-none"
           aria-hidden="true"
         >
@@ -240,8 +245,8 @@ function TransformationMap() {
           })}
         </svg>
 
-        {/* Invisible hover targets over the labelled items */}
-        <div className="absolute inset-0">
+        {/* Invisible hover targets over the labelled items (above every layer) */}
+        <div className="absolute inset-0" style={{ zIndex: 5 }}>
           {hotspots.map((h, i) => (
             <button
               key={i}
