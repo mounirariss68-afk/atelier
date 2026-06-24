@@ -113,6 +113,7 @@ import {
   runWhitespaceMapper,
   runQbrComposer,
   buildCartographerProposals,
+  AgentNonJsonResponseError,
   type PendingProfileUpdate,
   type WhitespaceOutput,
   type QbrOutput,
@@ -701,7 +702,23 @@ router.post("/accounts", async (req, res) => {
         });
       });
     } catch (err) {
-      console.warn("[atelier] auto-on-create cartographer failed", err);
+      // A "no parseable JSON" / aborted response means the model found nothing
+      // worth enriching (accounts with no public footprint — test fixtures,
+      // stealth companies). That is an expected miss, not a fault: account
+      // creation already succeeded, so log it calmly instead of as a warning
+      // with a stack trace.
+      const msg = err instanceof Error ? err.message : String(err);
+      const expectedMiss =
+        err instanceof AgentNonJsonResponseError || /abort/i.test(msg);
+      if (expectedMiss) {
+        console.info(
+          `[atelier] auto-on-create cartographer found no enrichment for ${
+            inserted.brandName ?? inserted.name
+          } (no public footprint)`,
+        );
+      } else {
+        console.warn("[atelier] auto-on-create cartographer failed", err);
+      }
       try {
         await db.insert(atelierAuditEvents).values({
           id: rid("aud"),

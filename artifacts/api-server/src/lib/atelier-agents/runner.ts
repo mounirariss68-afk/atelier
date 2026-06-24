@@ -428,6 +428,64 @@ if (
   );
 }
 
+/**
+ * Thrown when an agent's response contains no parseable JSON object — e.g. the
+ * model wrapped the answer in prose it could not be coaxed out of, or refused
+ * outright ("I cannot provide research on this company…"). This is an *expected*
+ * outcome for accounts with no public footprint (test fixtures, stealth
+ * companies), so callers can distinguish a "no enrichment available" miss from a
+ * genuine fault and fail soft without logging a stack trace.
+ */
+export class AgentNonJsonResponseError extends Error {
+  readonly snippet: string;
+  constructor(snippet: string) {
+    super(
+      `Agent returned no parseable JSON object${
+        snippet ? ` (response began: ${JSON.stringify(snippet)})` : ""
+      }.`,
+    );
+    this.name = "AgentNonJsonResponseError";
+    this.snippet = snippet;
+  }
+}
+
+/**
+ * Extract the first complete, balanced JSON object from a string. Unlike a naive
+ * first-`{`/last-`}` slice this is brace-depth aware and skips braces inside
+ * string literals, so it reliably recovers JSON that the model prefixed or
+ * wrapped with prose ("Based on the research: { … }"). Returns null when no
+ * balanced object is present (pure prose / refusal / truncated output).
+ */
+export function extractFirstJsonObject(text: string): string | null {
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === "}") {
+      if (depth > 0) {
+        depth--;
+        if (depth === 0 && start >= 0) return text.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
 async function callClaudeJson<T>(
   model: string,
   systemPrompt: string,
@@ -453,7 +511,16 @@ async function callClaudeJson<T>(
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  const value = JSON.parse(stripped) as T;
+  const json = extractFirstJsonObject(stripped);
+  if (json === null) {
+    throw new AgentNonJsonResponseError(stripped.slice(0, 120));
+  }
+  let value: T;
+  try {
+    value = JSON.parse(json) as T;
+  } catch {
+    throw new AgentNonJsonResponseError(stripped.slice(0, 120));
+  }
   const tokensIn = resp.usage.input_tokens;
   const tokensOut = resp.usage.output_tokens;
   const inRate = model.includes("haiku") ? 1 : 3;
@@ -2363,21 +2430,27 @@ async function callClaudeJsonWithWebSearch<T>(
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/```\s*$/i, "")
     .trim();
-  const firstBrace = stripped.indexOf("{");
-  const lastBrace = stripped.lastIndexOf("}");
-  const json =
-    firstBrace >= 0 && lastBrace > firstBrace
-      ? stripped.slice(firstBrace, lastBrace + 1)
-      : stripped;
+  // Brace-depth aware extraction recovers JSON even when the model prefixes or
+  // wraps it with prose ("Based on the research: { … }"); a naive first/last
+  // brace slice would break if the prose itself contained braces.
+  const json = extractFirstJsonObject(stripped);
   let value: T;
+  if (json === null) {
+    // If the model hit the output ceiling the JSON is truncated. Surface the
+    // real cause so the failure is actionable (raise max_tokens / tighten the
+    // schema). Otherwise the model returned no JSON at all (prose / refusal) —
+    // expected for accounts with no public footprint, so use the typed error
+    // callers can fail soft on.
+    if (resp.stop_reason === "max_tokens") {
+      throw new Error(
+        "Cartographer output exceeded the token budget and was truncated before the JSON brief completed. Increase max_tokens or reduce the requested detail.",
+      );
+    }
+    throw new AgentNonJsonResponseError(stripped.slice(0, 120));
+  }
   try {
     value = JSON.parse(json) as T;
   } catch (parseErr) {
-    // If the model hit the output ceiling the JSON is truncated and parse
-    // fails with a cryptic position error. Surface the real cause so the
-    // failure is actionable (raise max_tokens / tighten the schema). Parse
-    // first so a response that happens to complete exactly at the cap still
-    // succeeds.
     if (resp.stop_reason === "max_tokens") {
       throw new Error(
         "Cartographer output exceeded the token budget and was truncated before the JSON brief completed. Increase max_tokens or reduce the requested detail.",

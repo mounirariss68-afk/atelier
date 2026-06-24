@@ -754,6 +754,10 @@ async function main(): Promise<void> {
         description: "Pursue BPO expansion mandate",
         accountId: ACC,
         dealSizeUsd: 480000,
+        // The harness asserts CRUD persistence, not the Pursuit Scout. Skip the
+        // live LLM run so creation is deterministic (the scout is exercised in
+        // its own agent-focused suite, not here).
+        runScout: false,
       });
       check("POST /opportunities (accountId + description) \u2192 200/201", cr.status === 200 || cr.status === 201, `status=${cr.status}`);
       const [oppRow] = await db
@@ -831,7 +835,7 @@ async function main(): Promise<void> {
       // ---- Task #540: archive (soft-delete) over REST ----
       {
         const archName = uniq("ArchOpp");
-        await api("POST", "/opportunities", PERSONA.fp, { name: archName, description: "to be archived", accountId: ACC });
+        await api("POST", "/opportunities", PERSONA.fp, { name: archName, description: "to be archived", accountId: ACC, runScout: false });
         const [archRow] = await db
           .select({ id: atelierOpportunities.id })
           .from(atelierOpportunities)

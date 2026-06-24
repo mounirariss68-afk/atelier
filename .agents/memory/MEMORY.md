@@ -22,3 +22,4 @@
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.
 - [Running the CRM test harness](crm-harness-run.md) — one-shot test, >120s (unrelated LLM scout ~45s), can't run via restart_workflow (SIGKILLed for not "serving"); verify subsets with a standalone tsx probe that boots app.listen(0).
 - [Account-revenue write surfaces](atelier-revenue-write-surfaces.md) — annualRevenue is written ONLY by POST /accounts + PATCH /accounts/:id; financials gate must cover BOTH (create gate uses would-be partnerOwnerId).
+- [CRM harness live-LLM flakiness](crm-harness-flakiness.md) — test:crm CRUD logic is fine; failures come from real awaited LLM calls; pass runScout:false; shared extractFirstJsonObject + AgentNonJsonResponseError handle prose/refusals.
