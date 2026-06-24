@@ -2027,6 +2027,87 @@ async function main(): Promise<void> {
           `usd=${USD_FIGURE_RE.exec(boardText)?.[0] ?? "none"}`,
       );
 
+      // ---- group roll-up financials stay hidden for a board observer (Task #641) ----
+      // computeAccountHierarchyRollup blanks pipeline / revenue / health for any
+      // persona without account-financials authority (financialsRedacted=true)
+      // while keeping the non-financial counts (subsidiary + open-opportunity
+      // count). The board observer above OWNS boardAcctId, so canSeeAccount AND
+      // accountWide both pass — the role gate (`!isBoardObserver`) is therefore
+      // the SOLE reason financials are withheld, exactly the leak this test
+      // guards. We give the owned account a subsidiary (the roll-up is only
+      // computed when the account has children; leaf accounts return null) plus
+      // one open opportunity (so the visible count is provably non-zero), then
+      // assert the redacted-but-counted shape over the REST workspace payload.
+      // Previously no seeded persona had read access to a parent-with-children,
+      // so this redacted path could not be exercised over the API.
+      const boardSubId = `acc_board_sub_${STAMP}`;
+      const boardOppId = `opp_board_rollup_${STAMP}`;
+      await db.insert(atelierAccounts).values({
+        id: boardSubId,
+        orgId: ORG,
+        name: uniq("Board Observer Subsidiary"),
+        country: "United Arab Emirates",
+        sector: "Financial Services",
+        parentAccountId: boardAcctId,
+        partnerOwnerId: boardId, // visible to the board observer via canSeeAccount
+      });
+      created.accounts.add(boardSubId);
+      await db.insert(atelierOpportunities).values({
+        id: boardOppId,
+        orgId: ORG,
+        slug: `board-rollup-${STAMP}`,
+        name: uniq("Board Roll-up Opp"),
+        accountId: boardAcctId,
+        plmStage: "shape",
+        salesStage: "prospect", // non-terminal → counts as an open opportunity
+        partnerOwnerId: boardId,
+        engagementLeadId: boardId,
+        dealSizeHypothesis: 250_000,
+        probabilityPct: 40,
+        nextMilestone: "Roll-up redaction fixture",
+        sourceLead: "test",
+      });
+      created.opps.add(boardOppId);
+
+      // Founding partner (firm-wide) → roll-up financials visible, not redacted.
+      const fpRollupWs = await api("GET", `/accounts/${boardAcctId}`, PERSONA.fp);
+      const fpRollup = fpRollupWs.body?.account?.hierarchyRollup;
+      check(
+        "GET /accounts/:id hierarchyRollup (founding_partner) \u2192 financials visible, not redacted",
+        fpRollupWs.status === 200 &&
+          !!fpRollup &&
+          fpRollup.financialsRedacted === false &&
+          typeof fpRollup.openPipelineUsd === "number" &&
+          typeof fpRollup.totalRevenueUsd === "number" &&
+          fpRollup.subsidiaryCount >= 1 &&
+          fpRollup.openOpportunityCount >= 1,
+        `status=${fpRollupWs.status} rollup=${JSON.stringify(fpRollup)?.slice(0, 200)}`,
+      );
+
+      // Board observer (owns the account, but role-excluded from financials) →
+      // pipeline / revenue / health blanked, financialsRedacted=true.
+      const boardRollupWs = await api("GET", `/accounts/${boardAcctId}`, boardId);
+      const boardRollup = boardRollupWs.body?.account?.hierarchyRollup;
+      check(
+        "GET /accounts/:id hierarchyRollup (board observer) \u2192 financialsRedacted, money + health null",
+        boardRollupWs.status === 200 &&
+          !!boardRollup &&
+          boardRollup.financialsRedacted === true &&
+          boardRollup.openPipelineUsd === null &&
+          boardRollup.totalRevenueUsd === null &&
+          boardRollup.health === null,
+        `status=${boardRollupWs.status} rollup=${JSON.stringify(boardRollup)?.slice(0, 200)}`,
+      );
+      check(
+        "GET /accounts/:id hierarchyRollup (board observer) \u2192 non-financial counts still visible",
+        !!boardRollup &&
+          boardRollup.subsidiaryCount >= 1 &&
+          boardRollup.accountCount >= 2 &&
+          typeof boardRollup.openOpportunityCount === "number" &&
+          boardRollup.openOpportunityCount >= 1,
+        `rollup=${JSON.stringify(boardRollup)?.slice(0, 200)}`,
+      );
+
       // ---- money-free brief for the RESTRICTED persona (Task #576) ----
       // The financial gate also excludes restricted personas
       // (`!isRestrictedPersona(me.role)`). In practice that in-handler branch
