@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute, Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetAccountWorkspace,
@@ -168,6 +168,8 @@ export default function Account() {
   const [, params] = useRoute("/accounts/:accountId");
   const accountId = params?.accountId || "";
   const qc = useQueryClient();
+  const [, setLocation] = useLocation();
+  const { data: me } = useAtelierGetMe();
 
   const { data: ws, isLoading, isError } = useAtelierGetAccountWorkspace(accountId, {
     query: {
@@ -204,11 +206,37 @@ export default function Account() {
 
   const a = ws.account;
   const pending = (a.pendingProfileUpdates ?? []).filter((p) => p.status === "pending");
+  const isArchived = a.status === "archived";
+  const canArchive = !!me && (me.role === "founding_partner" || me.role === "partner");
+  const canPermanentlyDelete = !!me && me.role === "founding_partner";
 
   return (
     <div className="animate-in fade-in">
       <PageHero>
         <BackLink href="/crm">Back to Accounts</BackLink>
+
+        {isArchived && (
+          <div
+            className="mt-4 mb-2 border border-amber/40 bg-amber/10 rounded p-3 text-xs font-mono text-amber flex items-center justify-between gap-4 flex-wrap"
+            data-testid="banner-account-archived"
+          >
+            <span>
+              This account is <strong>archived</strong> — read-only. Open
+              opportunities were soft-closed and active engagements moved to a
+              closed stage. Restore to resume work.
+            </span>
+            {canArchive && (
+              <button
+                type="button"
+                onClick={() => restoreAccountMut(qc, accountId, () => invalidate())}
+                className="pill-btn pill-btn-ghost text-xs"
+                data-testid="button-restore-account"
+              >
+                Restore account
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <SectionHead
@@ -276,6 +304,38 @@ export default function Account() {
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
                 Refresh from web
+              </button>
+            )}
+            {canArchive && !isArchived && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Archive ${a.name}? Open opportunities will be soft-closed and active engagements moved to a closed stage. You can restore it later.`,
+                    )
+                  ) {
+                    archiveAccountMut(qc, accountId, () => invalidate());
+                  }
+                }}
+                className="pill-btn pill-btn-ghost text-xs"
+                data-testid="button-archive-account"
+              >
+                Archive
+              </button>
+            )}
+            {canPermanentlyDelete && (
+              <button
+                type="button"
+                onClick={() =>
+                  permanentDeleteAccountFlow(qc, accountId, a.name, () =>
+                    setLocation("/crm"),
+                  )
+                }
+                className="pill-btn pill-btn-ghost text-xs text-danger"
+                data-testid="button-delete-account"
+              >
+                Delete permanently
               </button>
             )}
           </div>
@@ -404,6 +464,103 @@ function bulkDecideProfileMut(
       body: JSON.stringify(body),
     },
   ).then(() => qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) }));
+}
+
+// Task #627 — reversible archive. Soft-closes children; restorable.
+function archiveAccountMut(
+  qc: ReturnType<typeof useQueryClient>,
+  accountId: string,
+  onDone: () => void,
+) {
+  fetch(`${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/archive`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  })
+    .then((r) => {
+      if (!r.ok) throw new Error("archive-failed");
+      return r.json();
+    })
+    .then(() => {
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      onDone();
+    })
+    .catch(() => window.alert("Could not archive this account."));
+}
+
+function restoreAccountMut(
+  qc: ReturnType<typeof useQueryClient>,
+  accountId: string,
+  onDone: () => void,
+) {
+  fetch(`${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/restore`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  })
+    .then((r) => {
+      if (!r.ok) throw new Error("restore-failed");
+      return r.json();
+    })
+    .then(() => {
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      onDone();
+    })
+    .catch(() => window.alert("Could not restore this account."));
+}
+
+// Permanent delete: founding-partner only, typed-name confirm, financial-gated
+// (409 → offer an explicit override).
+function permanentDeleteAccountFlow(
+  qc: ReturnType<typeof useQueryClient>,
+  accountId: string,
+  accountName: string,
+  onDeleted: () => void,
+) {
+  const typed = window.prompt(
+    `Permanently delete ${accountName}? This cannot be undone and purges attached documents.\n\nType the account name to confirm:`,
+  );
+  if (typed == null) return;
+  if (typed.trim() !== accountName.trim()) {
+    window.alert("Name did not match — nothing was deleted.");
+    return;
+  }
+  const run = (override: boolean) =>
+    fetch(
+      `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}${override ? "?override=true" : ""}`,
+      { method: "DELETE", credentials: "include" },
+    );
+  run(false)
+    .then(async (r) => {
+      if (r.ok) {
+        qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+        onDeleted();
+        return;
+      }
+      if (r.status === 409) {
+        const body = (await r.json().catch(() => ({}))) as { reason?: string };
+        if (
+          window.confirm(
+            `${body.reason ?? "This account has financial records."}\n\nOverride and delete anyway?`,
+          )
+        ) {
+          const r2 = await run(true);
+          if (r2.ok) {
+            qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+            onDeleted();
+          } else {
+            window.alert("Could not delete this account.");
+          }
+        }
+        return;
+      }
+      if (r.status === 403) {
+        window.alert("Only the founding partner can permanently delete an account.");
+        return;
+      }
+      window.alert("Could not delete this account.");
+    })
+    .catch(() => window.alert("Could not delete this account."));
 }
 
 // --- tabs ---

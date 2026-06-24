@@ -202,6 +202,7 @@ export * from "./atelierHypothesisBranch";
 export * from "./atelierHypothesisTree";
 export * from "./atelierHypothesisTreeRoot";
 export * from "./atelierListAccountsParams";
+export * from "./atelierListAccountsStatus";
 export * from "./atelierListAccountsTier";
 export * from "./atelierListAuditEntityType";
 export * from "./atelierListAuditParams";

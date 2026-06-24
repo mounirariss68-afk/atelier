@@ -3910,6 +3910,14 @@ export type AtelierListAccountsParams = {
   tier?: AtelierListAccountsTier;
   sector?: string;
   ownerId?: string;
+  /**
+ * Lifecycle filter (Task #627). Omitted = active roster (excludes
+archived). `archived` = only archived accounts (the Archived
+filter). `all` = both. Permanently-deleted accounts are never
+returned.
+
+ */
+  status?: AtelierListAccountsStatus;
 };
 
 export type AtelierListAccountsTier =
@@ -3920,6 +3928,14 @@ export const AtelierListAccountsTier = {
   B: "B",
   C: "C",
   D: "D",
+} as const;
+
+export type AtelierListAccountsStatus =
+  (typeof AtelierListAccountsStatus)[keyof typeof AtelierListAccountsStatus];
+
+export const AtelierListAccountsStatus = {
+  archived: "archived",
+  all: "all",
 } as const;
 
 export type AtelierListAuditParams = {

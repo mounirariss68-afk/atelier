@@ -33,6 +33,13 @@ import {
 } from "@workspace/db";
 import { purgeAttachmentsByScope } from "./attachments/index.js";
 import {
+  archiveAccount,
+  restoreAccount,
+  permanentlyDeleteAccount,
+  loadAccountAnyState,
+  accountFinancialFootprint,
+} from "../atelier-account-lifecycle.js";
+import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
   getSessionDraft,
@@ -270,8 +277,145 @@ defineCapability({
   module: "account",
   toolName: "account_delete",
   description:
-    "Soft-delete an account. Irreversible from CLI surface — second /confirm requires typing the account name.",
+    "Permanently delete an account (founding partner only). Blocked when invoices or timesheets exist unless overridden. Irreversible — purges every document and the second /confirm requires typing the account name. Use /archive-account for the reversible default.",
   slashAliases: { en: ["/delete-account"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: { type: "string" },
+      override: { type: "boolean" },
+      confirm: { type: "boolean" },
+    },
+    required: ["accountId"],
+  },
+  isWrite: true,
+  irreversible: true,
+  // Task #627 — true hard-delete is reserved for the founding partner.
+  requiredRoles: ["founding_partner"],
+  surfaceOn: ["account_workspace"],
+  examplePhrases: {
+    en: ["permanently delete the Acme account", "/delete-account acme"],
+  },
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "account_deleted",
+  async run(input, ctx) {
+    const accountId = String(input.accountId ?? "");
+    const override = input.override === true;
+    // Task #627 — true hard-delete is reserved for the founding partner. The
+    // catalog already hides this capability from other roles; this in-run guard
+    // makes the capability self-defending for direct/programmatic callers.
+    if (ctx.persona.role !== "founding_partner") {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage:
+          "Only the founding partner can permanently delete an account. Archive it instead.",
+      };
+    }
+    // Task #332/#627 — org-scope the lookup WITHOUT filtering deletedAt so a
+    // re-confirm of an already-removed target replays as a success no-op
+    // ("already removed"), never a confusing not_found.
+    const acc = await loadAccountAnyState(ctx.persona.orgId, accountId);
+    if (!acc) {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
+    }
+    if (acc.deletedAt) {
+      // Idempotent: the destructive action already happened.
+      return {
+        ok: true,
+        data: {
+          deleted: acc.id,
+          name: acc.name,
+          alreadyRemoved: true,
+          message: `Account "${acc.name}" was already removed.`,
+          navigateTo: { path: "/accounts", when: "on_commit" as const },
+        },
+      };
+    }
+
+    // Surface the financial-records gate before asking for confirmation.
+    const footprint = await accountFinancialFootprint(ctx.persona.orgId, acc.id);
+    if (footprint.hasAny && !override) {
+      const parts: string[] = [];
+      if (footprint.invoices > 0) parts.push(`${footprint.invoices} invoice${footprint.invoices === 1 ? "" : "s"}`);
+      if (footprint.timesheets > 0) parts.push(`${footprint.timesheets} timesheet entr${footprint.timesheets === 1 ? "y" : "ies"}`);
+      return {
+        ok: false,
+        errorCode: "financial_records_exist",
+        errorMessage:
+          `"${acc.name}" has ${parts.join(" and ")} on its books. Permanent deletion is blocked. ` +
+          `Archive it instead (/archive-account), or re-run with override:true to force the delete.`,
+      };
+    }
+
+    if (input.confirm !== true) {
+      const overrideNote =
+        footprint.hasAny && override
+          ? ` Overriding the financial-records block (${footprint.invoices} invoices, ${footprint.timesheets} timesheet entries will be orphaned).`
+          : "";
+      return {
+        ok: true,
+        data: { preview: { id: acc.id, name: acc.name } },
+        confirmation: {
+          summary:
+            `Permanently delete account "${acc.name}" and purge all of its documents. ` +
+            `This cannot be undone — you will be asked to retype the account name to confirm.` +
+            overrideNote +
+            ` (To keep the records and make this reversible, archive it instead.)`,
+          diff: {
+            delete: { table: "atelier_accounts", id: acc.id, name: acc.name },
+            irreversible: true,
+            typedNameRequired: acc.name,
+          },
+          pending: { tool: "account_delete", input: { accountId: acc.id, override, confirm: true } },
+        },
+      };
+    }
+
+    const result = await permanentlyDeleteAccount(
+      { id: ctx.persona.id, name: ctx.persona.name, orgId: ctx.persona.orgId },
+      acc.id,
+      { override },
+    );
+    if (result.status === "blocked") {
+      return {
+        ok: false,
+        errorCode: "financial_records_exist",
+        errorMessage:
+          `"${result.accountName}" has financial records (${result.financial.invoices} invoices, ` +
+          `${result.financial.timesheets} timesheet entries). Re-run with override:true to force the delete.`,
+      };
+    }
+    if (result.status === "not_found") {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
+    }
+    // Task #499/#627 — after a delete the entity page no longer exists; land
+    // the user on the accounts index so they see their list.
+    return {
+      ok: true,
+      data: {
+        deleted: acc.id,
+        name: result.accountName,
+        alreadyRemoved: result.status === "already_removed",
+        navigateTo: { path: "/accounts", when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// account.archive — reversible default. Cascades opps/engs, retains
+// invoices + timesheets read-only, restorable via account.restore.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "account.archive",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_archive",
+  description:
+    "Archive an account (reversible). Closes its open opportunities and engagements and hides it from the active roster, while keeping invoices and timesheets read-only. Restore it any time with /restore-account.",
+  slashAliases: { en: ["/archive-account"] },
   inputSchema: {
     type: "object",
     properties: {
@@ -281,32 +425,39 @@ defineCapability({
     required: ["accountId"],
   },
   isWrite: true,
-  irreversible: true,
+  irreversible: false,
   requiredRoles: ["founding_partner", "partner"],
   surfaceOn: ["account_workspace"],
   examplePhrases: {
-    en: ["delete the Acme account", "/delete-account acme"],
+    en: ["archive the Acme account", "/archive-account acme"],
   },
   twoPhaseConfirm: true,
   outboundChannel: null,
-  resultCard: "account_deleted",
+  resultCard: "entity_card",
   async run(input, ctx) {
     const accountId = String(input.accountId ?? "");
-    // Task #332 — org-scope the lookup so a forged accountId from a
-    // different tenant cannot be soft-deleted via the CLI surface.
-    const [acc] = await db
-      .select({ id: atelierAccounts.id, name: atelierAccounts.name })
-      .from(atelierAccounts)
-      .where(
-        and(
-          eq(atelierAccounts.id, accountId),
-          eq(atelierAccounts.orgId, ctx.persona.orgId),
-          isNull(atelierAccounts.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (!acc) {
-      return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
+    if (ctx.persona.role !== "founding_partner" && ctx.persona.role !== "partner") {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: "Only partners can archive accounts.",
+      };
+    }
+    const acc = await loadAccountAnyState(ctx.persona.orgId, accountId);
+    if (!acc || acc.deletedAt) {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
+    }
+    if (acc.status === "archived") {
+      return {
+        ok: true,
+        data: {
+          archived: acc.id,
+          name: acc.name,
+          alreadyArchived: true,
+          message: `Account "${acc.name}" is already archived.`,
+          navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },
+        },
+      };
     }
     if (input.confirm !== true) {
       return {
@@ -314,74 +465,120 @@ defineCapability({
         data: { preview: { id: acc.id, name: acc.name } },
         confirmation: {
           summary:
-            `Permanently delete account "${acc.name}". This cannot be undone from the CLI — ` +
-            `you will be asked to retype the account name to confirm.`,
+            `Archive account "${acc.name}". Its open opportunities and active engagements will be closed and ` +
+            `the account drops off the active roster (still viewable read-only under the Archived filter). ` +
+            `Invoices and timesheets are kept. You can restore it any time.`,
           diff: {
-            delete: { table: "atelier_accounts", id: acc.id, name: acc.name },
-            irreversible: true,
-            typedNameRequired: acc.name,
+            update: { table: "atelier_accounts", id: acc.id, name: acc.name, status: "archived" },
+            reversible: true,
           },
-          pending: { tool: "account_delete", input: { accountId: acc.id, confirm: true } },
+          pending: { tool: "account_archive", input: { accountId: acc.id, confirm: true } },
         },
       };
     }
-    await db
-      .update(atelierAccounts)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(
-        and(
-          eq(atelierAccounts.id, acc.id),
-          eq(atelierAccounts.orgId, ctx.persona.orgId),
-        ),
-      );
-    await db.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: acc.id,
-      actorType: "human",
-      actorId: ctx.persona.id,
-      actorLabel: ctx.persona.name,
-      action: "account.delete.cli",
-      payload: { accountId: acc.id, accountName: acc.name, viaCli: true, turnId: ctx.turnId },
-      payloadSummary: `CLI deleted account ${acc.name}`,
-    });
-    // Task #575 — parent-entity deletion lifecycle. Deleting the account
-    // purges every document scoped to it, plus documents scoped to the
-    // account's engagements (engagements are only ever *closed*, never
-    // hard-deleted, so their docs are reclaimed via the owning account's
-    // deletion). Removes blob + chunk vectors so retrieval can never
-    // surface a document whose parent no longer exists.
-    const engRows = await db
-      .select({ id: atelierEngagements.id })
-      .from(atelierEngagements)
-      .where(
-        and(
-          eq(atelierEngagements.accountId, acc.id),
-          eq(atelierEngagements.orgId, ctx.persona.orgId),
-        ),
-      );
-    await purgeAttachmentsByScope({
-      orgId: ctx.persona.orgId,
-      accountId: acc.id,
-      actorId: ctx.persona.id,
-      actorLabel: ctx.persona.name,
-    });
-    for (const eng of engRows) {
-      await purgeAttachmentsByScope({
-        orgId: ctx.persona.orgId,
-        engagementId: eng.id,
-        actorId: ctx.persona.id,
-        actorLabel: ctx.persona.name,
-      });
+    const result = await archiveAccount(
+      { id: ctx.persona.id, name: ctx.persona.name, orgId: ctx.persona.orgId },
+      acc.id,
+    );
+    if (result.status === "not_found") {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
     }
-    // Task #499 — after a delete the entity page no longer exists;
-    // land the user on the accounts index so they see their list.
     return {
       ok: true,
       data: {
-        deleted: acc.id,
-        name: acc.name,
-        navigateTo: { path: "/accounts", when: "on_commit" as const },
+        archived: acc.id,
+        name: result.status === "already_archived" ? result.accountName : result.accountName,
+        alreadyArchived: result.status === "already_archived",
+        navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// account.restore — inverse of archive. Reactivates the account and its
+// cascaded opportunities + engagements.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "account.restore",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_restore",
+  description:
+    "Restore a previously archived account, reactivating it and reverting its cascaded opportunities and engagements to their pre-archive state.",
+  slashAliases: { en: ["/restore-account"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: { type: "string" },
+      confirm: { type: "boolean" },
+    },
+    required: ["accountId"],
+  },
+  isWrite: true,
+  irreversible: false,
+  requiredRoles: ["founding_partner", "partner"],
+  surfaceOn: ["account_workspace"],
+  examplePhrases: {
+    en: ["restore the Acme account", "/restore-account acme"],
+  },
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  async run(input, ctx) {
+    const accountId = String(input.accountId ?? "");
+    if (ctx.persona.role !== "founding_partner" && ctx.persona.role !== "partner") {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: "Only partners can restore accounts.",
+      };
+    }
+    const acc = await loadAccountAnyState(ctx.persona.orgId, accountId);
+    if (!acc || acc.deletedAt) {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
+    }
+    if (acc.status !== "archived") {
+      return {
+        ok: true,
+        data: {
+          restored: acc.id,
+          name: acc.name,
+          alreadyActive: true,
+          message: `Account "${acc.name}" is not archived.`,
+          navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },
+        },
+      };
+    }
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: { preview: { id: acc.id, name: acc.name } },
+        confirmation: {
+          summary:
+            `Restore account "${acc.name}". It returns to the active roster and its archived opportunities and ` +
+            `engagements are reactivated to their pre-archive state.`,
+          diff: {
+            update: { table: "atelier_accounts", id: acc.id, name: acc.name, status: "active" },
+            reversible: true,
+          },
+          pending: { tool: "account_restore", input: { accountId: acc.id, confirm: true } },
+        },
+      };
+    }
+    const result = await restoreAccount(
+      { id: ctx.persona.id, name: ctx.persona.name, orgId: ctx.persona.orgId },
+      acc.id,
+    );
+    if (result.status === "not_found") {
+      return { ok: false, errorCode: "not_found", errorMessage: `No account ${accountId} in your workspace.` };
+    }
+    return {
+      ok: true,
+      data: {
+        restored: acc.id,
+        name: result.accountName,
+        navigateTo: { path: `/accounts/${acc.id}`, when: "on_commit" as const },
       },
     };
   },

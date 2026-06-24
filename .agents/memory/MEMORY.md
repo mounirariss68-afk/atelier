@@ -23,3 +23,4 @@
 - [Running the CRM test harness](crm-harness-run.md) — one-shot test, >120s (unrelated LLM scout ~45s), can't run via restart_workflow (SIGKILLed for not "serving"); verify subsets with a standalone tsx probe that boots app.listen(0).
 - [Account-revenue write surfaces](atelier-revenue-write-surfaces.md) — annualRevenue is written ONLY by POST /accounts + PATCH /accounts/:id; financials gate must cover BOTH (create gate uses would-be partnerOwnerId).
 - [CRM harness live-LLM flakiness](crm-harness-flakiness.md) — test:crm CRUD logic is fine; failures come from real awaited LLM calls; pass runScout:false; shared extractFirstJsonObject + AgentNonJsonResponseError handle prose/refusals.
+- [Account deletion lifecycle](atelier-account-lifecycle.md) — Archive (reversible, status flip + cascade, prior child state in audit for precise restore) vs Permanent delete (founding_partner only, financial-gated/override, idempotent); seed cascade test rows via db.insert not REST.

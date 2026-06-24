@@ -205,6 +205,8 @@ async function main(): Promise<void> {
     atelierAccountActions,
     atelierAccountRisks,
     atelierAccountGoalProgress,
+    atelierEngagements,
+    atelierInvoice,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -220,6 +222,8 @@ async function main(): Promise<void> {
     atelierAccountActions: any;
     atelierAccountRisks: any;
     atelierAccountGoalProgress: any;
+    atelierEngagements: any;
+    atelierInvoice: any;
   };
 
   const START = new Date();
@@ -1256,9 +1260,13 @@ async function main(): Promise<void> {
       // account_update + account_delete: the U and D of account CRUD via capabilities.
       const acctUpdateCap = catalog.findByToolName("account_update");
       const acctDeleteCap = catalog.findByToolName("account_delete");
+      const acctArchiveCap = catalog.findByToolName("account_archive");
+      const acctRestoreCap = catalog.findByToolName("account_restore");
       check("capability account_update registered", !!acctUpdateCap);
       check("capability account_delete registered", !!acctDeleteCap);
-      if (acctCap && acctUpdateCap && acctDeleteCap) {
+      check("capability account_archive registered", !!acctArchiveCap);
+      check("capability account_restore registered", !!acctRestoreCap);
+      if (acctCap && acctUpdateCap && acctDeleteCap && acctArchiveCap && acctRestoreCap) {
         // Seed a throwaway account to mutate then soft-delete (isolated from
         // the rows other groups assert against).
         const seed = await acctCap.run({ name: uniq("CrudAcct"), country: "AE", sector: "Technology", confirm: true }, ctx);
@@ -1275,14 +1283,133 @@ async function main(): Promise<void> {
           const [au] = await db.select({ s: atelierAccounts.status }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
           check("account_update persisted status 'dormant'", au?.s === "dormant", `got ${au?.s}`);
 
-          // delete (two-phase: typed-name re-confirm)
-          const delPhase1 = await acctDeleteCap.run({ accountId: targetId }, ctx);
+          // ---- Task #627 — reversible ARCHIVE lifecycle ----
+          // Seed a child opportunity + engagement so we can assert the cascade
+          // (open opps soft-close, active engagements move to plmStage 'closed')
+          // and, critically, that RESTORE reverts both to their prior state.
+          const cascadeOppId = `opp_arch_${STAMP}`;
+          await db.insert(atelierOpportunities).values({
+            id: cascadeOppId,
+            orgId: ORG,
+            slug: `arch-opp-${STAMP}`,
+            name: uniq("ArchOpp"),
+            accountId: targetId,
+            plmStage: "qualify",
+            salesStage: "suspect",
+            partnerOwnerId: PERSONA.fp,
+            engagementLeadId: PERSONA.fp,
+            dealSizeHypothesis: 480000,
+            probabilityPct: 30,
+            nextMilestone: "cascade-on-archive probe",
+            sourceLead: "probe",
+          });
+          created.opps.add(cascadeOppId);
+          const cascadeEngId = `eng_arch_${STAMP}`;
+          await db.insert(atelierEngagements).values({
+            id: cascadeEngId,
+            orgId: ORG,
+            slug: `arch-${STAMP}`,
+            name: uniq("ArchEng"),
+            accountId: targetId,
+            plmStage: "deliver",
+            partnerOwnerId: PERSONA.fp,
+            engagementLeadId: PERSONA.fp,
+            startDate: "2026-01-01",
+            plannedEndDate: "2026-12-31",
+          });
+
+          // archive — phase 1 (no confirm) → reversible confirmation envelope
+          const arcP1 = await acctArchiveCap.run({ accountId: targetId }, ctx);
+          check(
+            "account_archive phase1 \u2192 reversible confirmation",
+            arcP1.ok === true && !!arcP1.confirmation && (arcP1.confirmation as any)?.diff?.reversible === true,
+            JSON.stringify(arcP1).slice(0, 160),
+          );
+          // archive — phase 2 (confirm) → ok + status flips, children cascade
+          const arcP2 = await acctArchiveCap.run({ accountId: targetId, confirm: true }, ctx);
+          check("account_archive phase2 (confirm) \u2192 ok", arcP2.ok === true, JSON.stringify(arcP2).slice(0, 120));
+          const [arcRow] = await db.select({ s: atelierAccounts.status, d: atelierAccounts.deletedAt }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
+          check("account_archive set status 'archived' (deletedAt stays null)", arcRow?.s === "archived" && !arcRow?.d, `status=${arcRow?.s} deletedAt=${arcRow?.d}`);
+          if (cascadeOppId) {
+            const [co] = await db.select({ d: atelierOpportunities.deletedAt }).from(atelierOpportunities).where(eq(atelierOpportunities.id, cascadeOppId));
+            check("account_archive cascade: open opp soft-deleted", !!co?.d, `deletedAt=${co?.d}`);
+          }
+          const [ce] = await db.select({ st: atelierEngagements.plmStage }).from(atelierEngagements).where(eq(atelierEngagements.id, cascadeEngId));
+          check("account_archive cascade: active engagement \u2192 plmStage 'closed'", ce?.st === "closed", `got ${ce?.st}`);
+
+          // archive is idempotent: a second archive is a success no-op
+          const arcAgain = await acctArchiveCap.run({ accountId: targetId, confirm: true }, ctx);
+          check("account_archive (already archived) \u2192 ok alreadyArchived", arcAgain.ok === true && (arcAgain.data as any)?.alreadyArchived === true, JSON.stringify(arcAgain).slice(0, 120));
+
+          // workspace still resolves while archived (read-only)
+          const archWs = await api("GET", `/accounts/${targetId}`, PERSONA.fp);
+          check("archived account workspace still resolves", archWs.status === 200 && archWs.body?.account?.status === "archived", `status=${archWs.status}`);
+
+          // roster: default GET /accounts excludes archived; ?status=archived includes it
+          const rosterDefault = await api("GET", "/accounts", PERSONA.fp);
+          const inDefault = Array.isArray(rosterDefault.body) && rosterDefault.body.some((r: any) => r.id === targetId);
+          check("GET /accounts default EXCLUDES archived", rosterDefault.status === 200 && !inDefault, `present=${inDefault}`);
+          const rosterArchived = await api("GET", "/accounts?status=archived", PERSONA.fp);
+          const inArchived = Array.isArray(rosterArchived.body) && rosterArchived.body.some((r: any) => r.id === targetId);
+          check("GET /accounts?status=archived INCLUDES archived", rosterArchived.status === 200 && inArchived, `present=${inArchived}`);
+
+          // ---- RESTORE — inverse, reverts cascaded children to prior state ----
+          const resP2 = await acctRestoreCap.run({ accountId: targetId, confirm: true }, ctx);
+          check("account_restore (confirm) \u2192 ok", resP2.ok === true, JSON.stringify(resP2).slice(0, 120));
+          const [resRow] = await db.select({ s: atelierAccounts.status }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
+          check("account_restore set status back to 'active'", resRow?.s === "active", `got ${resRow?.s}`);
+          if (cascadeOppId) {
+            const [ro] = await db.select({ d: atelierOpportunities.deletedAt }).from(atelierOpportunities).where(eq(atelierOpportunities.id, cascadeOppId));
+            check("account_restore reverted opp (deletedAt cleared)", !ro?.d, `deletedAt=${ro?.d}`);
+          }
+          const [re] = await db.select({ st: atelierEngagements.plmStage }).from(atelierEngagements).where(eq(atelierEngagements.id, cascadeEngId));
+          check("account_restore reverted engagement plmStage to 'deliver'", re?.st === "deliver", `got ${re?.st}`);
+
+          // ---- ROLE GATING — capabilities are self-defending ----
+          const rArchive = await acctArchiveCap.run(
+            { accountId: targetId, confirm: true },
+            makeCtx(PERSONA.restricted, "partner_firm_resource", "Yara Al-Suwaidi"),
+          );
+          check("account_archive (restricted persona) \u2192 ok:false forbidden", rArchive.ok === false && (rArchive as any).errorCode === "forbidden", JSON.stringify(rArchive).slice(0, 120));
+          const smDelete = await acctDeleteCap.run(
+            { accountId: targetId, confirm: true },
+            makeCtx(PERSONA.sm, "senior_manager", "Layla Haddad"),
+          );
+          check("account_delete (senior_manager) \u2192 ok:false forbidden", smDelete.ok === false && (smDelete as any).errorCode === "forbidden", JSON.stringify(smDelete).slice(0, 120));
+          // HTTP layer mirrors: a partner cannot DELETE (founding-partner only)
+          const httpDelPartner = await api("DELETE", `/accounts/${targetId}`, PERSONA.restricted);
+          check("DELETE /accounts/:id (restricted) \u2192 403", httpDelPartner.status === 403, `status=${httpDelPartner.status}`);
+
+          // ---- PERMANENT DELETE — financial-records gate + override ----
+          // Seed an invoice so the footprint gate trips.
+          await db.insert(atelierInvoice).values({
+            id: `inv_t627_${STAMP}`,
+            orgId: ORG,
+            accountId: targetId,
+            jurisdiction: "AE",
+            currency: "USD",
+            status: "issued",
+            total: 1000,
+          });
+          const delBlocked = await acctDeleteCap.run({ accountId: targetId, confirm: true }, ctx);
+          check("account_delete with invoices (no override) \u2192 ok:false financial_records_exist", delBlocked.ok === false && (delBlocked as any).errorCode === "financial_records_exist", JSON.stringify(delBlocked).slice(0, 160));
+          const [stillThere] = await db.select({ d: atelierAccounts.deletedAt }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
+          check("account_delete financial block did NOT delete", !stillThere?.d, `deletedAt=${stillThere?.d}`);
+
+          // phase1 still issues a typed-name confirmation envelope (with override)
+          const delPhase1 = await acctDeleteCap.run({ accountId: targetId, override: true }, ctx);
           const typed = (delPhase1.confirmation as any)?.diff?.typedNameRequired as string | undefined;
-          check("account_delete phase1 \u2192 confirmation w/ typed-name", delPhase1.ok === true && !!delPhase1.confirmation && !!typed, JSON.stringify(delPhase1).slice(0, 140));
-          const delPhase2 = await acctDeleteCap.run({ accountId: targetId, confirm: true }, ctx);
-          check("account_delete phase2 (confirm) \u2192 ok", delPhase2.ok === true, JSON.stringify(delPhase2).slice(0, 120));
+          check("account_delete phase1 (override) \u2192 confirmation w/ typed-name", delPhase1.ok === true && !!delPhase1.confirmation && !!typed, JSON.stringify(delPhase1).slice(0, 160));
+          // override + confirm → hard delete
+          const delPhase2 = await acctDeleteCap.run({ accountId: targetId, override: true, confirm: true }, ctx);
+          check("account_delete phase2 (override+confirm) \u2192 ok", delPhase2.ok === true, JSON.stringify(delPhase2).slice(0, 120));
           const [ad] = await db.select({ d: atelierAccounts.deletedAt }).from(atelierAccounts).where(eq(atelierAccounts.id, targetId));
-          check("account_delete soft-deleted (deletedAt set)", !!ad?.d, `deletedAt=${ad?.d}`);
+          check("account_delete (override) hard-deleted (deletedAt set)", !!ad?.d, `deletedAt=${ad?.d}`);
+
+          // idempotent destructive confirm: re-delete an already-removed target
+          // is a success no-op ("already removed"), NOT a raw not_found.
+          const delIdem = await acctDeleteCap.run({ accountId: targetId, override: true, confirm: true }, ctx);
+          check("account_delete (already removed) \u2192 ok alreadyRemoved no-op", delIdem.ok === true && (delIdem.data as any)?.alreadyRemoved === true, JSON.stringify(delIdem).slice(0, 120));
         }
       }
 

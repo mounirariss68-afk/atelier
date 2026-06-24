@@ -2238,6 +2238,12 @@ export const AtelierListAccountsQueryParams = zod.object({
   tier: zod.enum(["A", "B", "C", "D"]).optional(),
   sector: zod.coerce.string().optional(),
   ownerId: zod.coerce.string().optional(),
+  status: zod
+    .enum(["archived", "all"])
+    .optional()
+    .describe(
+      "Lifecycle filter (Task #627). Omitted = active roster (excludes\narchived). `archived` = only archived accounts (the Archived\nfilter). `all` = both. Permanently-deleted accounts are never\nreturned.\n",
+    ),
 });
 
 export const atelierListAccountsResponseAnnualRevenueOneAmountMin = 0;

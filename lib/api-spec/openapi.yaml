@@ -1077,6 +1077,14 @@ paths:
         - in: query
           name: ownerId
           schema: { type: string }
+        - in: query
+          name: status
+          description: |
+            Lifecycle filter (Task #627). Omitted = active roster (excludes
+            archived). `archived` = only archived accounts (the Archived
+            filter). `all` = both. Permanently-deleted accounts are never
+            returned.
+          schema: { type: string, enum: [archived, all] }
       responses:
         "200":
           description: All accounts

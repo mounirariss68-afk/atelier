@@ -5,10 +5,19 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierListAccountsStatus } from "./atelierListAccountsStatus";
 import type { AtelierListAccountsTier } from "./atelierListAccountsTier";
 
 export type AtelierListAccountsParams = {
   tier?: AtelierListAccountsTier;
   sector?: string;
   ownerId?: string;
+  /**
+ * Lifecycle filter (Task #627). Omitted = active roster (excludes
+archived). `archived` = only archived accounts (the Archived
+filter). `all` = both. Permanently-deleted accounts are never
+returned.
+
+ */
+  status?: AtelierListAccountsStatus;
 };

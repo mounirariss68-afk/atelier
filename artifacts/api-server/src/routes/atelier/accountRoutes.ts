@@ -36,7 +36,12 @@ import {
   atelierActivities,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
-import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
+import { isRestrictedPersona, isBoardObserver, isFoundingPartner } from "./personaRoles.js";
+import {
+  archiveAccount,
+  restoreAccount,
+  permanentlyDeleteAccount,
+} from "../../lib/atelier-account-lifecycle.js";
 import {
   computeAccountFinancials,
   computeAccountHealth,
@@ -282,11 +287,22 @@ router.get("/accounts", async (req, res) => {
   const tier = typeof req.query.tier === "string" ? req.query.tier : undefined;
   const sector = typeof req.query.sector === "string" ? req.query.sector : undefined;
   const ownerId = typeof req.query.ownerId === "string" ? req.query.ownerId : undefined;
+  // Task #627 — archived accounts are hidden from the default roster. Pass
+  // `?status=archived` to see only archived accounts (the Archived filter) or
+  // `?status=all` to include both. permanently-deleted (deletedAt) rows are
+  // never returned regardless.
+  const statusFilter =
+    typeof req.query.status === "string" ? req.query.status : undefined;
   const rows = await db
     .select()
     .from(atelierAccounts)
     .where(isNull(atelierAccounts.deletedAt));
   let filtered = rows;
+  if (statusFilter === "archived") {
+    filtered = filtered.filter((r) => (r.status ?? "active") === "archived");
+  } else if (statusFilter !== "all") {
+    filtered = filtered.filter((r) => (r.status ?? "active") !== "archived");
+  }
   if (tier) filtered = filtered.filter((r) => (r.tier ?? "C") === tier);
   if (sector) filtered = filtered.filter((r) => r.sector === sector);
   if (ownerId) filtered = filtered.filter((r) => r.partnerOwnerId === ownerId);
@@ -2979,6 +2995,100 @@ router.patch("/accounts/:accountId", async (req, res) => {
 
   const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
+});
+
+// ---------- archive / restore / permanent delete (Task #627) ----------
+// Reversible archive is the partner-tier default. Permanent delete is the
+// restricted destructive path (founding partner only, financial-gated).
+const ARCHIVE_ROLES = new Set(["founding_partner", "partner"]);
+
+router.post("/accounts/:accountId/archive", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ARCHIVE_ROLES.has(me.role)) {
+    res.status(403).json({ error: "partner-only", reason: "Only partners can archive accounts." });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const result = await archiveAccount(
+    { id: me.id, name: me.name, orgId: me.orgId },
+    req.params.accountId,
+  );
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const ws = await buildWorkspace(req.params.accountId, access, me);
+  res.json({ ok: true, status: result.status, workspace: ws });
+});
+
+router.post("/accounts/:accountId/restore", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ARCHIVE_ROLES.has(me.role)) {
+    res.status(403).json({ error: "partner-only", reason: "Only partners can restore accounts." });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const result = await restoreAccount(
+    { id: me.id, name: me.name, orgId: me.orgId },
+    req.params.accountId,
+  );
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const ws = await buildWorkspace(req.params.accountId, access, me);
+  res.json({ ok: true, status: result.status, workspace: ws });
+});
+
+router.delete("/accounts/:accountId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  // True hard-delete is reserved for the founding partner.
+  if (!isFoundingPartner(me.role)) {
+    res.status(403).json({
+      error: "founding-partner-only",
+      reason: "Only the founding partner can permanently delete an account. Archive it instead.",
+    });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const override =
+    req.query.override === "true" ||
+    (req.body && (req.body as { override?: unknown }).override === true);
+  const result = await permanentlyDeleteAccount(
+    { id: me.id, name: me.name, orgId: me.orgId },
+    req.params.accountId,
+    { override },
+  );
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (result.status === "blocked") {
+    res.status(409).json({
+      error: "financial-records-exist",
+      reason:
+        `This account has ${result.financial.invoices} invoice(s) and ` +
+        `${result.financial.timesheets} timesheet entr(y/ies). Archive it, or retry with override.`,
+      financial: result.financial,
+    });
+    return;
+  }
+  res.json({ ok: true, status: result.status });
 });
 
 // ---------- cartographer refresh ----------

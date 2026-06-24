@@ -41,7 +41,10 @@ const ENTITY_ROLE_LABEL: Record<string, string> = {
 };
 
 export default function Crm() {
-  const { data: accounts, isLoading } = useAtelierListAccounts();
+  const [lifecycle, setLifecycle] = useState<"active" | "archived">("active");
+  const { data: accounts, isLoading } = useAtelierListAccounts(
+    lifecycle === "archived" ? { status: "archived" } : undefined,
+  );
   const { data: me } = useAtelierGetMe();
   const canCreate = !!me && CREATE_ROLES.has(me.role);
   const [view, setView] = useState<"accounts" | "renewals">("accounts");
@@ -137,6 +140,24 @@ export default function Crm() {
       <div className="container-atelier py-10 space-y-6">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
           <span>Filter</span>
+          <div className="inline-flex rounded border border-border overflow-hidden" data-testid="lifecycle-toggle">
+            <button
+              type="button"
+              onClick={() => setLifecycle("active")}
+              className={`px-2 py-1 ${lifecycle === "active" ? "bg-gold/20 text-gold" : "bg-bg-elevate text-text-mute hover:text-text"}`}
+              data-testid="lifecycle-active"
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setLifecycle("archived")}
+              className={`px-2 py-1 border-l border-border ${lifecycle === "archived" ? "bg-gold/20 text-gold" : "bg-bg-elevate text-text-mute hover:text-text"}`}
+              data-testid="lifecycle-archived"
+            >
+              Archived
+            </button>
+          </div>
           <select
             value={tier}
             onChange={(e) => setTier(e.target.value)}
