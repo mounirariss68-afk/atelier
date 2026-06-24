@@ -16,6 +16,7 @@ import type { AtelierAccountWorkspaceAccount } from "./atelierAccountWorkspaceAc
 import type { AtelierAuditEventLite } from "./atelierAuditEventLite";
 import type { AtelierContact } from "./atelierContact";
 import type { AtelierContactRelationship } from "./atelierContactRelationship";
+import type { AtelierFirmographicChange } from "./atelierFirmographicChange";
 import type { AtelierQbrCanvas } from "./atelierQbrCanvas";
 import type { AtelierWhitespaceCanvas } from "./atelierWhitespaceCanvas";
 
@@ -26,6 +27,7 @@ export interface AtelierAccountWorkspace {
   opportunities: AtelierAccountOpportunityRef[];
   engagements: AtelierAccountEngagementRef[];
   audit: AtelierAuditEventLite[];
+  firmographicHistory?: AtelierFirmographicChange[];
   insights?: AtelierAccountInsight[];
   accountTeam?: AtelierAccountTeamMember[];
   actionPlan?: AtelierAccountAction[];

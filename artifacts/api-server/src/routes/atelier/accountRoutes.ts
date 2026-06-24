@@ -684,6 +684,129 @@ router.post("/accounts", async (req, res) => {
 });
 
 // ---------- workspace ----------
+// Task #617 — firmographic fields whose edits are tracked in the change
+// history surfaced on the Company Details card. Labels mirror the edit dialog.
+const FIRMOGRAPHIC_FIELD_LABELS: Record<string, string> = {
+  employeeCount: "Employees",
+  annualRevenue: "Annual revenue",
+  holdingStructure: "Group structure",
+  countryPresence: "Country presence",
+  entityRole: "Entity role",
+};
+
+const ENTITY_ROLE_DISPLAY: Record<string, string> = {
+  hq: "Global HQ",
+  subsidiary: "Subsidiary",
+  branch: "Branch",
+  office: "Office",
+};
+
+/** Treat two firmographic values as equal for change-tracking. JSON-compares
+ *  objects/arrays and normalises null vs undefined so a no-op save (the edit
+ *  dialog always sends every field) never produces a spurious history row. */
+function firmoValuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+/** Human-readable one-line rendering of a firmographic value for the history
+ *  feed. Returns "—" for empty/unknown so the UI never shows a fabricated 0. */
+function displayFirmographicValue(field: string, value: unknown): string {
+  if (value == null) return "—";
+  switch (field) {
+    case "employeeCount": {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? Math.round(n).toLocaleString() : "—";
+    }
+    case "annualRevenue": {
+      const r = value as { amount?: number | null; currency?: string | null; asOf?: string | null };
+      if (r.amount == null) return "—";
+      const n = r.amount;
+      const abs = Math.abs(n);
+      let body: string;
+      if (abs >= 1_000_000_000) body = `${(n / 1_000_000_000).toFixed(1)}B`;
+      else if (abs >= 1_000_000) body = `${(n / 1_000_000).toFixed(1)}M`;
+      else if (abs >= 1_000) body = `${(n / 1_000).toFixed(0)}K`;
+      else body = `${Math.round(n)}`;
+      const head = r.currency ? `${r.currency} ${body}` : body;
+      return r.asOf ? `${head} (${r.asOf})` : head;
+    }
+    case "holdingStructure": {
+      const h = value as { isHoldingCompany?: boolean; isMultiBrand?: boolean; brands?: string[] };
+      const flags: string[] = [];
+      if (h.isHoldingCompany) flags.push("Holding company");
+      if (h.isMultiBrand) flags.push("Multi-brand");
+      const brands = (h.brands ?? []).filter((b) => b.trim().length > 0);
+      if (brands.length > 0) flags.push(`${brands.length} brand${brands.length === 1 ? "" : "s"}`);
+      return flags.length > 0 ? flags.join(" · ") : "—";
+    }
+    case "countryPresence": {
+      const c = value as Array<unknown>;
+      const n = Array.isArray(c) ? c.length : 0;
+      return n > 0 ? `${n} countr${n === 1 ? "y" : "ies"}` : "—";
+    }
+    case "entityRole":
+      return ENTITY_ROLE_DISPLAY[String(value)] ?? String(value);
+    default:
+      return "—";
+  }
+}
+
+/** Build the firmographic change history (newest-first) from the account's
+ *  audit events. Annual-revenue rows are redacted for personas without
+ *  financial authority — values + displays nulled, canRevert false — so the
+ *  money figure is never leaked through the history. */
+function buildFirmographicHistory(
+  audit: Array<{
+    id: string;
+    action: string;
+    actorType: string;
+    actorLabel: string | null;
+    payload: unknown;
+    createdAt: Date | string;
+  }>,
+  canSeeFinancials: boolean,
+) {
+  const out: Array<{
+    id: string;
+    field: string;
+    label: string;
+    actorType: string;
+    actorLabel: string;
+    at: string;
+    fromValue: unknown;
+    toValue: unknown;
+    fromDisplay: string | null;
+    toDisplay: string | null;
+    redacted: boolean;
+    canRevert: boolean;
+  }> = [];
+  for (const e of audit) {
+    if (e.action !== "account.update") continue;
+    const changes = (e.payload as { changes?: unknown } | null)?.changes;
+    if (!Array.isArray(changes)) continue;
+    for (const c of changes as Array<{ field?: string; before?: unknown; after?: unknown }>) {
+      const field = c.field ?? "";
+      if (!(field in FIRMOGRAPHIC_FIELD_LABELS)) continue;
+      const redacted = field === "annualRevenue" && !canSeeFinancials;
+      out.push({
+        id: `${e.id}:${field}`,
+        field,
+        label: FIRMOGRAPHIC_FIELD_LABELS[field],
+        actorType: e.actorType,
+        actorLabel: e.actorLabel ?? "",
+        at: new Date(e.createdAt).toISOString(),
+        fromValue: redacted ? null : (c.before ?? null),
+        toValue: redacted ? null : (c.after ?? null),
+        fromDisplay: redacted ? null : displayFirmographicValue(field, c.before ?? null),
+        toDisplay: redacted ? null : displayFirmographicValue(field, c.after ?? null),
+        redacted,
+        canRevert: !redacted,
+      });
+    }
+  }
+  return out.slice(0, 20);
+}
+
 async function buildWorkspace(
   accountId: string,
   access: EngAccess,
@@ -1033,6 +1156,9 @@ async function buildWorkspace(
     actionPlan: plan.actionPlan,
     riskRegister: plan.riskRegister,
     goalProgress: plan.goalProgress,
+    // Task #617 — recent firmographic edits + previous values so partners can
+    // review and revert an accidental overwrite from the Company Details card.
+    firmographicHistory: buildFirmographicHistory(audit, canSeeFinancials),
   };
 }
 
@@ -2265,6 +2391,18 @@ router.patch("/accounts/:accountId", async (req, res) => {
     }));
     changed.push("competitors");
   }
+  // Task #617 — per-field before/after for firmographic edits, recorded in the
+  // audit payload so the Company Details card can surface "who changed what,
+  // when" and offer a one-click revert. Only fields that ACTUALLY changed are
+  // recorded (the edit dialog always resends every field, so a deep-equal guard
+  // keeps the history free of no-op rows). `before` is the value as currently
+  // stored on the account; `after` is the cleaned value being written.
+  const firmoChanges: Array<{ field: string; label: string; before: unknown; after: unknown }> = [];
+  const recordFirmoChange = (field: string, before: unknown, after: unknown) => {
+    if (firmoValuesEqual(before, after)) return;
+    firmoChanges.push({ field, label: FIRMOGRAPHIC_FIELD_LABELS[field] ?? field, before, after });
+  };
+
   // Task #608 — firmographic enrichment, partner-editable after create. Each
   // key is written only when present (PATCH semantics) and is coerced/cleaned
   // exactly like the create flow so values stay within server caps and figures
@@ -2272,6 +2410,7 @@ router.patch("/accounts/:accountId", async (req, res) => {
   if ("employeeCount" in input) {
     update.employeeCount = input.employeeCount ?? null;
     changed.push("employeeCount");
+    recordFirmoChange("employeeCount", a.employeeCount ?? null, update.employeeCount);
   }
   if ("annualRevenue" in input) {
     // Task #613 — annual revenue is a money surface, so editing it honours the
@@ -2293,18 +2432,22 @@ router.patch("/accounts/:accountId", async (req, res) => {
     }
     update.annualRevenue = input.annualRevenue ?? null;
     changed.push("annualRevenue");
+    recordFirmoChange("annualRevenue", a.annualRevenue ?? null, update.annualRevenue);
   }
   if ("holdingStructure" in input) {
     update.holdingStructure = input.holdingStructure ?? null;
     changed.push("holdingStructure");
+    recordFirmoChange("holdingStructure", a.holdingStructure ?? null, update.holdingStructure);
   }
   if ("countryPresence" in input) {
     update.countryPresence = input.countryPresence ?? [];
     changed.push("countryPresence");
+    recordFirmoChange("countryPresence", a.countryPresence ?? [], update.countryPresence);
   }
   if ("entityRole" in input) {
     update.entityRole = input.entityRole ?? null;
     changed.push("entityRole");
+    recordFirmoChange("entityRole", a.entityRole ?? null, update.entityRole);
   }
 
   if (changed.length === 0) {
@@ -2321,7 +2464,7 @@ router.patch("/accounts/:accountId", async (req, res) => {
     actorId: me.id,
     actorLabel: me.name,
     action: "account.update",
-    payload: { fields: changed },
+    payload: { fields: changed, changes: firmoChanges },
     payloadSummary: `${me.name} updated ${changed.join(", ")} on ${a.name}.`,
   });
 

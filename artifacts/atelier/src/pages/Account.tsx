@@ -16,6 +16,8 @@ import {
   useAtelierAddAccountTeamMember,
   useAtelierUpdateAccountTeamMember,
   useAtelierRemoveAccountTeamMember,
+  useAtelierUpdateAccount,
+  getAtelierListAccountsQueryKey,
   getAtelierGetAccountWorkspaceQueryKey,
   type AtelierContact,
   type AtelierContactRelationship,
@@ -26,6 +28,8 @@ import {
   type AtelierAccountInsightCategory,
   type AtelierAccountTeamMember,
   type AtelierAccountTeamRole,
+  type AtelierFirmographicChange,
+  type AtelierUpdateAccountInput,
 } from "@workspace/api-client-react";
 import {
   BackLink,
@@ -49,6 +53,7 @@ import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { EditAccountProfileDialog } from "@/components/EditAccountProfileDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 import {
   Collapsible,
   CollapsibleContent,
@@ -81,6 +86,7 @@ import {
   Crown,
   Send,
   Gauge,
+  RotateCcw,
 } from "lucide-react";
 
 type TabKey =
@@ -873,6 +879,8 @@ function ProfileTab({
           {/* Company details — firmographics (Task #601/#607/#613, inline edit) */}
           <CompanyDetailsCard
             account={a}
+            accountId={a.id}
+            history={ws.firmographicHistory ?? []}
             canEdit={canEditProfile}
             onEdit={() => setEditProfile(true)}
           />
@@ -1169,10 +1177,14 @@ function fmtRevenue(r: NonNullable<AtelierAccountWorkspace["account"]["annualRev
 
 function CompanyDetailsCard({
   account,
+  accountId,
+  history,
   onEdit,
   canEdit,
 }: {
   account: AtelierAccountWorkspace["account"];
+  accountId: string;
+  history: AtelierFirmographicChange[];
   onEdit: () => void;
   canEdit: boolean;
 }) {
@@ -1188,6 +1200,39 @@ function CompanyDetailsCard({
   const structureFlags: string[] = [];
   if (holding?.isHoldingCompany) structureFlags.push("Holding company");
   if (holding?.isMultiBrand) structureFlags.push("Multi-brand");
+
+  // Task #617 — change history + one-click revert. Reverting re-uses the same
+  // account PATCH endpoint: we send the recorded previous value back for the
+  // single field, which the server validates, persists, and audit-logs (so the
+  // revert itself is also recorded). Hooks must run before the early returns.
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const update = useAtelierUpdateAccount();
+  const [revertingId, setRevertingId] = useState<string | null>(null);
+
+  async function revert(change: AtelierFirmographicChange) {
+    setRevertingId(change.id);
+    try {
+      await update.mutateAsync({
+        accountId,
+        data: { [change.field]: change.fromValue } as AtelierUpdateAccountInput,
+      });
+      qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
+      qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
+      toast({
+        title: "Change reverted",
+        description: `${change.label} restored to its previous value.`,
+      });
+    } catch (err: unknown) {
+      toast({
+        title: "Could not revert change",
+        description: (err as Error)?.message ?? String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setRevertingId(null);
+    }
+  }
 
   const hasAnything =
     employeeCount != null ||
@@ -1222,6 +1267,55 @@ function CompanyDetailsCard({
     </div>
   );
 
+  const historySection = history.length > 0 && (
+    <div className="border-t border-border-soft pt-3 space-y-2" data-testid="firmographic-history">
+      <Eyebrow>
+        <span className="inline-flex items-center gap-1.5">
+          <History className="w-3 h-3" /> Recent changes
+        </span>
+      </Eyebrow>
+      <ul className="space-y-2">
+        {history.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-start justify-between gap-3 text-xs"
+            data-testid={`firmographic-change-${c.id}`}
+          >
+            <div className="min-w-0">
+              <div className="text-text">
+                <span className="font-semibold">{c.label}</span>{" "}
+                {c.redacted ? (
+                  <span className="text-text-faint italic">changed (restricted)</span>
+                ) : (
+                  <span className="text-text-mute">
+                    <span className="line-through">{c.fromDisplay ?? "—"}</span>
+                    {" → "}
+                    <span className="text-text">{c.toDisplay ?? "—"}</span>
+                  </span>
+                )}
+              </div>
+              <div className="text-text-faint font-mono mt-0.5">
+                {c.actorLabel} · {new Date(c.at).toLocaleString()}
+              </div>
+            </div>
+            {canEdit && c.canRevert && (
+              <PillButton
+                variant="ghost"
+                onClick={() => revert(c)}
+                disabled={revertingId === c.id || update.isPending}
+                className="text-xs shrink-0"
+                data-testid={`button-revert-${c.id}`}
+              >
+                <RotateCcw className="w-3 h-3" />
+                {revertingId === c.id ? "Reverting…" : "Revert"}
+              </PillButton>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
   if (!hasAnything) {
     return (
       <Card className="p-6 space-y-4" data-testid="card-company-details">
@@ -1230,6 +1324,7 @@ function CompanyDetailsCard({
           No firmographics recorded yet — click Edit to add headcount, revenue,
           group structure, and country presence.
         </p>
+        {historySection}
       </Card>
     );
   }
@@ -1346,6 +1441,9 @@ function CompanyDetailsCard({
           </ul>
         </div>
       )}
+
+      {/* Recent changes + one-click revert (Task #617) */}
+      {historySection}
     </Card>
   );
 }

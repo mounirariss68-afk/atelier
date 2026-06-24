@@ -3419,6 +3419,30 @@ components:
         payloadSummary: { type: ["string", "null"] }
         createdAt: { type: string }
 
+    # Task #617 — a single firmographic field edit, surfaced so partners can
+    # see who changed what (and when) on the Company Details card and revert an
+    # accidental overwrite. `fromValue` / `toValue` carry the raw JSON so the
+    # revert can PATCH the previous value straight back; `fromDisplay` /
+    # `toDisplay` are pre-formatted for the UI. Annual-revenue entries are
+    # redacted (values + displays nulled, `redacted: true`, `canRevert: false`)
+    # for personas without financial authority — mirrors the annualRevenue gate.
+    AtelierFirmographicChange:
+      type: object
+      required: [id, field, label, actorType, actorLabel, at, redacted, canRevert]
+      properties:
+        id: { type: string }
+        field: { type: string }
+        label: { type: string }
+        actorType: { type: string }
+        actorLabel: { type: string }
+        at: { type: string }
+        fromValue: {}
+        toValue: {}
+        fromDisplay: { type: ["string", "null"] }
+        toDisplay: { type: ["string", "null"] }
+        redacted: { type: boolean }
+        canRevert: { type: boolean }
+
     AtelierAccountWorkspace:
       type: object
       required:
@@ -3521,6 +3545,12 @@ components:
         audit:
           type: array
           items: { $ref: "#/components/schemas/AtelierAuditEventLite" }
+        # Task #617 — recent firmographic field edits (newest-first), surfaced
+        # on the Company Details card so partners can review and revert an
+        # accidental overwrite without digging through the full audit trail.
+        firmographicHistory:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierFirmographicChange" }
         # Task #569 — multi-author human insight feed (newest-first).
         insights:
           type: array

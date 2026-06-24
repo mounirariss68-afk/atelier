@@ -3618,6 +3618,24 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -4765,6 +4783,24 @@ export const AtelierUpdateAccountResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -5693,6 +5729,24 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -7120,6 +7174,24 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -8049,6 +8121,24 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -8987,6 +9077,24 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -9926,6 +10034,24 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -10849,6 +10975,24 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -11781,6 +11925,24 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -12715,6 +12877,24 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -13640,6 +13820,24 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -14575,6 +14773,24 @@ export const AtelierCreateAccountActionResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -15509,6 +15725,24 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -16432,6 +16666,24 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -17364,6 +17616,24 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -18297,6 +18567,24 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -19220,6 +19508,24 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({
@@ -20151,6 +20457,24 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  firmographicHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        field: zod.string(),
+        label: zod.string(),
+        actorType: zod.string(),
+        actorLabel: zod.string(),
+        at: zod.string(),
+        fromValue: zod.unknown().optional(),
+        toValue: zod.unknown().optional(),
+        fromDisplay: zod.string().nullish(),
+        toDisplay: zod.string().nullish(),
+        redacted: zod.boolean(),
+        canRevert: zod.boolean(),
+      }),
+    )
+    .optional(),
   insights: zod
     .array(
       zod.object({

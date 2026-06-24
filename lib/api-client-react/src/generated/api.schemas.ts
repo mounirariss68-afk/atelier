@@ -1183,6 +1183,23 @@ export interface AtelierAuditEventLite {
   createdAt: string;
 }
 
+export interface AtelierFirmographicChange {
+  id: string;
+  field: string;
+  label: string;
+  actorType: string;
+  actorLabel: string;
+  at: string;
+  fromValue?: unknown;
+  toValue?: unknown;
+  /** @nullable */
+  fromDisplay?: string | null;
+  /** @nullable */
+  toDisplay?: string | null;
+  redacted: boolean;
+  canRevert: boolean;
+}
+
 export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
   text: string;
   sourceUrls: string[];
@@ -1464,6 +1481,7 @@ export interface AtelierAccountWorkspace {
   opportunities: AtelierAccountOpportunityRef[];
   engagements: AtelierAccountEngagementRef[];
   audit: AtelierAuditEventLite[];
+  firmographicHistory?: AtelierFirmographicChange[];
   insights?: AtelierAccountInsight[];
   accountTeam?: AtelierAccountTeamMember[];
   actionPlan?: AtelierAccountAction[];

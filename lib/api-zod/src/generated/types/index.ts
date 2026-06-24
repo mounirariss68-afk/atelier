@@ -184,6 +184,7 @@ export * from "./atelierDeliverableVersion";
 export * from "./atelierEditProposalSectionInput";
 export * from "./atelierError";
 export * from "./atelierFact";
+export * from "./atelierFirmographicChange";
 export * from "./atelierFiveC";
 export * from "./atelierForgePrototypeInput";
 export * from "./atelierForgePrototypeInputBrandOverrides";
