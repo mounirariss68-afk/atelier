@@ -1751,6 +1751,104 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
 
+  /atelier/accounts/{accountId}/timeline:
+    get:
+      operationId: atelierGetAccountTimeline
+      tags: [atelier]
+      summary: >-
+        Unified account timeline (activities/tasks + insights + meetings +
+        stage moves + agent runs) with the account's open-task roll-up
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Timeline payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountTimeline" }
+
+  /atelier/accounts/{accountId}/activities:
+    post:
+      operationId: atelierCreateActivity
+      tags: [atelier]
+      summary: Log an activity / create a task on the account (audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierCreateActivityInput" }
+      responses:
+        "200":
+          description: Updated timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountTimeline" }
+
+  /atelier/accounts/{accountId}/activities/{activityId}:
+    patch:
+      operationId: atelierUpdateActivity
+      tags: [atelier]
+      summary: Edit / complete an activity or task (audited)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: activityId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierUpdateActivityInput" }
+      responses:
+        "200":
+          description: Updated timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountTimeline" }
+    delete:
+      operationId: atelierDeleteActivity
+      tags: [atelier]
+      summary: Delete an activity or task (audited, soft delete)
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: activityId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountTimeline" }
+
+  /atelier/my-open-tasks:
+    get:
+      operationId: atelierGetMyOpenTasks
+      tags: [atelier]
+      summary: The current persona's open tasks across accounts, overdue-flagged
+      responses:
+        "200":
+          description: Open-task roll-up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierMyOpenTasks" }
+
   /atelier/contacts/{contactId}/disposition:
     post:
       operationId: atelierUpdateContactDisposition
@@ -3952,6 +4050,122 @@ components:
         currentValue: { type: ["string", "null"] }
         status: { $ref: "#/components/schemas/AtelierAccountGoalStatus" }
         note: { type: ["string", "null"] }
+
+    # ---- Task #631 — Activities & Tasks -------------------------------
+    AtelierActivityType:
+      type: string
+      enum: [task, call, email, meeting]
+
+    AtelierActivityStatus:
+      type: string
+      enum: [open, done]
+
+    AtelierActivityParentType:
+      type: string
+      enum: [account, contact, opportunity]
+
+    AtelierActivity:
+      type: object
+      required:
+        [id, accountId, parentType, parentId, type, title, status, overdue, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        accountId: { type: string }
+        # Cross-account roll-ups stamp these so the row links back to its
+        # account; null inside a single account's timeline.
+        accountName: { type: ["string", "null"] }
+        parentType: { $ref: "#/components/schemas/AtelierActivityParentType" }
+        parentId: { type: string }
+        parentLabel: { type: ["string", "null"] }
+        type: { $ref: "#/components/schemas/AtelierActivityType" }
+        title: { type: string }
+        body: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        ownerName: { type: ["string", "null"] }
+        ownerInitials: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierActivityStatus" }
+        # True when an open task's dueDate is in the past.
+        overdue: { type: boolean }
+        completedAt: { type: ["string", "null"] }
+        createdByUserId: { type: ["string", "null"] }
+        createdByName: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AtelierTimelineEntryKind:
+      type: string
+      enum: [activity, insight, meeting, stage_move, agent_run]
+
+    AtelierTimelineEntry:
+      type: object
+      required: [id, kind, title, date]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/AtelierTimelineEntryKind" }
+        # Sub-type label (e.g. activity type, insight category, meeting kind).
+        subtype: { type: ["string", "null"] }
+        title: { type: string }
+        detail: { type: ["string", "null"] }
+        actorName: { type: ["string", "null"] }
+        date: { type: string }
+        # Where this entry can be opened (e.g. opportunity / meeting / run).
+        refKind: { type: ["string", "null"] }
+        refId: { type: ["string", "null"] }
+
+    AtelierAccountTimeline:
+      type: object
+      required: [accountId, activities, timeline, openTasks]
+      properties:
+        accountId: { type: string }
+        # The account's first-class activities/tasks (newest-first).
+        activities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierActivity" }
+        # Unified, merged read model (newest-first).
+        timeline:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTimelineEntry" }
+        # Open tasks for this account (overdue-first), for the roll-up.
+        openTasks:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierActivity" }
+        # True when the persona may create / mutate activities here.
+        canManage: { type: boolean }
+
+    AtelierCreateActivityInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        type: { $ref: "#/components/schemas/AtelierActivityType" }
+        body: { type: ["string", "null"] }
+        # Defaults to account/{accountId} when omitted.
+        parentType: { $ref: "#/components/schemas/AtelierActivityParentType" }
+        parentId: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierActivityStatus" }
+
+    AtelierUpdateActivityInput:
+      type: object
+      properties:
+        title: { type: string }
+        type: { $ref: "#/components/schemas/AtelierActivityType" }
+        body: { type: ["string", "null"] }
+        ownerId: { type: ["string", "null"] }
+        dueDate: { type: ["string", "null"] }
+        status: { $ref: "#/components/schemas/AtelierActivityStatus" }
+
+    AtelierMyOpenTasks:
+      type: object
+      required: [tasks, openCount, overdueCount]
+      properties:
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierActivity" }
+        openCount: { type: integer }
+        overdueCount: { type: integer }
 
     AtelierCartographerRefreshInput:
       type: object

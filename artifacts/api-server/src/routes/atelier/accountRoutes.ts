@@ -33,6 +33,7 @@ import {
   atelierAccountActions,
   atelierAccountRisks,
   atelierAccountGoalProgress,
+  atelierActivities,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
@@ -44,6 +45,11 @@ import {
   countOpenRisks,
 } from "../../lib/atelier-account-360.js";
 import { buildAccountPlan } from "../../lib/atelier-account-plan.js";
+import {
+  buildAccountTimeline,
+  isOverdue,
+  type ActivityWire,
+} from "../../lib/atelier-account-timeline.js";
 
 type EngAccess = Awaited<ReturnType<typeof accessibleEngagementIds>>;
 function canSeeEng(access: EngAccess, engId: string) {
@@ -99,6 +105,8 @@ import {
   AtelierCreateAccountRiskBody as AtelierCreateAccountRiskInput,
   AtelierUpdateAccountRiskBody as AtelierUpdateAccountRiskInput,
   AtelierUpsertAccountGoalProgressBody as AtelierUpsertAccountGoalProgressInput,
+  AtelierCreateActivityBody as AtelierCreateActivityInput,
+  AtelierUpdateActivityBody as AtelierUpdateActivityInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -2312,6 +2320,456 @@ router.put("/accounts/:accountId/goals/:objectiveId", async (req, res) => {
     });
   });
   res.json(await buildWorkspace(account.id, access, me));
+});
+
+// ===================================================================
+// Activities & Tasks (Task #631)
+// -------------------------------------------------------------------
+// A first-class, polymorphic activity/task layer plus a unified, merged
+// timeline read model (activities + insights + meetings + stage moves +
+// agent runs). Reads + creates are gated by canSeeAccount (anyone actively
+// working the account can log activity / create a task). Editing, completing
+// or deleting a row requires being the row's owner (assignee) or creator, or
+// holding account-plan management authority. Every mutation is audited and
+// returns the refreshed timeline payload.
+// ===================================================================
+const ACTIVITY_TYPES = new Set(["task", "call", "email", "meeting"]);
+
+async function timelinePayload(
+  account: { id: string; name: string; brandName: string | null },
+  canManage: boolean,
+) {
+  const t = await buildAccountTimeline({
+    accountId: account.id,
+    accountName: account.brandName ?? account.name,
+  });
+  return { ...t, canManage };
+}
+
+// Validate a polymorphic parent belongs to this account; returns the parent
+// type/id pair to persist, or null (after sending an error response).
+async function resolveActivityParent(
+  res: Response,
+  account: { id: string },
+  parentType: string | undefined,
+  parentId: string | null | undefined,
+): Promise<{ parentType: "account" | "contact" | "opportunity"; parentId: string } | null> {
+  const pt = parentType ?? "account";
+  if (pt === "account") {
+    return { parentType: "account", parentId: account.id };
+  }
+  if (!parentId) {
+    res.status(400).json({ error: "parent-required", reason: `${pt} parentId is required.` });
+    return null;
+  }
+  if (pt === "contact") {
+    const [c] = await db
+      .select({ id: atelierContacts.id })
+      .from(atelierContacts)
+      .where(
+        and(
+          eq(atelierContacts.id, parentId),
+          eq(atelierContacts.accountId, account.id),
+          isNull(atelierContacts.deletedAt),
+        ),
+      );
+    if (!c) {
+      res.status(400).json({ error: "invalid-parent", reason: "Contact not on this account." });
+      return null;
+    }
+    return { parentType: "contact", parentId };
+  }
+  if (pt === "opportunity") {
+    const [o] = await db
+      .select({ id: atelierOpportunities.id })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.id, parentId),
+          eq(atelierOpportunities.accountId, account.id),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      );
+    if (!o) {
+      res.status(400).json({ error: "invalid-parent", reason: "Opportunity not on this account." });
+      return null;
+    }
+    return { parentType: "opportunity", parentId };
+  }
+  res.status(400).json({ error: "invalid-parent-type" });
+  return null;
+}
+
+// ---------- read unified timeline + open-task roll-up ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/accounts/:accountId/timeline", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const canManage = await canManageAccountPlan(me, account);
+  res.json(await timelinePayload(account, canManage));
+});
+
+// ---------- create activity / task (any persona who can see the account) ----
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/accounts/:accountId/activities", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const parsed = AtelierCreateActivityInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const title = parsed.data.title.trim();
+  if (!title) {
+    res.status(400).json({ error: "title-required" });
+    return;
+  }
+  const type = parsed.data.type ?? "task";
+  if (!ACTIVITY_TYPES.has(type)) {
+    res.status(400).json({ error: "invalid-type" });
+    return;
+  }
+  const parent = await resolveActivityParent(
+    res,
+    account,
+    parsed.data.parentType,
+    parsed.data.parentId,
+  );
+  if (!parent) return;
+  // Validate optional owner belongs to the org.
+  if (parsed.data.ownerId) {
+    const [owner] = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.id, parsed.data.ownerId),
+          eq(atelierUsers.orgId, account.orgId),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (!owner) {
+      res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+      return;
+    }
+  }
+  const id = rid("act");
+  const now = new Date();
+  const status = parsed.data.status ?? "open";
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierActivities).values({
+      id,
+      orgId: account.orgId,
+      accountId: account.id,
+      parentType: parent.parentType,
+      parentId: parent.parentId,
+      type,
+      title,
+      body: parsed.data.body?.trim() || null,
+      ownerId: parsed.data.ownerId ?? null,
+      dueDate: parsed.data.dueDate ?? null,
+      status,
+      completedAt: status === "done" ? now : null,
+      createdByUserId: me.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "activity.created",
+      payload: { activityId: id, type, parentType: parent.parentType, parentId: parent.parentId },
+      payloadSummary: `${me.name} logged a ${type} "${title}" on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  const canManage = await canManageAccountPlan(me, account);
+  res.json(await timelinePayload(account, canManage));
+});
+
+// Shared gate for activity mutation: owner (assignee), creator, or someone
+// with account-plan management authority.
+async function canMutateActivity(
+  me: { id: string; role: string },
+  account: { id: string; partnerOwnerId: string | null },
+  activity: { ownerId: string | null; createdByUserId: string | null },
+): Promise<boolean> {
+  if (activity.ownerId === me.id) return true;
+  if (activity.createdByUserId === me.id) return true;
+  return canManageAccountPlan(me, account);
+}
+
+// ---------- edit / complete activity ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.patch("/accounts/:accountId/activities/:activityId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierActivities)
+    .where(
+      and(
+        eq(atelierActivities.id, req.params.activityId),
+        eq(atelierActivities.accountId, account.id),
+        isNull(atelierActivities.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "activity-not-found" });
+    return;
+  }
+  if (!(await canMutateActivity(me, account, row))) {
+    res.status(403).json({
+      error: "activity-forbidden",
+      reason: "Only the task owner, its creator, or the account team can change it.",
+    });
+    return;
+  }
+  const parsed = AtelierUpdateActivityInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const d = parsed.data;
+  const patch: Partial<typeof atelierActivities.$inferInsert> = {};
+  if (d.title !== undefined) {
+    const t = d.title.trim();
+    if (!t) {
+      res.status(400).json({ error: "title-required" });
+      return;
+    }
+    patch.title = t;
+  }
+  if (d.type !== undefined) {
+    if (!ACTIVITY_TYPES.has(d.type)) {
+      res.status(400).json({ error: "invalid-type" });
+      return;
+    }
+    patch.type = d.type;
+  }
+  if (d.body !== undefined) patch.body = d.body?.trim() || null;
+  if (d.dueDate !== undefined) patch.dueDate = d.dueDate ?? null;
+  if (d.ownerId !== undefined) {
+    if (d.ownerId) {
+      const [owner] = await db
+        .select({ id: atelierUsers.id })
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.id, d.ownerId),
+            eq(atelierUsers.orgId, account.orgId),
+            isNull(atelierUsers.deletedAt),
+          ),
+        );
+      if (!owner) {
+        res.status(400).json({ error: "invalid-owner", reason: "Unknown owner." });
+        return;
+      }
+    }
+    patch.ownerId = d.ownerId ?? null;
+  }
+  const now = new Date();
+  if (d.status !== undefined) {
+    if (d.status !== "open" && d.status !== "done") {
+      res.status(400).json({ error: "invalid-status" });
+      return;
+    }
+    patch.status = d.status;
+    patch.completedAt = d.status === "done" ? row.completedAt ?? now : null;
+  }
+  if (Object.keys(patch).length === 0) {
+    res.status(400).json({ error: "no-op", reason: "No editable fields supplied." });
+    return;
+  }
+  patch.updatedAt = now;
+  await db.transaction(async (tx) => {
+    await tx.update(atelierActivities).set(patch).where(eq(atelierActivities.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: d.status === "done" ? "activity.completed" : "activity.edited",
+      payload: { activityId: row.id, fields: Object.keys(patch) },
+      payloadSummary:
+        d.status === "done"
+          ? `${me.name} completed "${patch.title ?? row.title}" on ${
+              account.brandName ?? account.name
+            }.`
+          : `${me.name} updated an activity on ${account.brandName ?? account.name}.`,
+    });
+  });
+  const canManage = await canManageAccountPlan(me, account);
+  res.json(await timelinePayload(account, canManage));
+});
+
+// ---------- delete activity (soft delete) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.delete("/accounts/:accountId/activities/:activityId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierActivities)
+    .where(
+      and(
+        eq(atelierActivities.id, req.params.activityId),
+        eq(atelierActivities.accountId, account.id),
+        isNull(atelierActivities.deletedAt),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "activity-not-found" });
+    return;
+  }
+  if (!(await canMutateActivity(me, account, row))) {
+    res.status(403).json({
+      error: "activity-forbidden",
+      reason: "Only the task owner, its creator, or the account team can delete it.",
+    });
+    return;
+  }
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierActivities)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(atelierActivities.id, row.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: account.orgId,
+      entityType: "account",
+      entityId: account.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "activity.deleted",
+      payload: { activityId: row.id, type: row.type },
+      payloadSummary: `${me.name} deleted a ${row.type} on ${
+        account.brandName ?? account.name
+      }.`,
+    });
+  });
+  const canManage = await canManageAccountPlan(me, account);
+  res.json(await timelinePayload(account, canManage));
+});
+
+// ---------- my open tasks (cross-account roll-up, overdue-flagged) ----------
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/my-open-tasks", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rows = await db
+    .select()
+    .from(atelierActivities)
+    .where(
+      and(
+        eq(atelierActivities.ownerId, me.id),
+        eq(atelierActivities.status, "open"),
+        isNull(atelierActivities.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierActivities.createdAt));
+  // Resolve the account names for the rows in one query.
+  const accountIds = Array.from(new Set(rows.map((r) => r.accountId)));
+  const accts = accountIds.length
+    ? await db
+        .select({
+          id: atelierAccounts.id,
+          name: atelierAccounts.name,
+          brandName: atelierAccounts.brandName,
+        })
+        .from(atelierAccounts)
+        .where(inArray(atelierAccounts.id, accountIds))
+    : [];
+  const acctName = (id: string) => {
+    const a = accts.find((x) => x.id === id);
+    return a ? a.brandName ?? a.name : null;
+  };
+  const tasks: ActivityWire[] = rows
+    .map((r) => ({
+      id: r.id,
+      accountId: r.accountId,
+      accountName: acctName(r.accountId),
+      parentType: (r.parentType ?? "account") as ActivityWire["parentType"],
+      parentId: r.parentId,
+      parentLabel: null,
+      type: (r.type ?? "task") as ActivityWire["type"],
+      title: r.title,
+      body: r.body ?? null,
+      ownerId: r.ownerId ?? null,
+      ownerName: me.name,
+      ownerInitials: null,
+      dueDate: r.dueDate ?? null,
+      status: "open" as const,
+      overdue: isOverdue("open", r.dueDate),
+      completedAt: null,
+      createdByUserId: r.createdByUserId ?? null,
+      createdByName: null,
+      createdAt: new Date(r.createdAt).toISOString(),
+      updatedAt: new Date(r.updatedAt).toISOString(),
+    }))
+    .sort((a, b) => {
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      const ad = a.dueDate ?? "9999-12-31";
+      const bd = b.dueDate ?? "9999-12-31";
+      if (ad !== bd) return ad.localeCompare(bd);
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+  res.json({
+    tasks,
+    openCount: tasks.length,
+    overdueCount: tasks.filter((t) => t.overdue).length,
+  });
 });
 
 // ---------- update partner-editable account fields (Task #566) ----------

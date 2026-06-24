@@ -1,9 +1,9 @@
 import * as React from "react";
-import { useAtelierGetHome, useAtelierGetMe } from "@workspace/api-client-react";
+import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks } from "@workspace/api-client-react";
 import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare, Store } from "lucide-react";
+import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CliContext } from "@/components/cli/cli-context";
 import { s as cliS } from "@/components/cli/locale";
@@ -611,6 +611,75 @@ function HomeAskAtelier({ role, userId }: { role: string | undefined; userId: st
   );
 }
 
+const TASK_TYPE_ICON: Record<string, React.ReactNode> = {
+  task: <CheckSquare className="w-3.5 h-3.5" />,
+  call: <Phone className="w-3.5 h-3.5" />,
+  email: <Mail className="w-3.5 h-3.5" />,
+  meeting: <CalendarClock className="w-3.5 h-3.5" />,
+};
+
+/**
+ * Task #631 — per-owner open/overdue task roll-up. Surfaces the signed-in
+ * persona's open activities/tasks across every account they own work on,
+ * overdue-flagged and deep-linked to the parent account.
+ */
+function MyOpenTasksCard() {
+  const { data, isLoading } = useAtelierGetMyOpenTasks();
+  if (isLoading || !data || data.openCount === 0) return null;
+  return (
+    <Card className="p-5 space-y-3" data-testid="card-home-my-tasks">
+      <div className="flex items-center justify-between">
+        <SectionLabel className="flex items-center gap-2">
+          <ListTodo className="w-3.5 h-3.5" /> My open tasks
+        </SectionLabel>
+        <div className="flex items-center gap-2">
+          <MonoChip>{data.openCount} open</MonoChip>
+          {data.overdueCount > 0 && (
+            <MonoChip tone="amber">{data.overdueCount} overdue</MonoChip>
+          )}
+        </div>
+      </div>
+      <div className="divide-y divide-border-soft">
+        {data.tasks.slice(0, 6).map((t) => (
+          <Link
+            key={t.id}
+            href={`/accounts/${t.accountId}`}
+            className="flex items-center gap-2.5 py-2 group"
+            data-testid={`row-my-task-${t.id}`}
+          >
+            <span className={t.overdue ? "text-danger" : "text-gold/80"}>
+              {TASK_TYPE_ICON[t.type] ?? <CheckSquare className="w-3.5 h-3.5" />}
+            </span>
+            <span className="flex-1 min-w-0 text-sm text-text group-hover:text-gold truncate">
+              {t.title}
+            </span>
+            {t.accountName && (
+              <span className="text-[11px] font-mono text-text-faint shrink-0">
+                {t.accountName}
+              </span>
+            )}
+            {t.dueDate && (
+              <span
+                className={`text-[11px] font-mono shrink-0 ${
+                  t.overdue ? "text-danger" : "text-text-faint"
+                }`}
+              >
+                {t.overdue ? "Overdue " : "Due "}
+                {t.dueDate}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+      {data.openCount > 6 && (
+        <div className="text-[11px] font-mono text-text-faint">
+          +{data.openCount - 6} more
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function Home() {
   // Use `isPending` (initial load only) instead of `isLoading` so background
   // refetches — e.g. on window focus or after a persona switch — don't flip
@@ -671,6 +740,8 @@ export default function Home() {
           <SectionLabel>What needs me today</SectionLabel>
 
           <div className="space-y-4">
+            {/* Task #631 — per-owner open/overdue task roll-up. */}
+            <MyOpenTasksCard />
             {/* Task #271 — pending timesheet approvals surface here as a single
                 rolled-up actionable item with inline approve/reject. */}
             {me?.role && <TimesheetApprovalsCard role={me.role} />}

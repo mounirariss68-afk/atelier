@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/primitives";
 import { Account360Tab } from "@/components/tabs/Account360Tab";
 import { AccountPlanTab } from "@/components/tabs/AccountPlanTab";
+import { ActivityTab } from "@/components/tabs/ActivityTab";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
@@ -87,6 +88,7 @@ import {
   Send,
   Gauge,
   RotateCcw,
+  Activity,
 } from "lucide-react";
 
 type TabKey =
@@ -96,6 +98,7 @@ type TabKey =
   | "engagements"
   | "relationships"
   | "insights"
+  | "activity"
   | "account_360"
   | "account_plan"
   | "whitespace"
@@ -109,6 +112,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "engagements", label: "Engagements", icon: <Layers className="w-3.5 h-3.5" /> },
   { key: "relationships", label: "Relationships", icon: <Network className="w-3.5 h-3.5" /> },
   { key: "insights", label: "Insights", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { key: "activity", label: "Activity", icon: <Activity className="w-3.5 h-3.5" /> },
   { key: "account_360", label: "Account 360", icon: <Gauge className="w-3.5 h-3.5" /> },
   { key: "account_plan", label: "Account Plan", icon: <Target className="w-3.5 h-3.5" /> },
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
@@ -347,6 +351,7 @@ export default function Account() {
           />
         )}
         {tab === "insights" && <InsightsTab ws={ws} accountId={accountId} />}
+        {tab === "activity" && <ActivityTab accountId={accountId} />}
         {tab === "account_360" && <Account360Tab accountId={accountId} />}
         {tab === "account_plan" && <AccountPlanTab ws={ws} accountId={accountId} />}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}

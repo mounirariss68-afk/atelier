@@ -577,6 +577,50 @@ export const atelierAccountGoalProgress = pgTable(
 );
 
 // ============================================================
+// ACTIVITIES & TASKS (Task #631)
+// ============================================================
+// First-class, polymorphic activity / task entity. A row may hang off an
+// account, a contact, or an opportunity (parentType/parentId), but always
+// carries `accountId` so reads + the account-scope ACL can stay account-keyed
+// without resolving the parent. `type` discriminates task | call | email |
+// meeting; `status` is open | done. Tasks have an owner (assignee) + due date
+// so they can be rolled up per-owner and flagged overdue. Soft-deleted.
+export const atelierActivities = pgTable(
+  "atelier_activities",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // Owning account (scope key) — always set, even when the parent is a
+    // contact or opportunity (resolved + denormalised at write time).
+    accountId: text("account_id").notNull(),
+    // account | contact | opportunity
+    parentType: text("parent_type").notNull().default("account"),
+    // The specific parent id (equals accountId when parentType=account).
+    parentId: text("parent_id").notNull(),
+    // task | call | email | meeting
+    type: text("type").notNull().default("task"),
+    title: text("title").notNull(),
+    body: text("body"),
+    ownerId: text("owner_id"), // FK → atelier_users (assignee). Nullable.
+    dueDate: text("due_date"), // ISO date (free text, mirrors action plan).
+    // open | done
+    status: text("status").notNull().default("open"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_activities_org").on(t.orgId),
+    index("idx_atelier_activities_account").on(t.accountId),
+    index("idx_atelier_activities_parent").on(t.parentType, t.parentId),
+    index("idx_atelier_activities_owner").on(t.ownerId),
+    index("idx_atelier_activities_status").on(t.status),
+  ],
+);
+
+// ============================================================
 // CREDENTIALS (v2 — PRD §1.1, first-class case-study workspace)
 // Extends the v1 Atelier asset with structured credential metadata.
 // ============================================================

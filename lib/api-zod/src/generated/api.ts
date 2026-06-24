@@ -20833,6 +20833,376 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
 });
 
 /**
+ * @summary Unified account timeline (activities/tasks + insights + meetings + stage moves + agent runs) with the account's open-task roll-up
+ */
+export const AtelierGetAccountTimelineParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierGetAccountTimelineResponse = zod.object({
+  accountId: zod.string(),
+  activities: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  timeline: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "activity",
+        "insight",
+        "meeting",
+        "stage_move",
+        "agent_run",
+      ]),
+      subtype: zod.string().nullish(),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      actorName: zod.string().nullish(),
+      date: zod.string(),
+      refKind: zod.string().nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  openTasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  canManage: zod.boolean().optional(),
+});
+
+/**
+ * @summary Log an activity / create a task on the account (audited)
+ */
+export const AtelierCreateActivityParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierCreateActivityBody = zod.object({
+  title: zod.string(),
+  type: zod.enum(["task", "call", "email", "meeting"]).optional(),
+  body: zod.string().nullish(),
+  parentType: zod.enum(["account", "contact", "opportunity"]).optional(),
+  parentId: zod.string().nullish(),
+  ownerId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  status: zod.enum(["open", "done"]).optional(),
+});
+
+export const AtelierCreateActivityResponse = zod.object({
+  accountId: zod.string(),
+  activities: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  timeline: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "activity",
+        "insight",
+        "meeting",
+        "stage_move",
+        "agent_run",
+      ]),
+      subtype: zod.string().nullish(),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      actorName: zod.string().nullish(),
+      date: zod.string(),
+      refKind: zod.string().nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  openTasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  canManage: zod.boolean().optional(),
+});
+
+/**
+ * @summary Edit / complete an activity or task (audited)
+ */
+export const AtelierUpdateActivityParams = zod.object({
+  accountId: zod.coerce.string(),
+  activityId: zod.coerce.string(),
+});
+
+export const AtelierUpdateActivityBody = zod.object({
+  title: zod.string().optional(),
+  type: zod.enum(["task", "call", "email", "meeting"]).optional(),
+  body: zod.string().nullish(),
+  ownerId: zod.string().nullish(),
+  dueDate: zod.string().nullish(),
+  status: zod.enum(["open", "done"]).optional(),
+});
+
+export const AtelierUpdateActivityResponse = zod.object({
+  accountId: zod.string(),
+  activities: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  timeline: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "activity",
+        "insight",
+        "meeting",
+        "stage_move",
+        "agent_run",
+      ]),
+      subtype: zod.string().nullish(),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      actorName: zod.string().nullish(),
+      date: zod.string(),
+      refKind: zod.string().nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  openTasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  canManage: zod.boolean().optional(),
+});
+
+/**
+ * @summary Delete an activity or task (audited, soft delete)
+ */
+export const AtelierDeleteActivityParams = zod.object({
+  accountId: zod.coerce.string(),
+  activityId: zod.coerce.string(),
+});
+
+export const AtelierDeleteActivityResponse = zod.object({
+  accountId: zod.string(),
+  activities: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  timeline: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "activity",
+        "insight",
+        "meeting",
+        "stage_move",
+        "agent_run",
+      ]),
+      subtype: zod.string().nullish(),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      actorName: zod.string().nullish(),
+      date: zod.string(),
+      refKind: zod.string().nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  openTasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  canManage: zod.boolean().optional(),
+});
+
+/**
+ * @summary The current persona's open tasks across accounts, overdue-flagged
+ */
+export const AtelierGetMyOpenTasksResponse = zod.object({
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  openCount: zod.number(),
+  overdueCount: zod.number(),
+});
+
+/**
  * @summary Update a contact's disposition (audited)
  */
 export const AtelierUpdateContactDispositionParams = zod.object({

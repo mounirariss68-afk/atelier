@@ -1784,6 +1784,135 @@ export interface AtelierUpsertAccountGoalProgressInput {
   note?: string | null;
 }
 
+export type AtelierActivityType =
+  (typeof AtelierActivityType)[keyof typeof AtelierActivityType];
+
+export const AtelierActivityType = {
+  task: "task",
+  call: "call",
+  email: "email",
+  meeting: "meeting",
+} as const;
+
+export type AtelierActivityStatus =
+  (typeof AtelierActivityStatus)[keyof typeof AtelierActivityStatus];
+
+export const AtelierActivityStatus = {
+  open: "open",
+  done: "done",
+} as const;
+
+export type AtelierActivityParentType =
+  (typeof AtelierActivityParentType)[keyof typeof AtelierActivityParentType];
+
+export const AtelierActivityParentType = {
+  account: "account",
+  contact: "contact",
+  opportunity: "opportunity",
+} as const;
+
+export interface AtelierActivity {
+  id: string;
+  accountId: string;
+  /** @nullable */
+  accountName?: string | null;
+  parentType: AtelierActivityParentType;
+  parentId: string;
+  /** @nullable */
+  parentLabel?: string | null;
+  type: AtelierActivityType;
+  title: string;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  /** @nullable */
+  ownerInitials?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  status: AtelierActivityStatus;
+  overdue: boolean;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  createdByUserId?: string | null;
+  /** @nullable */
+  createdByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AtelierTimelineEntryKind =
+  (typeof AtelierTimelineEntryKind)[keyof typeof AtelierTimelineEntryKind];
+
+export const AtelierTimelineEntryKind = {
+  activity: "activity",
+  insight: "insight",
+  meeting: "meeting",
+  stage_move: "stage_move",
+  agent_run: "agent_run",
+} as const;
+
+export interface AtelierTimelineEntry {
+  id: string;
+  kind: AtelierTimelineEntryKind;
+  /** @nullable */
+  subtype?: string | null;
+  title: string;
+  /** @nullable */
+  detail?: string | null;
+  /** @nullable */
+  actorName?: string | null;
+  date: string;
+  /** @nullable */
+  refKind?: string | null;
+  /** @nullable */
+  refId?: string | null;
+}
+
+export interface AtelierAccountTimeline {
+  accountId: string;
+  activities: AtelierActivity[];
+  timeline: AtelierTimelineEntry[];
+  openTasks: AtelierActivity[];
+  canManage?: boolean;
+}
+
+export interface AtelierCreateActivityInput {
+  title: string;
+  type?: AtelierActivityType;
+  /** @nullable */
+  body?: string | null;
+  parentType?: AtelierActivityParentType;
+  /** @nullable */
+  parentId?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  status?: AtelierActivityStatus;
+}
+
+export interface AtelierUpdateActivityInput {
+  title?: string;
+  type?: AtelierActivityType;
+  /** @nullable */
+  body?: string | null;
+  /** @nullable */
+  ownerId?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  status?: AtelierActivityStatus;
+}
+
+export interface AtelierMyOpenTasks {
+  tasks: AtelierActivity[];
+  openCount: number;
+  overdueCount: number;
+}
+
 export interface AtelierCartographerRefreshInput {
   /** @nullable */
   focusOpportunityId?: string | null;

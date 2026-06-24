@@ -22,6 +22,7 @@ import type {
   AtelierAccount360,
   AtelierAccountDuplicateError,
   AtelierAccountSummary,
+  AtelierAccountTimeline,
   AtelierAccountWorkspace,
   AtelierAddAccountTeamMemberInput,
   AtelierAdminSettings,
@@ -56,6 +57,7 @@ import type {
   AtelierCreateAccountInput,
   AtelierCreateAccountInsightInput,
   AtelierCreateAccountRiskInput,
+  AtelierCreateActivityInput,
   AtelierCreateContactInput,
   AtelierCreateContactRelationshipInput,
   AtelierCreateOpportunityInput,
@@ -86,6 +88,7 @@ import type {
   AtelierMarginPolicy,
   AtelierMarginPolicyInput,
   AtelierMeeting,
+  AtelierMyOpenTasks,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
   AtelierPersona,
@@ -129,6 +132,7 @@ import type {
   AtelierUpdateAccountInsightInput,
   AtelierUpdateAccountRiskInput,
   AtelierUpdateAccountTeamMemberInput,
+  AtelierUpdateActivityInput,
   AtelierUpdateContactInput,
   AtelierUpdateOpportunityInput,
   AtelierUpsertAccountGoalProgressInput,
@@ -7477,6 +7481,473 @@ export const useAtelierUpsertAccountGoalProgress = <
     getAtelierUpsertAccountGoalProgressMutationOptions(options),
   );
 };
+
+/**
+ * @summary Unified account timeline (activities/tasks + insights + meetings + stage moves + agent runs) with the account's open-task roll-up
+ */
+export const getAtelierGetAccountTimelineUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/timeline`;
+};
+
+export const atelierGetAccountTimeline = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountTimeline> => {
+  return customFetch<AtelierAccountTimeline>(
+    getAtelierGetAccountTimelineUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetAccountTimelineQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/timeline`] as const;
+};
+
+export const getAtelierGetAccountTimelineQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountTimeline>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountTimeline>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetAccountTimelineQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountTimeline>>
+  > = ({ signal }) =>
+    atelierGetAccountTimeline(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountTimeline>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountTimelineQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountTimeline>>
+>;
+export type AtelierGetAccountTimelineQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Unified account timeline (activities/tasks + insights + meetings + stage moves + agent runs) with the account's open-task roll-up
+ */
+
+export function useAtelierGetAccountTimeline<
+  TData = Awaited<ReturnType<typeof atelierGetAccountTimeline>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountTimeline>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountTimelineQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log an activity / create a task on the account (audited)
+ */
+export const getAtelierCreateActivityUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/activities`;
+};
+
+export const atelierCreateActivity = async (
+  accountId: string,
+  atelierCreateActivityInput: AtelierCreateActivityInput,
+  options?: RequestInit,
+): Promise<AtelierAccountTimeline> => {
+  return customFetch<AtelierAccountTimeline>(
+    getAtelierCreateActivityUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateActivityInput),
+    },
+  );
+};
+
+export const getAtelierCreateActivityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateActivity>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateActivityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateActivity>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateActivityInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateActivity>>,
+    { accountId: string; data: BodyType<AtelierCreateActivityInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierCreateActivity(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateActivity>>
+>;
+export type AtelierCreateActivityMutationBody =
+  BodyType<AtelierCreateActivityInput>;
+export type AtelierCreateActivityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Log an activity / create a task on the account (audited)
+ */
+export const useAtelierCreateActivity = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateActivity>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierCreateActivityInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateActivity>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierCreateActivityInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateActivityMutationOptions(options));
+};
+
+/**
+ * @summary Edit / complete an activity or task (audited)
+ */
+export const getAtelierUpdateActivityUrl = (
+  accountId: string,
+  activityId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/activities/${activityId}`;
+};
+
+export const atelierUpdateActivity = async (
+  accountId: string,
+  activityId: string,
+  atelierUpdateActivityInput: AtelierUpdateActivityInput,
+  options?: RequestInit,
+): Promise<AtelierAccountTimeline> => {
+  return customFetch<AtelierAccountTimeline>(
+    getAtelierUpdateActivityUrl(accountId, activityId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateActivityInput),
+    },
+  );
+};
+
+export const getAtelierUpdateActivityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateActivity>>,
+    TError,
+    {
+      accountId: string;
+      activityId: string;
+      data: BodyType<AtelierUpdateActivityInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateActivity>>,
+  TError,
+  {
+    accountId: string;
+    activityId: string;
+    data: BodyType<AtelierUpdateActivityInput>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateActivity>>,
+    {
+      accountId: string;
+      activityId: string;
+      data: BodyType<AtelierUpdateActivityInput>;
+    }
+  > = (props) => {
+    const { accountId, activityId, data } = props ?? {};
+
+    return atelierUpdateActivity(accountId, activityId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateActivity>>
+>;
+export type AtelierUpdateActivityMutationBody =
+  BodyType<AtelierUpdateActivityInput>;
+export type AtelierUpdateActivityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit / complete an activity or task (audited)
+ */
+export const useAtelierUpdateActivity = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateActivity>>,
+    TError,
+    {
+      accountId: string;
+      activityId: string;
+      data: BodyType<AtelierUpdateActivityInput>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateActivity>>,
+  TError,
+  {
+    accountId: string;
+    activityId: string;
+    data: BodyType<AtelierUpdateActivityInput>;
+  },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateActivityMutationOptions(options));
+};
+
+/**
+ * @summary Delete an activity or task (audited, soft delete)
+ */
+export const getAtelierDeleteActivityUrl = (
+  accountId: string,
+  activityId: string,
+) => {
+  return `/api/atelier/accounts/${accountId}/activities/${activityId}`;
+};
+
+export const atelierDeleteActivity = async (
+  accountId: string,
+  activityId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountTimeline> => {
+  return customFetch<AtelierAccountTimeline>(
+    getAtelierDeleteActivityUrl(accountId, activityId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteActivityMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteActivity>>,
+    TError,
+    { accountId: string; activityId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteActivity>>,
+  TError,
+  { accountId: string; activityId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteActivity"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteActivity>>,
+    { accountId: string; activityId: string }
+  > = (props) => {
+    const { accountId, activityId } = props ?? {};
+
+    return atelierDeleteActivity(accountId, activityId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteActivityMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteActivity>>
+>;
+
+export type AtelierDeleteActivityMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an activity or task (audited, soft delete)
+ */
+export const useAtelierDeleteActivity = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteActivity>>,
+    TError,
+    { accountId: string; activityId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteActivity>>,
+  TError,
+  { accountId: string; activityId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteActivityMutationOptions(options));
+};
+
+/**
+ * @summary The current persona's open tasks across accounts, overdue-flagged
+ */
+export const getAtelierGetMyOpenTasksUrl = () => {
+  return `/api/atelier/my-open-tasks`;
+};
+
+export const atelierGetMyOpenTasks = async (
+  options?: RequestInit,
+): Promise<AtelierMyOpenTasks> => {
+  return customFetch<AtelierMyOpenTasks>(getAtelierGetMyOpenTasksUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyOpenTasksQueryKey = () => {
+  return [`/api/atelier/my-open-tasks`] as const;
+};
+
+export const getAtelierGetMyOpenTasksQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyOpenTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyOpenTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetMyOpenTasksQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyOpenTasks>>
+  > = ({ signal }) => atelierGetMyOpenTasks({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyOpenTasks>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyOpenTasksQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyOpenTasks>>
+>;
+export type AtelierGetMyOpenTasksQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The current persona's open tasks across accounts, overdue-flagged
+ */
+
+export function useAtelierGetMyOpenTasks<
+  TData = Awaited<ReturnType<typeof atelierGetMyOpenTasks>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyOpenTasks>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyOpenTasksQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Update a contact's disposition (audited)
