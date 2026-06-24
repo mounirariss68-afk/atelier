@@ -367,6 +367,8 @@ async function persistReviewedResearch(args: {
         fullName: dm.fullName.trim(),
         title: dm.title ?? null,
         seniority,
+        entityName: dm.entityName ?? null,
+        entityScope: dm.entityScope ?? null,
         buyerPersona: dm.buyerPersona ?? null,
         influenceScore:
           seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
@@ -661,6 +663,8 @@ router.post("/accounts", async (req, res) => {
             fullName: d.fullName.trim(),
             title: d.title ?? null,
             seniority: d.seniority ?? null,
+            entityName: d.entityName ?? null,
+            entityScope: d.entityScope ?? null,
             buyerPersona: d.buyerPersona ?? null,
             timeInRole: d.timeInRole ?? null,
             careerHistory: d.careerHistory ?? [],
@@ -2764,6 +2768,8 @@ async function applyProfileUpdateDecisions(args: {
           const dm = effectiveValue as {
             fullName?: string;
             title?: string | null;
+            entityName?: string | null;
+            entityScope?: string | null;
             seniority?: string | null;
             buyerPersona?: string | null;
             sourceUrl?: string | null;
@@ -2795,6 +2801,8 @@ async function applyProfileUpdateDecisions(args: {
                 .set({
                   title: dm.title ?? null,
                   seniority,
+                  entityName: dm.entityName ?? null,
+                  entityScope: dm.entityScope ?? null,
                   buyerPersona: dm.buyerPersona ?? null,
                   timeInRole: dm.timeInRole ?? null,
                   careerHistory: dm.careerHistory ?? [],
@@ -2812,6 +2820,8 @@ async function applyProfileUpdateDecisions(args: {
                 fullName: dm.fullName,
                 title: dm.title ?? null,
                 seniority,
+                entityName: dm.entityName ?? null,
+                entityScope: dm.entityScope ?? null,
                 buyerPersona: dm.buyerPersona ?? null,
                 timeInRole: dm.timeInRole ?? null,
                 careerHistory: dm.careerHistory ?? [],
@@ -3096,6 +3106,15 @@ function toContactWire(
     })),
     sourceUrl: c.sourceUrl ?? null,
     confidence: (c.confidence ?? "inferred") as "verified" | "inferred",
+    // Entity-scope fix — drives the "Group" vs "Subsidiary · X" badge so a
+    // subsidiary executive is never read as group leadership.
+    entityName: c.entityName ?? null,
+    entityScope: (c.entityScope ?? null) as
+      | "parent_group"
+      | "subsidiary"
+      | "division"
+      | "standalone"
+      | null,
   };
 }
 

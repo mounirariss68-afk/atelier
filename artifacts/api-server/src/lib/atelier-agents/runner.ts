@@ -786,6 +786,8 @@ export function buildCartographerProposals(args: {
       {
         fullName: dm.fullName,
         title: dm.title ?? null,
+        entityName: dm.entityName ?? null,
+        entityScope: dm.entityScope ?? null,
         seniority: dm.seniority ?? null,
         buyerPersona: dm.buyerPersona ?? null,
         sourceUrl: dm.sourceUrl ?? null,
@@ -2023,6 +2025,10 @@ export interface CartographerOutput {
   decisionMakers: Array<{
     fullName: string;
     title?: string;
+    // Entity-scope fix — which entity this person's title sits at, so a
+    // subsidiary/brand exec is never flattened into group leadership.
+    entityName?: string | null;
+    entityScope?: "parent_group" | "subsidiary" | "division" | "standalone" | null;
     seniority?: "c_suite" | "vp" | "director" | "manager" | "ic";
     buyerPersona?: string;
     sourceUrl?: string | null;
@@ -2401,6 +2407,62 @@ async function callClaudeJsonWithWebSearch<T>(
   return { value, costUsd, tokensIn, tokensOut, citationUrls };
 }
 
+/**
+ * Deterministic entity-scope guard (entity-scope fix). The prompt (v1/v2) tells
+ * the model never to promote a subsidiary executive to group apex, but this is
+ * the safety net that does NOT depend on the model getting it right: any
+ * decision-maker carrying an apex (CEO) persona/title whose `entityScope` is a
+ * subsidiary/division — or whose `entityName` does not match the account's
+ * canonical name — is downgraded to `inferred`, has the group-apex implication
+ * stripped (CEO persona → business_head), and is tagged `entityScope:
+ * "subsidiary"` if it was unset. We never delete the person: a subsidiary CEO is
+ * a real, useful contact, just not the group's CEO. Mutates and returns `output`
+ * (returned for chaining / unit testing).
+ */
+export function guardCartographerEntityScope(
+  output: CartographerOutput,
+  canonicalName?: string | null,
+): CartographerOutput {
+  const normName = (s: string) =>
+    s
+      .trim()
+      .toLowerCase()
+      .replace(/[.,]/g, " ")
+      .replace(/\b(group|holding|holdings|company|co|llc|ltd|plc|the|inc)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const canon = normName(canonicalName ?? output.account?.canonicalName ?? "");
+  let downgraded = 0;
+  for (const dm of output.decisionMakers ?? []) {
+    const scope = dm.entityScope ?? null;
+    const isSubScope = scope === "subsidiary" || scope === "division";
+    const entityName = (dm.entityName ?? "").trim();
+    const entityMismatch =
+      entityName.length > 0 && canon.length > 0 && normName(entityName) !== canon;
+    const titleImpliesApex =
+      dm.buyerPersona === "CEO" ||
+      /\bchief executive officer\b|\bgroup ceo\b|(^|[^a-z])ceo([^a-z]|$)/i.test(
+        dm.title ?? "",
+      );
+    if (titleImpliesApex && (isSubScope || entityMismatch)) {
+      dm.confidence = "inferred";
+      // Strip the group-apex implication — a subsidiary CEO is not the group CEO.
+      if (dm.buyerPersona === "CEO") dm.buyerPersona = "business_head";
+      if (!dm.entityScope) dm.entityScope = "subsidiary";
+      downgraded += 1;
+    }
+  }
+  if (downgraded > 0) {
+    const oq = output.researchBrief?.openQuestions;
+    if (Array.isArray(oq) && !oq.some((q) => q.toLowerCase().includes("group-level ceo"))) {
+      oq.push(
+        "No verified group-level CEO: one or more apex titles were scoped to a subsidiary/brand and downgraded — confirm the group's apex leadership.",
+      );
+    }
+  }
+  return output;
+}
+
 export async function runAccountCartographer(args: {
   // `null` is allowed only when `mode === "research_only"` — the run is
   // not persisted to atelier_agent_runs and no DB writes happen. Used by
@@ -2550,6 +2612,17 @@ export async function runAccountCartographer(args: {
             .map((d) => ({
               fullName: d.fullName.trim(),
               title: d.title ?? undefined,
+              entityName:
+                typeof d.entityName === "string" && d.entityName.trim().length > 0
+                  ? d.entityName.trim()
+                  : null,
+              entityScope:
+                d.entityScope === "parent_group" ||
+                d.entityScope === "subsidiary" ||
+                d.entityScope === "division" ||
+                d.entityScope === "standalone"
+                  ? d.entityScope
+                  : null,
               seniority: d.seniority,
               buyerPersona: d.buyerPersona ?? undefined,
               sourceUrl: d.sourceUrl ?? null,
@@ -2582,6 +2655,11 @@ export async function runAccountCartographer(args: {
         (value as { researchBrief?: unknown } | null | undefined)?.researchBrief,
       ),
     };
+
+    // Deterministic entity-scope safety net (entity-scope fix) — downgrade any
+    // apex title mis-scoped to a subsidiary/brand even if the model slipped.
+    guardCartographerEntityScope(normalised);
+
     // If the model produced fewer signals than the search returned,
     // backfill with raw citation URLs so the UI still surfaces evidence.
     if (normalised.sourceSignals.length < 3 && citationUrls.length > 0) {

@@ -2854,6 +2854,14 @@ components:
       properties:
         fullName: { type: string, minLength: 1, maxLength: 200 }
         title: { type: ["string", "null"], maxLength: 200 }
+        # Entity-scope fix — which entity this person's title sits at, so a
+        # subsidiary/brand exec is never flattened into group leadership. A
+        # subsidiary CEO is stored with entityScope:"subsidiary" + entityName,
+        # never promoted to the group apex.
+        entityName: { type: ["string", "null"], maxLength: 200 }
+        entityScope:
+          type: ["string", "null"]
+          enum: [parent_group, subsidiary, division, standalone, null]
         seniority:
           type: ["string", "null"]
           enum: [c_suite, vp, director, manager, ic, null]
@@ -3211,6 +3219,12 @@ components:
         phone: { type: ["string", "null"] }
         linkedinUrl: { type: ["string", "null"] }
         buyerPersona: { type: ["string", "null"] }
+        # Entity-scope fix — surfaced as a "Group" vs "Subsidiary · X" badge so a
+        # subsidiary executive is never read as group leadership.
+        entityName: { type: ["string", "null"] }
+        entityScope:
+          type: ["string", "null"]
+          enum: [parent_group, subsidiary, division, standalone, null]
         influenceScore: { type: integer, minimum: 1, maximum: 5 }
         disposition: { $ref: "#/components/schemas/AtelierContactDisposition" }
         lastContactAt: { type: ["string", "null"] }

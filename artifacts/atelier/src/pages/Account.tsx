@@ -1505,6 +1505,28 @@ function ContactDeepProfile({ contact }: { contact: AtelierContact }) {
   );
 }
 
+// Entity-scope fix — a contact's title can sit at the named group OR at one of
+// its operating subsidiaries/brands. This badge makes a subsidiary executive
+// visually distinct from group leadership so a Partner never reads a subsidiary
+// CEO as the group's apex. Renders nothing for standalone/unknown scope.
+function EntityScopeChip({ contact }: { contact: AtelierContact }) {
+  const scope = contact.entityScope ?? null;
+  if (!scope || scope === "standalone") return null;
+  if (scope === "parent_group") {
+    return (
+      <MonoChip tone="gold" data-testid={`badge-entity-scope-${contact.id}`}>
+        Group
+      </MonoChip>
+    );
+  }
+  const label = scope === "division" ? "Division" : "Subsidiary";
+  return (
+    <MonoChip tone="amber" data-testid={`badge-entity-scope-${contact.id}`}>
+      {contact.entityName ? `${label} · ${contact.entityName}` : label}
+    </MonoChip>
+  );
+}
+
 function DecisionMakersTab({
   contacts,
   relationships,
@@ -1622,6 +1644,7 @@ function DecisionMakersTab({
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             <MonoChip tone={DISPOSITION_TONE[selected.disposition]}>{selected.disposition}</MonoChip>
+            <EntityScopeChip contact={selected} />
             {selected.buyerPersona && <MonoChip>{selected.buyerPersona}</MonoChip>}
             <MonoChip tone="gold">Influence {selected.influenceScore}/5</MonoChip>
             {selected.email && <MonoChip>{selected.email}</MonoChip>}
@@ -1712,6 +1735,7 @@ function DecisionMakersTab({
             <MonoChip tone={DISPOSITION_TONE[c.disposition]}>{c.disposition}</MonoChip>
           </div>
           <div className="flex flex-wrap gap-2">
+            <EntityScopeChip contact={c} />
             {c.buyerPersona && <MonoChip>{c.buyerPersona}</MonoChip>}
             <MonoChip tone="gold">Influence {c.influenceScore}/5</MonoChip>
             {c.email && <MonoChip>{c.email}</MonoChip>}

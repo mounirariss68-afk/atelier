@@ -351,6 +351,12 @@ export const atelierContacts = pgTable(
     // one citation backs the title + name, otherwise 'inferred'.
     sourceUrl: text("source_url"),
     confidence: text("confidence").notNull().default("inferred"),
+    // Entity-scope fix — which entity this person's title sits at, so a
+    // subsidiary/brand exec is never shown as group leadership. entityScope:
+    // 'parent_group' | 'subsidiary' | 'division' | 'standalone'. Both nullable
+    // so existing rows keep validating with no backfill.
+    entityName: text("entity_name"),
+    entityScope: text("entity_scope"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),

@@ -1,0 +1,27 @@
+{
+  "agent_id": "account_cartographer",
+  "prompt_version": 1,
+  "_doc": "Entity-scope regression fixture. The Account Cartographer must not conflate a subsidiary executive with the parent group's apex. Anchor case: 'Al Tayer Group' is a family-/chair-led conglomerate with NO group CEO — its apex is Executive Chairman Obeid Al Tayer. Dee Sarai is CEO of Al Tayer Insignia (a subsidiary/brand) and must be stored with entityScope='subsidiary' + entityName='Al Tayer Insignia', NEVER as the group CEO. The deterministic guard (guardCartographerEntityScope) enforces this regardless of model variance; see tests/cartographer-guard/run.ts. Live web_search output is non-deterministic, so these asserts encode the corrected target shape rather than exact prose.",
+  "cases": [
+    {
+      "id": "ac_01_al_tayer_group_no_fabricated_ceo",
+      "input": { "accountName": "Al Tayer Group", "accountCountry": "AE", "accountSector": "Diversified / Retail & Luxury" },
+      "asserts": [
+        { "kind": "no_fabricated_group_ceo" },
+        { "kind": "apex_is_chairman", "value": "Obeid Al Tayer" },
+        { "kind": "decision_makers_have_entity_scope" },
+        { "kind": "contact_present", "value": "Dee Sarai" },
+        { "kind": "contact_entity_scope", "name": "Dee Sarai", "entityScope": "subsidiary", "entityName": "Al Tayer Insignia" },
+        { "kind": "contact_not_group_apex", "name": "Dee Sarai" }
+      ]
+    },
+    {
+      "id": "ac_02_chair_led_group_abstains_on_ceo",
+      "input": { "accountName": "Al Tayer Group", "accountCountry": "AE", "accountSector": "Diversified" },
+      "asserts": [
+        { "kind": "no_unverified_group_ceo" },
+        { "kind": "open_questions_includes_ceo_gap" }
+      ]
+    }
+  ]
+}

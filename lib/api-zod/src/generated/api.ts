@@ -2459,6 +2459,8 @@ export const atelierCreateAccountBodyResearchOneDecisionMakersItemFullNameMax = 
 
 export const atelierCreateAccountBodyResearchOneDecisionMakersItemTitleMax = 200;
 
+export const atelierCreateAccountBodyResearchOneDecisionMakersItemEntityNameMax = 200;
+
 export const atelierCreateAccountBodyResearchOneDecisionMakersItemBuyerPersonaMax = 120;
 
 export const atelierCreateAccountBodyResearchOneDecisionMakersItemSourceUrlMax = 2000;
@@ -2756,6 +2758,21 @@ export const AtelierCreateAccountBody = zod.object({
                   .max(
                     atelierCreateAccountBodyResearchOneDecisionMakersItemTitleMax,
                   )
+                  .nullish(),
+                entityName: zod
+                  .string()
+                  .max(
+                    atelierCreateAccountBodyResearchOneDecisionMakersItemEntityNameMax,
+                  )
+                  .nullish(),
+                entityScope: zod
+                  .union([
+                    zod.literal("parent_group"),
+                    zod.literal("subsidiary"),
+                    zod.literal("division"),
+                    zod.literal("standalone"),
+                    zod.literal(null),
+                  ])
                   .nullish(),
                 seniority: zod
                   .union([
@@ -3496,6 +3513,16 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -4665,6 +4692,16 @@ export const AtelierUpdateAccountResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -5605,6 +5642,16 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -5921,6 +5968,16 @@ export const AtelierListAccountContactsResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -6138,6 +6195,16 @@ export const AtelierUpdateContactResponse = zod.object({
   phone: zod.string().nullish(),
   linkedinUrl: zod.string().nullish(),
   buyerPersona: zod.string().nullish(),
+  entityName: zod.string().nullish(),
+  entityScope: zod
+    .union([
+      zod.literal("parent_group"),
+      zod.literal("subsidiary"),
+      zod.literal("division"),
+      zod.literal("standalone"),
+      zod.literal(null),
+    ])
+    .nullish(),
   influenceScore: zod
     .number()
     .min(1)
@@ -7052,6 +7119,16 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -7997,6 +8074,16 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -8955,6 +9042,16 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -9912,6 +10009,16 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -10853,6 +10960,16 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -11803,6 +11920,16 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -12753,6 +12880,16 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -13696,6 +13833,16 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -14651,6 +14798,16 @@ export const AtelierCreateAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -15603,6 +15760,16 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -16544,6 +16711,16 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -17494,6 +17671,16 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -18445,6 +18632,16 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -19386,6 +19583,16 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -20333,6 +20540,16 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      entityName: zod.string().nullish(),
+      entityScope: zod
+        .union([
+          zod.literal("parent_group"),
+          zod.literal("subsidiary"),
+          zod.literal("division"),
+          zod.literal("standalone"),
+          zod.literal(null),
+        ])
+        .nullish(),
       influenceScore: zod
         .number()
         .min(1)
@@ -20662,6 +20879,16 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   phone: zod.string().nullish(),
   linkedinUrl: zod.string().nullish(),
   buyerPersona: zod.string().nullish(),
+  entityName: zod.string().nullish(),
+  entityScope: zod
+    .union([
+      zod.literal("parent_group"),
+      zod.literal("subsidiary"),
+      zod.literal("division"),
+      zod.literal("standalone"),
+      zod.literal(null),
+    ])
+    .nullish(),
   influenceScore: zod
     .number()
     .min(1)

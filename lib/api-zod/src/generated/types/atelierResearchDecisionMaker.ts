@@ -8,6 +8,7 @@
 import type { AtelierContactCareerEntry } from "./atelierContactCareerEntry";
 import type { AtelierContactEducationEntry } from "./atelierContactEducationEntry";
 import type { AtelierResearchDecisionMakerConfidence } from "./atelierResearchDecisionMakerConfidence";
+import type { AtelierResearchDecisionMakerEntityScope } from "./atelierResearchDecisionMakerEntityScope";
 import type { AtelierResearchDecisionMakerSeniority } from "./atelierResearchDecisionMakerSeniority";
 
 export interface AtelierResearchDecisionMaker {
@@ -21,6 +22,13 @@ export interface AtelierResearchDecisionMaker {
    * @nullable
    */
   title?: string | null;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  entityName?: string | null;
+  /** @nullable */
+  entityScope?: AtelierResearchDecisionMakerEntityScope;
   /** @nullable */
   seniority?: AtelierResearchDecisionMakerSeniority;
   /**

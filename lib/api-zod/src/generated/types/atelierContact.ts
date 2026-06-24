@@ -9,6 +9,7 @@ import type { AtelierContactCareerEntry } from "./atelierContactCareerEntry";
 import type { AtelierContactConfidence } from "./atelierContactConfidence";
 import type { AtelierContactDisposition } from "./atelierContactDisposition";
 import type { AtelierContactEducationEntry } from "./atelierContactEducationEntry";
+import type { AtelierContactEntityScope } from "./atelierContactEntityScope";
 import type { AtelierContactSeniorityProperty } from "./atelierContactSeniorityProperty";
 import type { AtelierContactTrendPoint } from "./atelierContactTrendPoint";
 
@@ -28,6 +29,10 @@ export interface AtelierContact {
   linkedinUrl?: string | null;
   /** @nullable */
   buyerPersona?: string | null;
+  /** @nullable */
+  entityName?: string | null;
+  /** @nullable */
+  entityScope?: AtelierContactEntityScope;
   /**
    * @minimum 1
    * @maximum 5

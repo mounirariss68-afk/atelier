@@ -436,6 +436,20 @@ export interface AtelierResearchBrief {
 /**
  * @nullable
  */
+export type AtelierResearchDecisionMakerEntityScope =
+  | (typeof AtelierResearchDecisionMakerEntityScope)[keyof typeof AtelierResearchDecisionMakerEntityScope]
+  | null;
+
+export const AtelierResearchDecisionMakerEntityScope = {
+  parent_group: "parent_group",
+  subsidiary: "subsidiary",
+  division: "division",
+  standalone: "standalone",
+} as const;
+
+/**
+ * @nullable
+ */
 export type AtelierResearchDecisionMakerSeniority =
   | (typeof AtelierResearchDecisionMakerSeniority)[keyof typeof AtelierResearchDecisionMakerSeniority]
   | null;
@@ -484,6 +498,13 @@ export interface AtelierResearchDecisionMaker {
    * @nullable
    */
   title?: string | null;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  entityName?: string | null;
+  /** @nullable */
+  entityScope?: AtelierResearchDecisionMakerEntityScope;
   /** @nullable */
   seniority?: AtelierResearchDecisionMakerSeniority;
   /**
@@ -847,6 +868,20 @@ export const AtelierContactSeniorityProperty = {
 } as const;
 
 /**
+ * @nullable
+ */
+export type AtelierContactEntityScope =
+  | (typeof AtelierContactEntityScope)[keyof typeof AtelierContactEntityScope]
+  | null;
+
+export const AtelierContactEntityScope = {
+  parent_group: "parent_group",
+  subsidiary: "subsidiary",
+  division: "division",
+  standalone: "standalone",
+} as const;
+
+/**
  * "verified" when at least one citation directly names the
 person; "inferred" when the contact came from a heuristic
 (title pattern, org chart inference) without a direct cite.
@@ -890,6 +925,10 @@ export interface AtelierContact {
   linkedinUrl?: string | null;
   /** @nullable */
   buyerPersona?: string | null;
+  /** @nullable */
+  entityName?: string | null;
+  /** @nullable */
+  entityScope?: AtelierContactEntityScope;
   /**
    * @minimum 1
    * @maximum 5
