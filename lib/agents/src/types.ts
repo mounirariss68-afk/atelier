@@ -11,11 +11,13 @@ import { z, type ZodTypeAny } from "zod";
 
 export type AgentGroup =
   | "Front of House"
+  | "Account Management"
   | "Engagement Memory"
   | "Mobilize"
   | "Deliver"
   | "Quality"
   | "Personal"
+  | "Wallet"
   | "Atelier";
 
 export type AgentStage =

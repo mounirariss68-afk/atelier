@@ -1,0 +1,44 @@
+{
+  "agentId": "ag_relationship_health",
+  "input": {
+    "accountId": "acc_demo_001",
+    "accountName": "Emirates Group"
+  },
+  "expectedOutput": {
+    "overall": "amber",
+    "score": 52,
+    "headline": "Healthy executive sponsorship, but contact cadence is slipping and the lead opportunity has stalled.",
+    "factors": [
+      {
+        "id": "rf_1",
+        "label": "Champion coverage",
+        "signal": "positive",
+        "severity": "low",
+        "detail": "A high-influence CDO champion is actively engaged and advocating internally.",
+        "metric": "influence 5/5, disposition champion"
+      },
+      {
+        "id": "rf_2",
+        "label": "Contact decay",
+        "signal": "negative",
+        "severity": "high",
+        "detail": "The economic buyer has not been contacted in over three weeks and the next-touch date is overdue.",
+        "metric": "23 days since last touch"
+      },
+      {
+        "id": "rf_3",
+        "label": "Stalled opportunity",
+        "signal": "negative",
+        "severity": "med",
+        "detail": "The lead opportunity has not advanced stage in 18 days and its probability has drifted down.",
+        "metric": "18 days in-stage"
+      }
+    ],
+    "recommendedActions": [
+      "Book an executive readout with the CDO this week to re-engage the economic buyer.",
+      "Confirm the procurement timeline and refresh the next-touch dates for both decision-makers."
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Relationship-Health fixture exercises score/band consistency, signed factors, and recommended actions."
+}

@@ -1,0 +1,61 @@
+{
+  "agentId": "ag_pre_meeting_briefing",
+  "input": {
+    "accountId": "acc_demo_001",
+    "accountName": "Emirates Group",
+    "meetingPurpose": "Executive readout and commercial alignment",
+    "attendees": ["Fatima Al-Marri (CDO)", "James Porter (Cognirise EL)"]
+  },
+  "expectedOutput": {
+    "title": "Pre-meeting brief — Emirates Group executive readout",
+    "meetingContext": "This readout re-engages the economic buyer after a three-week gap and aims to align on commercial terms before the procurement review opens.",
+    "attendees": [
+      {
+        "name": "Fatima Al-Marri",
+        "role": "Chief Data Officer",
+        "org": "client",
+        "note": "High-influence champion; cares about measurable productivity gains."
+      },
+      {
+        "name": "James Porter",
+        "role": "Engagement Lead",
+        "org": "cognirise",
+        "note": "Owns the relationship and the commercial narrative."
+      }
+    ],
+    "recentSignals": [
+      "Emirates announced a group-wide AI productivity mandate in its latest investor update.",
+      "Procurement flagged cost as the primary open objection in the last working session."
+    ],
+    "openItems": [
+      "ROI one-pager promised to procurement has not yet been sent.",
+      "Budget timing for the diagnostic remains unconfirmed."
+    ],
+    "talkingPoints": [
+      {
+        "point": "Reframe the diagnostic around the announced productivity mandate",
+        "rationale": "Ties the proposal directly to a public executive priority, raising urgency."
+      },
+      {
+        "point": "Walk through the quantified ROI case",
+        "rationale": "Directly addresses procurement's stated cost objection."
+      }
+    ],
+    "risksToManage": [
+      "Avoid over-promising delivery timelines before procurement timing is confirmed."
+    ],
+    "facts": [
+      {
+        "id": "f_1",
+        "topic": "Productivity mandate",
+        "statement": "Emirates Group committed to a group-wide AI productivity programme in its 2026 investor update.",
+        "sourceUrl": "https://www.emirates.com/investor-relations/2026-update",
+        "sourceTitle": "Emirates Group Investor Update 2026",
+        "snippet": "...committing to a group-wide AI productivity programme across operations...",
+        "confidence": "green"
+      }
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Pre-Meeting Briefing fixture exercises attendees, signals, talking points, and a sourced fact for the citation guardrail."
+}

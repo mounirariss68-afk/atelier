@@ -126,6 +126,9 @@ import {
   runQbrComposer,
   buildCartographerProposals,
   AgentNonJsonResponseError,
+  runNextBestAction,
+  runRelationshipHealth,
+  runPreMeetingBriefing,
   type PendingProfileUpdate,
   type WhitespaceOutput,
   type QbrOutput,
@@ -1501,6 +1504,113 @@ router.post("/accounts/:accountId/insights", async (req, res) => {
   });
   const ws = await buildWorkspace(account.id, access, me);
   res.json(ws);
+});
+
+// ============================================================
+// Account-management AI agents (account-scoped, propose-then-approve).
+// Each endpoint runs an agent over live account context and returns the
+// proposal synchronously. Output is never auto-applied: Next-Best-Action
+// recommendations become tasks only when a human accepts (via the
+// existing POST /activities route), and Relationship-Health assessments
+// are governed via the /dismiss endpoint below. All gated by canSeeAccount.
+// ============================================================
+
+async function guardAccountAgent(req: Request, res: Response) {
+  const me = ensurePersona(req, res);
+  if (!me) return null;
+  const account = await loadAccount(req.params.accountId as string);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return null;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return null;
+  }
+  return { me, account };
+}
+
+// ---------- Next-Best-Action: rank next moves on the account ----------
+router.post("/accounts/:accountId/agents/next-best-action/run", async (req, res) => {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { horizonDays?: number; focus?: string };
+  try {
+    const result = await runNextBestAction({
+      accountId: guard.account.id,
+      horizonDays: typeof body.horizonDays === "number" ? body.horizonDays : undefined,
+      focus: typeof body.focus === "string" ? body.focus : undefined,
+      triggeredByUserId: guard.me.id,
+    });
+    res.status(202).json({ runId: result.runId, output: result.output });
+  } catch (err) {
+    res.status(502).json({ error: "agent-failed", detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ---------- Relationship-Health / Churn-Risk: score the relationship ----------
+router.post("/accounts/:accountId/agents/relationship-health/run", async (req, res) => {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return;
+  try {
+    const result = await runRelationshipHealth({
+      accountId: guard.account.id,
+      triggeredByUserId: guard.me.id,
+    });
+    res.status(202).json({ runId: result.runId, output: result.output });
+  } catch (err) {
+    res.status(502).json({ error: "agent-failed", detail: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// ---------- Relationship-Health: governed dismiss (audit-logged) ----------
+router.post("/accounts/:accountId/agents/relationship-health/dismiss", async (req, res) => {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { runId?: string; reason?: string };
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    orgId: guard.account.orgId,
+    entityType: "account",
+    entityId: guard.account.id,
+    actorType: "human",
+    actorId: guard.me.id,
+    actorLabel: guard.me.name,
+    action: "agent.dismissed",
+    payload: {
+      agentId: "ag_relationship_health",
+      runId: typeof body.runId === "string" ? body.runId : null,
+      reason: typeof body.reason === "string" ? body.reason.slice(0, 240) : null,
+    },
+    payloadSummary: `${guard.me.name} dismissed the relationship-health assessment for ${guard.account.brandName ?? guard.account.name}.`,
+  });
+  res.json({ ok: true });
+});
+
+// ---------- Pre-Meeting Briefing: citable brief for a meeting ----------
+router.post("/accounts/:accountId/agents/pre-meeting-briefing/run", async (req, res) => {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as {
+    meetingId?: string;
+    meetingPurpose?: string;
+    attendees?: string[];
+  };
+  try {
+    const result = await runPreMeetingBriefing({
+      accountId: guard.account.id,
+      meetingId: typeof body.meetingId === "string" ? body.meetingId : undefined,
+      meetingPurpose: typeof body.meetingPurpose === "string" ? body.meetingPurpose : undefined,
+      attendees: Array.isArray(body.attendees)
+        ? body.attendees.filter((a): a is string => typeof a === "string")
+        : undefined,
+      triggeredByUserId: guard.me.id,
+    });
+    res.status(202).json({ runId: result.runId, output: result.output });
+  } catch (err) {
+    res.status(502).json({ error: "agent-failed", detail: err instanceof Error ? err.message : String(err) });
+  }
 });
 
 // ---------- edit insight (author only) ----------

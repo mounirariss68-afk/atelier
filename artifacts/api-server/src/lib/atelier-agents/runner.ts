@@ -23,8 +23,8 @@
  * amber→red).
  */
 
-import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings } from "@workspace/db";
-import { eq, and, gte, isNull } from "drizzle-orm";
+import { db, atelierAgentRuns, atelierAuditEvents, atelierAccounts, atelierOpportunities, atelierPaneAItems, atelierDealPricings, atelierContacts, atelierActivities } from "@workspace/db";
+import { eq, and, gte, isNull, inArray, desc } from "drizzle-orm";
 import { getAgent } from "@workspace/agents";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
@@ -5080,7 +5080,266 @@ export type V5DispatcherFn = (
   input: Record<string, unknown> & V5RunCommonArgs,
 ) => Promise<V5GenericResult>;
 
+// =============================================================
+// Account-management agents (Next-Best-Action, Relationship-Health,
+// Pre-Meeting Briefing). Unlike the v5 generic agents, these read live
+// account context from the DB (opportunities, contacts, activities,
+// meetings) before the LLM call, so the model reasons over real signals
+// instead of a bare JSON echo. Each is propose-only; a human accepts or
+// dismisses the output through the account-scoped routes + UI.
+// =============================================================
+
+/** Days between an ISO timestamp and now (negative = future). */
+function daysSince(iso: string | Date | null | undefined): number | null {
+  if (!iso) return null;
+  const t = typeof iso === "string" ? Date.parse(iso) : iso.getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.round((Date.now() - t) / 86_400_000);
+}
+
+/**
+ * Load a compact, model-ready snapshot of one account: firmographics +
+ * open/recent opportunities, decision-makers, recent activities, and the
+ * meetings hanging off this account's opportunities and engagements.
+ */
+async function loadAccountAgentContext(accountId: string) {
+  const [account] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.id, accountId), isNull(atelierAccounts.deletedAt)))
+    .limit(1);
+  if (!account) throw new Error(`loadAccountAgentContext: account ${accountId} not found`);
+
+  const [opportunities, contacts, activities, engagements] = await Promise.all([
+    db
+      .select()
+      .from(atelierOpportunities)
+      .where(and(eq(atelierOpportunities.accountId, accountId), isNull(atelierOpportunities.deletedAt))),
+    db
+      .select()
+      .from(atelierContacts)
+      .where(and(eq(atelierContacts.accountId, accountId), isNull(atelierContacts.deletedAt))),
+    db
+      .select()
+      .from(atelierActivities)
+      .where(and(eq(atelierActivities.accountId, accountId), isNull(atelierActivities.deletedAt)))
+      .orderBy(desc(atelierActivities.createdAt))
+      .limit(40),
+    db
+      .select()
+      .from(atelierEngagements)
+      .where(and(eq(atelierEngagements.accountId, accountId), isNull(atelierEngagements.deletedAt))),
+  ]);
+
+  const parentIds = [...opportunities.map((o) => o.id), ...engagements.map((e) => e.id)];
+  const meetings = parentIds.length
+    ? await db
+        .select()
+        .from(atelierMeetings)
+        .where(and(inArray(atelierMeetings.parentId, parentIds), isNull(atelierMeetings.deletedAt)))
+        .orderBy(desc(atelierMeetings.date))
+        .limit(15)
+    : [];
+
+  const nowIso = new Date().toISOString();
+  return {
+    nowIso,
+    account: {
+      id: account.id,
+      name: account.name,
+      brandName: account.brandName,
+      sector: account.sector,
+      country: account.country,
+      size: account.size,
+      tier: account.tier,
+      status: account.status,
+      annualRevenue: account.annualRevenue,
+      employeeCount: account.employeeCount,
+      strategicPriorities: account.strategicPriorities,
+      cogniriseHypothesis: account.cogniriseHypothesis,
+      notes: account.notes,
+    },
+    opportunities: opportunities.map((o) => ({
+      id: o.id,
+      name: o.name,
+      salesStage: o.salesStage,
+      plmStage: o.plmStage,
+      probabilityPct: o.probabilityPct,
+      buyerPersona: o.buyerPersona,
+      offeringAnchor: o.offeringAnchor,
+      daysSinceUpdate: daysSince(o.updatedAt),
+    })),
+    contacts: contacts.map((c) => ({
+      id: c.id,
+      fullName: c.fullName,
+      title: c.title,
+      seniority: c.seniority,
+      buyerPersona: c.buyerPersona,
+      disposition: c.disposition,
+      influenceScore: c.influenceScore,
+      relationshipStrength: c.relationshipStrength,
+      daysSinceLastContact: daysSince(c.lastContactAt),
+      nextTouchInDays: c.nextTouchAt ? -1 * (daysSince(c.nextTouchAt) ?? 0) : null,
+      timeInRole: c.timeInRole,
+    })),
+    openActivities: activities
+      .filter((a) => a.status === "open")
+      .map((a) => ({
+        id: a.id,
+        type: a.type,
+        title: a.title,
+        dueDate: a.dueDate,
+        daysSinceCreated: daysSince(a.createdAt),
+      })),
+    recentActivities: activities.slice(0, 15).map((a) => ({
+      type: a.type,
+      title: a.title,
+      status: a.status,
+      daysSinceCreated: daysSince(a.createdAt),
+    })),
+    recentMeetings: meetings.map((m) => ({
+      id: m.id,
+      title: m.title,
+      kind: m.kind,
+      date: m.date,
+      attendees: m.attendees,
+      summary: m.summary,
+      decisions: m.decisions,
+      actionItems: m.actionItems,
+    })),
+  };
+}
+
+export interface NextBestActionInput extends V5RunCommonArgs {
+  accountId: string;
+  horizonDays?: number;
+  focus?: string;
+}
+
+export async function runNextBestAction(
+  input: NextBestActionInput,
+): Promise<V5GenericResult> {
+  const ctx = await loadAccountAgentContext(input.accountId);
+  const result = await runAgent(
+    {
+      agentId: "ag_next_best_action",
+      input: { accountId: input.accountId, accountName: ctx.account.name, horizonDays: input.horizonDays, focus: input.focus },
+      triggeredByUserId: input.triggeredByUserId,
+      targetType: "account",
+      targetId: input.accountId,
+      targetLabel: ctx.account.name,
+      actorLabel: input.actorLabel ?? "Next-Best-Action",
+    },
+    async (c) => {
+      await c.progress(35, "Reading account signals");
+      const promptBody = loadPrompt("next_best_action", 1);
+      const userPrompt = JSON.stringify({
+        horizonDays: input.horizonDays ?? 30,
+        focus: input.focus ?? null,
+        ...ctx,
+      });
+      await c.progress(65, "Ranking next best actions");
+      const { value, costUsd } = await callClaudeJson<{ confidence?: "green" | "amber" | "red" }>(
+        "claude-sonnet-4-5",
+        promptBody,
+        userPrompt,
+      );
+      return { output: value, costUsd, confidence: value.confidence ?? "amber" };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
+export interface RelationshipHealthInput extends V5RunCommonArgs {
+  accountId: string;
+}
+
+export async function runRelationshipHealth(
+  input: RelationshipHealthInput,
+): Promise<V5GenericResult> {
+  const ctx = await loadAccountAgentContext(input.accountId);
+  const result = await runAgent(
+    {
+      agentId: "ag_relationship_health",
+      input: { accountId: input.accountId, accountName: ctx.account.name },
+      triggeredByUserId: input.triggeredByUserId,
+      targetType: "account",
+      targetId: input.accountId,
+      targetLabel: ctx.account.name,
+      actorLabel: input.actorLabel ?? "Relationship-Health",
+    },
+    async (c) => {
+      await c.progress(35, "Reading engagement signals");
+      const promptBody = loadPrompt("relationship_health", 1);
+      const userPrompt = JSON.stringify(ctx);
+      await c.progress(65, "Scoring relationship health");
+      const { value, costUsd } = await callClaudeJson<{ overall?: "green" | "amber" | "red" }>(
+        "claude-sonnet-4-5",
+        promptBody,
+        userPrompt,
+      );
+      return { output: value, costUsd, confidence: value.overall ?? "amber" };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
+export interface PreMeetingBriefingInput extends V5RunCommonArgs {
+  accountId: string;
+  meetingId?: string;
+  meetingPurpose?: string;
+  attendees?: string[];
+}
+
+export async function runPreMeetingBriefing(
+  input: PreMeetingBriefingInput,
+): Promise<V5GenericResult> {
+  const ctx = await loadAccountAgentContext(input.accountId);
+  const selectedMeeting = input.meetingId
+    ? ctx.recentMeetings.find((m) => m.id === input.meetingId) ?? null
+    : null;
+  const result = await runAgent(
+    {
+      agentId: "ag_pre_meeting_briefing",
+      input: {
+        accountId: input.accountId,
+        accountName: ctx.account.name,
+        meetingId: input.meetingId,
+        meetingPurpose: input.meetingPurpose,
+        attendees: input.attendees,
+      },
+      triggeredByUserId: input.triggeredByUserId,
+      targetType: "account",
+      targetId: input.accountId,
+      targetLabel: ctx.account.name,
+      actorLabel: input.actorLabel ?? "Pre-Meeting Briefing",
+    },
+    async (c) => {
+      await c.progress(35, "Assembling meeting context");
+      const promptBody = loadPrompt("pre_meeting_briefing", 1);
+      const userPrompt = JSON.stringify({
+        meeting: selectedMeeting,
+        meetingPurpose: input.meetingPurpose ?? null,
+        attendees: input.attendees ?? null,
+        ...ctx,
+      });
+      await c.progress(65, "Drafting the brief");
+      const { value, costUsd } = await callClaudeJson<{
+        facts?: AgentFact[];
+        confidence?: "green" | "amber" | "red";
+      }>("claude-sonnet-4-5", promptBody, userPrompt);
+      // Citation guardrail: unsourced facts are confidence-downgraded.
+      const guarded = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
+      return { output: guarded, costUsd, confidence: value.confidence ?? "amber" };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
 export const ATELIER_V5_DISPATCH: Record<string, V5DispatcherFn> = {
+  ag_next_best_action: (i) => runNextBestAction(i as never),
+  ag_relationship_health: (i) => runRelationshipHealth(i as never),
+  ag_pre_meeting_briefing: (i) => runPreMeetingBriefing(i as never),
   ag_linkedin_composer: (i) => runLinkedInComposer(i as never),
   ag_press_monitor: (i) => runPressMonitor(i as never),
   ag_field_notes_scheduler: (i) => runFieldNotesScheduler(i as never),

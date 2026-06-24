@@ -70,7 +70,11 @@ export type AtelierAgentId =
   | "redline_analyst"
   | "esign_orchestrator"
   | "dpa_sentinel"
-  | "renewal_watchdog";
+  | "renewal_watchdog"
+  // Account-management agents (Next-Best-Action, Relationship-Health, Pre-Meeting Briefing)
+  | "next_best_action"
+  | "relationship_health"
+  | "pre_meeting_briefing";
 
 /**
  * Load an agent prompt from `prompts/<agentId>/v<version>.md`.

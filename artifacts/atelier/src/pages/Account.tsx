@@ -17,6 +17,7 @@ import {
   useAtelierUpdateAccountTeamMember,
   useAtelierRemoveAccountTeamMember,
   useAtelierUpdateAccount,
+  useAtelierCreateActivity,
   getAtelierListAccountsQueryKey,
   getAtelierGetAccountWorkspaceQueryKey,
   type AtelierContact,
@@ -89,6 +90,11 @@ import {
   Gauge,
   RotateCcw,
   Activity,
+  Bot,
+  HeartPulse,
+  CalendarClock,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 
 type TabKey =
@@ -103,6 +109,7 @@ type TabKey =
   | "account_plan"
   | "whitespace"
   | "qbr"
+  | "account_ai"
   | "audit";
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
@@ -117,6 +124,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "account_plan", label: "Account Plan", icon: <Target className="w-3.5 h-3.5" /> },
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
+  { key: "account_ai", label: "Account AI", icon: <Bot className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
 ];
 
@@ -416,6 +424,9 @@ export default function Account() {
         {tab === "account_plan" && <AccountPlanTab ws={ws} accountId={accountId} />}
         {tab === "whitespace" && <WhitespaceTab accountId={accountId} />}
         {tab === "qbr" && <QbrTab accountId={accountId} />}
+        {tab === "account_ai" && (
+          <AccountAgentsTab accountId={accountId} contacts={ws.contacts} />
+        )}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}
       </div>
     </div>
@@ -2403,6 +2414,588 @@ function RelationshipsTab({
           </ul>
         )}
       </Card>
+    </div>
+  );
+}
+
+// ============================================================
+// Account AI — three account-management agents (Next-Best-Action,
+// Relationship-Health, Pre-Meeting Briefing). Every result is a
+// human-checkpointed proposal: nothing is applied until the user
+// accepts (NBA → a real task) or acts/dismisses (Relationship-Health).
+// ============================================================
+
+type Conf = "green" | "amber" | "red";
+
+interface NbaRecommendation {
+  id: string;
+  title: string;
+  rationale: string;
+  priority: "high" | "medium" | "low";
+  category: string;
+  suggestedOwnerRole?: string;
+  suggestedDueInDays?: number;
+  expectedImpact: string;
+  confidence: Conf;
+}
+interface NbaOutput {
+  accountSummary: string;
+  recommendations: NbaRecommendation[];
+  confidence: Conf;
+}
+interface HealthFactor {
+  id: string;
+  label: string;
+  signal: "positive" | "neutral" | "negative";
+  severity: "low" | "med" | "high";
+  detail: string;
+  metric?: string;
+}
+interface HealthOutput {
+  overall: Conf;
+  score: number;
+  headline: string;
+  factors: HealthFactor[];
+  recommendedActions: string[];
+  confidence: Conf;
+}
+interface BriefFact {
+  id?: string;
+  topic: string;
+  statement: string;
+  sourceUrl?: string;
+  sourceTitle?: string;
+  snippet?: string;
+  confidence: Conf;
+}
+interface BriefOutput {
+  title: string;
+  meetingContext: string;
+  attendees: Array<{ name: string; role?: string; org: "client" | "cognirise" | "unknown"; note?: string }>;
+  recentSignals: string[];
+  openItems: string[];
+  talkingPoints: Array<{ point: string; rationale: string }>;
+  risksToManage: string[];
+  facts: BriefFact[];
+  confidence: Conf;
+}
+
+const CONF_STYLE: Record<Conf, string> = {
+  green: "text-success border-success/40 bg-success/10",
+  amber: "text-amber border-amber/30 bg-amber/10",
+  red: "text-danger border-danger/40 bg-danger/10",
+};
+
+function ConfChip({ conf, label }: { conf: Conf; label?: string }) {
+  return (
+    <span
+      className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${CONF_STYLE[conf]}`}
+    >
+      {label ?? conf}
+    </span>
+  );
+}
+
+async function runAccountAgent<T>(
+  accountId: string,
+  slug: string,
+  body: Record<string, unknown>,
+): Promise<{ runId: string; output: T }> {
+  const res = await fetch(
+    `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/agents/${slug}/run`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string }).detail ?? `Run failed (${res.status})`);
+  }
+  return (await res.json()) as { runId: string; output: T };
+}
+
+function isoDateInDays(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function AgentPanel({
+  icon,
+  title,
+  blurb,
+  checkpoint,
+  running,
+  error,
+  onRun,
+  runLabel,
+  hasResult,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  blurb: string;
+  checkpoint: string;
+  running: boolean;
+  error: string | null;
+  onRun: () => void;
+  runLabel: string;
+  hasResult: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Card className="p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <span className="text-gold mt-0.5">{icon}</span>
+          <div>
+            <h3 className="text-base font-semibold text-text">{title}</h3>
+            <p className="text-sm text-text-mute mt-0.5">{blurb}</p>
+          </div>
+        </div>
+        <PillButton onClick={onRun} disabled={running}>
+          {running ? "Running…" : hasResult ? "Re-run" : runLabel}
+        </PillButton>
+      </div>
+      <div className="flex items-center gap-1.5 text-[11px] font-mono text-text-faint">
+        <Check className="w-3 h-3 text-gold" />
+        {checkpoint}
+      </div>
+      {error && (
+        <div className="border border-danger/40 bg-danger/10 rounded p-3 text-xs font-mono text-danger">
+          {error}
+        </div>
+      )}
+      {running && <Skeleton className="h-24 bg-bg-elevate" />}
+      {!running && children}
+    </Card>
+  );
+}
+
+function AccountAgentsTab({
+  accountId,
+  contacts,
+}: {
+  accountId: string;
+  contacts: AtelierContact[];
+}) {
+  // Next-Best-Action
+  const [nba, setNba] = useState<NbaOutput | null>(null);
+  const [nbaRunning, setNbaRunning] = useState(false);
+  const [nbaError, setNbaError] = useState<string | null>(null);
+  const [accepted, setAccepted] = useState<Record<string, boolean>>({});
+  const createActivity = useAtelierCreateActivity();
+
+  // Relationship-Health
+  const [health, setHealth] = useState<HealthOutput | null>(null);
+  const [healthRunId, setHealthRunId] = useState<string | null>(null);
+  const [healthRunning, setHealthRunning] = useState(false);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [healthDismissed, setHealthDismissed] = useState(false);
+
+  // Pre-Meeting Briefing
+  const [brief, setBrief] = useState<BriefOutput | null>(null);
+  const [briefRunning, setBriefRunning] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
+  const [meetingPurpose, setMeetingPurpose] = useState("");
+
+  const runNba = async () => {
+    setNbaRunning(true);
+    setNbaError(null);
+    try {
+      const { output } = await runAccountAgent<NbaOutput>(accountId, "next-best-action", {});
+      setNba(output);
+      setAccepted({});
+    } catch (e) {
+      setNbaError(e instanceof Error ? e.message : "Run failed");
+    } finally {
+      setNbaRunning(false);
+    }
+  };
+
+  const acceptRecommendation = (rec: NbaRecommendation) => {
+    createActivity.mutate(
+      {
+        accountId,
+        data: {
+          title: rec.title,
+          type: "task",
+          body: `${rec.rationale}\n\nExpected impact: ${rec.expectedImpact}\n\n— Proposed by Next-Best-Action (${rec.priority} priority, ${rec.category})`,
+          ownerId: null,
+          dueDate:
+            typeof rec.suggestedDueInDays === "number"
+              ? isoDateInDays(rec.suggestedDueInDays)
+              : null,
+        },
+      },
+      { onSuccess: () => setAccepted((p) => ({ ...p, [rec.id]: true })) },
+    );
+  };
+
+  const runHealth = async () => {
+    setHealthRunning(true);
+    setHealthError(null);
+    setHealthDismissed(false);
+    try {
+      const { output, runId } = await runAccountAgent<HealthOutput>(
+        accountId,
+        "relationship-health",
+        {},
+      );
+      setHealth(output);
+      setHealthRunId(runId);
+    } catch (e) {
+      setHealthError(e instanceof Error ? e.message : "Run failed");
+    } finally {
+      setHealthRunning(false);
+    }
+  };
+
+  const dismissHealth = async () => {
+    try {
+      await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/agents/relationship-health/dismiss`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ runId: healthRunId }),
+        },
+      );
+      setHealthDismissed(true);
+    } catch {
+      /* dismiss is best-effort; the assessment was never applied anyway */
+      setHealthDismissed(true);
+    }
+  };
+
+  const actOnHealth = (action: string) => {
+    createActivity.mutate({
+      accountId,
+      data: {
+        title: action,
+        type: "task",
+        body: "— Proposed by Relationship-Health (risk mitigation)",
+        ownerId: null,
+        dueDate: isoDateInDays(7),
+      },
+    });
+  };
+
+  const runBrief = async () => {
+    setBriefRunning(true);
+    setBriefError(null);
+    try {
+      const { output } = await runAccountAgent<BriefOutput>(accountId, "pre-meeting-briefing", {
+        meetingPurpose: meetingPurpose.trim() || undefined,
+        attendees: contacts
+          .filter((c) => (c.disposition ?? "unknown") !== "unknown")
+          .slice(0, 8)
+          .map((c) => `${c.fullName}${c.title ? ` (${c.title})` : ""}`),
+      });
+      setBrief(output);
+    } catch (e) {
+      setBriefError(e instanceof Error ? e.message : "Run failed");
+    } finally {
+      setBriefRunning(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <Eyebrow>Account AI · propose-then-approve</Eyebrow>
+
+      {/* Next-Best-Action */}
+      <AgentPanel
+        icon={<Zap className="w-5 h-5" />}
+        title="Next-Best-Action"
+        blurb="Ranks the highest-value moves on this account right now. Accept one to create a tracked task."
+        checkpoint="You accept each recommendation before it becomes a task."
+        running={nbaRunning}
+        error={nbaError}
+        onRun={runNba}
+        runLabel="Suggest actions"
+        hasResult={!!nba}
+      >
+        {nba && (
+          <div className="space-y-4">
+            <p className="text-sm text-text-mute leading-relaxed">{nba.accountSummary}</p>
+            <div className="space-y-3">
+              {nba.recommendations.map((rec) => (
+                <div
+                  key={rec.id}
+                  className="rounded-lg border border-border-soft bg-bg-soft p-4 space-y-2"
+                  data-testid={`nba-rec-${rec.id}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span
+                        className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border ${
+                          rec.priority === "high"
+                            ? "text-danger border-danger/40 bg-danger/10"
+                            : rec.priority === "medium"
+                              ? "text-amber border-amber/30 bg-amber/10"
+                              : "text-text-mute border-border-soft bg-bg-elevate"
+                        }`}
+                      >
+                        {rec.priority}
+                      </span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                        {rec.category}
+                      </span>
+                      <ConfChip conf={rec.confidence} />
+                    </div>
+                    {accepted[rec.id] ? (
+                      <span className="text-xs font-mono text-success inline-flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Task created
+                      </span>
+                    ) : (
+                      <PillButton
+                        variant="ghost"
+                        onClick={() => acceptRecommendation(rec)}
+                        disabled={createActivity.isPending}
+                        data-testid={`nba-accept-${rec.id}`}
+                      >
+                        Accept → task
+                      </PillButton>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-text">{rec.title}</p>
+                  <p className="text-sm text-text-mute">{rec.rationale}</p>
+                  <p className="text-xs text-text-faint">
+                    Impact: {rec.expectedImpact}
+                    {typeof rec.suggestedDueInDays === "number" && (
+                      <> · due in {rec.suggestedDueInDays}d</>
+                    )}
+                    {rec.suggestedOwnerRole && <> · {rec.suggestedOwnerRole}</>}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </AgentPanel>
+
+      {/* Relationship-Health */}
+      <AgentPanel
+        icon={<HeartPulse className="w-5 h-5" />}
+        title="Relationship-Health / Churn-Risk"
+        blurb="Scores the relationship and flags the signals driving any decay."
+        checkpoint="Assessment is advisory — you dismiss it or act on a recommendation."
+        running={healthRunning}
+        error={healthError}
+        onRun={runHealth}
+        runLabel="Assess health"
+        hasResult={!!health}
+      >
+        {health && !healthDismissed && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div
+                className={`text-2xl font-mono font-semibold px-3 py-1 rounded border ${CONF_STYLE[health.overall]}`}
+                data-testid="health-score"
+              >
+                {Math.round(health.score)}
+              </div>
+              <div className="flex-1">
+                <p className="text-sm text-text">{health.headline}</p>
+              </div>
+              <ConfChip conf={health.overall} label={`${health.overall} risk`} />
+            </div>
+            <div className="space-y-2">
+              {health.factors.map((f) => (
+                <div
+                  key={f.id}
+                  className="rounded-lg border border-border-soft bg-bg-soft p-3 flex items-start gap-3"
+                >
+                  <span
+                    className={`mt-0.5 ${
+                      f.signal === "negative"
+                        ? "text-danger"
+                        : f.signal === "positive"
+                          ? "text-success"
+                          : "text-text-faint"
+                    }`}
+                  >
+                    {f.signal === "negative" ? (
+                      <AlertTriangle className="w-4 h-4" />
+                    ) : f.signal === "positive" ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Activity className="w-4 h-4" />
+                    )}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-text">{f.label}</span>
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                        {f.severity}
+                      </span>
+                    </div>
+                    <p className="text-sm text-text-mute">{f.detail}</p>
+                    {f.metric && (
+                      <p className="text-xs font-mono text-text-faint mt-0.5">{f.metric}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {health.recommendedActions.length > 0 && (
+              <div className="space-y-2">
+                <SectionLabel>Recommended actions</SectionLabel>
+                {health.recommendedActions.map((a, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-text">→ {a}</span>
+                    <PillButton
+                      variant="ghost"
+                      onClick={() => actOnHealth(a)}
+                      disabled={createActivity.isPending}
+                    >
+                      Act → task
+                    </PillButton>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="pt-2 border-t border-border-soft">
+              <PillButton variant="ghost" onClick={dismissHealth} data-testid="health-dismiss">
+                <X className="w-3.5 h-3.5" /> Dismiss assessment
+              </PillButton>
+            </div>
+          </div>
+        )}
+        {health && healthDismissed && (
+          <p className="text-sm font-mono text-text-faint">Assessment dismissed.</p>
+        )}
+      </AgentPanel>
+
+      {/* Pre-Meeting Briefing */}
+      <AgentPanel
+        icon={<CalendarClock className="w-5 h-5" />}
+        title="Pre-Meeting Briefing"
+        blurb="A citable brief for an upcoming meeting: who's in the room, signals, open items, talking points."
+        checkpoint="Draft reviewed by you before the meeting. Unsourced facts are confidence-downgraded."
+        running={briefRunning}
+        error={briefError}
+        onRun={runBrief}
+        runLabel="Build brief"
+        hasResult={!!brief}
+      >
+        <div className="space-y-4">
+          <input
+            value={meetingPurpose}
+            onChange={(e) => setMeetingPurpose(e.target.value)}
+            placeholder="Meeting purpose (optional) — e.g. executive readout & commercial alignment"
+            className="w-full bg-bg-soft border border-border-soft rounded px-3 py-2 text-sm text-text placeholder:text-text-faint"
+            data-testid="brief-purpose"
+          />
+          {brief && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-sm font-semibold text-text">{brief.title}</h4>
+                <p className="text-sm text-text-mute mt-1 leading-relaxed">
+                  {brief.meetingContext}
+                </p>
+              </div>
+              {brief.attendees.length > 0 && (
+                <div className="space-y-1.5">
+                  <SectionLabel>In the room</SectionLabel>
+                  {brief.attendees.map((at, i) => (
+                    <div key={i} className="text-sm text-text">
+                      <span className="font-medium">{at.name}</span>
+                      {at.role && <span className="text-text-mute"> · {at.role}</span>}
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint ml-2">
+                        {at.org}
+                      </span>
+                      {at.note && <p className="text-xs text-text-mute">{at.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {brief.recentSignals.length > 0 && (
+                  <div className="space-y-1.5">
+                    <SectionLabel>Recent signals</SectionLabel>
+                    <ul className="space-y-1 text-sm text-text-mute">
+                      {brief.recentSignals.map((s, i) => (
+                        <li key={i}>→ {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {brief.openItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    <SectionLabel>Open items</SectionLabel>
+                    <ul className="space-y-1 text-sm text-text-mute">
+                      {brief.openItems.map((s, i) => (
+                        <li key={i}>→ {s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              {brief.talkingPoints.length > 0 && (
+                <div className="space-y-2">
+                  <SectionLabel>Talking points</SectionLabel>
+                  {brief.talkingPoints.map((tp, i) => (
+                    <div key={i} className="rounded-lg border border-border-soft bg-bg-soft p-3">
+                      <p className="text-sm font-medium text-text">{tp.point}</p>
+                      <p className="text-xs text-text-mute">{tp.rationale}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {brief.risksToManage.length > 0 && (
+                <div className="space-y-1.5">
+                  <SectionLabel>Risks to manage</SectionLabel>
+                  <ul className="space-y-1 text-sm text-amber">
+                    {brief.risksToManage.map((r, i) => (
+                      <li key={i}>⚠ {r}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {brief.facts.length > 0 && (
+                <div className="space-y-2">
+                  <SectionLabel>Sourced facts</SectionLabel>
+                  {brief.facts.map((f, i) => (
+                    <div
+                      key={f.id ?? i}
+                      className="rounded-lg border border-border-soft bg-bg-soft p-3 space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-mono uppercase tracking-wider text-text-faint">
+                          {f.topic}
+                        </span>
+                        <ConfChip conf={f.confidence} />
+                      </div>
+                      <p className="text-sm text-text">{f.statement}</p>
+                      {f.sourceUrl ? (
+                        <a
+                          href={f.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs font-mono text-gold inline-flex items-center gap-1 hover:underline"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          {f.sourceTitle ?? f.sourceUrl}
+                        </a>
+                      ) : (
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-danger">
+                          unsourced — confidence downgraded
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </AgentPanel>
     </div>
   );
 }

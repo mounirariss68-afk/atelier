@@ -1,0 +1,38 @@
+{
+  "agentId": "ag_next_best_action",
+  "input": {
+    "accountId": "acc_demo_001",
+    "accountName": "Emirates Group",
+    "horizonDays": 30,
+    "focus": "renewal risk"
+  },
+  "expectedOutput": {
+    "accountSummary": "Emirates is mid-pursuit on a productivity diagnostic with strong executive interest but a stalled procurement conversation. The economic buyer has not been engaged in three weeks.",
+    "recommendations": [
+      {
+        "id": "nba_1",
+        "title": "Schedule an executive readout with the CDO before quarter-end",
+        "rationale": "The CDO is the economic buyer and has not had a touchpoint since the discovery workshop 21 days ago.",
+        "priority": "high",
+        "category": "relationship",
+        "suggestedOwnerRole": "engagement_lead",
+        "suggestedDueInDays": 7,
+        "expectedImpact": "Re-anchors the deal with the decision-maker and surfaces budget timing.",
+        "confidence": "green"
+      },
+      {
+        "id": "nba_2",
+        "title": "Send a tailored ROI one-pager to procurement",
+        "rationale": "Procurement raised cost concerns in the last meeting; a quantified ROI case unblocks the commercial review.",
+        "priority": "medium",
+        "category": "commercial",
+        "suggestedOwnerRole": "business_developer",
+        "suggestedDueInDays": 5,
+        "expectedImpact": "Removes the stated commercial objection and advances the contract stage.",
+        "confidence": "amber"
+      }
+    ],
+    "confidence": "amber"
+  },
+  "notes": "Next-Best-Action fixture exercises ranked, owner-assignable recommendations with priority + category enums."
+}

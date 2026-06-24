@@ -1507,6 +1507,185 @@ export const CashFlowForecaster = defineAgent({
   evals: [],
 });
 
+// ====================== ACCOUNT MANAGEMENT ======================
+// Three Salesforce-class account-management agents. Each proposes; a human
+// approves. They read live account context (opportunities, contacts,
+// activities, meetings) and emit governed, checkpoint-gated output.
+
+export const NextBestAction = defineAgent({
+  id: "ag_next_best_action",
+  name: "Next-Best-Action",
+  group: "Account Management",
+  stage: "Cross-cutting",
+  purpose:
+    "Ranks the next best moves on an account and drafts them as acceptable tasks.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "mvp",
+  systemPromptRef: "prompts/next_best_action/v1.md",
+  inputSchema: z.object({
+    accountId: z.string().min(1),
+    accountName: z.string().optional(),
+    horizonDays: z.number().int().positive().optional(),
+    focus: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    accountSummary: z.string(),
+    recommendations: z.array(
+      z.object({
+        id: z.string(),
+        title: z.string(),
+        rationale: z.string(),
+        priority: z.enum(["high", "medium", "low"]),
+        category: z.enum([
+          "relationship",
+          "commercial",
+          "delivery",
+          "risk",
+          "expansion",
+        ]),
+        suggestedOwnerRole: z.string().optional(),
+        suggestedDueInDays: z.number().int().optional(),
+        expectedImpact: z.string(),
+        confidence: Confidence,
+      }),
+    ),
+    confidence: Confidence,
+  }),
+  tools: ["knowledge.search"],
+  guardrails: [
+    "Every recommendation must be a concrete, owner-assignable action",
+    "Never invent contacts, meetings, or revenue figures absent from context",
+    "Output is a proposal — a human accepts before any task is created",
+  ],
+  humanCheckpoints: [
+    leadCheck("Engagement Lead accepts recommendations before they become tasks"),
+  ],
+  evals: [
+    {
+      id: "ev_ranked",
+      description: "Returns ≥1 prioritised recommendation",
+      threshold: 1,
+    },
+  ],
+});
+
+export const RelationshipHealth = defineAgent({
+  id: "ag_relationship_health",
+  name: "Relationship-Health",
+  group: "Account Management",
+  stage: "Cross-cutting",
+  purpose:
+    "Watches engagement decay and flags at-risk accounts with contributing factors.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "mvp",
+  systemPromptRef: "prompts/relationship_health/v1.md",
+  inputSchema: z.object({
+    accountId: z.string().min(1),
+    accountName: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    overall: Confidence,
+    score: z.number().min(0).max(100),
+    headline: z.string(),
+    factors: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        signal: z.enum(["positive", "neutral", "negative"]),
+        severity: z.enum(["low", "med", "high"]),
+        detail: z.string(),
+        metric: z.string().optional(),
+      }),
+    ),
+    recommendedActions: z.array(z.string()),
+    confidence: Confidence,
+  }),
+  tools: ["knowledge.search"],
+  guardrails: [
+    "Score (0-100) must be consistent with the overall band",
+    "Every factor must be grounded in supplied data — no asserted-but-absent signals",
+    "Assessment is governed: a human can dismiss or act on it",
+  ],
+  humanCheckpoints: [
+    leadCheck("Engagement Lead reviews the at-risk assessment (dismiss / act)"),
+  ],
+  evals: [
+    {
+      id: "ev_band",
+      description: "Overall band consistent with numeric score",
+      threshold: 1,
+    },
+  ],
+});
+
+export const PreMeetingBriefing = defineAgent({
+  id: "ag_pre_meeting_briefing",
+  name: "Pre-Meeting Briefing",
+  group: "Account Management",
+  stage: "Cross-cutting",
+  purpose:
+    "Generates a citable pre-meeting brief: who's in the room, signals, open items, talking points.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "mvp",
+  systemPromptRef: "prompts/pre_meeting_briefing/v1.md",
+  inputSchema: z.object({
+    accountId: z.string().min(1),
+    accountName: z.string().optional(),
+    meetingId: z.string().optional(),
+    meetingPurpose: z.string().optional(),
+    attendees: z.array(z.string()).optional(),
+  }),
+  outputSchema: z.object({
+    title: z.string(),
+    meetingContext: z.string(),
+    attendees: z.array(
+      z.object({
+        name: z.string(),
+        role: z.string().optional(),
+        org: z.enum(["client", "cognirise", "unknown"]),
+        note: z.string().optional(),
+      }),
+    ),
+    recentSignals: z.array(z.string()),
+    openItems: z.array(z.string()),
+    talkingPoints: z.array(
+      z.object({ point: z.string(), rationale: z.string() }),
+    ),
+    risksToManage: z.array(z.string()),
+    facts: z.array(
+      z.object({
+        id: z.string().optional(),
+        topic: z.string(),
+        statement: z.string(),
+        sourceUrl: z.string().optional(),
+        sourceTitle: z.string().optional(),
+        snippet: z.string().optional(),
+        confidence: Confidence,
+      }),
+    ),
+    confidence: Confidence,
+  }),
+  tools: ["knowledge.search", "web_search"],
+  guardrails: [
+    "Every external fact requires a citation or is confidence-downgraded",
+    "Never invent attendees, decisions, or figures absent from context",
+    "Brief is a proposal reviewed by the Lead before the meeting",
+  ],
+  humanCheckpoints: [
+    leadCheck("Engagement Lead reviews the brief before the meeting"),
+  ],
+  evals: [
+    {
+      id: "ev_talking_points",
+      description: "Returns ≥1 talking point",
+      threshold: 1,
+    },
+  ],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1563,6 +1742,10 @@ export const ATELIER_AGENTS: Agent[] = [
   // L2C Wave 4 (Task #363)
   CashApplicationMatcher,
   CashFlowForecaster,
+  // Account-management agents — propose-then-approve
+  NextBestAction,
+  RelationshipHealth,
+  PreMeetingBriefing,
 ];
 
 export const AGENT_BY_ID: Record<string, Agent> = Object.fromEntries(
