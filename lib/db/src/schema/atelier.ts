@@ -2078,6 +2078,18 @@ export const atelierEmployees = pgTable(
     countryCode: text("country_code"),
     payrollCountryCode: text("payroll_country_code"),
     employmentType: text("employment_type").notNull().default("FTE"), // FTE | fixed_term | intern
+    // Task #645 — public business-card contact fields powering the offline
+    // vCard QR code. `cellPhones` holds up to 3 mobile numbers, each labelled
+    // by the COUNTRY the SIM/line belongs to (employees often carry local
+    // cells across the GCC); at least one is required at the app layer.
+    // `officeAddress` is the full postal address of the person's office.
+    // These are PUBLIC fields (safe to print on a card) — never gated behind
+    // the comp-policy lock.
+    cellPhones: jsonb("cell_phones")
+      .$type<Array<{ country: string; number: string }>>()
+      .notNull()
+      .default([]),
+    officeAddress: text("office_address"),
     // Task #412 — self-identified demographics for the People Lens
     // Team Composition dashboard. Optional, defaulting to `unspecified` /
     // null so we never imply coverage we don't actually have.

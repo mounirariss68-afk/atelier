@@ -72,6 +72,11 @@ interface PersonWire {
   employeeIdExternal?: string | null;
   employmentType?: string | null;
   homeOffice?: string | null;
+  // Task #645 — PUBLIC business-card contact fields (employees only). Safe to
+  // print on a card; never gated behind the comp lock. At least one cell is
+  // enforced on write.
+  cellPhones?: Array<{ country: string; number: string }>;
+  officeAddress?: string | null;
   avatarUrl?: string | null;
   notes?: string | null;
   partnerEconomicsId?: string | null;
@@ -239,6 +244,9 @@ function employeeToWire(
     endDate: r.endDate,
     employmentType: r.employmentType,
     homeOffice: r.homeOffice,
+    // Task #645 — public contact fields for the business-card vCard QR.
+    cellPhones: r.cellPhones ?? [],
+    officeAddress: r.officeAddress ?? null,
     avatarUrl: r.avatarUrl,
     notes: r.notes,
     gender: r.gender ?? "unspecified",
@@ -760,6 +768,101 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
       action: "roster.person.updated",
       payload: { workerType: person.workerType, change: "demographics", ...update },
       payloadSummary: `${me.fullName ?? me.id} updated demographics for ${person.fullName}`,
+    });
+    const updated = await getPerson(person.id, canSeeComp(me.role));
+    res.json({ person: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #645 — HR / Partner edit of an employee's PUBLIC business-card contact
+// fields (cell phones + office address) that feed the offline vCard QR code.
+// Wire-format: { cellPhones: Array<{country,number}>, officeAddress?: string|null }.
+// At least one cell with a non-empty number is mandatory; up to 3 are allowed,
+// each labelled by the country the line belongs to. Employees only.
+const MAX_CELLS = 3;
+router.patch("/roster/people/:id/contact", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "contact-edit-restricted" });
+      return;
+    }
+    const person = await getPerson(req.params.id, true);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (person.workerType !== "employee") {
+      res.status(422).json({ error: "contact-card-employees-only" });
+      return;
+    }
+    const body = req.body as {
+      cellPhones?: unknown;
+      officeAddress?: unknown;
+    };
+    if (!Array.isArray(body.cellPhones)) {
+      res.status(400).json({ error: "cellPhones-required" });
+      return;
+    }
+    const cleaned: Array<{ country: string; number: string }> = [];
+    for (const entry of body.cellPhones) {
+      if (!entry || typeof entry !== "object") continue;
+      const country = String((entry as { country?: unknown }).country ?? "").trim();
+      const number = String((entry as { number?: unknown }).number ?? "").trim();
+      if (!number && !country) continue; // drop fully-blank rows
+      // Each cell must carry a number AND the country it belongs to — the
+      // country label is what the vCard surfaces (TEL;TYPE=cell + X-ABLabel).
+      if (!number) {
+        res.status(422).json({ error: "cell-number-required" });
+        return;
+      }
+      if (!country) {
+        res.status(422).json({ error: "cell-country-required" });
+        return;
+      }
+      cleaned.push({ country, number });
+    }
+    if (cleaned.length === 0) {
+      res.status(422).json({ error: "at-least-one-cell-required" });
+      return;
+    }
+    if (cleaned.length > MAX_CELLS) {
+      res.status(422).json({ error: "too-many-cells", max: MAX_CELLS });
+      return;
+    }
+    // Office address is a required part of the business card (feeds the vCard ADR).
+    if (typeof body.officeAddress !== "string" || !body.officeAddress.trim()) {
+      res.status(422).json({ error: "office-address-required" });
+      return;
+    }
+    const update: {
+      cellPhones: Array<{ country: string; number: string }>;
+      officeAddress: string;
+    } = { cellPhones: cleaned, officeAddress: body.officeAddress.trim() };
+    const officeAddress = update.officeAddress;
+    await db
+      .update(atelierEmployees)
+      .set(update)
+      .where(eq(atelierEmployees.id, person.id));
+    assertAuditAction("roster.person.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person",
+      entityId: person.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "roster.person.updated",
+      payload: {
+        workerType: person.workerType,
+        change: "contact",
+        cellCount: cleaned.length,
+        officeAddressSet: officeAddress != null && officeAddress !== "",
+      },
+      payloadSummary: `${me.name} updated business-card contact for ${person.fullName}`,
     });
     const updated = await getPerson(person.id, canSeeComp(me.role));
     res.json({ person: updated });

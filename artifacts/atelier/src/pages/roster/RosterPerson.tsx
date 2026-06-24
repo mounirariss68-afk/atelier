@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { BusinessCardQR } from "./BusinessCardQR";
 
 interface Person {
   id: string;
@@ -26,6 +27,9 @@ interface Person {
   employmentType?: string | null;
   homeOffice?: string | null;
   notes?: string | null;
+  // Task #645 — public business-card contact fields (employees), feed vCard QR.
+  cellPhones?: Array<{ country: string; number: string }> | null;
+  officeAddress?: string | null;
   // Task #412 — self-identified demographics, optional.
   gender?: string | null;
   nationality?: string | null;
@@ -177,6 +181,12 @@ function ProfileTab({
         <Field label="Partner firm" value={person.partnerFirmName} />
         <Field label="External employee id" value={person.employeeIdExternal} />
       </Card>
+      {person.workerType === "employee" && (
+        <BusinessCardQR
+          person={person}
+          onUpdated={(patch) => onUpdated({ ...person, ...patch })}
+        />
+      )}
       <Card className="p-4 space-y-3 md:col-span-2">
         <h3 className="font-mono text-xs uppercase text-text-mute flex items-center gap-2">
           Compensation & banking

@@ -2902,6 +2902,12 @@ async function main() {
       homeOffice: "Dubai",
       payrollCountry: "AE",
       employeeIdExternal: "COGNIRISE-0001",
+      cellPhones: [
+        { country: "UAE", number: "+971 50 123 4567" },
+        { country: "KSA", number: "+966 50 765 4321" },
+      ],
+      officeAddress:
+        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
       iban: "AE070331234567890123456",
       swift: "EBILAEAD",
       noticePeriodDays: 90,
@@ -2921,6 +2927,12 @@ async function main() {
       homeOffice: "Riyadh",
       payrollCountry: "SA",
       employeeIdExternal: "COGNIRISE-0002",
+      cellPhones: [
+        { country: "KSA", number: "+966 55 234 5678" },
+        { country: "UAE", number: "+971 52 998 1122" },
+      ],
+      officeAddress:
+        "Cognirise, Olaya Towers, Tower B, King Fahd Road, Olaya District, Riyadh 12244, Saudi Arabia",
       iban: "SA0380000000608010167519",
       swift: "RJHISARI",
       noticePeriodDays: 60,
@@ -2940,6 +2952,9 @@ async function main() {
       homeOffice: "Dubai",
       payrollCountry: "AE",
       employeeIdExternal: "COGNIRISE-0003",
+      cellPhones: [{ country: "UAE", number: "+971 50 334 8890" }],
+      officeAddress:
+        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
       iban: "AE070331234567890999111",
       swift: "EBILAEAD",
       noticePeriodDays: 30,
@@ -2959,6 +2974,9 @@ async function main() {
       homeOffice: "Dubai",
       payrollCountry: "AE",
       employeeIdExternal: "COGNIRISE-0004",
+      cellPhones: [{ country: "UAE", number: "+971 54 776 5521" }],
+      officeAddress:
+        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
       iban: "AE070331234567899911234",
       swift: "EBILAEAD",
       noticePeriodDays: 30,
@@ -2978,6 +2996,9 @@ async function main() {
       homeOffice: "Riyadh",
       payrollCountry: "SA",
       employeeIdExternal: "COGNIRISE-0005",
+      cellPhones: [{ country: "KSA", number: "+966 56 443 2210" }],
+      officeAddress:
+        "Cognirise, Olaya Towers, Tower B, King Fahd Road, Olaya District, Riyadh 12244, Saudi Arabia",
       iban: "SA0380000000608010189999",
       swift: "RJHISARI",
       noticePeriodDays: 30,
@@ -3280,6 +3301,9 @@ async function main() {
       payrollCountry: "AE",
       payrollCountryCode: "AE",
       employeeIdExternal: "COGNIRISE-0011",
+      cellPhones: [{ country: "UAE", number: "+971 50 667 8842" }],
+      officeAddress:
+        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
       noticePeriodDays: 60,
       startDate: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
       status: "onboarding",
@@ -3905,7 +3929,14 @@ async function main() {
     const t = TARGETS.find((t) => t.predicate(emp))?.pct ?? 75;
     await db
       .update(atelierEmployees)
-      .set({ utilizationTargetPct: t, updatedAt: new Date() })
+      .set({
+        utilizationTargetPct: t,
+        // Task #645 — backfill public business-card contact fields on re-seed
+        // (the insert above is onConflictDoNothing, so existing rows are skipped).
+        ...(emp.cellPhones ? { cellPhones: emp.cellPhones } : {}),
+        ...(emp.officeAddress ? { officeAddress: emp.officeAddress } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(atelierEmployees.id, emp.id));
   }
 
