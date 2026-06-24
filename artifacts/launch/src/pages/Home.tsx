@@ -149,15 +149,16 @@ function TransformationMap() {
     { src: "images/model/logo.png", from: { opacity: 0, scale: 0.82 }, delay: 0.4, z: 4 },
   ];
 
-  /* Connector geometry traced over the backdrop (viewBox 952×481): each flow runs from a
-     left node, through the centre, out to its paired outcome. The path is drawn BELOW the
-     logo/centre layers (z 2 < z 3/4) so it disappears behind the central logo circle, just
-     like the baked-in streams. Node tangents are horizontal (the dashed lead-ins). */
+  /* Connector geometry, fit to the actual backdrop streams (viewBox 952×481): the lit
+     particle streams were sampled from background.png and each half (node→core) was
+     least-squares fit as a cubic with horizontal tangents at both the node and the bright
+     core at (474,256). Each flow runs left node → core → paired right node. Drawn BELOW the
+     logo/centre layers (z 2 < z 3/4) so it disappears behind the central logo circle. */
   const flows = [
-    { id: 0, d: "M256,166 C 330,166 360,196 452,238 C 540,196 600,166 672,166", label: "Man-days become measured outcomes" },
-    { id: 1, d: "M256,238 C 330,238 380,243 452,243 C 524,243 596,238 672,238", label: "PowerPoints become working solutions" },
-    { id: 2, d: "M256,310 C 330,310 380,300 452,248 C 524,300 596,310 672,310", label: "Long pilots become a 48-hour prototype" },
-    { id: 3, d: "M256,388 C 340,388 388,300 452,252 C 516,300 564,388 672,388", label: "Vendor lock-in becomes platform ownership" },
+    { id: 0, d: "M262,137 C 367,137 304,256 474,256 C 644,256 563,137 668,137", label: "Man-days become measured outcomes" },
+    { id: 1, d: "M262,219 C 337,219 294,256 474,256 C 654,256 573,219 668,219", label: "PowerPoints become working solutions" },
+    { id: 2, d: "M262,312 C 357,312 374,256 474,256 C 654,256 553,312 668,312", label: "Long pilots become a 48-hour prototype" },
+    { id: 3, d: "M262,388 C 387,388 294,256 474,256 C 654,256 543,389 668,389", label: "Vendor lock-in becomes platform ownership" },
   ];
 
   /* Invisible hover targets over each labelled item (4 left + 4 right), mapped to the

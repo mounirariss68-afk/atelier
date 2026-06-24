@@ -57,8 +57,15 @@ CANNOT extract per-line geometry from it.
 **Why:** the user wanted the glowing connector lines as a backdrop AND a hover-highlight
 that lights the path under the cursor.
 **How to apply:** ship the SVG rasterized to a small WebP backdrop layer (the raw SVG and
-a full-res PNG are multi-MB — never ship them). For the hover highlight, hand-trace the
-connector curves as a separate bezier SVG overlay that is invisible by default and only
-the hovered flow fades in (no competing static line); re-fit the control points against a
-throwaway /verify screenshot if the artwork is ever re-exported. Highlight respects
-prefers-reduced-motion (the traveling pulse is suppressed, the line still lights).
+a full-res PNG are multi-MB — never ship them). For the hover highlight, draw the connector
+curves as a separate bezier SVG overlay that is invisible by default and only the hovered
+flow fades in (no competing static line). Highlight respects prefers-reduced-motion (the
+traveling pulse is suppressed, the line still lights).
+**Don't eyeball the bezier control points** — the user rejected hand-traced curves twice.
+Extract the geometry from the artwork: load the high-res background with `sharp` (resolve
+it by full path from `node_modules/.pnpm/sharp@*/...` — it's NOT resolvable from the
+workspace root in the code-exec sandbox or CLI), resize to the viewBox (952×481), find the
+bright convergence CORE by brightness-weighted centroid, follow each stream column-by-column
+from its node dot to locate centerline samples, then least-squares fit each half (node→core)
+as a cubic with HORIZONTAL tangents at both the node and the core. Faint top/bottom streams
+give few clean samples — reuse the well-fit opposite side's tangent magnitudes by symmetry.
