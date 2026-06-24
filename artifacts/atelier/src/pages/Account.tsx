@@ -51,6 +51,8 @@ import { AccountPlanTab } from "@/components/tabs/AccountPlanTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
+import { MergeAccountDialog } from "@/components/MergeAccountDialog";
+import { MergeContactDialog } from "@/components/MergeContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { EditAccountProfileDialog } from "@/components/EditAccountProfileDialog";
@@ -217,6 +219,10 @@ export default function Account() {
   const isArchived = a.status === "archived";
   const canArchive = !!me && (me.role === "founding_partner" || me.role === "partner");
   const canPermanentlyDelete = !!me && me.role === "founding_partner";
+  // Mirrors the server's CREATE_ROLES gate on POST /accounts/:id/merge.
+  const canMerge =
+    !!me &&
+    ["founding_partner", "partner", "senior_manager"].includes(me.role);
 
   return (
     <div className="animate-in fade-in">
@@ -314,6 +320,23 @@ export default function Account() {
                 Refresh from web
               </button>
             )}
+            {canMerge && !isArchived && (
+              <MergeAccountDialog
+                accountId={accountId}
+                accountName={a.name}
+                brandName={a.brandName}
+                country={a.country}
+                trigger={
+                  <button
+                    type="button"
+                    className="pill-btn pill-btn-ghost text-xs"
+                    data-testid="button-merge-account"
+                  >
+                    Merge duplicate
+                  </button>
+                }
+              />
+            )}
             {canArchive && !isArchived && (
               <button
                 type="button"
@@ -408,6 +431,7 @@ export default function Account() {
             contacts={ws.contacts}
             relationships={ws.relationships}
             accountId={accountId}
+            canMerge={canMerge}
           />
         )}
         {tab === "opportunities" && <OpportunitiesTab opps={ws.opportunities} />}
@@ -1803,16 +1827,19 @@ function DecisionMakersTab({
   contacts,
   relationships,
   accountId,
+  canMerge,
 }: {
   contacts: AtelierContact[];
   relationships: AtelierContactRelationship[];
   accountId: string;
+  canMerge: boolean;
 }) {
   const updateDisp = useAtelierUpdateContactDisposition();
   const qc = useQueryClient();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [insightsId, setInsightsId] = useState<string | null>(null);
+  const [mergeFromId, setMergeFromId] = useState<string | null>(null);
   const editing = editingId ? contacts.find((c) => c.id === editingId) ?? null : null;
   const insights = insightsId ? contacts.find((c) => c.id === insightsId) ?? null : null;
   if (contacts.length === 0) {
@@ -1855,6 +1882,15 @@ function DecisionMakersTab({
           }}
         />
       )}
+      {mergeFromId && (
+        <MergeContactDialog
+          accountId={accountId}
+          contacts={contacts}
+          survivorId={mergeFromId}
+          open={!!mergeFromId}
+          onOpenChange={(o) => !o && setMergeFromId(null)}
+        />
+      )}
       <div className="flex items-center justify-between">
         <SectionLabel>Decision-makers</SectionLabel>
         <div className="flex items-center gap-2">
@@ -1866,6 +1902,15 @@ function DecisionMakersTab({
           >
             <PillButton variant="ghost">Meeting prep card ↗</PillButton>
           </a>
+          {canMerge && contacts.length >= 2 && (
+            <PillButton
+              variant="ghost"
+              onClick={() => setMergeFromId(contacts[0]!.id)}
+              data-testid="button-merge-contacts"
+            >
+              Merge duplicates
+            </PillButton>
+          )}
           <CreateContactDialog
             accountId={accountId}
             trigger={

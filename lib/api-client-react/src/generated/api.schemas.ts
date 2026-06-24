@@ -843,63 +843,18 @@ export interface AtelierContactDuplicateCandidates {
   candidates: AtelierContactDuplicateCandidate[];
 }
 
-export type AtelierAccountHealthBand =
-  (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
-
-export const AtelierAccountHealthBand = {
-  green: "green",
-  amber: "amber",
-  red: "red",
-} as const;
-
-export type AtelierAccountHealthFactorKey =
-  (typeof AtelierAccountHealthFactorKey)[keyof typeof AtelierAccountHealthFactorKey];
-
-export const AtelierAccountHealthFactorKey = {
-  relationship: "relationship",
-  financial: "financial",
-  engagement: "engagement",
-  risk: "risk",
-} as const;
-
-export interface AtelierAccountHealthFactor {
-  key: AtelierAccountHealthFactorKey;
-  label: string;
-  /**
-   * @minimum 0
-   * @maximum 100
-   */
-  score: number;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  weight: number;
-  detail: string;
+export interface AtelierMergeAccountsInput {
+  /** @minLength 1 */
+  duplicateAccountId: string;
 }
 
-export interface AtelierAccountHealth {
-  /**
-   * @minimum 0
-   * @maximum 100
-   */
-  score: number;
-  band: AtelierAccountHealthBand;
-  factors: AtelierAccountHealthFactor[];
+export interface AtelierMergeContactsInput {
+  /** @minLength 1 */
+  duplicateContactId: string;
 }
 
-export interface AtelierAccountHierarchyRollup {
-  /** Family size incl. this account. */
-  accountCount: number;
-  /** Descendant accounts only. */
-  subsidiaryCount: number;
-  openOpportunityCount: number;
-  /** @nullable */
-  openPipelineUsd?: number | null;
-  /** @nullable */
-  totalRevenueUsd?: number | null;
-  health?: AtelierAccountHealth | null;
-  financialsRedacted: boolean;
+export interface AtelierMergeCounts {
+  [key: string]: number;
 }
 
 /**
@@ -989,6 +944,79 @@ spinner during the long background research run.
   cartographerPhase?: string | null;
 }
 
+export type AtelierAccountHealthBand =
+  (typeof AtelierAccountHealthBand)[keyof typeof AtelierAccountHealthBand];
+
+export const AtelierAccountHealthBand = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierAccountHealthFactorKey =
+  (typeof AtelierAccountHealthFactorKey)[keyof typeof AtelierAccountHealthFactorKey];
+
+export const AtelierAccountHealthFactorKey = {
+  relationship: "relationship",
+  financial: "financial",
+  engagement: "engagement",
+  risk: "risk",
+} as const;
+
+export interface AtelierAccountHealthFactor {
+  key: AtelierAccountHealthFactorKey;
+  label: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  weight: number;
+  detail: string;
+}
+
+export interface AtelierAccountHealth {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  score: number;
+  band: AtelierAccountHealthBand;
+  factors: AtelierAccountHealthFactor[];
+}
+
+export interface AtelierAccountHierarchyRollup {
+  /** Family size incl. this account. */
+  accountCount: number;
+  /** Descendant accounts only. */
+  subsidiaryCount: number;
+  openOpportunityCount: number;
+  /** @nullable */
+  openPipelineUsd?: number | null;
+  /** @nullable */
+  totalRevenueUsd?: number | null;
+  health?: AtelierAccountHealth | null;
+  financialsRedacted: boolean;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierAccountWorkspaceAccountEntityRole =
+  | (typeof AtelierAccountWorkspaceAccountEntityRole)[keyof typeof AtelierAccountWorkspaceAccountEntityRole]
+  | null;
+
+export const AtelierAccountWorkspaceAccountEntityRole = {
+  hq: "hq",
+  subsidiary: "subsidiary",
+  branch: "branch",
+  office: "office",
+} as const;
+
 /**
  * @nullable
  */
@@ -1019,20 +1047,6 @@ export const AtelierContactEntityScope = {
   standalone: "standalone",
 } as const;
 
-/**
- * "verified" when at least one citation directly names the
-person; "inferred" when the contact came from a heuristic
-(title pattern, org chart inference) without a direct cite.
-
- */
-export type AtelierContactConfidence =
-  (typeof AtelierContactConfidence)[keyof typeof AtelierContactConfidence];
-
-export const AtelierContactConfidence = {
-  verified: "verified",
-  inferred: "inferred",
-} as const;
-
 export interface AtelierContactTrendPoint {
   /** ISO timestamp of the snapshot. */
   at: string;
@@ -1046,6 +1060,20 @@ export interface AtelierContactTrendPoint {
   /** @nullable */
   note?: string | null;
 }
+
+/**
+ * "verified" when at least one citation directly names the
+person; "inferred" when the contact came from a heuristic
+(title pattern, org chart inference) without a direct cite.
+
+ */
+export type AtelierContactConfidence =
+  (typeof AtelierContactConfidence)[keyof typeof AtelierContactConfidence];
+
+export const AtelierContactConfidence = {
+  verified: "verified",
+  inferred: "inferred",
+} as const;
 
 export interface AtelierContact {
   id: string;
@@ -1121,150 +1149,6 @@ export interface AtelierContactRelationship {
   notes?: string | null;
 }
 
-export interface AtelierContactGraph {
-  contacts: AtelierContact[];
-  relationships: AtelierContactRelationship[];
-}
-
-export interface AtelierContactDispositionInput {
-  disposition: AtelierContactDisposition;
-  /** @nullable */
-  note?: string | null;
-}
-
-/**
- * @nullable
- */
-export type AtelierCreateContactInputSeniority =
-  | (typeof AtelierCreateContactInputSeniority)[keyof typeof AtelierCreateContactInputSeniority]
-  | null;
-
-export const AtelierCreateContactInputSeniority = {
-  c_suite: "c_suite",
-  vp: "vp",
-  director: "director",
-  manager: "manager",
-  ic: "ic",
-  unknown: "unknown",
-} as const;
-
-export interface AtelierCreateContactInput {
-  /**
-   * @minLength 1
-   * @maxLength 160
-   */
-  fullName: string;
-  /** @nullable */
-  title?: string | null;
-  /** @nullable */
-  seniority?: AtelierCreateContactInputSeniority;
-  /** @nullable */
-  email?: string | null;
-  /** @nullable */
-  phone?: string | null;
-  /** @nullable */
-  linkedinUrl?: string | null;
-  /** @nullable */
-  buyerPersona?: string | null;
-  /**
-   * @minimum 1
-   * @maximum 5
-   * @nullable
-   */
-  influenceScore?: number | null;
-  disposition?: AtelierContactDisposition;
-  /**
-   * @minimum 0
-   * @maximum 100
-   * @nullable
-   */
-  relationshipStrength?: number | null;
-  /** @nullable */
-  contactOwnerId?: string | null;
-  /** @nullable */
-  lastContactAt?: string | null;
-  /** @nullable */
-  nextTouchAt?: string | null;
-  /** @nullable */
-  notes?: string | null;
-}
-
-/**
- * @nullable
- */
-export type AtelierUpdateContactInputSeniority =
-  | (typeof AtelierUpdateContactInputSeniority)[keyof typeof AtelierUpdateContactInputSeniority]
-  | null;
-
-export const AtelierUpdateContactInputSeniority = {
-  c_suite: "c_suite",
-  vp: "vp",
-  director: "director",
-  manager: "manager",
-  ic: "ic",
-  unknown: "unknown",
-} as const;
-
-export interface AtelierUpdateContactInput {
-  /**
-   * @minLength 1
-   * @maxLength 160
-   */
-  fullName?: string;
-  /** @nullable */
-  title?: string | null;
-  /** @nullable */
-  seniority?: AtelierUpdateContactInputSeniority;
-  /** @nullable */
-  email?: string | null;
-  /** @nullable */
-  phone?: string | null;
-  /** @nullable */
-  linkedinUrl?: string | null;
-  /** @nullable */
-  buyerPersona?: string | null;
-  /**
-   * @minimum 1
-   * @maximum 5
-   * @nullable
-   */
-  influenceScore?: number | null;
-  disposition?: AtelierContactDisposition;
-  /**
-   * @minimum 0
-   * @maximum 100
-   * @nullable
-   */
-  relationshipStrength?: number | null;
-  /** @nullable */
-  contactOwnerId?: string | null;
-  /** @nullable */
-  lastContactAt?: string | null;
-  /** @nullable */
-  nextTouchAt?: string | null;
-  /** @nullable */
-  notes?: string | null;
-}
-
-export type AtelierCreateContactRelationshipInputType =
-  (typeof AtelierCreateContactRelationshipInputType)[keyof typeof AtelierCreateContactRelationshipInputType];
-
-export const AtelierCreateContactRelationshipInputType = {
-  reports_to: "reports_to",
-  partners_with: "partners_with",
-  blocks: "blocks",
-} as const;
-
-export interface AtelierCreateContactRelationshipInput {
-  /** @minLength 1 */
-  fromContactId: string;
-  /** @minLength 1 */
-  toContactId: string;
-  type: AtelierCreateContactRelationshipInputType;
-  /** @nullable */
-  notes?: string | null;
-}
-
 export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
 
 export const PlmStage = {
@@ -1303,53 +1187,6 @@ export interface AtelierAccountEngagementRef {
   startedAt?: string | null;
 }
 
-export type AtelierWhitespaceCellState =
-  (typeof AtelierWhitespaceCellState)[keyof typeof AtelierWhitespaceCellState];
-
-export const AtelierWhitespaceCellState = {
-  empty: "empty",
-  identified: "identified",
-  qualified: "qualified",
-  won: "won",
-} as const;
-
-export interface AtelierWhitespaceCell {
-  offering: string;
-  persona: string;
-  state: AtelierWhitespaceCellState;
-  /** @nullable */
-  note?: string | null;
-  /** @nullable */
-  oppId?: string | null;
-  /** @nullable */
-  rationale?: string | null;
-}
-
-export interface AtelierWhitespaceCanvas {
-  accountId: string;
-  offerings: string[];
-  personas: string[];
-  cells: AtelierWhitespaceCell[];
-  priorityMoves?: string[];
-  /** @nullable */
-  generatedAt?: string | null;
-}
-
-export interface AtelierQbrSection {
-  heading: string;
-  body: string;
-}
-
-export interface AtelierQbrCanvas {
-  accountId: string;
-  periodLabel: string;
-  sections: AtelierQbrSection[];
-  riskFlags?: string[];
-  nextMoves?: string[];
-  /** @nullable */
-  generatedAt?: string | null;
-}
-
 export interface AtelierAuditEventLite {
   id: string;
   action: string;
@@ -1376,54 +1213,6 @@ export interface AtelierFirmographicChange {
   redacted: boolean;
   canRevert: boolean;
 }
-
-export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
-  text: string;
-  sourceUrls: string[];
-};
-
-/**
- * @nullable
- */
-export type AtelierAccountWorkspaceAccountEntityRole =
-  | (typeof AtelierAccountWorkspaceAccountEntityRole)[keyof typeof AtelierAccountWorkspaceAccountEntityRole]
-  | null;
-
-export const AtelierAccountWorkspaceAccountEntityRole = {
-  hq: "hq",
-  subsidiary: "subsidiary",
-  branch: "branch",
-  office: "office",
-} as const;
-
-export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
-  health?: AtelierAccountHealth | null;
-  /** @nullable */
-  notes?: string | null;
-  strategicPriorities?: string[];
-  strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
-  /** @nullable */
-  cogniriseHypothesis?: string | null;
-  accountStrategy?: AtelierAccountStrategy | null;
-  competitors?: AtelierAccountCompetitor[];
-  researchBrief?: AtelierResearchBrief | null;
-  /** @nullable */
-  parentAccountId?: string | null;
-  parent?: AtelierAccountHierarchyRef | null;
-  children?: AtelierAccountHierarchyRef[];
-  hierarchyRollup?: AtelierAccountHierarchyRollup | null;
-  sourceSignals?: AtelierSourceSignal[];
-  pendingProfileUpdates?: AtelierProfileUpdateProposal[];
-  /** @nullable */
-  employeeCount?: number | null;
-  annualRevenue?: AtelierAccountAnnualRevenue | null;
-  holdingStructure?: AtelierAccountHoldingStructure | null;
-  countryPresence?: AtelierAccountCountryPresence[];
-  /** @nullable */
-  entityRole?: AtelierAccountWorkspaceAccountEntityRole;
-  annualRevenueRedacted?: boolean;
-  canEditFinancials?: boolean;
-};
 
 export type AtelierAccountInsightCategory =
   (typeof AtelierAccountInsightCategory)[keyof typeof AtelierAccountInsightCategory];
@@ -1607,6 +1396,87 @@ export interface AtelierAccountGoalProgress {
   updatedAt?: string | null;
 }
 
+export type AtelierWhitespaceCellState =
+  (typeof AtelierWhitespaceCellState)[keyof typeof AtelierWhitespaceCellState];
+
+export const AtelierWhitespaceCellState = {
+  empty: "empty",
+  identified: "identified",
+  qualified: "qualified",
+  won: "won",
+} as const;
+
+export interface AtelierWhitespaceCell {
+  offering: string;
+  persona: string;
+  state: AtelierWhitespaceCellState;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  oppId?: string | null;
+  /** @nullable */
+  rationale?: string | null;
+}
+
+export interface AtelierWhitespaceCanvas {
+  accountId: string;
+  offerings: string[];
+  personas: string[];
+  cells: AtelierWhitespaceCell[];
+  priorityMoves?: string[];
+  /** @nullable */
+  generatedAt?: string | null;
+}
+
+export interface AtelierQbrSection {
+  heading: string;
+  body: string;
+}
+
+export interface AtelierQbrCanvas {
+  accountId: string;
+  periodLabel: string;
+  sections: AtelierQbrSection[];
+  riskFlags?: string[];
+  nextMoves?: string[];
+  /** @nullable */
+  generatedAt?: string | null;
+}
+
+export type AtelierAccountWorkspaceAccountStrategicPriorityRefsItem = {
+  text: string;
+  sourceUrls: string[];
+};
+
+export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
+  health?: AtelierAccountHealth | null;
+  /** @nullable */
+  notes?: string | null;
+  strategicPriorities?: string[];
+  strategicPriorityRefs?: AtelierAccountWorkspaceAccountStrategicPriorityRefsItem[];
+  /** @nullable */
+  cogniriseHypothesis?: string | null;
+  accountStrategy?: AtelierAccountStrategy | null;
+  competitors?: AtelierAccountCompetitor[];
+  researchBrief?: AtelierResearchBrief | null;
+  /** @nullable */
+  parentAccountId?: string | null;
+  parent?: AtelierAccountHierarchyRef | null;
+  children?: AtelierAccountHierarchyRef[];
+  hierarchyRollup?: AtelierAccountHierarchyRollup | null;
+  sourceSignals?: AtelierSourceSignal[];
+  pendingProfileUpdates?: AtelierProfileUpdateProposal[];
+  /** @nullable */
+  employeeCount?: number | null;
+  annualRevenue?: AtelierAccountAnnualRevenue | null;
+  holdingStructure?: AtelierAccountHoldingStructure | null;
+  countryPresence?: AtelierAccountCountryPresence[];
+  /** @nullable */
+  entityRole?: AtelierAccountWorkspaceAccountEntityRole;
+  annualRevenueRedacted?: boolean;
+  canEditFinancials?: boolean;
+};
+
 export interface AtelierAccountWorkspace {
   account: AtelierAccountWorkspaceAccount;
   contacts: AtelierContact[];
@@ -1622,6 +1492,165 @@ export interface AtelierAccountWorkspace {
   goalProgress?: AtelierAccountGoalProgress[];
   whitespacePreview?: AtelierWhitespaceCanvas;
   qbrPreview?: AtelierQbrCanvas;
+}
+
+export interface AtelierMergeAccountResult {
+  ok: boolean;
+  /** merged | already_merged */
+  status: string;
+  counts?: AtelierMergeCounts;
+  workspace: AtelierAccountWorkspace;
+}
+
+export interface AtelierMergeContactResult {
+  ok: boolean;
+  /** merged | already_merged */
+  status: string;
+  counts?: AtelierMergeCounts;
+}
+
+export interface AtelierContactGraph {
+  contacts: AtelierContact[];
+  relationships: AtelierContactRelationship[];
+}
+
+export interface AtelierContactDispositionInput {
+  disposition: AtelierContactDisposition;
+  /** @nullable */
+  note?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierCreateContactInputSeniority =
+  | (typeof AtelierCreateContactInputSeniority)[keyof typeof AtelierCreateContactInputSeniority]
+  | null;
+
+export const AtelierCreateContactInputSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export interface AtelierCreateContactInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  fullName: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierCreateContactInputSeniority;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   * @nullable
+   */
+  influenceScore?: number | null;
+  disposition?: AtelierContactDisposition;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  relationshipStrength?: number | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextTouchAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierUpdateContactInputSeniority =
+  | (typeof AtelierUpdateContactInputSeniority)[keyof typeof AtelierUpdateContactInputSeniority]
+  | null;
+
+export const AtelierUpdateContactInputSeniority = {
+  c_suite: "c_suite",
+  vp: "vp",
+  director: "director",
+  manager: "manager",
+  ic: "ic",
+  unknown: "unknown",
+} as const;
+
+export interface AtelierUpdateContactInput {
+  /**
+   * @minLength 1
+   * @maxLength 160
+   */
+  fullName?: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  seniority?: AtelierUpdateContactInputSeniority;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
+  /** @nullable */
+  buyerPersona?: string | null;
+  /**
+   * @minimum 1
+   * @maximum 5
+   * @nullable
+   */
+  influenceScore?: number | null;
+  disposition?: AtelierContactDisposition;
+  /**
+   * @minimum 0
+   * @maximum 100
+   * @nullable
+   */
+  relationshipStrength?: number | null;
+  /** @nullable */
+  contactOwnerId?: string | null;
+  /** @nullable */
+  lastContactAt?: string | null;
+  /** @nullable */
+  nextTouchAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export type AtelierCreateContactRelationshipInputType =
+  (typeof AtelierCreateContactRelationshipInputType)[keyof typeof AtelierCreateContactRelationshipInputType];
+
+export const AtelierCreateContactRelationshipInputType = {
+  reports_to: "reports_to",
+  partners_with: "partners_with",
+  blocks: "blocks",
+} as const;
+
+export interface AtelierCreateContactRelationshipInput {
+  /** @minLength 1 */
+  fromContactId: string;
+  /** @minLength 1 */
+  toContactId: string;
+  type: AtelierCreateContactRelationshipInputType;
+  /** @nullable */
+  notes?: string | null;
 }
 
 export type AtelierAccountFinancialsAging = {

@@ -92,6 +92,10 @@ import type {
   AtelierMarginPolicy,
   AtelierMarginPolicyInput,
   AtelierMeeting,
+  AtelierMergeAccountResult,
+  AtelierMergeAccountsInput,
+  AtelierMergeContactResult,
+  AtelierMergeContactsInput,
   AtelierMyOpenTasks,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
@@ -4963,6 +4967,104 @@ export const useAtelierCheckAccountDuplicates = <
 };
 
 /**
+ * Consolidates a duplicate account into the survivor identified by the
+path. Every child row (contacts, opportunities, engagements, insights,
+activities, audit history, …) is re-pointed to the survivor and the
+duplicate is soft-deleted. The merge is audit-logged and org-scoped.
+Partner / Senior Manager only, and the caller must be able to see BOTH
+accounts. Mirrors the role gating of editing an account.
+
+ * @summary Merge a duplicate account into this (survivor) account
+ */
+export const getAtelierMergeAccountsUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/merge`;
+};
+
+export const atelierMergeAccounts = async (
+  accountId: string,
+  atelierMergeAccountsInput: AtelierMergeAccountsInput,
+  options?: RequestInit,
+): Promise<AtelierMergeAccountResult> => {
+  return customFetch<AtelierMergeAccountResult>(
+    getAtelierMergeAccountsUrl(accountId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierMergeAccountsInput),
+    },
+  );
+};
+
+export const getAtelierMergeAccountsMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeAccounts>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierMergeAccountsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierMergeAccounts>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierMergeAccountsInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierMergeAccounts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierMergeAccounts>>,
+    { accountId: string; data: BodyType<AtelierMergeAccountsInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierMergeAccounts(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierMergeAccountsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierMergeAccounts>>
+>;
+export type AtelierMergeAccountsMutationBody =
+  BodyType<AtelierMergeAccountsInput>;
+export type AtelierMergeAccountsMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Merge a duplicate account into this (survivor) account
+ */
+export const useAtelierMergeAccounts = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeAccounts>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierMergeAccountsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierMergeAccounts>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierMergeAccountsInput> },
+  TContext
+> => {
+  return useMutation(getAtelierMergeAccountsMutationOptions(options));
+};
+
+/**
  * @summary Full account workspace payload (Profile + Contacts + Opps + Engs + Audit)
  */
 export const getAtelierGetAccountWorkspaceUrl = (accountId: string) => {
@@ -5517,6 +5619,103 @@ export const useAtelierCheckContactDuplicates = <
   TContext
 > => {
   return useMutation(getAtelierCheckContactDuplicatesMutationOptions(options));
+};
+
+/**
+ * Consolidates a duplicate contact into the survivor identified by the
+path. Both contacts must live on the same account. Relationship edges,
+activities and audit history are re-pointed to the survivor and the
+duplicate is soft-deleted. Audit-logged and org-scoped. Partner /
+Senior Manager only, gated by visibility on the owning account.
+
+ * @summary Merge a duplicate contact into this (survivor) contact
+ */
+export const getAtelierMergeContactsUrl = (contactId: string) => {
+  return `/api/atelier/contacts/${contactId}/merge`;
+};
+
+export const atelierMergeContacts = async (
+  contactId: string,
+  atelierMergeContactsInput: AtelierMergeContactsInput,
+  options?: RequestInit,
+): Promise<AtelierMergeContactResult> => {
+  return customFetch<AtelierMergeContactResult>(
+    getAtelierMergeContactsUrl(contactId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierMergeContactsInput),
+    },
+  );
+};
+
+export const getAtelierMergeContactsMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeContacts>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierMergeContactsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierMergeContacts>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierMergeContactsInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierMergeContacts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierMergeContacts>>,
+    { contactId: string; data: BodyType<AtelierMergeContactsInput> }
+  > = (props) => {
+    const { contactId, data } = props ?? {};
+
+    return atelierMergeContacts(contactId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierMergeContactsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierMergeContacts>>
+>;
+export type AtelierMergeContactsMutationBody =
+  BodyType<AtelierMergeContactsInput>;
+export type AtelierMergeContactsMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Merge a duplicate contact into this (survivor) contact
+ */
+export const useAtelierMergeContacts = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierMergeContacts>>,
+    TError,
+    { contactId: string; data: BodyType<AtelierMergeContactsInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierMergeContacts>>,
+  TError,
+  { contactId: string; data: BodyType<AtelierMergeContactsInput> },
+  TContext
+> => {
+  return useMutation(getAtelierMergeContactsMutationOptions(options));
 };
 
 /**

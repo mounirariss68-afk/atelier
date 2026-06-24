@@ -42,6 +42,7 @@ import {
   restoreAccount,
   permanentlyDeleteAccount,
 } from "../../lib/atelier-account-lifecycle.js";
+import { mergeAccounts, mergeContacts } from "../../lib/atelier-merge.js";
 import {
   computeAccountFinancials,
   computeAccountHealth,
@@ -119,6 +120,8 @@ import {
   AtelierUpdateActivityBody as AtelierUpdateActivityInput,
   AtelierCheckAccountDuplicatesBody as AtelierCheckAccountDuplicatesInput,
   AtelierCheckContactDuplicatesBody as AtelierCheckContactDuplicatesInput,
+  AtelierMergeAccountsBody as AtelierMergeAccountsInput,
+  AtelierMergeContactsBody as AtelierMergeContactsInput,
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
@@ -3268,6 +3271,62 @@ router.delete("/accounts/:accountId", async (req, res) => {
   res.json({ ok: true, status: result.status });
 });
 
+// ---------- merge (Task #640) ----------
+// Consolidate a duplicate account INTO this (survivor) account. Re-points every
+// child row to the survivor and soft-deletes the duplicate. Gated by the same
+// roles + visibility as editing an account (CREATE_ROLES + canSeeAccount on
+// BOTH the survivor and the duplicate so a scoped editor can't fold in an
+// account they cannot otherwise see).
+router.post("/accounts/:accountId/merge", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can merge accounts.",
+    });
+    return;
+  }
+  const parsed = AtelierMergeAccountsInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const duplicateAccountId = parsed.data.duplicateAccountId;
+  if (duplicateAccountId === req.params.accountId) {
+    res.status(400).json({ error: "same-record", reason: "Cannot merge an account into itself." });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (
+    !(await canSeeAccount(access, me, req.params.accountId)) ||
+    !(await canSeeAccount(access, me, duplicateAccountId))
+  ) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const result = await mergeAccounts(
+    { id: me.id, name: me.name, orgId: me.orgId },
+    req.params.accountId,
+    duplicateAccountId,
+  );
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (result.status === "same_record") {
+    res.status(400).json({ error: "same-record", reason: "Cannot merge an account into itself." });
+    return;
+  }
+  const ws = await buildWorkspace(req.params.accountId, access, me);
+  res.json({
+    ok: true,
+    status: result.status,
+    counts: "counts" in result ? result.counts : {},
+    workspace: ws,
+  });
+});
+
 // ---------- cartographer refresh ----------
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
@@ -4212,6 +4271,74 @@ router.delete("/contacts/:contactId", async (req, res) => {
     });
   });
   res.status(204).end();
+});
+
+// ---------- contact merge (Task #640) ----------
+// Consolidate a duplicate contact INTO this (survivor) contact. Both must live
+// on the same account. Re-points relationship edges, activities and audit
+// history, then soft-deletes the duplicate. Gated by the same roles as editing
+// an account (CREATE_ROLES) + visibility on the owning account.
+router.post("/contacts/:contactId/merge", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!CREATE_ROLES.has(me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can merge contacts.",
+    });
+    return;
+  }
+  const parsed = AtelierMergeContactsInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const duplicateContactId = parsed.data.duplicateContactId;
+  if (duplicateContactId === req.params.contactId) {
+    res.status(400).json({ error: "same-record", reason: "Cannot merge a contact into itself." });
+    return;
+  }
+  // Load the survivor to resolve its account, then gate on that account.
+  const [survivor] = await db
+    .select({ id: atelierContacts.id, accountId: atelierContacts.accountId })
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.id, req.params.contactId),
+        eq(atelierContacts.orgId, me.orgId),
+        isNull(atelierContacts.deletedAt),
+      ),
+    );
+  if (!survivor) {
+    res.status(404).json({ error: "contact-not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, survivor.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const result = await mergeContacts(
+    { id: me.id, name: me.name, orgId: me.orgId },
+    req.params.contactId,
+    duplicateContactId,
+  );
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "contact-not-found" });
+    return;
+  }
+  if (result.status === "different_accounts") {
+    res.status(400).json({
+      error: "different-accounts",
+      reason: "Both contacts must belong to the same account to be merged.",
+    });
+    return;
+  }
+  if (result.status === "same_record") {
+    res.status(400).json({ error: "same-record", reason: "Cannot merge a contact into itself." });
+    return;
+  }
+  res.json({ ok: true, status: result.status, counts: "counts" in result ? result.counts : {} });
 });
 
 // ---------- contact relationships (Task #567) ----------

@@ -1158,6 +1158,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/accounts/{accountId}/merge:
+    post:
+      operationId: atelierMergeAccounts
+      tags: [atelier]
+      summary: Merge a duplicate account into this (survivor) account
+      description: |
+        Consolidates a duplicate account into the survivor identified by the
+        path. Every child row (contacts, opportunities, engagements, insights,
+        activities, audit history, …) is re-pointed to the survivor and the
+        duplicate is soft-deleted. The merge is audit-logged and org-scoped.
+        Partner / Senior Manager only, and the caller must be able to see BOTH
+        accounts. Mirrors the role gating of editing an account.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierMergeAccountsInput"
+      responses:
+        "200":
+          description: Merge result with the refreshed survivor workspace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMergeAccountResult"
+        "400":
+          description: Invalid body / merging a record into itself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "403":
+          description: Not allowed (non-partner persona, or an account not visible)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "404":
+          description: Survivor or duplicate not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/accounts/{accountId}:
     get:
       operationId: atelierGetAccountWorkspace
@@ -1317,6 +1365,53 @@ paths:
                 $ref: "#/components/schemas/AtelierError"
         "404":
           description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/contacts/{contactId}/merge:
+    post:
+      operationId: atelierMergeContacts
+      tags: [atelier]
+      summary: Merge a duplicate contact into this (survivor) contact
+      description: |
+        Consolidates a duplicate contact into the survivor identified by the
+        path. Both contacts must live on the same account. Relationship edges,
+        activities and audit history are re-pointed to the survivor and the
+        duplicate is soft-deleted. Audit-logged and org-scoped. Partner /
+        Senior Manager only, gated by visibility on the owning account.
+      parameters:
+        - in: path
+          name: contactId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierMergeContactsInput"
+      responses:
+        "200":
+          description: Merge result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMergeContactResult"
+        "400":
+          description: Invalid body / different accounts / merging a record into itself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "403":
+          description: Not allowed (non-partner persona, or account not visible)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "404":
+          description: Survivor or duplicate contact not found
           content:
             application/json:
               schema:
@@ -3372,6 +3467,41 @@ components:
         candidates:
           type: array
           items: { $ref: "#/components/schemas/AtelierContactDuplicateCandidate" }
+
+    # Task #640 — record merge. The survivor is the path id; the body names the
+    # duplicate to fold in. `counts` is a per-table tally of re-pointed rows.
+    AtelierMergeAccountsInput:
+      type: object
+      required: [duplicateAccountId]
+      properties:
+        duplicateAccountId: { type: string, minLength: 1 }
+
+    AtelierMergeContactsInput:
+      type: object
+      required: [duplicateContactId]
+      properties:
+        duplicateContactId: { type: string, minLength: 1 }
+
+    AtelierMergeCounts:
+      type: object
+      additionalProperties: { type: integer }
+
+    AtelierMergeAccountResult:
+      type: object
+      required: [ok, status, workspace]
+      properties:
+        ok: { type: boolean }
+        status: { type: string, description: "merged | already_merged" }
+        counts: { $ref: "#/components/schemas/AtelierMergeCounts" }
+        workspace: { $ref: "#/components/schemas/AtelierAccountWorkspace" }
+
+    AtelierMergeContactResult:
+      type: object
+      required: [ok, status]
+      properties:
+        ok: { type: boolean }
+        status: { type: string, description: "merged | already_merged" }
+        counts: { $ref: "#/components/schemas/AtelierMergeCounts" }
 
     # Task #632 — rolled-up family metrics across an account + its subsidiaries.
     AtelierAccountHierarchyRollup:
