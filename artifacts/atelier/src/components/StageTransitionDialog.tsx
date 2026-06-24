@@ -212,261 +212,265 @@ export function StageTransitionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] bg-bg-elevate border-gold/40 text-text">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[840px] max-h-[90vh] flex flex-col gap-0 bg-bg-elevate border-gold/40 text-text">
+        <DialogHeader className="shrink-0 pr-8">
           <DialogTitle className="text-xl font-semibold">Move stage</DialogTitle>
           <DialogDescription className="text-text-mute">
             Stage moves on <span className="font-mono text-text">{oppName}</span> are
             audit-logged. Provide a rationale and tune the win-probability.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-5 py-3">
-          <div className="grid gap-2">
-            <Label className="text-xs uppercase tracking-widest font-mono text-text-faint">
-              Move to stage
-            </Label>
-            <div className="grid grid-cols-2 gap-2">
-              {SALES_STAGES.map((s) => {
-                const active = s === toStage;
-                const isCurrent = s === currentStage;
-                return (
-                  <button
-                    type="button"
-                    key={s}
-                    onClick={() => setToStage(s)}
-                    className={`text-left text-xs font-mono uppercase tracking-wider rounded border px-3 py-2 transition-colors ${
-                      active
-                        ? "border-gold bg-gold/10 text-gold"
-                        : "border-border-soft hover:border-gold/40 text-text-mute"
-                    }`}
-                  >
-                    {SALES_STAGE_LABEL[s]}
-                    {isCurrent && (
-                      <span className="ml-2 text-[9px] text-text-faint">current</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="t-rationale" className="text-xs uppercase tracking-widest font-mono text-text-faint">
-              Rationale
-            </Label>
-            <Textarea
-              id="t-rationale"
-              value={rationale}
-              onChange={(e) => setRationale(e.target.value)}
-              placeholder="Why is this opportunity moving to this stage now?"
-              className="bg-bg-deep border-border-soft text-text min-h-[88px]"
-              required
-            />
-          </div>
-
-          {subStatusOptions.length > 0 && (
-            <div className="grid gap-2">
-              <Label htmlFor="t-substatus" className="text-xs uppercase tracking-widest font-mono text-text-faint">
-                Sub-status (optional)
-              </Label>
-              <select
-                id="t-substatus"
-                value={subStatus}
-                onChange={(e) => setSubStatus(e.target.value)}
-                className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
-              >
-                <option value="">— none —</option>
-                {subStatusOptions.map((s) => (
-                  <option key={s} value={s}>
-                    {SUB_STATUS_LABEL[s] ?? s}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="grid gap-2">
-            <div className="flex items-baseline justify-between">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto py-4 pr-1 sm:grid-cols-2">
+            <div className="grid gap-2 sm:col-span-2">
               <Label className="text-xs uppercase tracking-widest font-mono text-text-faint">
-                Win probability
+                Move to stage
               </Label>
-              <span className="font-mono text-gold text-sm">{prob}%</span>
-            </div>
-            <Slider
-              value={[prob]}
-              min={0}
-              max={100}
-              step={5}
-              onValueChange={(v) => setProb(v[0])}
-            />
-            <p className="text-[11px] text-text-faint font-mono">
-              Default for {SALES_STAGE_LABEL[toStage]}: {SALES_STAGE_DEFAULT_PROB[toStage]}%
-            </p>
-          </div>
-
-          {!isTerminalEntry && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="t-milestone" className="text-xs uppercase tracking-widest font-mono text-text-faint">
-                  Next milestone
-                </Label>
-                <Input
-                  id="t-milestone"
-                  value={milestone}
-                  onChange={(e) => setMilestone(e.target.value)}
-                  placeholder="e.g. POV demo with COO"
-                  className="bg-bg-deep border-border-soft"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="t-milestone-date" className="text-xs uppercase tracking-widest font-mono text-text-faint">
-                  Target date
-                </Label>
-                <Input
-                  id="t-milestone-date"
-                  type="date"
-                  value={milestoneDate}
-                  onChange={(e) => setMilestoneDate(e.target.value)}
-                  className="bg-bg-deep border-border-soft"
-                />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {SALES_STAGES.map((s) => {
+                  const active = s === toStage;
+                  const isCurrent = s === currentStage;
+                  return (
+                    <button
+                      type="button"
+                      key={s}
+                      onClick={() => setToStage(s)}
+                      className={`text-left text-xs font-mono uppercase tracking-wider rounded border px-3 py-2 transition-colors ${
+                        active
+                          ? "border-gold bg-gold/10 text-gold"
+                          : "border-border-soft hover:border-gold/40 text-text-mute"
+                      }`}
+                    >
+                      {SALES_STAGE_LABEL[s]}
+                      {isCurrent && (
+                        <span className="ml-2 text-[9px] text-text-faint">current</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          )}
 
-          <div className="grid gap-2">
-            <Label htmlFor="t-evidence" className="text-xs uppercase tracking-widest font-mono text-text-faint">
-              Evidence artifact IDs (optional)
-            </Label>
-            <Textarea
-              id="t-evidence"
-              value={evidence}
-              onChange={(e) => setEvidence(e.target.value)}
-              placeholder="art_… one per line, or comma-separated"
-              className="bg-bg-deep border-border-soft text-text font-mono text-xs min-h-[56px]"
-            />
-            <p className="text-[10px] text-text-faint">
-              References attached here are recorded on the transition and surface in the opportunity's Artifacts tab.
-            </p>
-          </div>
-
-          {isSuspectToProspect && (
-            <div className="rounded border border-gold/40 bg-gold/5 p-3 text-xs text-text-mute">
-              <span className="block font-mono uppercase tracking-wider text-gold mb-1">
-                Suspect → Prospect gate
-              </span>
-              Requires a completed 5C qualifier with a Go decision. Fill the
-              5C tab on this opportunity, or tick partner override below.
+            <div className="grid content-start gap-2">
+              <Label htmlFor="t-rationale" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                Rationale
+              </Label>
+              <Textarea
+                id="t-rationale"
+                value={rationale}
+                onChange={(e) => setRationale(e.target.value)}
+                placeholder="Why is this opportunity moving to this stage now?"
+                className="bg-bg-deep border-border-soft text-text min-h-[120px] h-full"
+                required
+              />
             </div>
-          )}
 
-          {isConvertToRunner && (
-            <div className="grid gap-3 rounded border border-gold/40 bg-gold/5 p-3">
-              <span className="font-mono uppercase tracking-wider text-gold text-xs">
-                Convert → Runner gate
-              </span>
+            <div className="grid content-start gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="t-decider" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
-                  Named decider
-                </Label>
-                <Input
-                  id="t-decider"
-                  value={decider}
-                  onChange={(e) => setDecider(e.target.value)}
-                  placeholder="e.g. CFO Sarah Patel"
-                  className="bg-bg-deep border-border-soft"
+                <div className="flex items-baseline justify-between">
+                  <Label className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                    Win probability
+                  </Label>
+                  <span className="font-mono text-gold text-sm">{prob}%</span>
+                </div>
+                <Slider
+                  value={[prob]}
+                  min={0}
+                  max={100}
+                  step={5}
+                  onValueChange={(v) => setProb(v[0])}
                 />
+                <p className="text-[11px] text-text-faint font-mono">
+                  Default for {SALES_STAGE_LABEL[toStage]}: {SALES_STAGE_DEFAULT_PROB[toStage]}%
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+
+              {subStatusOptions.length > 0 && (
                 <div className="grid gap-2">
-                  <Label htmlFor="t-vcd" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
-                    Verbal-commit date
+                  <Label htmlFor="t-substatus" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                    Sub-status (optional)
+                  </Label>
+                  <select
+                    id="t-substatus"
+                    value={subStatus}
+                    onChange={(e) => setSubStatus(e.target.value)}
+                    className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
+                  >
+                    <option value="">— none —</option>
+                    {subStatusOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {SUB_STATUS_LABEL[s] ?? s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {!isTerminalEntry && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="t-milestone" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                    Next milestone
                   </Label>
                   <Input
-                    id="t-vcd"
+                    id="t-milestone"
+                    value={milestone}
+                    onChange={(e) => setMilestone(e.target.value)}
+                    placeholder="e.g. POV demo with COO"
+                    className="bg-bg-deep border-border-soft"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="t-milestone-date" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                    Target date
+                  </Label>
+                  <Input
+                    id="t-milestone-date"
                     type="date"
-                    value={verbalCommitDate}
-                    onChange={(e) => setVerbalCommitDate(e.target.value)}
+                    value={milestoneDate}
+                    onChange={(e) => setMilestoneDate(e.target.value)}
                     className="bg-bg-deep border-border-soft"
                   />
                 </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="t-sigpath" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
-                    Signature path
-                  </Label>
-                  <Input
-                    id="t-sigpath"
-                    value={signaturePath}
-                    onChange={(e) => setSignaturePath(e.target.value)}
-                    placeholder="e.g. Procurement → CFO → DocuSign"
-                    className="bg-bg-deep border-border-soft"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+              </>
+            )}
 
-          {isRunnerToContract && (
-            <div className="grid gap-2 rounded border border-gold/40 bg-gold/5 p-3">
-              <span className="font-mono uppercase tracking-wider text-gold text-xs">
-                Runner → Contract gate
-              </span>
-              <Label htmlFor="t-sif" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
-                Signed instrument · artifact id
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="t-evidence" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                Evidence artifact IDs (optional)
               </Label>
-              <Input
-                id="t-sif"
-                value={signedInstrumentFileId}
-                onChange={(e) => setSignedInstrumentFileId(e.target.value)}
-                placeholder="art_…"
-                className="bg-bg-deep border-border-soft font-mono text-xs"
+              <Textarea
+                id="t-evidence"
+                value={evidence}
+                onChange={(e) => setEvidence(e.target.value)}
+                placeholder="art_… one per line, or comma-separated"
+                className="bg-bg-deep border-border-soft text-text font-mono text-xs min-h-[56px]"
               />
               <p className="text-[10px] text-text-faint">
-                Charter Architect auto-fires on Contract entry for the linked engagement.
+                References attached here are recorded on the transition and surface in the opportunity's Artifacts tab.
               </p>
             </div>
-          )}
 
-          {isTerminalEntry && (
-            <div className="grid gap-2 rounded border border-amber/40 bg-amber/5 p-3">
-              <span className="font-mono uppercase tracking-wider text-amber text-xs">
-                Closing as {SALES_STAGE_LABEL[toStage]}
-              </span>
-              <Label htmlFor="t-reason" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
-                Reason code
-              </Label>
-              <select
-                id="t-reason"
-                value={reasonCode}
-                onChange={(e) => setReasonCode(e.target.value)}
-                className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
-              >
-                <option value="">— pick reason —</option>
-                {reasonOptions.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {(isSuspectToProspect || isConvertToRunner || isRunnerToContract || isTerminalEntry) && (
-            <label className="flex items-start gap-2 text-xs text-text-mute cursor-pointer">
-              <Checkbox
-                checked={override}
-                onCheckedChange={(c) => setOverride(c === true)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="font-mono uppercase tracking-wider text-amber">Partner override</span>
-                <span className="block">
-                  Skip the gate above. Use only when partner authority is direct and this will be reviewed at the next portfolio sync.
+            {isSuspectToProspect && (
+              <div className="rounded border border-gold/40 bg-gold/5 p-3 text-xs text-text-mute sm:col-span-2">
+                <span className="block font-mono uppercase tracking-wider text-gold mb-1">
+                  Suspect → Prospect gate
                 </span>
-              </span>
-            </label>
-          )}
+                Requires a completed 5C qualifier with a Go decision. Fill the
+                5C tab on this opportunity, or tick partner override below.
+              </div>
+            )}
 
-          <div className="flex justify-end gap-2 pt-1">
+            {isConvertToRunner && (
+              <div className="grid gap-3 rounded border border-gold/40 bg-gold/5 p-3 sm:col-span-2">
+                <span className="font-mono uppercase tracking-wider text-gold text-xs">
+                  Convert → Runner gate
+                </span>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="t-decider" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                      Named decider
+                    </Label>
+                    <Input
+                      id="t-decider"
+                      value={decider}
+                      onChange={(e) => setDecider(e.target.value)}
+                      placeholder="e.g. CFO Sarah Patel"
+                      className="bg-bg-deep border-border-soft"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="t-vcd" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                      Verbal-commit date
+                    </Label>
+                    <Input
+                      id="t-vcd"
+                      type="date"
+                      value={verbalCommitDate}
+                      onChange={(e) => setVerbalCommitDate(e.target.value)}
+                      className="bg-bg-deep border-border-soft"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="t-sigpath" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                      Signature path
+                    </Label>
+                    <Input
+                      id="t-sigpath"
+                      value={signaturePath}
+                      onChange={(e) => setSignaturePath(e.target.value)}
+                      placeholder="e.g. Procurement → CFO → DocuSign"
+                      className="bg-bg-deep border-border-soft"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {isRunnerToContract && (
+              <div className="grid gap-2 rounded border border-gold/40 bg-gold/5 p-3 sm:col-span-2">
+                <span className="font-mono uppercase tracking-wider text-gold text-xs">
+                  Runner → Contract gate
+                </span>
+                <Label htmlFor="t-sif" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                  Signed instrument · artifact id
+                </Label>
+                <Input
+                  id="t-sif"
+                  value={signedInstrumentFileId}
+                  onChange={(e) => setSignedInstrumentFileId(e.target.value)}
+                  placeholder="art_…"
+                  className="bg-bg-deep border-border-soft font-mono text-xs"
+                />
+                <p className="text-[10px] text-text-faint">
+                  Charter Architect auto-fires on Contract entry for the linked engagement.
+                </p>
+              </div>
+            )}
+
+            {isTerminalEntry && (
+              <div className="grid gap-2 rounded border border-amber/40 bg-amber/5 p-3 sm:col-span-2">
+                <span className="font-mono uppercase tracking-wider text-amber text-xs">
+                  Closing as {SALES_STAGE_LABEL[toStage]}
+                </span>
+                <Label htmlFor="t-reason" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
+                  Reason code
+                </Label>
+                <select
+                  id="t-reason"
+                  value={reasonCode}
+                  onChange={(e) => setReasonCode(e.target.value)}
+                  className={`${fieldControlCls} bg-bg-deep border border-border-soft rounded text-sm text-text`}
+                >
+                  <option value="">— pick reason —</option>
+                  {reasonOptions.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(isSuspectToProspect || isConvertToRunner || isRunnerToContract || isTerminalEntry) && (
+              <label className="flex items-start gap-2 text-xs text-text-mute cursor-pointer sm:col-span-2">
+                <Checkbox
+                  checked={override}
+                  onCheckedChange={(c) => setOverride(c === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-mono uppercase tracking-wider text-amber">Partner override</span>
+                  <span className="block">
+                    Skip the gate above. Use only when partner authority is direct and this will be reviewed at the next portfolio sync.
+                  </span>
+                </span>
+              </label>
+            )}
+          </div>
+
+          <div className="flex shrink-0 justify-end gap-2 border-t border-border-soft pt-4">
             <PillButton type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </PillButton>
