@@ -72,6 +72,7 @@ import {
   ATELIER_V5_DISPATCH,
   dispatchV5ModeExtension,
   applyCitationGuardrail,
+  isScoutBriefEmpty,
   type AgentFact,
   type PursuitScoutOutput,
   type PovOutline,
@@ -315,7 +316,18 @@ router.post("/opportunities", async (req, res) => {
     .filter(Boolean)
     .join("\n\n");
 
+  // Task #653 — surface the Pursuit Scout outcome instead of swallowing a
+  // failed/empty run behind a bare 201. The opportunity itself is already
+  // persisted (rows + audit), so we keep creating it — but the response carries
+  // an explicit `scout` status so the caller can tell whether a usable brief was
+  // produced ("completed"), the run returned an empty/soft-refusal brief
+  // ("empty"), or the run failed outright ("failed", with the error). "skipped"
+  // means the caller passed runScout:false and no run was attempted.
   let scoutRunId: string | null = null;
+  let scout: {
+    status: "completed" | "empty" | "failed" | "skipped";
+    error?: string;
+  } = { status: "skipped" };
   if (input.runScout !== false) {
     try {
       const { runId } = await runPursuitScout({
@@ -332,16 +344,21 @@ router.post("/opportunities", async (req, res) => {
       // Persist brief + facts.
       const [latest] = await db.select().from(atelierAgentRuns).where(eq(atelierAgentRuns.id, runId));
       const out = (latest?.output as PursuitScoutOutput) ?? null;
-      if (out) await persistBriefAndFacts(opp.id, runId, out);
+      const persisted = out ? await persistBriefAndFacts(opp.id, runId, out) : { persisted: false, reason: "empty" as const };
+      scout = persisted.persisted ? { status: "completed" } : { status: "empty" };
     } catch (err) {
-      // Scout failure shouldn't block opp creation.
+      // A failed Scout run must not block opportunity creation, but it must be
+      // surfaced — not swallowed by a clean 201.
+      const message = err instanceof Error ? err.message : String(err);
       console.warn("[atelier] scout failed", err);
+      scout = { status: "failed", error: message };
     }
   }
 
   res.status(201).json({
     opportunity: await buildOppWire(opp),
     scoutRunId,
+    scout,
   });
 });
 
@@ -580,30 +597,16 @@ async function persistBriefAndFacts(
   oppId: string,
   runId: string,
   out: PursuitScoutOutput,
-): Promise<void> {
+): Promise<{ persisted: boolean; reason?: "empty" }> {
   // Task #653 — validate the Scout output before it becomes the brief of
   // record. The model can return a structurally-valid-but-empty object (a soft
   // refusal for accounts with no public footprint). Persisting that would put a
   // blank brief in front of the partner as if it were research. Require at least
   // one narrative section to carry content; otherwise skip persistence and leave
   // the prior brief (if any) intact rather than overwriting it with nothing.
-  const narrative = [
-    out.accountSnapshot?.oneLiner,
-    out.accountSnapshot?.scaleHint,
-    ...(out.accountSnapshot?.recentMoves ?? []),
-    out.buyerLandscape?.powerMap,
-    ...(out.buyerLandscape?.likelyBuyers ?? []).map((b) => b?.rationale),
-    out.fiveCDraft?.client,
-    out.fiveCDraft?.competition,
-    out.fiveCDraft?.capability,
-    out.fiveCDraft?.capacity,
-    out.fiveCDraft?.contract,
-  ]
-    .map((s) => (typeof s === "string" ? s.trim() : ""))
-    .filter(Boolean);
-  if (narrative.length === 0) {
+  if (isScoutBriefEmpty(out)) {
     console.warn(`[atelier] scout produced an empty brief for ${oppId} — skipping persist`);
-    return;
+    return { persisted: false, reason: "empty" };
   }
   // Run facts through the citation guardrail so any claim without a real source
   // URL is confidence-downgraded (never silently promoted as green evidence).
@@ -645,6 +648,7 @@ async function persistBriefAndFacts(
       })),
     );
   }
+  return { persisted: true };
 }
 
 // =============================================================

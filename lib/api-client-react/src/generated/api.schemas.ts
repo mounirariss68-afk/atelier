@@ -2618,10 +2618,34 @@ event, manual. Free-form fallback allowed.
   runScout?: boolean;
 }
 
+/**
+ * completed = usable brief persisted; empty = run returned an empty/soft-refusal brief (not persisted); failed = the run threw (see error); skipped = runScout:false, no run attempted.
+ */
+export type AtelierCreateOpportunityResponseScoutStatus =
+  (typeof AtelierCreateOpportunityResponseScoutStatus)[keyof typeof AtelierCreateOpportunityResponseScoutStatus];
+
+export const AtelierCreateOpportunityResponseScoutStatus = {
+  completed: "completed",
+  empty: "empty",
+  failed: "failed",
+  skipped: "skipped",
+} as const;
+
+/**
+ * Pursuit Scout outcome for this create. The opportunity is created regardless; this surfaces whether a usable research brief was produced so a failed/empty run is not swallowed by a bare 201.
+ */
+export type AtelierCreateOpportunityResponseScout = {
+  /** completed = usable brief persisted; empty = run returned an empty/soft-refusal brief (not persisted); failed = the run threw (see error); skipped = runScout:false, no run attempted. */
+  status: AtelierCreateOpportunityResponseScoutStatus;
+  error?: string;
+};
+
 export interface AtelierCreateOpportunityResponse {
   opportunity: Opportunity;
   /** @nullable */
   scoutRunId?: string | null;
+  /** Pursuit Scout outcome for this create. The opportunity is created regardless; this surfaces whether a usable research brief was produced so a failed/empty run is not swallowed by a bare 201. */
+  scout?: AtelierCreateOpportunityResponseScout;
 }
 
 export interface AtelierStageChangeInput {

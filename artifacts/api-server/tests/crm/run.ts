@@ -189,6 +189,9 @@ async function main(): Promise<void> {
   );
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
+  const { isScoutBriefEmpty } = await import(
+    "../../src/lib/atelier-agents/runner.js"
+  );
 
   const {
     db,
@@ -789,6 +792,32 @@ async function main(): Promise<void> {
 
       const noDesc = await api("POST", "/opportunities", PERSONA.fp, { name: uniq("OppND"), accountId: ACC });
       check("POST /opportunities missing description \u2192 400", noDesc.status === 400, `status=${noDesc.status}`);
+
+      // Task #653 — Pursuit Scout outcome must be SURFACED on create, never
+      // swallowed by a bare 201. (a) When runScout:false the response carries
+      // scout.status === "skipped". (b) The empty/soft-refusal detector that
+      // gates persistence is asserted directly (deterministic; no live LLM):
+      // a structurally-valid-but-blank brief is "empty" and must not persist.
+      check(
+        "POST /opportunities (runScout:false) \u2192 scout.status=skipped",
+        cr.body?.scout?.status === "skipped",
+        `scout=${JSON.stringify(cr.body?.scout)}`,
+      );
+      const emptyBrief = {
+        accountSnapshot: { oneLiner: "  ", scaleHint: "", recentMoves: [] },
+        buyerLandscape: { likelyBuyers: [], powerMap: "" },
+        fiveCDraft: { client: "", competition: "", capability: "", capacity: "", contract: "" },
+        openQuestions: [],
+        facts: [],
+        confidence: "red" as const,
+      };
+      const fullBrief = {
+        ...emptyBrief,
+        accountSnapshot: { oneLiner: "Top-3 regional BPO operator", scaleHint: "~12k seats", recentMoves: [] },
+      };
+      check("isScoutBriefEmpty(null) \u2192 true", isScoutBriefEmpty(null) === true);
+      check("isScoutBriefEmpty(blank brief) \u2192 true (no persist)", isScoutBriefEmpty(emptyBrief) === true);
+      check("isScoutBriefEmpty(brief w/ narrative) \u2192 false (persists)", isScoutBriefEmpty(fullBrief) === false);
 
       const notFound = await api("POST", "/opportunities", PERSONA.fp, {
         name: uniq("OppNF"),

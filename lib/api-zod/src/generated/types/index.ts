@@ -167,6 +167,8 @@ export * from "./atelierCreateContactRelationshipInput";
 export * from "./atelierCreateContactRelationshipInputType";
 export * from "./atelierCreateOpportunityInput";
 export * from "./atelierCreateOpportunityResponse";
+export * from "./atelierCreateOpportunityResponseScout";
+export * from "./atelierCreateOpportunityResponseScoutStatus";
 export * from "./atelierCreateStageTransition200";
 export * from "./atelierCredential";
 export * from "./atelierCredentialAnonymizationStatus";

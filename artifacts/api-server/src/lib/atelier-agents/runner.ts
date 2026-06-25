@@ -83,6 +83,31 @@ export interface PursuitScoutOutput {
   confidence: "green" | "amber" | "red";
 }
 
+// Task #653 — a Pursuit Scout run can return a structurally-valid-but-empty
+// object (a soft refusal for accounts with no public footprint, or a degraded
+// run). Persisting that would put a blank brief in front of the partner as if it
+// were research. Treat a brief as empty unless at least one narrative section
+// carries text. Shared by the persistence path and the create/re-run handlers so
+// "empty" is detected the same way everywhere.
+export function isScoutBriefEmpty(out: PursuitScoutOutput | null | undefined): boolean {
+  if (!out) return true;
+  const narrative = [
+    out.accountSnapshot?.oneLiner,
+    out.accountSnapshot?.scaleHint,
+    ...(out.accountSnapshot?.recentMoves ?? []),
+    out.buyerLandscape?.powerMap,
+    ...(out.buyerLandscape?.likelyBuyers ?? []).map((b) => b?.rationale),
+    out.fiveCDraft?.client,
+    out.fiveCDraft?.competition,
+    out.fiveCDraft?.capability,
+    out.fiveCDraft?.capacity,
+    out.fiveCDraft?.contract,
+  ]
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+  return narrative.length === 0;
+}
+
 export interface PovOutline {
   title: string;
   thesis: string;

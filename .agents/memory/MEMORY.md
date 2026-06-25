@@ -11,6 +11,7 @@
 - [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk account/engagement scope stamped at ingest-LINK time (not upload); engagements only close (purge rides on account delete); retrieval fail-loud; model sees chunk text only via inert safeBlocks.
 - [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.
 - [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.
+- [Pursuit Scout create contract](atelier-scout-create-contract.md) — opp create is committed before scout; surface failed/empty scout via structured 201 `scout.status`, never rollback or bare 201; reuse isScoutBriefEmpty.
 - [Atelier advisory prefill must degrade](atelier-advisory-prefill-degrade.md) — chat create-account Cartographer timeout must degrade to a manual proposal card (ok:true, degraded:true), never ok:false/STOP.
 - [Opp plm_stage retired](atelier-opp-plm-stage-retired.md) — opp sales_stage is sole stage SoT (contract=won); engagement plmStage kept on purpose; push-based DB skips numbered-migration backfills (funnel audit-row test fails env-only).
 - [Atelier employee seed onConflict](atelier-employee-seed-onconflict.md) — employee insert is onConflictDoNothing; new columns won't backfill on re-seed unless added to the idempotent update loop too.

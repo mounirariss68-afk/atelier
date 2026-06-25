@@ -4930,6 +4930,22 @@ components:
       properties:
         opportunity: { $ref: "#/components/schemas/Opportunity" }
         scoutRunId: { type: ["string", "null"] }
+        scout:
+          type: object
+          description: >-
+            Pursuit Scout outcome for this create. The opportunity is created
+            regardless; this surfaces whether a usable research brief was
+            produced so a failed/empty run is not swallowed by a bare 201.
+          required: [status]
+          properties:
+            status:
+              type: string
+              enum: [completed, empty, failed, skipped]
+              description: >-
+                completed = usable brief persisted; empty = run returned an
+                empty/soft-refusal brief (not persisted); failed = the run threw
+                (see error); skipped = runScout:false, no run attempted.
+            error: { type: string }
 
     AtelierStageChangeInput:
       type: object

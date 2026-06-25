@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierCreateOpportunityResponseScout } from "./atelierCreateOpportunityResponseScout";
 import type { Opportunity } from "./opportunity";
 
 export interface AtelierCreateOpportunityResponse {
   opportunity: Opportunity;
   /** @nullable */
   scoutRunId?: string | null;
+  /** Pursuit Scout outcome for this create. The opportunity is created regardless; this surfaces whether a usable research brief was produced so a failed/empty run is not swallowed by a bare 201. */
+  scout?: AtelierCreateOpportunityResponseScout;
 }
