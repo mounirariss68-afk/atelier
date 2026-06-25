@@ -5,12 +5,12 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PlmStage } from "./plmStage";
+import type { SalesStage } from "./salesStage";
 
 export interface AtelierAccountOpportunityRef {
   id: string;
   name: string;
-  plmStage: PlmStage;
+  salesStage: SalesStage;
   dealValueUsd: number;
   /** @nullable */
   winProbabilityPct?: number | null;

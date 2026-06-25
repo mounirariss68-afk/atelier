@@ -11,6 +11,7 @@
 - [Atelier RAG scope/lifecycle](atelier-rag-scope-lifecycle.md) — chunk account/engagement scope stamped at ingest-LINK time (not upload); engagements only close (purge rides on account delete); retrieval fail-loud; model sees chunk text only via inert safeBlocks.
 - [Drizzle sql array IN](drizzle-sql-array-in.md) — JS array in sql`` expands to `($1,$2,$3)` WITH parens; use `col IN ${arr}` (no parens, not ANY), guard empty.
 - [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.
+- [Opp plm_stage retired](atelier-opp-plm-stage-retired.md) — opp sales_stage is sole stage SoT (contract=won); engagement plmStage kept on purpose; push-based DB skips numbered-migration backfills (funnel audit-row test fails env-only).
 - [Atelier employee seed onConflict](atelier-employee-seed-onconflict.md) — employee insert is onConflictDoNothing; new columns won't backfill on re-seed unless added to the idempotent update loop too.
 - [Atelier API types are codegen'd](atelier-api-types-codegen.md) — AtelierContact/cartographer types are orval-generated from lib/api-spec/openapi.yaml; edit the spec + run codegen, never hand-edit generated files.
 - [api-client-react new-hook wiring](api-client-react-barrel.md) — orval regenerates generated/api.ts hooks but NOT the hand-maintained src/index.ts barrel; add new hook names there + run `tsc -b …/api-client-react --force` (types flow via wildcard, hooks don't).

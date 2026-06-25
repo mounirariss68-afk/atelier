@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ForecastCategory } from "./forecastCategory";
 
 /**
  * Task #540 — partial edit of an opportunity's core details. All fields
@@ -25,6 +26,9 @@ export interface AtelierUpdateOpportunityInput {
   nextMilestone?: string | null;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory | null;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */

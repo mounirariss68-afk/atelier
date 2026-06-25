@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierAccountTier } from "./atelierAccountTier";
+import type { ForecastCategory } from "./forecastCategory";
 
 export interface AtelierCreateOpportunityInput {
   /** @minLength 1 */
@@ -61,6 +62,9 @@ event, manual. Free-form fallback allowed.
   nextMilestone?: string | null;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory | null;
   /** Deprecated alias for description; retained for backwards compatibility. */
   contextBlurb?: string;
   /**

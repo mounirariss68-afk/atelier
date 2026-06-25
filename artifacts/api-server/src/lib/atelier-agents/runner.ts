@@ -2940,11 +2940,11 @@ export async function runPipelineForecaster(args: {
           eq(atelierOpportunities.partnerOwnerId, args.actorId),
         ),
       );
-    const TERMINAL = new Set(["signed", "lost_no_decision", "withdrawn", "won", "lost", "no_go"]);
+    const TERMINAL = new Set(["contract", "lost", "no_decision", "withdrawn"]);
     let flagged = 0;
     let miscalibrated = 0;
     for (const o of stalledRows) {
-      if (TERMINAL.has(o.salesStage) || TERMINAL.has(o.plmStage)) continue;
+      if (TERMINAL.has(o.salesStage)) continue;
 
       // (a) Stalled deals — surface aging in-stage.
       if (o.daysInStage > STALLED_THRESHOLD_DAYS) {
@@ -5163,7 +5163,6 @@ async function loadAccountAgentContext(accountId: string) {
       id: o.id,
       name: o.name,
       salesStage: o.salesStage,
-      plmStage: o.plmStage,
       probabilityPct: o.probabilityPct,
       buyerPersona: o.buyerPersona,
       offeringAnchor: o.offeringAnchor,

@@ -64,6 +64,14 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const FORECAST_CATEGORY_LABEL: Record<string, string> = {
+  omitted: "Omitted",
+  pipeline: "Pipeline",
+  best_case: "Best case",
+  commit: "Commit",
+  closed: "Closed",
+};
+
 export default function Opportunity() {
   const [, paramsV2] = useRoute("/opportunities/:oppId");
   const [, paramsV1] = useRoute("/pipeline/:oppId");
@@ -175,6 +183,18 @@ export default function Opportunity() {
               { label: "Partner", name: opp.partnerOwnerName },
               { label: "Engagement Lead", name: opp.engagementLeadName },
               { label: "Next milestone", name: opp.nextMilestone, meta: true },
+              {
+                label: "Expected close",
+                name: opp.closeDate
+                  ? new Date(opp.closeDate).toLocaleDateString()
+                  : "Unscheduled",
+                meta: true,
+              },
+              {
+                label: "Forecast",
+                name: FORECAST_CATEGORY_LABEL[opp.forecastCategory ?? "pipeline"] ?? "Pipeline",
+                meta: true,
+              },
             ]}
           />
         </div>

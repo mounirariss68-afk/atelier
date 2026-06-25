@@ -178,6 +178,27 @@ defineCapability({
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "meeting_create requires confirm:true." };
     }
+    // Task #653 — dedup. A meeting with the same parent, title, and date is the
+    // same meeting; return the existing row rather than inserting a duplicate
+    // (calendar syncs and re-runs otherwise fan out into noise).
+    const dedupTitle = String(input.title).trim();
+    const dedupDate = String(input.date).trim();
+    const [dupe] = await db
+      .select({ id: atelierMeetings.id })
+      .from(atelierMeetings)
+      .where(
+        and(
+          eq(atelierMeetings.orgId, ctx.persona.orgId),
+          eq(atelierMeetings.parentType, String(input.parentType)),
+          eq(atelierMeetings.parentId, String(input.parentId)),
+          eq(atelierMeetings.title, dedupTitle),
+          eq(atelierMeetings.date, dedupDate),
+        ),
+      )
+      .limit(1);
+    if (dupe) {
+      return { ok: true, data: { id: dupe.id, kind: "meeting", deduped: true, navigateTo: null } };
+    }
     const id = rid("mtg");
     await db.insert(atelierMeetings).values({
       id,
@@ -1833,8 +1854,21 @@ defineCapability({
     const id = String(input.id);
     const patch: Partial<typeof atelierOpportunities.$inferInsert> = { updatedAt: new Date() };
     if (input.name !== undefined) patch.name = String(input.name);
-    if (input.dealSizeHypothesis !== undefined) patch.dealSizeHypothesis = Number(input.dealSizeHypothesis);
-    if (input.probabilityPct !== undefined) patch.probabilityPct = Number(input.probabilityPct);
+    // Task #651 — validate numeric fields rather than persisting garbage.
+    if (input.dealSizeHypothesis !== undefined) {
+      const deal = Number(input.dealSizeHypothesis);
+      if (!Number.isFinite(deal) || deal < 0) {
+        return { ok: false, errorCode: "invalid", errorMessage: "dealSize must be a number ≥ 0." };
+      }
+      patch.dealSizeHypothesis = Math.round(deal);
+    }
+    if (input.probabilityPct !== undefined) {
+      const prob = Number(input.probabilityPct);
+      if (!Number.isFinite(prob) || prob < 0 || prob > 100) {
+        return { ok: false, errorCode: "invalid", errorMessage: "probability must be between 0 and 100." };
+      }
+      patch.probabilityPct = Math.round(prob);
+    }
     if (input.buyerPersona !== undefined) patch.buyerPersona = String(input.buyerPersona);
     if (input.offeringAnchor !== undefined) patch.offeringAnchor = String(input.offeringAnchor);
     await db.update(atelierOpportunities).set(patch)

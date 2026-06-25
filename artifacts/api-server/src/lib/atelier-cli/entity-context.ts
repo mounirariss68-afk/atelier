@@ -135,7 +135,6 @@ async function opportunityContext(id: string, orgId: string, depth: 1 | 2): Prom
     label: o.name,
     fields: {
       salesStage: o.salesStage,
-      plmStage: o.plmStage,
       probabilityPct: o.probabilityPct,
       dealSizeHypothesis: o.dealSizeHypothesis,
       partnerOwnerId: o.partnerOwnerId,

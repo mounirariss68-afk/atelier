@@ -22,6 +22,12 @@
 
 import { and, eq, isNull, inArray, desc } from "drizzle-orm";
 import {
+  isOpenStage,
+  isWonStage,
+  isLostStage,
+  resolveSalesStage,
+} from "./atelier-agents/pipeline.js";
+import {
   db,
   atelierAccounts,
   atelierEngagementBudget,
@@ -37,32 +43,20 @@ import {
 type Engagement = typeof atelierEngagements.$inferSelect;
 type Opportunity = typeof atelierOpportunities.$inferSelect;
 
-// Opportunity stages that are terminal (not open pipeline).
-const TERMINAL_OPP_STAGES = new Set([
-  "won",
-  "lost",
-  "no_go",
-  "no_decision",
-  "withdrawn",
-  "closed",
-]);
-const LOST_OPP_STAGES = new Set(["lost", "no_go", "no_decision", "withdrawn"]);
+// Engagement stages that represent a closed engagement.
 const CLOSED_ENG_STAGES = new Set(["closed", "won", "lost"]);
 
+// Opportunity open/won/lost are derived from the canonical salesStage
+// (Task #654 — plmStage retired). "Won" = reached contract; terminals are
+// lost · no_decision · withdrawn.
 function isOpenOpp(o: Opportunity): boolean {
-  return (
-    !TERMINAL_OPP_STAGES.has((o.salesStage as string) ?? "") &&
-    !TERMINAL_OPP_STAGES.has((o.plmStage as string) ?? "")
-  );
+  return isOpenStage(resolveSalesStage(o.salesStage));
 }
 function isWonOpp(o: Opportunity): boolean {
-  return (o.salesStage as string) === "won" || (o.plmStage as string) === "won";
+  return isWonStage(resolveSalesStage(o.salesStage));
 }
 function isLostOpp(o: Opportunity): boolean {
-  return (
-    LOST_OPP_STAGES.has((o.salesStage as string) ?? "") ||
-    LOST_OPP_STAGES.has((o.plmStage as string) ?? "")
-  );
+  return isLostStage(resolveSalesStage(o.salesStage));
 }
 function isActiveEng(e: Engagement): boolean {
   return !CLOSED_ENG_STAGES.has((e.plmStage as string) ?? "");
@@ -583,7 +577,7 @@ export async function buildRenewalsAndActions(args: {
       title: `Expansion · ${o.name}`,
       detail: o.nextMilestone
         ? `Next: ${o.nextMilestone}`
-        : `${(o.plmStage as string) ?? "open"} stage`,
+        : `${resolveSalesStage(o.salesStage)} stage`,
       valueUsd: round(Number(o.dealSizeHypothesis ?? 0)),
       dueDate: o.nextMilestoneDate ?? null,
       refKind: "opportunity",

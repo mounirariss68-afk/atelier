@@ -39,6 +39,13 @@ export interface RubricDimension {
 export interface RubricResult {
   composite: number;
   band: "pursue" | "watch" | "decline";
+  /**
+   * Deterministic go/no-go *recommendation* derived from the band. `pursue` →
+   * "go", `decline` → "no_go", `watch` → null (a human must decide). This is a
+   * suggestion the partner can adopt when recording the gate decision — it does
+   * not auto-mutate the opportunity.
+   */
+  recommendedDecision: "go" | "no_go" | null;
   dimensions: RubricDimension[];
   attachmentIds: string[];
   generatedAt: string;
@@ -203,9 +210,12 @@ export function scoreRubric(input: RubricInput): RubricResult {
   );
   const band: RubricResult["band"] =
     composite >= 70 ? "pursue" : composite >= 40 ? "watch" : "decline";
+  const recommendedDecision: RubricResult["recommendedDecision"] =
+    band === "pursue" ? "go" : band === "decline" ? "no_go" : null;
   return {
     composite,
     band,
+    recommendedDecision,
     dimensions,
     attachmentIds: [...input.attachmentIds],
     generatedAt: new Date().toISOString(),

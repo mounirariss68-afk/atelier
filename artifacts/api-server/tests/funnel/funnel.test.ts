@@ -116,7 +116,8 @@ check(
   convertToRunner({ decider: "CFO", verbalCommitDate: "2026-05-01", signaturePath: "Procurement → CFO" }) === null,
 );
 
-// Runner → Contract: signed instrument or evidence required.
+// Runner → Contract: the actual signed instrument is required (Task #651 —
+// a stray evidence artifact must NOT satisfy the gate).
 check(
   "runner→contract blocked when no instrument",
   validateStageTransition({ fromStage: "runner", toStage: "contract" })?.gate === "runner_to_contract",
@@ -126,8 +127,8 @@ check(
   validateStageTransition({ fromStage: "runner", toStage: "contract", signedInstrumentFileId: "art_123" }) === null,
 );
 check(
-  "runner→contract passes with evidenceArtifactIds",
-  validateStageTransition({ fromStage: "runner", toStage: "contract", evidenceArtifactIds: ["art_456"] }) === null,
+  "runner→contract still blocked with only a stray evidence artifact",
+  validateStageTransition({ fromStage: "runner", toStage: "contract", evidenceArtifactIds: ["art_456"] })?.gate === "runner_to_contract",
 );
 
 // Terminal entry: reasonCode required.
@@ -244,10 +245,10 @@ async function dbAssertions() {
 
     const r5 = await client.query<{ count: string }>(
       `SELECT count(*)::text AS count FROM atelier_opportunities
-        WHERE plm_stage NOT IN ('identify','shape','pursue','mobilize','deliver','compound','won','lost','no_go','closed')`,
+        WHERE sales_stage NOT IN ('suspect','prospect','convert','runner','contract','lost','no_decision','withdrawn')`,
     );
-    check("plm_stage stays inside its enum after migration", Number(r5.rows[0].count) === 0,
-      `${r5.rows[0].count} rows with off-enum plm_stage`);
+    check("sales_stage stays inside its enum after migration", Number(r5.rows[0].count) === 0,
+      `${r5.rows[0].count} rows with off-enum sales_stage`);
   } finally {
     await pool.end();
   }

@@ -10,7 +10,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, ilike } from "drizzle-orm";
 import {
   db,
   atelierOpportunities,
@@ -35,6 +35,7 @@ import {
   computeStickyStageTimestamps,
   deriveSalesStage,
   isSalesStage,
+  resolveSalesStage,
   isTerminalStage,
   migrateLegacyStage,
   validateStageTransition,
@@ -42,6 +43,7 @@ import {
 } from "../../lib/atelier-agents/pipeline.js";
 import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
 import { runCharterArchitect } from "../../lib/atelier-agents/runner.js";
+import { applyStageTransition } from "../../lib/atelier-agents/stage-service.js";
 import { scoreRubric } from "../../lib/atelier-cli/qualification-rubric.js";
 import { loadAllChunks } from "../../lib/atelier-cli/attachment-capabilities.js";
 import {
@@ -69,6 +71,7 @@ import {
   runPipelineForecaster,
   ATELIER_V5_DISPATCH,
   dispatchV5ModeExtension,
+  applyCitationGuardrail,
   type AgentFact,
   type PursuitScoutOutput,
   type PovOutline,
@@ -109,16 +112,13 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
   const [acct] = await db.select().from(atelierAccounts).where(eq(atelierAccounts.id, o.accountId));
   const [partner] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.partnerOwnerId));
   const [lead] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.engagementLeadId));
-  const salesStage = (isSalesStage(o.salesStage)
-    ? o.salesStage
-    : deriveSalesStage(o.plmStage, o.probabilityPct)) as string;
+  const salesStage = resolveSalesStage(o.salesStage) as string;
   return {
     id: o.id,
     slug: o.slug,
     name: o.name,
     accountId: o.accountId,
     accountName: acct?.name ?? o.accountId,
-    plmStage: o.plmStage,
     salesStage,
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,
@@ -130,6 +130,9 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     daysInStage: o.daysInStage,
     nextMilestone: o.nextMilestone,
     nextMilestoneDate: o.nextMilestoneDate ?? null,
+    // Task #653 — forecast fields.
+    closeDate: o.closeDate ?? null,
+    forecastCategory: o.forecastCategory,
     sourceLead: o.sourceLead,
     stalled:
       o.daysInStage > STALLED_THRESHOLD_DAYS &&
@@ -193,12 +196,13 @@ router.post("/opportunities", async (req, res) => {
       res.status(400).json({ error: "account-required" });
       return;
     }
-    // Reuse an existing account if the name already matches (case-sensitive
-    // exact, mirroring previous behaviour) — protects against accidental dupes.
+    // Reuse an existing account if the name already matches — case-insensitive
+    // exact match (ilike without wildcards) so "Tasama" and "tasama" don't
+    // create accidental duplicate accounts.
     [acct] = await db
       .select()
       .from(atelierAccounts)
-      .where(eq(atelierAccounts.name, newName));
+      .where(and(ilike(atelierAccounts.name, newName), isNull(atelierAccounts.deletedAt)));
     if (!acct) {
       const acctId = `acct_${slugify(newName)}_${Math.random().toString(36).slice(2, 6)}`;
       [acct] = await db
@@ -249,6 +253,8 @@ router.post("/opportunities", async (req, res) => {
   const nextMilestone =
     (input.nextMilestone ?? "").trim() || "Run Pursuit Scout · qualify 5C";
   const nextMilestoneDate = (input.nextMilestoneDate ?? "").trim() || null;
+  const closeDate = (input.closeDate ?? "").trim() || null;
+  const forecastCategory = input.forecastCategory ?? "pipeline";
   const sourceLead = (input.sourceLead ?? "").trim() || "manual";
 
   const oppId = `opp_${slugify(input.name)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -262,9 +268,8 @@ router.post("/opportunities", async (req, res) => {
       // Persist the partner-authored description as the offering anchor so
       // the opportunity carries it forward without a schema change.
       offeringAnchor: description,
-      plmStage: "identify",
-      // v1/v2 lockstep at create time so the new kanban + forecast see the
-      // opportunity in the right column from the moment it's persisted.
+      // Task #654 — salesStage is the single source of truth; the opportunity
+      // lands in the right kanban/forecast column from the moment it persists.
       salesStage: deriveSalesStage("identify", probabilityPct),
       partnerOwnerId,
       engagementLeadId,
@@ -272,6 +277,8 @@ router.post("/opportunities", async (req, res) => {
       probabilityPct,
       nextMilestone,
       nextMilestoneDate,
+      closeDate,
+      forecastCategory,
       sourceLead,
       createdByUserId: me.id,
     })
@@ -399,6 +406,14 @@ router.patch("/opportunities/:oppId", async (req, res) => {
   if (input.nextMilestoneDate !== undefined) {
     patch.nextMilestoneDate = (input.nextMilestoneDate ?? "").trim() || null;
     changed.push("nextMilestoneDate");
+  }
+  if (input.closeDate !== undefined) {
+    patch.closeDate = (input.closeDate ?? "").trim() || null;
+    changed.push("closeDate");
+  }
+  if (input.forecastCategory !== undefined && input.forecastCategory !== null) {
+    patch.forecastCategory = input.forecastCategory;
+    changed.push("forecastCategory");
   }
   if (input.buyerPersona !== undefined) {
     patch.buyerPersona = input.buyerPersona;
@@ -552,9 +567,10 @@ router.post("/opportunities/:oppId/qualification-rubric", async (req, res) => {
     payload: {
       composite: rubric.composite,
       band: rubric.band,
+      recommendedDecision: rubric.recommendedDecision,
       attachmentIds: rubric.attachmentIds,
     },
-    payloadSummary: `${me.name} scored "${opp.name}" — ${rubric.band} (${rubric.composite}).`,
+    payloadSummary: `${me.name} scored "${opp.name}" — ${rubric.band} (${rubric.composite}); recommends ${rubric.recommendedDecision ?? "human review"}.`,
   });
 
   res.json(rubric);
@@ -565,6 +581,33 @@ async function persistBriefAndFacts(
   runId: string,
   out: PursuitScoutOutput,
 ): Promise<void> {
+  // Task #653 — validate the Scout output before it becomes the brief of
+  // record. The model can return a structurally-valid-but-empty object (a soft
+  // refusal for accounts with no public footprint). Persisting that would put a
+  // blank brief in front of the partner as if it were research. Require at least
+  // one narrative section to carry content; otherwise skip persistence and leave
+  // the prior brief (if any) intact rather than overwriting it with nothing.
+  const narrative = [
+    out.accountSnapshot?.oneLiner,
+    out.accountSnapshot?.scaleHint,
+    ...(out.accountSnapshot?.recentMoves ?? []),
+    out.buyerLandscape?.powerMap,
+    ...(out.buyerLandscape?.likelyBuyers ?? []).map((b) => b?.rationale),
+    out.fiveCDraft?.client,
+    out.fiveCDraft?.competition,
+    out.fiveCDraft?.capability,
+    out.fiveCDraft?.capacity,
+    out.fiveCDraft?.contract,
+  ]
+    .map((s) => (typeof s === "string" ? s.trim() : ""))
+    .filter(Boolean);
+  if (narrative.length === 0) {
+    console.warn(`[atelier] scout produced an empty brief for ${oppId} — skipping persist`);
+    return;
+  }
+  // Run facts through the citation guardrail so any claim without a real source
+  // URL is confidence-downgraded (never silently promoted as green evidence).
+  const guardedFacts = applyCitationGuardrail(out.facts ?? []);
   // Soft-delete prior briefs so the latest is the source of truth.
   await db
     .update(atelierBriefs)
@@ -578,16 +621,16 @@ async function persistBriefAndFacts(
     buyerLandscape: out.buyerLandscape,
     fiveCDraft: out.fiveCDraft,
     openQuestions: out.openQuestions ?? [],
-    citations: out.facts ?? [],
+    citations: guardedFacts,
     confidence: out.confidence ?? "amber",
   });
   // Insert facts (don't dedupe — run history is the audit).
   // Every fact emitted by the scout into the brief is by definition
   // `included_in_brief=true`; the partner can later flip POV inclusion
   // on a per-fact basis via the promote endpoint.
-  if (out.facts?.length) {
+  if (guardedFacts.length) {
     await db.insert(atelierResearchFacts).values(
-      out.facts.map((f) => ({
+      guardedFacts.map((f) => ({
         id: f.id ?? rid("fact"),
         opportunityId: oppId,
         runId,
@@ -622,44 +665,25 @@ router.patch("/opportunities/:oppId/stage", async (req, res) => {
     return;
   }
   const { toStage, rationale } = parsed.data;
-  if (toStage === "pursue") {
-    const q = opp.qualify5c ?? null;
-    const decision = opp.goNoGoDecision ?? null;
-    const filled = q && (["client", "competition", "capability", "capacity", "contract"] as const).every(
-      (k) => typeof q[k] === "string" && q[k]!.trim().length > 0,
-    );
-    if (!filled || !decision || decision.decision !== "go") {
-      res.status(412).json({
-        error: "qualifier-required",
-      });
-      return;
-    }
+  // Task #651 — this legacy v1 shim accepts a plm_stage label but now routes
+  // through the shared service so the same gates fire as on every other path.
+  // Map the legacy plm_stage onto the canonical sales_stage first.
+  const targetSales = deriveSalesStage(toStage, opp.probabilityPct) as SalesStage;
+  const result = await applyStageTransition(
+    opp,
+    {
+      toStage: targetSales,
+      rationaleText: rationale ?? "",
+      source: "legacy-patch",
+    },
+    { id: me.id, name: me.name, orgId: me.orgId },
+  );
+  if (!result.ok) {
+    const code = result.gate?.gate === "suspect_to_prospect_5c" ? "qualifier-required" : result.error;
+    res.status(result.status).json({ error: code, ...(result.gate ?? {}) });
+    return;
   }
-  // v1/v2 lockstep: derive a sales_stage from the legacy plm_stage so the
-  // v2 kanban + forecast remain consistent when callers hit the v1 route.
-  const derivedSales = deriveSalesStage(toStage, opp.probabilityPct);
-  const [updated] = await db
-    .update(atelierOpportunities)
-    .set({
-      plmStage: toStage,
-      salesStage: derivedSales,
-      daysInStage: 0,
-      updatedAt: new Date(),
-    })
-    .where(eq(atelierOpportunities.id, opp.id))
-    .returning();
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: opp.id,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "opportunity.stage_change",
-    payload: { from: opp.plmStage, to: toStage, derivedSalesStage: derivedSales, rationale },
-    payloadSummary: `${me.name} moved "${opp.name}" from ${opp.plmStage} → ${toStage}${rationale ? ` (${rationale.slice(0, 100)})` : ""}.`,
-  });
-  res.json(await buildOppWire(updated));
+  res.json(await buildOppWire(result.opportunity));
 });
 
 // =============================================================
@@ -1077,6 +1101,17 @@ router.post("/povs/:povId/draft", async (req, res) => {
     snippet: f.snippet ?? undefined,
     confidence: f.confidence as "green" | "amber" | "red",
   }));
+  // Task #653 — empty-brief degrade. A POV is an evidence-backed argument; with
+  // no promoted facts there is nothing to cite, so refuse with a clear, soft
+  // 412 ("promote facts first") rather than generating an uncitable draft.
+  if (promoted.length === 0) {
+    res.status(412).json({
+      error: "no-promoted-facts",
+      reason:
+        "No research facts have been promoted for this opportunity. Promote at least one fact before drafting the POV so claims can be cited.",
+    });
+    return;
+  }
   const outline: PovOutline = {
     title: pov.title,
     thesis: pov.objective ?? "",
@@ -1090,6 +1125,20 @@ router.post("/povs/:povId/draft", async (req, res) => {
     triggeredByUserId: me.id,
     actorLabel: "POV Author · Sections+Critic+Stylist",
   });
+  // Task #653 — citation-coverage gate. The draft self-reports the share of
+  // sections whose claims cite a promoted fact. Below the floor the argument is
+  // under-evidenced; reject (without persisting a version) so the partner
+  // promotes more facts or tightens the outline instead of shipping thin work.
+  const POV_MIN_CITATION_COVERAGE = 0.6;
+  if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
+    res.status(422).json({
+      error: "insufficient-citation-coverage",
+      citationCoverage: draft.citationCoverage,
+      minimum: POV_MIN_CITATION_COVERAGE,
+      reason: `POV draft cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before drafting.`,
+    });
+    return;
+  }
   // Version number = max + 1.
   const versions = await db
     .select()
@@ -1477,273 +1526,36 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
     reasonCode,
   } = body;
 
-  // Resolve the canonical from-stage. If the row still carries a legacy
-  // 10-stage label, map it through migrateLegacyStage so the gate logic
-  // sees the new taxonomy. We also remember the legacy label so the
-  // transition row can preserve it (`legacy_stage_label`).
-  const rawFromStage = isSalesStage(opp.salesStage)
-    ? (opp.salesStage as SalesStage)
-    : (deriveSalesStage(opp.plmStage, opp.probabilityPct) as SalesStage);
-  const legacyMapped = migrateLegacyStage(opp.salesStage as string);
-  const fromSales: SalesStage = legacyMapped?.stage ?? rawFromStage;
-  const legacyStageLabel = legacyMapped ? (opp.salesStage as string) : null;
-
-  const to = toStage as SalesStage;
-
-  // ---- Per-transition gates (Task #295) -------------------------------
-  // The pure helper is unit-tested in tests/funnel/funnel.test.ts; the
-  // route's job is just to map its result onto an HTTP response.
-  const gateError = validateStageTransition({
-    fromStage: fromSales,
-    toStage: to,
-    partnerOverride: !!partnerOverride,
-    qualify5c: opp.qualify5c ?? null,
-    goNoGoDecision: opp.goNoGoDecision ?? null,
-    decider,
-    verbalCommitDate,
-    signaturePath,
-    signedInstrumentFileId,
-    evidenceArtifactIds: evidenceArtifactIds ?? [],
-    reasonCode,
-    subStatus,
-  });
-  if (gateError) {
-    const status = gateError.gate === "invalid_sub_status" ? 400 : 412;
-    res.status(status).json({ error: "stage-gate-failed", ...gateError });
+  // Task #651 — all stage moves go through the shared service so the gates
+  // and every derived-field write are identical across REST / legacy / chat.
+  const result = await applyStageTransition(
+    opp,
+    {
+      toStage: toStage as SalesStage,
+      rationaleText,
+      evidenceArtifactIds: evidenceArtifactIds ?? [],
+      newProbabilityPct,
+      nextMilestone,
+      nextMilestoneDate,
+      partnerOverride: !!partnerOverride,
+      subStatus,
+      decider,
+      verbalCommitDate,
+      signaturePath,
+      signedInstrumentFileId,
+      reasonCode,
+      source: "rest",
+    },
+    { id: me.id, name: me.name, orgId: me.orgId },
+  );
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error, ...(result.gate ?? {}) });
     return;
   }
 
-  const priorProb = opp.probabilityPct;
-  const newProb =
-    typeof newProbabilityPct === "number" && newProbabilityPct !== null
-      ? newProbabilityPct
-      : SALES_STAGE_DEFAULT_PROB[to];
-  const derivedPlm = SALES_TO_PLM[to];
-  const now = new Date();
-
-  // Sticky runner_entered_at / contract_signed_at — once set, never
-  // overwritten — so a Contract→Runner→Contract bounce never re-fires
-  // the Charter Architect.
-  const sticky = computeStickyStageTimestamps({
-    toStage: to,
-    now,
-    prior: {
-      runnerEnteredAt: opp.runnerEnteredAt ?? null,
-      contractSignedAt: opp.contractSignedAt ?? null,
-    },
-  });
-  const runnerEnteredAt = sticky.runnerEnteredAt;
-  const contractSignedAt = sticky.contractSignedAt;
-  // finalPlmStage captures the last-known stage of the funnel for closed
-  // deals (mirrors the legacy 10-stage label when applicable).
-  const finalPlmStage = isTerminalStage(to)
-    ? (legacyStageLabel ?? fromSales)
-    : opp.finalPlmStage;
-
-  const [updated] = await db
-    .update(atelierOpportunities)
-    .set({
-      salesStage: to,
-      plmStage: derivedPlm,
-      probabilityPct: newProb,
-      subStatus: subStatus ?? opp.subStatus,
-      runnerEnteredAt,
-      contractSignedAt,
-      finalPlmStage,
-      nextMilestone: nextMilestone ?? opp.nextMilestone,
-      nextMilestoneDate: nextMilestoneDate ?? opp.nextMilestoneDate,
-      daysInStage: 0,
-      updatedAt: now,
-    })
-    .where(eq(atelierOpportunities.id, opp.id))
-    .returning();
-
-  const transitionId = rid("stxn");
-  await db.insert(atelierOpportunityStageTransitions).values({
-    id: transitionId,
-    opportunityId: opp.id,
-    fromStage: fromSales,
-    toStage: to,
-    transitionedByUserId: me.id,
-    rationaleText: rationaleText.trim(),
-    evidenceArtifactIds: evidenceArtifactIds ?? [],
-    priorProbabilityPct: priorProb,
-    newProbabilityPct: newProb,
-    nextMilestone: nextMilestone ?? null,
-    nextMilestoneDate: nextMilestoneDate ?? null,
-    agentRecommended: false,
-    partnerOverride: !!partnerOverride,
-    // Task #295 — preserve gate evidence on the transition row.
-    legacyStageLabel,
-    decider: decider ?? null,
-    verbalCommitDate: verbalCommitDate ?? null,
-    signaturePath: signaturePath ?? null,
-    signedInstrumentFileId: signedInstrumentFileId ?? null,
-    reasonCode: reasonCode ?? null,
-  });
-  await db.insert(atelierAuditEvents).values({
-    id: rid("aud"),
-    entityType: "opportunity",
-    entityId: opp.id,
-    actorType: "human",
-    actorId: me.id,
-    actorLabel: me.name,
-    action: "opportunity.stage_transition",
-    payload: {
-      from: fromSales,
-      to: toStage,
-      priorProb,
-      newProb,
-      partnerOverride: !!partnerOverride,
-      evidenceCount: (evidenceArtifactIds ?? []).length,
-    },
-    payloadSummary: `${me.name} moved "${opp.name}" ${fromSales} → ${to} (prob ${priorProb}% → ${newProb}%): ${rationaleText.slice(0, 120)}`,
-  });
-
-  // Task #295 — Charter Architect auto-fire on Contract entry.
-  // When an opp lands in `contract` for the first time, kick off the
-  // Charter Architect for the linked engagement (idempotent: skip if a
-  // charter version already exists). If no engagement is linked yet, we
-  // surface a Pane A item for the partner owner instead of failing.
-  if (to === "contract" && !opp.contractSignedAt) {
-    try {
-      const [eng] = await db
-        .select({ id: atelierEngagements.id, name: atelierEngagements.name })
-        .from(atelierEngagements)
-        .where(
-          and(
-            eq(atelierEngagements.opportunityId, opp.id),
-            isNull(atelierEngagements.deletedAt),
-          ),
-        )
-        .limit(1);
-      if (eng) {
-        const [existingCharter] = await db
-          .select({ id: atelierCharterVersions.id })
-          .from(atelierCharterVersions)
-          .where(eq(atelierCharterVersions.engagementId, eng.id))
-          .limit(1);
-        if (!existingCharter) {
-          // Best-effort account name lookup. The Charter Architect only
-          // needs a non-empty seed; we fall back to the account id if
-          // the join returns nothing.
-          const [acct] = await db
-            .select({ name: atelierAccounts.name })
-            .from(atelierAccounts)
-            .where(eq(atelierAccounts.id, opp.accountId))
-            .limit(1);
-          await runCharterArchitect({
-            engagementId: eng.id,
-            engagementName: eng.name,
-            accountName: acct?.name ?? opp.accountId,
-            wonProposalSummary: `${opp.name} — auto-fired on Contract entry. Re-derive from won-proposal artifacts and seeded context.`,
-            kickoffTranscriptExcerpt: null,
-            triggeredByUserId: me.id,
-            actorLabel: "Charter Architect",
-          });
-        }
-      } else {
-        await db.insert(atelierPaneAItems).values({
-          id: rid("pane"),
-          orgId: me.orgId,
-          userId: opp.partnerOwnerId,
-          priority: "high",
-          title: `Open engagement for "${opp.name}"`,
-          summary: `${opp.name} just hit Contract — open the engagement so Charter Architect can run.`,
-          hrefKind: "opportunity",
-          hrefTargetId: opp.id,
-          dueLabel: "now",
-          sortKey: 10,
-        });
-      }
-    } catch (err) {
-      req.log?.warn?.({ err, oppId: opp.id }, "charter auto-fire failed (non-blocking)");
-    }
-  }
-
-  // Task #241 / Task #295 — Closed-opportunity debrief hook.
-  // When an opp closes (lost | no_decision | withdrawn — `contract` is the
-  // working "won" state), enqueue a pending Win/Loss debrief and a Pane A
-  // item for the partner owner, with a 14-day SLA before the partner-
-  // override-required gate fires (PRD §5.2). Never blocks the close.
-  const CLOSED_STAGES: SalesStage[] = ["contract", "lost", "no_decision", "withdrawn"];
-  if (CLOSED_STAGES.includes(to)) {
-    // Best-effort: never fail the stage-transition response because of a
-    // debrief-side-effect failure. The 14-day SLA gate fires elsewhere.
-    try {
-      const existing = await db
-        .select({ id: atelierWinLossDebriefs.id })
-        .from(atelierWinLossDebriefs)
-        .where(
-          and(
-            eq(atelierWinLossDebriefs.opportunityId, opp.id),
-            isNull(atelierWinLossDebriefs.deletedAt),
-          ),
-        )
-        .limit(1);
-      if (!existing.length) {
-        const debriefId = rid("wld");
-        const dueAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
-        await db.insert(atelierWinLossDebriefs).values({
-          id: debriefId,
-          orgId: me.orgId,
-          opportunityId: opp.id,
-          outcome: to,
-          status: "pending",
-          sellerPerceivedReasons: [],
-          partnerOwnerUserId: opp.partnerOwnerId,
-          engagementLeadUserId: opp.engagementLeadId,
-          dueAt,
-          createdByUserId: me.id,
-        });
-        await db.insert(atelierPaneAItems).values({
-          id: rid("pane"),
-          orgId: me.orgId,
-          userId: opp.partnerOwnerId,
-          priority: to === "contract" ? "medium" : "high",
-          title: `Win/Loss debrief due — ${opp.name}`,
-          summary: `${opp.name} closed as ${to.replace(/_/g, " ")}. Capture seller view, schedule buyer interview within 14 days.`,
-          hrefKind: "opportunity",
-          hrefTargetId: opp.id,
-          dueLabel: "14 days",
-          sortKey: to === "contract" ? 50 : 20,
-        });
-        await db.insert(atelierAuditEvents).values({
-          id: rid("aud"),
-          entityType: "opportunity",
-          entityId: opp.id,
-          actorType: "system",
-          actorId: "stage-transition-hook",
-          actorLabel: "Atelier",
-          action: "winloss.debrief_enqueued",
-          payload: { debriefId, outcome: toStage, dueAt: dueAt.toISOString() },
-          payloadSummary: `Atelier enqueued Win/Loss debrief for ${opp.name} (due in 14 days)`,
-        });
-      }
-    } catch (err) {
-      req.log?.warn?.({ err, oppId: opp.id }, "winloss debrief enqueue failed (non-blocking)");
-    }
-  }
-
   res.json({
-    opportunity: await buildOppWire(updated),
-    transition: {
-      id: transitionId,
-      opportunityId: opp.id,
-      fromStage: fromSales,
-      toStage,
-      transitionedByUserId: me.id,
-      transitionedByName: me.name,
-      rationaleText: rationaleText.trim(),
-      evidenceArtifactIds: evidenceArtifactIds ?? [],
-      priorProbabilityPct: priorProb,
-      newProbabilityPct: newProb,
-      nextMilestone: nextMilestone ?? null,
-      nextMilestoneDate: nextMilestoneDate ?? null,
-      agentRecommended: false,
-      partnerOverride: !!partnerOverride,
-      createdAt: new Date().toISOString(),
-    },
+    opportunity: await buildOppWire(result.opportunity),
+    transition: result.transition,
   });
 });
 
@@ -1805,9 +1617,7 @@ async function computeForecast() {
   let weightedTotal = 0;
   let stalled = 0;
   for (const o of rows) {
-    const s = (isSalesStage(o.salesStage)
-      ? o.salesStage
-      : deriveSalesStage(o.plmStage, o.probabilityPct)) as SalesStage;
+    const s = resolveSalesStage(o.salesStage);
     const w = (o.dealSizeHypothesis * o.probabilityPct) / 100;
     const cur = buckets.get(s) ?? { count: 0, deal: 0, weighted: 0, daysSum: 0 };
     cur.count += 1;

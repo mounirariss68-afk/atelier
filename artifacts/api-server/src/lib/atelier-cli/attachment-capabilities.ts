@@ -344,7 +344,6 @@ defineCapability({
       name: opportunityName,
       accountId,
       offeringAnchor: offeringAnchor ?? undefined,
-      plmStage: "lead",
       salesStage: "suspect",
       partnerOwnerId: ctx.persona.id,
       engagementLeadId: ctx.persona.id,

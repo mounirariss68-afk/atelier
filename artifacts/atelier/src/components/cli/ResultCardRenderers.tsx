@@ -2047,7 +2047,8 @@ function renderItemMeta(it: Json, locale: CliLocale): string | null {
     pushIf(true, `${asNum(it.daysInStage)}d in stage`);
   if (asNum(it.ageDays) != null)
     pushIf(true, locale === "ar" ? `منذ ${asNum(it.ageDays)} يوم` : `${asNum(it.ageDays)}d old`);
-  if (typeof it.plmStage === "string") pushIf(true, asStr(it.plmStage));
+  if (typeof it.salesStage === "string") pushIf(true, asStr(it.salesStage));
+  else if (typeof it.plmStage === "string") pushIf(true, asStr(it.plmStage));
   if (typeof it.plannedEndDate === "string")
     pushIf(true, `→ ${asStr(it.plannedEndDate)}`);
   if (typeof it.dueDate === "string" && it.dueDate)

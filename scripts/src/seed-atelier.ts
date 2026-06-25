@@ -1089,6 +1089,21 @@ const AGENTS: AgentSeed[] = [
 // ============================================================
 // 4) OPPORTUNITIES — at least one per account, varied PLM stages
 // ============================================================
+// Task #651 — local mirror of deriveSalesStage (atelier-agents/pipeline.ts).
+// Kept inline so the seed has no cross-package import; sales_stage stays the
+// single source of truth and never drifts from the authored plm_stage.
+function deriveSeedSalesStage(plmStage: string, probabilityPct: number): string {
+  const p = probabilityPct ?? 0;
+  if (plmStage === "won") return "contract";
+  if (plmStage === "lost") return "lost";
+  if (plmStage === "no_go") return "withdrawn";
+  if (["mobilize", "deliver", "compound", "closed"].includes(plmStage)) return "contract";
+  if (plmStage === "identify") return p < 15 ? "suspect" : "prospect";
+  if (plmStage === "shape") return p < 35 ? "prospect" : "convert";
+  if (plmStage === "pursue") return p < 65 ? "convert" : "runner";
+  return "suspect";
+}
+
 const OPPORTUNITIES = [
   {
     id: "opp_tasama_bpo_expansion",
@@ -1370,7 +1385,12 @@ const ENGAGEMENTS = [
     id: "eng_nhc_ar_pilot",
     slug: "nhc-ar-pilot",
     name: "NHC — Arabic-first chat pilot · synthetic",
-    opportunityId: "opp_nhc_arabic_pilot",
+    // Task #652 — won-lifecycle invariant: a live engagement may only link to a
+    // won (contract) opportunity. opp_nhc_arabic_pilot is seeded as `withdrawn`
+    // (a deliberate terminal-state fixture), so linking it here was contradictory.
+    // Keep this Arabic-first engagement as a standalone delivery (no opp link),
+    // matching the other historical engagements (dge/aldrees) that carry none.
+    opportunityId: null,
     accountId: "acc_nhc",
     plmStage: "deliver",
     partnerOwnerId: "p_mounir_ariss",
@@ -2273,25 +2293,32 @@ async function main() {
 
   console.log("[seed-atelier] opportunities…");
   await db.insert(atelierOpportunities).values(
-    OPPORTUNITIES.map((o) => ({
-      id: o.id,
-      slug: o.slug,
-      name: o.name,
-      accountId: o.accountId,
-      buyerPersona: o.buyerPersona,
-      offeringAnchor: o.offeringAnchor,
-      plmStage: o.plmStage,
-      // Task #243 — explicit salesStage when supplied (no_decision/withdrawn);
-      // otherwise let the column default to 'lead'.
-      ...("salesStage" in o && o.salesStage ? { salesStage: o.salesStage } : {}),
-      partnerOwnerId: o.partnerOwnerId,
-      engagementLeadId: o.engagementLeadId,
-      dealSizeHypothesis: o.dealSizeHypothesis,
-      probabilityPct: o.probabilityPct,
-      nextMilestone: o.nextMilestone,
-      sourceLead: o.sourceLead,
-      daysInStage: o.daysInStage,
-    })),
+    OPPORTUNITIES.map((o) => {
+      // Task #651 — sales_stage is the single source of truth. Use the
+      // explicit override when supplied (no_decision / withdrawn) otherwise
+      // derive it from the authoritative plm_stage so the two columns never
+      // drift (mirrors deriveSalesStage in atelier-agents/pipeline.ts).
+      const salesStage =
+        "salesStage" in o && o.salesStage
+          ? o.salesStage
+          : deriveSeedSalesStage(o.plmStage, o.probabilityPct);
+      return {
+        id: o.id,
+        slug: o.slug,
+        name: o.name,
+        accountId: o.accountId,
+        buyerPersona: o.buyerPersona,
+        offeringAnchor: o.offeringAnchor,
+        salesStage,
+        partnerOwnerId: o.partnerOwnerId,
+        engagementLeadId: o.engagementLeadId,
+        dealSizeHypothesis: o.dealSizeHypothesis,
+        probabilityPct: o.probabilityPct,
+        nextMilestone: o.nextMilestone,
+        sourceLead: o.sourceLead,
+        daysInStage: o.daysInStage,
+      };
+    }),
   );
 
   console.log("[seed-atelier] engagements…");

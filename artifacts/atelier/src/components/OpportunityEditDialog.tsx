@@ -39,6 +39,12 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
   const [nextMilestoneDate, setNextMilestoneDate] = React.useState(
     opp.nextMilestoneDate ? opp.nextMilestoneDate.slice(0, 10) : "",
   );
+  const [closeDate, setCloseDate] = React.useState(
+    opp.closeDate ? opp.closeDate.slice(0, 10) : "",
+  );
+  const [forecastCategory, setForecastCategory] = React.useState<
+    NonNullable<Opportunity["forecastCategory"]>
+  >(opp.forecastCategory ?? "pipeline");
   const [buyerPersona, setBuyerPersona] = React.useState(opp.buyerPersona ?? "");
   const [offeringAnchor, setOfferingAnchor] = React.useState(opp.offeringAnchor ?? "");
 
@@ -49,6 +55,8 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
     setProbabilityPct(String(opp.probabilityPct));
     setNextMilestone(opp.nextMilestone ?? "");
     setNextMilestoneDate(opp.nextMilestoneDate ? opp.nextMilestoneDate.slice(0, 10) : "");
+    setCloseDate(opp.closeDate ? opp.closeDate.slice(0, 10) : "");
+    setForecastCategory(opp.forecastCategory ?? "pipeline");
     setBuyerPersona(opp.buyerPersona ?? "");
     setOfferingAnchor(opp.offeringAnchor ?? "");
   }, [open, opp]);
@@ -78,6 +86,8 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
           probabilityPct: prob,
           nextMilestone: nextMilestone.trim() || null,
           nextMilestoneDate: nextMilestoneDate.trim() || null,
+          closeDate: closeDate.trim() || null,
+          forecastCategory,
           buyerPersona: buyerPersona.trim() || null,
           offeringAnchor: offeringAnchor.trim() || null,
         },
@@ -169,6 +179,43 @@ export function OpportunityEditDialog({ opp, open, onOpenChange }: Props) {
                 onChange={(e) => setNextMilestoneDate(e.target.value)}
                 className="bg-bg-deep border-border-soft"
               />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="e-close-date" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                Expected close date
+              </Label>
+              <Input
+                id="e-close-date"
+                type="date"
+                value={closeDate}
+                onChange={(e) => setCloseDate(e.target.value)}
+                className="bg-bg-deep border-border-soft"
+                data-testid="input-edit-close-date"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="e-forecast-cat" className="text-xs uppercase tracking-widest font-mono text-text-faint">
+                Forecast category
+              </Label>
+              <select
+                id="e-forecast-cat"
+                value={forecastCategory}
+                onChange={(e) =>
+                  setForecastCategory(
+                    e.target.value as NonNullable<Opportunity["forecastCategory"]>,
+                  )
+                }
+                className="bg-bg-deep border border-border-soft rounded px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-gold/50"
+                data-testid="select-edit-forecast-category"
+              >
+                <option value="pipeline">Pipeline</option>
+                <option value="best_case">Best case</option>
+                <option value="commit">Commit</option>
+                <option value="omitted">Omitted</option>
+                <option value="closed">Closed</option>
+              </select>
             </div>
           </div>
           <div className="grid gap-2">

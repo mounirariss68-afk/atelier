@@ -64,10 +64,22 @@ type FormState = {
   probabilityPct: string;
   nextMilestone: string;
   nextMilestoneDate: string;
+  closeDate: string;
+  forecastCategory: "omitted" | "pipeline" | "best_case" | "commit" | "closed";
   // Scout
   runScout: boolean;
   scoutFocus: string;
 };
+
+const FORECAST_CATEGORY_OPTIONS: {
+  value: FormState["forecastCategory"];
+  label: string;
+}[] = [
+  { value: "pipeline", label: "Pipeline" },
+  { value: "best_case", label: "Best case" },
+  { value: "commit", label: "Commit" },
+  { value: "omitted", label: "Omitted" },
+];
 
 const SOURCE_OPTIONS: { value: FormState["sourceLead"]; label: string }[] = [
   { value: "inbound", label: "Inbound" },
@@ -151,6 +163,8 @@ export function CreateOpportunityDialog({ trigger }: Props) {
       probabilityPct: "25",
       nextMilestone: "",
       nextMilestoneDate: "",
+      closeDate: "",
+      forecastCategory: "pipeline",
       runScout: true,
       scoutFocus: "",
     }),
@@ -262,6 +276,8 @@ export function CreateOpportunityDialog({ trigger }: Props) {
             : undefined,
           nextMilestone: form.nextMilestone.trim() || undefined,
           nextMilestoneDate: form.nextMilestoneDate || undefined,
+          closeDate: form.closeDate || undefined,
+          forecastCategory: form.forecastCategory,
           runScout: form.runScout,
           scoutFocus: form.scoutFocus.trim() || undefined,
         },
@@ -669,6 +685,45 @@ export function CreateOpportunityDialog({ trigger }: Props) {
                   onChange={(e) => set("nextMilestoneDate", e.target.value)}
                   className={inputCls}
                 />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="o-close-date" className={labelCls}>
+                  Expected close date
+                </Label>
+                <Input
+                  id="o-close-date"
+                  type="date"
+                  value={form.closeDate}
+                  onChange={(e) => set("closeDate", e.target.value)}
+                  className={inputCls}
+                  data-testid="input-opp-close-date"
+                />
+                <p className="text-[11px] text-text-faint">
+                  Drives the quarter forecast roll-up.
+                </p>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="o-forecast-cat" className={labelCls}>
+                  Forecast category
+                </Label>
+                <select
+                  id="o-forecast-cat"
+                  value={form.forecastCategory}
+                  onChange={(e) =>
+                    set(
+                      "forecastCategory",
+                      e.target.value as FormState["forecastCategory"],
+                    )
+                  }
+                  className={selectCls}
+                  data-testid="select-forecast-category"
+                >
+                  {FORECAST_CATEGORY_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-1.5 sm:col-span-2">
                 <Label htmlFor="o-mile" className={labelCls}>

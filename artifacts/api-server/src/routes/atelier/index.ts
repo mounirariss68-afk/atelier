@@ -45,6 +45,8 @@ import {
   STALLED_THRESHOLD_DAYS,
   deriveSalesStage,
   isSalesStage,
+  resolveSalesStage,
+  funnelBucket,
 } from "../../lib/atelier-agents/pipeline.js";
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
@@ -421,7 +423,7 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
     "identify" | "shape" | "pursue" | "won" | "lost" | "no_go"
   > = ["identify", "shape", "pursue", "won", "lost", "no_go"];
   const pipeline = PIPELINE_STAGES.map((stage) => {
-    const list = opps.filter((o) => o.plmStage === stage);
+    const list = opps.filter((o) => funnelBucket(o.salesStage) === stage);
     return {
       stage,
       count: list.length,
@@ -551,16 +553,13 @@ async function buildOpportunityWire(
     .select()
     .from(atelierUsers)
     .where(eq(atelierUsers.id, o.engagementLeadId));
-  const salesStage = (isSalesStage(o.salesStage)
-    ? o.salesStage
-    : deriveSalesStage(o.plmStage, o.probabilityPct)) as string;
+  const salesStage = resolveSalesStage(o.salesStage) as string;
   return {
     id: o.id,
     slug: o.slug,
     name: o.name,
     accountId: o.accountId,
     accountName: acct?.name ?? o.accountId,
-    plmStage: o.plmStage,
     salesStage,
     buyerPersona: o.buyerPersona,
     offeringAnchor: o.offeringAnchor,

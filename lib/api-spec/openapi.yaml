@@ -3734,11 +3734,11 @@ components:
 
     AtelierAccountOpportunityRef:
       type: object
-      required: [id, name, plmStage, dealValueUsd]
+      required: [id, name, salesStage, dealValueUsd]
       properties:
         id: { type: string }
         name: { type: string }
-        plmStage: { $ref: "#/components/schemas/PlmStage" }
+        salesStage: { $ref: "#/components/schemas/SalesStage" }
         dealValueUsd: { type: number }
         winProbabilityPct: { type: ["number", "null"] }
         leadName: { type: ["string", "null"] }
@@ -4598,7 +4598,7 @@ components:
         - name
         - accountId
         - accountName
-        - plmStage
+        - salesStage
         - partnerOwnerName
         - engagementLeadName
         - dealSizeUsd
@@ -4614,7 +4614,6 @@ components:
         name: { type: string }
         accountId: { type: string }
         accountName: { type: string }
-        plmStage: { $ref: "#/components/schemas/PlmStage" }
         salesStage: { $ref: "#/components/schemas/SalesStage" }
         buyerPersona: { type: ["string", "null"] }
         offeringAnchor: { type: ["string", "null"] }
@@ -4626,6 +4625,8 @@ components:
         daysInStage: { type: integer }
         nextMilestone: { type: string }
         nextMilestoneDate: { type: ["string", "null"] }
+        closeDate: { type: ["string", "null"] }
+        forecastCategory: { $ref: "#/components/schemas/ForecastCategory" }
         sourceLead: { type: string }
         stalled: { type: boolean }
         # Task #295/#296 — sub-status chip for kanban + sticky stage timestamps.
@@ -4862,6 +4863,14 @@ components:
       type: string
       enum: [green, amber, red]
 
+    ForecastCategory:
+      type: string
+      description: |
+        Task #653 — standard sales forecast band. `omitted` deals are excluded
+        from the roll-up; `pipeline` is the working default; `best_case` /
+        `commit` are graduated confidence; `closed` is booked.
+      enum: [omitted, pipeline, best_case, commit, closed]
+
     AtelierCreateOpportunityInput:
       type: object
       required: [name, description]
@@ -4901,6 +4910,11 @@ components:
         probabilityPct: { type: ["number", "null"], minimum: 0, maximum: 100 }
         nextMilestone: { type: ["string", "null"] }
         nextMilestoneDate: { type: ["string", "null"] }
+        closeDate: { type: ["string", "null"] }
+        forecastCategory:
+          oneOf:
+            - { $ref: "#/components/schemas/ForecastCategory" }
+            - { type: "null" }
         contextBlurb:
           type: string
           default: ""
@@ -4973,6 +4987,11 @@ components:
         probabilityPct: { type: number, minimum: 0, maximum: 100 }
         nextMilestone: { type: ["string", "null"] }
         nextMilestoneDate: { type: ["string", "null"] }
+        closeDate: { type: ["string", "null"] }
+        forecastCategory:
+          oneOf:
+            - { $ref: "#/components/schemas/ForecastCategory" }
+            - { type: "null" }
         buyerPersona: { type: ["string", "null"] }
         offeringAnchor: { type: ["string", "null"] }
         partnerOwnerId: { type: string }

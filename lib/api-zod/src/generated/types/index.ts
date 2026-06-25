@@ -354,6 +354,7 @@ export * from "./confidence";
 export * from "./engagement";
 export * from "./engagementRaidStatus";
 export * from "./engagementSummary";
+export * from "./forecastCategory";
 export * from "./healthStatus";
 export * from "./opportunity";
 export * from "./opportunityStageTransition";

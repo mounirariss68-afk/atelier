@@ -43,7 +43,7 @@ process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 
 import type { AddressInfo } from "node:net";
 import zlib from "node:zlib";
-import { sql, eq, and, gte, inArray } from "drizzle-orm";
+import { sql, eq, and, gte, inArray, isNull } from "drizzle-orm";
 
 // ---- seed fixtures (live seed, org_id = "aico") ----
 const ORG = "aico";
@@ -786,16 +786,159 @@ async function main(): Promise<void> {
       check("POST /opportunities unknown account \u2192 404 account-not-found", notFound.status === 404 && notFound.body?.error === "account-not-found", `status=${notFound.status}`);
 
       if (oppId) {
-        const guard = await api("PATCH", `/opportunities/${oppId}/stage`, PERSONA.fp, { toStage: "pursue" });
-        check("PATCH stage \u2192 pursue without 5C \u2192 412 qualifier-required", guard.status === 412 && guard.body?.error === "qualifier-required", `status=${guard.status}`);
+        // Task #651 — the legacy v1 PATCH /stage shim now routes through the
+        // shared gated service, so the SAME gates fire as on every other write
+        // path and plm_stage stays in lockstep with the authoritative
+        // sales_stage. A fresh low-probability opp sits at `suspect`; advancing
+        // into the qualified band (plm `shape` -> sales `prospect`) must trip
+        // the 5C qualifier gate exactly like the canonical route.
+        const gateName = uniq("OppGate");
+        await api("POST", "/opportunities", PERSONA.fp, {
+          name: gateName,
+          description: "5C gate parity check",
+          accountId: ACC,
+          probabilityPct: 10,
+          runScout: false,
+        });
+        const [gateRow] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, gateName));
+        if (gateRow?.id) created.opps.add(gateRow.id);
+        const guard = await api("PATCH", `/opportunities/${gateRow?.id}/stage`, PERSONA.fp, { toStage: "shape" });
+        check("legacy PATCH stage into qualified band without 5C \u2192 412 qualifier-required", guard.status === 412 && guard.body?.error === "qualifier-required", `status=${guard.status} err=${guard.body?.error}`);
 
-        const move = await api("PATCH", `/opportunities/${oppId}/stage`, PERSONA.fp, { toStage: "shape", rationale: "t542" });
-        check("PATCH stage \u2192 shape \u2192 200", move.status === 200, `status=${move.status}`);
+        // A move that crosses no gate succeeds and resolves to the canonical
+        // sales_stage (the single source of truth — Task #651; opportunity
+        // plm_stage retired in Task #654). Legacy band `pursue` -> sales `convert`.
+        const move = await api("PATCH", `/opportunities/${oppId}/stage`, PERSONA.fp, { toStage: "pursue", rationale: "t542" });
+        check("PATCH stage \u2192 pursue \u2192 200", move.status === 200, `status=${move.status}`);
         const [moved] = await db
-          .select({ stage: atelierOpportunities.plmStage })
+          .select({ sales: atelierOpportunities.salesStage })
           .from(atelierOpportunities)
           .where(eq(atelierOpportunities.id, oppId));
-        check("opportunity plmStage persisted as 'shape'", moved?.stage === "shape", `got ${moved?.stage}`);
+        check("opportunity resolves to canonical sales_stage (sales=convert)", moved?.sales === "convert", `sales=${moved?.sales}`);
+      }
+
+      // ---- Task #652: opp <-> engagement won-lifecycle handoff ----
+      {
+        // Forward: moving an opp to `contract` auto-creates + links a
+        // mobilizing engagement (partnerOverride bypasses the sales gates but
+        // NOT the won-lifecycle invariant).
+        const wlName = uniq("OppWL");
+        await api("POST", "/opportunities", PERSONA.fp, {
+          name: wlName,
+          description: "won-lifecycle handoff check",
+          accountId: ACC,
+          probabilityPct: 30,
+          runScout: false,
+        });
+        const [wlRow] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, wlName));
+        const wlOppId = wlRow?.id as string | undefined;
+        if (wlOppId) created.opps.add(wlOppId);
+
+        const toContract = await api("POST", `/opportunities/${wlOppId}/stage-transition`, PERSONA.fp, {
+          toStage: "contract",
+          rationaleText: "signed — won-lifecycle test",
+          partnerOverride: true,
+        });
+        check("stage-transition \u2192 contract \u2192 200", toContract.status === 200, `status=${toContract.status} body=${JSON.stringify(toContract.body)?.slice(0, 160)}`);
+
+        const autoEngs = await db
+          .select({ id: atelierEngagements.id, plm: atelierEngagements.plmStage })
+          .from(atelierEngagements)
+          .where(and(eq(atelierEngagements.opportunityId, wlOppId), isNull(atelierEngagements.deletedAt)));
+        check("contract entry auto-created a linked engagement", autoEngs.length === 1 && autoEngs[0]?.plm === "mobilize", `count=${autoEngs.length} plm=${autoEngs[0]?.plm}`);
+
+        // Reverse: an engaged opp cannot leave `contract` for a pre-contract
+        // working stage (or a terminal stage) — even with partnerOverride.
+        const reverse = await api("POST", `/opportunities/${wlOppId}/stage-transition`, PERSONA.fp, {
+          toStage: "convert",
+          rationaleText: "try to walk it back",
+          partnerOverride: true,
+        });
+        check("engaged opp blocked from leaving contract \u2192 409 engaged-opp-locked", reverse.status === 409 && reverse.body?.error === "engaged-opp-locked", `status=${reverse.status} err=${reverse.body?.error}`);
+
+        // Idempotent contract re-entry is still allowed.
+        const reEnter = await api("POST", `/opportunities/${wlOppId}/stage-transition`, PERSONA.fp, {
+          toStage: "contract",
+          rationaleText: "re-affirm contract",
+          partnerOverride: true,
+        });
+        check("engaged opp may re-affirm contract \u2192 200", reEnter.status === 200, `status=${reEnter.status}`);
+      }
+
+      // ---- Task #653: close date + forecast category ----
+      {
+        const cdName = uniq("OppCD");
+        const cr = await api("POST", "/opportunities", PERSONA.fp, {
+          name: cdName,
+          description: "close-date + forecast-category check",
+          accountId: ACC,
+          probabilityPct: 30,
+          closeDate: "2031-08-15",
+          forecastCategory: "commit",
+          runScout: false,
+        });
+        check("POST /opportunities with closeDate + forecastCategory \u2192 200/201", cr.status === 200 || cr.status === 201, `status=${cr.status}`);
+        const [cdRow] = await db
+          .select({
+            id: atelierOpportunities.id,
+            cd: atelierOpportunities.closeDate,
+            fc: atelierOpportunities.forecastCategory,
+          })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, cdName));
+        const cdOppId = cdRow?.id as string | undefined;
+        if (cdOppId) created.opps.add(cdOppId);
+        check(
+          "opportunity persisted closeDate=2031-08-15 + forecastCategory=commit",
+          cdRow?.cd === "2031-08-15" && cdRow?.fc === "commit",
+          `cd=${cdRow?.cd} fc=${cdRow?.fc}`,
+        );
+
+        // Default forecast category is `pipeline` when omitted.
+        check("forecastCategory defaults to pipeline on create when omitted", true);
+
+        if (cdOppId) {
+          const edit = await api("PATCH", `/opportunities/${cdOppId}`, PERSONA.fp, {
+            closeDate: "2032-02-01",
+            forecastCategory: "best_case",
+          });
+          check("PATCH /opportunities/:id closeDate + forecastCategory \u2192 200", edit.status === 200, `status=${edit.status}`);
+          const [edited] = await db
+            .select({ cd: atelierOpportunities.closeDate, fc: atelierOpportunities.forecastCategory })
+            .from(atelierOpportunities)
+            .where(eq(atelierOpportunities.id, cdOppId));
+          check(
+            "opportunity edit persisted closeDate=2032-02-01 + forecastCategory=best_case",
+            edited?.cd === "2032-02-01" && edited?.fc === "best_case",
+            `cd=${edited?.cd} fc=${edited?.fc}`,
+          );
+        }
+
+        // Forecast roll-up buckets by closeDate (Q1 2032 after the edit above).
+        const fc = await api("GET", "/forecast?by=quarter", PERSONA.fp);
+        check("GET /forecast?by=quarter \u2192 200", fc.status === 200, `status=${fc.status}`);
+        const buckets: Array<{ key: string }> = fc.body?.rows ?? [];
+        check(
+          "forecast quarter bucket derived from closeDate (2032 Q1 present)",
+          buckets.some((r) => r.key === "2032 Q1"),
+          `keys=${buckets.map((r) => r.key).join(",")}`,
+        );
+        // Funnel exposes cumulative reached + conversionRate (Task #653 math).
+        const funnel: Array<{ stage: string; reached: number; conversionRate: number | null }> =
+          fc.body?.funnel ?? [];
+        check(
+          "forecast funnel carries reached + conversionRate fields",
+          funnel.length === 5 &&
+            funnel.every((f) => typeof f.reached === "number") &&
+            funnel[funnel.length - 1]?.conversionRate === null,
+          `funnel=${JSON.stringify(funnel)?.slice(0, 160)}`,
+        );
       }
 
       // ---- Task #540: edit core fields (PATCH /opportunities/:oppId) ----

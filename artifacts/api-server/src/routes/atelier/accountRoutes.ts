@@ -225,7 +225,7 @@ async function summariseAccount(
     (o) => access.all || visibleOppIds.has(o.id),
   );
   const openOpps = opps.filter(
-    (o) => !["won", "lost", "no_go", "closed"].includes(o.plmStage as string),
+    (o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage as string),
   );
   const activeEngs = engs.filter(
     (e) => !["closed", "won", "lost"].includes((e.plmStage as string) ?? ""),
@@ -1011,7 +1011,7 @@ async function buildWorkspace(
   const oppRefs = opps.map((o) => ({
     id: o.id,
     name: o.name,
-    plmStage: o.plmStage,
+    salesStage: o.salesStage,
     dealValueUsd: Number(o.dealSizeHypothesis ?? 0),
     winProbabilityPct: o.probabilityPct ?? null,
     leadName: leadName(o.engagementLeadId),

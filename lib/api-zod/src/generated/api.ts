@@ -277,18 +277,6 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   name: zod.string(),
   accountId: zod.string(),
   accountName: zod.string(),
-  plmStage: zod.enum([
-    "identify",
-    "shape",
-    "pursue",
-    "mobilize",
-    "deliver",
-    "compound",
-    "won",
-    "lost",
-    "no_go",
-    "closed",
-  ]),
   salesStage: zod
     .enum([
       "suspect",
@@ -300,7 +288,6 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
       "no_decision",
       "withdrawn",
     ])
-    .optional()
     .describe(
       "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
@@ -314,6 +301,13 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
   nextMilestoneDate: zod.string().nullish(),
+  closeDate: zod.string().nullish(),
+  forecastCategory: zod
+    .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+    .optional()
+    .describe(
+      "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+    ),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
   subStatus: zod.string().nullish(),
@@ -412,6 +406,17 @@ export const AtelierCreateOpportunityBody = zod.object({
     .nullish(),
   nextMilestone: zod.string().nullish(),
   nextMilestoneDate: zod.string().nullish(),
+  closeDate: zod.string().nullish(),
+  forecastCategory: zod
+    .union([
+      zod
+        .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+        .describe(
+          "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+        ),
+      zod.null(),
+    ])
+    .optional(),
   contextBlurb: zod
     .string()
     .default(atelierCreateOpportunityBodyContextBlurbDefault)
@@ -437,18 +442,6 @@ export const AtelierGetOpportunityResponse = zod.object({
   name: zod.string(),
   accountId: zod.string(),
   accountName: zod.string(),
-  plmStage: zod.enum([
-    "identify",
-    "shape",
-    "pursue",
-    "mobilize",
-    "deliver",
-    "compound",
-    "won",
-    "lost",
-    "no_go",
-    "closed",
-  ]),
   salesStage: zod
     .enum([
       "suspect",
@@ -460,7 +453,6 @@ export const AtelierGetOpportunityResponse = zod.object({
       "no_decision",
       "withdrawn",
     ])
-    .optional()
     .describe(
       "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
@@ -474,6 +466,13 @@ export const AtelierGetOpportunityResponse = zod.object({
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
   nextMilestoneDate: zod.string().nullish(),
+  closeDate: zod.string().nullish(),
+  forecastCategory: zod
+    .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+    .optional()
+    .describe(
+      "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+    ),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
   subStatus: zod.string().nullish(),
@@ -535,6 +534,17 @@ export const AtelierUpdateOpportunityBody = zod
       .optional(),
     nextMilestone: zod.string().nullish(),
     nextMilestoneDate: zod.string().nullish(),
+    closeDate: zod.string().nullish(),
+    forecastCategory: zod
+      .union([
+        zod
+          .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+          .describe(
+            "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+          ),
+        zod.null(),
+      ])
+      .optional(),
     buyerPersona: zod.string().nullish(),
     offeringAnchor: zod.string().nullish(),
     partnerOwnerId: zod.string().optional(),
@@ -550,18 +560,6 @@ export const AtelierUpdateOpportunityResponse = zod.object({
   name: zod.string(),
   accountId: zod.string(),
   accountName: zod.string(),
-  plmStage: zod.enum([
-    "identify",
-    "shape",
-    "pursue",
-    "mobilize",
-    "deliver",
-    "compound",
-    "won",
-    "lost",
-    "no_go",
-    "closed",
-  ]),
   salesStage: zod
     .enum([
       "suspect",
@@ -573,7 +571,6 @@ export const AtelierUpdateOpportunityResponse = zod.object({
       "no_decision",
       "withdrawn",
     ])
-    .optional()
     .describe(
       "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
@@ -587,6 +584,13 @@ export const AtelierUpdateOpportunityResponse = zod.object({
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
   nextMilestoneDate: zod.string().nullish(),
+  closeDate: zod.string().nullish(),
+  forecastCategory: zod
+    .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+    .optional()
+    .describe(
+      "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+    ),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
   subStatus: zod.string().nullish(),
@@ -714,18 +718,6 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   name: zod.string(),
   accountId: zod.string(),
   accountName: zod.string(),
-  plmStage: zod.enum([
-    "identify",
-    "shape",
-    "pursue",
-    "mobilize",
-    "deliver",
-    "compound",
-    "won",
-    "lost",
-    "no_go",
-    "closed",
-  ]),
   salesStage: zod
     .enum([
       "suspect",
@@ -737,7 +729,6 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
       "no_decision",
       "withdrawn",
     ])
-    .optional()
     .describe(
       "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
     ),
@@ -751,6 +742,13 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   daysInStage: zod.number(),
   nextMilestone: zod.string(),
   nextMilestoneDate: zod.string().nullish(),
+  closeDate: zod.string().nullish(),
+  forecastCategory: zod
+    .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+    .optional()
+    .describe(
+      "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+    ),
   sourceLead: zod.string(),
   stalled: zod.boolean().optional(),
   subStatus: zod.string().nullish(),
@@ -836,18 +834,6 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     name: zod.string(),
     accountId: zod.string(),
     accountName: zod.string(),
-    plmStage: zod.enum([
-      "identify",
-      "shape",
-      "pursue",
-      "mobilize",
-      "deliver",
-      "compound",
-      "won",
-      "lost",
-      "no_go",
-      "closed",
-    ]),
     salesStage: zod
       .enum([
         "suspect",
@@ -859,7 +845,6 @@ export const AtelierCreateStageTransitionResponse = zod.object({
         "no_decision",
         "withdrawn",
       ])
-      .optional()
       .describe(
         "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
       ),
@@ -873,6 +858,13 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     daysInStage: zod.number(),
     nextMilestone: zod.string(),
     nextMilestoneDate: zod.string().nullish(),
+    closeDate: zod.string().nullish(),
+    forecastCategory: zod
+      .enum(["omitted", "pipeline", "best_case", "commit", "closed"])
+      .optional()
+      .describe(
+        "Task #653 — standard sales forecast band. `omitted` deals are excluded\nfrom the roll-up; `pipeline` is the working default; `best_case` \/\n`commit` are graduated confidence; `closed` is booked.\n",
+      ),
     sourceLead: zod.string(),
     stalled: zod.boolean().optional(),
     subStatus: zod.string().nullish(),
@@ -3755,18 +3747,20 @@ export const AtelierMergeAccountsResponse = zod.object({
       zod.object({
         id: zod.string(),
         name: zod.string(),
-        plmStage: zod.enum([
-          "identify",
-          "shape",
-          "pursue",
-          "mobilize",
-          "deliver",
-          "compound",
-          "won",
-          "lost",
-          "no_go",
-          "closed",
-        ]),
+        salesStage: zod
+          .enum([
+            "suspect",
+            "prospect",
+            "convert",
+            "runner",
+            "contract",
+            "lost",
+            "no_decision",
+            "withdrawn",
+          ])
+          .describe(
+            "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+          ),
         dealValueUsd: zod.number(),
         winProbabilityPct: zod.number().nullish(),
         leadName: zod.string().nullish(),
@@ -4776,18 +4770,20 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -6021,18 +6017,20 @@ export const AtelierUpdateAccountResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -7047,18 +7045,20 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -8656,18 +8656,20 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -9683,18 +9685,20 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -10719,18 +10723,20 @@ export const AtelierCreateAccountInsightResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -11756,18 +11762,20 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -12777,18 +12785,20 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -13807,18 +13817,20 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -14839,18 +14851,20 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -15862,18 +15876,20 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -16895,18 +16911,20 @@ export const AtelierCreateAccountActionResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -17927,18 +17945,20 @@ export const AtelierUpdateAccountActionResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -18948,18 +18968,20 @@ export const AtelierDeleteAccountActionResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -19978,18 +20000,20 @@ export const AtelierCreateAccountRiskResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -21009,18 +21033,20 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -22030,18 +22056,20 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),
@@ -23059,18 +23087,20 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
     zod.object({
       id: zod.string(),
       name: zod.string(),
-      plmStage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      salesStage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       dealValueUsd: zod.number(),
       winProbabilityPct: zod.number().nullish(),
       leadName: zod.string().nullish(),

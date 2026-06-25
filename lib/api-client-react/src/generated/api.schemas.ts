@@ -1149,25 +1149,29 @@ export interface AtelierContactRelationship {
   notes?: string | null;
 }
 
-export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
+/**
+ * Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is
+derived. Working: suspect → prospect → convert → runner → contract.
+Terminals: lost · no_decision · withdrawn.
 
-export const PlmStage = {
-  identify: "identify",
-  shape: "shape",
-  pursue: "pursue",
-  mobilize: "mobilize",
-  deliver: "deliver",
-  compound: "compound",
-  won: "won",
+ */
+export type SalesStage = (typeof SalesStage)[keyof typeof SalesStage];
+
+export const SalesStage = {
+  suspect: "suspect",
+  prospect: "prospect",
+  convert: "convert",
+  runner: "runner",
+  contract: "contract",
   lost: "lost",
-  no_go: "no_go",
-  closed: "closed",
+  no_decision: "no_decision",
+  withdrawn: "withdrawn",
 } as const;
 
 export interface AtelierAccountOpportunityRef {
   id: string;
   name: string;
-  plmStage: PlmStage;
+  salesStage: SalesStage;
   dealValueUsd: number;
   /** @nullable */
   winProbabilityPct?: number | null;
@@ -2149,23 +2153,19 @@ export interface AtelierPersonaSwitchInput {
   personaId: string;
 }
 
-/**
- * Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is
-derived. Working: suspect → prospect → convert → runner → contract.
-Terminals: lost · no_decision · withdrawn.
+export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
 
- */
-export type SalesStage = (typeof SalesStage)[keyof typeof SalesStage];
-
-export const SalesStage = {
-  suspect: "suspect",
-  prospect: "prospect",
-  convert: "convert",
-  runner: "runner",
-  contract: "contract",
+export const PlmStage = {
+  identify: "identify",
+  shape: "shape",
+  pursue: "pursue",
+  mobilize: "mobilize",
+  deliver: "deliver",
+  compound: "compound",
+  won: "won",
   lost: "lost",
-  no_decision: "no_decision",
-  withdrawn: "withdrawn",
+  no_go: "no_go",
+  closed: "closed",
 } as const;
 
 export interface Account {
@@ -2176,6 +2176,23 @@ export interface Account {
   /** @nullable */
   notes?: string | null;
 }
+
+/**
+ * Task #653 — standard sales forecast band. `omitted` deals are excluded
+from the roll-up; `pipeline` is the working default; `best_case` /
+`commit` are graduated confidence; `closed` is booked.
+
+ */
+export type ForecastCategory =
+  (typeof ForecastCategory)[keyof typeof ForecastCategory];
+
+export const ForecastCategory = {
+  omitted: "omitted",
+  pipeline: "pipeline",
+  best_case: "best_case",
+  commit: "commit",
+  closed: "closed",
+} as const;
 
 export type QualificationRubricBand =
   (typeof QualificationRubricBand)[keyof typeof QualificationRubricBand];
@@ -2220,8 +2237,7 @@ export interface Opportunity {
   name: string;
   accountId: string;
   accountName: string;
-  plmStage: PlmStage;
-  salesStage?: SalesStage;
+  salesStage: SalesStage;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */
@@ -2235,6 +2251,9 @@ export interface Opportunity {
   nextMilestone: string;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory;
   sourceLead: string;
   stalled?: boolean;
   /** @nullable */
@@ -2586,6 +2605,9 @@ event, manual. Free-form fallback allowed.
   nextMilestone?: string | null;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory | null;
   /** Deprecated alias for description; retained for backwards compatibility. */
   contextBlurb?: string;
   /**
@@ -2666,6 +2688,9 @@ export interface AtelierUpdateOpportunityInput {
   nextMilestone?: string | null;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory | null;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */

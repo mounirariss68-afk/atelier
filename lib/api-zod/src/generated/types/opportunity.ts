@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PlmStage } from "./plmStage";
+import type { ForecastCategory } from "./forecastCategory";
 import type { QualificationRubric } from "./qualificationRubric";
 import type { SalesStage } from "./salesStage";
 
@@ -15,8 +15,7 @@ export interface Opportunity {
   name: string;
   accountId: string;
   accountName: string;
-  plmStage: PlmStage;
-  salesStage?: SalesStage;
+  salesStage: SalesStage;
   /** @nullable */
   buyerPersona?: string | null;
   /** @nullable */
@@ -30,6 +29,9 @@ export interface Opportunity {
   nextMilestone: string;
   /** @nullable */
   nextMilestoneDate?: string | null;
+  /** @nullable */
+  closeDate?: string | null;
+  forecastCategory?: ForecastCategory;
   sourceLead: string;
   stalled?: boolean;
   /** @nullable */

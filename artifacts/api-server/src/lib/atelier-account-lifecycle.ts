@@ -51,7 +51,7 @@ export interface LifecycleActor {
 // Opportunity plmStage values that are already terminal — these are not
 // cascaded by archive (they are already "done") and not reactivated on
 // restore. Mirrors the openOpps filter in accountRoutes.summariseAccount.
-const TERMINAL_OPP_STAGES = new Set(["won", "lost", "no_go", "closed"]);
+const TERMINAL_OPP_STAGES = new Set(["contract", "lost", "no_decision", "withdrawn"]);
 // Engagement plmStage that represents a closed engagement.
 const ENGAGEMENT_CLOSED_STAGE = "closed";
 
@@ -216,7 +216,7 @@ export async function archiveAccount(
 
   // Cascade: open opportunities → soft-deleted (reversible via deletedAt).
   const oppRows = await db
-    .select({ id: atelierOpportunities.id, stage: atelierOpportunities.plmStage })
+    .select({ id: atelierOpportunities.id, stage: atelierOpportunities.salesStage })
     .from(atelierOpportunities)
     .where(
       and(

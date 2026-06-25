@@ -244,6 +244,23 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     res.status(409).json({ error: "not-yet-synthesized" });
     return;
   }
+  // Task #653 — lessons verification gate. Approval publishes the debrief's
+  // suggested lessons to the Atelier library, so a debrief with no captured
+  // lessons cannot be approved/closed — that would close the loop without
+  // banking any institutional learning. Require at least one lesson with a
+  // non-empty title before approval.
+  const pendingLessons = (debrief.suggestedAtelierLessons as Array<{ title?: string }>) ?? [];
+  const hasVerifiedLessons = pendingLessons.some(
+    (l) => typeof l?.title === "string" && l.title.trim().length > 0,
+  );
+  if (!hasVerifiedLessons) {
+    res.status(422).json({
+      error: "lessons-required",
+      detail:
+        "This debrief has no captured lessons. Synthesize or add at least one Atelier lesson before approving — approval publishes lessons to the library.",
+    });
+    return;
+  }
   // Win/Loss conductor guardrail (PRD §5.2): the deal team (partner_owner
   // + engagement_lead) MUST NOT be the conductor of their own debrief.
   // Approver (= conductor of record) must be either an off-deal partner

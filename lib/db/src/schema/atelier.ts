@@ -678,9 +678,9 @@ export const atelierOpportunities = pgTable(
     accountId: text("account_id").notNull(),
     buyerPersona: text("buyer_persona"),
     offeringAnchor: text("offering_anchor"),
-    plmStage: text("plm_stage").notNull(),
-    // v2 sales stage (PRD §2.3) — finer-grained 10-value lifecycle.
-    // plmStage is now derived from salesStage at write-time via SALES_TO_PLM.
+    // Single source of truth for opportunity stage (Task #295/#654). The
+    // legacy `plm_stage` column was retired in Task #654 — opportunities now
+    // read and write `salesStage` exclusively (engagements keep plmStage).
     salesStage: text("sales_stage").notNull().default("suspect"),
     // Task #295 — 5 canonical + 3 terminal:
     // 'suspect' | 'prospect' | 'convert' | 'runner' | 'contract'
@@ -694,10 +694,6 @@ export const atelierOpportunities = pgTable(
     runnerEnteredAt: timestamp("runner_entered_at", { withTimezone: true }),
     // Set when the signed instrument is uploaded (Runner→Contract gate).
     contractSignedAt: timestamp("contract_signed_at", { withTimezone: true }),
-    // Captured on close — preserves the legacy 10-stage label that the
-    // funnel was on at the moment of migration / close, so legacy
-    // reports that aggregate by the old taxonomy keep working.
-    finalPlmStage: text("final_plm_stage"),
     partnerOwnerId: text("partner_owner_id").notNull(),
     engagementLeadId: text("engagement_lead_id").notNull(),
     dealSizeHypothesis: doublePrecision("deal_size_hypothesis").notNull(),
@@ -744,6 +740,13 @@ export const atelierOpportunities = pgTable(
     } | null>(),
     nextMilestone: text("next_milestone").notNull(),
     nextMilestoneDate: text("next_milestone_date"),
+    // Task #653 — forecast fields. `closeDate` is the partner's expected
+    // close (ISO date, free text mirroring nextMilestoneDate); drives quarter
+    // bucketing and the overdue-close alert. `forecastCategory` is the
+    // standard sales forecast band — omitted | pipeline | best_case | commit |
+    // closed — defaulting to `pipeline` for working deals.
+    closeDate: text("close_date"),
+    forecastCategory: text("forecast_category").notNull().default("pipeline"),
     sourceLead: text("source_lead").notNull(),
     daysInStage: integer("days_in_stage").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -753,7 +756,6 @@ export const atelierOpportunities = pgTable(
   },
   (t) => [
     index("idx_atelier_opps_org").on(t.orgId),
-    index("idx_atelier_opps_stage").on(t.plmStage),
     index("idx_atelier_opps_sales_stage").on(t.salesStage),
     index("idx_atelier_opps_account").on(t.accountId),
   ],

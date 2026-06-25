@@ -38,6 +38,7 @@ import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
 } from "./capability-catalog.js";
+import { funnelBucket } from "../atelier-agents/pipeline.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import {
@@ -105,7 +106,7 @@ defineCapability({
     const opps = await db
       .select({
         id: atelierOpportunities.id,
-        plmStage: atelierOpportunities.plmStage,
+        salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
         days: atelierOpportunities.daysInStage,
@@ -118,7 +119,7 @@ defineCapability({
         ),
       );
     const stages = PIPELINE_STAGES.map((stage) => {
-      const list = opps.filter((o) => o.plmStage === stage);
+      const list = opps.filter((o) => funnelBucket(o.salesStage) === stage);
       return {
         stage,
         count: list.length,
@@ -170,7 +171,7 @@ defineCapability({
         id: atelierOpportunities.id,
         name: atelierOpportunities.name,
         accountId: atelierOpportunities.accountId,
-        plmStage: atelierOpportunities.plmStage,
+        salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
         days: atelierOpportunities.daysInStage,
@@ -180,11 +181,11 @@ defineCapability({
       .where(
         and(
           eq(atelierOpportunities.orgId, ctx.persona.orgId),
-          eq(atelierOpportunities.plmStage, stage),
           isNull(atelierOpportunities.deletedAt),
         ),
       );
-    const items = rows
+    const inStage = rows.filter((r) => funnelBucket(r.salesStage) === stage);
+    const items = inStage
       .map((r) => ({
         id: r.id,
         label: r.name,
@@ -196,7 +197,7 @@ defineCapability({
       }))
       .sort((a, b) => b.weightedValueUsd - a.weightedValueUsd)
       .slice(0, limit);
-    return { ok: true, data: { stage, items, total: rows.length } };
+    return { ok: true, data: { stage, items, total: inStage.length } };
   },
 });
 
@@ -722,7 +723,7 @@ defineCapability({
           ),
         ),
       db
-        .select({ id: atelierOpportunities.id, plmStage: atelierOpportunities.plmStage })
+        .select({ id: atelierOpportunities.id, salesStage: atelierOpportunities.salesStage })
         .from(atelierOpportunities)
         .where(
           and(
@@ -808,7 +809,7 @@ defineCapability({
           structureFlags.length > 0 ? structureFlags.join(" · ") : null,
         contactCount: contacts.length,
         openOpportunityCount: opps.filter(
-          (o) => !["won", "lost", "no_go"].includes(o.plmStage),
+          (o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage),
         ).length,
         activeEngagementCount: engs.filter((e) => e.plmStage !== "closed").length,
         // Task #499 — dossier resolves a single account; navigate the
@@ -1186,7 +1187,7 @@ defineCapability({
   async run(_input, ctx) {
     const opps = await db
       .select({
-        plmStage: atelierOpportunities.plmStage,
+        salesStage: atelierOpportunities.salesStage,
         deal: atelierOpportunities.dealSizeHypothesis,
         prob: atelierOpportunities.probabilityPct,
       })
@@ -1197,7 +1198,7 @@ defineCapability({
           isNull(atelierOpportunities.deletedAt),
         ),
       );
-    const open = opps.filter((o) => !["won", "lost", "no_go"].includes(o.plmStage));
+    const open = opps.filter((o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage));
     const weighted = open.reduce((a, o) => a + (o.deal * o.prob) / 100, 0);
     const bestCase = open.filter((o) => o.prob >= 50).reduce((a, o) => a + o.deal, 0);
     return {
@@ -1469,7 +1470,7 @@ defineCapability({
   async run(_input, ctx) {
     const [opps, engs] = await Promise.all([
       db
-        .select({ id: atelierOpportunities.id, plmStage: atelierOpportunities.plmStage })
+        .select({ id: atelierOpportunities.id, salesStage: atelierOpportunities.salesStage })
         .from(atelierOpportunities)
         .where(
           and(
@@ -1496,7 +1497,7 @@ defineCapability({
       ok: true,
       data: {
         openOpportunityCount: opps.filter(
-          (o) => !["won", "lost", "no_go"].includes(o.plmStage),
+          (o) => !["contract", "lost", "no_decision", "withdrawn"].includes(o.salesStage),
         ).length,
         activeEngagementCount: engs.filter((e) => e.plmStage !== "closed").length,
         raidAmberCount: engs.filter((e) => e.raidStatus === "amber").length,

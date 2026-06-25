@@ -2333,16 +2333,11 @@ function OpportunitiesTab({
             {o.name}
           </Link>
           <div className="flex flex-wrap gap-2 mt-3">
-            <PlmPill stage={o.plmStage} />
-            {/* Task #296 — surface canonical sales-stage alongside PLM
-                so the account view groups by the 5-band funnel too. */}
-            {(o as { salesStage?: string }).salesStage && (
-              <MonoChip tone="gold">
-                {((o as { salesStage?: string }).salesStage ?? "")
-                  .replace(/_/g, " ")
-                  .toUpperCase()}
-              </MonoChip>
-            )}
+            {/* Task #654 — opportunity stage is the canonical salesStage
+                (plmStage retired); render the funnel label. */}
+            <MonoChip tone="gold">
+              {o.salesStage.replace(/_/g, " ").toUpperCase()}
+            </MonoChip>
             <MonoChip>${(o.dealValueUsd / 1000).toFixed(0)}k</MonoChip>
             {o.winProbabilityPct != null && <MonoChip tone="amber">{o.winProbabilityPct}%</MonoChip>}
             {o.leadName && <MonoChip>Lead: {o.leadName}</MonoChip>}

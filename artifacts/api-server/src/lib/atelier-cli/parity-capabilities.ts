@@ -17,7 +17,7 @@
  * Coverage is checked at build time by tests/cli-parity/run.ts.
  */
 
-import { and, eq, isNull, desc } from "drizzle-orm";
+import { and, eq, isNull, desc, ilike } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
@@ -49,6 +49,8 @@ import {
 } from "./resolvers/index.js";
 import { checkAndRecord } from "./outbound-rate-limit.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
+import { applyStageTransition } from "../atelier-agents/stage-service.js";
+import { deriveSalesStage, SALES_TO_PLM } from "../atelier-agents/pipeline.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 function rid(prefix: string): string {
@@ -186,6 +188,30 @@ defineCapability({
     }
     if (!country || !sector) {
       return denyInvalid("country and sector are required to commit");
+    }
+    // Case-insensitive dedup — if an account with the same name already exists
+    // in this org, return it instead of creating a duplicate. ilike without
+    // wildcards is an exact, case-insensitive match.
+    const [existing] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          ilike(atelierAccounts.name, name),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      );
+    if (existing) {
+      return {
+        ok: true,
+        data: {
+          id: existing.id,
+          name: existing.name,
+          deduped: true,
+          navigateTo: { path: `/accounts/${existing.id}`, when: "on_commit" as const },
+        },
+      };
     }
     const id = rid("acct");
     const now = new Date();
@@ -477,7 +503,8 @@ defineCapability({
         slug,
         name,
         accountId,
-        plmStage: "shape",
+        // Task #654 — sales_stage is the single source of truth for
+        // opportunities; plm_stage has been retired.
         salesStage: "suspect",
         partnerOwnerId: (input.partnerOwnerId as string | undefined) ?? ctx.persona.id,
         engagementLeadId: (input.engagementLeadId as string | undefined) ?? ctx.persona.id,
@@ -507,7 +534,7 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "opportunity",
   toolName: "opportunity_move_stage",
-  description: "Move an opportunity to a new sales stage. Stage names accepted: shape/pursue/propose/runner/won/lost (and locale variants).",
+  description: "Move an opportunity to a new sales stage. Canonical stages: suspect → prospect → convert → runner → contract, or terminal lost / no_decision / withdrawn (legacy + locale synonyms also accepted).",
   slashAliases: { en: ["/move-stage"], fr: ["/changer-étape"] },
   inputSchema: {
     type: "object",
@@ -546,23 +573,28 @@ defineCapability({
         },
       };
     }
-    await db.update(atelierOpportunities).set({ salesStage: toStage, updatedAt: new Date() }).where(eq(atelierOpportunities.id, opp.id));
-    await db.insert(atelierOpportunityStageTransitions).values({
-      id: rid("trans"),
-      opportunityId: opp.id,
-      fromStage: opp.salesStage,
-      toStage,
-      transitionedByUserId: ctx.persona.id,
-      rationaleText: String(input.rationale ?? ""),
-    });
-    await recordAudit(ctx, "opportunity", opp.id, "opportunity.stage_changed.cli", { fromStage: opp.salesStage, toStage }, `${ctx.persona.name} moved "${opp.name}" to ${toStage}.`);
+    // Task #651 — route through the shared service so the chat/CLI path is
+    // gated identically to the REST + legacy paths and keeps plm_stage in
+    // lockstep. Gate failures surface as a deny the assistant can relay.
+    const result = await applyStageTransition(
+      opp,
+      { toStage, rationaleText: String(input.rationale ?? ""), source: "cli" },
+      { id: ctx.persona.id, name: ctx.persona.name, orgId: ctx.persona.orgId },
+    );
+    if (!result.ok) {
+      return {
+        ok: false,
+        errorCode: result.gate ? "stage_gate_failed" : "invalid",
+        errorMessage: result.gate?.reason ?? "Stage move blocked.",
+      };
+    }
     // Task #511 — stage transitions land back on the opportunity workspace.
     return {
       ok: true,
       data: {
         id: opp.id,
-        fromStage: opp.salesStage,
-        toStage,
+        fromStage: result.transition.fromStage,
+        toStage: result.transition.toStage,
         navigateTo: { path: `/opportunities/${opp.id}`, when: "on_commit" as const },
       },
     };

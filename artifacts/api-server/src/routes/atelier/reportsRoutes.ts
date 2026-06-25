@@ -496,8 +496,9 @@ async function computeReport(
       for (const o of opps) {
         const k = o.offeringAnchor ?? "unknown";
         const r = buckets.get(k) ?? { offering: k, won: 0, lost: 0, winRatePct: 0 };
-        if (o.plmStage === "won") r.won++;
-        if (o.plmStage === "lost") r.lost++;
+        const s = o.salesStage as string;
+        if (s === "contract") r.won++;
+        else if (["lost", "no_decision", "withdrawn"].includes(s)) r.lost++;
         buckets.set(k, r);
       }
       const rows = [...buckets.values()].map((r) => ({

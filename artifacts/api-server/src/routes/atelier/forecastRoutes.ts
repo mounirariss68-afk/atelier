@@ -41,14 +41,20 @@ function quarterKey(d: Date): string {
   return `${y} Q${q}`;
 }
 
-// Resolve the quarter bucket for an opportunity. A malformed or empty
-// nextMilestoneDate (e.g. "TBD", "", or a non-ISO string) parses to an
-// Invalid Date whose getFullYear()/getMonth() are NaN — that produced a
-// bogus "NaN QNaN" bucket. Guard with isNaN and fall back to "Unscheduled"
-// so the forecast roll-up stays clean and crash-free.
-function quarterBucketForOpp(nextMilestoneDate: string | null): string {
-  if (!nextMilestoneDate) return "Unscheduled";
-  const d = new Date(nextMilestoneDate);
+// Resolve the quarter bucket for an opportunity. Task #653 — the expected
+// close date is the authoritative forecast horizon, so prefer `closeDate` and
+// only fall back to `nextMilestoneDate` when no close date is set. A malformed
+// or empty date (e.g. "TBD", "", or a non-ISO string) parses to an Invalid
+// Date whose getFullYear()/getMonth() are NaN — that produced a bogus
+// "NaN QNaN" bucket. Guard with isNaN and fall back to "Unscheduled" so the
+// forecast roll-up stays clean and crash-free.
+function quarterBucketForOpp(o: {
+  closeDate: string | null;
+  nextMilestoneDate: string | null;
+}): string {
+  const raw = o.closeDate ?? o.nextMilestoneDate;
+  if (!raw) return "Unscheduled";
+  const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return "Unscheduled";
   return quarterKey(d);
 }
@@ -107,7 +113,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     } else if (by === "stage") {
       bump(o.salesStage, o.salesStage, o);
     } else if (by === "quarter") {
-      const q = quarterBucketForOpp(o.nextMilestoneDate);
+      const q = quarterBucketForOpp(o);
       bump(q, q, o);
     } else {
       res.status(400).json({ error: "invalid-by" });
@@ -156,7 +162,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     else if (by === "sector") priorBump(acctMap.get(o.accountId)?.sector ?? "unknown", o);
     else if (by === "stage") priorBump(o.salesStage, o);
     else if (by === "quarter") {
-      const q = quarterBucketForOpp(o.nextMilestoneDate);
+      const q = quarterBucketForOpp(o);
       priorBump(q, o);
     }
   }
@@ -180,10 +186,37 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   // Conversion funnel — Task #296 canonical 5-band working stages.
   // Terminal stages (lost / no_decision / withdrawn) are excluded;
   // they show up in the Reports terminal sidebar instead.
+  //
+  // Task #653 — proper conversion math. `count` is current-stage occupancy;
+  // `reached` is the cumulative number of (working) opps that have made it to
+  // this stage *or beyond* (the conversion denominator). The stage-to-stage
+  // `conversionRate` is reached[next] / reached[current] — i.e. of everything
+  // that reached this stage, the share that progressed past it. Without the
+  // cumulative denominator a raw occupancy count understates conversion because
+  // it ignores deals that already moved on to later stages.
   const FUNNEL = ["suspect", "prospect", "convert", "runner", "contract"];
-  const funnel = FUNNEL.map((s) => ({
+  const stageRank = new Map(FUNNEL.map((s, i) => [s, i]));
+  const occupancy = FUNNEL.map(
+    (s) => opps.filter((o) => o.salesStage === s).length,
+  );
+  // reached[i] = # working opps whose stage rank >= i.
+  const reached = FUNNEL.map((_s, i) =>
+    opps.filter((o) => {
+      const r = stageRank.get(o.salesStage);
+      return r !== undefined && r >= i;
+    }).length,
+  );
+  const funnel = FUNNEL.map((s, i) => ({
     stage: s,
-    count: opps.filter((o) => o.salesStage === s).length,
+    count: occupancy[i],
+    reached: reached[i],
+    // Conversion from this stage to the next (null at the last band).
+    conversionRate:
+      i < FUNNEL.length - 1
+        ? reached[i] > 0
+          ? reached[i + 1] / reached[i]
+          : 0
+        : null,
   }));
 
   const lastWeekTotalWeighted = [...lastWeekBuckets.values()].reduce((a, b) => a + b, 0);

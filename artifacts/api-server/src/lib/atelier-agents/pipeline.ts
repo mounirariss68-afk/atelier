@@ -106,6 +106,60 @@ export function isWorkingStage(s: SalesStage): boolean {
   return (WORKING_STAGES as readonly string[]).includes(s);
 }
 
+/**
+ * Opportunity-state predicates on the canonical salesStage (Task #654 —
+ * plmStage is retired for opportunities; salesStage is the only source of
+ * truth). These partition the funnel into open · won · lost:
+ *   - "won"  = reached `contract` (signed; the engagement takes over).
+ *   - "lost" = any terminal stage (lost · no_decision · withdrawn).
+ *   - "open" = a working stage that has not yet reached contract.
+ */
+export function isWonStage(s: SalesStage): boolean {
+  return s === "contract";
+}
+export function isLostStage(s: SalesStage): boolean {
+  return (TERMINAL_STAGES as readonly string[]).includes(s);
+}
+export function isOpenStage(s: SalesStage): boolean {
+  return (WORKING_STAGES as readonly string[]).includes(s) && s !== "contract";
+}
+
+/**
+ * Resolve a stored opportunity stage string to a canonical SalesStage.
+ * salesStage is the single source of truth (Task #654); legacy rows may still
+ * hold a pre-#295 label there, so migrate those; otherwise default to suspect.
+ */
+export function resolveSalesStage(stored: string | null | undefined): SalesStage {
+  const v = stored ?? "";
+  if (isSalesStage(v)) return v;
+  return migrateLegacyStage(v)?.stage ?? "suspect";
+}
+
+/**
+ * Group a canonical SalesStage into the legacy 6-bucket funnel display used by
+ * the Home pipeline pane and the CLI "pipeline by stage" view. Keeps those
+ * UIs' bucket labels stable while sourcing membership from salesStage.
+ */
+export const FUNNEL_BUCKET_BY_SALES_STAGE: Record<
+  SalesStage,
+  "identify" | "shape" | "pursue" | "won" | "lost" | "no_go"
+> = {
+  suspect: "identify",
+  prospect: "shape",
+  convert: "pursue",
+  runner: "pursue",
+  contract: "won",
+  lost: "lost",
+  no_decision: "no_go",
+  withdrawn: "no_go",
+};
+
+export function funnelBucket(
+  stored: string | null | undefined,
+): "identify" | "shape" | "pursue" | "won" | "lost" | "no_go" {
+  return FUNNEL_BUCKET_BY_SALES_STAGE[resolveSalesStage(stored)];
+}
+
 export function isValidSubStatus(stage: SalesStage, sub: string | null | undefined): boolean {
   if (!sub) return true;
   return (SUB_STATUS_BY_STAGE[stage] as readonly string[]).includes(sub);
@@ -200,11 +254,13 @@ export function validateStageTransition(input: StageGateInput): StageGateError |
   }
 
   if (fromStage === "runner" && toStage === "contract") {
-    const evidenceCount = input.evidenceArtifactIds?.length ?? 0;
-    if (!input.signedInstrumentFileId?.trim() && evidenceCount === 0) {
+    // Task #651 — require the actual signed instrument. A stray evidence
+    // artifact must NOT satisfy the contract gate (was: file OR any artifact).
+    if (!input.signedInstrumentFileId?.trim()) {
       return {
         gate: "runner_to_contract",
-        reason: "Runner → Contract requires the signed instrument as an uploaded artifact.",
+        reason:
+          "Runner → Contract requires the signed instrument uploaded as signedInstrumentFileId.",
       };
     }
   }
