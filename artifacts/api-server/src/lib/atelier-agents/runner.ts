@@ -2240,12 +2240,38 @@ async function callClaudeJsonWithWebSearch<T>(
   // ceiling. It gets its OWN, larger budget than the generic agent timeout
   // (ATELIER_AGENT_TIMEOUT_MS, default 90s) — otherwise the abort timer fires
   // mid-research and the cartographer prefill fails with "Request was aborted".
-  const timeoutMs = Number(
+  // IDLE watchdog, not a wall-clock cap. Heavy accounts legitimately spend
+  // minutes; a fixed total-time abort would kill research that is STILL making
+  // progress (the symptom the partner saw: a 180s timer firing mid-synthesis).
+  // Instead we abort only when the model stalls — no stream activity (search,
+  // source read, or answer token) for `idleMs`. Active research is never
+  // interrupted; the deadline is pushed forward on every real event.
+  const idleMs = Number(
     process.env.ATELIER_WEBSEARCH_TIMEOUT_MS ??
       process.env.ATELIER_AGENT_TIMEOUT_MS ??
       180_000,
   );
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  // Absolute safety ceiling so a hung socket can't leak forever. Set far above
+  // idleMs so it NEVER pre-empts genuinely-streaming research.
+  const hardCapMs = Number(process.env.ATELIER_WEBSEARCH_HARD_CAP_MS ?? 900_000);
+  const startedAt = Date.now();
+  let abortReason: "idle" | "cap" | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      abortReason = "idle";
+      ac.abort();
+    }, idleMs);
+  };
+  const capTimer = setTimeout(() => {
+    abortReason = "cap";
+    ac.abort();
+  }, hardCapMs);
+  // Every genuine stream event means the model is still working — push the idle
+  // deadline forward so active research is never interrupted.
+  const bumpActivity = () => armIdle();
+  armIdle();
   // Stream rather than `.create(...)` so the web-search agent's otherwise
   // opaque multi-minute call surfaces granular progress (search queries,
   // sources read, drafting) to the ambient progress sink. The final parsed
@@ -2337,6 +2363,7 @@ async function callClaudeJsonWithWebSearch<T>(
           event.content_block.name === "web_search"
         ) {
           searchCount += 1;
+          bumpActivity();
           // A fresh search means we are not yet composing — cancel any pending
           // "Analysing…" promotion and pause the heartbeat for the search.
           cancelSynthesisPending();
@@ -2346,6 +2373,7 @@ async function callClaudeJsonWithWebSearch<T>(
           event.type === "content_block_start" &&
           event.content_block.type === "web_search_tool_result"
         ) {
+          bumpActivity();
           const result = event.content_block.content as unknown;
           if (Array.isArray(result)) {
             for (const item of result as Array<{
@@ -2388,6 +2416,7 @@ async function callClaudeJsonWithWebSearch<T>(
           // Answer tokens are streaming — flip the live caption to synthesis
           // and, as each top-level JSON section key first appears, advance the
           // caption to the friendly sub-step for the section being written.
+          bumpActivity();
           cancelSynthesisPending();
           answerText += event.delta.text;
           // Find the furthest-along section whose key has now appeared. Scan
@@ -2419,15 +2448,17 @@ async function callClaudeJsonWithWebSearch<T>(
       // terminal phase so the substatus clearly reports the timeout before the
       // error propagates (the caller degrades to a manual draft).
       if (ac.signal.aborted) {
-        emitPhase(
-          97,
-          `Research timed out after ${Math.round(timeoutMs / 1000)}s`,
-          { phase: "synthesis" },
-        );
+        const secs = Math.round((Date.now() - startedAt) / 1000);
+        const msg =
+          abortReason === "cap"
+            ? `Research hit the ${Math.round(hardCapMs / 1000)}s ceiling`
+            : `Research stalled — no progress for ${Math.round(idleMs / 1000)}s (stopped after ${secs}s)`;
+        emitPhase(97, msg, { phase: "synthesis" });
       }
       throw err;
     } finally {
-      clearTimeout(timer);
+      if (idleTimer) clearTimeout(idleTimer);
+      clearTimeout(capTimer);
       cancelSynthesisPending();
       stopHeartbeat();
     }
