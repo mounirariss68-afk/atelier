@@ -59,6 +59,16 @@
   -webkit-text-fill-color: transparent;
   animation: gradientShift 6s ease infinite;
 }
+/* Brighter brand gradient text (hero) */
+.text-gradient-bright {
+  background: linear-gradient(90deg, #7B97FF 0%, #B07BFF 32%, #FF6BE0 62%, #FF9A6B 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 6s ease infinite;
+}
+
 .bg-cog-grad { background: var(--cog-grad); }
 .bg-cog-grad-diag { background: var(--cog-grad-diag); }
 

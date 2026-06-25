@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Link } from "wouter";
-import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight, ArrowUpRight, ChevronDown, Check,
   Activity, Database, Cpu, ShieldCheck, Layers,
@@ -8,6 +8,177 @@ import {
 } from "lucide-react";
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
+
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  type CarouselApi,
+} from "@/components/ui/carousel";
+
+import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628.png";
+import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628.png";
+import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628.png";
+import slide2Mobile from "@assets/Slide_2-_48_hours_prototype_-_Mobile_1782396651537.png";
+import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_1782396575628.png";
+import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628.png";
+import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628.png";
+import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628.png";
+
+type HeroSlide = {
+  white: [string, string];
+  gradient: [string, string];
+  desktop: string;
+  mobile: string;
+};
+
+const HERO_SLIDES: HeroSlide[] = [
+  { white: ["We don't", "bill mandays."], gradient: ["We deliver", "outcomes."], desktop: slide1Desktop, mobile: slide1Mobile },
+  { white: ["No long", "pilots."], gradient: ["Prototype in", "48 hours."], desktop: slide2Desktop, mobile: slide2Mobile },
+  { white: ["We don't build", "PowerPoints."], gradient: ["We build", "working solutions."], desktop: slide3Desktop, mobile: slide3Mobile },
+  { white: ["No vendor", "lock-in."], gradient: ["You own", "the solution."], desktop: slide4Desktop, mobile: slide4Mobile },
+];
+
+/* ---------- Hero carousel ---------- */
+function HeroCarousel() {
+  const [api, setApi] = useState<CarouselApi | null>(null);
+  const [selected, setSelected] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const onSelect = () => setSelected(api.selectedScrollSnap());
+    onSelect();
+    api.on("select", onSelect);
+    api.on("reInit", onSelect);
+    return () => {
+      api.off("select", onSelect);
+      api.off("reInit", onSelect);
+    };
+  }, [api]);
+
+  useEffect(() => {
+    if (!api) return;
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) return;
+    const id = window.setInterval(() => {
+      api.scrollNext();
+    }, 6000);
+    return () => window.clearInterval(id);
+  }, [api]);
+
+  return (
+    <section className="relative min-h-[100dvh] flex items-center overflow-hidden">
+      {/* Background slides */}
+      <Carousel
+        setApi={setApi}
+        opts={{ loop: true, align: "start" }}
+        className="absolute inset-0 z-0"
+      >
+        <CarouselContent className="ml-0 h-[100dvh]">
+          {HERO_SLIDES.map((slide, i) => (
+            <CarouselItem key={i} className="pl-0 basis-full relative h-[100dvh]">
+              <picture>
+                <source media="(min-width: 768px)" srcSet={slide.desktop} />
+                <img
+                  src={slide.mobile}
+                  alt=""
+                  loading={i === 0 ? "eager" : "lazy"}
+                  className="w-full h-full object-cover object-center"
+                />
+              </picture>
+              <div className="absolute inset-0 bg-gradient-to-b from-navy/70 via-navy/55 to-navy" />
+              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(91,124,255,0.18),transparent_55%)]" />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
+
+      {/* Floating glows */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <div className="glow-a absolute top-[18%] left-[8%] w-[34rem] h-[34rem] rounded-full bg-cogblue/25 blur-[120px]" />
+        <div className="glow-b absolute bottom-[6%] right-[6%] w-[30rem] h-[30rem] rounded-full bg-cogmagenta/22 blur-[120px]" />
+      </div>
+
+      {/* Overlay content */}
+      <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24">
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}
+          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 mb-8">
+          <span className="relative flex h-2 w-2">
+            <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cogcoral" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cogcoral" />
+          </span>
+          <span className="text-[11px] font-semibold tracking-[2px] uppercase text-offwhite/80">Intelligence that Elevates</span>
+        </motion.div>
+
+        <div className="min-h-[4.2em]">
+          <AnimatePresence mode="wait">
+            <motion.h1
+              key={selected}
+              className="text-[13vw] sm:text-[64px] md:text-[84px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
+            >
+              <motion.span
+                className="block text-white"
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -14 }}
+                transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+              >
+                {HERO_SLIDES[selected].white[0]}
+                <br />
+                {HERO_SLIDES[selected].white[1]}
+              </motion.span>
+              <motion.span
+                className="block text-gradient-bright"
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -14 }}
+                transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
+              >
+                {HERO_SLIDES[selected].gradient[0]}
+                <br />
+                {HERO_SLIDES[selected].gradient[1]}
+              </motion.span>
+            </motion.h1>
+          </AnimatePresence>
+        </div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.45 }}
+          className="flex flex-wrap items-center gap-4 mt-12">
+          <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
+            Transform Your Enterprise <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </a>
+          <a href="#services" className="inline-flex items-center gap-2 text-offwhite/80 hover:text-white px-6 py-4 rounded-full border border-white/15 hover:border-white/30 transition-colors text-base font-medium">
+            What we do
+          </a>
+        </motion.div>
+
+        {/* Slide navigator */}
+        <div className="flex items-center gap-3 mt-14">
+          {HERO_SLIDES.map((slide, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => api?.scrollTo(i)}
+              aria-label={`Go to slide ${i + 1}: ${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+              aria-current={selected === i}
+              className="group h-3 flex items-center"
+            >
+              <span
+                className={`block h-[3px] rounded-full transition-all duration-500 ${
+                  selected === i ? "w-12 bg-cog-grad" : "w-6 bg-white/25 group-hover:bg-white/50"
+                }`}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 text-offwhite/50">
+        <ChevronDown className="w-6 h-6 animate-bounce" />
+      </div>
+    </section>
+  );
+}
 
 /* ---------- Scroll reveal ---------- */
 function Reveal({
@@ -513,10 +684,6 @@ function GuildSystem() {
 
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
-  const { scrollY } = useScroll();
-  const heroImgY = useTransform(scrollY, [0, 800], [0, 160]);
-  const heroOpacity = useTransform(scrollY, [0, 600], [1, 0]);
-  const heroTextY = useTransform(scrollY, [0, 600], [0, 120]);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -544,54 +711,7 @@ export default function Home() {
       </nav>
 
       {/* ===== Hero ===== */}
-      <section className="relative min-h-[100dvh] flex items-center overflow-hidden">
-        <motion.div style={{ y: heroImgY, opacity: heroOpacity }} className="absolute inset-0 z-0">
-          <img src={asset("images/deck/img19.webp")} alt="MENAT skyline" loading="eager" className="w-full h-[120%] object-cover object-center" />
-          <div className="absolute inset-0 bg-gradient-to-b from-navy/70 via-navy/55 to-navy" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(91,124,255,0.18),transparent_55%)]" />
-        </motion.div>
-
-        <div className="pointer-events-none absolute inset-0 z-0">
-          <div className="glow-a absolute top-[18%] left-[8%] w-[34rem] h-[34rem] rounded-full bg-cogblue/25 blur-[120px]" />
-          <div className="glow-b absolute bottom-[6%] right-[6%] w-[30rem] h-[30rem] rounded-full bg-cogmagenta/22 blur-[120px]" />
-        </div>
-
-        <motion.div style={{ y: heroTextY }} className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24">
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cogcoral" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cogcoral" />
-            </span>
-            <span className="text-[11px] font-semibold tracking-[2px] uppercase text-offwhite/80">Intelligence that Elevates</span>
-          </motion.div>
-
-          <motion.h1 initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.25 }}
-            className="text-[15vw] sm:text-[78px] md:text-[104px] leading-[0.95] font-extrabold text-white tracking-[-3px] max-w-5xl">
-            From AI ambition<br />to <span className="text-gradient">AI in production.</span>
-          </motion.h1>
-
-          <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.4 }}
-            className="text-lg md:text-2xl text-offwhite/75 max-w-2xl font-light mt-8 leading-relaxed">
-            The AI-native transformation partner for the MENAT region — senior delivery,
-            agentic-native execution, and outcomes you fully own.
-          </motion.p>
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.55 }}
-            className="flex flex-wrap items-center gap-4 mt-12">
-            <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
-              Transform Your Enterprise <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </a>
-            <a href="#services" className="inline-flex items-center gap-2 text-offwhite/80 hover:text-white px-6 py-4 rounded-full border border-white/15 hover:border-white/30 transition-colors text-base font-medium">
-              What we do
-            </a>
-          </motion.div>
-        </motion.div>
-
-        <motion.div style={{ opacity: heroOpacity }} className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 text-offwhite/50">
-          <ChevronDown className="w-6 h-6 animate-bounce" />
-        </motion.div>
-      </section>
+      <HeroCarousel />
 
       {/* ===== Stat strip (client value) ===== */}
       <section className="relative bg-navydeep py-20 border-y border-white/5">
