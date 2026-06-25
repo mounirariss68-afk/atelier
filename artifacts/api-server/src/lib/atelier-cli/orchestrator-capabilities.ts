@@ -655,10 +655,52 @@ defineCapability({
           },
         };
       } catch (e) {
+        // The Cartographer prefill is ADVISORY — the partner always reviews and
+        // edits the draft on the `account_proposal` card before the account is
+        // actually written. A web-search/synthesis timeout (a heavy
+        // conglomerate that exhausts the research budget mid-synthesis surfaces
+        // as "Request was aborted") must therefore NOT block account creation.
+        // Degrade gracefully: emit the same proposal card pre-filled with
+        // whatever the partner already typed, flagged `degraded` so the UI and
+        // the orchestrator's final message make clear auto-enrichment couldn't
+        // finish and the remaining fields need manual entry on Review & Create.
+        const reason = (e as Error).message;
+        console.warn(
+          `[prefill_from_specialist] Account Cartographer failed for "${rawName}"; degrading to manual draft: ${reason}`,
+        );
+        const fallbackDraft: Record<string, unknown> = {
+          name: rawName,
+          brandName: rawName,
+          country: typeof inp.country === "string" ? inp.country : null,
+          sector: typeof inp.sector === "string" ? inp.sector : null,
+          hqCity: typeof inp.hqCity === "string" ? inp.hqCity : null,
+          strategicPriorities: [],
+          sourceSignals: [],
+          decisionMakers: [],
+        };
+        if (entityRoleAnswer) fallbackDraft.entityRole = entityRoleAnswer;
+        const required = ["sector", "country"];
+        const missingRequiredFields = required.filter((k) => {
+          const v = fallbackDraft[k];
+          return v == null || (typeof v === "string" && v.trim() === "");
+        });
         return {
-          ok: false,
-          errorCode: "specialist_failed",
-          errorMessage: `Cartographer prefill failed: ${(e as Error).message}`,
+          ok: true,
+          data: {
+            shape: "account_proposal",
+            degraded: true,
+            degradedReason: reason,
+            specialist: {
+              id: "ag_account_cartographer",
+              name: "Account Cartographer",
+              mode: "research_only",
+              costUsd: 0,
+            },
+            draft: fallbackDraft,
+            missingRequiredFields,
+            missingOptionalFields: ["website", "size"],
+            lowConfidenceFields: [],
+          },
         };
       }
     }

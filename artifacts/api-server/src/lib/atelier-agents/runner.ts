@@ -2412,6 +2412,20 @@ async function callClaudeJsonWithWebSearch<T>(
         }
       }
       return await stream.finalMessage();
+    } catch (err) {
+      // When the abort timer fires mid-synthesis the live heartbeat would
+      // otherwise freeze on its last section caption ("Surfacing executive
+      // tensions…"), making the run look silently stuck. Emit one explicit
+      // terminal phase so the substatus clearly reports the timeout before the
+      // error propagates (the caller degrades to a manual draft).
+      if (ac.signal.aborted) {
+        emitPhase(
+          97,
+          `Research timed out after ${Math.round(timeoutMs / 1000)}s`,
+          { phase: "synthesis" },
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
       cancelSynthesisPending();

@@ -613,6 +613,7 @@ function AccountProposalCard({
   const ar = locale === "ar";
   const draft = asObj(data.draft);
   const brief = asObj(draft.researchBrief);
+  const degraded = data.degraded === true;
 
   const name = asStr(draft.name) || (ar ? "حساب جديد" : "New account");
   const summary = asStr(draft.refreshedSummary);
@@ -767,6 +768,14 @@ function AccountProposalCard({
           <div className="truncate text-base font-semibold text-text">{name}</div>
         </div>
       </div>
+
+      {degraded ? (
+        <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-sm leading-relaxed text-text">
+          {ar
+            ? "تعذّر إكمال البحث الآلي. المسودة أدناه تحتوي فقط على ما أدخلته — أكمل بقية التفاصيل عبر «مراجعة وإنشاء»."
+            : "Automated research couldn't complete. The draft below has only what you entered — add the rest on Review & Create."}
+        </p>
+      ) : null}
 
       {summary ? (
         <p className="mt-2 text-sm leading-relaxed text-text-mute">{summary}</p>
