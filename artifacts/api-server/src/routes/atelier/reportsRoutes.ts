@@ -23,6 +23,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import PDFDocument from "pdfkit";
+import { STALLED_THRESHOLD_DAYS } from "../../lib/atelier-agents/pipeline.js";
 import {
   db,
   atelierUsers,
@@ -246,7 +247,10 @@ async function computeReport(
             (a, o) => a + (o.dealSizeHypothesis * o.probabilityPct) / 100,
             0,
           ),
-          agedRedCount: list.filter((o) => o.daysInStage > 30).length,
+          // Task #653 — one shared stalled-threshold constant (was a stray
+          // hardcoded 30 here, which made the waterfall disagree with the
+          // forecast/pipeline aging used everywhere else).
+          agedRedCount: list.filter((o) => o.daysInStage > STALLED_THRESHOLD_DAYS).length,
         };
       };
       const rows = [

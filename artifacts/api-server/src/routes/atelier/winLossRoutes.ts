@@ -386,10 +386,15 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
 // that are still not approved, and (a) escalate the partner Pane A item to
 // red/critical, (b) write an audit row noting that close-without-debrief
 // now requires partner override + rationale to remove the gate.
-// @cli-skip: pending Task #340 read-parity migration
-router.post("/win-loss/overdue/scan", async (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
+//
+// Task #653 — extracted into a reusable, transport-free function so both the
+// manual REST trigger AND the scheduler (lib/scheduler.ts) run identical logic.
+// Without an automatic trigger the SLA escalation was pull-only, so overdue
+// debriefs never actually escalated unless someone remembered to POST.
+export async function runWinLossOverdueScan(): Promise<{
+  scanned: number;
+  escalated: number;
+}> {
   const now = new Date();
   const overdue = await db
     .select()
@@ -433,7 +438,15 @@ router.post("/win-loss/overdue/scan", async (req, res) => {
     });
     escalated++;
   }
-  res.json({ scanned: overdue.length, escalated });
+  return { scanned: overdue.length, escalated };
+}
+
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/win-loss/overdue/scan", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const result = await runWinLossOverdueScan();
+  res.json(result);
 });
 
 // Partner-override path (PRD §5.2): allow a partner to clear the

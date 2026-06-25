@@ -9,9 +9,16 @@ Gotchas observed:
 - It takes **>120s** wall time. A large chunk is one REAL Anthropic "pursuit
   scout" call in the Opportunities group that aborts after ~45s when no API key
   is present (ATELIER_MOCK_AGENTS=1 does NOT mock that path here).
-- It **cannot be run via `restart_workflow test-crm`**: the runner waits for the
-  process to "serve", and since a one-shot test never serves, it SIGTERM/SIGKILLs
-  it partway (the workflow shows "failed" even when assertions pass).
+- **Best way to run it: `restart_workflow test-crm` (it is a registered
+  one-shot workflow).** It runs to completion and the run summary shows the final
+  `✓ CRM harness: all checks passed.` (or `✗ … N check(s) failed`). It does NOT
+  get SIGKILLed — an earlier note that it can't run via restart_workflow is
+  obsolete. After it finishes, the freshest output is in the **newest**
+  `/tmp/logs/test-crm_*.log`; you must call `refresh_all_logs` to rotate a new
+  file, otherwise you re-read the stale prior run's log.
+- Running it **inline** via the bash tool (`pnpm … test:crm`) often exceeds the
+  120s shell cap and gets killed mid-run, leaving a truncated log — prefer the
+  workflow.
 - Detached/`setsid` background runs also get reaped when the tool shell returns,
   so /tmp logs capture only the npm header.
 

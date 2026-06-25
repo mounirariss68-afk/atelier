@@ -112,6 +112,12 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
       bump(sec, sec, o);
     } else if (by === "stage") {
       bump(o.salesStage, o.salesStage, o);
+    } else if (by === "category") {
+      // Task #653 — forecast category (pipeline | best_case | commit |
+      // closed | omitted) expresses deal confidence independently of stage
+      // and probability; roll it up as its own bucketing dimension.
+      const fc = o.forecastCategory ?? "pipeline";
+      bump(fc, fc, o);
     } else if (by === "quarter") {
       const q = quarterBucketForOpp(o);
       bump(q, q, o);
@@ -161,6 +167,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     else if (by === "offering") priorBump(o.offeringAnchor ?? "unknown", o);
     else if (by === "sector") priorBump(acctMap.get(o.accountId)?.sector ?? "unknown", o);
     else if (by === "stage") priorBump(o.salesStage, o);
+    else if (by === "category") priorBump(o.forecastCategory ?? "pipeline", o);
     else if (by === "quarter") {
       const q = quarterBucketForOpp(o);
       priorBump(q, o);

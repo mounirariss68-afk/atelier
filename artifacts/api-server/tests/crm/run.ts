@@ -207,6 +207,10 @@ async function main(): Promise<void> {
     atelierAccountGoalProgress,
     atelierEngagements,
     atelierInvoice,
+    atelierMeetings,
+    atelierTranscripts,
+    atelierWinLossDebriefs,
+    atelierPaneAItems,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -224,6 +228,10 @@ async function main(): Promise<void> {
     atelierAccountGoalProgress: any;
     atelierEngagements: any;
     atelierInvoice: any;
+    atelierMeetings: any;
+    atelierTranscripts: any;
+    atelierWinLossDebriefs: any;
+    atelierPaneAItems: any;
   };
 
   const START = new Date();
@@ -238,6 +246,10 @@ async function main(): Promise<void> {
     accountActions: new Set<string>(),
     accountRisks: new Set<string>(),
     accountGoalProgress: new Set<string>(),
+    meetings: new Set<string>(),
+    transcripts: new Set<string>(),
+    debriefs: new Set<string>(),
+    paneAItems: new Set<string>(),
   };
 
   // Boot an ephemeral server on a random port.
@@ -939,6 +951,242 @@ async function main(): Promise<void> {
             funnel[funnel.length - 1]?.conversionRate === null,
           `funnel=${JSON.stringify(funnel)?.slice(0, 160)}`,
         );
+
+        // Forecast roll-up keyed by forecast category (independent of stage).
+        const fcCat = await api("GET", "/forecast?by=category", PERSONA.fp);
+        check("GET /forecast?by=category \u2192 200", fcCat.status === 200, `status=${fcCat.status}`);
+        const catRows: Array<{ key: string }> = fcCat.body?.rows ?? [];
+        check(
+          "forecast by=category buckets keyed by forecastCategory",
+          catRows.length > 0 &&
+            catRows.every((r) =>
+              ["pipeline", "best_case", "commit", "closed", "omitted"].includes(r.key),
+            ),
+          `keys=${catRows.map((r) => r.key).join(",")}`,
+        );
+      }
+
+      // ---- Task #653: meeting capture dedup ----
+      {
+        const mtgName = uniq("OppMtg");
+        await api("POST", "/opportunities", PERSONA.fp, {
+          name: mtgName,
+          description: "meeting dedup check",
+          accountId: ACC,
+          probabilityPct: 20,
+          runScout: false,
+        });
+        const [mtgOpp] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, mtgName));
+        const mtgOppId = mtgOpp?.id as string | undefined;
+        if (mtgOppId) created.opps.add(mtgOppId);
+        if (mtgOppId) {
+          const transcript = `Discovery call ${STAMP}. Client wants pricing intelligence. Budget approved by CFO.`;
+          const m1 = await api("POST", `/opportunities/${mtgOppId}/meetings`, PERSONA.fp, {
+            kind: "discovery",
+            transcript,
+          });
+          check("first meeting submit \u2192 201", m1.status === 201, `status=${m1.status}`);
+          if (m1.body?.id) created.meetings.add(m1.body.id);
+          if (m1.body?.transcriptId) created.transcripts.add(m1.body.transcriptId);
+
+          const m2 = await api("POST", `/opportunities/${mtgOppId}/meetings`, PERSONA.fp, {
+            kind: "discovery",
+            transcript,
+          });
+          check(
+            "re-POST identical meeting \u2192 200 deduped (no 2nd row)",
+            m2.status === 200 && m2.body?.deduped === true,
+            `status=${m2.status} deduped=${m2.body?.deduped}`,
+          );
+
+          const mtgRows = await db
+            .select({ id: atelierMeetings.id })
+            .from(atelierMeetings)
+            .where(
+              and(
+                eq(atelierMeetings.parentType, "opportunity"),
+                eq(atelierMeetings.parentId, mtgOppId),
+                isNull(atelierMeetings.deletedAt),
+              ),
+            );
+          check("dedup left exactly one meeting row", mtgRows.length === 1, `count=${mtgRows.length}`);
+
+          // A genuinely different transcript is NOT deduped.
+          const m3 = await api("POST", `/opportunities/${mtgOppId}/meetings`, PERSONA.fp, {
+            kind: "discovery",
+            transcript: `${transcript} Follow-up scheduled for next quarter.`,
+          });
+          check("distinct meeting transcript \u2192 201 (not deduped)", m3.status === 201, `status=${m3.status}`);
+          if (m3.body?.id) created.meetings.add(m3.body.id);
+          if (m3.body?.transcriptId) created.transcripts.add(m3.body.transcriptId);
+
+          // Concurrency: two simultaneous identical submits must still yield
+          // exactly one new meeting row (advisory-locked reservation).
+          const raceTranscript = `Steering review ${STAMP}. Concurrent double-submit guard check.`;
+          const [r1, r2] = await Promise.all([
+            api("POST", `/opportunities/${mtgOppId}/meetings`, PERSONA.fp, { kind: "steering", transcript: raceTranscript }),
+            api("POST", `/opportunities/${mtgOppId}/meetings`, PERSONA.fp, { kind: "steering", transcript: raceTranscript }),
+          ]);
+          for (const r of [r1, r2]) {
+            if (r.body?.id) created.meetings.add(r.body.id);
+            if (r.body?.transcriptId) created.transcripts.add(r.body.transcriptId);
+          }
+          const steeringRows = await db
+            .select({ id: atelierMeetings.id })
+            .from(atelierMeetings)
+            .where(
+              and(
+                eq(atelierMeetings.parentType, "opportunity"),
+                eq(atelierMeetings.parentId, mtgOppId),
+                eq(atelierMeetings.kind, "steering"),
+                isNull(atelierMeetings.deletedAt),
+              ),
+            );
+          check(
+            "concurrent identical submits create exactly one meeting row",
+            steeringRows.length === 1,
+            `count=${steeringRows.length} statuses=${r1.status},${r2.status}`,
+          );
+        }
+      }
+
+      // ---- Task #653: qualification-rubric enforcement gate (5C go/no-go) ----
+      {
+        const rubName = uniq("OppRub");
+        await api("POST", "/opportunities", PERSONA.fp, {
+          name: rubName,
+          description: "rubric gate check",
+          accountId: ACC,
+          probabilityPct: 20,
+          runScout: false,
+        });
+        const [rubOpp] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, rubName));
+        const rubOppId = rubOpp?.id as string | undefined;
+        if (rubOppId) created.opps.add(rubOppId);
+        if (rubOppId) {
+          await db
+            .update(atelierOpportunities)
+            .set({ qualificationRubric: { band: "decline", composite: 22 } })
+            .where(eq(atelierOpportunities.id, rubOppId));
+          const fiveC = {
+            client: "x",
+            competition: "x",
+            capability: "x",
+            capacity: "x",
+            contract: "x",
+          };
+          const blocked = await api("POST", `/opportunities/${rubOppId}/qualifier`, PERSONA.fp, {
+            fiveC,
+            decision: "go",
+            rationale: "push it through",
+          });
+          check(
+            "go vs DECLINE rubric without override \u2192 422 rubric-decline-conflict",
+            blocked.status === 422 && blocked.body?.error === "rubric-decline-conflict",
+            `status=${blocked.status} err=${blocked.body?.error}`,
+          );
+
+          // A non-partner cannot self-clear the DECLINE veto even with the flag.
+          const nonPartnerOverride = await api("POST", `/opportunities/${rubOppId}/qualifier`, PERSONA.consultant, {
+            fiveC,
+            decision: "go",
+            rationale: "trying to push past the rubric",
+            overrideRubric: true,
+          });
+          check(
+            "non-partner overrideRubric:true \u2192 403 rubric-override-forbidden",
+            nonPartnerOverride.status === 403 && nonPartnerOverride.body?.error === "rubric-override-forbidden",
+            `status=${nonPartnerOverride.status} err=${nonPartnerOverride.body?.error}`,
+          );
+
+          const overridden = await api("POST", `/opportunities/${rubOppId}/qualifier`, PERSONA.fp, {
+            fiveC,
+            decision: "go",
+            rationale: "partner override after review",
+            overrideRubric: true,
+          });
+          check("partner go with overrideRubric:true \u2192 200", overridden.status === 200, `status=${overridden.status}`);
+
+          // A no-go is always allowed regardless of the rubric band.
+          const noGo = await api("POST", `/opportunities/${rubOppId}/qualifier`, PERSONA.fp, {
+            fiveC,
+            decision: "no_go",
+            rationale: "agreed decline",
+          });
+          check("no-go vs DECLINE rubric \u2192 200 (no gate)", noGo.status === 200, `status=${noGo.status}`);
+        }
+      }
+
+      // ---- Task #653: Win/Loss overdue SLA scan escalation ----
+      {
+        const slaName = uniq("OppSLA");
+        await api("POST", "/opportunities", PERSONA.fp, {
+          name: slaName,
+          description: "winloss SLA scan check",
+          accountId: ACC,
+          probabilityPct: 20,
+          runScout: false,
+        });
+        const [slaOpp] = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(eq(atelierOpportunities.name, slaName));
+        const slaOppId = slaOpp?.id as string | undefined;
+        if (slaOppId) created.opps.add(slaOppId);
+        if (slaOppId) {
+          const debriefId = `wld_t653_${STAMP}`;
+          const paneId = `pane_t653_${STAMP}`;
+          const dueAt = new Date(Date.now() - 24 * 60 * 60 * 1000); // 1 day overdue
+          await db.insert(atelierWinLossDebriefs).values({
+            id: debriefId,
+            orgId: ORG,
+            opportunityId: slaOppId,
+            outcome: "lost",
+            status: "pending",
+            sellerPerceivedReasons: [],
+            partnerOwnerUserId: PERSONA.fp,
+            engagementLeadUserId: PERSONA.fp,
+            dueAt,
+            createdByUserId: PERSONA.fp,
+          });
+          created.debriefs.add(debriefId);
+          await db.insert(atelierPaneAItems).values({
+            id: paneId,
+            orgId: ORG,
+            userId: PERSONA.fp,
+            priority: "high",
+            title: `Win/Loss debrief due — ${slaName}`,
+            summary: "seed overdue item",
+            hrefKind: "opportunity",
+            hrefTargetId: slaOppId,
+            dueLabel: "14 days",
+            sortKey: 20,
+          });
+          created.paneAItems.add(paneId);
+
+          const scan = await api("POST", "/win-loss/overdue/scan", PERSONA.fp);
+          check("POST /win-loss/overdue/scan \u2192 200", scan.status === 200, `status=${scan.status}`);
+          check(
+            "overdue scan escalated the breached debrief (escalated \u2265 1)",
+            (scan.body?.escalated ?? 0) >= 1,
+            `escalated=${scan.body?.escalated}`,
+          );
+          const [pane] = await db
+            .select({ priority: atelierPaneAItems.priority, dueLabel: atelierPaneAItems.dueLabel })
+            .from(atelierPaneAItems)
+            .where(eq(atelierPaneAItems.id, paneId));
+          check(
+            "overdue Pane A item escalated to critical / OVERDUE",
+            pane?.priority === "critical" && pane?.dueLabel === "OVERDUE",
+            `priority=${pane?.priority} dueLabel=${pane?.dueLabel}`,
+          );
+        }
       }
 
       // ---- Task #540: edit core fields (PATCH /opportunities/:oppId) ----
@@ -2282,6 +2530,12 @@ async function main(): Promise<void> {
       for (const id of created.renewals) await db.delete(atelierRenewal).where(eq(atelierRenewal.id, id));
       for (const id of created.raids) await db.delete(atelierRaidItems).where(eq(atelierRaidItems.id, id));
       for (const id of created.deliverables) await db.delete(atelierDeliverables).where(eq(atelierDeliverables.id, id));
+      // Task #653 — meeting/transcript + win-loss/pane-A rows reference opps, so
+      // remove them before the opportunities they hang off of.
+      for (const id of created.meetings) await db.delete(atelierMeetings).where(eq(atelierMeetings.id, id));
+      for (const id of created.transcripts) await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, id));
+      for (const id of created.debriefs) await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.id, id));
+      for (const id of created.paneAItems) await db.delete(atelierPaneAItems).where(eq(atelierPaneAItems.id, id));
       for (const id of created.opps) await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, id));
       for (const id of created.contacts) await db.delete(atelierContacts).where(eq(atelierContacts.id, id));
       for (const id of created.accounts) {

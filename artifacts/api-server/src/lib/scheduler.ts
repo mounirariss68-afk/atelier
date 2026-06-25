@@ -6,17 +6,21 @@ import { eq, or } from "drizzle-orm";
 import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
 import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
 import { runPaymentProposer } from "./atelier-payment-proposer";
+import { runWinLossOverdueScan } from "../routes/atelier/winLossRoutes";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
 const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
 // Mon 03:00 UTC = Mon 06:00 GST — the start of the working week.
 const WALLET_PAYMENT_PROPOSER_CRON = process.env.WALLET_PAYMENT_PROPOSER_CRON ?? "0 3 * * 1";
+// Daily 05:00 UTC — escalate any Win/Loss debrief past its 14-day SLA.
+const WINLOSS_SLA_CRON = process.env.WINLOSS_SLA_CRON ?? "0 5 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
 let walletPaymentProposerTask: ScheduledTask | null = null;
+let winLossSlaTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -149,6 +153,30 @@ export function startScheduler(): void {
       "Invalid WALLET_PAYMENT_PROPOSER_CRON expression, payment proposer not scheduled",
     );
   }
+
+  // Daily Win/Loss SLA monitor (Task #653) — escalates debriefs past their
+  // 14-day SLA automatically so overdue debriefs surface without anyone
+  // remembering to POST /win-loss/overdue/scan.
+  if (cron.validate(WINLOSS_SLA_CRON)) {
+    winLossSlaTask = cron.schedule(
+      WINLOSS_SLA_CRON,
+      async () => {
+        try {
+          const out = await runWinLossOverdueScan();
+          logger.info(out, "Win/Loss SLA scan finished");
+        } catch (err) {
+          logger.error({ err }, "Win/Loss SLA scan encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: WINLOSS_SLA_CRON }, "Win/Loss SLA scheduler started");
+  } else {
+    logger.error(
+      { cron: WINLOSS_SLA_CRON },
+      "Invalid WINLOSS_SLA_CRON expression, Win/Loss SLA monitor not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -171,6 +199,11 @@ export function stopScheduler(): void {
     walletPaymentProposerTask.stop();
     walletPaymentProposerTask = null;
     logger.info("Wallet payment proposer scheduler stopped");
+  }
+  if (winLossSlaTask) {
+    winLossSlaTask.stop();
+    winLossSlaTask = null;
+    logger.info("Win/Loss SLA scheduler stopped");
   }
 }
 

@@ -10,7 +10,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { eq, and, desc, isNull, inArray, ilike } from "drizzle-orm";
+import { eq, and, desc, isNull, inArray, ilike, sql } from "drizzle-orm";
 import {
   db,
   atelierOpportunities,
@@ -726,6 +726,41 @@ router.post("/opportunities/:oppId/qualifier", async (req, res) => {
     return;
   }
   const { fiveC, decision, rationale } = parsed.data;
+  // Task #653 — rubric enforcement gate. The document-scored qualification
+  // rubric (Task #540) used to be decorative: scored, stored, and surfaced, but
+  // never enforced anywhere, so it competed with the 5C as a second, toothless
+  // qualification system. We keep the 5C go/no-go as THE single qualification
+  // decision and let the rubric act only as a veto on over-optimistic calls:
+  // when a rubric is on file and lands in the `decline` band, recording a `go`
+  // requires an explicit partner override (`overrideRubric:true`) so the
+  // disagreement is deliberate and audited rather than silent. Opportunities
+  // with no rubric are unaffected (the 5C alone governs).
+  const rubricBand = (opp.qualificationRubric as { band?: string } | null)?.band;
+  const overrideRubric = (req.body as { overrideRubric?: boolean }).overrideRubric === true;
+  const isPartnerTier = me.role === "partner" || me.role === "founding_partner";
+  if (decision === "go" && rubricBand === "decline") {
+    // Only a partner-tier user may override a DECLINE-band rubric. A non-partner
+    // setting overrideRubric:true is rejected so the governance veto cannot be
+    // self-cleared by the deal team.
+    if (overrideRubric && !isPartnerTier) {
+      res.status(403).json({
+        error: "rubric-override-forbidden",
+        band: rubricBand,
+        reason:
+          "Overriding a DECLINE-band qualification rubric requires partner authority. Ask a partner to record the Go.",
+      });
+      return;
+    }
+    if (!overrideRubric) {
+      res.status(422).json({
+        error: "rubric-decline-conflict",
+        band: rubricBand,
+        reason:
+          "The scored qualification rubric places this opportunity in the DECLINE band. Recording a Go requires an explicit partner override (set overrideRubric:true) with a rationale.",
+      });
+      return;
+    }
+  }
   const ts = new Date().toISOString();
   await db
     .update(atelierOpportunities)
@@ -1270,43 +1305,122 @@ router.post("/opportunities/:oppId/meetings", async (req, res) => {
       } as PursuitScoutOutput)
     : null;
 
-  const transcriptId = rid("trn");
-  await db.insert(atelierTranscripts).values({
-    id: transcriptId,
-    cleanedText: parsed.data.transcript,
-    createdByUserId: me.id,
-  });
+  // Task #653 — meeting capture dedup. Re-submitting the same meeting
+  // (identical transcript text + kind for this opportunity) must NOT create a
+  // second meeting row or re-run the scribe — re-running re-extracts and
+  // re-inserts research facts, inflating the opportunity's fact set and skewing
+  // the brief. If an identical capture already exists, return it unchanged.
+  //
+  // Dedup must also be race-safe: two near-simultaneous identical submissions
+  // would both pass a naive check-then-insert and each run the scribe. We close
+  // that window with a transaction-scoped advisory lock keyed on opp+kind so
+  // the check-and-reserve is serialized. The lock is released when the short
+  // reservation transaction commits — it is NOT held across the long-running
+  // scribe call, so no pooled connection is pinned for the duration of the LLM
+  // run. The reserved (placeholder) meeting row is what a concurrent caller
+  // sees as the existing capture, so only one scribe ever runs per transcript.
+  const newTranscriptText = parsed.data.transcript.trim();
+  const lockKey = `atelier:mtg:${opp.id}:${parsed.data.kind}`;
 
-  const { runId, output } = await runMeetingScribe({
-    opportunityId: opp.id,
-    opportunityName: opp.name,
-    transcript: parsed.data.transcript,
-    kind: parsed.data.kind,
-    priorBrief,
-    triggeredByUserId: me.id,
-    actorLabel: "Meeting Scribe",
-  });
+  type Reservation =
+    | { kind: "duplicate"; meeting: typeof atelierMeetings.$inferSelect }
+    | { kind: "reserved"; transcriptId: string; meetingId: string };
 
-  const meetingId = rid("mtg");
-  const [meeting] = await db
-    .insert(atelierMeetings)
-    .values({
+  const reservation: Reservation = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`);
+
+    const priorMeetings = await tx
+      .select()
+      .from(atelierMeetings)
+      .where(
+        and(
+          eq(atelierMeetings.parentType, "opportunity"),
+          eq(atelierMeetings.parentId, opp.id),
+          eq(atelierMeetings.kind, parsed.data.kind),
+          isNull(atelierMeetings.deletedAt),
+        ),
+      );
+    const priorTranscriptIds = priorMeetings
+      .map((m) => m.transcriptId)
+      .filter((id): id is string => !!id);
+    if (priorTranscriptIds.length > 0) {
+      const priorTranscripts = await tx
+        .select()
+        .from(atelierTranscripts)
+        .where(inArray(atelierTranscripts.id, priorTranscriptIds));
+      const textById = new Map(
+        priorTranscripts.map((t) => [t.id, (t.cleanedText ?? "").trim()]),
+      );
+      const dup = priorMeetings.find(
+        (m) => m.transcriptId && textById.get(m.transcriptId) === newTranscriptText,
+      );
+      if (dup) return { kind: "duplicate", meeting: dup };
+    }
+
+    // Reserve: persist the transcript and a placeholder meeting row inside the
+    // lock so a concurrent identical submit dedups against it. The scribe runs
+    // afterwards (outside the lock) and fills in the analysed fields.
+    const transcriptId = rid("trn");
+    await tx.insert(atelierTranscripts).values({
+      id: transcriptId,
+      cleanedText: parsed.data.transcript,
+      createdByUserId: me.id,
+    });
+    const meetingId = rid("mtg");
+    await tx.insert(atelierMeetings).values({
       id: meetingId,
       parentType: "opportunity",
       parentId: opp.id,
       mode: parsed.data.mode ?? "paste",
       kind: parsed.data.kind,
-      title: parsed.data.title || output.title,
+      title: parsed.data.title || "Meeting",
       date: parsed.data.date || new Date().toISOString().slice(0, 10),
-      attendees: output.attendees as never,
       transcriptId,
+      status: "draft",
+      createdByUserId: me.id,
+    });
+    return { kind: "reserved", transcriptId, meetingId };
+  });
+
+  if (reservation.kind === "duplicate") {
+    const dup = reservation.meeting;
+    res.status(200).json({ ...meetingWire(dup, dup.runId), deduped: true });
+    return;
+  }
+
+  const { transcriptId, meetingId } = reservation;
+  let output: Awaited<ReturnType<typeof runMeetingScribe>>["output"];
+  let runId: string;
+  try {
+    ({ runId, output } = await runMeetingScribe({
+      opportunityId: opp.id,
+      opportunityName: opp.name,
+      transcript: parsed.data.transcript,
+      kind: parsed.data.kind,
+      priorBrief,
+      triggeredByUserId: me.id,
+      actorLabel: "Meeting Scribe",
+    }));
+  } catch (err) {
+    // Scribe failed — roll back the reservation so a retry is not permanently
+    // dedup-blocked by an empty placeholder row.
+    await db.delete(atelierMeetings).where(eq(atelierMeetings.id, meetingId)).catch(() => undefined);
+    await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, transcriptId)).catch(() => undefined);
+    throw err;
+  }
+
+  const [meeting] = await db
+    .update(atelierMeetings)
+    .set({
+      title: parsed.data.title || output.title,
+      attendees: output.attendees as never,
       summary: output.summary,
       decisions: output.decisions as never,
       actionItems: output.actionItems as never,
       runId,
-      status: "draft",
-      createdByUserId: me.id,
+      updatedAt: new Date(),
     })
+    .where(eq(atelierMeetings.id, meetingId))
     .returning();
   res.status(201).json(meetingWire(meeting, runId));
 });
