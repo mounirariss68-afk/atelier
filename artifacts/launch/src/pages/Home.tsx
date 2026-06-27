@@ -263,9 +263,7 @@ type ProblemCard = {
   accent: string;
   title: string;
   quote: string;
-  body?: string;
-  span?: boolean;
-  blocks?: { label: string; text: string }[];
+  body: string;
 };
 
 const problemCards: ProblemCard[] = [
@@ -288,13 +286,10 @@ const problemCards: ProblemCard[] = [
     body: "We modernize technology and accelerate delivery through AI-augmented engineering. Faster builds, retired legacy dependencies, owned systems instead of rented SaaS. On-premise capable for clients who need it.",
   },
   {
-    icon: Settings, accent: "#FF7B5A", span: true,
+    icon: Settings, accent: "#FF7B5A",
     title: "Agent Studio",
     quote: "AI adoption in your organization stops at the tool level. The real value is one layer deeper.",
-    blocks: [
-      { label: "Employee", text: "Specialized agents that work alongside every individual — handling repetitive work and amplifying output across the organization." },
-      { label: "Process", text: "End-to-end agentic workflows that replace headcount-heavy functions with autonomous, governed systems — procurement, onboarding, reporting, compliance, and more." },
-    ],
+    body: "We deploy specialized agents at two layers — alongside every individual to handle repetitive work and amplify output, and as end-to-end agentic workflows that replace headcount-heavy functions like procurement, onboarding, reporting, and compliance with autonomous, governed systems.",
   },
   {
     icon: Layers, accent: "#5B7CFF",
@@ -858,39 +853,26 @@ function AgenticWorkflowMock() {
 
 function ProblemCards() {
   return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
+    <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-5 auto-rows-fr">
       {problemCards.map((c, i) => {
         const Icon = c.icon;
         return (
-          <Reveal key={c.title} delay={i * 0.06} className={c.span ? "lg:col-span-2" : ""}>
-            <div className="grad-border bg-navylight/20 h-full p-6 md:p-7 flex flex-col">
-              <div className="flex items-center gap-3 mb-5">
-                <span
-                  className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: c.accent }}
-                >
-                  <Icon className="w-5 h-5 text-white" strokeWidth={1.8} />
-                </span>
-                <h3 className="text-lg md:text-xl font-bold text-white leading-tight">{c.title}</h3>
-              </div>
+          <Reveal key={c.title} delay={i * 0.06}>
+            <div className="grad-border bg-navylight/20 h-full p-5 flex flex-col">
+              <span
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mb-4"
+                style={{ background: c.accent }}
+              >
+                <Icon className="w-5 h-5 text-white" strokeWidth={1.8} />
+              </span>
+              <h3 className="text-base font-bold text-white leading-tight mb-4">{c.title}</h3>
               <p
-                className="border-l-2 pl-4 mb-5 text-white/90 text-[15px] md:text-base font-medium italic leading-snug"
+                className="border-l-2 pl-3 mb-4 text-white/90 text-[13.5px] font-medium italic leading-snug"
                 style={{ borderColor: c.accent }}
               >
                 {c.quote}
               </p>
-              {c.blocks ? (
-                <div className="grid sm:grid-cols-2 gap-6 mt-auto">
-                  {c.blocks.map((b) => (
-                    <div key={b.label}>
-                      <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-gradient-bright mb-2">{b.label}</p>
-                      <p className="text-[14px] text-offwhite/65 font-light leading-relaxed">{b.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[15px] text-offwhite/65 font-light leading-relaxed">{c.body}</p>
-              )}
+              <p className="text-[13px] text-offwhite/60 font-light leading-relaxed">{c.body}</p>
             </div>
           </Reveal>
         );
