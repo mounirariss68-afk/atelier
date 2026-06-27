@@ -698,7 +698,7 @@ type FormulaStep = {
   num: string;
   stage: string;
   label: string;
-  img: string;
+  icon: typeof Target;
   accent: string;
   body: string;
   takeaway: string;
@@ -710,7 +710,7 @@ const formulaSteps: FormulaStep[] = [
     num: "01",
     stage: "Innovate",
     label: "Spot the value",
-    img: "images/approach/step-01-t.png",
+    icon: Target,
     accent: "#5B7CFF",
     body: "Start with one high-value use case with clear ROI and real data.",
     takeaway: "Don’t boil the ocean.",
@@ -720,7 +720,7 @@ const formulaSteps: FormulaStep[] = [
     num: "02",
     stage: "Demonstrate",
     label: "Prototype",
-    img: "images/approach/step-02-t.png",
+    icon: Presentation,
     accent: "#8A5BD6",
     body: "See it, test it, and validate value in 48 hours.",
     takeaway: "See it before you buy it.",
@@ -730,7 +730,7 @@ const formulaSteps: FormulaStep[] = [
     num: "03",
     stage: "Activate",
     label: "Build the Solution",
-    img: "images/approach/step-03-t.png",
+    icon: Settings,
     accent: "#C45BB8",
     body: "Senior-led teams working with AI agents to build, iterate and deliver at speed.",
     takeaway: "Human judgment. Agent scale.",
@@ -740,7 +740,7 @@ const formulaSteps: FormulaStep[] = [
     num: "04",
     stage: "Generate",
     label: "Scale & Operationalize",
-    img: "images/approach/step-04-t.png",
+    icon: Rocket,
     accent: "#FF7B5A",
     body: "You own the IP, the platform and the outcomes. No lock-in.",
     takeaway: "No lock-in. Full ownership.",
@@ -751,52 +751,45 @@ const formulaSteps: FormulaStep[] = [
 function Formula() {
   return (
     <div className="relative">
-      <div className="grid gap-5 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {formulaSteps.map((s, i) => (
-          <Reveal key={s.num} delay={i * 0.08}>
-            <div className="grad-border relative h-full bg-navydeep flex flex-col overflow-hidden">
-              <span
-                className="absolute inset-x-0 top-0 h-[2px] z-10"
-                style={{ background: s.accent }}
-              />
-              {/* Vector header (transparent art, floats on the card) */}
-              <div className="relative px-3 pt-7 pb-1">
-                <img
-                  src={asset(s.img)}
-                  alt={`${s.stage} — ${s.label}`}
-                  loading="lazy"
-                  draggable={false}
-                  className="block w-full aspect-[4/3] object-contain select-none"
-                />
+      <div className="grid gap-5 sm:gap-6 pt-9 md:grid-cols-2 lg:grid-cols-4">
+        {formulaSteps.map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <Reveal key={s.num} delay={i * 0.08}>
+              <div className="relative h-full">
+                {/* Floating vector icon above the card */}
                 <span
-                  className="absolute top-3 left-4 text-[40px] font-extrabold leading-none tracking-[-2px]"
-                  style={{ color: s.accent, textShadow: "0 2px 16px rgba(0,0,0,0.7)" }}
+                  className="absolute -top-9 left-1/2 -translate-x-1/2 z-20 w-[68px] h-[68px] rounded-2xl flex items-center justify-center ring-4 ring-navy"
+                  style={{ background: s.accent, boxShadow: `0 16px 34px -10px ${s.accent}cc` }}
                 >
-                  {s.num}
+                  <Icon className="w-7 h-7 text-white" strokeWidth={1.8} />
                 </span>
-              </div>
-              {/* Body */}
-              <div className="px-5 pb-5 pt-3 flex flex-col flex-1">
-                <div
-                  className="text-[11px] font-bold tracking-[2.5px] uppercase mb-1.5"
-                  style={{ color: s.accent }}
-                >
-                  {s.stage}
+                <div className="grad-border relative h-full bg-navylight/20 px-6 pb-6 pt-12 flex flex-col items-center text-center overflow-hidden">
+                  <span
+                    className="absolute inset-x-0 top-0 h-[2px]"
+                    style={{ background: s.accent }}
+                  />
+                  <div
+                    className="text-[11px] font-bold tracking-[2.5px] uppercase mb-2"
+                    style={{ color: s.accent }}
+                  >
+                    {s.num} — {s.stage}
+                  </div>
+                  <h3 className="text-lg font-bold text-white leading-tight mb-2.5">{s.label}</h3>
+                  <p className="text-[13px] text-offwhite/60 font-light leading-relaxed mb-4">
+                    {s.body}
+                  </p>
+                  <div className="mt-auto flex items-center gap-2 pt-3 border-t border-white/10 w-full justify-center">
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: s.accent }} />
+                    <span className="text-[12.5px] font-semibold" style={{ color: s.accent }}>
+                      {s.takeaway}
+                    </span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-bold text-white leading-tight mb-2.5">{s.label}</h3>
-                <p className="text-[13px] text-offwhite/60 font-light leading-relaxed mb-4">
-                  {s.body}
-                </p>
-                <div className="mt-auto flex items-center gap-2 pt-3 border-t border-white/10">
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: s.accent }} />
-                  <span className="text-[12.5px] font-semibold" style={{ color: s.accent }}>
-                    {s.takeaway}
-                  </span>
-                </div>
               </div>
-            </div>
-          </Reveal>
-        ))}
+            </Reveal>
+          );
+        })}
       </div>
 
       {/* Timeline */}
@@ -1217,6 +1210,17 @@ export default function Home() {
             </Reveal>
           </div>
           <ProblemCards />
+          <Reveal delay={0.1}>
+            <div className="mt-12 flex justify-center">
+              <a
+                href="#approach"
+                className="group inline-flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white transition-colors"
+              >
+                Here’s how we deliver
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </a>
+            </div>
+          </Reveal>
         </div>
       </section>
 
