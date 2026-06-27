@@ -67,31 +67,10 @@ function HeroCarousel() {
   }, [api]);
 
   return (
-    <section className="relative min-h-[100dvh] flex items-center overflow-hidden">
-      {/* Background slides */}
-      <Carousel
-        setApi={setApi}
-        opts={{ loop: true, align: "start" }}
-        className="absolute inset-0 z-0"
-      >
-        <CarouselContent className="ml-0 h-[100dvh]">
-          {HERO_SLIDES.map((slide, i) => (
-            <CarouselItem key={i} className="pl-0 basis-full relative h-[100dvh]">
-              <picture>
-                <source media="(min-width: 768px)" srcSet={slide.desktop} />
-                <img
-                  src={slide.mobile}
-                  alt=""
-                  loading={i === 0 ? "eager" : "lazy"}
-                  className="w-full h-full object-cover object-center"
-                />
-              </picture>
-              <div className="absolute inset-0 bg-gradient-to-b from-navy/70 via-navy/55 to-navy" />
-              <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(91,124,255,0.18),transparent_55%)]" />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
+    <section className="relative min-h-[100dvh] flex items-center overflow-hidden bg-navy">
+      {/* Background treatment */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-b from-navy via-navy to-navy" />
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_30%_40%,rgba(91,124,255,0.18),transparent_55%)]" />
 
       {/* Floating glows */}
       <div className="pointer-events-none absolute inset-0 z-0">
@@ -99,78 +78,104 @@ function HeroCarousel() {
         <div className="glow-b absolute bottom-[6%] right-[6%] w-[30rem] h-[30rem] rounded-full bg-cogmagenta/22 blur-[120px]" />
       </div>
 
-      {/* Overlay content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24">
-        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}
-          className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 mb-8">
-          <span className="relative flex h-2 w-2">
-            <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cogcoral" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-cogcoral" />
-          </span>
-          <span className="text-[11px] font-semibold tracking-[2px] uppercase text-offwhite/80">Intelligence that Elevates</span>
-        </motion.div>
+      {/* Content: text left, image right (40%) */}
+      <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24 pb-16 md:pb-0 grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-10 md:gap-10 items-center">
+        {/* Left: message + CTAs */}
+        <div>
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 mb-8">
+            <span className="relative flex h-2 w-2">
+              <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cogcoral" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-cogcoral" />
+            </span>
+            <span className="text-[11px] font-semibold tracking-[2px] uppercase text-offwhite/80">Intelligence that Elevates</span>
+          </motion.div>
 
-        <div className="min-h-[4.2em]">
-          <AnimatePresence mode="wait">
-            <motion.h1
-              key={selected}
-              className="text-[13vw] sm:text-[64px] md:text-[84px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
-            >
-              <motion.span
-                className="block text-white"
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -14 }}
-                transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+          <div className="min-h-[4.2em]">
+            <AnimatePresence mode="wait">
+              <motion.h1
+                key={selected}
+                className="text-[12vw] sm:text-[56px] md:text-[68px] lg:text-[78px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
               >
-                {HERO_SLIDES[selected].white[0]}
-                <br />
-                {HERO_SLIDES[selected].white[1]}
-              </motion.span>
-              <motion.span
-                className="block text-gradient-bright"
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -14 }}
-                transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
+                <motion.span
+                  className="block text-white"
+                  initial={{ opacity: 0, y: 28 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -14 }}
+                  transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+                >
+                  {HERO_SLIDES[selected].white[0]}
+                  <br />
+                  {HERO_SLIDES[selected].white[1]}
+                </motion.span>
+                <motion.span
+                  className="block text-gradient-bright"
+                  initial={{ opacity: 0, y: 28 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -14 }}
+                  transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
+                >
+                  {HERO_SLIDES[selected].gradient[0]}
+                  <br />
+                  {HERO_SLIDES[selected].gradient[1]}
+                </motion.span>
+              </motion.h1>
+            </AnimatePresence>
+          </div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.45 }}
+            className="flex flex-wrap items-center gap-4 mt-12">
+            <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
+              Transform Your Enterprise <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </a>
+            <a href="#services" className="inline-flex items-center gap-2 text-offwhite/80 hover:text-white px-6 py-4 rounded-full border border-white/15 hover:border-white/30 transition-colors text-base font-medium">
+              What we do
+            </a>
+          </motion.div>
+
+          {/* Slide navigator */}
+          <div className="flex items-center gap-3 mt-14">
+            {HERO_SLIDES.map((slide, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => api?.scrollTo(i)}
+                aria-label={`Go to slide ${i + 1}: ${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+                aria-current={selected === i}
+                className="group h-3 flex items-center"
               >
-                {HERO_SLIDES[selected].gradient[0]}
-                <br />
-                {HERO_SLIDES[selected].gradient[1]}
-              </motion.span>
-            </motion.h1>
-          </AnimatePresence>
+                <span
+                  className={`block h-[3px] rounded-full transition-all duration-500 ${
+                    selected === i ? "w-12 bg-cog-grad" : "w-6 bg-white/25 group-hover:bg-white/50"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
         </div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.45 }}
-          className="flex flex-wrap items-center gap-4 mt-12">
-          <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
-            Transform Your Enterprise <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-          </a>
-          <a href="#services" className="inline-flex items-center gap-2 text-offwhite/80 hover:text-white px-6 py-4 rounded-full border border-white/15 hover:border-white/30 transition-colors text-base font-medium">
-            What we do
-          </a>
-        </motion.div>
-
-        {/* Slide navigator */}
-        <div className="flex items-center gap-3 mt-14">
-          {HERO_SLIDES.map((slide, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => api?.scrollTo(i)}
-              aria-label={`Go to slide ${i + 1}: ${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
-              aria-current={selected === i}
-              className="group h-3 flex items-center"
-            >
-              <span
-                className={`block h-[3px] rounded-full transition-all duration-500 ${
-                  selected === i ? "w-12 bg-cog-grad" : "w-6 bg-white/25 group-hover:bg-white/50"
-                }`}
-              />
-            </button>
-          ))}
-        </div>
+        {/* Right: slide image at natural aspect ratio (~40% width) */}
+        <Carousel
+          setApi={setApi}
+          opts={{ loop: true, align: "start" }}
+          className="w-full"
+        >
+          <CarouselContent className="ml-0">
+            {HERO_SLIDES.map((slide, i) => (
+              <CarouselItem key={i} className="pl-0 basis-full">
+                <picture>
+                  <source media="(min-width: 768px)" srcSet={slide.desktop} />
+                  <img
+                    src={slide.mobile}
+                    alt={`${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+                    loading={i === 0 ? "eager" : "lazy"}
+                    className="w-full h-auto object-contain rounded-2xl drop-shadow-[0_24px_60px_rgba(0,0,0,0.45)]"
+                  />
+                </picture>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
       </div>
 
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 text-offwhite/50">
