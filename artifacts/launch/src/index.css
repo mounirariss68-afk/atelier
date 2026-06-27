@@ -91,6 +91,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
+  pointer-events: none;
   background: var(--cog-grad-diag);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
