@@ -668,72 +668,123 @@ function GuildSystem() {
 /* ===================== AGENTIC WORKFLOW PROTOTYPE (rendered mock) ===================== */
 
 function AgenticWorkflowMock() {
-  const steps = [
-    { icon: Database, name: "Data Collector", note: "Pulled 1,240 SKUs", status: "done" as const },
-    { icon: Activity, name: "Market Analyst", note: "Benchmarked 38 competitors", status: "done" as const },
-    { icon: Cpu, name: "Pricing Strategist", note: "Optimizing margins…", status: "running" as const },
-    { icon: ShieldCheck, name: "Approval Agent", note: "Awaiting sign-off", status: "queued" as const },
-    { icon: Rocket, name: "Publisher", note: "Push prices to ERP", status: "queued" as const },
-  ];
-
-  const ring: Record<string, React.CSSProperties> = {
-    done: { borderColor: "rgba(95,208,166,0.45)", color: "#5fd0a6", background: "rgba(95,208,166,0.10)" },
-    running: { borderColor: "transparent", color: "#fff", background: "var(--cog-grad-diag)" },
-    queued: { borderColor: "rgba(255,255,255,0.12)", color: "rgba(235,238,255,0.45)", background: "rgba(255,255,255,0.03)" },
+  type NodeStatus = "done" | "running" | "queued";
+  type WfNode = {
+    id: string;
+    icon: typeof Database;
+    label: string;
+    sub: string;
+    x: number;
+    y: number;
+    accent: string;
+    status: NodeStatus;
   };
 
-  const badge: Record<string, { label: string; cls: string }> = {
-    done: { label: "Done", cls: "text-[#5fd0a6]" },
-    running: { label: "Running", cls: "text-white" },
-    queued: { label: "Queued", cls: "text-offwhite/40" },
+  const nodes: WfNode[] = [
+    { id: "trigger", icon: Hourglass, label: "Daily Schedule", sub: "Trigger · 9:00am", x: 12, y: 50, accent: "#8A5BD6", status: "done" },
+    { id: "fetch", icon: Database, label: "Fetch SKUs", sub: "1,240 items", x: 37, y: 50, accent: "#5B7CFF", status: "done" },
+    { id: "market", icon: Activity, label: "Analyze Market", sub: "38 competitors", x: 63, y: 24, accent: "#C45BB8", status: "running" },
+    { id: "margin", icon: Target, label: "Score Margins", sub: "per product", x: 63, y: 76, accent: "#FF7B5A", status: "running" },
+    { id: "publish", icon: Rocket, label: "Publish to ERP", sub: "auto-sync", x: 88, y: 50, accent: "#5B7CFF", status: "queued" },
+  ];
+
+  const edges = [
+    { from: "trigger", to: "fetch", active: true },
+    { from: "fetch", to: "market", active: true },
+    { from: "fetch", to: "margin", active: true },
+    { from: "market", to: "publish", active: false },
+    { from: "margin", to: "publish", active: false },
+  ];
+
+  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const path = (a: WfNode, b: WfNode) => {
+    const cx = (a.x + b.x) / 2;
+    return `M ${a.x} ${a.y} C ${cx} ${a.y}, ${cx} ${b.y}, ${b.x} ${b.y}`;
+  };
+
+  const dot: Record<NodeStatus, string> = {
+    done: "bg-[#5fd0a6]",
+    running: "bg-white animate-pulse",
+    queued: "bg-white/25",
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-[460px]">
+    <div className="relative mx-auto w-full max-w-[520px]">
       <div className="pointer-events-none absolute -inset-10 bg-cog-grad-diag opacity-20 blur-[90px]" />
-      {/* ===== Computer screen (matches hero card framing) ===== */}
+      {/* ===== Computer screen (Mac desktop 16:10) ===== */}
       <div className="relative grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
-        <div className="rounded-[12px] overflow-hidden bg-navydeep">
-          {/* app top bar */}
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 bg-navylight/30">
-            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-            <div className="ml-3 hidden sm:block flex-1 max-w-[170px] rounded-md bg-white/5 px-3 py-1 text-[10px] text-offwhite/45 truncate">
-              app.cognirise.ai/agents
+        <div className="rounded-[12px] overflow-hidden bg-navydeep aspect-[16/10] flex flex-col">
+          {/* macOS title bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 bg-navylight/30 shrink-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
+            <div className="ml-3 hidden sm:block flex-1 max-w-[180px] rounded-md bg-white/5 px-3 py-1 text-[10px] text-offwhite/45 truncate">
+              app.cognirise.ai/workflows
             </div>
             <span className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-[1px] text-[#5fd0a6]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#5fd0a6] animate-pulse" /> Live
             </span>
           </div>
-          {/* screen body */}
-          <div className="p-5">
-            <p className="text-[11px] uppercase tracking-[1.5px] text-offwhite/40">Pricing Agent</p>
-            <h4 className="text-[15px] font-semibold text-white mt-0.5 mb-5">Autonomous run · 5 steps</h4>
-            {steps.map((s, i) => {
-              const Icon = s.icon;
-              const last = i === steps.length - 1;
+
+          {/* workflow canvas */}
+          <div
+            className="relative flex-1"
+            style={{
+              backgroundImage:
+                "radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
+              backgroundSize: "16px 16px",
+            }}
+          >
+            {/* connectors */}
+            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="wf-edge" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#5B7CFF" />
+                  <stop offset="50%" stopColor="#8A5BD6" />
+                  <stop offset="100%" stopColor="#C45BB8" />
+                </linearGradient>
+              </defs>
+              {edges.map((e, i) => {
+                const a = byId[e.from];
+                const b = byId[e.to];
+                return (
+                  <path
+                    key={i}
+                    d={path(a, b)}
+                    fill="none"
+                    stroke={e.active ? "url(#wf-edge)" : "rgba(255,255,255,0.16)"}
+                    strokeWidth={e.active ? 1.4 : 1}
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray={e.active ? "4 4" : undefined}
+                    className={e.active ? "wf-flow" : undefined}
+                  />
+                );
+              })}
+            </svg>
+
+            {/* nodes */}
+            {nodes.map((n) => {
+              const Icon = n.icon;
               return (
-                <div key={s.name} className="relative flex items-start gap-3 pb-4 last:pb-0">
-                  {!last && <span className="absolute left-[15px] top-9 -bottom-0.5 w-px bg-white/10" />}
-                  <span
-                    className="relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
-                    style={ring[s.status]}
-                  >
-                    {s.status === "done" ? (
-                      <Check className="w-4 h-4" strokeWidth={2.5} />
-                    ) : (
-                      <Icon className={`w-4 h-4 ${s.status === "running" ? "animate-pulse" : ""}`} strokeWidth={1.8} />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1 pt-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[13px] font-semibold text-white truncate">{s.name}</p>
-                      <span className={`text-[10px] font-semibold uppercase tracking-[0.5px] shrink-0 ${badge[s.status].cls}`}>
-                        {badge[s.status].label}
-                      </span>
+                <div
+                  key={n.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[118px]"
+                  style={{ left: `${n.x}%`, top: `${n.y}%` }}
+                >
+                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-navylight/80 backdrop-blur-sm px-2 py-1.5 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)]">
+                    <span
+                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: n.accent }}
+                    >
+                      <Icon className="w-3.5 h-3.5 text-white" strokeWidth={2} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10.5px] font-semibold text-white leading-tight truncate">{n.label}</p>
+                      <p className="text-[9px] text-offwhite/45 leading-tight truncate">{n.sub}</p>
                     </div>
-                    <p className="text-[12px] text-offwhite/50 truncate">{s.note}</p>
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot[n.status]}`} />
                   </div>
                 </div>
               );

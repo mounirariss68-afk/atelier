@@ -143,6 +143,7 @@
 
 /* Service card hover motif (animated network — hover-video fallback) */
 @keyframes dashFlow { to { stroke-dashoffset: -48; } }
+.wf-flow { animation: dashFlow 1.1s linear infinite; }
 @keyframes nodePulse {
   0%, 100% { opacity: 0.25; }
   50% { opacity: 1; }
