@@ -801,7 +801,7 @@ export default function Home() {
           </div>
 
           {/* Five guilds */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-16">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-16 max-w-5xl mx-auto">
             {[
               { name: "Strategy Guild", role: "What to build and why" },
               { name: "Delivery Guild", role: "Ideas into programs" },
