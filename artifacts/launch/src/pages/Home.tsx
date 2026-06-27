@@ -17,6 +17,7 @@ import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_17823965756
 import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.png";
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
+import humanAgent from "@assets/human_agent_trimmed.webp";
 
 type HeroSlide = {
   white: [string, string];
@@ -732,6 +733,99 @@ export default function Home() {
               </p>
             </Reveal>
           </div>
+        </div>
+      </section>
+
+      {/* ===== How We Work (human + agents) ===== */}
+      <section id="how-we-work" className="relative py-32">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="glow-b absolute top-1/4 left-1/3 w-[30rem] h-[30rem] rounded-full bg-cogblue/10 blur-[140px]" />
+        </div>
+        <div className="max-w-7xl mx-auto px-6 relative">
+          <div className="max-w-4xl mb-16">
+            <Reveal><Eyebrow>How we work</Eyebrow></Reveal>
+            <Reveal delay={0.05}>
+              <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
+                Two kinds of intelligence. <span className="text-gradient">One delivery team.</span>
+              </h2>
+            </Reveal>
+          </div>
+
+          {/* Two columns split by the human/agent visual */}
+          <div className="grid lg:grid-cols-[1fr_minmax(260px,400px)_1fr] gap-10 lg:gap-10 items-center">
+            {/* Left: human side */}
+            <Reveal delay={0.05}>
+              <div className="lg:text-right">
+                <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The human side</p>
+                <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
+                  <span className="text-gradient">Forward Deployed Engineer</span>
+                </h3>
+                <p className="text-offwhite/70 leading-relaxed font-light">
+                  Not a remote advisor. A senior transformation professional who works inside your
+                  organization from day one — alongside your leadership, your teams, your systems. They
+                  direct the agents, bridge strategy with execution, and stay until the outcome is real.
+                </p>
+              </div>
+            </Reveal>
+
+            {/* Center visual */}
+            <Reveal delay={0.1}>
+              <img
+                src={humanAgent}
+                alt="Human expertise and AI agents working as one delivery team"
+                className="w-full max-w-[400px] mx-auto select-none drop-shadow-[0_30px_80px_rgba(91,124,255,0.25)]"
+                draggable={false}
+              />
+            </Reveal>
+
+            {/* Right: agent side */}
+            <Reveal delay={0.15}>
+              <div>
+                <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The agent side</p>
+                <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
+                  <span className="text-gradient">Agent Guilds</span>
+                </h3>
+                <p className="text-offwhite/70 leading-relaxed font-light">
+                  Specialized AI agents organized into five guilds — each with a defined role, working at
+                  machine speed, in parallel. Not automation. Purpose-built agents assembled around your
+                  specific problem.
+                </p>
+              </div>
+            </Reveal>
+          </div>
+
+          {/* Five guilds */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-16">
+            {[
+              { name: "Strategy Guild", role: "What to build and why" },
+              { name: "Delivery Guild", role: "Ideas into programs" },
+              { name: "Engineering Guild", role: "Production systems" },
+              { name: "Governance Guild", role: "Trust and compliance" },
+              { name: "Value Guild", role: "Outcomes that stick" },
+            ].map((g, i) => (
+              <Reveal key={g.name} delay={i * 0.06}>
+                <div className="grad-border bg-navylight/20 h-full p-5 transition-transform duration-300 hover:-translate-y-1">
+                  <p className="font-semibold text-white text-[15px] mb-1.5">{g.name}</p>
+                  <p className="text-sm text-offwhite/55 leading-snug">{g.role}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Tie-back line */}
+          <Reveal delay={0.1}>
+            <p className="text-center text-xl md:text-2xl font-light text-offwhite/85 mt-16">
+              Together, they're why <span className="text-gradient">48 hours</span> is possible.
+            </p>
+          </Reveal>
+
+          {/* Transition into services */}
+          <Reveal delay={0.15}>
+            <a href="#services" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
+              <span className="text-sm tracking-wide">Here's what you can apply this to.</span>
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+            </a>
+          </Reveal>
         </div>
       </section>
 
