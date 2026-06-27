@@ -61,6 +61,15 @@ function HeroCarousel() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24 pb-16 md:pb-0 grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-10 md:gap-10 items-center">
         {/* Left: message + CTAs */}
         <div className="relative z-20">
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.1 }}
+            className="text-base sm:text-lg md:text-xl font-semibold text-offwhite/70 mb-6 max-w-xl"
+          >
+            Professional services. Rebuilt for the age of agents.
+          </motion.p>
+
           <div className="min-h-[4.2em]">
             <AnimatePresence mode="wait">
               <motion.h1
@@ -125,7 +134,7 @@ function HeroCarousel() {
         </div>
 
         {/* Right: crossfading slide image (decorative, sits behind text) */}
-        <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
+        <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-[58%] md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
           {HERO_SLIDES.map((slide, i) => (
             <motion.div
               key={i}
