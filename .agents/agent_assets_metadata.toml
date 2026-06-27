@@ -144,6 +144,12 @@ uri = "file://artifacts/launch/public/images/scenes/guild-hub.png"
 type = "image"
 title = "guild radial hub five nodes"
 
+[[generated]]
+id = "xaP39Psp5DmcDIjodvjWs"
+uri = "file://attached_assets/generated_images/prototype_dashboard.png"
+type = "image"
+title = "prototype dashboard mockup"
+
 [[outputs]]
 id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"

@@ -18,6 +18,7 @@ import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_178239657562
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 import humanAgent from "@assets/human_agent_trimmed.webp";
+import prototypeShot from "@assets/prototype_dashboard.webp";
 
 type HeroSlide = {
   white: [string, string];
@@ -734,7 +735,17 @@ export default function Home() {
             </Reveal>
           </div>
           <Reveal delay={0.1} className="mt-16">
-            <TransformationMap />
+            <div className="relative max-w-4xl mx-auto">
+              <div className="pointer-events-none absolute -inset-6 bg-cog-grad-diag opacity-20 blur-[60px] rounded-[28px]" />
+              <div className="grad-border bg-navydeep/40 p-1.5 relative shadow-[0_40px_100px_-30px_rgba(0,0,0,0.8)]">
+                <img
+                  src={prototypeShot}
+                  alt="A working software prototype dashboard delivered in 48 hours"
+                  className="block w-full h-auto rounded-[12px] select-none"
+                  draggable={false}
+                />
+              </div>
+            </div>
           </Reveal>
           <Reveal delay={0.2}>
             <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
