@@ -720,24 +720,24 @@ export default function Home() {
           <div className="glow-a absolute top-1/3 left-1/4 w-[28rem] h-[28rem] rounded-full bg-cogpurple/15 blur-[130px]" />
         </div>
         <div className="max-w-7xl mx-auto px-6 relative">
-          <div className="max-w-3xl mb-14">
+          <div className="max-w-4xl">
             <Reveal><Eyebrow>A different kind of partner</Eyebrow></Reveal>
             <Reveal delay={0.05}>
               <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
-                From selling effort to <span className="text-gradient">delivering outcomes.</span>
+                Most engagements start with a proposal. <span className="text-gradient">Ours start with a prototype.</span>
               </h2>
             </Reveal>
             <Reveal delay={0.1}>
-              <p className="text-lg text-offwhite/65 mt-6 font-light leading-relaxed">
-                No endless decks. No man-day billing. No multi-month pilots that go nowhere. We replace
-                activity with measurable, production-ready results — and you keep full ownership.
+              <p className="text-lg md:text-xl text-offwhite/70 mt-8 font-light leading-relaxed">
+                In 48 hours, you’ll have a working system — not a roadmap, not a recommendation, not a deck.
+              </p>
+            </Reveal>
+            <Reveal delay={0.15}>
+              <p className="text-lg md:text-xl text-offwhite/70 mt-4 font-light leading-relaxed">
+                See it running in your environment before you commit to anything.
               </p>
             </Reveal>
           </div>
-
-          <Reveal>
-            <TransformationMap />
-          </Reveal>
         </div>
       </section>
 
