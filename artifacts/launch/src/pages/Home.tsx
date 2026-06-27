@@ -701,7 +701,7 @@ export default function Home() {
       <section className="relative bg-navydeep py-24 border-y border-white/5">
         <div className="max-w-5xl mx-auto px-6 text-center">
           <Reveal>
-            <h2 className="text-[32px] md:text-[52px] font-bold text-white tracking-[-1.5px] leading-[1.1]">
+            <h2 className="text-[26px] md:text-[40px] font-bold text-white tracking-[-1.5px] leading-[1.1]">
               AI tools and PowerPoints don't create value.<br /><span className="text-gradient">Execution does.</span>
             </h2>
           </Reveal>
