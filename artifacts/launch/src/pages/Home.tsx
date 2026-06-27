@@ -279,12 +279,6 @@ const problemCards: ProblemCard[] = [
   },
 ];
 
-const agentCards = [
-  { src: "images/deck/img35.webp", name: "CogniSage", role: "Research & Knowledge Synthesis" },
-  { src: "images/deck/img36.webp", name: "CogniCompass", role: "Strategy & Decision Intelligence" },
-  { src: "images/deck/img37.webp", name: "CogniSignal", role: "Competitive Intelligence" },
-];
-
 /* The transformation map — each row pairs an old-world cost (left) with the
    Cognirise outcome it becomes (right), wired through the central "new model"
    node. Used by <TransformationMap />. */
@@ -624,7 +618,7 @@ function GuildSystem() {
     <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
       <div className="overflow-x-auto rounded-[12px]">
         <img
-          src={asset("images/scenes/guild-deck.webp")}
+          src={asset("images/scenes/guild-deck-v2.webp")}
           alt="The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform"
           className="block h-auto rounded-[12px] min-w-[880px] w-full select-none"
           draggable={false}
@@ -1040,6 +1034,12 @@ export default function Home() {
             </Reveal>
           </div>
           <Reveal delay={0.05}><Formula /></Reveal>
+          <Reveal delay={0.1}>
+            <a href="#guilds" className="group mt-12 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
+              <span className="text-sm tracking-wide">See how humans and agents work as one.</span>
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+            </a>
+          </Reveal>
         </div>
       </section>
 
@@ -1064,34 +1064,17 @@ export default function Home() {
             </Reveal>
           </div>
           <Reveal delay={0.05}><GuildSystem /></Reveal>
-        </div>
-      </section>
-
-      {/* ===== Agents ===== */}
-      <section className="relative py-32">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="max-w-3xl mb-14">
-            <Reveal><Eyebrow>Meet the agents</Eyebrow></Reveal>
-            <Reveal delay={0.05}>
-              <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
-                Specialized intelligence, <span className="text-gradient">on demand.</span>
-              </h2>
-            </Reveal>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {agentCards.map((a, i) => (
-              <Reveal key={a.name} delay={i * 0.1}>
-                <div className="grad-border group bg-navy/60 p-1.5 transition-transform duration-300 hover:-translate-y-2">
-                  <img src={asset(a.src)} alt={a.name} loading="lazy" className="w-full h-auto rounded-[12px] block" />
-                </div>
-              </Reveal>
-            ))}
-          </div>
+          <Reveal delay={0.1}>
+            <a href="#cta" className="group mt-12 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
+              <span className="text-sm tracking-wide">Ready to become an agentic enterprise?</span>
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+            </a>
+          </Reveal>
         </div>
       </section>
 
       {/* ===== CTA ===== */}
-      <section className="relative py-36 overflow-hidden bg-navydeep border-t border-white/5">
+      <section id="cta" className="relative py-36 overflow-hidden bg-navydeep border-t border-white/5">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-a absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] rounded-full bg-cogpurple/20 blur-[150px]" />
         </div>
