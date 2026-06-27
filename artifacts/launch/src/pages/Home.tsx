@@ -764,7 +764,7 @@ export default function Home() {
               <div className="lg:text-right">
                 <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The human side</p>
                 <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
-                  <span className="text-gradient">Forward Deployed Engineer</span>
+                  <span className="text-gradient">Forward Deployed Engineers (FDEs)</span>
                 </h3>
                 <p className="text-offwhite/70 leading-relaxed font-light">
                   Not a remote advisor. A senior transformation professional who works inside your
@@ -789,7 +789,7 @@ export default function Home() {
               <div>
                 <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The agent side</p>
                 <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
-                  <span className="text-gradient">Agent Guilds</span>
+                  <span className="text-gradient">Forward Deployed Agents (FDAs)</span>
                 </h3>
                 <p className="text-offwhite/70 leading-relaxed font-light">
                   Specialized AI agents organized into five guilds — each with a defined role, working at
