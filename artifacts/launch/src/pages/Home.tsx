@@ -310,7 +310,7 @@ const problemCards: ProblemCard[] = [
   {
     icon: Layers, accent: "#5B7CFF",
     title: "Platforms",
-    quote: "Many enterprise platforms. None of them are intelligent. And they’re not flexible.",
+    quote: "Many enterprise platforms. None of them are intelligent.",
     points: [
       "AI-native, built for enterprise",
       "Mission-specific agentic platforms solving toughest business problems",
