@@ -710,7 +710,7 @@ export default function Home() {
       </section>
 
       {/* ===== From selling effort to outcomes (interactive comparison) ===== */}
-      <section id="model" className="relative py-32">
+      <section id="model" className="relative pt-32 pb-16">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-a absolute top-1/3 left-1/4 w-[28rem] h-[28rem] rounded-full bg-cogpurple/15 blur-[130px]" />
         </div>
@@ -732,12 +732,18 @@ export default function Home() {
                 See it running in your environment before you commit to anything.
               </p>
             </Reveal>
+            <Reveal delay={0.2}>
+              <a href="#how-we-work" className="group mt-10 inline-flex items-center gap-2 text-mutedgrey hover:text-white transition-colors">
+                <span className="text-sm tracking-wide">Here’s how we do it.</span>
+                <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+              </a>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* ===== How We Work (human + agents) ===== */}
-      <section id="how-we-work" className="relative py-32">
+      <section id="how-we-work" className="relative pt-16 pb-32">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/4 left-1/3 w-[30rem] h-[30rem] rounded-full bg-cogblue/10 blur-[140px]" />
         </div>
