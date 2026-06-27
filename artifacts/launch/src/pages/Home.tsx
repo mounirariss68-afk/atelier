@@ -710,7 +710,7 @@ const formulaSteps: FormulaStep[] = [
     num: "01",
     stage: "Innovate",
     label: "Spot the value",
-    img: "images/approach/step-01.png",
+    img: "images/approach/step-01-t.png",
     accent: "#5B7CFF",
     body: "Start with one high-value use case with clear ROI and real data.",
     takeaway: "Don’t boil the ocean.",
@@ -720,7 +720,7 @@ const formulaSteps: FormulaStep[] = [
     num: "02",
     stage: "Demonstrate",
     label: "Prototype",
-    img: "images/approach/step-02.png",
+    img: "images/approach/step-02-t.png",
     accent: "#8A5BD6",
     body: "See it, test it, and validate value in 48 hours.",
     takeaway: "See it before you buy it.",
@@ -730,7 +730,7 @@ const formulaSteps: FormulaStep[] = [
     num: "03",
     stage: "Activate",
     label: "Build the Solution",
-    img: "images/approach/step-03.png",
+    img: "images/approach/step-03-t.png",
     accent: "#C45BB8",
     body: "Senior-led teams working with AI agents to build, iterate and deliver at speed.",
     takeaway: "Human judgment. Agent scale.",
@@ -740,7 +740,7 @@ const formulaSteps: FormulaStep[] = [
     num: "04",
     stage: "Generate",
     label: "Scale & Operationalize",
-    img: "images/approach/step-04.png",
+    img: "images/approach/step-04-t.png",
     accent: "#FF7B5A",
     body: "You own the IP, the platform and the outcomes. No lock-in.",
     takeaway: "No lock-in. Full ownership.",
@@ -759,22 +759,21 @@ function Formula() {
                 className="absolute inset-x-0 top-0 h-[2px] z-10"
                 style={{ background: s.accent }}
               />
-              {/* Vector header */}
-              <div className="relative">
+              {/* Vector header (transparent art, floats on the card) */}
+              <div className="relative px-3 pt-7 pb-1">
                 <img
                   src={asset(s.img)}
                   alt={`${s.stage} — ${s.label}`}
                   loading="lazy"
                   draggable={false}
-                  className="block w-full aspect-[4/3] object-cover select-none"
+                  className="block w-full aspect-[4/3] object-contain select-none"
                 />
                 <span
-                  className="absolute top-2.5 left-4 text-[40px] font-extrabold leading-none tracking-[-2px]"
+                  className="absolute top-3 left-4 text-[40px] font-extrabold leading-none tracking-[-2px]"
                   style={{ color: s.accent, textShadow: "0 2px 16px rgba(0,0,0,0.7)" }}
                 >
                   {s.num}
                 </span>
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-navydeep" />
               </div>
               {/* Body */}
               <div className="px-5 pb-5 pt-3 flex flex-col flex-1">
