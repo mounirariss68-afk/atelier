@@ -618,7 +618,7 @@ function GuildSystem() {
     <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
       <div className="overflow-x-auto rounded-[12px]">
         <img
-          src={asset("images/scenes/guild-deck-v2.webp")}
+          src={asset("images/scenes/guild-deck-v3.webp")}
           alt="The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform"
           className="block h-auto rounded-[12px] min-w-[880px] w-full select-none"
           draggable={false}
