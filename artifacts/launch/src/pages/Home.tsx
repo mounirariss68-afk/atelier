@@ -16,14 +16,14 @@ import {
   type CarouselApi,
 } from "@/components/ui/carousel";
 
-import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628.png";
-import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628.png";
-import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628.png";
-import slide2Mobile from "@assets/Slide_2-_48_hours_prototype_-_Mobile_1782396651537.png";
-import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_1782396575628.png";
-import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628.png";
-import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628.png";
-import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628.png";
+import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628_t.png";
+import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628_t.png";
+import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628_t.png";
+import slide2Mobile from "@assets/Slide_2-_48_hours_prototype_-_Mobile_1782396651537_t.png";
+import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_1782396575628_t.png";
+import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.png";
+import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
+import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 
 type HeroSlide = {
   white: [string, string];
@@ -169,7 +169,7 @@ function HeroCarousel() {
                     src={slide.mobile}
                     alt={`${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
                     loading={i === 0 ? "eager" : "lazy"}
-                    className="w-full h-auto object-contain rounded-2xl drop-shadow-[0_24px_60px_rgba(0,0,0,0.45)]"
+                    className="w-full h-auto object-contain"
                   />
                 </picture>
               </CarouselItem>
