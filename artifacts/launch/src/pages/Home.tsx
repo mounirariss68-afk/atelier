@@ -723,7 +723,7 @@ export default function Home() {
             </Reveal>
             <Reveal delay={0.1}>
               <p className="text-lg md:text-xl text-offwhite/70 mt-8 font-light leading-relaxed">
-                In 48 hours, you’ll have a working system — not a roadmap, not a recommendation, not a deck.
+<span className="text-gradient-bright font-semibold">In 48 hours,</span> you’ll have a working system — not a roadmap, not a recommendation, not a deck.
               </p>
             </Reveal>
             <Reveal delay={0.15}>
