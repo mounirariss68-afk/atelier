@@ -158,7 +158,7 @@ function HeroCarousel() {
         <Carousel
           setApi={setApi}
           opts={{ loop: true, align: "start" }}
-          className="w-full"
+          className="w-full md:scale-[2.25] md:origin-center"
         >
           <CarouselContent className="ml-0">
             {HERO_SLIDES.map((slide, i) => (
