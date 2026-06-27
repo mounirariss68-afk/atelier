@@ -733,6 +733,9 @@ export default function Home() {
               </p>
             </Reveal>
           </div>
+          <Reveal delay={0.1} className="mt-16">
+            <TransformationMap />
+          </Reveal>
           <Reveal delay={0.2}>
             <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
               <span className="text-sm tracking-wide">Here’s how we do it.</span>
