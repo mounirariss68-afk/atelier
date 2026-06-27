@@ -758,13 +758,13 @@ export default function Home() {
           </div>
 
           {/* Two columns split by the human/agent visual */}
-          <div className="grid lg:grid-cols-[1fr_minmax(260px,400px)_1fr] gap-10 lg:gap-10 items-center">
+          <div className="grid lg:grid-cols-[1fr_minmax(260px,400px)_1fr] gap-10 lg:gap-10 items-start">
             {/* Left: human side */}
             <Reveal delay={0.05}>
               <div className="lg:text-right">
                 <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The human side</p>
                 <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
-                  <span className="text-gradient">Forward Deployed Engineers (FDEs)</span>
+                  <span className="text-gradient">Forward Deployed<br />Engineers (FDEs)</span>
                 </h3>
                 <p className="text-offwhite/70 leading-relaxed font-light">
                   Not a remote advisor. A senior transformation professional who works inside your
@@ -789,7 +789,7 @@ export default function Home() {
               <div>
                 <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">The agent side</p>
                 <h3 className="text-2xl md:text-[30px] font-bold mb-4 tracking-[-0.5px]">
-                  <span className="text-gradient">Forward Deployed Agents (FDAs)</span>
+                  <span className="text-gradient">Forward Deployed<br />Agents (FDAs)</span>
                 </h3>
                 <p className="text-offwhite/70 leading-relaxed font-light">
                   Specialized AI agents organized into five guilds — each with a defined role, working at
