@@ -9,13 +9,6 @@ import {
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
 
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  type CarouselApi,
-} from "@/components/ui/carousel";
-
 import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628_t.png";
 import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628_t.png";
 import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628_t.png";
@@ -41,30 +34,16 @@ const HERO_SLIDES: HeroSlide[] = [
 
 /* ---------- Hero carousel ---------- */
 function HeroCarousel() {
-  const [api, setApi] = useState<CarouselApi | null>(null);
   const [selected, setSelected] = useState(0);
 
   useEffect(() => {
-    if (!api) return;
-    const onSelect = () => setSelected(api.selectedScrollSnap());
-    onSelect();
-    api.on("select", onSelect);
-    api.on("reInit", onSelect);
-    return () => {
-      api.off("select", onSelect);
-      api.off("reInit", onSelect);
-    };
-  }, [api]);
-
-  useEffect(() => {
-    if (!api) return;
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReduced) return;
     const id = window.setInterval(() => {
-      api.scrollNext();
+      setSelected((s) => (s + 1) % HERO_SLIDES.length);
     }, 6000);
     return () => window.clearInterval(id);
-  }, [api]);
+  }, []);
 
   return (
     <section className="relative min-h-[100dvh] flex items-center overflow-hidden bg-navy">
@@ -81,16 +60,7 @@ function HeroCarousel() {
       {/* Content: text left, image right (40%) */}
       <div className="relative z-10 max-w-7xl mx-auto px-6 w-full pt-24 pb-16 md:pb-0 grid grid-cols-1 md:grid-cols-[3fr_2fr] gap-10 md:gap-10 items-center">
         {/* Left: message + CTAs */}
-        <div>
-          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }}
-            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 backdrop-blur px-4 py-1.5 mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cogcoral" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cogcoral" />
-            </span>
-            <span className="text-[11px] font-semibold tracking-[2px] uppercase text-offwhite/80">Intelligence that Elevates</span>
-          </motion.div>
-
+        <div className="relative z-20">
           <div className="min-h-[4.2em]">
             <AnimatePresence mode="wait">
               <motion.h1
@@ -139,7 +109,7 @@ function HeroCarousel() {
               <button
                 key={i}
                 type="button"
-                onClick={() => api?.scrollTo(i)}
+                onClick={() => setSelected(i)}
                 aria-label={`Go to slide ${i + 1}: ${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
                 aria-current={selected === i}
                 className="group h-3 flex items-center"
@@ -154,28 +124,28 @@ function HeroCarousel() {
           </div>
         </div>
 
-        {/* Right: slide image at natural aspect ratio (~40% width) */}
-        <Carousel
-          setApi={setApi}
-          opts={{ loop: true, align: "start" }}
-          className="w-full md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:w-[87%] md:max-w-none"
-        >
-          <CarouselContent className="ml-0">
-            {HERO_SLIDES.map((slide, i) => (
-              <CarouselItem key={i} className="pl-0 basis-full">
-                <picture>
-                  <source media="(min-width: 768px)" srcSet={slide.desktop} />
-                  <img
-                    src={slide.mobile}
-                    alt={`${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
-                    loading={i === 0 ? "eager" : "lazy"}
-                    className="w-full h-auto object-contain"
-                  />
-                </picture>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
+        {/* Right: crossfading slide image (decorative, sits behind text) */}
+        <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
+          {HERO_SLIDES.map((slide, i) => (
+            <motion.div
+              key={i}
+              className="col-start-1 row-start-1"
+              initial={false}
+              animate={{ opacity: selected === i ? 1 : 0 }}
+              transition={{ duration: 0.8, ease: "easeInOut" }}
+            >
+              <picture>
+                <source media="(min-width: 768px)" srcSet={slide.desktop} />
+                <img
+                  src={slide.mobile}
+                  alt={`${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  className="w-full h-auto object-contain"
+                />
+              </picture>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 text-offwhite/50">
