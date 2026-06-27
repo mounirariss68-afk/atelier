@@ -104,7 +104,7 @@ function HeroCarousel() {
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.45 }}
             className="flex flex-wrap items-center gap-4 mt-12">
-            <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
+            <a href="mailto:support@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-8 py-4 rounded-full text-base font-semibold shadow-[0_14px_40px_-10px_rgba(138,91,214,0.8)] hover:scale-[1.02] transition-transform">
               Transform Your Enterprise <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </a>
             <a href="#services" className="inline-flex items-center gap-2 text-offwhite/80 hover:text-white px-6 py-4 rounded-full border border-white/15 hover:border-white/30 transition-colors text-base font-medium">
@@ -688,7 +688,7 @@ export default function Home() {
             <a href="#approach" className="nav-link hover:text-white transition-colors">Approach</a>
             <a href="#guilds" className="nav-link hover:text-white transition-colors">The Guild</a>
           </div>
-          <a href="mailto:hello@cognirise.ai" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
+          <a href="mailto:support@cognirise.ai" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
             Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </a>
         </div>
@@ -862,8 +862,8 @@ export default function Home() {
             </p>
           </Reveal>
           <Reveal delay={0.15}>
-            <a href="mailto:hello@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-10 py-5 rounded-full text-lg font-semibold mt-10 shadow-[0_18px_50px_-12px_rgba(196,91,184,0.8)] hover:scale-[1.03] transition-transform">
-              hello@cognirise.ai <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            <a href="mailto:support@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-10 py-5 rounded-full text-lg font-semibold mt-10 shadow-[0_18px_50px_-12px_rgba(196,91,184,0.8)] hover:scale-[1.03] transition-transform">
+              support@cognirise.ai <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </a>
           </Reveal>
         </div>
