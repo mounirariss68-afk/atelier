@@ -721,15 +721,15 @@ function AgenticWorkflowMock() {
   };
 
   const nodes: WfNode[] = [
-    { id: "trigger", icon: Hourglass, label: "Schedule", x: 12, y: 50, accent: "#8A5BD6", status: "done" },
-    { id: "fetch", icon: Database, label: "Fetch SKUs", x: 29, y: 30, accent: "#5B7CFF", status: "done" },
-    { id: "stream", icon: Activity, label: "Stream Sales", x: 29, y: 70, accent: "#5B7CFF", status: "done" },
-    { id: "market", icon: Target, label: "Analyze Market", x: 50, y: 18, accent: "#C45BB8", status: "running" },
+    { id: "trigger", icon: Hourglass, label: "Schedule", x: 10, y: 50, accent: "#8A5BD6", status: "done" },
+    { id: "fetch", icon: Database, label: "Fetch SKUs", x: 30, y: 30, accent: "#5B7CFF", status: "done" },
+    { id: "stream", icon: Activity, label: "Stream Sales", x: 30, y: 70, accent: "#5B7CFF", status: "done" },
+    { id: "market", icon: Target, label: "Analyze Market", x: 50, y: 20, accent: "#C45BB8", status: "running" },
     { id: "margins", icon: Cpu, label: "Score Margins", x: 50, y: 50, accent: "#C45BB8", status: "running" },
-    { id: "anomalies", icon: ShieldCheck, label: "Detect Anomalies", x: 50, y: 82, accent: "#C45BB8", status: "running" },
-    { id: "optimize", icon: Settings, label: "Optimize Price", x: 71, y: 34, accent: "#FF7B5A", status: "queued" },
-    { id: "compliance", icon: Lock, label: "Compliance", x: 71, y: 66, accent: "#FF7B5A", status: "queued" },
-    { id: "publish", icon: Rocket, label: "Publish ERP", x: 88, y: 50, accent: "#5B7CFF", status: "queued" },
+    { id: "anomalies", icon: ShieldCheck, label: "Detect Anomalies", x: 50, y: 80, accent: "#C45BB8", status: "running" },
+    { id: "optimize", icon: Settings, label: "Optimize Price", x: 70, y: 34, accent: "#FF7B5A", status: "queued" },
+    { id: "compliance", icon: Lock, label: "Compliance", x: 70, y: 66, accent: "#FF7B5A", status: "queued" },
+    { id: "publish", icon: Rocket, label: "Publish ERP", x: 90, y: 50, accent: "#5B7CFF", status: "queued" },
   ];
 
   const edges = [
@@ -760,7 +760,7 @@ function AgenticWorkflowMock() {
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-[364px]">
+    <div className="relative mx-auto w-full max-w-[460px]">
       <div className="pointer-events-none absolute -inset-8 bg-cog-grad-diag opacity-20 blur-[80px]" />
       {/* ===== Computer screen (Mac desktop 16:10) ===== */}
       <div className="relative grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
@@ -821,18 +821,18 @@ function AgenticWorkflowMock() {
               return (
                 <div
                   key={n.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[82px]"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[76px]"
                   style={{ left: `${n.x}%`, top: `${n.y}%` }}
                 >
-                  <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-navylight/85 backdrop-blur-sm px-1.5 py-1 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.7)]">
+                  <div className="relative flex flex-col items-center gap-1.5 rounded-lg border border-white/10 bg-navylight/90 backdrop-blur-sm px-1.5 py-2 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.7)]">
                     <span
-                      className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
+                      className="w-6 h-6 rounded-md flex items-center justify-center"
                       style={{ background: n.accent }}
                     >
-                      <Icon className="w-3 h-3 text-white" strokeWidth={2} />
+                      <Icon className="w-3.5 h-3.5 text-white" strokeWidth={2} />
                     </span>
-                    <p className="min-w-0 flex-1 text-[8.5px] font-semibold text-white leading-[1.1]">{n.label}</p>
-                    <span className={`w-1 h-1 rounded-full shrink-0 ${dot[n.status]}`} />
+                    <p className="text-[8.5px] font-semibold text-white leading-[1.15] text-center w-full">{n.label}</p>
+                    <span className={`absolute top-1 right-1 w-1 h-1 rounded-full ${dot[n.status]}`} />
                   </div>
                 </div>
               );
