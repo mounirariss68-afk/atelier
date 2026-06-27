@@ -18,7 +18,6 @@ import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_178239657562
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 import humanAgent from "@assets/human_agent_trimmed.webp";
-import prototypeShot from "@assets/prototype_dashboard_nobg.webp";
 
 type HeroSlide = {
   white: [string, string];
@@ -666,6 +665,79 @@ function GuildSystem() {
   );
 }
 
+/* ===================== AGENTIC WORKFLOW PROTOTYPE (rendered mock) ===================== */
+
+function AgenticWorkflowMock() {
+  const steps = [
+    { icon: Database, name: "Data Collector", note: "Pulled 1,240 SKUs", status: "done" as const },
+    { icon: Activity, name: "Market Analyst", note: "Benchmarked 38 competitors", status: "done" as const },
+    { icon: Cpu, name: "Pricing Strategist", note: "Optimizing margins…", status: "running" as const },
+    { icon: ShieldCheck, name: "Approval Agent", note: "Awaiting sign-off", status: "queued" as const },
+    { icon: Rocket, name: "Publisher", note: "Push prices to ERP", status: "queued" as const },
+  ];
+
+  const ring: Record<string, React.CSSProperties> = {
+    done: { borderColor: "rgba(95,208,166,0.45)", color: "#5fd0a6", background: "rgba(95,208,166,0.10)" },
+    running: { borderColor: "transparent", color: "#fff", background: "var(--cog-grad-diag)" },
+    queued: { borderColor: "rgba(255,255,255,0.12)", color: "rgba(235,238,255,0.45)", background: "rgba(255,255,255,0.03)" },
+  };
+
+  const badge: Record<string, { label: string; cls: string }> = {
+    done: { label: "Done", cls: "text-[#5fd0a6]" },
+    running: { label: "Running", cls: "text-white" },
+    queued: { label: "Queued", cls: "text-offwhite/40" },
+  };
+
+  return (
+    <div className="relative mx-auto w-full max-w-[340px]">
+      <div className="pointer-events-none absolute -inset-8 bg-cog-grad-diag opacity-20 blur-[70px]" />
+      <div className="relative grad-border bg-navydeep/70 backdrop-blur-sm overflow-hidden rounded-[16px] shadow-[0_30px_70px_-22px_rgba(0,0,0,0.75)]">
+        {/* window bar */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10">
+          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+          <p className="ml-2 text-[12px] text-offwhite/65 font-medium">Pricing Agent — live run</p>
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-[1px] text-[#5fd0a6]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#5fd0a6] animate-pulse" /> Live
+          </span>
+        </div>
+        {/* steps */}
+        <div className="p-4 pt-4">
+          {steps.map((s, i) => {
+            const Icon = s.icon;
+            const last = i === steps.length - 1;
+            return (
+              <div key={s.name} className="relative flex items-start gap-3 pb-4 last:pb-0">
+                {!last && <span className="absolute left-[15px] top-9 -bottom-0.5 w-px bg-white/10" />}
+                <span
+                  className="relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
+                  style={ring[s.status]}
+                >
+                  {s.status === "done" ? (
+                    <Check className="w-4 h-4" strokeWidth={2.5} />
+                  ) : (
+                    <Icon className={`w-4 h-4 ${s.status === "running" ? "animate-pulse" : ""}`} strokeWidth={1.8} />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1 pt-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold text-white truncate">{s.name}</p>
+                    <span className={`text-[10px] font-semibold uppercase tracking-[0.5px] shrink-0 ${badge[s.status].cls}`}>
+                      {badge[s.status].label}
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-offwhite/50 truncate">{s.note}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===================== PAGE ===================== */
 
 export default function Home() {
@@ -736,15 +808,7 @@ export default function Home() {
               </Reveal>
             </div>
             <Reveal delay={0.1}>
-              <div className="relative">
-                <div className="pointer-events-none absolute inset-0 bg-cog-grad-diag opacity-20 blur-[70px]" />
-                <img
-                  src={prototypeShot}
-                  alt="A working software prototype dashboard delivered in 48 hours"
-                  className="relative block w-full h-auto select-none drop-shadow-[0_30px_70px_rgba(0,0,0,0.55)]"
-                  draggable={false}
-                />
-              </div>
+              <AgenticWorkflowMock />
             </Reveal>
           </div>
           <Reveal delay={0.2}>
