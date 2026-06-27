@@ -150,6 +150,30 @@ uri = "file://attached_assets/generated_images/prototype_dashboard.png"
 type = "image"
 title = "prototype dashboard mockup"
 
+[[generated]]
+id = "HDVw8KgCIxelii8ekEOcS"
+uri = "file://artifacts/launch/public/images/approach/step-01.png"
+type = "image"
+title = "approach step innovate target"
+
+[[generated]]
+id = "j_IKfvSdrkyRIimlNLddL"
+uri = "file://artifacts/launch/public/images/approach/step-02.png"
+type = "image"
+title = "approach step demonstrate prototype"
+
+[[generated]]
+id = "y0Bl1aD1f-R1dcAfEHqlt"
+uri = "file://artifacts/launch/public/images/approach/step-03.png"
+type = "image"
+title = "approach step activate agents"
+
+[[generated]]
+id = "Ol2dpwnH6BDa39Qto3Glq"
+uri = "file://artifacts/launch/public/images/approach/step-04.png"
+type = "image"
+title = "approach step generate ownership"
+
 [[outputs]]
 id = "5x0h6JPvS_fK_80uoaR6h"
 uri = "file://.local/deliverables/arcelik-demo-video-script.md"

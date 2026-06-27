@@ -698,9 +698,11 @@ type FormulaStep = {
   num: string;
   stage: string;
   label: string;
-  icon: typeof Target;
+  img: string;
   accent: string;
   body: string;
+  takeaway: string;
+  duration: string;
 };
 
 const formulaSteps: FormulaStep[] = [
@@ -708,98 +710,121 @@ const formulaSteps: FormulaStep[] = [
     num: "01",
     stage: "Innovate",
     label: "Spot the value",
-    icon: Target,
+    img: "images/approach/step-01.png",
     accent: "#5B7CFF",
-    body:
-      "One day. One high-value use case. We work with your team to identify where AI creates the fastest, most measurable impact — not across your whole organization, but in the one place that matters most right now. You leave with a decision, not a deck.",
+    body: "Start with one high-value use case with clear ROI and real data.",
+    takeaway: "Don’t boil the ocean.",
+    duration: "1 day",
   },
   {
     num: "02",
     stage: "Demonstrate",
     label: "Prototype",
-    icon: Presentation,
+    img: "images/approach/step-02.png",
     accent: "#8A5BD6",
-    body:
-      "In 48 hours, you’ll see it working. Not a mockup, not a wireframe — a functioning prototype running on your data. You validate the value before committing to anything. Most clients have never seen an AI use case move this fast.",
+    body: "See it, test it, and validate value in 48 hours.",
+    takeaway: "See it before you buy it.",
+    duration: "48 hours",
   },
   {
     num: "03",
     stage: "Activate",
     label: "Build the Solution",
-    icon: Settings,
+    img: "images/approach/step-03.png",
     accent: "#C45BB8",
-    body:
-      "Forward Deployed Engineers embedded in your team, directing specialized AI agent guilds to build, test, and iterate at speed. MVP in 2 to 4 weeks. Every decision made in your environment, with your stakeholders, against your real requirements — not in a consulting lab offsite.",
+    body: "Senior-led teams working with AI agents to build, iterate and deliver at speed.",
+    takeaway: "Human judgment. Agent scale.",
+    duration: "2–4 weeks (MVP)",
   },
   {
     num: "04",
     stage: "Generate",
     label: "Scale & Operationalize",
-    icon: Rocket,
+    img: "images/approach/step-04.png",
     accent: "#FF7B5A",
-    body:
-      "The solution scales. Your team takes ownership. We transfer the IP, the platform, and the operating model — then stay until adoption is real and outcomes are measurable. When we leave, nothing leaves with us.",
+    body: "You own the IP, the platform and the outcomes. No lock-in.",
+    takeaway: "No lock-in. Full ownership.",
+    duration: "4–12 weeks",
   },
 ];
 
 function Formula() {
   return (
     <div className="relative">
-      {/* Progression rail (desktop) */}
-      <div className="hidden lg:grid grid-cols-4 mb-7 relative">
-        <div
-          className="absolute top-1/2 left-[12.5%] right-[12.5%] h-[2px] -translate-y-1/2 rounded-full opacity-80"
-          style={{ background: "var(--cog-grad)" }}
-        />
-        {formulaSteps.map((s) => (
-          <div key={s.num} className="relative z-10 flex justify-center">
-            <span
-              className="w-3.5 h-3.5 rounded-full ring-4 ring-navy"
-              style={{ background: s.accent, boxShadow: `0 0 18px ${s.accent}cc` }}
-            />
-          </div>
-        ))}
-      </div>
-
       <div className="grid gap-5 sm:gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {formulaSteps.map((s, i) => {
-          const Icon = s.icon;
-          return (
-            <Reveal key={s.num} delay={i * 0.08}>
-              <div className="grad-border relative h-full bg-navylight/20 p-6 flex flex-col overflow-hidden">
-                <span
-                  className="absolute inset-x-0 top-0 h-[2px]"
-                  style={{ background: s.accent }}
+        {formulaSteps.map((s, i) => (
+          <Reveal key={s.num} delay={i * 0.08}>
+            <div className="grad-border relative h-full bg-navydeep flex flex-col overflow-hidden">
+              <span
+                className="absolute inset-x-0 top-0 h-[2px] z-10"
+                style={{ background: s.accent }}
+              />
+              {/* Vector header */}
+              <div className="relative">
+                <img
+                  src={asset(s.img)}
+                  alt={`${s.stage} — ${s.label}`}
+                  loading="lazy"
+                  draggable={false}
+                  className="block w-full aspect-[4/3] object-cover select-none"
                 />
-                <div className="flex items-start justify-between mb-5">
-                  <span
-                    className="text-[46px] font-extrabold leading-none tracking-[-2px]"
-                    style={{ color: s.accent }}
-                  >
-                    {s.num}
-                  </span>
-                  <span
-                    className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: s.accent }}
-                  >
-                    <Icon className="w-5 h-5 text-white" strokeWidth={1.8} />
-                  </span>
-                </div>
+                <span
+                  className="absolute top-2.5 left-4 text-[40px] font-extrabold leading-none tracking-[-2px]"
+                  style={{ color: s.accent, textShadow: "0 2px 16px rgba(0,0,0,0.7)" }}
+                >
+                  {s.num}
+                </span>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-navydeep" />
+              </div>
+              {/* Body */}
+              <div className="px-5 pb-5 pt-3 flex flex-col flex-1">
                 <div
                   className="text-[11px] font-bold tracking-[2.5px] uppercase mb-1.5"
                   style={{ color: s.accent }}
                 >
                   {s.stage}
                 </div>
-                <h3 className="text-lg font-bold text-white leading-tight mb-3">{s.label}</h3>
-                <p className="text-[13.5px] text-offwhite/65 font-light leading-relaxed">
+                <h3 className="text-lg font-bold text-white leading-tight mb-2.5">{s.label}</h3>
+                <p className="text-[13px] text-offwhite/60 font-light leading-relaxed mb-4">
                   {s.body}
                 </p>
+                <div className="mt-auto flex items-center gap-2 pt-3 border-t border-white/10">
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: s.accent }} />
+                  <span className="text-[12.5px] font-semibold" style={{ color: s.accent }}>
+                    {s.takeaway}
+                  </span>
+                </div>
               </div>
-            </Reveal>
-          );
-        })}
+            </div>
+          </Reveal>
+        ))}
       </div>
+
+      {/* Timeline */}
+      <Reveal delay={0.1}>
+        <div className="relative mt-12">
+          <div
+            className="hidden md:block absolute top-1/2 left-[12%] right-[10%] h-[2px] -translate-y-1/2 rounded-full opacity-80"
+            style={{ background: "var(--cog-grad)" }}
+          />
+          <ArrowRight
+            className="hidden md:block absolute right-[2%] top-1/2 -translate-y-1/2 w-5 h-5"
+            style={{ color: "#FF7B5A" }}
+          />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative">
+            {formulaSteps.map((s) => (
+              <div key={s.num} className="flex justify-center">
+                <span
+                  className="px-5 py-2 rounded-full text-[13px] font-semibold text-white whitespace-nowrap shadow-[0_8px_24px_-10px_rgba(0,0,0,0.8)]"
+                  style={{ background: s.accent }}
+                >
+                  {s.duration}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Reveal>
     </div>
   );
 }
