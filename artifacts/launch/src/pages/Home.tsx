@@ -697,20 +697,14 @@ export default function Home() {
       {/* ===== Hero ===== */}
       <HeroCarousel />
 
-      {/* ===== Stat strip (client value) ===== */}
-      <section className="relative bg-navydeep py-20 border-y border-white/5">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-y-12 gap-x-8">
-          {[
-            { v: <Counter end={48} suffix="h" />, l: "from idea to a working prototype" },
-            { v: <Counter end={100} suffix="%" />, l: "yours — the IP, the platform, the outcomes" },
-            { v: <Counter end={13} />, l: "specialized AI agents across 5 guilds" },
-            { v: <Counter end={5} />, l: "service lines, one connected system" },
-          ].map((s, i) => (
-            <Reveal key={i} delay={i * 0.08} className={i ? "md:border-l border-white/10 md:pl-8" : ""}>
-              <div className="text-[44px] md:text-[58px] font-extrabold tracking-tight leading-none mb-3 text-gradient">{s.v}</div>
-              <p className="text-sm text-offwhite/55 font-medium leading-snug max-w-[15rem]">{s.l}</p>
-            </Reveal>
-          ))}
+      {/* ===== Execution statement (client value) ===== */}
+      <section className="relative bg-navydeep py-24 border-y border-white/5">
+        <div className="max-w-5xl mx-auto px-6 text-center">
+          <Reveal>
+            <h2 className="text-[32px] md:text-[52px] font-bold text-white tracking-[-1.5px] leading-[1.1]">
+              AI tools and PowerPoints don't create value.<br /><span className="text-gradient">Execution does.</span>
+            </h2>
+          </Reveal>
         </div>
       </section>
 
@@ -828,17 +822,6 @@ export default function Home() {
               </Reveal>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ===== Execution statement ===== */}
-      <section className="relative py-28">
-        <div className="max-w-5xl mx-auto px-6 text-center">
-          <Reveal>
-            <h2 className="text-[32px] md:text-[52px] font-bold text-white tracking-[-1.5px] leading-[1.1]">
-              AI tools and PowerPoints don't create value.<br /><span className="text-gradient">Execution does.</span>
-            </h2>
-          </Reveal>
         </div>
       </section>
 
