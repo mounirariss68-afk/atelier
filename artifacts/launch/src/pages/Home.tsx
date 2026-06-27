@@ -67,7 +67,7 @@ function HeroCarousel() {
             transition={{ duration: 0.7, delay: 0.1 }}
             className="text-gradient-bright text-base sm:text-lg md:text-xl font-bold mb-6 max-w-xl"
           >
-            Professional services. Rebuilt for the age of agents.
+            Professional services.<br />Rebuilt for the age of agents.
           </motion.p>
 
           <div className="h-[40vw] sm:h-[196px] md:h-[236px] lg:h-[268px]">
