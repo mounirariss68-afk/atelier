@@ -18,7 +18,7 @@ import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_178239657562
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 import humanAgent from "@assets/human_agent_trimmed.webp";
-import prototypeShot from "@assets/prototype_dashboard.webp";
+import prototypeShot from "@assets/prototype_dashboard_nobg.webp";
 
 type HeroSlide = {
   white: [string, string];
@@ -716,37 +716,37 @@ export default function Home() {
           <div className="glow-a absolute top-1/3 left-1/4 w-[28rem] h-[28rem] rounded-full bg-cogpurple/15 blur-[130px]" />
         </div>
         <div className="max-w-7xl mx-auto px-6 relative">
-          <div className="max-w-4xl">
-            <Reveal><Eyebrow>A different kind of partner</Eyebrow></Reveal>
-            <Reveal delay={0.05}>
-              <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
-                Most engagements start with a proposal. <span className="text-gradient">Ours start with a prototype.</span>
-              </h2>
-            </Reveal>
+          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            <div>
+              <Reveal><Eyebrow>A different kind of partner</Eyebrow></Reveal>
+              <Reveal delay={0.05}>
+                <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
+                  Most engagements start with a proposal. <span className="text-gradient">Ours start with a prototype.</span>
+                </h2>
+              </Reveal>
+              <Reveal delay={0.1}>
+                <p className="text-lg md:text-xl text-offwhite/70 mt-8 font-light leading-relaxed">
+                  <span className="text-gradient-bright font-semibold">In 48 hours,</span> you’ll have a working system — not a roadmap, not a recommendation, not a deck.
+                </p>
+              </Reveal>
+              <Reveal delay={0.15}>
+                <p className="text-lg md:text-xl text-offwhite/70 mt-4 font-light leading-relaxed">
+                  See it running in your environment before you commit to anything.
+                </p>
+              </Reveal>
+            </div>
             <Reveal delay={0.1}>
-              <p className="text-lg md:text-xl text-offwhite/70 mt-8 font-light leading-relaxed">
-<span className="text-gradient-bright font-semibold">In 48 hours,</span> you’ll have a working system — not a roadmap, not a recommendation, not a deck.
-              </p>
-            </Reveal>
-            <Reveal delay={0.15}>
-              <p className="text-lg md:text-xl text-offwhite/70 mt-4 font-light leading-relaxed">
-                See it running in your environment before you commit to anything.
-              </p>
-            </Reveal>
-          </div>
-          <Reveal delay={0.1} className="mt-16">
-            <div className="relative max-w-4xl mx-auto">
-              <div className="pointer-events-none absolute -inset-6 bg-cog-grad-diag opacity-20 blur-[60px] rounded-[28px]" />
-              <div className="grad-border bg-navydeep/40 p-1.5 relative shadow-[0_40px_100px_-30px_rgba(0,0,0,0.8)]">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-0 bg-cog-grad-diag opacity-20 blur-[70px]" />
                 <img
                   src={prototypeShot}
                   alt="A working software prototype dashboard delivered in 48 hours"
-                  className="block w-full h-auto rounded-[12px] select-none"
+                  className="relative block w-full h-auto select-none drop-shadow-[0_30px_70px_rgba(0,0,0,0.55)]"
                   draggable={false}
                 />
               </div>
-            </div>
-          </Reveal>
+            </Reveal>
+          </div>
           <Reveal delay={0.2}>
             <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
               <span className="text-sm tracking-wide">Here’s how we do it.</span>
