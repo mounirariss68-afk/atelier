@@ -733,7 +733,7 @@ export default function Home() {
               </p>
             </Reveal>
             <Reveal delay={0.2}>
-              <a href="#how-we-work" className="group mt-10 inline-flex items-center gap-2 text-mutedgrey hover:text-white transition-colors">
+              <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
                 <span className="text-sm tracking-wide">Here’s how we do it.</span>
                 <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
               </a>
