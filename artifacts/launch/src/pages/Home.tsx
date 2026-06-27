@@ -70,11 +70,11 @@ function HeroCarousel() {
             Professional services. Rebuilt for the age of agents.
           </motion.p>
 
-          <div className="min-h-[4.2em]">
+          <div className="h-[40vw] sm:h-[196px] md:h-[236px] lg:h-[268px]">
             <AnimatePresence mode="popLayout">
               <motion.h1
                 key={selected}
-                className="text-[12vw] sm:text-[56px] md:text-[68px] lg:text-[78px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
+                className="text-[10vw] sm:text-[48px] md:text-[58px] lg:text-[66px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
               >
                 <motion.span
                   className="block text-white"
