@@ -158,7 +158,7 @@ function HeroCarousel() {
         <Carousel
           setApi={setApi}
           opts={{ loop: true, align: "start" }}
-          className="w-full md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:w-[58%] md:max-w-none"
+          className="w-full md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:w-[87%] md:max-w-none"
         >
           <CarouselContent className="ml-0">
             {HERO_SLIDES.map((slide, i) => (
