@@ -617,18 +617,145 @@ function Formula() {
   );
 }
 
-/* ===================== GUILD SYSTEM (cropped deck graphic) ===================== */
+/* ===================== GUILD SYSTEM (rendered constellation) ===================== */
+/* Five specialized agent guilds orbiting a central transformation platform.
+   Animated gradient connectors carry work between each guild and the core, so the
+   "one connected system" claim is shown rather than asserted. Renders as a radial
+   constellation on md+ and stacks into a legible platform-led grid on small screens. */
+
+type Guild = {
+  name: string;
+  role: string;
+  agents: number;
+  icon: typeof Target;
+  accent: string;
+  /* node centre as % of the diagram box (md+ constellation only) */
+  x: number;
+  y: number;
+};
+
+const guilds: Guild[] = [
+  { name: "Strategy Guild", role: "What to build and why", agents: 3, icon: Target, accent: "#5B7CFF", x: 50, y: 15 },
+  { name: "Delivery Guild", role: "Ideas into programs", agents: 2, icon: Layers, accent: "#8A5BD6", x: 87, y: 39 },
+  { name: "Engineering Guild", role: "Production systems", agents: 4, icon: Cpu, accent: "#C45BB8", x: 72, y: 80 },
+  { name: "Governance Guild", role: "Trust and compliance", agents: 2, icon: ShieldCheck, accent: "#FF7B5A", x: 28, y: 80 },
+  { name: "Value Guild", role: "Outcomes that stick", agents: 2, icon: Activity, accent: "#5FD0A6", x: 13, y: 39 },
+];
+
+function GuildCore({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={`relative ${compact ? "w-[112px] h-[112px]" : "w-[132px] h-[132px]"}`}>
+      <span className="pulse-ring absolute inset-0 rounded-full bg-cogpurple/25" />
+      <span className="absolute -inset-3 rounded-full bg-cog-grad-diag opacity-20 blur-xl" />
+      <div className="grad-border relative w-full h-full rounded-full bg-navydeep flex flex-col items-center justify-center text-center shadow-[0_18px_50px_-18px_rgba(138,91,214,0.8)]">
+        <img src={asset("images/logo-mark.png")} alt="" className="h-8 w-auto spin-slow opacity-95 mb-1" />
+        <p className="text-[11px] font-bold text-white leading-tight">Cognirise<br />Platform</p>
+        <span className="mt-1 flex items-center gap-1 text-[8.5px] uppercase tracking-[1px] text-[#5FD0A6]">
+          <span className="w-1 h-1 rounded-full bg-[#5FD0A6] animate-pulse" /> 13 agents live
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function GuildNode({ g, compact = false }: { g: Guild; compact?: boolean }) {
+  const Icon = g.icon;
+  return (
+    <div className={`grad-border relative h-full bg-navylight/90 backdrop-blur-sm px-3.5 py-3 transition-transform duration-300 hover:-translate-y-1 ${compact ? "" : "w-[150px]"}`}>
+      <span
+        className="absolute top-2.5 right-2.5 w-1.5 h-1.5 rounded-full animate-pulse"
+        style={{ background: g.accent }}
+      />
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center mb-2.5"
+        style={{ background: g.accent }}
+      >
+        <Icon className="w-4 h-4 text-white" strokeWidth={2} />
+      </span>
+      <p className="text-[13.5px] font-bold text-white leading-tight">{g.name}</p>
+      <p className="text-[11.5px] text-offwhite/55 leading-snug mt-0.5">{g.role}</p>
+      <p className="text-[10px] font-semibold tracking-[0.5px] uppercase mt-2" style={{ color: g.accent }}>
+        {g.agents} {g.agents === 1 ? "agent" : "agents"}
+      </p>
+    </div>
+  );
+}
 
 function GuildSystem() {
   return (
-    <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
-      <div className="overflow-x-auto rounded-[12px]">
-        <img
-          src={asset("images/scenes/guild-deck.webp")}
-          alt="The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform"
-          className="block h-auto rounded-[12px] min-w-[880px] w-full select-none"
-          draggable={false}
-        />
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="w-[26rem] h-[26rem] rounded-full bg-cogpurple/10 blur-[120px]" />
+      </div>
+
+      {/* ---- md+ : radial constellation ---- */}
+      <div
+        className="hidden md:block relative mx-auto w-full max-w-[760px]"
+        style={{ aspectRatio: "8 / 7" }}
+      >
+        {/* connectors (platform <-> guild) */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="guild-edge" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#5B7CFF" />
+              <stop offset="50%" stopColor="#8A5BD6" />
+              <stop offset="100%" stopColor="#C45BB8" />
+            </linearGradient>
+          </defs>
+          {guilds.map((g) => (
+            <g key={g.name}>
+              <line
+                x1={50} y1={50} x2={g.x} y2={g.y}
+                stroke="url(#guild-edge)" strokeWidth={1} strokeLinecap="round"
+                vectorEffect="non-scaling-stroke" opacity={0.22}
+              />
+              <line
+                x1={50} y1={50} x2={g.x} y2={g.y}
+                stroke="url(#guild-edge)" strokeWidth={1.4} strokeLinecap="round"
+                vectorEffect="non-scaling-stroke" strokeDasharray="4 5" className="wf-flow"
+              />
+            </g>
+          ))}
+        </svg>
+
+        {/* guild nodes */}
+        {guilds.map((g, i) => (
+          <div
+            key={g.name}
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{ left: `${g.x}%`, top: `${g.y}%` }}
+          >
+            <Reveal delay={0.1 + i * 0.07}>
+              <GuildNode g={g} />
+            </Reveal>
+          </div>
+        ))}
+
+        {/* central platform */}
+        <div className="absolute z-20 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <Reveal delay={0.05}>
+            <GuildCore />
+          </Reveal>
+        </div>
+      </div>
+
+      {/* ---- mobile : platform-led stack ---- */}
+      <div className="md:hidden relative">
+        <div className="flex flex-col items-center">
+          <Reveal>
+            <GuildCore compact />
+          </Reveal>
+          <div className="my-4 h-10 w-[2px] rounded-full" style={{ background: "var(--cog-grad)" }} />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {guilds.map((g, i) => (
+            <Reveal key={g.name} delay={i * 0.06}>
+              <div className={i === guilds.length - 1 ? "col-span-2" : ""}>
+                <GuildNode g={g} compact />
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </div>
     </div>
   );
