@@ -65,12 +65,12 @@ function HeroCarousel() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-gradient-bright text-base sm:text-lg md:text-xl font-bold mb-6 max-w-xl"
+            className="text-gradient-bright text-base sm:text-lg md:text-xl font-bold mb-10 max-w-xl"
           >
             Professional services.<br />Rebuilt for the age of agents.
           </motion.p>
 
-          <div className="h-[40vw] sm:h-[196px] md:h-[236px] lg:h-[268px]">
+          <div className="h-[42vw] sm:h-[204px] md:h-[244px] lg:h-[276px]">
             <AnimatePresence mode="popLayout">
               <motion.h1
                 key={selected}
@@ -88,7 +88,7 @@ function HeroCarousel() {
                   {HERO_SLIDES[selected].white[1]}
                 </motion.span>
                 <motion.span
-                  className="block text-gradient-bright"
+                  className="block text-gradient-bright pb-2"
                   initial={{ opacity: 0, y: 28 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -14 }}
