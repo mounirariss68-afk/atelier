@@ -689,50 +689,62 @@ function AgenticWorkflowMock() {
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-[340px]">
-      <div className="pointer-events-none absolute -inset-8 bg-cog-grad-diag opacity-20 blur-[70px]" />
-      <div className="relative grad-border bg-navydeep/70 backdrop-blur-sm overflow-hidden rounded-[16px] shadow-[0_30px_70px_-22px_rgba(0,0,0,0.75)]">
-        {/* window bar */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10">
-          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-          <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
-          <p className="ml-2 text-[12px] text-offwhite/65 font-medium">Pricing Agent — live run</p>
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-[1px] text-[#5fd0a6]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#5fd0a6] animate-pulse" /> Live
-          </span>
-        </div>
-        {/* steps */}
-        <div className="p-4 pt-4">
-          {steps.map((s, i) => {
-            const Icon = s.icon;
-            const last = i === steps.length - 1;
-            return (
-              <div key={s.name} className="relative flex items-start gap-3 pb-4 last:pb-0">
-                {!last && <span className="absolute left-[15px] top-9 -bottom-0.5 w-px bg-white/10" />}
-                <span
-                  className="relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
-                  style={ring[s.status]}
-                >
-                  {s.status === "done" ? (
-                    <Check className="w-4 h-4" strokeWidth={2.5} />
-                  ) : (
-                    <Icon className={`w-4 h-4 ${s.status === "running" ? "animate-pulse" : ""}`} strokeWidth={1.8} />
-                  )}
-                </span>
-                <div className="min-w-0 flex-1 pt-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-white truncate">{s.name}</p>
-                    <span className={`text-[10px] font-semibold uppercase tracking-[0.5px] shrink-0 ${badge[s.status].cls}`}>
-                      {badge[s.status].label}
-                    </span>
+    <div className="relative mx-auto w-full max-w-[460px]">
+      <div className="pointer-events-none absolute -inset-10 bg-cog-grad-diag opacity-20 blur-[90px]" />
+      {/* ===== Computer screen (matches hero card framing) ===== */}
+      <div className="relative grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
+        <div className="rounded-[12px] overflow-hidden bg-navydeep">
+          {/* app top bar */}
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10 bg-navylight/30">
+            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+            <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+            <div className="ml-3 hidden sm:block flex-1 max-w-[170px] rounded-md bg-white/5 px-3 py-1 text-[10px] text-offwhite/45 truncate">
+              app.cognirise.ai/agents
+            </div>
+            <span className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-[1px] text-[#5fd0a6]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#5fd0a6] animate-pulse" /> Live
+            </span>
+          </div>
+          {/* screen body */}
+          <div className="p-5">
+            <p className="text-[11px] uppercase tracking-[1.5px] text-offwhite/40">Pricing Agent</p>
+            <h4 className="text-[15px] font-semibold text-white mt-0.5 mb-5">Autonomous run · 5 steps</h4>
+            {steps.map((s, i) => {
+              const Icon = s.icon;
+              const last = i === steps.length - 1;
+              return (
+                <div key={s.name} className="relative flex items-start gap-3 pb-4 last:pb-0">
+                  {!last && <span className="absolute left-[15px] top-9 -bottom-0.5 w-px bg-white/10" />}
+                  <span
+                    className="relative z-10 w-8 h-8 rounded-full flex items-center justify-center shrink-0 border"
+                    style={ring[s.status]}
+                  >
+                    {s.status === "done" ? (
+                      <Check className="w-4 h-4" strokeWidth={2.5} />
+                    ) : (
+                      <Icon className={`w-4 h-4 ${s.status === "running" ? "animate-pulse" : ""}`} strokeWidth={1.8} />
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1 pt-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[13px] font-semibold text-white truncate">{s.name}</p>
+                      <span className={`text-[10px] font-semibold uppercase tracking-[0.5px] shrink-0 ${badge[s.status].cls}`}>
+                        {badge[s.status].label}
+                      </span>
+                    </div>
+                    <p className="text-[12px] text-offwhite/50 truncate">{s.note}</p>
                   </div>
-                  <p className="text-[12px] text-offwhite/50 truncate">{s.note}</p>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
+      </div>
+      {/* ===== Monitor stand ===== */}
+      <div className="relative flex flex-col items-center">
+        <div className="h-5 w-12 bg-gradient-to-b from-white/12 to-white/[0.04]" />
+        <div className="h-2 w-36 rounded-full bg-white/10" />
       </div>
     </div>
   );
