@@ -258,6 +258,52 @@ const services = [
   },
 ];
 
+type ProblemCard = {
+  icon: typeof Database;
+  accent: string;
+  title: string;
+  quote: string;
+  body?: string;
+  span?: boolean;
+  blocks?: { label: string; text: string }[];
+};
+
+const problemCards: ProblemCard[] = [
+  {
+    icon: Activity, accent: "#5B7CFF",
+    title: "Agentic Enterprise Transformation",
+    quote: "You’ve approved the pilots. Nothing has scaled.",
+    body: "We redesign how your organization operates — end to end — around a human + agent model. FDEs embedded in your team. Agents in production. Adoption built in from day one. We don’t close the engagement when the plan is done. We close it when it runs.",
+  },
+  {
+    icon: Database, accent: "#8A5BD6",
+    title: "Data & AI Foundations",
+    quote: "You have data. It’s siloed, ungoverned, and not powering anything intelligent.",
+    body: "We build the data infrastructure that makes transformation possible — unified platforms, governance frameworks, AI operating models. Not for its own sake. Built so agents can use it from day one.",
+  },
+  {
+    icon: Cpu, accent: "#C45BB8",
+    title: "Engineering with AI",
+    quote: "You’re building too slowly and paying too much for systems you can’t replace.",
+    body: "We modernize technology and accelerate delivery through AI-augmented engineering. Faster builds, retired legacy dependencies, owned systems instead of rented SaaS. On-premise capable for clients who need it.",
+  },
+  {
+    icon: Settings, accent: "#FF7B5A", span: true,
+    title: "Agent Studio",
+    quote: "AI adoption in your organization stops at the tool level. The real value is one layer deeper.",
+    blocks: [
+      { label: "Employee", text: "Specialized agents that work alongside every individual — handling repetitive work and amplifying output across the organization." },
+      { label: "Process", text: "End-to-end agentic workflows that replace headcount-heavy functions with autonomous, governed systems — procurement, onboarding, reporting, compliance, and more." },
+    ],
+  },
+  {
+    icon: Layers, accent: "#5B7CFF",
+    title: "Platforms",
+    quote: "Ten tools. None of them intelligent. All of them expensive.",
+    body: "We build AI-native platforms for enterprise problems — replacing fragmented SaaS stacks with owned, intelligent systems. No subscription. No lock-in. You own it outright.",
+  },
+];
+
 const agentCards = [
   { src: "images/deck/img35.webp", name: "CogniSage", role: "Research & Knowledge Synthesis" },
   { src: "images/deck/img36.webp", name: "CogniCompass", role: "Strategy & Decision Intelligence" },
@@ -673,7 +719,6 @@ function AgenticWorkflowMock() {
     id: string;
     icon: typeof Database;
     label: string;
-    sub: string;
     x: number;
     y: number;
     accent: string;
@@ -681,19 +726,30 @@ function AgenticWorkflowMock() {
   };
 
   const nodes: WfNode[] = [
-    { id: "trigger", icon: Hourglass, label: "Daily Schedule", sub: "Trigger · 9:00am", x: 12, y: 50, accent: "#8A5BD6", status: "done" },
-    { id: "fetch", icon: Database, label: "Fetch SKUs", sub: "1,240 items", x: 37, y: 50, accent: "#5B7CFF", status: "done" },
-    { id: "market", icon: Activity, label: "Analyze Market", sub: "38 competitors", x: 63, y: 24, accent: "#C45BB8", status: "running" },
-    { id: "margin", icon: Target, label: "Score Margins", sub: "per product", x: 63, y: 76, accent: "#FF7B5A", status: "running" },
-    { id: "publish", icon: Rocket, label: "Publish to ERP", sub: "auto-sync", x: 88, y: 50, accent: "#5B7CFF", status: "queued" },
+    { id: "trigger", icon: Hourglass, label: "Schedule", x: 12, y: 50, accent: "#8A5BD6", status: "done" },
+    { id: "fetch", icon: Database, label: "Fetch SKUs", x: 29, y: 30, accent: "#5B7CFF", status: "done" },
+    { id: "stream", icon: Activity, label: "Stream Sales", x: 29, y: 70, accent: "#5B7CFF", status: "done" },
+    { id: "market", icon: Target, label: "Analyze Market", x: 50, y: 18, accent: "#C45BB8", status: "running" },
+    { id: "margins", icon: Cpu, label: "Score Margins", x: 50, y: 50, accent: "#C45BB8", status: "running" },
+    { id: "anomalies", icon: ShieldCheck, label: "Detect Anomalies", x: 50, y: 82, accent: "#C45BB8", status: "running" },
+    { id: "optimize", icon: Settings, label: "Optimize Price", x: 71, y: 34, accent: "#FF7B5A", status: "queued" },
+    { id: "compliance", icon: Lock, label: "Compliance", x: 71, y: 66, accent: "#FF7B5A", status: "queued" },
+    { id: "publish", icon: Rocket, label: "Publish ERP", x: 88, y: 50, accent: "#5B7CFF", status: "queued" },
   ];
 
   const edges = [
-    { from: "trigger", to: "fetch", active: true },
-    { from: "fetch", to: "market", active: true },
-    { from: "fetch", to: "margin", active: true },
-    { from: "market", to: "publish", active: false },
-    { from: "margin", to: "publish", active: false },
+    { from: "trigger", to: "fetch" },
+    { from: "trigger", to: "stream" },
+    { from: "fetch", to: "market" },
+    { from: "fetch", to: "margins" },
+    { from: "stream", to: "margins" },
+    { from: "stream", to: "anomalies" },
+    { from: "market", to: "optimize" },
+    { from: "margins", to: "optimize" },
+    { from: "margins", to: "compliance" },
+    { from: "anomalies", to: "compliance" },
+    { from: "optimize", to: "publish" },
+    { from: "compliance", to: "publish" },
   ];
 
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
@@ -709,8 +765,8 @@ function AgenticWorkflowMock() {
   };
 
   return (
-    <div className="relative mx-auto w-full max-w-[520px]">
-      <div className="pointer-events-none absolute -inset-10 bg-cog-grad-diag opacity-20 blur-[90px]" />
+    <div className="relative mx-auto w-full max-w-[364px]">
+      <div className="pointer-events-none absolute -inset-8 bg-cog-grad-diag opacity-20 blur-[80px]" />
       {/* ===== Computer screen (Mac desktop 16:10) ===== */}
       <div className="relative grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
         <div className="rounded-[12px] overflow-hidden bg-navydeep aspect-[16/10] flex flex-col">
@@ -733,7 +789,7 @@ function AgenticWorkflowMock() {
             style={{
               backgroundImage:
                 "radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)",
-              backgroundSize: "16px 16px",
+              backgroundSize: "12px 12px",
             }}
           >
             {/* connectors */}
@@ -753,12 +809,12 @@ function AgenticWorkflowMock() {
                     key={i}
                     d={path(a, b)}
                     fill="none"
-                    stroke={e.active ? "url(#wf-edge)" : "rgba(255,255,255,0.16)"}
-                    strokeWidth={e.active ? 1.4 : 1}
+                    stroke="url(#wf-edge)"
+                    strokeWidth={1.3}
                     strokeLinecap="round"
                     vectorEffect="non-scaling-stroke"
-                    strokeDasharray={e.active ? "4 4" : undefined}
-                    className={e.active ? "wf-flow" : undefined}
+                    strokeDasharray="4 4"
+                    className="wf-flow"
                   />
                 );
               })}
@@ -770,21 +826,18 @@ function AgenticWorkflowMock() {
               return (
                 <div
                   key={n.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[118px]"
+                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[82px]"
                   style={{ left: `${n.x}%`, top: `${n.y}%` }}
                 >
-                  <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-navylight/80 backdrop-blur-sm px-2 py-1.5 shadow-[0_8px_24px_-8px_rgba(0,0,0,0.6)]">
+                  <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-navylight/85 backdrop-blur-sm px-1.5 py-1 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.7)]">
                     <span
-                      className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+                      className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
                       style={{ background: n.accent }}
                     >
-                      <Icon className="w-3.5 h-3.5 text-white" strokeWidth={2} />
+                      <Icon className="w-3 h-3 text-white" strokeWidth={2} />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10.5px] font-semibold text-white leading-tight truncate">{n.label}</p>
-                      <p className="text-[9px] text-offwhite/45 leading-tight truncate">{n.sub}</p>
-                    </div>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot[n.status]}`} />
+                    <p className="min-w-0 flex-1 text-[8.5px] font-semibold text-white leading-[1.1]">{n.label}</p>
+                    <span className={`w-1 h-1 rounded-full shrink-0 ${dot[n.status]}`} />
                   </div>
                 </div>
               );
@@ -797,6 +850,51 @@ function AgenticWorkflowMock() {
         <div className="h-5 w-12 bg-gradient-to-b from-white/12 to-white/[0.04]" />
         <div className="h-2 w-36 rounded-full bg-white/10" />
       </div>
+    </div>
+  );
+}
+
+/* ===================== WHAT WE DO — PROBLEM CARDS ===================== */
+
+function ProblemCards() {
+  return (
+    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
+      {problemCards.map((c, i) => {
+        const Icon = c.icon;
+        return (
+          <Reveal key={c.title} delay={i * 0.06} className={c.span ? "lg:col-span-2" : ""}>
+            <div className="grad-border bg-navylight/20 h-full p-6 md:p-7 flex flex-col">
+              <div className="flex items-center gap-3 mb-5">
+                <span
+                  className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: c.accent }}
+                >
+                  <Icon className="w-5 h-5 text-white" strokeWidth={1.8} />
+                </span>
+                <h3 className="text-lg md:text-xl font-bold text-white leading-tight">{c.title}</h3>
+              </div>
+              <p
+                className="border-l-2 pl-4 mb-5 text-white/90 text-[15px] md:text-base font-medium italic leading-snug"
+                style={{ borderColor: c.accent }}
+              >
+                {c.quote}
+              </p>
+              {c.blocks ? (
+                <div className="grid sm:grid-cols-2 gap-6 mt-auto">
+                  {c.blocks.map((b) => (
+                    <div key={b.label}>
+                      <p className="text-[11px] font-bold uppercase tracking-[1.5px] text-gradient-bright mb-2">{b.label}</p>
+                      <p className="text-[14px] text-offwhite/65 font-light leading-relaxed">{b.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[15px] text-offwhite/65 font-light leading-relaxed">{c.body}</p>
+              )}
+            </div>
+          </Reveal>
+        );
+      })}
     </div>
   );
 }
@@ -983,16 +1081,11 @@ export default function Home() {
             <Reveal><Eyebrow>What we do</Eyebrow></Reveal>
             <Reveal delay={0.05}>
               <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
-                Five service lines. <span className="text-gradient">Infinite impact.</span>
+                Which problem are we <span className="text-gradient">solving for you?</span>
               </h2>
             </Reveal>
-            <Reveal delay={0.1}>
-              <p className="text-lg text-offwhite/60 mt-5 font-light">
-                Built to transform. Designed to scale. Select a service line to explore what we deliver.
-              </p>
-            </Reveal>
           </div>
-          <Reveal delay={0.05}><ServiceLines /></Reveal>
+          <ProblemCards />
         </div>
       </section>
 
