@@ -270,7 +270,7 @@ const problemCards: ProblemCard[] = [
   {
     icon: Activity, accent: "#5B7CFF",
     title: "Agentic Enterprise Transformation",
-    quote: "You’ve approved the pilots, run the workshops — and still, nothing has actually scaled.",
+    quote: "You’ve approved the pilots, run the workshops — and still, no value.",
     points: [
       "Agentic operating model, end to end",
       "FDEs embedded in your team",
@@ -280,7 +280,7 @@ const problemCards: ProblemCard[] = [
   {
     icon: Database, accent: "#8A5BD6",
     title: "Data & AI Foundations",
-    quote: "You have the data. It’s siloed, ungoverned, and not powering anything intelligent yet.",
+    quote: "You have the data. It’s siloed, ungoverned, and not powering anything.",
     points: [
       "Unified data platforms & pipelines",
       "Governance & AI operating models",
@@ -290,31 +290,31 @@ const problemCards: ProblemCard[] = [
   {
     icon: Cpu, accent: "#C45BB8",
     title: "Engineering with AI",
-    quote: "You’re building far too slowly and paying too much for systems you can’t replace.",
+    quote: "You’re building far too slowly and paying too much for systems maintenance.",
     points: [
-      "AI-augmented, faster builds",
-      "Legacy dependencies retired",
+      "AI powered software development at scale",
+      "AI powered legacy modernization",
       "Owned systems, on-premise capable",
     ],
   },
   {
     icon: Settings, accent: "#FF7B5A",
     title: "Agent Studio",
-    quote: "AI adoption in your org stops at the tool level — the real value sits one layer deeper.",
+    quote: "AI adoption stops at the tool level — no real productivity impact.",
     points: [
       "Agents alongside every individual",
       "End-to-end agentic workflows",
-      "Procurement, onboarding, compliance",
+      "Autonomous processes with human-in-the-loop",
     ],
   },
   {
     icon: Layers, accent: "#5B7CFF",
     title: "Platforms",
-    quote: "Ten different tools. None of them intelligent. And all of them quietly expensive.",
+    quote: "Many enterprise platforms. None of them are intelligent. And they’re not flexible.",
     points: [
       "AI-native, built for enterprise",
-      "Replaces fragmented SaaS stacks",
-      "You own it — no lock-in",
+      "Mission-specific agentic platforms solving toughest business problems",
+      "You own it — no vendor lock-in",
     ],
   },
 ];
