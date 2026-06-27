@@ -732,13 +732,13 @@ export default function Home() {
                 See it running in your environment before you commit to anything.
               </p>
             </Reveal>
-            <Reveal delay={0.2}>
-              <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
-                <span className="text-sm tracking-wide">Here’s how we do it.</span>
-                <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
-              </a>
-            </Reveal>
           </div>
+          <Reveal delay={0.2}>
+            <a href="#how-we-work" className="group mt-10 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
+              <span className="text-sm tracking-wide">Here’s how we do it.</span>
+              <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
+            </a>
+          </Reveal>
         </div>
       </section>
 
