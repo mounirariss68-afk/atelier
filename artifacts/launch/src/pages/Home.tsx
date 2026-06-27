@@ -263,39 +263,59 @@ type ProblemCard = {
   accent: string;
   title: string;
   quote: string;
-  body: string;
+  points: string[];
 };
 
 const problemCards: ProblemCard[] = [
   {
     icon: Activity, accent: "#5B7CFF",
     title: "Agentic Enterprise Transformation",
-    quote: "You’ve approved the pilots. Nothing has scaled.",
-    body: "We redesign how your organization operates — end to end — around a human + agent model. FDEs embedded in your team. Agents in production. Adoption built in from day one. We don’t close the engagement when the plan is done. We close it when it runs.",
+    quote: "You’ve approved the pilots, run the workshops — and still, nothing has actually scaled.",
+    points: [
+      "Agentic operating model, end to end",
+      "FDEs embedded in your team",
+      "Agents in production from day one",
+    ],
   },
   {
     icon: Database, accent: "#8A5BD6",
     title: "Data & AI Foundations",
-    quote: "You have data. It’s siloed, ungoverned, and not powering anything intelligent.",
-    body: "We build the data infrastructure that makes transformation possible — unified platforms, governance frameworks, AI operating models. Not for its own sake. Built so agents can use it from day one.",
+    quote: "You have the data. It’s siloed, ungoverned, and not powering anything intelligent yet.",
+    points: [
+      "Unified data platforms & pipelines",
+      "Governance & AI operating models",
+      "Built so agents can use it day one",
+    ],
   },
   {
     icon: Cpu, accent: "#C45BB8",
     title: "Engineering with AI",
-    quote: "You’re building too slowly and paying too much for systems you can’t replace.",
-    body: "We modernize technology and accelerate delivery through AI-augmented engineering. Faster builds, retired legacy dependencies, owned systems instead of rented SaaS. On-premise capable for clients who need it.",
+    quote: "You’re building far too slowly and paying too much for systems you can’t replace.",
+    points: [
+      "AI-augmented, faster builds",
+      "Legacy dependencies retired",
+      "Owned systems, on-premise capable",
+    ],
   },
   {
     icon: Settings, accent: "#FF7B5A",
     title: "Agent Studio",
-    quote: "AI adoption in your organization stops at the tool level. The real value is one layer deeper.",
-    body: "We deploy specialized agents at two layers — alongside every individual to handle repetitive work and amplify output, and as end-to-end agentic workflows that replace headcount-heavy functions like procurement, onboarding, reporting, and compliance with autonomous, governed systems.",
+    quote: "AI adoption in your org stops at the tool level — the real value sits one layer deeper.",
+    points: [
+      "Agents alongside every individual",
+      "End-to-end agentic workflows",
+      "Procurement, onboarding, compliance",
+    ],
   },
   {
     icon: Layers, accent: "#5B7CFF",
     title: "Platforms",
-    quote: "Ten tools. None of them intelligent. All of them expensive.",
-    body: "We build AI-native platforms for enterprise problems — replacing fragmented SaaS stacks with owned, intelligent systems. No subscription. No lock-in. You own it outright.",
+    quote: "Ten different tools. None of them intelligent. And all of them quietly expensive.",
+    points: [
+      "AI-native, built for enterprise",
+      "Replaces fragmented SaaS stacks",
+      "You own it — no lock-in",
+    ],
   },
 ];
 
@@ -865,14 +885,24 @@ function ProblemCards() {
               >
                 <Icon className="w-5 h-5 text-white" strokeWidth={1.8} />
               </span>
-              <h3 className="text-base font-bold text-white leading-tight mb-4">{c.title}</h3>
+              <h3 className="text-base font-bold text-white leading-tight mb-4 min-h-[2.5em]">{c.title}</h3>
               <p
-                className="border-l-2 pl-3 mb-4 text-white/90 text-[13.5px] font-medium italic leading-snug"
+                className="border-l-2 pl-3 mb-5 text-white/90 text-[13.5px] font-medium italic leading-snug line-clamp-3 min-h-[4.2em]"
                 style={{ borderColor: c.accent }}
               >
                 {c.quote}
               </p>
-              <p className="text-[13px] text-offwhite/60 font-light leading-relaxed">{c.body}</p>
+              <ul className="space-y-2.5">
+                {c.points.map((pt) => (
+                  <li key={pt} className="flex gap-2.5 text-[12.5px] text-offwhite/65 font-light leading-snug">
+                    <span
+                      className="mt-[6px] w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: c.accent }}
+                    />
+                    <span>{pt}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </Reveal>
         );
