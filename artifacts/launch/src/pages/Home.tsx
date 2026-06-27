@@ -41,7 +41,7 @@ function HeroCarousel() {
     if (prefersReduced) return;
     const id = window.setInterval(() => {
       setSelected((s) => (s + 1) % HERO_SLIDES.length);
-    }, 6000);
+    }, 4000);
     return () => window.clearInterval(id);
   }, []);
 
@@ -65,13 +65,13 @@ function HeroCarousel() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
-            className="text-base sm:text-lg md:text-xl font-semibold text-offwhite/70 mb-6 max-w-xl"
+            className="text-gradient-bright text-base sm:text-lg md:text-xl font-bold mb-6 max-w-xl"
           >
             Professional services. Rebuilt for the age of agents.
           </motion.p>
 
           <div className="min-h-[4.2em]">
-            <AnimatePresence mode="wait">
+            <AnimatePresence mode="popLayout">
               <motion.h1
                 key={selected}
                 className="text-[12vw] sm:text-[56px] md:text-[68px] lg:text-[78px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
