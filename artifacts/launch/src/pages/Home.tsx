@@ -636,7 +636,6 @@ function AgenticWorkflowMock() {
   type WfNode = {
     id: string;
     icon: typeof Database;
-    label: string;
     x: number;
     y: number;
     accent: string;
@@ -644,30 +643,69 @@ function AgenticWorkflowMock() {
   };
 
   const nodes: WfNode[] = [
-    { id: "trigger", icon: Hourglass, label: "Schedule", x: 10, y: 50, accent: "#8A5BD6", status: "done" },
-    { id: "fetch", icon: Database, label: "Fetch SKUs", x: 30, y: 30, accent: "#5B7CFF", status: "done" },
-    { id: "stream", icon: Activity, label: "Stream Sales", x: 30, y: 70, accent: "#5B7CFF", status: "done" },
-    { id: "market", icon: Target, label: "Analyze Market", x: 50, y: 20, accent: "#C45BB8", status: "running" },
-    { id: "margins", icon: Cpu, label: "Score Margins", x: 50, y: 50, accent: "#C45BB8", status: "running" },
-    { id: "anomalies", icon: ShieldCheck, label: "Detect Anomalies", x: 50, y: 80, accent: "#C45BB8", status: "running" },
-    { id: "optimize", icon: Settings, label: "Optimize Price", x: 70, y: 34, accent: "#FF7B5A", status: "queued" },
-    { id: "compliance", icon: Lock, label: "Compliance", x: 70, y: 66, accent: "#FF7B5A", status: "queued" },
-    { id: "publish", icon: Rocket, label: "Publish ERP", x: 90, y: 50, accent: "#5B7CFF", status: "queued" },
+    { id: "n1", icon: Hourglass, x: 6, y: 50, accent: "#8A5BD6", status: "done" },
+    { id: "n2", icon: Database, x: 17, y: 26, accent: "#5B7CFF", status: "done" },
+    { id: "n3", icon: Activity, x: 19, y: 52, accent: "#5B7CFF", status: "done" },
+    { id: "n4", icon: Layers, x: 15, y: 76, accent: "#5B7CFF", status: "done" },
+    { id: "n22", icon: MapPin, x: 23, y: 39, accent: "#8A5BD6", status: "done" },
+    { id: "n5", icon: Link2, x: 30, y: 16, accent: "#8A5BD6", status: "done" },
+    { id: "n6", icon: Cpu, x: 32, y: 38, accent: "#C45BB8", status: "running" },
+    { id: "n7", icon: Database, x: 28, y: 62, accent: "#5B7CFF", status: "done" },
+    { id: "n8", icon: Activity, x: 33, y: 84, accent: "#C45BB8", status: "running" },
+    { id: "n9", icon: Target, x: 44, y: 27, accent: "#C45BB8", status: "running" },
+    { id: "n10", icon: Cpu, x: 46, y: 49, accent: "#C45BB8", status: "running" },
+    { id: "n11", icon: ShieldCheck, x: 42, y: 72, accent: "#C45BB8", status: "running" },
+    { id: "n12", icon: Settings, x: 57, y: 14, accent: "#FF7B5A", status: "queued" },
+    { id: "n13", icon: Target, x: 59, y: 36, accent: "#C45BB8", status: "running" },
+    { id: "n14", icon: Layers, x: 55, y: 58, accent: "#FF7B5A", status: "queued" },
+    { id: "n15", icon: ShieldCheck, x: 60, y: 80, accent: "#FF7B5A", status: "queued" },
+    { id: "n16", icon: Settings, x: 71, y: 24, accent: "#FF7B5A", status: "queued" },
+    { id: "n17", icon: Lock, x: 73, y: 48, accent: "#FF7B5A", status: "queued" },
+    { id: "n18", icon: FileText, x: 69, y: 70, accent: "#FF7B5A", status: "queued" },
+    { id: "n23", icon: FileText, x: 88, y: 20, accent: "#5B7CFF", status: "queued" },
+    { id: "n19", icon: Presentation, x: 83, y: 34, accent: "#5B7CFF", status: "queued" },
+    { id: "n20", icon: Rocket, x: 85, y: 60, accent: "#5B7CFF", status: "queued" },
+    { id: "n21", icon: Rocket, x: 94, y: 46, accent: "#5fd0a6", status: "queued" },
   ];
 
   const edges = [
-    { from: "trigger", to: "fetch" },
-    { from: "trigger", to: "stream" },
-    { from: "fetch", to: "market" },
-    { from: "fetch", to: "margins" },
-    { from: "stream", to: "margins" },
-    { from: "stream", to: "anomalies" },
-    { from: "market", to: "optimize" },
-    { from: "margins", to: "optimize" },
-    { from: "margins", to: "compliance" },
-    { from: "anomalies", to: "compliance" },
-    { from: "optimize", to: "publish" },
-    { from: "compliance", to: "publish" },
+    { from: "n1", to: "n2" },
+    { from: "n1", to: "n3" },
+    { from: "n1", to: "n4" },
+    { from: "n2", to: "n22" },
+    { from: "n2", to: "n5" },
+    { from: "n2", to: "n6" },
+    { from: "n22", to: "n6" },
+    { from: "n3", to: "n6" },
+    { from: "n3", to: "n7" },
+    { from: "n4", to: "n7" },
+    { from: "n4", to: "n8" },
+    { from: "n5", to: "n9" },
+    { from: "n6", to: "n9" },
+    { from: "n6", to: "n10" },
+    { from: "n7", to: "n10" },
+    { from: "n7", to: "n11" },
+    { from: "n8", to: "n11" },
+    { from: "n9", to: "n12" },
+    { from: "n9", to: "n13" },
+    { from: "n10", to: "n13" },
+    { from: "n10", to: "n14" },
+    { from: "n11", to: "n14" },
+    { from: "n11", to: "n15" },
+    { from: "n12", to: "n16" },
+    { from: "n13", to: "n16" },
+    { from: "n13", to: "n17" },
+    { from: "n14", to: "n17" },
+    { from: "n14", to: "n18" },
+    { from: "n15", to: "n18" },
+    { from: "n16", to: "n23" },
+    { from: "n16", to: "n19" },
+    { from: "n17", to: "n19" },
+    { from: "n17", to: "n20" },
+    { from: "n18", to: "n20" },
+    { from: "n23", to: "n21" },
+    { from: "n19", to: "n21" },
+    { from: "n20", to: "n21" },
   ];
 
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
@@ -744,18 +782,17 @@ function AgenticWorkflowMock() {
               return (
                 <div
                   key={n.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 w-[76px]"
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
                   style={{ left: `${n.x}%`, top: `${n.y}%` }}
                 >
-                  <div className="relative flex flex-col items-center gap-1.5 rounded-lg border border-white/10 bg-navylight/90 backdrop-blur-sm px-1.5 py-2 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.7)]">
+                  <div className="relative rounded-lg border border-white/10 bg-navylight/90 backdrop-blur-sm p-1 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.7)]">
                     <span
                       className="w-6 h-6 rounded-md flex items-center justify-center"
                       style={{ background: n.accent }}
                     >
                       <Icon className="w-3.5 h-3.5 text-white" strokeWidth={2} />
                     </span>
-                    <p className="text-[8.5px] font-semibold text-white leading-[1.15] text-center w-full">{n.label}</p>
-                    <span className={`absolute top-1 right-1 w-1 h-1 rounded-full ${dot[n.status]}`} />
+                    <span className={`absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full ring-2 ring-navydeep ${dot[n.status]}`} />
                   </div>
                 </div>
               );
