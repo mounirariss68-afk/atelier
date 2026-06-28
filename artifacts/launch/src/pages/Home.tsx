@@ -957,11 +957,11 @@ export default function Home() {
       </section>
 
       {/* ===== How We Work (human + agents) ===== */}
-      <section id="how-we-work" className="relative pt-16 pb-32 scroll-mt-24 md:scroll-mt-28">
+      <section className="relative pt-16 pb-32">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/4 left-1/3 w-[30rem] h-[30rem] rounded-full bg-cogblue/10 blur-[140px]" />
         </div>
-        <div className="max-w-7xl mx-auto px-6 relative">
+        <div id="how-we-work" className="max-w-7xl mx-auto px-6 relative scroll-mt-20 md:scroll-mt-24">
           <div className="max-w-4xl mb-16">
             <Reveal><Eyebrow>How we work</Eyebrow></Reveal>
             <Reveal delay={0.05}>
@@ -1050,8 +1050,8 @@ export default function Home() {
       </section>
 
       {/* ===== What We Do (interactive service lines) ===== */}
-      <section id="services" className="relative bg-navydeep py-32 border-y border-white/5 scroll-mt-24 md:scroll-mt-28">
-        <div className="max-w-7xl mx-auto px-6">
+      <section className="relative bg-navydeep py-32 border-y border-white/5">
+        <div id="services" className="max-w-7xl mx-auto px-6 scroll-mt-20 md:scroll-mt-24">
           <div className="max-w-3xl mb-14">
             <Reveal><Eyebrow>What we do</Eyebrow></Reveal>
             <Reveal delay={0.05}>
@@ -1076,11 +1076,11 @@ export default function Home() {
       </section>
 
       {/* ===== Approach (rendered four-step journey) ===== */}
-      <section id="approach" className="relative py-32 scroll-mt-24 md:scroll-mt-28">
+      <section className="relative py-32">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/3 right-1/4 w-[28rem] h-[28rem] rounded-full bg-cogblue/12 blur-[140px]" />
         </div>
-        <div className="max-w-7xl mx-auto px-6 relative">
+        <div id="approach" className="max-w-7xl mx-auto px-6 relative scroll-mt-20 md:scroll-mt-24">
           <div className="max-w-3xl mb-14">
             <Reveal><Eyebrow>Our approach</Eyebrow></Reveal>
             <Reveal delay={0.05}>
@@ -1105,11 +1105,11 @@ export default function Home() {
       </section>
 
       {/* ===== Guild System (interactive constellation) ===== */}
-      <section id="guilds" className="relative bg-navydeep py-32 border-y border-white/5 scroll-mt-24 md:scroll-mt-28">
+      <section className="relative bg-navydeep py-32 border-y border-white/5">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/4 right-1/4 w-[30rem] h-[30rem] rounded-full bg-cogmagenta/12 blur-[140px]" />
         </div>
-        <div className="max-w-7xl mx-auto px-6 relative">
+        <div id="guilds" className="max-w-7xl mx-auto px-6 relative scroll-mt-20 md:scroll-mt-24">
           <div className="max-w-3xl mb-14">
             <Reveal><Eyebrow>The Cognirise Guild System</Eyebrow></Reveal>
             <Reveal delay={0.05}>
