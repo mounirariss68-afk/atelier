@@ -890,6 +890,27 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const close = () => setMobileMenuOpen(false);
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (target && target.closest("nav")) return;
+      close();
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("scroll", close, { passive: true });
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("scroll", close);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
     const sections = NAV_SECTIONS
       .map((id) => document.getElementById(id))
       .filter((el): el is HTMLElement => el !== null);
