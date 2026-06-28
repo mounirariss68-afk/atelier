@@ -186,22 +186,25 @@ export default function ContactSection({ id }: { id?: string }) {
                     <p>Dubai, United Arab Emirates</p>
                   </div>
                 </div>
-
-                <div className="mt-6 pt-5 border-t border-white/10">
-                  <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">Where we are</p>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-offwhite/70">
-                    {CITIES.map((city, i) => (
-                      <span key={city} className="flex items-center gap-x-3">
-                        {i > 0 && <span className="text-cogmagenta/60">·</span>}
-                        <span className="text-[15px] font-medium">{city}</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           </Reveal>
         </div>
+
+        {/* ===== Where we are (centered footer strip) ===== */}
+        <Reveal delay={0.16}>
+          <div className="mt-14 flex flex-col items-center text-center">
+            <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey mb-3">Where we are</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-offwhite/70">
+              {CITIES.map((city, i) => (
+                <span key={city} className="flex items-center gap-x-3">
+                  {i > 0 && <span className="text-cogmagenta/60">·</span>}
+                  <span className="text-[15px] font-medium">{city}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );
