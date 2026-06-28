@@ -5,6 +5,7 @@ import {
   ArrowRight, ArrowUpRight, ChevronDown, Check,
   Activity, Database, Cpu, ShieldCheck, Layers,
   FileText, Presentation, Hourglass, Link2, Target, Settings, Rocket, Lock,
+  MapPin,
 } from "lucide-react";
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
@@ -1070,6 +1071,57 @@ export default function Home() {
               <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
             </a>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ===== Regional presence ===== */}
+      <section id="presence" className="relative py-32">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="glow-a absolute top-1/3 left-1/4 w-[30rem] h-[30rem] rounded-full bg-cogpurple/12 blur-[140px]" />
+        </div>
+        <div className="max-w-7xl mx-auto px-6 relative">
+          <div className="max-w-3xl mb-14">
+            <Reveal><Eyebrow>Regional presence</Eyebrow></Reveal>
+            <Reveal delay={0.05}>
+              <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
+                On the ground across <span className="text-gradient">MENAT.</span>
+              </h2>
+            </Reveal>
+            <Reveal delay={0.1}>
+              <p className="text-lg text-offwhite/60 mt-5 font-light leading-relaxed">
+                Five offices across the region’s key markets — close to your teams, your regulators and your customers.
+              </p>
+            </Reveal>
+          </div>
+
+          <Reveal delay={0.05}>
+            <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
+              <img
+                src={asset("images/menat-map.png")}
+                alt="Cognirise offices across the MENAT region"
+                className="block h-auto rounded-[12px] w-full select-none"
+                draggable={false}
+              />
+            </div>
+          </Reveal>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-10">
+            {[
+              { city: "Riyadh", country: "Saudi Arabia" },
+              { city: "Dubai", country: "United Arab Emirates" },
+              { city: "Abu Dhabi", country: "United Arab Emirates" },
+              { city: "Doha", country: "Qatar" },
+              { city: "Istanbul", country: "Türkiye" },
+            ].map((o, i) => (
+              <Reveal key={o.city} delay={i * 0.06}>
+                <div className="grad-border bg-navylight/20 h-full p-5 transition-transform duration-300 hover:-translate-y-1">
+                  <MapPin className="w-5 h-5 text-cogmagenta mb-3" />
+                  <p className="font-semibold text-white text-[15px] mb-1">{o.city}</p>
+                  <p className="text-sm text-offwhite/55 leading-snug">{o.country}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 
