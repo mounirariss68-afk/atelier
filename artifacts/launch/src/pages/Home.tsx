@@ -1036,7 +1036,7 @@ export default function Home() {
           <Reveal delay={0.05}><Formula /></Reveal>
           <Reveal delay={0.1}>
             <a href="#guilds" className="group mt-12 flex items-center justify-center gap-2 text-mutedgrey hover:text-white transition-colors">
-              <span className="text-sm tracking-wide">See how humans and agents work as one.</span>
+              <span className="text-sm tracking-wide">See our Guild System</span>
               <ChevronDown className="w-4 h-4 group-hover:translate-y-0.5 transition-transform" />
             </a>
           </Reveal>
