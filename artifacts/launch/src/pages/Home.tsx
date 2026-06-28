@@ -181,6 +181,16 @@ function HeroCarousel() {
               </button>
             ))}
           </div>
+
+          {/* Office locations — watermark */}
+          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-[3px] text-offwhite/25">
+            {["Riyadh", "Dubai", "Abu Dhabi", "Doha", "Istanbul"].map((city, i) => (
+              <span key={city} className="flex items-center gap-x-3">
+                {i > 0 && <span className="text-offwhite/15">·</span>}
+                <span>{city}</span>
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Right: crossfading slide image (decorative, sits behind text) */}
