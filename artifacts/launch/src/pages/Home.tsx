@@ -19,7 +19,6 @@ import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_17823965
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 import introTree from "@assets/tree_agentic_glow_1782618420404_t.png";
 import humanAgent from "@assets/human_agent_v2.png";
-import ContactSection from "@/components/ContactSection";
 
 type HeroSlide =
   | {
@@ -1159,12 +1158,20 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== Contact ===== */}
-      <ContactSection id="contact" />
-
       {/* ===== Footer ===== */}
       <footer className="bg-navy pt-12 pb-12 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col items-center text-center gap-3 pb-10 mb-10 border-b border-white/5">
+            <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey">Where we are</p>
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-offwhite/70">
+              {["Riyadh", "Dubai", "Abu Dhabi", "Doha", "Istanbul"].map((city, i) => (
+                <span key={city} className="flex items-center gap-x-3">
+                  {i > 0 && <span className="text-cogmagenta/60">·</span>}
+                  <span className="text-[15px] font-medium">{city}</span>
+                </span>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
               <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 w-auto opacity-90" />
