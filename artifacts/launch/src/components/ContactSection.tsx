@@ -66,7 +66,7 @@ export default function ContactSection({ id }: { id?: string }) {
   };
 
   return (
-    <section id={id} className="relative overflow-hidden py-28 scroll-mt-24 md:scroll-mt-28">
+    <section id={id} className="relative overflow-hidden pt-10 pb-28 md:pt-14 scroll-mt-24 md:scroll-mt-28">
       {/* ===== Background map ===== */}
       <div className="pointer-events-none absolute inset-0 z-0">
         <img
