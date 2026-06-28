@@ -1151,9 +1151,9 @@ export default function Home() {
             </p>
           </Reveal>
           <Reveal delay={0.15}>
-            <a href="mailto:support@cognirise.ai" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-10 py-5 rounded-full text-lg font-semibold mt-10 shadow-[0_18px_50px_-12px_rgba(196,91,184,0.8)] hover:scale-[1.03] transition-transform">
-              support@cognirise.ai <ArrowUpRight className="w-5 h-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-            </a>
+            <Link href="/contact" className="group inline-flex items-center gap-2 bg-cog-grad-diag text-white px-10 py-5 rounded-full text-lg font-semibold mt-10 shadow-[0_18px_50px_-12px_rgba(196,91,184,0.8)] hover:scale-[1.03] transition-transform">
+              Talk to Us <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
           </Reveal>
         </div>
       </section>
