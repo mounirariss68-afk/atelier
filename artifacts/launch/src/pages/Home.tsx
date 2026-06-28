@@ -19,6 +19,7 @@ import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_17823965
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
 import introTree from "@assets/tree_agentic_glow_1782618420404_t.png";
 import humanAgent from "@assets/human_agent_v2.png";
+import ContactSection from "@/components/ContactSection";
 
 type HeroSlide =
   | {
@@ -893,9 +894,10 @@ export default function Home() {
             <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 md:h-10 w-auto" />
           </Link>
           <div className="hidden md:flex items-center gap-9 text-sm text-offwhite/75">
-            <a href="#services" className="nav-link hover:text-white transition-colors">Services</a>
-            <a href="#approach" className="nav-link hover:text-white transition-colors">Approach</a>
-            <a href="#guilds" className="nav-link hover:text-white transition-colors">The Guild</a>
+            <a href="#how-we-work" className="nav-link hover:text-white transition-colors">How we work</a>
+            <a href="#services" className="nav-link hover:text-white transition-colors">What we do</a>
+            <a href="#approach" className="nav-link hover:text-white transition-colors">Our Approach</a>
+            <a href="#guilds" className="nav-link hover:text-white transition-colors">The Guild System</a>
           </div>
           <Link href="/contact" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
             Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
@@ -956,7 +958,7 @@ export default function Home() {
       </section>
 
       {/* ===== How We Work (human + agents) ===== */}
-      <section id="how-we-work" className="relative pt-16 pb-32">
+      <section id="how-we-work" className="relative pt-16 pb-32 scroll-mt-24 md:scroll-mt-28">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/4 left-1/3 w-[30rem] h-[30rem] rounded-full bg-cogblue/10 blur-[140px]" />
         </div>
@@ -1049,7 +1051,7 @@ export default function Home() {
       </section>
 
       {/* ===== What We Do (interactive service lines) ===== */}
-      <section id="services" className="relative bg-navydeep py-32 border-y border-white/5">
+      <section id="services" className="relative bg-navydeep py-32 border-y border-white/5 scroll-mt-24 md:scroll-mt-28">
         <div className="max-w-7xl mx-auto px-6">
           <div className="max-w-3xl mb-14">
             <Reveal><Eyebrow>What we do</Eyebrow></Reveal>
@@ -1075,7 +1077,7 @@ export default function Home() {
       </section>
 
       {/* ===== Approach (rendered four-step journey) ===== */}
-      <section id="approach" className="relative py-32">
+      <section id="approach" className="relative py-32 scroll-mt-24 md:scroll-mt-28">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/3 right-1/4 w-[28rem] h-[28rem] rounded-full bg-cogblue/12 blur-[140px]" />
         </div>
@@ -1104,16 +1106,16 @@ export default function Home() {
       </section>
 
       {/* ===== Guild System (interactive constellation) ===== */}
-      <section id="guilds" className="relative bg-navydeep py-32 border-y border-white/5">
+      <section id="guilds" className="relative bg-navydeep py-32 border-y border-white/5 scroll-mt-24 md:scroll-mt-28">
         <div className="pointer-events-none absolute inset-0">
           <div className="glow-b absolute top-1/4 right-1/4 w-[30rem] h-[30rem] rounded-full bg-cogmagenta/12 blur-[140px]" />
         </div>
         <div className="max-w-7xl mx-auto px-6 relative">
           <div className="max-w-3xl mb-14">
-            <Reveal><Eyebrow>Humans + Agents</Eyebrow></Reveal>
+            <Reveal><Eyebrow>The Cognirise Guild System</Eyebrow></Reveal>
             <Reveal delay={0.05}>
               <h2 className="text-[38px] md:text-[56px] font-bold text-white tracking-[-1.5px] leading-[1.05]">
-                The Cognirise <span className="text-gradient">Guild System.</span>
+                Five guilds. <span className="text-gradient">Thirteen agents.</span>
               </h2>
             </Reveal>
             <Reveal delay={0.1}>
@@ -1157,20 +1159,12 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ===== Contact ===== */}
+      <ContactSection id="contact" />
+
       {/* ===== Footer ===== */}
       <footer className="bg-navy pt-12 pb-12 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col items-center text-center gap-3 pb-10 mb-10 border-b border-white/5">
-            <p className="text-[11px] uppercase tracking-[2px] text-mutedgrey">Where we are</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-offwhite/70">
-              {["Riyadh", "Dubai", "Abu Dhabi", "Doha", "Istanbul"].map((city, i) => (
-                <span key={city} className="flex items-center gap-x-3">
-                  {i > 0 && <span className="text-cogmagenta/60">·</span>}
-                  <span className="text-[15px] font-medium">{city}</span>
-                </span>
-              ))}
-            </div>
-          </div>
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
               <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 w-auto opacity-90" />
