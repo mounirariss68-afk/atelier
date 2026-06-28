@@ -1153,10 +1153,10 @@ export default function Home() {
       <footer className="bg-navy py-12 border-t border-white/5">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-3">
-            <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-7 w-auto opacity-90" />
+            <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 w-auto opacity-90" />
           </div>
-          <p className="text-offwhite/45 text-sm tracking-[2px] uppercase">Intelligence that Elevates</p>
-          <span className="text-offwhite/40 text-sm">© {new Date().getFullYear()} Cognirise. All rights reserved.</span>
+          <p className="text-offwhite/45 text-xs tracking-[2px] uppercase">Intelligence that Elevates</p>
+          <span className="text-offwhite/40 text-xs">© {new Date().getFullYear()} Cognirise. All rights reserved.</span>
         </div>
       </footer>
     </div>
