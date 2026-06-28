@@ -897,9 +897,9 @@ export default function Home() {
             <a href="#approach" className="nav-link hover:text-white transition-colors">Approach</a>
             <a href="#guilds" className="nav-link hover:text-white transition-colors">The Guild</a>
           </div>
-          <a href="mailto:support@cognirise.ai" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
+          <Link href="/contact" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
             Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </a>
+          </Link>
         </div>
       </nav>
 
