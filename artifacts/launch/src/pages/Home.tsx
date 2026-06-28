@@ -18,16 +18,40 @@ import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_17823965756
 import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.png";
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
+import introTree from "@assets/tree_agentic_glow_1782618420404_t.png";
 import humanAgent from "@assets/human_agent_v2.png";
 
-type HeroSlide = {
-  white: [string, string];
-  gradient: [string, string];
-  desktop: string;
-  mobile: string;
-};
+type HeroSlide =
+  | {
+      kind?: "value";
+      white: [string, string];
+      gradient: [string, string];
+      desktop: string;
+      mobile: string;
+    }
+  | {
+      kind: "intro";
+      headline: string;
+      headlineGradient: string;
+      body: string;
+      desktop: string;
+      mobile: string;
+    };
+
+const slideLabel = (slide: HeroSlide) =>
+  slide.kind === "intro"
+    ? `${slide.headline} ${slide.headlineGradient}`
+    : `${slide.white.join(" ")} ${slide.gradient.join(" ")}`;
 
 const HERO_SLIDES: HeroSlide[] = [
+  {
+    kind: "intro",
+    headline: "Built for the",
+    headlineGradient: "Agentic Enterprise.",
+    body: "Cognirise is an AI-native advisory and engineering firm specializing in agentic transformation and sovereign AI. We help organizations define their AI strategy, build production-grade AI systems, and deliver measurable business impact at enterprise scale.",
+    desktop: introTree,
+    mobile: introTree,
+  },
   { white: ["We don't", "bill mandays."], gradient: ["We deliver", "outcomes."], desktop: slide1Desktop, mobile: slide1Mobile },
   { white: ["No long", "pilots."], gradient: ["Prototype in", "48 hours."], desktop: slide2Desktop, mobile: slide2Mobile },
   { white: ["We don't build", "PowerPoints."], gradient: ["We build", "working solutions."], desktop: slide3Desktop, mobile: slide3Mobile },
@@ -72,35 +96,59 @@ function HeroCarousel() {
             Professional services.<br />Rebuilt for the age of agents.
           </motion.p>
 
-          <div className="h-[42vw] sm:h-[204px] md:h-[244px] lg:h-[276px]">
+          <div className="min-h-[42vw] sm:min-h-[204px] md:min-h-[244px] lg:min-h-[276px]">
             <AnimatePresence mode="popLayout">
-              <motion.h1
-                key={selected}
-                className="text-[10vw] sm:text-[48px] md:text-[58px] lg:text-[66px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
-              >
-                <motion.span
-                  className="block text-white"
-                  initial={{ opacity: 0, y: 28 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -14 }}
-                  transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+              {HERO_SLIDES[selected].kind === "intro" ? (
+                <motion.div key={selected} className="max-w-2xl">
+                  <motion.h1
+                    className="text-[10vw] sm:text-[44px] md:text-[52px] lg:text-[60px] leading-[1.0] font-extrabold tracking-[-2px]"
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -14 }}
+                    transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+                  >
+                    <span className="block text-white">{HERO_SLIDES[selected].headline}</span>
+                    <span className="block text-gradient-bright pb-2">{HERO_SLIDES[selected].headlineGradient}</span>
+                  </motion.h1>
+                  <motion.p
+                    className="mt-5 text-offwhite/75 text-base sm:text-lg leading-relaxed max-w-xl"
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -14 }}
+                    transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
+                  >
+                    {HERO_SLIDES[selected].body}
+                  </motion.p>
+                </motion.div>
+              ) : (
+                <motion.h1
+                  key={selected}
+                  className="text-[10vw] sm:text-[48px] md:text-[58px] lg:text-[66px] leading-[0.98] font-extrabold tracking-[-2px] max-w-2xl"
                 >
-                  {HERO_SLIDES[selected].white[0]}
-                  <br />
-                  {HERO_SLIDES[selected].white[1]}
-                </motion.span>
-                <motion.span
-                  className="block text-gradient-bright pb-2"
-                  initial={{ opacity: 0, y: 28 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -14 }}
-                  transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
-                >
-                  {HERO_SLIDES[selected].gradient[0]}
-                  <br />
-                  {HERO_SLIDES[selected].gradient[1]}
-                </motion.span>
-              </motion.h1>
+                  <motion.span
+                    className="block text-white"
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -14 }}
+                    transition={{ duration: 0.55, ease: [0.21, 0.6, 0.35, 1] }}
+                  >
+                    {HERO_SLIDES[selected].white[0]}
+                    <br />
+                    {HERO_SLIDES[selected].white[1]}
+                  </motion.span>
+                  <motion.span
+                    className="block text-gradient-bright pb-2"
+                    initial={{ opacity: 0, y: 28 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -14 }}
+                    transition={{ duration: 0.55, delay: 0.08, ease: [0.21, 0.6, 0.35, 1] }}
+                  >
+                    {HERO_SLIDES[selected].gradient[0]}
+                    <br />
+                    {HERO_SLIDES[selected].gradient[1]}
+                  </motion.span>
+                </motion.h1>
+              )}
             </AnimatePresence>
           </div>
 
@@ -121,7 +169,7 @@ function HeroCarousel() {
                 key={i}
                 type="button"
                 onClick={() => setSelected(i)}
-                aria-label={`Go to slide ${i + 1}: ${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+                aria-label={`Go to slide ${i + 1}: ${slideLabel(slide)}`}
                 aria-current={selected === i}
                 className="group h-3 flex items-center"
               >
@@ -149,7 +197,7 @@ function HeroCarousel() {
                 <source media="(min-width: 768px)" srcSet={slide.desktop} />
                 <img
                   src={slide.mobile}
-                  alt={`${slide.white.join(" ")} ${slide.gradient.join(" ")}`}
+                  alt={slideLabel(slide)}
                   loading={i === 0 ? "eager" : "lazy"}
                   className="w-full h-auto object-contain"
                 />
