@@ -1079,9 +1079,6 @@ export default function Home() {
           <div className="glow-a absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[40rem] h-[40rem] rounded-full bg-cogpurple/20 blur-[150px]" />
         </div>
         <div className="max-w-3xl mx-auto px-6 text-center relative">
-          <Reveal>
-            <img src={asset("images/logo-mark.png")} alt="" className="h-14 w-auto mx-auto mb-8 spin-slow opacity-90" />
-          </Reveal>
           <Reveal delay={0.05}>
             <h2 className="text-[40px] md:text-[64px] font-extrabold text-white tracking-[-2px] leading-[1.02]">
               Ready to become an <span className="text-gradient">Agentic Enterprise?</span>
