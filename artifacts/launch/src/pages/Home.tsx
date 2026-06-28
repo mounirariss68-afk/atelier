@@ -875,13 +875,49 @@ function ProblemCards() {
 
 /* ===================== PAGE ===================== */
 
+const NAV_SECTIONS = ["how-we-work", "services", "approach", "guilds"] as const;
+
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState<string>("");
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", h);
     return () => window.removeEventListener("scroll", h);
+  }, []);
+
+  useEffect(() => {
+    const sections = NAV_SECTIONS
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    if (sections.length === 0) return;
+
+    const visible = new Map<string, number>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            visible.set(entry.target.id, entry.intersectionRatio);
+          } else {
+            visible.delete(entry.target.id);
+          }
+        }
+        let best = "";
+        let bestRatio = -1;
+        visible.forEach((ratio, id) => {
+          if (ratio > bestRatio) {
+            bestRatio = ratio;
+            best = id;
+          }
+        });
+        setActiveSection(best);
+      },
+      { rootMargin: "-30% 0px -55% 0px", threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+
+    sections.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -893,10 +929,10 @@ export default function Home() {
             <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 md:h-10 w-auto" />
           </Link>
           <div className="hidden md:flex items-center gap-9 text-sm text-offwhite/75">
-            <a href="#how-we-work" className="nav-link hover:text-white transition-colors">How we work</a>
-            <a href="#services" className="nav-link hover:text-white transition-colors">What we do</a>
-            <a href="#approach" className="nav-link hover:text-white transition-colors">Our Approach</a>
-            <a href="#guilds" className="nav-link hover:text-white transition-colors">The Guild System</a>
+            <a href="#how-we-work" className={`nav-link hover:text-white transition-colors ${activeSection === "how-we-work" ? "active" : ""}`}>How we work</a>
+            <a href="#services" className={`nav-link hover:text-white transition-colors ${activeSection === "services" ? "active" : ""}`}>What we do</a>
+            <a href="#approach" className={`nav-link hover:text-white transition-colors ${activeSection === "approach" ? "active" : ""}`}>Our Approach</a>
+            <a href="#guilds" className={`nav-link hover:text-white transition-colors ${activeSection === "guilds" ? "active" : ""}`}>The Guild System</a>
           </div>
           <Link href="/contact" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
             Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
