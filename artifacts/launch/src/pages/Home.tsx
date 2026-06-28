@@ -5,6 +5,7 @@ import {
   ArrowRight, ArrowUpRight, ChevronDown, Check,
   Activity, Database, Cpu, ShieldCheck, Layers,
   FileText, Presentation, Hourglass, Link2, Target, Settings, Rocket, Lock,
+  Menu, X,
 } from "lucide-react";
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
@@ -880,6 +881,7 @@ const NAV_SECTIONS = ["how-we-work", "services", "approach", "guilds"] as const;
 export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
@@ -934,10 +936,39 @@ export default function Home() {
             <a href="#approach" className={`nav-link hover:text-white transition-colors ${activeSection === "approach" ? "active" : ""}`}>Our Approach</a>
             <a href="#guilds" className={`nav-link hover:text-white transition-colors ${activeSection === "guilds" ? "active" : ""}`}>The Guild System</a>
           </div>
-          <Link href="/contact" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
-            Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/contact" className="group relative inline-flex items-center gap-2 bg-cog-grad-diag text-white px-5 py-2.5 rounded-full text-sm font-semibold shadow-[0_8px_24px_-8px_rgba(138,91,214,0.7)] hover:shadow-[0_10px_30px_-6px_rgba(196,91,184,0.8)] transition-shadow">
+              Talk to Us <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+              className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-full text-offwhite/80 hover:text-white hover:bg-white/5 transition-colors"
+            >
+              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
         </div>
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="md:hidden overflow-hidden border-t border-white/5 bg-navydeep/95 backdrop-blur-xl"
+            >
+              <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col text-base text-offwhite/80">
+                <a href="#how-we-work" onClick={() => setMobileMenuOpen(false)} className={`py-3 border-b border-white/5 hover:text-white transition-colors ${activeSection === "how-we-work" ? "text-white" : ""}`}>How we work</a>
+                <a href="#services" onClick={() => setMobileMenuOpen(false)} className={`py-3 border-b border-white/5 hover:text-white transition-colors ${activeSection === "services" ? "text-white" : ""}`}>What we do</a>
+                <a href="#approach" onClick={() => setMobileMenuOpen(false)} className={`py-3 border-b border-white/5 hover:text-white transition-colors ${activeSection === "approach" ? "text-white" : ""}`}>Our Approach</a>
+                <a href="#guilds" onClick={() => setMobileMenuOpen(false)} className={`py-3 hover:text-white transition-colors ${activeSection === "guilds" ? "text-white" : ""}`}>The Guild System</a>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </nav>
 
       {/* ===== Hero ===== */}
