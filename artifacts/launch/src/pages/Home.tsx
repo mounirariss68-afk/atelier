@@ -18,7 +18,7 @@ import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_17823965756
 import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.png";
 import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
 import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
-import humanAgent from "@assets/human_agent_trimmed.webp";
+import humanAgent from "@assets/human_agent_v2.png";
 
 type HeroSlide = {
   white: [string, string];
