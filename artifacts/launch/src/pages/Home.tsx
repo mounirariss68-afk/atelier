@@ -743,11 +743,80 @@ function Formula() {
 
 /* ===================== GUILD SYSTEM (cropped deck graphic) ===================== */
 
+const GUILD_MIN_SCALE = 1;
+const GUILD_MAX_SCALE = 6;
+
 function GuildSystem() {
   const [open, setOpen] = useState(false);
   const guildSrc = asset("images/scenes/guild-deck-v3.webp");
   const guildAlt =
     "The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform";
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 });
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
+
+  // Active pointers (by id) for pan + pinch gesture tracking.
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const panRef = useRef<{ x: number; y: number } | null>(null);
+  const movedRef = useRef(false);
+  const pinchRef = useRef<
+    | {
+        startDist: number;
+        startScale: number;
+        startX: number;
+        startY: number;
+        startMidX: number;
+        startMidY: number;
+      }
+    | null
+  >(null);
+  const lastTapRef = useRef(0);
+
+  const clampTransform = useCallback(
+    (scale: number, x: number, y: number) => {
+      const s = Math.min(GUILD_MAX_SCALE, Math.max(GUILD_MIN_SCALE, scale));
+      const vp = viewportRef.current;
+      const img = imgRef.current;
+      if (!vp || !img) return { scale: s, x: 0, y: 0 };
+      const maxX = Math.max(0, (img.offsetWidth * s - vp.clientWidth) / 2);
+      const maxY = Math.max(0, (img.offsetHeight * s - vp.clientHeight) / 2);
+      return {
+        scale: s,
+        x: Math.min(maxX, Math.max(-maxX, x)),
+        y: Math.min(maxY, Math.max(-maxY, y)),
+      };
+    },
+    [],
+  );
+
+  // Zoom toward a point given in viewport-center-relative pixels.
+  const zoomToPoint = useCallback(
+    (nextScale: number, px: number, py: number) => {
+      setTransform((t) => {
+        const target = Math.min(
+          GUILD_MAX_SCALE,
+          Math.max(GUILD_MIN_SCALE, nextScale),
+        );
+        const ratio = target / t.scale;
+        const nx = px - (px - t.x) * ratio;
+        const ny = py - (py - t.y) * ratio;
+        return clampTransform(target, nx, ny);
+      });
+    },
+    [clampTransform],
+  );
+
+  const reset = useCallback(() => {
+    setTransform({ scale: 1, x: 0, y: 0 });
+  }, []);
+
+  // Reset whenever the overlay opens.
+  useEffect(() => {
+    if (open) reset();
+  }, [open, reset]);
 
   useEffect(() => {
     if (!open) return;
@@ -762,6 +831,109 @@ function GuildSystem() {
       document.body.style.overflow = prevOverflow;
     };
   }, [open]);
+
+  // Native non-passive wheel listener so we can preventDefault for ctrl/scroll zoom.
+  useEffect(() => {
+    const vp = viewportRef.current;
+    if (!open || !vp) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = vp.getBoundingClientRect();
+      const px = e.clientX - rect.left - rect.width / 2;
+      const py = e.clientY - rect.top - rect.height / 2;
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      zoomToPoint(transformRef.current.scale * factor, px, py);
+    };
+    vp.addEventListener("wheel", onWheel, { passive: false });
+    return () => vp.removeEventListener("wheel", onWheel);
+  }, [open, zoomToPoint]);
+
+  const midOf = (pts: { x: number; y: number }[]) => ({
+    x: (pts[0].x + pts[1].x) / 2,
+    y: (pts[0].y + pts[1].y) / 2,
+  });
+  const distOf = (pts: { x: number; y: number }[]) =>
+    Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    const vp = viewportRef.current;
+    if (!vp) return;
+    movedRef.current = false;
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointersRef.current.values()];
+    if (pts.length === 2) {
+      const rect = vp.getBoundingClientRect();
+      const m = midOf(pts);
+      pinchRef.current = {
+        startDist: distOf(pts),
+        startScale: transformRef.current.scale,
+        startX: transformRef.current.x,
+        startY: transformRef.current.y,
+        startMidX: m.x - rect.left - rect.width / 2,
+        startMidY: m.y - rect.top - rect.height / 2,
+      };
+      panRef.current = null;
+    } else if (pts.length === 1) {
+      panRef.current = { x: e.clientX, y: e.clientY };
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const vp = viewportRef.current;
+    if (!vp || !pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointersRef.current.values()];
+
+    if (pts.length === 2 && pinchRef.current) {
+      movedRef.current = true;
+      const rect = vp.getBoundingClientRect();
+      const g = pinchRef.current;
+      const newDist = distOf(pts);
+      const ratio = newDist / g.startDist;
+      const target = Math.min(
+        GUILD_MAX_SCALE,
+        Math.max(GUILD_MIN_SCALE, g.startScale * ratio),
+      );
+      const eff = target / g.startScale;
+      const m = midOf(pts);
+      const mx = m.x - rect.left - rect.width / 2;
+      const my = m.y - rect.top - rect.height / 2;
+      // Zoom about the gesture's start midpoint, plus pan by midpoint drift.
+      const nx = g.startMidX - (g.startMidX - g.startX) * eff + (mx - g.startMidX);
+      const ny = g.startMidY - (g.startMidY - g.startY) * eff + (my - g.startMidY);
+      setTransform(clampTransform(target, nx, ny));
+    } else if (pts.length === 1 && panRef.current) {
+      const dx = e.clientX - panRef.current.x;
+      const dy = e.clientY - panRef.current.y;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) movedRef.current = true;
+      panRef.current = { x: e.clientX, y: e.clientY };
+      setTransform((t) => clampTransform(t.scale, t.x + dx, t.y + dy));
+    }
+  };
+
+  const endPointer = (e: React.PointerEvent) => {
+    pointersRef.current.delete(e.pointerId);
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) pinchRef.current = null;
+    if (pts.length === 1) panRef.current = { x: pts[0].x, y: pts[0].y };
+    if (pts.length === 0) {
+      panRef.current = null;
+      // Double-tap detection (touch): two quick taps reset to fit.
+      if (e.pointerType === "touch") {
+        const now = Date.now();
+        if (now - lastTapRef.current < 300) {
+          reset();
+          lastTapRef.current = 0;
+        } else {
+          lastTapRef.current = now;
+        }
+      }
+    }
+  };
+
+  const zoomed = transform.scale > 1.001;
 
   return (
     <>
@@ -795,8 +967,7 @@ function GuildSystem() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[120] overflow-auto bg-navydeep/95 backdrop-blur-sm"
+            className="fixed inset-0 z-[120] bg-navydeep/95 backdrop-blur-sm"
             role="dialog"
             aria-modal="true"
             aria-label="Guild System diagram, enlarged"
@@ -809,17 +980,41 @@ function GuildSystem() {
             >
               <X className="h-5 w-5" />
             </button>
-            <div className="flex min-h-full w-fit min-w-full items-center justify-center p-4 sm:p-8">
+            {/* Gesture hint */}
+            <span className="pointer-events-none fixed bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-navydeep/80 px-3.5 py-1.5 text-[11px] font-medium text-white/80 ring-1 ring-white/10 backdrop-blur-sm">
+              Pinch or scroll to zoom · drag to pan · double-tap to reset
+            </span>
+            <div
+              ref={viewportRef}
+              onClick={(e) => {
+                // Close on backdrop tap (empty area, not the image) when it
+                // wasn't a pan/zoom gesture.
+                if (e.target === e.currentTarget && !movedRef.current) {
+                  setOpen(false);
+                }
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={endPointer}
+              onPointerCancel={endPointer}
+              onDoubleClick={reset}
+              className="absolute inset-0 flex touch-none select-none items-center justify-center overflow-hidden p-4 sm:p-8"
+              style={{ cursor: zoomed ? "grab" : "zoom-in" }}
+            >
               <motion.img
-                initial={{ scale: 0.96 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.96 }}
+                ref={imgRef}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 src={guildSrc}
                 alt={guildAlt}
-                onClick={(e) => e.stopPropagation()}
-                className="block h-auto max-w-none w-[1200px] rounded-xl shadow-2xl sm:w-auto sm:max-h-[88vh] sm:max-w-[92vw]"
+                className="block h-auto max-w-none w-[1200px] rounded-xl shadow-2xl will-change-transform sm:w-auto sm:max-h-[88vh] sm:max-w-[92vw]"
                 draggable={false}
+                style={{
+                  transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
+                  transition: pinchRef.current || panRef.current ? "none" : "transform 0.12s ease-out",
+                }}
               />
             </div>
           </motion.div>
