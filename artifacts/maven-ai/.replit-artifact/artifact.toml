@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/"
+previewPath = "/maven-ai/"
 title = "Cognirise"
 version = "1.0.0"
 id = "artifacts/maven-ai"
@@ -11,21 +11,12 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/" ]
+paths = [ "/maven-ai/" ]
 localPort = 22132
 
 [services.development]
 run = "pnpm --filter @workspace/maven-ai run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/maven-ai", "run", "build" ]
-publicDir = "artifacts/maven-ai/dist/public"
-serve = "static"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
-
 [services.env]
 PORT = "22132"
-BASE_PATH = "/"
+BASE_PATH = "/maven-ai/"

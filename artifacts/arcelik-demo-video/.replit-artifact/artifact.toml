@@ -17,15 +17,6 @@ localPort = 23742
 [services.development]
 run = "pnpm --filter @workspace/arcelik-demo-video run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/arcelik-demo-video", "run", "build" ]
-publicDir = "artifacts/arcelik-demo-video/dist/public"
-serve = "static"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
-
 [services.env]
 PORT = "23742"
 BASE_PATH = "/arcelik-demo-video/"

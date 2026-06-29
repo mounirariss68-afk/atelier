@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/launch/"
+previewPath = "/"
 title = "Cognirise"
 version = "1.0.0"
 id = "artifacts/launch"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/launch/" ]
+paths = [ "/" ]
 localPort = 20132
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "20132"
-BASE_PATH = "/launch/"
+BASE_PATH = "/"
