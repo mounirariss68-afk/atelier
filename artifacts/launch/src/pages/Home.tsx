@@ -135,7 +135,7 @@ function HeroCarousel() {
             Professional services.<br />Rebuilt for the age of agents.
           </motion.p>
 
-          <div className="min-h-[42vw] sm:min-h-[204px] md:min-h-[244px] lg:min-h-[276px]">
+          <div className="min-h-[230px] sm:min-h-[204px] md:min-h-[244px] lg:min-h-[276px]">
             <AnimatePresence mode="popLayout">
               {HERO_SLIDES[selected].kind === "intro" ? (
                 <motion.div key={selected} className="max-w-2xl">
@@ -150,7 +150,7 @@ function HeroCarousel() {
                     <span className="block text-gradient-bright pb-2">{HERO_SLIDES[selected].headlineGradient}</span>
                   </motion.h1>
                   <motion.p
-                    className="mt-5 text-offwhite/75 text-base sm:text-lg leading-relaxed max-w-xl"
+                    className="mt-5 text-offwhite/75 text-base sm:text-lg leading-relaxed max-w-xl line-clamp-4 sm:line-clamp-none"
                     initial={{ opacity: 0, y: 28 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -14 }}
@@ -222,7 +222,7 @@ function HeroCarousel() {
           </div>
 
           {/* Office locations — watermark */}
-          <div className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-[3px] text-offwhite/25">
+          <div className="mt-6 flex flex-wrap justify-center md:justify-start items-center gap-x-3 gap-y-1 text-[10px] sm:text-[11px] uppercase tracking-[2px] sm:tracking-[3px] text-offwhite/25">
             {["Riyadh", "Dubai", "Abu Dhabi", "Doha", "Istanbul"].map((city, i) => (
               <span key={city} className="flex items-center gap-x-3">
                 {i > 0 && <span className="text-offwhite/15">·</span>}
@@ -232,8 +232,8 @@ function HeroCarousel() {
           </div>
         </div>
 
-        {/* Right: crossfading slide image (decorative, sits behind text) */}
-        <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-[58%] md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
+        {/* Right: crossfading slide image (decorative, sits behind text) — desktop only */}
+        <div className="hidden md:grid w-full pointer-events-none md:absolute md:right-0 md:top-[58%] md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
           {HERO_SLIDES.map((slide, i) => {
             // Mount the selected slide, the one currently held visible, and any
             // still fading out — so the outgoing image is never unmounted before
@@ -739,11 +739,13 @@ function Formula() {
 function GuildSystem() {
   return (
     <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
-      <div className="overflow-x-auto rounded-[12px]">
+      <div className="rounded-[12px] overflow-hidden">
         <img
           src={asset("images/scenes/guild-deck-v3.webp")}
           alt="The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform"
-          className="block h-auto rounded-[12px] min-w-[880px] w-full select-none"
+          width={1600}
+          height={634}
+          className="block h-auto rounded-[12px] w-full select-none aspect-[1600/634]"
           draggable={false}
         />
       </div>
@@ -952,14 +954,15 @@ function ProblemCards() {
 
 const NAV_SECTIONS = ["how-we-work", "services", "approach", "guilds"] as const;
 
-export default function Home() {
+/* ---------- Site navigation (isolated so scroll / menu state never re-renders the whole page) ---------- */
+function SiteNav() {
   const [scrolled, setScrolled] = useState(false);
   const [activeSection, setActiveSection] = useState<string>("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const h = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", h);
+    window.addEventListener("scroll", h, { passive: true });
     return () => window.removeEventListener("scroll", h);
   }, []);
 
@@ -1018,9 +1021,7 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-navy overflow-x-hidden">
-      {/* ===== Nav ===== */}
-      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${scrolled ? "bg-navydeep/85 backdrop-blur-xl border-b border-white/5 py-3" : "bg-transparent py-5"}`}>
+    <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${scrolled ? "bg-navydeep/85 backdrop-blur-xl border-b border-white/5 py-3" : "bg-transparent py-5"}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center">
             <img src={asset("images/cognirise-logo.webp")} alt="Cognirise" className="h-9 md:h-10 w-auto" />
@@ -1052,8 +1053,8 @@ export default function Home() {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="md:hidden overflow-hidden border-t border-white/5 bg-navydeep/95 backdrop-blur-xl"
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="md:hidden overflow-hidden border-t border-white/5 bg-navydeep"
             >
               <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col text-base text-offwhite/80">
                 <a href="#how-we-work" onClick={() => setMobileMenuOpen(false)} className={`py-3 border-b border-white/5 hover:text-white transition-colors ${activeSection === "how-we-work" ? "text-white" : ""}`}>How we work</a>
@@ -1064,7 +1065,15 @@ export default function Home() {
             </motion.div>
           )}
         </AnimatePresence>
-      </nav>
+    </nav>
+  );
+}
+
+export default function Home() {
+  return (
+    <div className="min-h-screen bg-navy overflow-x-hidden">
+      {/* ===== Nav ===== */}
+      <SiteNav />
 
       {/* ===== Hero ===== */}
       <HeroCarousel />
@@ -1155,7 +1164,9 @@ export default function Home() {
               <img
                 src={humanAgent}
                 alt="Human expertise and AI agents working as one delivery team"
-                className="w-full max-w-[400px] mx-auto select-none drop-shadow-[0_30px_80px_rgba(91,124,255,0.25)]"
+                width={800}
+                height={534}
+                className="w-full max-w-[400px] mx-auto select-none drop-shadow-[0_30px_80px_rgba(91,124,255,0.25)] aspect-[800/534]"
                 draggable={false}
               />
             </Reveal>
