@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, ArrowUpRight, ArrowLeft, MapPin, Mail, Building2, CheckCircle2 } from "lucide-react";
-import menatMap from "@assets/MENAT_Map_1782623616287.png";
+import menatMap from "@assets/MENAT_Map_1782623616287.webp";
 
 const SUPPORT_EMAIL = "support@cognirise.ai";
 

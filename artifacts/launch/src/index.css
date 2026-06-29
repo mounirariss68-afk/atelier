@@ -165,14 +165,26 @@
 }
 .group:hover .motif .nd { animation-play-state: running; }
 
-.glow-a { animation: floatGlow 11s ease-in-out infinite; }
-.glow-b { animation: floatGlow2 14s ease-in-out infinite; }
-.spin-slow { animation: spinSlow 22s linear infinite; }
-.pulse-ring { animation: pulseRing 3s ease-out infinite; }
 .marquee-track {
   display: flex;
   width: max-content;
-  animation: marquee 32s linear infinite;
+}
+
+/* Heavy always-on decorative animations only run on larger screens.
+   On phones they cause GPU jank (animating huge blurred layers), so the
+   layers stay static there. */
+@media (min-width: 768px) {
+  .glow-a { animation: floatGlow 11s ease-in-out infinite; }
+  .glow-b { animation: floatGlow2 14s ease-in-out infinite; }
+  .spin-slow { animation: spinSlow 22s linear infinite; }
+  .pulse-ring { animation: pulseRing 3s ease-out infinite; }
+  .marquee-track { animation: marquee 32s linear infinite; }
+}
+
+/* Shrink the large blur radius of decorative glows on phones so they don't
+   force expensive full-screen rasterization. */
+@media (max-width: 767px) {
+  .glow-a, .glow-b { filter: blur(48px) !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {

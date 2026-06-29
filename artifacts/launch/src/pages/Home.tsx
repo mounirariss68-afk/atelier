@@ -10,16 +10,17 @@ import {
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
 
-import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628_t.png";
-import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628_t.png";
-import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628_t.png";
-import slide2Mobile from "@assets/Slide_2-_48_hours_prototype_-_Mobile_1782396651537_t.png";
-import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_1782396575628_t.png";
-import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.png";
-import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.png";
-import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.png";
-import introTree from "@assets/tree_agentic_glow_1782618420404_t.png";
-import humanAgent from "@assets/human_agent_v2.png";
+import slide1Desktop from "@assets/Slide_1_-_Mandays_to_outcomes_-_Desktop_1782396575628_t.webp";
+import slide1Mobile from "@assets/Slide1_-_Mandays_to_Outcomes_-_Mobile_1782396575628_t.webp";
+import slide2Desktop from "@assets/Slide_2-_48_hours_prototype_-_Desktop_1782396575628_t.webp";
+import slide2Mobile from "@assets/Slide_2-_48_hours_prototype_-_Mobile_1782396651537_t.webp";
+import slide3Desktop from "@assets/Slide_3-_No_PowerPoints_-_Desktop_1782396575628_t.webp";
+import slide3Mobile from "@assets/Slide_3_-_No_PowerPoints_-_Mobile_1782396575628_t.webp";
+import slide4Desktop from "@assets/Slide_4_-_No_Vendor_Lockin_-_Desktop_1782396575628_t.webp";
+import slide4Mobile from "@assets/Slide_4_-_No_Vendor_Lockin_-_Mobile_1782396575628_t.webp";
+import introTree from "@assets/tree_agentic_glow_1782618420404_t.webp";
+import introTreeMobile from "@assets/tree_agentic_glow_1782618420404_t-m.webp";
+import humanAgent from "@assets/human_agent_v2.webp";
 
 type HeroSlide =
   | {
@@ -50,7 +51,7 @@ const HERO_SLIDES: HeroSlide[] = [
     headlineGradient: "Agentic Enterprise.",
     body: "Cognirise is an AI-native advisory and engineering firm specializing in agentic transformation and sovereign AI. We help organizations define their AI strategy, build production-grade AI systems, and deliver measurable business impact at enterprise scale.",
     desktop: introTree,
-    mobile: introTree,
+    mobile: introTreeMobile,
   },
   { white: ["We don't", "bill mandays."], gradient: ["We deliver", "outcomes."], desktop: slide1Desktop, mobile: slide1Mobile },
   { white: ["No long", "pilots."], gradient: ["Prototype in", "48 hours."], desktop: slide2Desktop, mobile: slide2Mobile },
@@ -61,6 +62,13 @@ const HERO_SLIDES: HeroSlide[] = [
 /* ---------- Hero carousel ---------- */
 function HeroCarousel() {
   const [selected, setSelected] = useState(0);
+  // Track the previously-shown slide (last committed value) so the crossfade can
+  // keep just the outgoing slide mounted. Updated in an effect to keep render pure.
+  const prevRef = useRef(0);
+  useEffect(() => {
+    prevRef.current = selected;
+  }, [selected]);
+  const prev = prevRef.current;
 
   useEffect(() => {
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -195,25 +203,33 @@ function HeroCarousel() {
 
         {/* Right: crossfading slide image (decorative, sits behind text) */}
         <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-[58%] md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
-          {HERO_SLIDES.map((slide, i) => (
-            <motion.div
-              key={i}
-              className="col-start-1 row-start-1"
-              initial={false}
-              animate={{ opacity: selected === i ? 1 : 0 }}
-              transition={{ duration: 0.8, ease: "easeInOut" }}
-            >
-              <picture>
-                <source media="(min-width: 768px)" srcSet={slide.desktop} />
-                <img
-                  src={slide.mobile}
-                  alt={slideLabel(slide)}
-                  loading={i === 0 ? "eager" : "lazy"}
-                  className="w-full h-auto object-contain"
-                />
-              </picture>
-            </motion.div>
-          ))}
+          {HERO_SLIDES.map((slide, i) => {
+            // Only mount the active slide and the one fading out — keeps at most
+            // two large images decoded in memory at once (mobile perf).
+            const mounted = i === selected || i === prev;
+            return (
+              <motion.div
+                key={i}
+                className="col-start-1 row-start-1"
+                initial={false}
+                animate={{ opacity: selected === i ? 1 : 0 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
+              >
+                {mounted && (
+                  <picture>
+                    <source media="(min-width: 768px)" srcSet={slide.desktop} />
+                    <img
+                      src={slide.mobile}
+                      alt={slideLabel(slide)}
+                      loading={i === 0 ? "eager" : "lazy"}
+                      decoding="async"
+                      className="w-full h-auto object-contain"
+                    />
+                  </picture>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
@@ -533,7 +549,7 @@ function TransformationMap() {
           })}
         </div>
         <div className="flex items-center justify-center gap-3 mt-6">
-          <img src={asset("images/logo-mark.png")} alt="" className="w-8 h-8 object-contain opacity-90" />
+          <img src={asset("images/logo-mark.webp")} alt="" className="w-8 h-8 object-contain opacity-90" />
           <p className="text-[13px] text-offwhite/55">The new model — <span className="text-gradient font-semibold">Human + Agent + Shared Intelligence</span></p>
         </div>
       </div>
@@ -959,7 +975,7 @@ export default function Home() {
       <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${scrolled ? "bg-navydeep/85 backdrop-blur-xl border-b border-white/5 py-3" : "bg-transparent py-5"}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link href="/" className="flex items-center">
-            <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 md:h-10 w-auto" />
+            <img src={asset("images/cognirise-logo.webp")} alt="Cognirise" className="h-9 md:h-10 w-auto" />
           </Link>
           <div className="hidden md:flex items-center gap-9 text-sm text-offwhite/75">
             <a href="#how-we-work" className={`nav-link hover:text-white transition-colors ${activeSection === "how-we-work" ? "active" : ""}`}>How we work</a>
@@ -1272,7 +1288,7 @@ export default function Home() {
           </div>
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-3">
-              <img src={asset("images/cognirise-logo.png")} alt="Cognirise" className="h-9 w-auto opacity-90" />
+              <img src={asset("images/cognirise-logo.webp")} alt="Cognirise" className="h-9 w-auto opacity-90" />
             </div>
             <p className="text-offwhite/45 text-xs tracking-[2px] uppercase">Intelligence that Elevates</p>
             <span className="text-offwhite/40 text-xs">© {new Date().getFullYear()} Cognirise. All rights reserved.</span>
