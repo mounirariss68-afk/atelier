@@ -5,7 +5,7 @@ import {
   ArrowRight, ArrowUpRight, ChevronDown, Check,
   Activity, Database, Cpu, ShieldCheck, Layers,
   FileText, Presentation, Hourglass, Link2, Target, Settings, Rocket, Lock,
-  Menu, X,
+  Menu, X, ZoomIn,
 } from "lucide-react";
 
 const asset = (p: string) => `${import.meta.env.BASE_URL}${p}`;
@@ -698,6 +698,13 @@ function Formula() {
                       {s.takeaway}
                     </span>
                   </div>
+                  {/* Per-step duration, bound to the card on mobile (desktop uses the timeline row below) */}
+                  <span
+                    className="md:hidden mt-4 inline-block px-4 py-1.5 rounded-full text-[12px] font-semibold text-white whitespace-nowrap shadow-[0_8px_24px_-10px_rgba(0,0,0,0.8)]"
+                    style={{ background: s.accent }}
+                  >
+                    {s.duration}
+                  </span>
                 </div>
               </div>
             </Reveal>
@@ -705,9 +712,9 @@ function Formula() {
         })}
       </div>
 
-      {/* Timeline */}
+      {/* Timeline (desktop only — on mobile each duration is shown on its own card above) */}
       <Reveal delay={0.1}>
-        <div className="relative mt-12">
+        <div className="hidden md:block relative mt-12">
           <div
             className="hidden md:block absolute top-1/2 left-[12%] right-[10%] h-[2px] -translate-y-1/2 rounded-full opacity-80"
             style={{ background: "var(--cog-grad)" }}
@@ -737,19 +744,88 @@ function Formula() {
 /* ===================== GUILD SYSTEM (cropped deck graphic) ===================== */
 
 function GuildSystem() {
+  const [open, setOpen] = useState(false);
+  const guildSrc = asset("images/scenes/guild-deck-v3.webp");
+  const guildAlt =
+    "The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform";
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
   return (
-    <div className="grad-border bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]">
-      <div className="rounded-[12px] overflow-hidden">
-        <img
-          src={asset("images/scenes/guild-deck-v3.webp")}
-          alt="The Cognirise Guild System — five specialized agent guilds connected to a central AI transformation platform"
-          width={1600}
-          height={634}
-          className="block h-auto rounded-[12px] w-full select-none aspect-[1600/634]"
-          draggable={false}
-        />
-      </div>
-    </div>
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Enlarge the Guild System diagram"
+        className="grad-border group relative block w-full cursor-zoom-in bg-navydeep/40 p-1.5 shadow-[0_30px_80px_-24px_rgba(0,0,0,0.7)]"
+      >
+        <div className="rounded-[12px] overflow-hidden">
+          <img
+            src={guildSrc}
+            alt={guildAlt}
+            width={1600}
+            height={634}
+            className="block h-auto rounded-[12px] w-full select-none aspect-[1600/634]"
+            draggable={false}
+          />
+        </div>
+        {/* Tap-to-enlarge hint (most useful on mobile where the diagram is dense) */}
+        <span className="pointer-events-none absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-navydeep/80 px-3 py-1.5 text-[11px] font-semibold text-white/90 backdrop-blur-sm ring-1 ring-white/10 md:opacity-0 md:transition-opacity md:group-hover:opacity-100">
+          <ZoomIn className="h-3.5 w-3.5" />
+          Tap to enlarge
+        </span>
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-[120] overflow-auto bg-navydeep/95 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Guild System diagram, enlarged"
+          >
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close enlarged image"
+              className="fixed right-4 top-4 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-navylight/60 text-white ring-1 ring-white/15 transition-colors hover:bg-navylight"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <div className="flex min-h-full w-fit min-w-full items-center justify-center p-4 sm:p-8">
+              <motion.img
+                initial={{ scale: 0.96 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.96 }}
+                transition={{ duration: 0.2 }}
+                src={guildSrc}
+                alt={guildAlt}
+                onClick={(e) => e.stopPropagation()}
+                className="block h-auto max-w-none w-[1200px] rounded-xl shadow-2xl sm:w-auto sm:max-h-[88vh] sm:max-w-[92vw]"
+                draggable={false}
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
