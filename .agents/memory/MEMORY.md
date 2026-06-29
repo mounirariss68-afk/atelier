@@ -13,6 +13,7 @@
 - [Atelier account prefill clamp](atelier-account-prefill-clamp.md) — chat "Review & Create" draft overflows server zod caps → 400 invalid-body; clamp every prefilled field in makeInitial to its cap.
 - [Pursuit Scout create contract](atelier-scout-create-contract.md) — opp create is committed before scout; surface failed/empty scout via structured 201 `scout.status`, never rollback or bare 201; reuse isScoutBriefEmpty.
 - [Launch hero glow-art alpha](launch-hero-glow-art-alpha.md) — glow-on-black slide art: bake luminance→alpha into PNGs (ImageMagick CopyOpacity), don't use mix-blend-screen (Embla carousel isolation kills it).
+- [Launch hero crossfade blank-frame guard](launch-hero-crossfade.md) — hero crossfade is LOAD-gated on img.decode() + holds prev slide + fadingOut mount window; don't revert to timer-only {selected,prev}.
 - [Atelier advisory prefill must degrade](atelier-advisory-prefill-degrade.md) — chat create-account Cartographer timeout must degrade to a manual proposal card (ok:true, degraded:true), never ok:false/STOP.
 - [Opp plm_stage retired](atelier-opp-plm-stage-retired.md) — opp sales_stage is sole stage SoT (contract=won); engagement plmStage kept on purpose; push-based DB skips numbered-migration backfills (funnel audit-row test fails env-only).
 - [Atelier employee seed onConflict](atelier-employee-seed-onconflict.md) — employee insert is onConflictDoNothing; new columns won't backfill on re-seed unless added to the idempotent update loop too.

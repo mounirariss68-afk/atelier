@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -62,13 +62,44 @@ const HERO_SLIDES: HeroSlide[] = [
 /* ---------- Hero carousel ---------- */
 function HeroCarousel() {
   const [selected, setSelected] = useState(0);
-  // Track the previously-shown slide (last committed value) so the crossfade can
-  // keep just the outgoing slide mounted. Updated in an effect to keep render pure.
-  const prevRef = useRef(0);
+  // The slide currently held at full opacity. We do NOT fade it out until the
+  // incoming slide's image is actually decoded — this is what prevents a blank
+  // frame on slow networks / low-end CPUs.
+  const [shown, setShown] = useState(0);
+  // Slides whose images have finished decoding (load-gating the crossfade).
+  const [loaded, setLoaded] = useState<ReadonlySet<number>>(() => new Set());
+  // Outgoing slides still animating their fade-out; kept mounted until done so
+  // the outgoing image never unmounts mid-crossfade (no blank flash on rapid taps).
+  const [fadingOut, setFadingOut] = useState<ReadonlySet<number>>(() => new Set());
+
+  const newReady = loaded.has(selected);
+
+  const markLoaded = useCallback((i: number) => {
+    setLoaded((s) => (s.has(i) ? s : new Set(s).add(i)));
+  }, []);
+
+  // Mark a slide ready only once its bytes are decoded. The ref callback covers
+  // already-cached images (onLoad may not fire); onLoad covers fresh fetches.
+  const handleImg = useCallback(
+    (i: number, el: HTMLImageElement | null) => {
+      if (!el || !el.complete || el.naturalWidth === 0) return;
+      el.decode().then(() => markLoaded(i)).catch(() => markLoaded(i));
+    },
+    [markLoaded],
+  );
+
+  // Promote the selected slide to the visible one only after its image is ready,
+  // retiring the previously-shown slide via a fade-out (kept mounted meanwhile).
   useEffect(() => {
-    prevRef.current = selected;
-  }, [selected]);
-  const prev = prevRef.current;
+    if (newReady && shown !== selected) {
+      setFadingOut((f) => {
+        const n = new Set(f);
+        n.add(shown);
+        return n;
+      });
+      setShown(selected);
+    }
+  }, [newReady, shown, selected]);
 
   useEffect(() => {
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -204,25 +235,42 @@ function HeroCarousel() {
         {/* Right: crossfading slide image (decorative, sits behind text) */}
         <div className="w-full grid pointer-events-none md:absolute md:right-0 md:top-[58%] md:-translate-y-1/2 md:w-[87%] md:max-w-none md:z-0">
           {HERO_SLIDES.map((slide, i) => {
-            // Only mount the active slide and the one fading out — keeps at most
-            // two large images decoded in memory at once (mobile perf).
-            const mounted = i === selected || i === prev;
+            // Mount the selected slide, the one currently held visible, and any
+            // still fading out — so the outgoing image is never unmounted before
+            // its crossfade finishes (no blank frame on rapid taps / slow CPU).
+            const mounted = i === selected || i === shown || fadingOut.has(i);
+            // Hold the previous slide at full opacity until the incoming image is
+            // decoded; only then crossfade. Prevents a blank frame on slow networks.
+            const visible = newReady ? i === selected : i === shown;
             return (
               <motion.div
                 key={i}
                 className="col-start-1 row-start-1"
                 initial={false}
-                animate={{ opacity: selected === i ? 1 : 0 }}
+                animate={{ opacity: visible ? 1 : 0 }}
                 transition={{ duration: 0.8, ease: "easeInOut" }}
+                onAnimationComplete={() => {
+                  if (i !== selected && i !== shown) {
+                    setFadingOut((f) => {
+                      if (!f.has(i)) return f;
+                      const n = new Set(f);
+                      n.delete(i);
+                      return n;
+                    });
+                  }
+                }}
               >
                 {mounted && (
                   <picture>
                     <source media="(min-width: 768px)" srcSet={slide.desktop} />
                     <img
+                      ref={(el) => handleImg(i, el)}
                       src={slide.mobile}
                       alt={slideLabel(slide)}
                       loading={i === 0 ? "eager" : "lazy"}
                       decoding="async"
+                      onLoad={(e) => handleImg(i, e.currentTarget)}
+                      onError={() => markLoaded(i)}
                       className="w-full h-auto object-contain"
                     />
                   </picture>
