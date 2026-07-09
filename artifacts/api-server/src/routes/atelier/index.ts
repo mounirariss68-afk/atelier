@@ -408,7 +408,10 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
       id: r.id,
       title: r.title,
       summary: r.summary,
-      priority: r.priority as "high" | "medium" | "low",
+      priority: (r.priority === "critical" ? "high" : r.priority) as
+        | "high"
+        | "medium"
+        | "low",
       hrefKind: r.hrefKind as "opportunity" | "engagement" | "deliverable" | "atelier",
       hrefTargetId: r.hrefTargetId,
       dueLabel: r.dueLabel,

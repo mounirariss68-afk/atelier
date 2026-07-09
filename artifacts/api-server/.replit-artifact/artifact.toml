@@ -14,3 +14,7 @@ PORT = "8080"
 
 [services.development]
 run = "pnpm --filter @workspace/api-server run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/api-server", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/api-server", "run", "start" ]
