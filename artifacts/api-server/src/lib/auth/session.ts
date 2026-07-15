@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { db, atelierAuthSessions } from "@workspace/db";
-import { eq, lt } from "drizzle-orm";
+import { and, eq, lt, ne } from "drizzle-orm";
 
 /**
  * Server-side session store (Postgres-backed) — Task #1.
@@ -74,6 +74,25 @@ export async function destroySession(token: string): Promise<void> {
   await db
     .delete(atelierAuthSessions)
     .where(eq(atelierAuthSessions.tokenHash, hashToken(token)));
+}
+
+/**
+ * Task #2 — after a password change, kill every other session for the user
+ * so any stolen/old session dies with the old password. The session behind
+ * `keepToken` (the one that made the change) survives.
+ */
+export async function revokeOtherSessions(
+  userId: string,
+  keepToken: string,
+): Promise<void> {
+  await db
+    .delete(atelierAuthSessions)
+    .where(
+      and(
+        eq(atelierAuthSessions.userId, userId),
+        ne(atelierAuthSessions.tokenHash, hashToken(keepToken)),
+      ),
+    );
 }
 
 export function setSessionCookie(

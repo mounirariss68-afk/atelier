@@ -3720,6 +3720,9 @@ export const atelierAuthCredentials = pgTable(
     email: text("email").primaryKey(),
     userId: text("user_id").notNull(),
     passwordHash: text("password_hash").notNull(),
+    // Task #2 — set to true when the user changes their own password;
+    // the boot seed must never overwrite a user-managed hash.
+    userManaged: boolean("user_managed").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

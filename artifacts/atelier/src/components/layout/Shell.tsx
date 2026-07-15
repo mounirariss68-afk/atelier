@@ -38,6 +38,7 @@ import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 
 /**
  * Task #497 — light/dark mode toggle. Sits in the right-side utility
@@ -65,6 +66,7 @@ function ThemeToggle() {
 export function TopNav() {
   const [location] = useLocation();
   const { logout } = useAuth();
+  const [changePwOpen, setChangePwOpen] = React.useState(false);
   const { data: me } = useAtelierGetMe();
   const { data: personas } = useAtelierListPersonas();
   const switchPersona = useAtelierSwitchPersona();
@@ -253,6 +255,13 @@ export function TopNav() {
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
                   <DropdownMenuItem
+                    onClick={() => setChangePwOpen(true)}
+                    data-testid="menu-change-password"
+                    className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer"
+                  >
+                    Change Password
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => void logout()}
                     data-testid="menu-sign-out"
                     className="focus:bg-bg-elevate-2 focus:text-danger cursor-pointer mt-1 border-t border-border-soft"
@@ -265,6 +274,7 @@ export function TopNav() {
           )}
         </div>
       </div>
+      <ChangePasswordDialog open={changePwOpen} onOpenChange={setChangePwOpen} />
     </header>
   );
 }

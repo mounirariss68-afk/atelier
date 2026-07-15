@@ -25,6 +25,18 @@ export async function ensureAtelierAuthSeed(): Promise<void> {
       .select()
       .from(atelierAuthCredentials)
       .where(eq(atelierAuthCredentials.email, u.email));
+    // Task #2 — once a user has changed their own password, the seed must
+    // never overwrite it. Only repair the userId link if it drifted.
+    if (existing && existing.userManaged) {
+      if (existing.userId !== u.userId) {
+        await db
+          .update(atelierAuthCredentials)
+          .set({ userId: u.userId, updatedAt: new Date() })
+          .where(eq(atelierAuthCredentials.email, u.email));
+        logger.info({ email: u.email }, "auth credential userId repaired (user-managed hash kept)");
+      }
+      continue;
+    }
     if (
       existing &&
       existing.userId === u.userId &&

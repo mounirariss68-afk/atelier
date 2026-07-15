@@ -8,6 +8,7 @@ import {
   createSession,
   destroySession,
   lookupSession,
+  revokeOtherSessions,
   setSessionCookie,
   clearSessionCookie,
 } from "../../lib/auth/session";
@@ -41,7 +42,7 @@ function rateLimitOk(ip: string): boolean {
 }
 
 async function audit(
-  action: "login_success" | "login_failed" | "logout",
+  action: "login_success" | "login_failed" | "logout" | "password_changed" | "password_change_failed",
   opts: { actorId?: string | null; actorLabel: string; ip: string },
 ): Promise<void> {
   try {
@@ -59,7 +60,11 @@ async function audit(
           ? `${opts.actorLabel} signed in`
           : action === "logout"
             ? `${opts.actorLabel} signed out`
-            : `Failed sign-in attempt`,
+            : action === "password_changed"
+              ? `${opts.actorLabel} changed their password`
+              : action === "password_change_failed"
+                ? `Failed password change attempt by ${opts.actorLabel}`
+                : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -136,6 +141,85 @@ router.post("/logout", async (req: Request, res: Response) => {
   // Also clear the persona cookies so no stale identity survives logout.
   res.clearCookie("atelier_persona", { path: "/" });
   res.clearCookie("salon_persona", { path: "/" });
+  res.json({ ok: true });
+});
+
+// Task #2 — authenticated password change. Mounted before the global auth
+// gate, so it verifies the session itself. Requires the current password
+// (session-cookie theft alone can't rotate the credential), rate-limited
+// with the same per-IP window as login.
+router.post("/change-password", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const session = token ? await lookupSession(token) : null;
+  if (!session) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return;
+  }
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({
+      error: "rate-limited",
+      message: "Too many attempts. Try again in a few minutes.",
+    });
+    return;
+  }
+  const currentPassword = String(req.body?.currentPassword ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+  if (!currentPassword || !newPassword) {
+    res.status(400).json({
+      error: "invalid-body",
+      message: "Current and new password are required.",
+    });
+    return;
+  }
+  if (newPassword.length < 10 || newPassword.length > 200) {
+    res.status(400).json({
+      error: "weak-password",
+      message: "New password must be at least 10 characters.",
+    });
+    return;
+  }
+  if (newPassword === currentPassword) {
+    res.status(400).json({
+      error: "same-password",
+      message: "New password must be different from the current one.",
+    });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, session.email));
+  if (!cred || cred.userId !== session.userId || !verifyPassword(currentPassword, cred?.passwordHash ?? DUMMY_HASH)) {
+    await audit("password_change_failed", {
+      actorId: session.userId,
+      actorLabel: session.email,
+      ip,
+    });
+    res.status(403).json({
+      error: "wrong-password",
+      message: "Current password is incorrect.",
+    });
+    return;
+  }
+  await db
+    .update(atelierAuthCredentials)
+    .set({
+      passwordHash: hashPassword(newPassword),
+      userManaged: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierAuthCredentials.email, session.email));
+  // Revoke every other session for this user (the current one stays valid),
+  // so a stolen session elsewhere dies with the old password.
+  if (token) {
+    await revokeOtherSessions(session.userId, token);
+  }
+  await audit("password_changed", {
+    actorId: session.userId,
+    actorLabel: session.email,
+    ip,
+  });
   res.json({ ok: true });
 });
 

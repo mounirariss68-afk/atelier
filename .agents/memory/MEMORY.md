@@ -34,4 +34,5 @@
 - [Account-agent UI uses raw fetch](atelier-account-agent-ui.md) — bespoke /accounts/:id/agents/* run+dismiss routes aren't in openapi, so the Account AI tab calls them with raw fetch ({runId,output}); only reuse codegen hooks (useAtelierCreateActivity) for accept→task.
 - [Atelier account/contact merge](atelier-merge.md) — survivor=path id, dup=body, archives dup (soft), idempotent already_merged; both gate CREATE_ROLES+canSeeAccount; contactRelationships has no updatedAt.
 - [Atelier auth lockdown](atelier-auth-lockdown.md) — single global 401 gate (mount new routers after it); NODE_ENV=test harness bypass killed by REPLIT_DEPLOYMENT; boot seed is data-only.
+- [Atelier password user_managed flag](atelier-password-user-managed.md) — boot seed must skip user_managed=true credential rows; any new credential write surface must set the flag deliberately.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
