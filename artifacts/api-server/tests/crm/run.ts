@@ -192,6 +192,7 @@ async function main(): Promise<void> {
   const { isScoutBriefEmpty } = await import(
     "../../src/lib/atelier-agents/runner.js"
   );
+  const { runAuthGateChecks } = await import("./auth-gate.js");
 
   const {
     db,
@@ -299,6 +300,12 @@ async function main(): Promise<void> {
   }
 
   try {
+    // =====================================================================
+    // Task #3 — the global 401 gate: structural router-stack assertions plus
+    // unauthenticated live probes with the test bypass force-disabled.
+    // =====================================================================
+    await runAuthGateChecks(port, check, group);
+
     // =====================================================================
     group("REST \u00b7 Accounts");
     // =====================================================================
