@@ -7,6 +7,7 @@ import { runRosterSteward } from "../routes/atelier/rosterLifecycleRoutes";
 import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
 import { runPaymentProposer } from "./atelier-payment-proposer";
 import { runWinLossOverdueScan } from "../routes/atelier/winLossRoutes";
+import { cleanupExpiredSessions } from "./auth/session";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -15,12 +16,15 @@ const WALLET_RETENTION_CRON = process.env.WALLET_RETENTION_CRON ?? "0 4 * * *";
 const WALLET_PAYMENT_PROPOSER_CRON = process.env.WALLET_PAYMENT_PROPOSER_CRON ?? "0 3 * * 1";
 // Daily 05:00 UTC — escalate any Win/Loss debrief past its 14-day SLA.
 const WINLOSS_SLA_CRON = process.env.WINLOSS_SLA_CRON ?? "0 5 * * *";
+// Daily 02:00 UTC — delete expired auth session rows (Task #4).
+const SESSION_CLEANUP_CRON = process.env.SESSION_CLEANUP_CRON ?? "0 2 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
 let walletRetentionTask: ScheduledTask | null = null;
 let walletPaymentProposerTask: ScheduledTask | null = null;
 let winLossSlaTask: ScheduledTask | null = null;
+let sessionCleanupTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -177,6 +181,29 @@ export function startScheduler(): void {
       "Invalid WINLOSS_SLA_CRON expression, Win/Loss SLA monitor not scheduled",
     );
   }
+
+  // Daily auth-session cleanup (Task #4) — expired rows from abandoned
+  // browsers never hit the delete-on-read path, so sweep them here.
+  if (cron.validate(SESSION_CLEANUP_CRON)) {
+    sessionCleanupTask = cron.schedule(
+      SESSION_CLEANUP_CRON,
+      async () => {
+        try {
+          const out = await cleanupExpiredSessions();
+          logger.info(out, "Auth session cleanup finished");
+        } catch (err) {
+          logger.error({ err }, "Auth session cleanup encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: SESSION_CLEANUP_CRON }, "Auth session cleanup scheduler started");
+  } else {
+    logger.error(
+      { cron: SESSION_CLEANUP_CRON },
+      "Invalid SESSION_CLEANUP_CRON expression, session cleanup not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -204,6 +231,11 @@ export function stopScheduler(): void {
     winLossSlaTask.stop();
     winLossSlaTask = null;
     logger.info("Win/Loss SLA scheduler stopped");
+  }
+  if (sessionCleanupTask) {
+    sessionCleanupTask.stop();
+    sessionCleanupTask = null;
+    logger.info("Auth session cleanup scheduler stopped");
   }
 }
 

@@ -52,6 +52,19 @@ export async function createSession(
   return { token, expiresAt };
 }
 
+/**
+ * Task #4 — periodic sweep of expired session rows. Abandoned browsers never
+ * trigger the delete-on-read path, so a daily cron deletes anything past its
+ * expires_at. Active sessions (expires_at in the future) are untouched.
+ */
+export async function cleanupExpiredSessions(): Promise<{ deleted: number }> {
+  const rows = await db
+    .delete(atelierAuthSessions)
+    .where(lt(atelierAuthSessions.expiresAt, new Date()))
+    .returning({ tokenHash: atelierAuthSessions.tokenHash });
+  return { deleted: rows.length };
+}
+
 export async function lookupSession(token: string): Promise<AuthSession | null> {
   if (!token) return null;
   const [row] = await db
