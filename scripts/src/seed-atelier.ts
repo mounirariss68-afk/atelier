@@ -127,54 +127,6 @@ const PERSONAS = [
     bdActive: true,
     legacyRole: "partner",
   },
-  {
-    id: "p_layla_haddad",
-    email: "layla@cognirise.ai",
-    name: "Layla Haddad",
-    initials: "LH",
-    role: "senior_manager",
-    roleLabel: "Senior Manager",
-    title: "Principal · Engagements",
-    permissions: ["engagement.lead", "deliverable.draft"],
-    bdActive: true,
-    legacyRole: "engagement_lead",
-  },
-  {
-    id: "p_omar_najjar",
-    email: "omar@cognirise.ai",
-    name: "Omar Najjar",
-    initials: "ON",
-    role: "consultant",
-    roleLabel: "Consultant — Public Sector",
-    title: "Senior Consultant · Public Sector",
-    permissions: ["sme.review"],
-    bdActive: false,
-    legacyRole: "sme",
-  },
-  {
-    id: "p_sara_qureshi",
-    email: "sara@cognirise.ai",
-    name: "Sara Qureshi",
-    initials: "SQ",
-    role: "consultant",
-    roleLabel: "Consultant — AI Engineering",
-    title: "Lead Engineer · Agent Runtime",
-    permissions: ["agent.deploy", "prompt.author"],
-    bdActive: false,
-    legacyRole: "ai_engineer",
-  },
-  {
-    id: "p_khaled_aziz",
-    email: "khaled@cognirise.ai",
-    name: "Khaled Aziz",
-    initials: "KA",
-    role: "consultant",
-    roleLabel: "Consultant — Pursuit",
-    title: "Director · Pursuit",
-    permissions: ["pipeline.write"],
-    bdActive: true,
-    legacyRole: "business_developer",
-  },
 ] as const;
 
 // ============================================================
@@ -1114,7 +1066,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Chief Operating Officer",
     offeringAnchor: "Agentic Operations",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 1_400_000,
     probabilityPct: 100,
     nextMilestone: "Mobilize phase-2 charter",
@@ -1130,7 +1082,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Director of Government Enablement",
     offeringAnchor: "Citizen Service Agents",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 820_000,
     probabilityPct: 65,
     nextMilestone: "Submit proposal · 18 May",
@@ -1146,7 +1098,7 @@ const OPPORTUNITIES = [
     buyerPersona: "VP Enterprise Solutions",
     offeringAnchor: "Agentic Platform",
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_gokhan_guney",
     dealSizeHypothesis: 2_100_000,
     probabilityPct: 45,
     nextMilestone: "Go/no-go decision today",
@@ -1162,7 +1114,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Head of Procurement",
     offeringAnchor: "Process Discovery",
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     dealSizeHypothesis: 320_000,
     probabilityPct: 55,
     nextMilestone: "Scope letter · 16 May",
@@ -1178,7 +1130,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Director General",
     offeringAnchor: "Service Design + Agents",
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     dealSizeHypothesis: 1_650_000,
     probabilityPct: 40,
     nextMilestone: "Draft PRT for ED · 14 May",
@@ -1194,7 +1146,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Chief Operating Officer",
     offeringAnchor: "Operations Copilots",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 480_000,
     probabilityPct: 25,
     nextMilestone: "POV brief draft",
@@ -1210,7 +1162,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Chief Customer Officer",
     offeringAnchor: "Design Intelligence",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 720_000,
     probabilityPct: 20,
     nextMilestone: "Discovery call · 19 May",
@@ -1226,7 +1178,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Director of Service Design",
     offeringAnchor: "Citizen Service Agents",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 290_000,
     probabilityPct: 0,
     nextMilestone: "Post-mortem written-up",
@@ -1246,7 +1198,7 @@ const OPPORTUNITIES = [
     buyerPersona: "VP Procurement",
     offeringAnchor: "Operations Copilots",
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_gokhan_guney",
     dealSizeHypothesis: 410_000,
     probabilityPct: 0,
     nextMilestone: "Buyer transcript pending; debrief queued",
@@ -1263,7 +1215,7 @@ const OPPORTUNITIES = [
     buyerPersona: "Chief Customer Officer",
     offeringAnchor: "Citizen Service Agents",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     dealSizeHypothesis: 540_000,
     probabilityPct: 0,
     nextMilestone: "Buyer requested deferral to FY27 — withdrawn by Cognirise",
@@ -1285,7 +1237,7 @@ const ENGAGEMENTS = [
     accountId: "acc_tasama",
     plmStage: "deliver",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     charter: {
       objectives: [
         "Stand up the Cognirise marketplace as Tasama's primary agentic operations channel",
@@ -1324,10 +1276,10 @@ const ENGAGEMENTS = [
         "If Tasama's top-volume services are handled by named agents with senior human oversight, mean handle time drops 40% and adoption compounds to >70% of inbound by day 90.",
     },
     workstreams: [
-      { name: "Marketplace front-end", lead: "Sara Qureshi", status: "on-track" },
-      { name: "Agent runtime", lead: "Sara Qureshi", status: "on-track" },
-      { name: "Service-by-service rollout", lead: "Layla Haddad", status: "amber" },
-      { name: "Adoption + change", lead: "Omar Najjar", status: "on-track" },
+      { name: "Marketplace front-end", lead: "Mounir Ariss", status: "on-track" },
+      { name: "Agent runtime", lead: "Mounir Ariss", status: "on-track" },
+      { name: "Service-by-service rollout", lead: "Mounir Ariss", status: "amber" },
+      { name: "Adoption + change", lead: "Mounir Ariss", status: "on-track" },
     ],
     valueCase: {
       monthlyRunRateSar: 1_320_000,
@@ -1347,10 +1299,10 @@ const ENGAGEMENTS = [
     accountId: "acc_dge",
     plmStage: "compound",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_mounir_ariss",
     charter: null,
     workstreams: [
-      { name: "Service-pack v1", lead: "Omar Najjar", status: "complete" },
+      { name: "Service-pack v1", lead: "Mounir Ariss", status: "complete" },
     ],
     valueCase: null,
     startDate: isoDate(DAYS_AGO(180)),
@@ -1366,10 +1318,10 @@ const ENGAGEMENTS = [
     accountId: "acc_aldrees",
     plmStage: "compound",
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     charter: null,
     workstreams: [
-      { name: "Workshop facilitation", lead: "Layla Haddad", status: "complete" },
+      { name: "Workshop facilitation", lead: "Gökhan Güney", status: "complete" },
     ],
     valueCase: null,
     startDate: isoDate(DAYS_AGO(45)),
@@ -1394,10 +1346,10 @@ const ENGAGEMENTS = [
     accountId: "acc_nhc",
     plmStage: "deliver",
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_mounir_ariss",
     charter: null,
     workstreams: [
-      { name: "Arabic-first conversation design", lead: "Layla Haddad", status: "on-track" },
+      { name: "Arabic-first conversation design", lead: "Mounir Ariss", status: "on-track" },
     ],
     valueCase: null,
     startDate: isoDate(DAYS_AGO(20)),
@@ -1458,7 +1410,7 @@ const ASSETS = [
     tags: ["delivery", "workshop", "aldrees", "learning"],
     bodyOrFileUrl: null,
     promotedFromEngagementId: "eng_aldrees_workshop",
-    promotedByUserId: "p_layla_haddad",
+    promotedByUserId: "p_mounir_ariss",
   },
   {
     id: "ast_diagnostic_memo_v3",
@@ -1466,11 +1418,11 @@ const ASSETS = [
     title: "Prompt · Diagnostic Memo v3",
     abstract:
       "Latest active prompt for Diagnostic Memo Author. Eval score 0.91; supersedes v2.",
-    provenance: "Authored by Sara Qureshi · activated 6 days ago",
+    provenance: "Authored by Mounir Ariss · activated 6 days ago",
     tags: ["prompt", "diagnostic", "active"],
     bodyOrFileUrl: null,
     promotedFromEngagementId: null,
-    promotedByUserId: "p_sara_qureshi",
+    promotedByUserId: "p_mounir_ariss",
   },
   {
     id: "ast_pyramid_framework",
@@ -1561,182 +1513,6 @@ const PANE_A = [
     hrefTargetId: TASAMA_ENG_ID,
     dueLabel: "Fri, 16 May",
     sortKey: 5,
-  },
-
-  // Layla Haddad — Engagement Lead
-  {
-    id: "pa_layla_charter",
-    userId: "p_layla_haddad",
-    title: "Tasama charter v3 — your sign-off needed",
-    summary:
-      "Charter Architect tightened the success metrics. Two amber items remain on the Steering RACI.",
-    priority: "high",
-    hrefKind: "engagement",
-    hrefTargetId: TASAMA_ENG_ID,
-    dueLabel: "Today, 5:00 PM",
-    sortKey: 1,
-  },
-  {
-    id: "pa_layla_raid",
-    userId: "p_layla_haddad",
-    title: "RAID review — Tasama week 4",
-    summary:
-      "RAID Watchdog escalated 2 risks to red after vendor delay. Recommend mitigations attached.",
-    priority: "high",
-    hrefKind: "engagement",
-    hrefTargetId: TASAMA_ENG_ID,
-    dueLabel: "Today, EOD",
-    sortKey: 2,
-  },
-  {
-    id: "pa_layla_workplan",
-    userId: "p_layla_haddad",
-    title: "Approve workplan re-baseline — Aldrees scoping",
-    summary:
-      "Workplan Architect produced revised milestones; critical path slipped by 4 working days.",
-    priority: "medium",
-    hrefKind: "opportunity",
-    hrefTargetId: "opp_aldrees_boq",
-    dueLabel: "Tomorrow",
-    sortKey: 3,
-  },
-  {
-    id: "pa_layla_meeting",
-    userId: "p_layla_haddad",
-    title: "Steering deck for Tasama — review draft",
-    summary:
-      "Meeting Scribe prepared the steering pack with last-week decisions and open RAID items.",
-    priority: "medium",
-    hrefKind: "engagement",
-    hrefTargetId: TASAMA_ENG_ID,
-    dueLabel: "Wed, 14 May",
-    sortKey: 4,
-  },
-
-  // Omar Najjar — SME (sector / domain expert)
-  {
-    id: "pa_omar_pov_review",
-    userId: "p_omar_najjar",
-    title: "SME review — STC RFP point-of-view",
-    summary:
-      "POV Author wants your sector lens on the B2B platform pricing argument before partner read.",
-    priority: "high",
-    hrefKind: "opportunity",
-    hrefTargetId: "opp_stc_b2b_platform",
-    dueLabel: "Today, 3:00 PM",
-    sortKey: 1,
-  },
-  {
-    id: "pa_omar_diagnostic",
-    userId: "p_omar_najjar",
-    title: "Diagnostic memo — Dubai Municipality service design",
-    summary:
-      "Diagnostic Memo agent drafted findings; needs your benchmarks against UAE peers.",
-    priority: "medium",
-    hrefKind: "opportunity",
-    hrefTargetId: "opp_dubai_muni_servicedesign",
-    dueLabel: "Tomorrow",
-    sortKey: 2,
-  },
-  {
-    id: "pa_omar_atelier",
-    userId: "p_omar_najjar",
-    title: "Promote new framework to Atelier — Service Blueprint v2",
-    summary:
-      "Atelier Curator queued your authored framework for promotion. Approve and add tags.",
-    priority: "low",
-    hrefKind: "atelier",
-    hrefTargetId: "atelier_assets",
-    dueLabel: "This week",
-    sortKey: 3,
-  },
-
-  // Sara Qureshi — AI Engineer
-  {
-    id: "pa_sara_agent_design",
-    userId: "p_sara_qureshi",
-    title: "Approve agent design — Pricing Analyst v2",
-    summary:
-      "Agent Architect produced an updated tool/guardrail spec. Eval pack staged for review.",
-    priority: "high",
-    hrefKind: "atelier",
-    hrefTargetId: "atelier_agents",
-    dueLabel: "Today, 6:00 PM",
-    sortKey: 1,
-  },
-  {
-    id: "pa_sara_prototype",
-    userId: "p_sara_qureshi",
-    title: "Prototype Forge — Tasama action-tracker UI",
-    summary:
-      "First buildable prototype is up; you marked critique items in last review — ready to re-run.",
-    priority: "high",
-    hrefKind: "engagement",
-    hrefTargetId: TASAMA_ENG_ID,
-    dueLabel: "Tomorrow",
-    sortKey: 2,
-  },
-  {
-    id: "pa_sara_eval",
-    userId: "p_sara_qureshi",
-    title: "Eval failures — Synthesis Critic regressions",
-    summary:
-      "Two regression cases flagged amber after model swap. Suggested prompt diff attached.",
-    priority: "medium",
-    hrefKind: "atelier",
-    hrefTargetId: "atelier_agents",
-    dueLabel: "Wed, 14 May",
-    sortKey: 3,
-  },
-
-  // Khaled Aziz — Business Developer
-  {
-    id: "pa_khaled_pursuit",
-    userId: "p_khaled_aziz",
-    title: "Triage — 4 new pursuits scouted overnight",
-    summary:
-      "Pursuit Scout returned 4 candidates above threshold. Decide promote / park / reject.",
-    priority: "high",
-    hrefKind: "atelier",
-    hrefTargetId: "pipeline",
-    dueLabel: "Today, 10:00 AM",
-    sortKey: 1,
-  },
-  {
-    id: "pa_khaled_proposal",
-    userId: "p_khaled_aziz",
-    title: "Proposal Composer — Aldrees BoQ commercial pack",
-    summary:
-      "Composer prepared sections A–F; pricing window narrowed. Needs your final margin call.",
-    priority: "high",
-    hrefKind: "opportunity",
-    hrefTargetId: "opp_aldrees_boq",
-    dueLabel: "Today, EOD",
-    sortKey: 2,
-  },
-  {
-    id: "pa_khaled_pipeline_review",
-    userId: "p_khaled_aziz",
-    title: "Weekly pipeline hygiene — 3 opps aged red",
-    summary:
-      "Three opportunities have been in stage > 30 days. Triage agent suggests next actions per row.",
-    priority: "medium",
-    hrefKind: "atelier",
-    hrefTargetId: "pipeline",
-    dueLabel: "Tomorrow",
-    sortKey: 3,
-  },
-  {
-    id: "pa_khaled_dubai_prt",
-    userId: "p_khaled_aziz",
-    title: "Confirm PRT recipients — Dubai Municipality",
-    summary:
-      "Partner-Ready Transmittal staged by Proposal Composer. Distribution list awaits your review.",
-    priority: "low",
-    hrefKind: "opportunity",
-    hrefTargetId: "opp_dubai_muni_servicedesign",
-    dueLabel: "This week",
-    sortKey: 4,
   },
 ];
 
@@ -1886,7 +1662,7 @@ const PROMPTS = AGENTS.filter((a) => a.starred).map((a, i) => ({
   body: `# ${a.name} · v1\n\n## Purpose\n${a.purpose}\n\n## Tools\n${a.tools.map((t) => `- ${t}`).join("\n")}\n\n## Guardrails\n${a.guardrails.map((g) => `- ${g}`).join("\n")}\n\n## Human checkpoints\n${a.humanCheckpoints.map((h) => `- ${h}`).join("\n")}\n\n## Voice\nConfident, commercial, partner-grade. Mirror the Cognirise non-negotiables: human authority sovereign; show the work; audit trail; bilingual-aware; watermark synthetic data.\n`,
   status: "active" as const,
   evalScore: 0.85 + (i % 5) * 0.02,
-  author: "p_sara_qureshi",
+  author: "p_mounir_ariss",
 }));
 
 // ============================================================
@@ -1975,7 +1751,7 @@ const TASAMA_MEETINGS = [
     kind: "kickoff",
     title: "Tasama phase-1 kickoff",
     date: isoDate(DAYS_AGO(58)),
-    attendees: ["Tasama COO", "Tasama Ops Director", "Mounir Ariss", "Layla Haddad"],
+    attendees: ["Tasama COO", "Tasama Ops Director", "Mounir Ariss"],
     summary:
       "Confirmed phase-1 scope, named the first 6 services, agreed on weekly steering cadence.",
   },
@@ -1987,7 +1763,7 @@ const TASAMA_MEETINGS = [
     kind: "discovery",
     title: "Tasama shared services intake — discovery",
     date: isoDate(DAYS_AGO(40)),
-    attendees: ["Tasama Ops Director", "Tasama Service Leads ×3", "Layla Haddad", "Sara Qureshi"],
+    attendees: ["Tasama Ops Director", "Tasama Service Leads ×3", "Mounir Ariss"],
     summary:
       "Captured the as-is intake flow for the top-3 services; identified 9 candidate agentifiable steps.",
   },
@@ -1999,7 +1775,7 @@ const TASAMA_MEETINGS = [
     kind: "steering",
     title: "Tasama steering · 11 May",
     date: isoDate(DAYS_AGO(1)),
-    attendees: ["Tasama COO", "Mounir Ariss", "Layla Haddad"],
+    attendees: ["Tasama COO", "Mounir Ariss"],
     summary:
       "Approved Pyramid v2 of the POV; agreed to revisit value-realisation slide before client send.",
   },
@@ -2010,7 +1786,7 @@ const TASAMA_RAID = [
     id: "raid_tasama_adoption",
     kind: "risk",
     severity: "amber",
-    ownerId: "p_layla_haddad",
+    ownerId: "p_mounir_ariss",
     status: "open",
     dueDate: isoDate(DAYS_FROM_NOW(7)),
     description:
@@ -2020,7 +1796,7 @@ const TASAMA_RAID = [
     id: "raid_tasama_residency",
     kind: "issue",
     severity: "amber",
-    ownerId: "p_omar_najjar",
+    ownerId: "p_mounir_ariss",
     status: "open",
     dueDate: isoDate(DAYS_FROM_NOW(10)),
     description:
@@ -2357,7 +2133,11 @@ async function main() {
   // column `role`); using the new name keeps seed in sync with PRD §2.1.
   const accessRows: { id: string; engagementId: string; userId: string; roleOnEngagement: string }[] = [];
   for (const e of ENGAGEMENTS) {
-    if (e.engagementLeadId && e.engagementLeadId !== "p_mounir_ariss") {
+    if (
+      e.engagementLeadId &&
+      e.engagementLeadId !== "p_mounir_ariss" &&
+      e.engagementLeadId !== "p_gokhan_guney"
+    ) {
       accessRows.push({
         id: `access_${e.id}_${e.engagementLeadId}`,
         engagementId: e.id,
@@ -2365,15 +2145,6 @@ async function main() {
         roleOnEngagement: "lead",
       });
     }
-  }
-  // SME + AI engineer staffed on Tasama (the showcase engagement).
-  for (const uid of ["p_omar_najjar", "p_sara_qureshi"]) {
-    accessRows.push({
-      id: `access_${TASAMA_ENG_ID}_${uid}`,
-      engagementId: TASAMA_ENG_ID,
-      userId: uid,
-      roleOnEngagement: "member",
-    });
   }
   if (accessRows.length) await db.insert(atelierEngagementAccess).values(accessRows);
 
@@ -2486,11 +2257,11 @@ async function main() {
         "opportunity",
         o.id,
         "human",
-        "Khaled Aziz",
+        "Mounir Ariss",
         "opportunity.create",
         `Opportunity created at PLM stage ${o.plmStage}`,
         DAYS_AGO(o.daysInStage + 2),
-        "p_khaled_aziz",
+        "p_mounir_ariss",
       ),
     ),
     ...ENGAGEMENTS.map((e) =>
@@ -2559,11 +2330,11 @@ async function main() {
       "atelier",
       "ast_aldrees_learning",
       "human",
-      "Layla Haddad",
+      "Mounir Ariss",
       "atelier.promote",
       "Aldrees BOQ workshop learnings promoted.",
       DAYS_AGO(18),
-      "p_layla_haddad",
+      "p_mounir_ariss",
     ),
     // Per-agent-run audit trail so the AgentRun audit tab is verifiably
     // populated for at least one canonical run from each starred agent.
@@ -2732,7 +2503,7 @@ async function main() {
       ],
       sellerNotes: "Lost momentum after the COO transition; never rebooted the trust ladder.",
       partnerOwnerUserId: "p_mounir_ariss",
-      engagementLeadUserId: "p_omar_najjar",
+      engagementLeadUserId: "p_mounir_ariss",
       dueAt: DAYS_FROM_NOW(7),
       createdByUserId: "p_mounir_ariss",
     },
@@ -2845,8 +2616,8 @@ async function main() {
       deliverableVersionId: "delv_tasama_pov_v2_v2",
       engagementId: TASAMA_ENG_ID,
       workspaceId: SALON_WS_ID,
-      publishedByAtelierUserId: "p_layla_haddad",
-      publishedByName: "Layla Haddad",
+      publishedByAtelierUserId: "p_mounir_ariss",
+      publishedByName: "Mounir Ariss",
       publishedAt: HOURS_AGO(20),
       sentinelStatus: "pass",
       sentinelChecks: [{ name: "pii_scan", status: "pass" as const, detail: "No PII detected." }],
@@ -2860,8 +2631,8 @@ async function main() {
       deliverableVersionId: "delv_tasama_servicepack_v1",
       engagementId: TASAMA_ENG_ID,
       workspaceId: SALON_WS_ID,
-      publishedByAtelierUserId: "p_layla_haddad",
-      publishedByName: "Layla Haddad",
+      publishedByAtelierUserId: "p_mounir_ariss",
+      publishedByName: "Mounir Ariss",
       publishedAt: HOURS_AGO(40),
       sentinelStatus: "warn",
       sentinelChecks: [{ name: "internal_only_marker", status: "warn" as const, detail: "Watermark required; no PII detected." }],
@@ -2905,7 +2676,7 @@ async function main() {
   ]);
   await db.insert(atelierSalonRequests).values([
     { id: "sr_1", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "copy_request", title: "Copy of POV v2 for COO offline review",   detail: "Need a watermarked PDF I can share inside Tasama.",         status: "open",       raisedBySalonUserId: "su_tasama_admin",    raisedByName: NAME_OF.su_tasama_admin,    raisedAt: HOURS_AGO(5) },
-    { id: "sr_2", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "meeting",      title: "Workshop on residency & identity controls",detail: "Block 90 minutes with Layla and Omar in the next two weeks.",status: "in_progress",raisedBySalonUserId: "su_tasama_approver", raisedByName: NAME_OF.su_tasama_approver, raisedAt: DAYS_AGO(1) },
+    { id: "sr_2", workspaceId: SALON_WS_ID, engagementId: TASAMA_ENG_ID, kind: "meeting",      title: "Workshop on residency & identity controls",detail: "Block 90 minutes with the engagement leads in the next two weeks.",status: "in_progress",raisedBySalonUserId: "su_tasama_approver", raisedByName: NAME_OF.su_tasama_approver, raisedAt: DAYS_AGO(1) },
   ]);
 
   // ============================================================
@@ -2939,75 +2710,6 @@ async function main() {
       swift: "EBILAEAD",
       noticePeriodDays: 90,
       startDate: "2023-01-15",
-      status: "active",
-    },
-    {
-      id: "emp_p_layla_haddad",
-      userId: "p_layla_haddad",
-      fullName: "Layla Haddad",
-      email: "layla@cognirise.example",
-      role: "senior_manager",
-      seniority: "principal",
-      title: "Senior Manager (Engagement Lead)",
-      country: "SA",
-      employmentType: "FTE",
-      homeOffice: "Riyadh",
-      payrollCountry: "SA",
-      employeeIdExternal: "COGNIRISE-0002",
-      cellPhones: [
-        { country: "KSA", number: "+966 55 234 5678" },
-        { country: "UAE", number: "+971 52 998 1122" },
-      ],
-      officeAddress:
-        "Cognirise, Olaya Towers, Tower B, King Fahd Road, Olaya District, Riyadh 12244, Saudi Arabia",
-      iban: "SA0380000000608010167519",
-      swift: "RJHISARI",
-      noticePeriodDays: 60,
-      startDate: "2023-04-01",
-      status: "active",
-    },
-    {
-      id: "emp_p_omar_najjar",
-      userId: "p_omar_najjar",
-      fullName: "Omar Najjar",
-      email: "omar@cognirise.example",
-      role: "consultant",
-      seniority: "senior_consultant",
-      title: "Subject-Matter Expert — Operations",
-      country: "AE",
-      employmentType: "FTE",
-      homeOffice: "Dubai",
-      payrollCountry: "AE",
-      employeeIdExternal: "COGNIRISE-0003",
-      cellPhones: [{ country: "UAE", number: "+971 50 334 8890" }],
-      officeAddress:
-        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
-      iban: "AE070331234567890999111",
-      swift: "EBILAEAD",
-      noticePeriodDays: 30,
-      startDate: "2024-02-12",
-      status: "active",
-    },
-    {
-      id: "emp_p_sara_qureshi",
-      userId: "p_sara_qureshi",
-      fullName: "Sara Qureshi",
-      email: "sara@cognirise.example",
-      role: "consultant",
-      seniority: "consultant",
-      title: "AI Engineer",
-      country: "AE",
-      employmentType: "FTE",
-      homeOffice: "Dubai",
-      payrollCountry: "AE",
-      employeeIdExternal: "COGNIRISE-0004",
-      cellPhones: [{ country: "UAE", number: "+971 54 776 5521" }],
-      officeAddress:
-        "Cognirise, Unit 1204, One Central, Dubai World Trade Centre, Dubai, United Arab Emirates",
-      iban: "AE070331234567899911234",
-      swift: "EBILAEAD",
-      noticePeriodDays: 30,
-      startDate: "2024-08-19",
       status: "active",
     },
     {
@@ -3140,25 +2842,6 @@ async function main() {
   console.log("[seed-atelier] v3 roster: partner-firm resources…");
   const PARTNER_RESOURCES = [
     {
-      id: "pfr_bgts_yara",
-      partnerFirmId: "pf_bgts",
-      fullName: "Yara Al-Suwaidi",
-      email: "yara.suwaidi@bgts.example",
-      role: "Senior Consultant",
-      seniority: "senior_consultant",
-      country: "SA",
-      dayRateAmount: 15000_00,
-      dayRateCurrency: "SAR",
-      startDate: "2025-09-01",
-      endDate: "2026-08-31",
-      status: "active",
-      secondedToEngagementIds: ["eng_tasama_bpo_phase1"],
-      // Link to the atelier_users persona for this partner-firm PM so
-      // resolvePartnerFirmScope() in ledgerRoutes can attach object-level
-      // ACL (own firm + own seconded engagements) to /ledger/partner-firm-hours.
-      partnerFirmPmUserId: "u_yara_bgts",
-    },
-    {
       id: "pfr_bgts_khalid",
       partnerFirmId: "pf_bgts",
       fullName: "Khalid Al-Otaibi",
@@ -3213,38 +2896,6 @@ async function main() {
         countryCode: mapCountryToCode(r.country),
       })),
     )
-    .onConflictDoNothing();
-
-  // Task #254 — Provision a partner-firm USER persona + scoped engagement-access
-  // grant. Required so the cross-realm test ("partner-firm staff in seed only
-  // see assigned engagement routes") has a concrete subject.
-  console.log("[seed-atelier] v3 roster: partner-firm persona + scoped grant…");
-  await db
-    .insert(atelierUsers)
-    .values({
-      id: "u_yara_bgts",
-      orgId: "aico",
-      name: "Yara Al-Suwaidi",
-      initials: "YA",
-      email: "yara.suwaidi@bgts.example",
-      role: "partner_firm_resource",
-      roleLabel: "Senior Consultant — BGTS",
-      title: "Senior Consultant — BGTS",
-    })
-    .onConflictDoNothing();
-  await db
-    .insert(atelierEngagementAccess)
-    .values({
-      id: "ea_yara_tasama",
-      engagementId: "eng_tasama_bpo_phase1",
-      userId: "u_yara_bgts",
-      roleOnEngagement: "partner_resource",
-      allocationPct: 60,
-      scope: ["can_view_engagement", "can_view_artifacts"],
-      status: "active",
-      grantedByUserId: "p_mounir_ariss",
-      grantedAt: new Date(),
-    })
     .onConflictDoNothing();
 
   console.log("[seed-atelier] v3 lifecycle (Task #255): agents…");
@@ -3461,23 +3112,6 @@ async function main() {
     .insert(atelierComplianceRecords)
     .values([
       {
-        id: "cmp_layla_iqama_seed",
-        personType: "employee",
-        personId: "emp_p_layla_haddad",
-        kind: "iqama",
-        jurisdiction: "KSA",
-        // Task #291 — FK ISO alpha-2 code; sub-jurisdiction stays in `jurisdiction`.
-        jurisdictionCountryCode: "SA",
-        // Redacted-only — raw number never persisted.
-        referenceNumberRedacted: "••••4471",
-        referenceNumberLastFour: "4471",
-        issuedDate: "2024-06-01",
-        expiryDate: new Date(Date.now() + 25 * 86400_000).toISOString().slice(0, 10),
-        status: "active",
-        metadata: { sponsorEntity: "Cognirise KSA" },
-        createdByUserId: "p_mounir_ariss",
-      },
-      {
         id: "cmp_aico_difc_seed",
         personType: null,
         personId: null,
@@ -3615,29 +3249,6 @@ async function main() {
     { person: "emp_p_mounir_ariss", skill: "sk_french", proficiency: 5, source: "self" },
     { person: "emp_p_mounir_ariss", skill: "sk_change_management", proficiency: 4, source: "partner_attested" },
     { person: "emp_p_mounir_ariss", skill: "sk_english", proficiency: 5, source: "self" },
-    // Layla — Operations Lead
-    { person: "emp_p_layla_haddad", skill: "sk_change_management", proficiency: 5, source: "certification", summary: "Prosci certified" },
-    { person: "emp_p_layla_haddad", skill: "sk_gcc_banking", proficiency: 4, source: "evidence_atelier" },
-    { person: "emp_p_layla_haddad", skill: "sk_powerbi", proficiency: 3, source: "self" },
-    { person: "emp_p_layla_haddad", skill: "sk_figma", proficiency: 3, source: "self" },
-    { person: "emp_p_layla_haddad", skill: "sk_arabic", proficiency: 5, source: "self" },
-    { person: "emp_p_layla_haddad", skill: "sk_english", proficiency: 5, source: "self" },
-    // Omar — Engagement Lead (Pricing)
-    { person: "emp_p_omar_najjar", skill: "sk_pricing_strategy", proficiency: 5, source: "evidence_atelier", summary: "Lead on Arçelik pricing engagement" },
-    { person: "emp_p_omar_najjar", skill: "sk_databricks", proficiency: 4, source: "certification", summary: "Databricks Certified Data Engineer Pro" },
-    { person: "emp_p_omar_najjar", skill: "sk_langgraph", proficiency: 4, source: "self", summary: "Built LangGraph workflows for in-house agents" },
-    { person: "emp_p_omar_najjar", skill: "sk_python", proficiency: 4, source: "self" },
-    { person: "emp_p_omar_najjar", skill: "sk_telco", proficiency: 3, source: "evidence_atelier" },
-    { person: "emp_p_omar_najjar", skill: "sk_arabic", proficiency: 4, source: "self" },
-    { person: "emp_p_omar_najjar", skill: "sk_english", proficiency: 5, source: "self" },
-    // Sara — Senior Consultant (Forecast/Analytics)
-    { person: "emp_p_sara_qureshi", skill: "sk_forecasting", proficiency: 5, source: "evidence_atelier", summary: "Authored forecast deliverables" },
-    { person: "emp_p_sara_qureshi", skill: "sk_python", proficiency: 5, source: "self" },
-    { person: "emp_p_sara_qureshi", skill: "sk_dbt", proficiency: 4, source: "certification", summary: "dbt Analytics Engineering certified" },
-    { person: "emp_p_sara_qureshi", skill: "sk_snowflake", proficiency: 4, source: "self" },
-    { person: "emp_p_sara_qureshi", skill: "sk_replit", proficiency: 3, source: "self", summary: "Prototyping notebooks and Streamlit apps on Replit" },
-    { person: "emp_p_sara_qureshi", skill: "sk_powerbi", proficiency: 3, source: "evidence_atelier" },
-    { person: "emp_p_sara_qureshi", skill: "sk_english", proficiency: 5, source: "self" },
     // Youssef — Business Developer
     { person: "emp_p_youssef_idrissi", skill: "sk_gcc_banking", proficiency: 4, source: "partner_attested" },
     { person: "emp_p_youssef_idrissi", skill: "sk_telco", proficiency: 3, source: "self" },
@@ -3793,11 +3404,11 @@ async function main() {
       submittedAt: ["submitted", "lead_approved", "partner_approved", "rejected"].includes(opts.status) ? seedDate : null,
       submittedByUserId: ["submitted", "lead_approved", "partner_approved", "rejected"].includes(opts.status) ? opts.person.userId : null,
       leadApprovedAt: ["lead_approved", "partner_approved"].includes(opts.status) ? seedDate : null,
-      leadApprovedByUserId: ["lead_approved", "partner_approved"].includes(opts.status) ? "p_layla_haddad" : null,
+      leadApprovedByUserId: ["lead_approved", "partner_approved"].includes(opts.status) ? "p_gokhan_guney" : null,
       partnerApprovedAt: opts.status === "partner_approved" ? seedDate : null,
       partnerApprovedByUserId: opts.status === "partner_approved" ? "p_mounir_ariss" : null,
       rejectedAt: opts.status === "rejected" ? seedDate : null,
-      rejectedByUserId: opts.status === "rejected" ? "p_layla_haddad" : null,
+      rejectedByUserId: opts.status === "rejected" ? "p_gokhan_guney" : null,
       rejectionReason: opts.rejectionReason ?? null,
       totalHours: total,
       billableHours: billable,
@@ -3855,59 +3466,16 @@ async function main() {
     { dayOffset: 4, eng: null, hours: 4, billable: false, narrative: "Internal — pursuit support" },
   ];
   const mounir = findEmp("emp_p_mounir_ariss");
-  const layla = findEmp("emp_p_layla_haddad");
-  const omar = findEmp("emp_p_omar_najjar");
-  const sara = findEmp("emp_p_sara_qureshi");
 
   if (mounir) {
     pushWeek({ person: mounir, wk: weekA, status: "partner_approved", entrySpecs: standardWeek(TASAMA_ENG_ID) });
     pushWeek({ person: mounir, wk: weekB, status: "draft", entrySpecs: standardWeek(TASAMA_ENG_ID).slice(0, 3) });
   }
-  if (layla) {
-    pushWeek({ person: layla, wk: weekA, status: "lead_approved", entrySpecs: standardWeek(TASAMA_ENG_ID) });
-    pushWeek({
-      person: layla,
-      wk: weekB,
-      status: "submitted",
-      entrySpecs: standardWeek(TASAMA_ENG_ID),
-      flags: ["double_booked:" + weekB.monday.toISOString().slice(0, 10) + ":" + TASAMA_ENG_ID],
-    });
-  }
-  if (omar) {
-    pushWeek({
-      person: omar,
-      wk: weekA,
-      status: "rejected",
-      entrySpecs: standardWeek(TASAMA_ENG_ID),
-      rejectionReason: "Friday hours need a narrative — please redraft.",
-    });
-    pushWeek({ person: omar, wk: weekB, status: "draft", entrySpecs: standardWeek(TASAMA_ENG_ID).slice(0, 2) });
-  }
-  if (sara) {
-    // Suspicious: 16h on Wed (>14h), fully billable, no meetings.
-    pushWeek({
-      person: sara,
-      wk: weekA,
-      status: "submitted",
-      entrySpecs: [
-        { dayOffset: 0, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Heads-down build" },
-        { dayOffset: 1, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Heads-down build" },
-        { dayOffset: 2, eng: TASAMA_ENG_ID, hours: 16, billable: true, narrative: "All-nighter for demo" },
-        { dayOffset: 3, eng: TASAMA_ENG_ID, hours: 8, billable: true, narrative: "Polish + bugfix" },
-        { dayOffset: 4, eng: TASAMA_ENG_ID, hours: 6, billable: true, narrative: "Demo support" },
-      ],
-      flags: [
-        `day_overload:${(() => { const d = new Date(weekA.monday); d.setUTCDate(d.getUTCDate() + 2); return d.toISOString().slice(0, 10); })()}:16h`,
-        "fully_billable_no_meetings",
-      ],
-    });
-    pushWeek({ person: sara, wk: weekB, status: "draft", entrySpecs: [] });
-  }
 
   // Coverage backfill: for every other LEDGER_PEOPLE row not in the named
   // matrix above, seed two standard weeks (weekA submitted, weekB draft) so
   // approvers + the steward tick have realistic data across the roster.
-  const namedIds = new Set(["emp_p_mounir_ariss", "emp_p_layla_haddad", "emp_p_omar_najjar", "emp_p_sara_qureshi"]);
+  const namedIds = new Set(["emp_p_mounir_ariss"]);
   for (const emp of LEDGER_PEOPLE) {
     if (namedIds.has(emp.id)) continue;
     pushWeek({ person: emp, wk: weekA, status: "submitted", entrySpecs: standardWeek(TASAMA_ENG_ID) });
@@ -3926,8 +3494,8 @@ async function main() {
         id: `pfh_seed_bgts_${weekA.weekIso}`,
         engagementId: TASAMA_ENG_ID,
         partnerFirmId: "pf_bgts",
-        partnerFirmResourceId: "pfr_bgts_yara",
-        resourceName: "Yara Al-Suwaidi",
+        partnerFirmResourceId: "pfr_bgts_khalid",
+        resourceName: "Khalid Al-Otaibi",
         weekIso: weekA.weekIso,
         hours: 38,
         costAmount: 57000,
@@ -4131,9 +3699,6 @@ async function seedV3Wallet() {
   // --- 4 Corporate cards ---------------------------------------
   const cards = [
     { id: "card_mounir_amex", cardholderUserId: "p_mounir_ariss", label: "Mounir Ariss · Amex Plat",   last4: "1004", provider: "manual",     currency: "USD", monthlyLimitAmount: 50000 },
-    { id: "card_layla_visa",  cardholderUserId: "p_layla_haddad", label: "Layla Haddad · ENBD Visa",    last4: "8821", provider: "manual",     currency: "AED", monthlyLimitAmount: 25000 },
-    { id: "card_omar_visa",   cardholderUserId: "p_omar_najjar",  label: "Omar Najjar · SNB Visa",       last4: "5510", provider: "manual",     currency: "SAR", monthlyLimitAmount: 25000 },
-    { id: "card_sara_mc",     cardholderUserId: "p_sara_qureshi", label: "Sara Qureshi · Mesh MC",       last4: "3370", provider: "mesh",       currency: "USD", monthlyLimitAmount: 15000 },
   ];
   await db.insert(atelierCorporateCards).values(
     cards.map((c) => ({ ...c, status: "active", linkedAt: DAYS_AGO(180) })),
@@ -4187,42 +3752,11 @@ async function seedV3Wallet() {
     { id: "exp_003", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 12, captureSource: "manual", merchant: "Najd Village", description: "Dinner with Tasama CEO + COO", category: "meal", amount: 540, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 70.43, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_dinner_clientmeal", status: "approved", policyStatus: "green" },
     { id: "exp_004", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG, daysAgo: 11, captureSource: "card_feed", cardId: "card_mounir_amex", merchant: "Saudia SV", description: "RUH → DXB business one-way", category: "flight", amount: 4200, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 547.83, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "flight_riyadh_dubai_business", status: "approved", policyStatus: "green" },
 
-    // Layla — Dubai trip (approved, billable)
-    { id: "exp_005", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 9, captureSource: "card_feed", cardId: "card_layla_visa", merchant: "Careem UAE", description: "DXB → DIFC", category: "taxi", amount: 95, currency: "AED", vatTreatment: "uae_5", vatAmount: 4.52, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_taxi_01", status: "approved", policyStatus: "green" },
-    { id: "exp_006", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 8, captureSource: "manual", merchant: "Address Downtown", description: "1 night (DGE workshop)", category: "hotel", amount: 1450, currency: "AED", vatTreatment: "uae_5", vatAmount: 69.05, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_hotel_01", status: "approved", policyStatus: "green" },
-    { id: "exp_007", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 7, captureSource: "manual", merchant: "Pierchic", description: "Working dinner — DGE leads", category: "meal", amount: 620, currency: "AED", vatTreatment: "uae_5", vatAmount: 29.52, vatCountry: "UAE", clientBillable: true, markupPct: 10, fixtureKey: "dubai_dinner_01", status: "approved", policyStatus: "green" },
-
-    // Omar — submitted, awaiting approval
-    { id: "exp_008", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 4, captureSource: "card_feed", cardId: "card_omar_visa", merchant: "Careem KSA", description: "Hotel → Tasama HQ", category: "taxi", amount: 95, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 12.39, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_taxi_01", status: "submitted", policyStatus: "green" },
-    { id: "exp_009", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 3, captureSource: "per_diem", merchant: "Per-diem 3 days (Riyadh)", description: "Field per-diem", category: "per_diem", amount: 225, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "submitted", policyStatus: "green" },
-
-    // Sara — software (firm overhead)
-    { id: "exp_010", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 6, captureSource: "manual", merchant: "OpenAI ChatGPT Team", description: "Team subscription · 5 seats", category: "software", amount: 150, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "software_chatgpt_team", status: "approved", policyStatus: "green" },
-    { id: "exp_011", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 6, captureSource: "manual", merchant: "Figma", description: "Org plan · 12 seats", category: "software", amount: 540, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "software_figma_org", status: "submitted", policyStatus: "amber", overrideRationale: "Renewal of org plan; pre-approved at planning kickoff (Q1 ops review).", findings: [{ severity: "amber", ruleId: "pol_software", category: "software", message: "Software charge $540 exceeds approval threshold $300; needs ops review." }] },
-
-    // Layla — mileage internal
-    { id: "exp_012", personId: "p_layla_haddad", personType: "employee", engagementId: ENG, daysAgo: 5, captureSource: "mileage", merchant: "DXB → AUH (round trip)", description: "Client visit Abu Dhabi", category: "mileage", amount: 173.6, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "approved", policyStatus: "green" },
-
     // Mounir — RED block: first-class flight beyond hard cap (rejected then re-edited would normally happen; here keep as 'rejected' for audit trail).
     { id: "exp_013", personId: "p_mounir_ariss", personType: "employee", engagementId: ENG_DGE, daysAgo: 2, captureSource: "card_feed", cardId: "card_mounir_amex", merchant: "Emirates EK", description: "DXB → LHR first class", category: "flight", amount: 14800, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, fixtureKey: "flight_dubai_london_first", status: "rejected", policyStatus: "red", findings: [{ severity: "red", ruleId: "pol_flight_part", category: "flight", message: "Flight $14,800 exceeds hard cap $12,000 for partner segment." }] },
 
-    // Omar — small client gift (green)
-    { id: "exp_014", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 10, captureSource: "manual", merchant: "Patchi", description: "Gift box for Tasama PM (project close)", category: "gift", amount: 600, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 78.26, vatCountry: "KSA", clientBillable: false, markupPct: 0, fixtureKey: "gift_client_riyadh", status: "approved", policyStatus: "green" },
-
-    // Sara — Eurozone vendor (no VAT register)
-    { id: "exp_015", personId: "p_sara_qureshi", personType: "employee", engagementId: null, daysAgo: 20, captureSource: "manual", merchant: "Hetzner Online GmbH", description: "Compute · Q1 invoice", category: "software", amount: 320, currency: "EUR", vatTreatment: "none", vatAmount: 0, vatCountry: "EU", clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
-
     // Mounir — small TRY meal (no VAT register)
     { id: "exp_016", personId: "p_mounir_ariss", personType: "employee", engagementId: null, daysAgo: 25, captureSource: "manual", merchant: "Karaköy Lokantası", description: "Dinner Istanbul stopover", category: "meal", amount: 1850, currency: "TRY", vatTreatment: "none", vatAmount: 0, vatCountry: "TR", clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
-
-    // Layla — drafts
-    { id: "exp_017", personId: "p_layla_haddad", personType: "employee", engagementId: ENG_DGE, daysAgo: 1, captureSource: "manual", merchant: "Costa Coffee DXB", description: "Workshop coffees", category: "meal", amount: 145, currency: "AED", vatTreatment: "uae_5", vatAmount: 6.9, vatCountry: "UAE", clientBillable: true, markupPct: 10, status: "draft", policyStatus: "green" },
-
-    // Omar — draft mileage
-    { id: "exp_018", personId: "p_omar_najjar", personType: "employee", engagementId: ENG, daysAgo: 1, captureSource: "mileage", merchant: "Riyadh → Jeddah", description: "Driver visit", category: "mileage", amount: 595.2, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: true, markupPct: 0, status: "draft", policyStatus: "green" },
-
-    // Sara — submitted hotel approval-threshold (green but >approval)
-    { id: "exp_019", personId: "p_sara_qureshi", personType: "employee", engagementId: ENG, daysAgo: 4, captureSource: "card_feed", cardId: "card_sara_mc", merchant: "Hilton Riyadh Hotel & Residences", description: "1 night", category: "hotel", amount: 1500, currency: "SAR", vatTreatment: "ksa_15", vatAmount: 195.65, vatCountry: "KSA", clientBillable: true, markupPct: 10, fixtureKey: "riyadh_hotel_01", status: "submitted", policyStatus: "green" },
 
     // Mounir — approved meal in USD (firm overhead)
     { id: "exp_020", personId: "p_mounir_ariss", personType: "employee", engagementId: null, daysAgo: 30, captureSource: "manual", merchant: "Cipriani DXB", description: "Recruiting dinner", category: "meal", amount: 480, currency: "USD", vatTreatment: "none", vatAmount: 0, vatCountry: null, clientBillable: false, markupPct: 0, status: "approved", policyStatus: "green" },
@@ -4499,7 +4033,7 @@ async function seedEngagementPnl() {
       budgetAtCompletionUsd: 1_680_000,
       baselinedAt: daysAgo(60),
       partnerOwnerId: "p_mounir_ariss",
-      engagementLeadId: "p_layla_haddad",
+      engagementLeadId: "p_mounir_ariss",
       sector: "BPO / Shared Services",
     },
     {
@@ -4512,7 +4046,7 @@ async function seedEngagementPnl() {
       budgetAtCompletionUsd: 420_000,
       baselinedAt: daysAgo(180),
       partnerOwnerId: "p_mounir_ariss",
-      engagementLeadId: "p_omar_najjar",
+      engagementLeadId: "p_mounir_ariss",
       sector: "Public Sector",
     },
     {
@@ -4525,7 +4059,7 @@ async function seedEngagementPnl() {
       budgetAtCompletionUsd: 84_000,
       baselinedAt: daysAgo(45),
       partnerOwnerId: "p_gokhan_guney",
-      engagementLeadId: "p_layla_haddad",
+      engagementLeadId: "p_gokhan_guney",
       sector: "Industrial",
     },
     {
@@ -4538,7 +4072,7 @@ async function seedEngagementPnl() {
       budgetAtCompletionUsd: 300_000,
       baselinedAt: daysAgo(20),
       partnerOwnerId: "p_mounir_ariss",
-      engagementLeadId: "p_layla_haddad",
+      engagementLeadId: "p_mounir_ariss",
       sector: "Real Estate",
     },
   ]);
@@ -4606,7 +4140,7 @@ async function seedEngagementPnl() {
       rationale:
         "Lead's bottoms-up: rollout workstream slipping ~3 weeks; held additional QA hours and one extra sub-engagement.",
       updatedAtIso: daysAgo(7),
-      updatedByUserId: "p_layla_haddad",
+      updatedByUserId: "p_mounir_ariss",
     },
     {
       engagementId: "eng_dge_effortless_v1",
@@ -4614,7 +4148,7 @@ async function seedEngagementPnl() {
       manualEtcUsd: 0,
       rationale: "Closed engagement; nothing left to spend.",
       updatedAtIso: daysAgo(20),
-      updatedByUserId: "p_omar_najjar",
+      updatedByUserId: "p_mounir_ariss",
     },
     {
       engagementId: "eng_aldrees_workshop",
@@ -4622,7 +4156,7 @@ async function seedEngagementPnl() {
       manualEtcUsd: 0,
       rationale: "Workshop closed; learning harvest captured.",
       updatedAtIso: daysAgo(15),
-      updatedByUserId: "p_layla_haddad",
+      updatedByUserId: "p_mounir_ariss",
     },
     {
       engagementId: "eng_nhc_ar_pilot",
@@ -4631,7 +4165,7 @@ async function seedEngagementPnl() {
       rationale:
         "Driver-based: CTD is 50% of BAC at only 30% complete — extrapolation forecasts a material over-run.",
       updatedAtIso: daysAgo(3),
-      updatedByUserId: "p_layla_haddad",
+      updatedByUserId: "p_mounir_ariss",
     },
   ]);
 
@@ -4666,7 +4200,7 @@ async function seedEngagementPnl() {
       submittedAtIso: daysAgo(35),
       approvedAtIso: daysAgo(28),
       rejectedAtIso: null,
-      raisedByUserId: "p_layla_haddad",
+      raisedByUserId: "p_mounir_ariss",
       approvedByUserId: "p_mounir_ariss",
       rejectionReason: null,
       createdAtIso: daysAgo(40),
@@ -4684,7 +4218,7 @@ async function seedEngagementPnl() {
       submittedAtIso: daysAgo(4),
       approvedAtIso: null,
       rejectedAtIso: null,
-      raisedByUserId: "p_layla_haddad",
+      raisedByUserId: "p_mounir_ariss",
       approvedByUserId: null,
       rejectionReason: null,
       createdAtIso: daysAgo(6),
@@ -4702,7 +4236,7 @@ async function seedEngagementPnl() {
       submittedAtIso: daysAgo(2),
       approvedAtIso: null,
       rejectedAtIso: null,
-      raisedByUserId: "p_layla_haddad",
+      raisedByUserId: "p_mounir_ariss",
       approvedByUserId: null,
       rejectionReason: null,
       createdAtIso: daysAgo(3),
@@ -4719,7 +4253,7 @@ async function seedEngagementPnl() {
       submittedAtIso: daysAgo(120),
       approvedAtIso: daysAgo(115),
       rejectedAtIso: null,
-      raisedByUserId: "p_omar_najjar",
+      raisedByUserId: "p_mounir_ariss",
       approvedByUserId: "p_mounir_ariss",
       rejectionReason: null,
       createdAtIso: daysAgo(125),

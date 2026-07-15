@@ -57,16 +57,101 @@ const ACC = "acc_tasama";
 // and neither is its partner_owner, so it is the genuine out-of-scope
 // fixture for cross-scope mutation-denial assertions.
 const ACC_OOS = "acc_dge";
+// Task T003 — the demo personas (p_layla_haddad, p_omar_najjar, u_yara_bgts,
+// p_khaled_aziz) were removed from the seed. This harness now provisions its
+// own EPHEMERAL test personas (created in the try block below, cleaned up in
+// finally) with the SAME roles + engagement-access grants the old personas
+// carried, so every RBAC assertion below is preserved unchanged.
 const PERSONA = {
-  fp: "p_mounir_ariss", // founding_partner — firm-wide visibility
-  sm: "p_layla_haddad", // senior_manager
-  consultant: "p_omar_najjar", // consultant — cannot create accounts
-  restricted: "u_yara_bgts", // partner_firm_resource — RESTRICTED, scoped
-  // consultant with NO engagement-access grant on ENG. An employee (so it
-  // passes the non-employee boundary middleware) but lacks the per-engagement
-  // grant, so engagement-scoped routes reject it via ensureEngAccess (403).
-  noAccess: "p_khaled_aziz",
+  fp: "p_mounir_ariss", // founding_partner — firm-wide visibility (real founder)
+  sm: "p_test_senior_mgr", // senior_manager — engagement LEAD on ENG (acc_tasama)
+  consultant: "p_test_consultant", // consultant — scoped grant on ENG2 (acc_dge)
+  restricted: "p_test_restricted", // partner_firm_resource — RESTRICTED, scoped to ENG
+  // consultant with NO engagement-access grant. An employee (so it passes the
+  // non-employee boundary middleware) but lacks the per-engagement grant, so
+  // engagement-scoped routes reject it via ensureEngAccess (403).
+  noAccess: "p_test_noaccess",
 };
+
+// Ephemeral persona definitions — mirror the fields the removed demo personas
+// held (role/roleLabel/title/permissions/bdActive) so role gates behave the
+// same. `grant` (when present) reproduces the engagement-access ACL row that
+// scoped the old persona.
+const EPHEMERAL_PERSONAS: Array<{
+  id: string;
+  email: string;
+  name: string;
+  initials: string;
+  role: string;
+  roleLabel: string;
+  title: string;
+  permissions: string[];
+  bdActive: boolean;
+  grant?: {
+    engagementId: string;
+    roleOnEngagement: string;
+    allocationPct?: number;
+    scope?: string[];
+  };
+}> = [
+  {
+    // was p_layla_haddad (senior_manager, engagement LEAD on the Tasama eng).
+    id: "p_test_senior_mgr",
+    email: "test.senior.mgr@cognirise.ai",
+    name: "Test Senior Manager",
+    initials: "TS",
+    role: "senior_manager",
+    roleLabel: "Senior Manager",
+    title: "Principal · Engagements",
+    permissions: ["engagement.lead", "deliverable.draft"],
+    bdActive: true,
+    grant: { engagementId: "eng_tasama_bpo_phase1", roleOnEngagement: "lead" },
+  },
+  {
+    // was p_omar_najjar (consultant, holds a scoped grant reaching acc_dge).
+    id: "p_test_consultant",
+    email: "test.consultant@cognirise.ai",
+    name: "Test Consultant",
+    initials: "TC",
+    role: "consultant",
+    roleLabel: "Consultant — Public Sector",
+    title: "Senior Consultant · Public Sector",
+    permissions: ["sme.review"],
+    bdActive: false,
+    grant: { engagementId: "eng_dge_effortless_v1", roleOnEngagement: "member" },
+  },
+  {
+    // was p_khaled_aziz (consultant, employee with NO engagement grant).
+    id: "p_test_noaccess",
+    email: "test.noaccess@cognirise.ai",
+    name: "Test No Access",
+    initials: "TN",
+    role: "consultant",
+    roleLabel: "Consultant — Pursuit",
+    title: "Director · Pursuit",
+    permissions: ["pipeline.write"],
+    bdActive: true,
+  },
+  {
+    // was u_yara_bgts (partner_firm_resource, RESTRICTED, scoped to the Tasama
+    // eng via a partner_resource grant with view-only scope tokens).
+    id: "p_test_restricted",
+    email: "test.restricted@bgts.example",
+    name: "Test Restricted Resource",
+    initials: "TR",
+    role: "partner_firm_resource",
+    roleLabel: "Senior Consultant — BGTS",
+    title: "Senior Consultant — BGTS",
+    permissions: [],
+    bdActive: false,
+    grant: {
+      engagementId: "eng_tasama_bpo_phase1",
+      roleOnEngagement: "partner_resource",
+      allocationPct: 60,
+      scope: ["can_view_engagement", "can_view_artifacts"],
+    },
+  },
+];
 
 // A second engagement (also visible to the founding_partner) used to assert
 // that a RAID delete is scoped to the engagement in the path: deleting a RAID
@@ -215,6 +300,7 @@ async function main(): Promise<void> {
     atelierTranscripts,
     atelierWinLossDebriefs,
     atelierPaneAItems,
+    atelierEngagementAccess,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -254,6 +340,7 @@ async function main(): Promise<void> {
     transcripts: new Set<string>(),
     debriefs: new Set<string>(),
     paneAItems: new Set<string>(),
+    engAccess: new Set<string>(),
   };
 
   // Boot an ephemeral server on a random port.
@@ -300,6 +387,50 @@ async function main(): Promise<void> {
   }
 
   try {
+    // =====================================================================
+    // Task T003 — provision the EPHEMERAL RBAC personas this harness acts as.
+    // The demo personas that used to carry these roles/scopes were removed
+    // from the seed, so we recreate equivalents (same role, permissions and
+    // engagement-access grants) up-front and tear them down in `finally`.
+    // onConflictDoNothing keeps setup idempotent if a prior run crashed mid-way.
+    // =====================================================================
+    for (const p of EPHEMERAL_PERSONAS) {
+      await db
+        .insert(atelierUsers)
+        .values({
+          id: p.id,
+          orgId: ORG,
+          email: p.email,
+          name: p.name,
+          initials: p.initials,
+          role: p.role,
+          roleLabel: p.roleLabel,
+          title: p.title,
+          permissions: p.permissions,
+          bdActive: p.bdActive,
+        })
+        .onConflictDoNothing();
+      created.users.add(p.id);
+      if (p.grant) {
+        const grantId = `access_test_${p.id}_${STAMP}`;
+        await db
+          .insert(atelierEngagementAccess)
+          .values({
+            id: grantId,
+            engagementId: p.grant.engagementId,
+            userId: p.id,
+            roleOnEngagement: p.grant.roleOnEngagement,
+            ...(p.grant.allocationPct !== undefined ? { allocationPct: p.grant.allocationPct } : {}),
+            ...(p.grant.scope !== undefined ? { scope: p.grant.scope } : {}),
+            status: "active",
+            grantedByUserId: PERSONA.fp,
+            grantedAt: new Date(),
+          })
+          .onConflictDoNothing();
+        created.engAccess.add(grantId);
+      }
+    }
+
     // =====================================================================
     // Task #3 — the global 401 gate: structural router-stack assertions plus
     // unauthenticated live probes with the test bypass force-disabled.
@@ -2578,7 +2709,12 @@ async function main(): Promise<void> {
         await db.execute(sql`delete from atelier_agent_runs where target_id = ${id}`).catch(() => undefined);
         await db.delete(atelierAccounts).where(eq(atelierAccounts.id, id));
       }
-      // Users created by this run (e.g. the Task #576 board-observer persona).
+      // Engagement-access grants for the ephemeral RBAC personas (Task T003) —
+      // removed before their owning users so no orphan ACL rows are left behind.
+      for (const id of created.engAccess)
+        await db.delete(atelierEngagementAccess).where(eq(atelierEngagementAccess.id, id));
+      // Users created by this run (ephemeral RBAC personas + the Task #576
+      // board-observer persona).
       for (const id of created.users) await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
       // Audit cleanup is scoped to BOTH the entities this run touched AND the
       // actor personas it acted as, so concurrent activity by any other actor

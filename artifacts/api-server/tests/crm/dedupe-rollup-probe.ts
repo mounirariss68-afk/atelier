@@ -29,11 +29,14 @@ function check(name: string, cond: boolean, extra?: unknown) {
 }
 
 const FP = "p_mounir_ariss"; // founding_partner — firm-wide visibility + financials
-const RESTRICTED = "u_yara_bgts"; // restricted persona
+// Task T003 — the demo restricted persona was removed from the seed; this probe
+// now provisions its own EPHEMERAL restricted persona (created below, cleaned up
+// in finally) with the same partner_firm_resource role the old one had.
+const RESTRICTED = "p_test_dedupe_restricted"; // restricted persona
 
 async function main() {
   const { default: app } = await import("../../src/app.ts");
-  const { db, atelierAccounts, atelierContacts } = await import("@workspace/db");
+  const { db, atelierUsers, atelierAccounts, atelierContacts } = await import("@workspace/db");
 
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -79,6 +82,21 @@ async function main() {
   let parentForChild: string | null = null;
 
   try {
+    // ---- provision the ephemeral RESTRICTED persona (Task T003) ----
+    await db
+      .insert(atelierUsers)
+      .values({
+        id: RESTRICTED,
+        orgId: "aico",
+        email: "test.dedupe.restricted@bgts.example",
+        name: "Test Restricted Resource",
+        initials: "TR",
+        role: "partner_firm_resource",
+        roleLabel: "Senior Consultant — BGTS",
+        title: "Senior Consultant — BGTS",
+      } as any)
+      .onConflictDoNothing();
+
     // Pick a real seeded account to fuzz against.
     const accs = await db
       .select({
@@ -251,6 +269,8 @@ async function main() {
       const { inArray, eq } = await import("drizzle-orm");
       await db.delete(atelierContacts).where(inArray(atelierContacts.id, contactIds));
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, childId));
+      // ephemeral RBAC persona (Task T003)
+      await db.delete(atelierUsers).where(eq(atelierUsers.id, RESTRICTED));
     } catch (e) {
       console.error("cleanup failed:", e);
     }

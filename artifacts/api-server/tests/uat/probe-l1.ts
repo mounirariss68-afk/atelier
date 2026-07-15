@@ -26,11 +26,38 @@ import { and, eq, inArray } from "drizzle-orm";
 
 const ORG = "aico";
 const ACC_OOS = "acc_dge"; // out of scope for the restricted persona
+// Task T003 — the demo personas were removed from the seed; this probe now
+// provisions its own EPHEMERAL personas (created in the try block, cleaned up
+// in finally) with the same roles the old personas had.
 const PERSONA = {
-  fp: "p_mounir_ariss",
-  consultant: "p_omar_najjar",
-  restricted: "u_yara_bgts",
+  fp: "p_mounir_ariss", // real founding partner (stays in the seed)
+  consultant: "p_test_probe_consultant", // consultant — role gate only
+  restricted: "p_test_probe_restricted", // partner_firm_resource — RESTRICTED
 };
+const EPHEMERAL_PERSONAS = [
+  {
+    id: PERSONA.consultant,
+    email: "test.probe.consultant@cognirise.ai",
+    name: "Test Probe Consultant",
+    initials: "PC",
+    role: "consultant",
+    roleLabel: "Consultant — Public Sector",
+    title: "Senior Consultant · Public Sector",
+    permissions: ["sme.review"],
+    bdActive: false,
+  },
+  {
+    id: PERSONA.restricted,
+    email: "test.probe.restricted@bgts.example",
+    name: "Test Probe Restricted",
+    initials: "PR",
+    role: "partner_firm_resource",
+    roleLabel: "Senior Consultant — BGTS",
+    title: "Senior Consultant — BGTS",
+    permissions: [] as string[],
+    bdActive: false,
+  },
+];
 const STAMP = Date.now().toString(36);
 const TAG = `UATGAP-${STAMP}`;
 const uniq = (p: string) => `${TAG} ${p}`;
@@ -57,7 +84,7 @@ async function main() {
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
 
-  const { db, pool, atelierAccounts, atelierContacts, atelierContactRelationships, atelierOpportunities, atelierAuditEvents } =
+  const { db, pool, atelierUsers, atelierAccounts, atelierContacts, atelierContactRelationships, atelierOpportunities, atelierAuditEvents } =
     D as any;
 
   const created = {
@@ -65,6 +92,7 @@ async function main() {
     contacts: new Set<string>(),
     rels: new Set<string>(),
     opps: new Set<string>(),
+    users: new Set<string>(),
   };
 
   const server = app.listen(0);
@@ -104,6 +132,26 @@ async function main() {
   };
 
   try {
+    // ---- provision ephemeral RBAC personas (Task T003) ----
+    for (const p of EPHEMERAL_PERSONAS) {
+      await db
+        .insert(atelierUsers)
+        .values({
+          id: p.id,
+          orgId: ORG,
+          email: p.email,
+          name: p.name,
+          initials: p.initials,
+          role: p.role,
+          roleLabel: p.roleLabel,
+          title: p.title,
+          permissions: p.permissions,
+          bdActive: p.bdActive,
+        })
+        .onConflictDoNothing();
+      created.users.add(p.id);
+    }
+
     // ---- seed fixture accounts via REST (fp) ----
     group("Seed");
     const mk = async (name: string) => {
@@ -328,6 +376,8 @@ async function main() {
       if (created.accounts.size) {
         await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, [...created.accounts, ...created.opps, ...created.contacts, ...created.rels]));
       }
+      // ephemeral RBAC personas (Task T003)
+      if (created.users.size) await db.delete(atelierUsers).where(inArray(atelierUsers.id, [...created.users]));
     } catch (e) {
       console.error("cleanup error", e);
     }

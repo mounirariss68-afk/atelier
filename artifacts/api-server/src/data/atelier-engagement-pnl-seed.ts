@@ -61,8 +61,6 @@ export interface EngagementCostToDate {
  *  partner / lead names without joining against a separate people table. */
 export const PERSON_NAMES: Record<string, string> = {
   p_mounir_ariss: "Mounir Ariss",
-  p_layla_haddad: "Layla Haddad",
-  p_omar_najjar: "Omar Najjar",
   p_gokhan_guney: "Gokhan Guney",
 };
 export function personName(id: string | null | undefined): string {
@@ -139,7 +137,7 @@ export const SEED_BUDGETS: EngagementBudget[] = [
     budgetAtCompletionUsd: 1_680_000, // labour + expenses + subs
     baselinedAt: seedDaysAgo(60),
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     sector: "BPO / Shared Services",
   },
   {
@@ -152,7 +150,7 @@ export const SEED_BUDGETS: EngagementBudget[] = [
     budgetAtCompletionUsd: 420_000,
     baselinedAt: seedDaysAgo(180),
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_omar_najjar",
+    engagementLeadId: "p_gokhan_guney",
     sector: "Public Sector",
   },
   {
@@ -165,7 +163,7 @@ export const SEED_BUDGETS: EngagementBudget[] = [
     budgetAtCompletionUsd: 84_000,
     baselinedAt: seedDaysAgo(45),
     partnerOwnerId: "p_gokhan_guney",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     sector: "Industrial",
   },
   {
@@ -178,7 +176,7 @@ export const SEED_BUDGETS: EngagementBudget[] = [
     budgetAtCompletionUsd: 300_000,
     baselinedAt: seedDaysAgo(20),
     partnerOwnerId: "p_mounir_ariss",
-    engagementLeadId: "p_layla_haddad",
+    engagementLeadId: "p_gokhan_guney",
     sector: "Real Estate",
   },
 ];
@@ -252,7 +250,7 @@ export const SEED_ETCS: EngagementEtc[] = [
     rationale:
       "Lead's bottoms-up: rollout workstream slipping ~3 weeks; held additional QA hours and one extra sub-engagement.",
     updatedAt: seedDaysAgo(7),
-    updatedByUserId: "p_layla_haddad",
+    updatedByUserId: "p_gokhan_guney",
   },
   {
     engagementId: "eng_dge_effortless_v1",
@@ -260,7 +258,7 @@ export const SEED_ETCS: EngagementEtc[] = [
     manualEtcUsd: 0,
     rationale: "Closed engagement; nothing left to spend.",
     updatedAt: seedDaysAgo(20),
-    updatedByUserId: "p_omar_najjar",
+    updatedByUserId: "p_gokhan_guney",
   },
   {
     engagementId: "eng_aldrees_workshop",
@@ -268,7 +266,7 @@ export const SEED_ETCS: EngagementEtc[] = [
     manualEtcUsd: 0,
     rationale: "Workshop closed; learning harvest captured.",
     updatedAt: seedDaysAgo(15),
-    updatedByUserId: "p_layla_haddad",
+    updatedByUserId: "p_gokhan_guney",
   },
   {
     engagementId: "eng_nhc_ar_pilot",
@@ -277,7 +275,7 @@ export const SEED_ETCS: EngagementEtc[] = [
     rationale:
       "Driver-based: CTD is 50% of BAC at only 30% complete — extrapolation forecasts a material over-run.",
     updatedAt: seedDaysAgo(3),
-    updatedByUserId: "p_layla_haddad",
+    updatedByUserId: "p_gokhan_guney",
   },
 ];
 
@@ -295,7 +293,7 @@ export const SEED_CHANGE_ORDERS: any[] = [
     submittedAt: seedDaysAgo(35),
     approvedAt: seedDaysAgo(28),
     rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
+    raisedByUserId: "p_gokhan_guney",
     approvedByUserId: "p_mounir_ariss",
     rejectionReason: null,
     createdAt: seedDaysAgo(40),
@@ -313,7 +311,7 @@ export const SEED_CHANGE_ORDERS: any[] = [
     submittedAt: seedDaysAgo(4),
     approvedAt: null,
     rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
+    raisedByUserId: "p_gokhan_guney",
     approvedByUserId: null,
     rejectionReason: null,
     createdAt: seedDaysAgo(6),
@@ -331,7 +329,7 @@ export const SEED_CHANGE_ORDERS: any[] = [
     submittedAt: seedDaysAgo(2),
     approvedAt: null,
     rejectedAt: null,
-    raisedByUserId: "p_layla_haddad",
+    raisedByUserId: "p_gokhan_guney",
     approvedByUserId: null,
     rejectionReason: null,
     createdAt: seedDaysAgo(3),
@@ -348,7 +346,7 @@ export const SEED_CHANGE_ORDERS: any[] = [
     submittedAt: seedDaysAgo(120),
     approvedAt: seedDaysAgo(115),
     rejectedAt: null,
-    raisedByUserId: "p_omar_najjar",
+    raisedByUserId: "p_gokhan_guney",
     approvedByUserId: "p_mounir_ariss",
     rejectionReason: null,
     createdAt: seedDaysAgo(125),

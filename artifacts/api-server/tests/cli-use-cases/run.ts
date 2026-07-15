@@ -27,6 +27,7 @@ import assert from "node:assert/strict";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import {
   db,
+  atelierUsers,
   atelierCliTurns,
   atelierRaidItems,
   atelierAuditEvents,
@@ -35,7 +36,10 @@ import { runEvals } from "../../src/lib/atelier-cli/evals.js";
 
 const BASE = process.env.API_BASE ?? `http://127.0.0.1:${process.env.PORT ?? 8080}/api/atelier`;
 const PERSONA_ID = "p_mounir_ariss";
-const OTHER_PERSONA = process.env.ATELIER_TEST_OTHER_PERSONA ?? "p_layla_haddad";
+// Task T003 — the demo persona (p_layla_haddad) was removed from the seed; this
+// suite now provisions its own EPHEMERAL "other" persona (created at the start
+// of main(), deleted at the end) with the same senior_manager role.
+const OTHER_PERSONA = process.env.ATELIER_TEST_OTHER_PERSONA ?? "p_test_cli_other";
 const ENG_ID = process.env.ATELIER_TEST_ENG_ID ?? "eng_tasama_bpo_phase1";
 const COOKIE = `atelier_persona=${PERSONA_ID}`;
 const OTHER_COOKIE = `atelier_persona=${OTHER_PERSONA}`;
@@ -98,6 +102,27 @@ async function step(name: string, fn: () => Promise<void>): Promise<void> {
 // =====================================================================
 async function main(): Promise<void> {
   console.log("Task #335 — CLI use-case suite");
+
+  // Task T003 — provision the ephemeral "other" persona used by the non-owner
+  // gate check. onConflictDoNothing keeps it idempotent across runs; it is
+  // removed again before this function returns.
+  if (!process.env.ATELIER_TEST_OTHER_PERSONA) {
+    await db
+      .insert(atelierUsers)
+      .values({
+        id: OTHER_PERSONA,
+        orgId: "aico",
+        email: "test.cli.other@cognirise.ai",
+        name: "Test CLI Other",
+        initials: "TO",
+        role: "senior_manager",
+        roleLabel: "Senior Manager",
+        title: "Principal · Engagements",
+      } as any)
+      .onConflictDoNothing();
+  }
+
+  try {
 
   // 1. /cli/help groups catalog + has example phrases.
   await step("GET /cli/help returns groups with example phrases", async () => {
@@ -398,6 +423,14 @@ async function main(): Promise<void> {
     }
     assert.equal(failures.length, 0, `${failures.length} eval failure(s)`);
   });
+
+  } finally {
+    // Task T003 — remove the ephemeral "other" persona provisioned above,
+    // even if a step above threw (prevents stranding the test user in the DB).
+    if (!process.env.ATELIER_TEST_OTHER_PERSONA) {
+      await db.delete(atelierUsers).where(eq(atelierUsers.id, OTHER_PERSONA)).catch(() => {});
+    }
+  }
 
   console.log(`\nResults: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);

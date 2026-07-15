@@ -48,9 +48,14 @@ async function main() {
   const catalog = await import("../../src/lib/atelier-cli/capability-catalog.js");
   const cliIndex = await import("../../src/lib/atelier-cli/index.js");
 
-  const { db, pool, atelierAccounts, atelierOpportunities, atelierAuditEvents } = D;
+  const { db, pool, atelierUsers, atelierAccounts, atelierOpportunities, atelierAuditEvents } = D;
 
-  const created = { accounts: new Set<string>(), opps: new Set<string>() };
+  const created = { accounts: new Set<string>(), opps: new Set<string>(), users: new Set<string>() };
+
+  // Task T003 — the demo personas were removed from the seed; this probe now
+  // provisions its own EPHEMERAL RESTRICTED persona (created below, cleaned up
+  // in finally) with the same partner_firm_resource role the old one had.
+  const RESTRICTED_ID = "p_test_probe2_restricted";
 
   function makeCtx(personaId: string, role: string, name: string) {
     return {
@@ -61,7 +66,7 @@ async function main() {
     };
   }
   const fpCtx = makeCtx("p_mounir_ariss", "founding_partner", "Mounir Ariss");
-  const restrictedCtx = makeCtx("u_yara_bgts", "partner_firm_resource", "Yara BGTS");
+  const restrictedCtx = makeCtx(RESTRICTED_ID, "partner_firm_resource", "Test Restricted Resource");
   const cap = (tool: string) => {
     const c = catalog.findByToolName(tool);
     if (!c) throw new Error(`capability ${tool} not registered`);
@@ -69,6 +74,22 @@ async function main() {
   };
 
   try {
+    // ---- provision the ephemeral RESTRICTED persona (Task T003) ----
+    await db
+      .insert(atelierUsers)
+      .values({
+        id: RESTRICTED_ID,
+        orgId: ORG,
+        email: "test.probe2.restricted@bgts.example",
+        name: "Test Restricted Resource",
+        initials: "TR",
+        role: "partner_firm_resource",
+        roleLabel: "Senior Consultant — BGTS",
+        title: "Senior Consultant — BGTS",
+      })
+      .onConflictDoNothing();
+    created.users.add(RESTRICTED_ID);
+
     // ---- seed one account + one opp pinned at suspect via direct insert ----
     group("Seed (direct insert, salesStage pinned)");
     const accId = `acct_uatgap2_${STAMP}`;
@@ -140,7 +161,7 @@ async function main() {
     // =====================================================
     group("B2 \u00b7 findToolByName persona filter fall-through");
     {
-      const obs = { id: "p_khaled_aziz", name: "Khaled Aziz", role: "board_observer", orgId: ORG };
+      const obs = { id: "p_test_probe2_board_obs", name: "Test Board Observer", role: "board_observer", orgId: ORG };
       const surface = catalog.capabilitiesForPersona(obs as any).map((e: any) => e.toolName);
       const inSurface = surface.includes("opportunity_move_stage");
       const resolved = cliIndex.findToolByName("opportunity_move_stage", obs as any);
@@ -216,6 +237,8 @@ async function main() {
       }
       // ACC_OOS audit rows from the probe are left in place on purpose —
       // deleting by entityId would wipe pre-existing history for a real row.
+      // ephemeral RBAC persona (Task T003)
+      if (created.users.size) await db.delete(atelierUsers).where(inArray(atelierUsers.id, [...created.users]));
     } catch (e) {
       console.error("cleanup error", e);
     }
