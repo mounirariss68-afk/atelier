@@ -1,5 +1,12 @@
+import * as React from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryCache,
+  MutationCache,
+} from "@tanstack/react-query";
+import { AuthProvider, useAuth, notifyUnauthenticated } from "@/lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Shell } from "@/components/layout/Shell";
@@ -184,7 +191,44 @@ function redirectTo(target: string) {
   };
 }
 
-const queryClient = new QueryClient();
+// Task #1 — any query/mutation failing with 401 flips the auth gate back
+// to the login screen (session expired or revoked server-side).
+function is401(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { status?: number }).status === 401
+  );
+}
+
+const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    onError: (err) => {
+      if (is401(err)) notifyUnauthenticated();
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (err) => {
+      if (is401(err)) notifyUnauthenticated();
+    },
+  }),
+});
+
+/** Renders the login screen for any route while unauthenticated. */
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { status } = useAuth();
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <span className="font-mono text-xs uppercase tracking-widest text-text-faint">
+          Loading…
+        </span>
+      </div>
+    );
+  }
+  if (status === "unauthenticated") return <SignIn />;
+  return <>{children}</>;
+}
 
 function Router() {
   return (
@@ -638,9 +682,13 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <CreateAccountProvider>
-              <TopLevelRouter />
-            </CreateAccountProvider>
+            <AuthProvider>
+              <AuthGate>
+                <CreateAccountProvider>
+                  <TopLevelRouter />
+                </CreateAccountProvider>
+              </AuthGate>
+            </AuthProvider>
           </WouterRouter>
           <Toaster />
         </TooltipProvider>

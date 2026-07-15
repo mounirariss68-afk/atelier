@@ -25,6 +25,18 @@ declare global {
   }
 }
 
+/**
+ * Whether the atelier_persona cookie may override the session identity.
+ * Dev/demo builds keep the persona switcher; production always binds the
+ * request identity to the logged-in user.
+ */
+function personaOverrideAllowed(): boolean {
+  return (
+    process.env.NODE_ENV !== "production" ||
+    process.env.ATELIER_PERSONA_SWITCHER === "true"
+  );
+}
+
 export async function attachPersona(
   req: Request,
   res: Response,
@@ -35,13 +47,32 @@ export async function attachPersona(
     const salonCookie = req.cookies?.["salon_persona"] as string | undefined;
     // Realm guard (Task #242): if a salon (client) session is active and the
     // caller did NOT explicitly present an internal atelier_persona cookie,
-    // refuse to manufacture an internal default persona for them. They must
-    // route through /api/salon/*.
-    if (!fromCookie?.trim() && salonCookie?.trim()) {
+    // refuse to manufacture an internal persona for them. They must route
+    // through /api/salon/*.
+    if (!fromCookie?.trim() && salonCookie?.trim() && !req.authSession) {
       next();
       return;
     }
-    const personaId = fromCookie?.trim() || DEFAULT_PERSONA_ID;
+
+    // Task #1 — NO default-persona fallback. Identity comes from the real
+    // auth session (requireAuthSession, mounted upstream); the persona
+    // cookie may only override it outside production (dev persona
+    // switcher) or under the NODE_ENV=test harness.
+    let personaId: string | undefined;
+    const cookieId = fromCookie?.trim();
+    if (req.authSession) {
+      personaId =
+        cookieId && personaOverrideAllowed() ? cookieId : req.authSession.userId;
+    } else if (process.env.NODE_ENV === "test" && cookieId) {
+      personaId = cookieId;
+    }
+
+    if (!personaId) {
+      res
+        .status(401)
+        .json({ error: "unauthenticated", message: "Sign in required." });
+      return;
+    }
 
     const [persona] = await db
       .select()
@@ -51,22 +82,29 @@ export async function attachPersona(
       );
 
     if (!persona) {
-      // Persona referenced by cookie no longer exists — clear it and fall back.
+      // Persona referenced by cookie no longer exists — clear the stale
+      // cookie and fall back to the session identity (if any).
       res.clearCookie(PERSONA_COOKIE, { path: "/" });
-      const [fallback] = await db
-        .select()
-        .from(atelierUsers)
-        .where(
-          and(
-            eq(atelierUsers.id, DEFAULT_PERSONA_ID),
-            isNull(atelierUsers.deletedAt),
-          ),
-        );
-      if (fallback) {
-        req.atelierPersonaId = fallback.id;
-        req.atelierPersona = fallback;
+      if (req.authSession && personaId !== req.authSession.userId) {
+        const [fallback] = await db
+          .select()
+          .from(atelierUsers)
+          .where(
+            and(
+              eq(atelierUsers.id, req.authSession.userId),
+              isNull(atelierUsers.deletedAt),
+            ),
+          );
+        if (fallback) {
+          req.atelierPersonaId = fallback.id;
+          req.atelierPersona = fallback;
+          next();
+          return;
+        }
       }
-      next();
+      res
+        .status(401)
+        .json({ error: "unauthenticated", message: "Sign in required." });
       return;
     }
 

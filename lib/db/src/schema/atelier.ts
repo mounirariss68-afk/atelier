@@ -3710,3 +3710,35 @@ export const atelierPromiseToPay = pgTable(
   },
   (t) => [index("idx_atelier_p2p_invoice").on(t.invoiceId)],
 );
+
+// ============================================================
+// REAL AUTH — credentials + server-side sessions (Task #1)
+// ============================================================
+export const atelierAuthCredentials = pgTable(
+  "atelier_auth_credentials",
+  {
+    email: text("email").primaryKey(),
+    userId: text("user_id").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_auth_cred_user").on(t.userId)],
+);
+
+export const atelierAuthSessions = pgTable(
+  "atelier_auth_sessions",
+  {
+    // Stores the SHA-256 hex digest of the opaque session token, never the
+    // token itself, so a DB leak cannot be replayed as a session cookie.
+    tokenHash: text("token_hash").primaryKey(),
+    userId: text("user_id").notNull(),
+    email: text("email").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  (t) => [
+    index("idx_atelier_auth_sessions_user").on(t.userId),
+    index("idx_atelier_auth_sessions_exp").on(t.expiresAt),
+  ],
+);

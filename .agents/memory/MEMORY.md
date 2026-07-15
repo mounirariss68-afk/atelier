@@ -33,4 +33,5 @@
 - [Account deletion lifecycle](atelier-account-lifecycle.md) — Archive (reversible, status flip + cascade, prior child state in audit for precise restore) vs Permanent delete (founding_partner only, financial-gated/override, idempotent); seed cascade test rows via db.insert not REST.
 - [Account-agent UI uses raw fetch](atelier-account-agent-ui.md) — bespoke /accounts/:id/agents/* run+dismiss routes aren't in openapi, so the Account AI tab calls them with raw fetch ({runId,output}); only reuse codegen hooks (useAtelierCreateActivity) for accept→task.
 - [Atelier account/contact merge](atelier-merge.md) — survivor=path id, dup=body, archives dup (soft), idempotent already_merged; both gate CREATE_ROLES+canSeeAccount; contactRelationships has no updatedAt.
+- [Atelier auth lockdown](atelier-auth-lockdown.md) — single global 401 gate (mount new routers after it); NODE_ENV=test harness bypass killed by REPLIT_DEPLOYMENT; boot seed is data-only.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.

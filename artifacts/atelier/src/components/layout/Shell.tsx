@@ -37,6 +37,7 @@ import type { CliLocale } from "@/components/cli/types";
 import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
 
 /**
  * Task #497 — light/dark mode toggle. Sits in the right-side utility
@@ -63,6 +64,7 @@ function ThemeToggle() {
 
 export function TopNav() {
   const [location] = useLocation();
+  const { logout } = useAuth();
   const { data: me } = useAtelierGetMe();
   const { data: personas } = useAtelierListPersonas();
   const switchPersona = useAtelierSwitchPersona();
@@ -250,8 +252,12 @@ export function TopNav() {
                       </DropdownMenuSubContent>
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
-                  <DropdownMenuItem asChild className="focus:bg-bg-elevate-2 focus:text-danger cursor-pointer mt-1 border-t border-border-soft">
-                    <Link href="/sign-in">Sign Out</Link>
+                  <DropdownMenuItem
+                    onClick={() => void logout()}
+                    data-testid="menu-sign-out"
+                    className="focus:bg-bg-elevate-2 focus:text-danger cursor-pointer mt-1 border-t border-border-soft"
+                  >
+                    Sign Out
                   </DropdownMenuItem>
                 </div>
               </DropdownMenuContent>

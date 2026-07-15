@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
+import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
 import { ensureAtelierV5Seed } from "./lib/atelier-seed-v5";
 import { ensureAtelierAgentsLensSeed } from "./lib/atelier-seed-agents-lens";
 import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
@@ -35,6 +36,12 @@ app.listen(port, (err) => {
 
   logger.info({ port }, "Server listening");
   startScheduler();
+  // Task #1 — real auth: create credentials/sessions tables if missing and
+  // seed the two allowed logins (idempotent; covers production on redeploy).
+  // Fail loudly: without this the API is a wall of 401s.
+  void ensureAtelierAuthSeed().catch((err) => {
+    logger.error({ err }, "Auth credential seed failed — logins will not work");
+  });
   // Idempotent — guarantees Pricing module is usable on first boot
   // without a manual Partner setup step (Task #240 acceptance).
   void ensureAtelierPricingSeed();
