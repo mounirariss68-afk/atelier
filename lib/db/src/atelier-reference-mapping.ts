@@ -344,8 +344,8 @@ const SUB_INDUSTRY_ALIASES: Record<string, string> = {
   manufacturing: "IGR_MANUFACTURING",
   "industrial manufacturing": "IGR_MANUFACTURING",
   automotive: "IGR_MANUFACTURING",
-  aerospace: "IGR_AEROSPACE_DEFENSE",
-  "aerospace defense": "IGR_AEROSPACE_DEFENSE",
+  aerospace: "DEF_AEROSPACE",
+  "aerospace defense": "DEF_AEROSPACE",
   "engineering services": "IGR_ENG_SVCS",
   // TTH
   aviation: "TTH_AVIATION",

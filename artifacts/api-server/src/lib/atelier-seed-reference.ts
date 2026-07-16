@@ -3,8 +3,8 @@
  *
  * Ensures `atelier_countries` (249 ISO 3166-1 alpha-2 entries with EN/AR/TR
  * display names from `i18n-iso-countries` plus firm-specific extras),
- * `atelier_industries` (8 Cognirise sectors), and `atelier_sub_industries`
- * (43 entries) are populated. This is reference/configuration data — NOT
+ * `atelier_industries` (9 Cognirise sectors), and `atelier_sub_industries`
+ * (44 entries) are populated. This is reference/configuration data — NOT
  * demo data — and the UI dropdowns (ReferenceCombobox) are unusable
  * without it, so it runs idempotently on every cold start.
  *

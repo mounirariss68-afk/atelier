@@ -339,14 +339,15 @@ export const INDUSTRIES = [
   { code: "FS", displayNameEn: "Financial Services", displayNameAr: "الخدمات المالية", shortDescription: "Banks, insurers, capital markets, FinTech", displayOrder: 2 },
   { code: "TMT", displayNameEn: "Technology, Media & Telecom", displayNameAr: "التكنولوجيا والإعلام والاتصالات", shortDescription: "Telcos, media, software, digital natives", displayOrder: 3 },
   { code: "ER", displayNameEn: "Energy & Resources", displayNameAr: "الطاقة والموارد", shortDescription: "Oil & gas, mining, utilities, chemicals, renewables", displayOrder: 4 },
-  { code: "IGR", displayNameEn: "Industrial Goods & Real Estate", displayNameAr: "الصناعات والعقارات", shortDescription: "Construction, real estate, manufacturing, A&D", displayOrder: 5 },
-  { code: "TTH", displayNameEn: "Travel, Transportation & Hospitality", displayNameAr: "السفر والنقل والضيافة", shortDescription: "Aviation, ports, logistics, hospitality", displayOrder: 6 },
-  { code: "RC", displayNameEn: "Retail & Consumer Goods", displayNameAr: "البيع بالتجزئة والسلع الاستهلاكية", shortDescription: "Retail, CPG, luxury, beauty, F&B", displayOrder: 7 },
-  { code: "XSEC", displayNameEn: "Cross-Sector / Diversified", displayNameAr: "متعدد القطاعات", shortDescription: "Conglomerates, PE, family holdings, NGOs, other", displayOrder: 8 },
+  { code: "IGR", displayNameEn: "Industrial Goods & Real Estate", displayNameAr: "الصناعات والعقارات", shortDescription: "Construction, real estate, manufacturing", displayOrder: 5 },
+  { code: "DEF", displayNameEn: "Defense", displayNameAr: "الدفاع", shortDescription: "Defense programs, aerospace & defense industry, national security", displayOrder: 6 },
+  { code: "TTH", displayNameEn: "Travel, Transportation & Hospitality", displayNameAr: "السفر والنقل والضيافة", shortDescription: "Aviation, ports, logistics, hospitality", displayOrder: 7 },
+  { code: "RC", displayNameEn: "Retail & Consumer Goods", displayNameAr: "البيع بالتجزئة والسلع الاستهلاكية", shortDescription: "Retail, CPG, luxury, beauty, F&B", displayOrder: 8 },
+  { code: "XSEC", displayNameEn: "Cross-Sector / Diversified", displayNameAr: "متعدد القطاعات", shortDescription: "Conglomerates, PE, family holdings, NGOs, other", displayOrder: 9 },
 ] as const;
 
 /**
- * Sub-industry catalogue (43 entries, Cognirise taxonomy).
+ * Sub-industry catalogue (44 entries, Cognirise taxonomy).
  *
  * Per patch §6.1, every sub-industry must canonicalize a `defaultOfferingAnchor`
  * (the offering family the Cognirise CSP defaults to when a deal lands in this
@@ -365,8 +366,7 @@ export const SUB_INDUSTRIES = [
   { code: "HPS_HEALTHCARE", industryCode: "HPS", displayNameEn: "Healthcare Providers", displayOrder: 4, shortDescription: "Hospital groups, clinics, payor-providers, health authorities", defaultOfferingAnchor: "agentic_ai" },
   { code: "HPS_PHARMA", industryCode: "HPS", displayNameEn: "Pharma & Life Sciences", displayOrder: 5, shortDescription: "Pharmaceutical, biotech, medical-devices, regulators", defaultOfferingAnchor: "ai_product" },
   { code: "HPS_EDUCATION", industryCode: "HPS", displayNameEn: "Education", displayOrder: 6, shortDescription: "K-12, higher ed, ministries of education, EdTech", defaultOfferingAnchor: "agentic_ai" },
-  { code: "HPS_DEFENSE_CIVIL", industryCode: "HPS", displayNameEn: "Defense (civilian / non-classified)", displayOrder: 7, shortDescription: "Civilian defense back-office, simulation, training", defaultOfferingAnchor: "legacy_modernization" },
-  { code: "HPS_NGO", industryCode: "HPS", displayNameEn: "NGO / Multilateral", displayOrder: 8, shortDescription: "UN agencies, foundations, development banks, NGOs", defaultOfferingAnchor: "data_foundations" },
+  { code: "HPS_NGO", industryCode: "HPS", displayNameEn: "NGO / Multilateral", displayOrder: 7, shortDescription: "UN agencies, foundations, development banks, NGOs", defaultOfferingAnchor: "data_foundations" },
   // FS (6)
   { code: "FS_BANKING", industryCode: "FS", displayNameEn: "Banking", displayOrder: 1, shortDescription: "Retail, commercial, corporate banking; core systems", defaultOfferingAnchor: "agentic_ai" },
   { code: "FS_INSURANCE", industryCode: "FS", displayNameEn: "Insurance", displayOrder: 2, shortDescription: "P&C, life, health, takaful; underwriting and claims", defaultOfferingAnchor: "agentic_ai" },
@@ -391,8 +391,11 @@ export const SUB_INDUSTRIES = [
   { code: "IGR_CONSTRUCTION", industryCode: "IGR", displayNameEn: "Construction & Engineering", displayOrder: 1, shortDescription: "Contractors, EPC firms, infrastructure programs", defaultOfferingAnchor: "legacy_modernization" },
   { code: "IGR_REAL_ESTATE", industryCode: "IGR", displayNameEn: "Real Estate Development", displayOrder: 2, shortDescription: "Master developers, REITs, property managers, PropTech", defaultOfferingAnchor: "agentic_ai" },
   { code: "IGR_MANUFACTURING", industryCode: "IGR", displayNameEn: "Industrial Manufacturing", displayOrder: 3, shortDescription: "Heavy/light manufacturing, factory operations, MES/SCADA", defaultOfferingAnchor: "data_foundations" },
-  { code: "IGR_AEROSPACE_DEFENSE", industryCode: "IGR", displayNameEn: "Aerospace & Defense (commercial)", displayOrder: 4, shortDescription: "Commercial aerospace OEMs, MRO, defense electronics", defaultOfferingAnchor: "ai_product" },
-  { code: "IGR_ENG_SVCS", industryCode: "IGR", displayNameEn: "Engineering Services", displayOrder: 5, shortDescription: "Engineering consultancies, design firms, program mgmt", defaultOfferingAnchor: "agentic_ai" },
+  { code: "IGR_ENG_SVCS", industryCode: "IGR", displayNameEn: "Engineering Services", displayOrder: 4, shortDescription: "Engineering consultancies, design firms, program mgmt", defaultOfferingAnchor: "agentic_ai" },
+  // DEF (3)
+  { code: "DEF_GOVERNMENT", industryCode: "DEF", displayNameEn: "Defense Ministries & Agencies", displayOrder: 1, shortDescription: "Ministries of defense, armed forces back-office, simulation, training", defaultOfferingAnchor: "legacy_modernization" },
+  { code: "DEF_AEROSPACE", industryCode: "DEF", displayNameEn: "Aerospace & Defense Industry", displayOrder: 2, shortDescription: "Defense OEMs, aerospace primes, MRO, defense electronics", defaultOfferingAnchor: "ai_product" },
+  { code: "DEF_SECURITY", industryCode: "DEF", displayNameEn: "National Security & Cyber", displayOrder: 3, shortDescription: "Homeland security, intelligence support, cyber defense", defaultOfferingAnchor: "data_foundations" },
   // TTH (5)
   { code: "TTH_AVIATION", industryCode: "TTH", displayNameEn: "Aviation", displayOrder: 1, shortDescription: "Airlines, airports, ANSPs, ground handling", defaultOfferingAnchor: "agentic_ai" },
   { code: "TTH_PORTS_SHIPPING", industryCode: "TTH", displayNameEn: "Ports & Shipping", displayOrder: 2, shortDescription: "Container terminals, shipping lines, port operators", defaultOfferingAnchor: "data_foundations" },

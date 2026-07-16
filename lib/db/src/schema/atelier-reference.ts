@@ -12,7 +12,7 @@ import {
  * THE ATELIER — Reference data lookups (Task #290 / Patch: Reference Data).
  *
  * Canonical lookup tables for countries (ISO 3166-1 alpha-2), industries
- * (8 primary Cognirise taxonomy), and sub-industries (43 entries).
+ * (9 primary Cognirise taxonomy), and sub-industries (44 entries).
  *
  * Design notes:
  * - Text PKs use the canonical ISO/Cognirise code so cross-table references stay
@@ -90,7 +90,7 @@ export const atelierIndustries = pgTable(
 );
 
 // ============================================================
-// SUB-INDUSTRIES — 43 entries across 8 primaries
+// SUB-INDUSTRIES — 44 entries across 9 primaries
 // ============================================================
 export const atelierSubIndustries = pgTable(
   "atelier_sub_industries",
