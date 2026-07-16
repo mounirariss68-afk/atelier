@@ -38,3 +38,4 @@
 - [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
 - [CRM dummy-data wipe](atelier-crm-wipe.md) — dev DB CRM slate wiped; l2c + account-plan boot seeds skip when demo accounts absent; re-run scripts/src/wipe-crm-dummy-data.ts if dummies reappear.
+- [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
