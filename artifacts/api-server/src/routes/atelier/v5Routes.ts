@@ -18,8 +18,8 @@
  *     restricted by engagement — by design they need firm-wide read for
  *     audit").
  *
- * The seed bootstrap in `lib/atelier-seed-v5.ts` populates the canonical
- * v5 demo dataset on cold start (idempotent).
+ * Demo seed bootstrap was removed (2026-07-16); data is user-entered. It once populated the canonical
+ * v5 demo dataset; the tables now start empty.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, isNull } from "drizzle-orm";

@@ -30,6 +30,7 @@
 - [Running the CRM test harness](crm-harness-run.md) — one-shot test, >120s (unrelated LLM scout ~45s), can't run via restart_workflow (SIGKILLed for not "serving"); verify subsets with a standalone tsx probe that boots app.listen(0).
 - [Account-revenue write surfaces](atelier-revenue-write-surfaces.md) — annualRevenue is written ONLY by POST /accounts + PATCH /accounts/:id; financials gate must cover BOTH (create gate uses would-be partnerOwnerId).
 - [CRM harness live-LLM flakiness](crm-harness-flakiness.md) — test:crm CRUD logic is fine; failures come from real awaited LLM calls; pass runScout:false; shared extractFirstJsonObject + AgentNonJsonResponseError handle prose/refusals.
+- [No demo seeding — production policy](atelier-crm-wipe.md) — ALL dummy data deleted + every seeder removed (2026-07-16); only the boot auth seed remains. Never reintroduce seeding.
 - [Account deletion lifecycle](atelier-account-lifecycle.md) — Archive (reversible, status flip + cascade, prior child state in audit for precise restore) vs Permanent delete (founding_partner only, financial-gated/override, idempotent); seed cascade test rows via db.insert not REST.
 - [Account-agent UI uses raw fetch](atelier-account-agent-ui.md) — bespoke /accounts/:id/agents/* run+dismiss routes aren't in openapi, so the Account AI tab calls them with raw fetch ({runId,output}); only reuse codegen hooks (useAtelierCreateActivity) for accept→task.
 - [Atelier account/contact merge](atelier-merge.md) — survivor=path id, dup=body, archives dup (soft), idempotent already_merged; both gate CREATE_ROLES+canSeeAccount; contactRelationships has no updatedAt.
@@ -37,5 +38,4 @@
 - [Atelier password user_managed flag](atelier-password-user-managed.md) — boot seed must skip user_managed=true credential rows; any new credential write surface must set the flag deliberately.
 - [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
-- [CRM dummy-data wipe](atelier-crm-wipe.md) — dev DB CRM slate wiped; l2c + account-plan boot seeds skip when demo accounts absent; re-run scripts/src/wipe-crm-dummy-data.ts if dummies reappear.
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.

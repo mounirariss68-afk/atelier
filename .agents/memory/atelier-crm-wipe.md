@@ -1,13 +1,9 @@
 ---
-name: CRM dummy-data wipe
-description: Dev DB dummy clients/opportunities were wiped; which boot seeds are gated and how to re-wipe.
+name: No demo seeding — production data policy
+description: All dummy-data seeding was removed (2026-07-16); DB holds only real data + 2 login users. Never reintroduce seeders.
 ---
-The Atelier dev DB CRM slate (accounts, opportunities, and every dependent record) was wiped on 2026-07-16.
+**Rule:** The database contains ONLY real user-entered data plus the two login users (`p_mounir_ariss`, `p_gokhan_guney`) and their auth credentials/sessions. The sole remaining seed is the boot-time auth credential seed in the API server. All other seeders were deleted: the scripts-package demo seeders (atelier/tasama/arcelik/reference + CRM wipe utility), the API boot seeds (pricing, v5, agents-lens, l2c, account-plan), and the post-merge seed steps.
 
-**Rule:** boot must never resurrect dummy CRM rows. `atelier-seed-l2c` and `atelier-seed-account-plan` deliberately log+skip when their demo accounts are absent — keep any new demo seed behind the same "skip if demo parents missing" gate.
+**Why:** the project is moving to production; the user explicitly ordered all dummy data deleted and all seeding removed (keeping only logins). Any resurrected demo rows corrupt real data.
 
-**Why:** the user tests CRM flows from a clean slate; silent re-seeding on restart would corrupt that.
-
-**How to apply:** if dummy rows reappear, re-run `cd scripts && pnpm tsx src/wipe-crm-dummy-data.ts` (idempotent, self-verifying, preserves users/auth/org/reference data). The test-crm harness transiently creates+cleans its own tagged rows — that is not reseeding.
-
-**Post-merge gotcha:** `scripts/post-merge.sh` re-runs the full seed:atelier on every task merge, which resurrects the CRM demo rows. It now re-applies the wipe after seeding while the marker `.local/state/atelier-crm-wiped` exists. Delete that marker if the user wants demo CRM data back.
+**How to apply:** never add seed steps to post-merge, boot, or workflows. If a module "needs" bootstrap rows (e.g. pricing rate cards were previously boot-seeded), it must be set up by the user through the app or an explicit user-approved one-off. Tests must create and clean up their own tagged rows only.

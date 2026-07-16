@@ -13,24 +13,6 @@ fi
 rm -f lib/cognirise-content/tsconfig.tsbuildinfo
 pnpm --filter @workspace/cognirise-content exec tsc -p tsconfig.json
 
-# Re-seed the Tasama Payroll Hub demo so the dashboards always have
-# data after merges. The seeder TRUNCATEs and re-inserts deterministically,
-# so this is safe to re-run on every merge. Skip with SKIP_TASAMA_SEED=1.
-if [ "${SKIP_TASAMA_SEED:-0}" != "1" ]; then
-  pnpm --filter @workspace/scripts run seed:tasama
-fi
-
-# Re-seed The Atelier (employee portal) on every merge so the demo data is
-# always present. TRUNCATE-then-INSERT in dependency order; deterministic.
-if [ "${SKIP_ATELIER_SEED:-0}" != "1" ]; then
-  pnpm --filter @workspace/scripts run seed:atelier
-fi
-
-# The user wiped all dummy CRM data (Task #12) to test client/opportunity
-# flows from a clean slate. The Atelier seeder above re-inserts demo
-# accounts/opportunities, so while the marker file exists, re-apply the
-# wipe after seeding (idempotent; preserves users/auth/HR/reference data).
-# Delete the marker to restore demo CRM data on future merges.
-if [ -f .local/state/atelier-crm-wiped ]; then
-  pnpm --filter @workspace/scripts exec tsx src/wipe-crm-dummy-data.ts
-fi
+# All demo-data seeding was removed on 2026-07-16 (moving to production):
+# no seeder may run here. The only boot-time seed left is the auth
+# credential seed inside the API server itself.

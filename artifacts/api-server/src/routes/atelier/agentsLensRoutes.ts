@@ -17,8 +17,8 @@
  * employee personas may write; non-employees (contractor, PFR, board
  * observer, recruiter, compliance officer) receive 403.
  *
- * Bootstrap data lives in `lib/atelier-seed-agents-lens.ts` and is
- * loaded idempotently on cold start from `index.ts`.
+ * Demo bootstrap data was removed (2026-07-16); rows are user-entered and
+ * mutated only through these routes.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, eq, inArray, isNull } from "drizzle-orm";

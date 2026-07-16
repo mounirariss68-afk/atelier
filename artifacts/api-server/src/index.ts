@@ -1,12 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
-import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
-import { ensureAtelierV5Seed } from "./lib/atelier-seed-v5";
-import { ensureAtelierAgentsLensSeed } from "./lib/atelier-seed-agents-lens";
-import { ensureAtelierL2cSeed } from "./lib/atelier-seed-l2c";
-import { ensureAtelierAccountPlanSeed } from "./lib/atelier-seed-account-plan";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 import { warmEmbedder } from "./lib/atelier-cli/embeddings";
@@ -42,32 +37,9 @@ app.listen(port, (err) => {
   void ensureAtelierAuthSeed().catch((err) => {
     logger.error({ err }, "Auth credential seed failed — logins will not work");
   });
-  // Idempotent — guarantees Pricing module is usable on first boot
-  // without a manual Partner setup step (Task #240 acceptance).
-  void ensureAtelierPricingSeed();
-  // Task #354 — Press / Alliances / Studio / Guardhouse / IP catalog
-  // demo data (idempotent). Migrates the former TS seed files to Postgres.
-  void ensureAtelierV5Seed();
-  // Task #373 — Agents lens (Design / Build / Evaluate / Deploy / Improve /
-  // Retire) demo data (idempotent). Migrates the former TS seed file to Postgres.
-  void ensureAtelierAgentsLensSeed();
-  // Task #360 — Wave-1 L2C demo seed: counterparties, clauses, contracts,
-  // DPA, and signed deliverable acceptance bound to existing engagements.
-  // Fail-fast on bootstrap so partial-state startup is visible in logs.
-  void ensureAtelierL2cSeed().catch((err) => {
-    logger.error(
-      { err },
-      "Wave-1 L2C demo seed bootstrap failed — workspace will show no Codex data",
-    );
-  });
-  // Task #571 — Account planning & execution demo seed: account actions,
-  // account risk register, and goal-progress rows for the demo accounts.
-  void ensureAtelierAccountPlanSeed().catch((err) => {
-    logger.error(
-      { err },
-      "Account-plan demo seed bootstrap failed — Account Plan tab will be empty",
-    );
-  });
+  // All demo-data seeding was removed for production (2026-07-16): the only
+  // boot-time seed left is the auth credential seed above. Real data is
+  // entered through the app.
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
