@@ -97,6 +97,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "kpi_strip",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show pipeline by stage", "What's in pursue right now?"],
     ar: ["اعرض خط الفرص حسب المرحلة"],
@@ -158,6 +159,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["List opportunities in pursue", "Top 10 deals in shape"],
     ar: ["اعرض الفرص في مرحلة pursue"],
@@ -219,6 +221,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["List active engagements", "Show engagements in flight"],
     ar: ["اعرض الارتباطات النشطة"],
@@ -292,6 +295,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "kpi_strip",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show firm utilization this week", "What's our utilisation right now?"],
     ar: ["اعرض استخدام الفريق لهذا الأسبوع"],
@@ -355,8 +359,9 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "entity_card",
+  promoteAsSuggestion: true,
   examplePhrases: {
-    en: ["Show utilization for person_xxx", "How's Sara's utilisation?"],
+    en: ["Show utilization for a specific person", "How's Sara's utilisation?"],
     ar: ["اعرض استخدام شخص"],
     fr: ["Utilisation de cette personne"],
   },
@@ -419,9 +424,10 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "time_series",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: [
-      "Show burn vs budget on eng_acme",
+      "Show burn versus budget for an engagement",
       "How is the DEWA engagement burning vs budget?",
       "Burn for the DEWA engagement",
     ],
@@ -531,6 +537,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show expenses aging over 30 days", "Old expenses still open"],
     ar: ["اعرض النفقات المتقادمة أكثر من 30 يومًا"],
@@ -607,6 +614,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Flag any expense over policy", "Show policy violations on expenses"],
     ar: ["اعرض النفقات الخارجة عن السياسة"],
@@ -674,6 +682,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "entity_card",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Summarize the Tasama dossier", "Show me the dossier for Acme"],
     ar: ["لخّص ملف الحساب لشركة Tasama"],
@@ -846,6 +855,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "audit_timeline",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["What changed on Acme this week?", "Show recent changes for the Tasama account"],
     ar: ["ماذا تغيّر على حساب Acme هذا الأسبوع؟"],
@@ -940,6 +950,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show agent runs that failed yesterday", "Any blocked agent runs?"],
     ar: ["اعرض تنفيذات الوكلاء التي فشلت أمس"],
@@ -1014,6 +1025,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show open RAID on Riyadh Metro", "List my open RAID items"],
     ar: ["اعرض بنود RAID المفتوحة"],
@@ -1107,6 +1119,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show my approval queue", "What needs my sign-off?"],
     ar: ["اعرض قائمة الموافقات"],
@@ -1179,6 +1192,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "kpi_strip",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show pipeline forecast", "What's our weighted forecast right now?"],
     ar: ["اعرض توقعات خط الفرص"],
@@ -1236,6 +1250,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "ranked_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show people whose certifications expire in 90 days", "Compliance records expiring soon"],
     ar: ["اعرض الأشخاص الذين تنتهي شهاداتهم خلال 90 يومًا"],
@@ -1306,6 +1321,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "entity_card",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show my timesheet for this week", "What's my current timesheet?"],
     ar: ["اعرض جدول زمني لهذا الأسبوع"],
@@ -1373,6 +1389,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "audit_timeline",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show recent activity across the firm", "What happened in the last 24 hours?"],
     ar: ["اعرض النشاط الأخير في الشركة"],
@@ -1462,6 +1479,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "kpi_strip",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["What needs me today?", "Show today's home summary"],
     ar: ["ما الذي يحتاج اهتمامي اليوم؟"],

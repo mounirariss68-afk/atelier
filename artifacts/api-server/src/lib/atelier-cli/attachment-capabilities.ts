@@ -1000,8 +1000,9 @@ defineCapability({
   isWrite: false,
   irreversible: false,
   surfaceOn: ["global"],
+  promoteAsSuggestion: true,
   examplePhrases: {
-    en: ["search my documents for the renewal terms", "/search-docs payment milestones"],
+    en: ["Search my documents for the renewal terms", "/search-docs payment milestones"],
   },
   twoPhaseConfirm: false,
   outboundChannel: null,

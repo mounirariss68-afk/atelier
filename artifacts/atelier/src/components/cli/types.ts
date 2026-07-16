@@ -204,6 +204,10 @@ export interface CliCapability {
    * Falls back to the description when absent. The catalog (Task #332)
    * may populate these later — surface field is forward-safe. */
   examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
+  /** Task #20 — opt-in flag: only capabilities explicitly marked
+   * promotable server-side contribute suggestion chips. /help still
+   * shows every capability's example phrases. */
+  promoteAsSuggestion?: boolean;
 }
 
 export interface CliAttachment {

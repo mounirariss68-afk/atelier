@@ -278,6 +278,16 @@ export interface CapabilityEntry {
    */
   examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
   /**
+   * Task #20 — opt-in promotion flag for the suggestion-chip strips
+   * (chat-bar empty state + Home). Only capabilities that deliberately
+   * set this to `true` contribute chips; everything else stays out of
+   * the strips (but keeps its examplePhrases in the /help drawer,
+   * where they have context). Default: off. Any capability marked
+   * promotable MUST have a plain-language first example phrase per
+   * locale — no chunk ids, opaque record ids, or slash syntax.
+   */
+  promoteAsSuggestion?: boolean;
+  /**
    * Origin of the registration — used by lint/coverage tests to verify
    * every route file uses the framework rather than ad-hoc
    * `defineCapability` calls.

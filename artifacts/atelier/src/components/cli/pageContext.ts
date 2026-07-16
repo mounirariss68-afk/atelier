@@ -204,6 +204,7 @@ export function suggestionsFor(
   capabilities: Array<{
     surfaceOn?: string[] | null;
     examplePhrases?: { en?: string[]; ar?: string[]; fr?: string[] } | null;
+    promoteAsSuggestion?: boolean;
   }> = [],
 ): Array<{ en: string; ar: string; text: string }> {
   // Catalog-driven first: pull every capability whose `surfaceOn`
@@ -213,6 +214,11 @@ export function suggestionsFor(
   const catalogSurfaces = SURFACE_TO_CATALOG[ctx.surface] ?? ["global"];
   const fromCatalog: Suggestion[] = [];
   for (const c of capabilities) {
+    // Task #20 — chips are opt-in: only capabilities explicitly marked
+    // promotable server-side may surface here. Keeps niche utility
+    // tools (chunk reads, purge, undo…) out of the strip; their
+    // examples still render in /help where they have context.
+    if (c.promoteAsSuggestion !== true) continue;
     const surfaces = c.surfaceOn ?? [];
     if (!surfaces.some((s) => catalogSurfaces.includes(s))) continue;
     const en = c.examplePhrases?.en?.[0];
@@ -291,6 +297,8 @@ export function homeSuggestionsFor(
     // capability flagged as a write so destructive verbs never leak
     // into the empty-state suggestion strip.
     if (c.isWrite !== false) continue;
+    // Task #20 — chips are opt-in via the server-side promotion flag.
+    if (c.promoteAsSuggestion !== true) continue;
     if (!Array.isArray(c.surfaceOn) || !c.surfaceOn.includes("home")) continue;
     const ex = c.examplePhrases ?? null;
     const en = ex?.en?.[0];

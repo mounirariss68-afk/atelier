@@ -73,6 +73,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "capability_list",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Show me what I can ask Atelier", "What can Atelier do?"],
     ar: ["اعرض ما يمكنني سؤاله للأتيليه", "ما الذي يستطيع الأتيليه فعله؟"],
@@ -109,6 +110,7 @@ defineCapability({
   twoPhaseConfirm: false,
   outboundChannel: null,
   resultCard: "account_card",
+  promoteAsSuggestion: true,
   examplePhrases: {
     en: ["Find an account by name", "Look up an account"],
     ar: ["ابحث عن حساب بالاسم", "اعثر على حساب"],

@@ -388,6 +388,10 @@ router.get("/cli/capabilities", async (req, res) => {
       // example phrasings later; surface the field as forward-safe so
       // the client /help drawer can render them when present.
       examplePhrases: c.examplePhrases ?? null,
+      // Task #20 — opt-in chip promotion. Only capabilities that
+      // deliberately set this contribute suggestion chips client-side;
+      // /help still renders every capability's examplePhrases.
+      promoteAsSuggestion: c.promoteAsSuggestion === true,
     })),
   });
 });

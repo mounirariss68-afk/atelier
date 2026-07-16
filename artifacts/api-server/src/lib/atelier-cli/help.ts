@@ -71,7 +71,11 @@ export function suggestionsForSurface(
 ): Array<{ capabilityId: string; toolName: string; phrase: string; isWrite: boolean }> {
   const caps = capabilitiesForPersona(persona).filter(
     (c) =>
-      c.surfaceOn.includes(surface) || c.surfaceOn.includes("global"),
+      // Task #20 — chips are opt-in: only capabilities deliberately
+      // marked `promoteAsSuggestion` may surface in the strip. /help
+      // (helpForPersona above) still lists every capability's examples.
+      c.promoteAsSuggestion === true &&
+      (c.surfaceOn.includes(surface) || c.surfaceOn.includes("global")),
   );
   const ranked = caps.slice().sort((a, b) => {
     const aRank = (a.isWrite ? 1 : 0) + (a.irreversible ? 2 : 0);

@@ -516,6 +516,7 @@ defineCapability({
   resultCard: "ar_aging_grid",
   irreversible: false,
   surfaceOn: ["wallet", "home"],
+  promoteAsSuggestion: true,
   examplePhrases: { en: ["Show AR aging", "Where is the cash sitting?"] },
   async run(input, ctx) {
     // board_observer is allowed on the AR rollup (rollup-only access).
