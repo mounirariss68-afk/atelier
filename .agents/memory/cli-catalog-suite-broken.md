@@ -1,9 +1,11 @@
 ---
-name: cli-catalog run.ts is import-broken
-description: The main capability-catalog test suite doesn't load; new catalog guards go in standalone files.
+name: cli-catalog run.ts repaired; lint test is a ratchet
+description: The capability-catalog suite runs again (test:cli-catalog); route-coverage lint uses a frozen baseline — never grow lint-baseline.json.
 ---
-`artifacts/api-server/tests/cli-catalog/run.ts` fails at import time: it imports `pinnedPromptDrift` from capability-catalog.ts, an export that was removed from capability-catalog.ts. The whole suite (role perimeter, PII, schema-hash checks) silently provides no coverage.
+`artifacts/api-server/tests/cli-catalog/run.ts` runs again (`pnpm --filter @workspace/api-server test:cli-catalog`). The stale `pinnedPromptDrift` import was removed; drift coverage now asserts the `schemaHash`/`hashSchema` primitive that the capability-retriever re-embedding relies on.
 
-**Why:** any new test added to run.ts is dead on arrival until the stale import is repaired.
+Two role-perimeter tests were rewritten for newer chat-surface semantics: legacy dispatch-owned writes (e.g. `account_delete`) are stripped from `getToolsForPersona` chat surface by design, and `findToolByName(persona)` deliberately falls through to the catalog for the propose_write dispatcher — role gating lives in `capabilitiesForPersona`, not the lookup.
 
-**How to apply:** put new deterministic catalog guards in standalone files under tests/cli-catalog/ (pattern: `suggestion-jargon.ts` + a `test:*` package script). A follow-up task exists to repair run.ts itself.
+**Route-coverage lint is a ratchet:** 214 routes accumulated without `defineRouteCapability`/`@cli-skip` while the suite was import-broken. They are frozen in `tests/cli-catalog/lint-baseline.json`; the test fails only on NEW unannotated routes.
+
+**How to apply:** never add entries to lint-baseline.json — annotate the new route instead. Shrink the baseline as routes get annotated.

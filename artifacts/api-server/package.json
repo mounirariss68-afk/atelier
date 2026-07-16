@@ -24,6 +24,7 @@
     "test:crm": "tsx ./tests/crm/run.ts",
     "test:brief-envelope": "tsx ./tests/crm/brief-envelope-contract-probe.ts",
     "test:change-password": "tsx ./tests/change-password/run.ts",
+    "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
     "test:suggestion-jargon": "tsx ./tests/cli-catalog/suggestion-jargon.ts",
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
