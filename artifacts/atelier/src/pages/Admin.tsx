@@ -430,7 +430,189 @@ export default function Admin() {
             )}
           </>
         )}
+
+        {/* Task #5 — founding-partner-only colleague password reset. */}
+        {me.role === "founding_partner" && <PartnerAccessRecovery />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Task #5 — "colleague locked out" recovery. Founding partners can reset
+ * the other partner's password: the server sets a temporary password,
+ * revokes all their sessions, and forces a change on next login. The temp
+ * password is shown ONCE here so it can be shared out-of-band.
+ */
+function PartnerAccessRecovery() {
+  const { toast } = useToast();
+  type Target = { email: string; name: string; title: string; pendingReset: boolean };
+  const [targets, setTargets] = React.useState<Target[] | null>(null);
+  const [busyEmail, setBusyEmail] = React.useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = React.useState<string | null>(null);
+  const [result, setResult] = React.useState<{ email: string; tempPassword: string } | null>(null);
+
+  const loadTargets = React.useCallback(() => {
+    void fetch("/api/auth/reset-targets", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { targets?: Target[] } | null) => setTargets(j?.targets ?? []));
+  }, []);
+
+  React.useEffect(() => {
+    loadTargets();
+  }, [loadTargets]);
+
+  const doReset = async (email: string) => {
+    setBusyEmail(email);
+    setConfirmEmail(null);
+    try {
+      const r = await fetch("/api/auth/reset-colleague-password", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        tempPassword?: string;
+        message?: string;
+      };
+      if (!r.ok || !j.tempPassword) {
+        toast({
+          title: "Reset failed",
+          description: j.message ?? "Could not reset the password. Try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setResult({ email, tempPassword: j.tempPassword });
+      loadTargets();
+      toast({
+        title: "Password reset",
+        description: `${email} was signed out everywhere and must set a new password at next sign-in.`,
+      });
+    } catch {
+      toast({
+        title: "Reset failed",
+        description: "Network error. Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setBusyEmail(null);
+    }
+  };
+
+  return (
+    <Card className="p-6 space-y-4 border-gold/30" data-testid="card-access-recovery">
+      <h3 className="font-mono text-sm tracking-widest uppercase text-gold flex items-center gap-2">
+        <KeyRound className="w-4 h-4" /> Partner Access Recovery
+      </h3>
+      <p className="text-xs text-text-mute">
+        If a partner is locked out, reset their password here. This signs them out everywhere,
+        issues a one-time temporary password (shown once, share it in person or over a call), and
+        forces them to choose a new password at next sign-in. Every reset is recorded in the audit
+        trail.
+      </p>
+      {targets === null ? (
+        <Skeleton className="h-14 bg-bg-elevate" />
+      ) : targets.length === 0 ? (
+        <p className="text-sm text-text-mute">No other partner logins found.</p>
+      ) : (
+        <div className="border border-border-soft rounded-md divide-y divide-border-soft">
+          {targets.map((t) => (
+            <div
+              key={t.email}
+              className="flex flex-wrap justify-between items-center gap-3 px-4 py-3"
+              data-testid={`row-reset-target-${t.email}`}
+            >
+              <div>
+                <div className="text-text text-sm font-semibold">{t.name}</div>
+                <div className="text-xs text-text-mute font-mono">{t.email}</div>
+                {t.pendingReset && (
+                  <div className="text-[11px] text-amber-300 mt-0.5">
+                    Reset pending — they haven't set a new password yet.
+                  </div>
+                )}
+              </div>
+              {confirmEmail === t.email ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-mute">Sign them out everywhere?</span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={busyEmail !== null}
+                    onClick={() => void doReset(t.email)}
+                    data-testid={`button-confirm-reset-${t.email}`}
+                  >
+                    {busyEmail === t.email ? "Resetting…" : "Confirm reset"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyEmail !== null}
+                    onClick={() => setConfirmEmail(null)}
+                    data-testid={`button-cancel-reset-${t.email}`}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyEmail !== null}
+                  onClick={() => setConfirmEmail(t.email)}
+                  data-testid={`button-reset-${t.email}`}
+                >
+                  Reset password
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {result && (
+        <div
+          className="rounded-md border border-gold/40 bg-gold/5 p-4 space-y-2"
+          data-testid="panel-temp-password"
+        >
+          <div className="text-sm text-text font-semibold">
+            Temporary password for {result.email}
+          </div>
+          <div className="flex items-center gap-2">
+            <code
+              className="font-mono text-sm text-gold bg-bg-elevate border border-border rounded px-2 py-1"
+              data-testid="text-temp-password"
+            >
+              {result.tempPassword}
+            </code>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                void navigator.clipboard.writeText(result.tempPassword).then(
+                  () => toast({ title: "Copied to clipboard" }),
+                  () => toast({ title: "Copy failed", variant: "destructive" }),
+                );
+              }}
+              data-testid="button-copy-temp-password"
+            >
+              Copy
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setResult(null)}
+              data-testid="button-dismiss-temp-password"
+            >
+              Dismiss
+            </Button>
+          </div>
+          <p className="text-xs text-text-mute">
+            Shown only once. Share it directly with {result.email} — it stops working as soon as
+            they set their new password.
+          </p>
+        </div>
+      )}
+    </Card>
   );
 }

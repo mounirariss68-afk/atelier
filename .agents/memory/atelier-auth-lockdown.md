@@ -9,3 +9,4 @@ description: How real login/session gating works and its test/prod escape hatche
 - Persona-cookie identity override is only honored non-prod or with `ATELIER_PERSONA_SWITCHER=true`; otherwise identity comes from the auth session. No default persona fallback anywhere.
 - Credential seed (`atelier-seed-auth`) is boot-time and data-only — no runtime DDL; prod tables arrive via the Publish schema diff. If a password-change feature lands, the seed must stop overwriting user-set hashes.
 - Passwords: node scrypt (no bcrypt dep), timing-safe compare, dummy verify on unknown email for anti-enumeration.
+- Partner-initiated reset: `must_change_password` lives on BOTH credential and session rows — copied at login, enforced by the global gate (403 `password-change-required`), cleared by change-password. Reset sets `user_managed=true` so the boot seed never resurrects the old password; all target sessions are revoked.

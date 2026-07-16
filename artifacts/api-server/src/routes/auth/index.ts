@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, atelierAuthCredentials, atelierUsers, atelierAuditEvents } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { verifyPassword, hashPassword } from "../../lib/auth/passwords";
 import {
   AUTH_SESSION_COOKIE,
@@ -9,6 +9,8 @@ import {
   destroySession,
   lookupSession,
   revokeOtherSessions,
+  revokeAllSessions,
+  clearSessionMustChange,
   setSessionCookie,
   clearSessionCookie,
 } from "../../lib/auth/session";
@@ -42,19 +44,36 @@ function rateLimitOk(ip: string): boolean {
 }
 
 async function audit(
-  action: "login_success" | "login_failed" | "logout" | "password_changed" | "password_change_failed",
-  opts: { actorId?: string | null; actorLabel: string; ip: string },
+  action:
+    | "login_success"
+    | "login_failed"
+    | "logout"
+    | "password_changed"
+    | "password_change_failed"
+    | "password_reset_by_partner"
+    | "password_reset_denied",
+  opts: {
+    actorId?: string | null;
+    actorLabel: string;
+    ip: string;
+    targetEmail?: string;
+    targetUserId?: string;
+  },
 ): Promise<void> {
   try {
     await db.insert(atelierAuditEvents).values({
       id: `audit_${randomUUID()}`,
       entityType: "auth",
-      entityId: opts.actorId ?? "unknown",
+      entityId: opts.targetUserId ?? opts.actorId ?? "unknown",
       actorType: opts.actorId ? "human" : "system",
       actorId: opts.actorId ?? null,
       actorLabel: opts.actorLabel,
       action,
-      payload: { ip: opts.ip },
+      payload: {
+        ip: opts.ip,
+        ...(opts.targetEmail ? { targetEmail: opts.targetEmail } : {}),
+        ...(opts.targetUserId ? { targetUserId: opts.targetUserId } : {}),
+      },
       payloadSummary:
         action === "login_success"
           ? `${opts.actorLabel} signed in`
@@ -64,7 +83,11 @@ async function audit(
               ? `${opts.actorLabel} changed their password`
               : action === "password_change_failed"
                 ? `Failed password change attempt by ${opts.actorLabel}`
-                : `Failed sign-in attempt`,
+                : action === "password_reset_by_partner"
+                  ? `${opts.actorLabel} reset the password for ${opts.targetEmail ?? "a colleague"}`
+                  : action === "password_reset_denied"
+                    ? `Denied password reset attempt by ${opts.actorLabel}`
+                    : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -118,10 +141,12 @@ router.post("/login", async (req: Request, res: Response) => {
     res.status(401).json(GENERIC_FAIL);
     return;
   }
-  const { token, expiresAt } = await createSession(persona.id, email);
+  const { token, expiresAt } = await createSession(persona.id, email, {
+    mustChangePassword: cred.mustChangePassword,
+  });
   setSessionCookie(res, token, expiresAt);
   await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
-  res.json({ user: personaToWire(persona) });
+  res.json({ user: personaToWire(persona), mustChangePassword: cred.mustChangePassword });
 });
 
 router.post("/logout", async (req: Request, res: Response) => {
@@ -207,6 +232,8 @@ router.post("/change-password", async (req: Request, res: Response) => {
     .set({
       passwordHash: hashPassword(newPassword),
       userManaged: true,
+      // Task #5 — a successful change satisfies any pending forced reset.
+      mustChangePassword: false,
       updatedAt: new Date(),
     })
     .where(eq(atelierAuthCredentials.email, session.email));
@@ -214,6 +241,7 @@ router.post("/change-password", async (req: Request, res: Response) => {
   // so a stolen session elsewhere dies with the old password.
   if (token) {
     await revokeOtherSessions(session.userId, token);
+    await clearSessionMustChange(token);
   }
   await audit("password_changed", {
     actorId: session.userId,
@@ -238,7 +266,147 @@ router.get("/session", async (req: Request, res: Response) => {
     res.status(401).json({ error: "unauthenticated" });
     return;
   }
-  res.json({ user: personaToWire(persona), expiresAt: session.expiresAt.toISOString() });
+  res.json({
+    user: personaToWire(persona),
+    expiresAt: session.expiresAt.toISOString(),
+    mustChangePassword: session.mustChangePassword,
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task #5 — partner-initiated password reset ("colleague locked out").
+// Founding partners only. Generates a temporary password, flags the
+// credential so the next login forces a change, revokes every session of
+// the reset user, and writes an audit event.
+// ---------------------------------------------------------------------------
+
+/** Resolve the session AND require a founding_partner persona. */
+async function requireFoundingPartner(
+  req: Request,
+  res: Response,
+): Promise<{ userId: string; email: string; name: string } | null> {
+  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const session = token ? await lookupSession(token) : null;
+  if (!session) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return null;
+  }
+  // A session that is itself pending a forced password change must not be
+  // able to reset anyone else's password.
+  if (session.mustChangePassword) {
+    res.status(403).json({
+      error: "password-change-required",
+      message: "You must change your temporary password before continuing.",
+    });
+    return null;
+  }
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, session.userId), isNull(atelierUsers.deletedAt)));
+  if (!persona || persona.role !== "founding_partner") {
+    await audit("password_reset_denied", {
+      actorId: session.userId,
+      actorLabel: persona?.name ?? session.email,
+      ip: req.ip ?? "unknown",
+    });
+    res.status(403).json({
+      error: "forbidden",
+      message: "Only founding partners can reset a colleague's password.",
+    });
+    return null;
+  }
+  return { userId: session.userId, email: session.email, name: persona.name };
+}
+
+/** Human-friendly temporary password, e.g. "Reset-KJH3-TM8Q-9XWC". */
+function generateTempPassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
+  const bytes = randomBytes(12);
+  let out = "";
+  for (let i = 0; i < 12; i++) {
+    if (i > 0 && i % 4 === 0) out += "-";
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return `Reset-${out}`;
+}
+
+// Who can I reset? Every credential except my own, with the person's name.
+router.get("/reset-targets", async (req: Request, res: Response) => {
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const creds = await db.select().from(atelierAuthCredentials);
+  const targets = [];
+  for (const c of creds) {
+    if (c.email === actor.email) continue;
+    const [persona] = await db
+      .select()
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, c.userId), isNull(atelierUsers.deletedAt)));
+    if (!persona) continue;
+    targets.push({
+      email: c.email,
+      name: persona.name,
+      title: persona.title,
+      pendingReset: c.mustChangePassword,
+    });
+  }
+  res.json({ targets });
+});
+
+router.post("/reset-colleague-password", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({
+      error: "rate-limited",
+      message: "Too many attempts. Try again in a few minutes.",
+    });
+    return;
+  }
+  const targetEmail = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!targetEmail) {
+    res.status(400).json({ error: "invalid-body", message: "Target email is required." });
+    return;
+  }
+  if (targetEmail === actor.email) {
+    res.status(400).json({
+      error: "cannot-reset-self",
+      message: "You cannot reset your own password this way — use Change password instead.",
+    });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  if (!cred) {
+    res.status(404).json({ error: "not-found", message: "No login exists for that email." });
+    return;
+  }
+  const tempPassword = generateTempPassword();
+  await db
+    .update(atelierAuthCredentials)
+    .set({
+      passwordHash: hashPassword(tempPassword),
+      // user_managed=true: the boot seed must never overwrite this hash.
+      userManaged: true,
+      mustChangePassword: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  // Kill every session of the reset user — they must log back in with the
+  // temporary password and immediately change it.
+  await revokeAllSessions(cred.userId);
+  await audit("password_reset_by_partner", {
+    actorId: actor.userId,
+    actorLabel: actor.name,
+    ip,
+    targetEmail,
+    targetUserId: cred.userId,
+  });
+  res.json({ ok: true, tempPassword });
 });
 
 export default router;

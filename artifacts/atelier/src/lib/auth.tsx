@@ -23,6 +23,10 @@ type AuthStatus = "loading" | "unauthenticated" | "authenticated";
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
+  // Task #5 — true when a partner reset this user's password; the app is
+  // blocked behind a forced password change until it's cleared.
+  mustChangePassword: boolean;
+  clearMustChangePassword: () => void;
   setAuthenticated: (user: AuthUser) => void;
   logout: () => Promise<void>;
 }
@@ -30,6 +34,8 @@ interface AuthContextValue {
 const AuthContext = React.createContext<AuthContextValue>({
   status: "loading",
   user: null,
+  mustChangePassword: false,
+  clearMustChangePassword: () => {},
   setAuthenticated: () => {},
   logout: async () => {},
 });
@@ -47,6 +53,7 @@ export function notifyUnauthenticated(): void {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<AuthStatus>("loading");
   const [user, setUser] = React.useState<AuthUser | null>(null);
+  const [mustChangePassword, setMustChangePassword] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
@@ -54,8 +61,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async (r) => {
         if (!alive) return;
         if (r.ok) {
-          const j = (await r.json()) as { user: AuthUser };
+          const j = (await r.json()) as { user: AuthUser; mustChangePassword?: boolean };
           setUser(j.user);
+          setMustChangePassword(Boolean(j.mustChangePassword));
           setStatus("authenticated");
         } else {
           setStatus("unauthenticated");
@@ -83,6 +91,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStatus("authenticated");
   }, []);
 
+  const clearMustChangePassword = React.useCallback(() => {
+    setMustChangePassword(false);
+  }, []);
+
   const logout = React.useCallback(async () => {
     try {
       await fetch("/api/auth/logout", {
@@ -98,7 +110,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ status, user, setAuthenticated, logout }}>
+    <AuthContext.Provider
+      value={{ status, user, mustChangePassword, clearMustChangePassword, setAuthenticated, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

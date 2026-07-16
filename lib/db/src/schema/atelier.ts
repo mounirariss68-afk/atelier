@@ -3723,6 +3723,9 @@ export const atelierAuthCredentials = pgTable(
     // Task #2 — set to true when the user changes their own password;
     // the boot seed must never overwrite a user-managed hash.
     userManaged: boolean("user_managed").notNull().default(false),
+    // Task #5 — set to true when a partner resets a colleague's password;
+    // the next login must change the temporary password before using the app.
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -3737,6 +3740,9 @@ export const atelierAuthSessions = pgTable(
     tokenHash: text("token_hash").primaryKey(),
     userId: text("user_id").notNull(),
     email: text("email").notNull(),
+    // Task #5 — copied from the credential at login; while true the global
+    // auth gate blocks data routes until the password is changed.
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     expiresAt: timestamp("expires_at").notNull(),
   },

@@ -16,6 +16,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
+import ForcePasswordChange from "@/pages/ForcePasswordChange";
 import Cli from "@/pages/Cli";
 import Home from "@/pages/Home";
 import Pipeline from "@/pages/Pipeline";
@@ -216,7 +217,7 @@ const queryClient = new QueryClient({
 
 /** Renders the login screen for any route while unauthenticated. */
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
+  const { status, mustChangePassword } = useAuth();
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -227,6 +228,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
   if (status === "unauthenticated") return <SignIn />;
+  // Task #5 — after a partner reset, block the app behind a forced change
+  // (the server also 403s every data route until it's done).
+  if (mustChangePassword) return <ForcePasswordChange />;
   return <>{children}</>;
 }
 

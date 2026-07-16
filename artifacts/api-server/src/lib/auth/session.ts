@@ -17,6 +17,7 @@ export interface AuthSession {
   userId: string;
   email: string;
   expiresAt: Date;
+  mustChangePassword: boolean;
 }
 
 declare global {
@@ -35,6 +36,7 @@ function hashToken(token: string): string {
 export async function createSession(
   userId: string,
   email: string,
+  opts?: { mustChangePassword?: boolean },
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -42,6 +44,7 @@ export async function createSession(
     tokenHash: hashToken(token),
     userId,
     email,
+    mustChangePassword: opts?.mustChangePassword ?? false,
     expiresAt,
   });
   // Opportunistic sweep of expired rows (cheap; indexed on expires_at).
@@ -79,7 +82,35 @@ export async function lookupSession(token: string): Promise<AuthSession | null> 
       .catch(() => undefined);
     return null;
   }
-  return { userId: row.userId, email: row.email, expiresAt: row.expiresAt };
+  return {
+    userId: row.userId,
+    email: row.email,
+    expiresAt: row.expiresAt,
+    mustChangePassword: row.mustChangePassword,
+  };
+}
+
+/**
+ * Task #5 — after a forced password change succeeds, clear the
+ * must-change flag on the session that performed it so the user can
+ * proceed without re-logging in.
+ */
+export async function clearSessionMustChange(token: string): Promise<void> {
+  if (!token) return;
+  await db
+    .update(atelierAuthSessions)
+    .set({ mustChangePassword: false })
+    .where(eq(atelierAuthSessions.tokenHash, hashToken(token)));
+}
+
+/**
+ * Task #5 — partner-initiated password reset revokes EVERY session of the
+ * reset user, so a lost/stolen session cannot ride out the reset.
+ */
+export async function revokeAllSessions(userId: string): Promise<void> {
+  await db
+    .delete(atelierAuthSessions)
+    .where(eq(atelierAuthSessions.userId, userId));
 }
 
 export async function destroySession(token: string): Promise<void> {
@@ -158,6 +189,15 @@ export async function requireAuthSession(
     if (!session) {
       if (token) clearSessionCookie(res);
       res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+      return;
+    }
+    // Task #5 — a reset user must change their temporary password before
+    // touching any data route (/api/auth/* is mounted before this gate).
+    if (session.mustChangePassword) {
+      res.status(403).json({
+        error: "password-change-required",
+        message: "You must change your temporary password before continuing.",
+      });
       return;
     }
     req.authSession = session;
