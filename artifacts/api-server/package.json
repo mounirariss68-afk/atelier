@@ -22,6 +22,7 @@
     "test:cli-smoke": "tsx ./tests/cli-smoke/run.ts",
     "test:cli-navigation": "tsx ./tests/cli-navigation/run.ts",
     "test:crm": "tsx ./tests/crm/run.ts",
+    "test:change-password": "tsx ./tests/change-password/run.ts",
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
   },
