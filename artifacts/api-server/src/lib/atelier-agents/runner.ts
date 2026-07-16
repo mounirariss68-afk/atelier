@@ -565,7 +565,7 @@ async function callClaudeJson<T>(
  * approve/reject these via the Cartographer Profile tab. We never overwrite
  * live account fields here.
  */
-async function proposeProfileUpdatesFromScout(args: {
+export async function proposeProfileUpdatesFromScout(args: {
   opportunityId: string;
   proposedBy: string;
   output: PursuitScoutOutput;
