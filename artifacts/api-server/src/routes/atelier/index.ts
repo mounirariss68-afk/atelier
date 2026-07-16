@@ -569,6 +569,9 @@ async function buildOpportunityWire(
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
     engagementLeadName: lead?.name ?? o.engagementLeadId,
     dealSizeUsd: o.dealSizeHypothesis,
+    // Task #8 — deal values are denominated in the account's primaryCurrency;
+    // surface it so the UI never hardcodes a "$"/USD label.
+    currency: acct?.primaryCurrency ?? "USD",
     probabilityPct: o.probabilityPct,
     weightedValueUsd: (o.dealSizeHypothesis * o.probabilityPct) / 100,
     daysInStage: o.daysInStage,

@@ -657,6 +657,9 @@ defineCapability({
         id: opp.id,
         fromStage: result.transition.fromStage,
         toStage: result.transition.toStage,
+        // Task #8 — surface a failed contract-entry engagement auto-create to
+        // the assistant so it can warn the operator (transition still commits).
+        engagementHookError: result.engagementHookError ?? null,
         navigateTo: { path: `/opportunities/${opp.id}`, when: "on_commit" as const },
       },
     };

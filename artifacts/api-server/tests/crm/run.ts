@@ -1025,6 +1025,13 @@ async function main(): Promise<void> {
           partnerOverride: true,
         });
         check("stage-transition \u2192 contract \u2192 200", toContract.status === 200, `status=${toContract.status} body=${JSON.stringify(toContract.body)?.slice(0, 160)}`);
+        // Task #8 — the engagement auto-create hook outcome is surfaced on
+        // the transition response (null when the hook succeeded).
+        check(
+          "stage-transition response surfaces engagementHookError (null on success)",
+          "engagementHookError" in (toContract.body ?? {}) && toContract.body.engagementHookError === null,
+          `body keys=${Object.keys(toContract.body ?? {}).join(",")}`,
+        );
 
         const autoEngs = await db
           .select({ id: atelierEngagements.id, plm: atelierEngagements.plmStage })
@@ -1807,6 +1814,22 @@ async function main(): Promise<void> {
           (par.data as any)?.scout?.status === "skipped",
           JSON.stringify((par.data as any)?.scout),
         );
+
+        // Task #8 — opp wire carries the account's primaryCurrency so the UI
+        // never hardcodes a USD label for deal money.
+        if (parId) {
+          const wire = await api("GET", `/opportunities/${parId}`, PERSONA.fp);
+          const [acctRow] = await db
+            .select({ ccy: atelierAccounts.primaryCurrency })
+            .from(atelierAccounts)
+            .where(eq(atelierAccounts.id, ACC));
+          const expected = acctRow?.ccy ?? "USD";
+          check(
+            "GET /opportunities/:id \u2192 wire currency = account primaryCurrency",
+            wire.status === 200 && wire.body?.currency === expected,
+            `status=${wire.status} currency=${wire.body?.currency} expected=${expected}`,
+          );
+        }
       }
 
       // Task #609 — branch-vs-HQ clarification on the smarter auto-fill

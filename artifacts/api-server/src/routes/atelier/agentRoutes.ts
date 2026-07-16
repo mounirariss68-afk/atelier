@@ -140,6 +140,9 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     partnerOwnerName: partner?.name ?? o.partnerOwnerId,
     engagementLeadName: lead?.name ?? o.engagementLeadId,
     dealSizeUsd: o.dealSizeHypothesis,
+    // Task #8 — deal values are denominated in the account's primaryCurrency;
+    // surface it so the UI never hardcodes a "$"/USD label.
+    currency: acct?.primaryCurrency ?? "USD",
     probabilityPct: o.probabilityPct,
     weightedValueUsd: (o.dealSizeHypothesis * o.probabilityPct) / 100,
     daysInStage: o.daysInStage,
@@ -1636,6 +1639,9 @@ router.post("/opportunities/:oppId/stage-transition", async (req, res) => {
   res.json({
     opportunity: await buildOppWire(result.opportunity),
     transition: result.transition,
+    // Task #8 — a failed contract-entry engagement auto-create no longer
+    // hides in the audit log only; the caller sees it too.
+    engagementHookError: result.engagementHookError ?? null,
   });
 });
 

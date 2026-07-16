@@ -11,4 +11,6 @@ import type { OpportunityStageTransition } from "./opportunityStageTransition";
 export type AtelierCreateStageTransition200 = {
   opportunity: Opportunity;
   transition: OpportunityStageTransition;
+  /** @nullable */
+  engagementHookError?: string | null;
 };

@@ -46,14 +46,22 @@ import {
 
 type OppItem = Opportunity;
 
-// Opportunity deal sizes are stored normalised in USD (`dealSizeUsd`); the
-// opportunity wire model carries no per-deal currency, so pipeline totals are
-// intrinsically USD. We route through the shared currency-aware formatter
-// (defaulting to USD) so the presentation is consistent with the rest of the
-// app; showing an account's `primaryCurrency` here would require the API to
-// expose FX-converted amounts, which it does not — we never fabricate a rate.
+// Task #8 — deal values are denominated in each account's `primaryCurrency`
+// (surfaced on the opportunity wire as `currency`). Per-card money is
+// formatted in that currency; roll-ups are grouped per currency and joined
+// with " + " — we never sum across currencies or fabricate an FX rate.
+function fmtOppMoney(n: number, currency?: string | null): string {
+  return fmtMoney(n, currency ?? "USD");
+}
 function fmtUsd(n: number): string {
   return fmtMoney(n, "USD");
+}
+function fmtByCurrency(m: Record<string, number>): string {
+  const parts = Object.entries(m)
+    .filter(([, v]) => v !== 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([c, v]) => fmtMoney(v, c));
+  return parts.length ? parts.join(" + ") : fmtMoney(0, "USD");
 }
 
 function StageColumn({
@@ -65,7 +73,7 @@ function StageColumn({
   stage: SalesStage;
   children: React.ReactNode;
   count: number;
-  weighted: number;
+  weighted: Record<string, number>;
 }) {
   return (
     <div className="min-w-[280px] w-[280px] shrink-0 flex flex-col gap-3 snap-start rounded-md p-2"
@@ -76,7 +84,7 @@ function StageColumn({
             {SALES_STAGE_LABEL[stage]}
           </span>
           <span className="font-mono text-xs text-text-faint">
-            {count} · <span className="text-gold">{fmtUsd(weighted)}</span>
+            {count} · <span className="text-gold">{fmtByCurrency(weighted)}</span>
           </span>
         </div>
         <p className="text-[10px] leading-snug text-text-faint">
@@ -164,9 +172,9 @@ function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
         <div className="flex flex-col gap-1">
           <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
           <span className="text-sm font-semibold text-text">
-            {fmtUsd(opp.dealSizeUsd)}
+            {fmtOppMoney(opp.dealSizeUsd, (opp as { currency?: string }).currency)}
             <span className="text-text-mute font-normal"> · </span>
-            <span className="text-gold">{fmtUsd((opp.dealSizeUsd * opp.probabilityPct) / 100)}</span>
+            <span className="text-gold">{fmtOppMoney((opp.dealSizeUsd * opp.probabilityPct) / 100, (opp as { currency?: string }).currency)}</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -200,6 +208,33 @@ interface ForecastRow {
   weightedValueUsd: number;
   rawValueUsd: number;
   byStage: Record<string, number>;
+  // Task #8 — server groups money per account currency and flags mixed
+  // buckets so we never present a cross-currency sum under one label.
+  byCurrency?: Record<string, { weightedValue: number; rawValue: number; count: number }>;
+  mixedCurrency?: boolean;
+  redactedCount?: number;
+}
+interface ForecastTotals {
+  count: number;
+  weightedValueUsd: number;
+  rawValueUsd: number;
+  byCurrency?: Record<string, { weightedValue: number; rawValue: number; count: number }>;
+  mixedCurrency?: boolean;
+  redactedCount?: number;
+}
+// Render a money roll-up honestly: single-currency buckets use that currency;
+// mixed buckets show per-currency parts joined with " + ".
+function fmtForecastMoney(
+  usdTotal: number,
+  byCurrency: Record<string, { weightedValue: number; rawValue: number; count: number }> | undefined,
+  field: "weightedValue" | "rawValue",
+): string {
+  if (byCurrency && Object.keys(byCurrency).length > 0) {
+    return fmtByCurrency(
+      Object.fromEntries(Object.entries(byCurrency).map(([c, v]) => [c, v[field]])),
+    );
+  }
+  return fmtUsd(usdTotal);
 }
 const FORECAST_TABS: Array<{ id: string; label: string }> = [
   { id: "partner", label: "Partner" },
@@ -210,7 +245,7 @@ const FORECAST_TABS: Array<{ id: string; label: string }> = [
 ];
 function ForecastPanel({ initialBy }: { initialBy: string }) {
   const [by, setBy] = useState<string>(initialBy);
-  const [data, setData] = useState<{ rows: ForecastRow[]; totals: { count: number; weightedValueUsd: number; rawValueUsd: number } } | null>(null);
+  const [data, setData] = useState<{ rows: ForecastRow[]; totals: ForecastTotals } | null>(null);
   useEffect(() => {
     setData(null);
     let alive = true;
@@ -254,11 +289,11 @@ function ForecastPanel({ initialBy }: { initialBy: string }) {
             </Card>
             <Card className="p-4 border-gold/40">
               <div className="text-text-faint font-mono text-[11px] uppercase tracking-widest">Weighted</div>
-              <div className="text-2xl font-light mt-1 text-gold">{fmtUsd(data.totals.weightedValueUsd)}</div>
+              <div className="text-2xl font-light mt-1 text-gold">{fmtForecastMoney(data.totals.weightedValueUsd, data.totals.byCurrency, "weightedValue")}</div>
             </Card>
             <Card className="p-4">
               <div className="text-text-faint font-mono text-[11px] uppercase tracking-widest">Raw</div>
-              <div className="text-2xl font-light mt-1 text-text">{fmtUsd(data.totals.rawValueUsd)}</div>
+              <div className="text-2xl font-light mt-1 text-text">{fmtForecastMoney(data.totals.rawValueUsd, data.totals.byCurrency, "rawValue")}</div>
             </Card>
           </div>
           <Card className="overflow-hidden">
@@ -277,8 +312,8 @@ function ForecastPanel({ initialBy }: { initialBy: string }) {
                   <tr key={r.key} className="hover:bg-bg-elevate-2 transition-colors">
                     <td className="p-3 font-medium text-text">{r.label}</td>
                     <td className="p-3 text-right">{r.count}</td>
-                    <td className="p-3 text-right text-gold">{fmtUsd(r.weightedValueUsd)}</td>
-                    <td className="p-3 text-right text-text-mute">{fmtUsd(r.rawValueUsd)}</td>
+                    <td className="p-3 text-right text-gold">{fmtForecastMoney(r.weightedValueUsd, r.byCurrency, "weightedValue")}</td>
+                    <td className="p-3 text-right text-text-mute">{fmtForecastMoney(r.rawValueUsd, r.byCurrency, "rawValue")}</td>
                     <td className="p-3 text-xs font-mono text-text-mute">
                       {Object.entries(r.byStage).map(([s, c]) => `${s}:${c}`).join(" · ")}
                     </td>
@@ -390,13 +425,16 @@ export default function Pipeline() {
 
   // Build per-stage roll-up locally (also use forecast.buckets for consistency).
   const bucketByStage = useMemo(() => {
-    const m = new Map<SalesStage, { count: number; weighted: number }>();
-    for (const s of SALES_STAGES) m.set(s, { count: 0, weighted: 0 });
+    const m = new Map<SalesStage, { count: number; weighted: Record<string, number> }>();
+    for (const s of SALES_STAGES) m.set(s, { count: 0, weighted: {} });
     for (const o of opps ?? []) {
       const s = (o as { salesStage?: SalesStage }).salesStage ?? ("suspect" as SalesStage);
-      const cur = m.get(s) ?? { count: 0, weighted: 0 };
+      const cur = m.get(s) ?? { count: 0, weighted: {} };
       cur.count += 1;
-      cur.weighted += (o.dealSizeUsd * o.probabilityPct) / 100;
+      // Task #8 — group weighted value per account currency; never sum
+      // heterogeneous currencies into one number.
+      const ccy = (o as { currency?: string }).currency ?? "USD";
+      cur.weighted[ccy] = (cur.weighted[ccy] ?? 0) + (o.dealSizeUsd * o.probabilityPct) / 100;
       m.set(s, cur);
     }
     return m;
@@ -563,7 +601,7 @@ export default function Pipeline() {
               const stageOpps = filteredOpps.filter(
                 (o) => ((o as { salesStage?: SalesStage }).salesStage ?? "suspect") === stage,
               );
-              const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };
+              const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: {} };
               return (
                 <StageColumn key={stage} stage={stage} count={bucket.count} weighted={bucket.weighted}>
                   {stageOpps.map((opp) => (
@@ -582,7 +620,7 @@ export default function Pipeline() {
                 </span>
               </div>
               {TERMINAL_STAGES.map((stage) => {
-                const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: 0 };
+                const bucket = bucketByStage.get(stage) ?? { count: 0, weighted: {} };
                 return (
                   <Card
                     key={stage}
@@ -642,9 +680,9 @@ export default function Pipeline() {
                           <MonoChip tone={stageTone(s)}>{SALES_STAGE_LABEL[s]}</MonoChip>
                         </td>
                         <td className="p-4 font-mono">
-                          {fmtUsd(opp.dealSizeUsd)}
+                          {fmtOppMoney(opp.dealSizeUsd, (opp as { currency?: string }).currency)}
                           <span className="text-text-faint"> · </span>
-                          <span className="text-gold">{fmtUsd((opp.dealSizeUsd * opp.probabilityPct) / 100)}</span>
+                          <span className="text-gold">{fmtOppMoney((opp.dealSizeUsd * opp.probabilityPct) / 100, (opp as { currency?: string }).currency)}</span>
                         </td>
                         <td className="p-4 font-mono text-text-mute">{opp.probabilityPct}%</td>
                         <td className="p-4 text-text-mute">

@@ -357,6 +357,10 @@ paths:
                 properties:
                   opportunity: { $ref: "#/components/schemas/Opportunity" }
                   transition: { $ref: "#/components/schemas/OpportunityStageTransition" }
+                  # Task #8 — contract entry auto-creates an engagement; if that
+                  # hook fails the transition still commits, but the failure is
+                  # surfaced here (and audited) instead of being swallowed.
+                  engagementHookError: { type: ["string", "null"] }
         "412":
           description: Stage gate not satisfied (e.g. 5C missing for late stages)
           content:
@@ -4620,6 +4624,9 @@ components:
         partnerOwnerName: { type: string }
         engagementLeadName: { type: string }
         dealSizeUsd: { type: number }
+        # Task #8 — the account's primaryCurrency; deal values are denominated
+        # in this currency (no client-side FX is ever fabricated).
+        currency: { type: string }
         probabilityPct: { type: number }
         weightedValueUsd: { type: number }
         daysInStage: { type: integer }

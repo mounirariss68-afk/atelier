@@ -23,6 +23,7 @@ export interface Opportunity {
   partnerOwnerName: string;
   engagementLeadName: string;
   dealSizeUsd: number;
+  currency?: string;
   probabilityPct: number;
   weightedValueUsd: number;
   daysInStage: number;

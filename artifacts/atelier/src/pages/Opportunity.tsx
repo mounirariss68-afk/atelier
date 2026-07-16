@@ -115,12 +115,10 @@ export default function Opportunity() {
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
 
   const personaName = me?.name ?? "You";
-  // Deal sizes are stored USD-normalised (`dealSizeUsd`); the opportunity wire
-  // model has no per-deal currency, so this is intrinsically a USD figure. We
-  // route through the shared currency-aware formatter (defaulting to USD) for
-  // presentation consistency — showing the account's primaryCurrency would need
-  // an FX-converted amount from the API, which we never fabricate client-side.
-  const dealLabel = fmtMoney(opp.dealSizeUsd, "USD");
+  // Task #8 — deal values are denominated in the account's primaryCurrency,
+  // surfaced on the wire as `currency`; format with it instead of a hardcoded
+  // USD label (we never fabricate an FX conversion client-side).
+  const dealLabel = fmtMoney(opp.dealSizeUsd, (opp as { currency?: string }).currency ?? "USD");
   const salesStage: SalesStage =
     (opp as { salesStage?: SalesStage }).salesStage ?? ("lead" as SalesStage);
   const isStalled =

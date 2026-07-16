@@ -296,6 +296,7 @@ export const AtelierListOpportunitiesResponseItem = zod.object({
   partnerOwnerName: zod.string(),
   engagementLeadName: zod.string(),
   dealSizeUsd: zod.number(),
+  currency: zod.string().optional(),
   probabilityPct: zod.number(),
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
@@ -461,6 +462,7 @@ export const AtelierGetOpportunityResponse = zod.object({
   partnerOwnerName: zod.string(),
   engagementLeadName: zod.string(),
   dealSizeUsd: zod.number(),
+  currency: zod.string().optional(),
   probabilityPct: zod.number(),
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
@@ -579,6 +581,7 @@ export const AtelierUpdateOpportunityResponse = zod.object({
   partnerOwnerName: zod.string(),
   engagementLeadName: zod.string(),
   dealSizeUsd: zod.number(),
+  currency: zod.string().optional(),
   probabilityPct: zod.number(),
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
@@ -737,6 +740,7 @@ export const AtelierUpdateOpportunityStageResponse = zod.object({
   partnerOwnerName: zod.string(),
   engagementLeadName: zod.string(),
   dealSizeUsd: zod.number(),
+  currency: zod.string().optional(),
   probabilityPct: zod.number(),
   weightedValueUsd: zod.number(),
   daysInStage: zod.number(),
@@ -853,6 +857,7 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     partnerOwnerName: zod.string(),
     engagementLeadName: zod.string(),
     dealSizeUsd: zod.number(),
+    currency: zod.string().optional(),
     probabilityPct: zod.number(),
     weightedValueUsd: zod.number(),
     daysInStage: zod.number(),
@@ -947,6 +952,7 @@ export const AtelierCreateStageTransitionResponse = zod.object({
     partnerOverride: zod.boolean().optional(),
     createdAt: zod.coerce.date(),
   }),
+  engagementHookError: zod.string().nullish(),
 });
 
 /**

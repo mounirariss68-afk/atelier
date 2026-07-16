@@ -2245,6 +2245,7 @@ export interface Opportunity {
   partnerOwnerName: string;
   engagementLeadName: string;
   dealSizeUsd: number;
+  currency?: string;
   probabilityPct: number;
   weightedValueUsd: number;
   daysInStage: number;
@@ -4076,6 +4077,8 @@ export type AtelierGetActivityParams = {
 export type AtelierCreateStageTransition200 = {
   opportunity: Opportunity;
   transition: OpportunityStageTransition;
+  /** @nullable */
+  engagementHookError?: string | null;
 };
 
 export type AtelierListAccountsParams = {
