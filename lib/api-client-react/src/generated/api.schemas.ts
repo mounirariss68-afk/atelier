@@ -181,6 +181,7 @@ export interface AtelierSourceSignal {
   publishedAt?: string | null;
   /** @nullable */
   confidence?: AtelierSourceSignalConfidence;
+  uncorroborated?: boolean;
 }
 
 export type AtelierProfileUpdateProposalStatus =
@@ -2777,6 +2778,39 @@ export interface AtelierBrief {
   confidence?: Confidence;
 }
 
+/**
+ * Research-fact ids supporting each 5C draft section (deterministic token-overlap match).
+ */
+export interface AtelierFiveCFactIds {
+  client: string[];
+  competition: string[];
+  capability: string[];
+  capacity: string[];
+  contract: string[];
+}
+
+export type AtelierBriefCompletenessSections = { [key: string]: boolean };
+
+export type AtelierBriefCompletenessConfidenceMix = {
+  green: number;
+  amber: number;
+  red: number;
+};
+
+/**
+ * Per-brief completeness summary so partners can judge research quality at a glance.
+ */
+export interface AtelierBriefCompleteness {
+  sections: AtelierBriefCompletenessSections;
+  missingSections: string[];
+  factCount: number;
+  sourcedFactCount: number;
+  /** @nullable */
+  sourcedFactRatio: number | null;
+  confidenceMix: AtelierBriefCompletenessConfidenceMix;
+  score: number;
+}
+
 export interface AtelierBriefEnvelope {
   brief?: AtelierBrief;
   /** @nullable */
@@ -2784,6 +2818,11 @@ export interface AtelierBriefEnvelope {
   /** @nullable */
   createdAt?: string | null;
   confidence?: Confidence;
+  fiveCFactIds?: AtelierFiveCFactIds;
+  completeness?: AtelierBriefCompleteness;
+  /** @nullable */
+  ageDays?: number | null;
+  refreshRecommended?: boolean;
 }
 
 export interface AtelierScoutInput {

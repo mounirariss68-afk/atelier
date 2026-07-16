@@ -2941,6 +2941,10 @@ components:
         summary: { type: ["string", "null"] }
         publishedAt: { type: ["string", "null"] }
         confidence: { type: ["string", "null"], enum: [green, amber, red, null] }
+        # Task #9 — true when the URL was backfilled from raw search citations
+        # rather than cited by the model against a specific claim. Rendered as
+        # "uncorroborated source"; never presented as claim evidence.
+        uncorroborated: { type: boolean }
 
     AtelierProfileUpdateProposal:
       type: object
@@ -5133,7 +5137,48 @@ components:
         runId: { type: ["string", "null"] }
         createdAt: { type: ["string", "null"], format: date-time }
         confidence: { $ref: "#/components/schemas/Confidence" }
+        # Task #9 — research quality signals, derived server-side.
+        fiveCFactIds: { $ref: "#/components/schemas/AtelierFiveCFactIds" }
+        completeness: { $ref: "#/components/schemas/AtelierBriefCompleteness" }
+        # Whole days since the brief was generated; null when unknown.
+        ageDays: { type: ["integer", "null"] }
+        # True when the brief is older than the staleness threshold (30 days).
+        refreshRecommended: { type: boolean }
       required: []
+
+    AtelierFiveCFactIds:
+      type: object
+      description: Research-fact ids supporting each 5C draft section (deterministic token-overlap match).
+      required: [client, competition, capability, capacity, contract]
+      properties:
+        client: { type: array, items: { type: string } }
+        competition: { type: array, items: { type: string } }
+        capability: { type: array, items: { type: string } }
+        capacity: { type: array, items: { type: string } }
+        contract: { type: array, items: { type: string } }
+
+    AtelierBriefCompleteness:
+      type: object
+      description: Per-brief completeness summary so partners can judge research quality at a glance.
+      required: [sections, missingSections, factCount, sourcedFactCount, sourcedFactRatio, confidenceMix, score]
+      properties:
+        sections:
+          type: object
+          additionalProperties: { type: boolean }
+        missingSections:
+          type: array
+          items: { type: string }
+        factCount: { type: integer }
+        sourcedFactCount: { type: integer }
+        sourcedFactRatio: { type: ["number", "null"] }
+        confidenceMix:
+          type: object
+          required: [green, amber, red]
+          properties:
+            green: { type: integer }
+            amber: { type: integer }
+            red: { type: integer }
+        score: { type: integer }
 
     AtelierScoutInput:
       type: object

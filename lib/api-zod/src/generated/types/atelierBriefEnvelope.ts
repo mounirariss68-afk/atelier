@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierBrief } from "./atelierBrief";
+import type { AtelierBriefCompleteness } from "./atelierBriefCompleteness";
+import type { AtelierFiveCFactIds } from "./atelierFiveCFactIds";
 import type { Confidence } from "./confidence";
 
 export interface AtelierBriefEnvelope {
@@ -15,4 +17,9 @@ export interface AtelierBriefEnvelope {
   /** @nullable */
   createdAt?: Date | null;
   confidence?: Confidence;
+  fiveCFactIds?: AtelierFiveCFactIds;
+  completeness?: AtelierBriefCompleteness;
+  /** @nullable */
+  ageDays?: number | null;
+  refreshRecommended?: boolean;
 }

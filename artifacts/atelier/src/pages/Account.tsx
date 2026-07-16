@@ -683,6 +683,11 @@ function ProfileTab({
 }) {
   const a = ws.account;
   const { data: me } = useAtelierGetMe();
+  // Task #9 — "Research this" on missing brief sections re-runs Cartographer.
+  const qc = useQueryClient();
+  const refreshBrief = useAtelierRefreshAccountCartographer();
+  const invalidateWorkspace = () =>
+    qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(a.id) });
   // Editing account strategy / firmographics is partner-tier only (mirrors the
   // server's CREATE_ROLES gate on PATCH /accounts/:id). Hide the Edit affordance
   // for everyone else so we never surface an action that would 403.
@@ -860,6 +865,43 @@ function ProfileTab({
                   <FileText className="w-4 h-4 text-gold" /> Research brief
                 </span>
               </SectionLabel>
+              {/* Task #9 — surface unresearched sections instead of hiding them. */}
+              {(() => {
+                const missing: string[] = [];
+                if ((brief.whatsChanging ?? []).length === 0) missing.push("What's changing");
+                if ((brief.executiveTensions ?? []).length === 0) missing.push("Executive tensions");
+                if ((brief.serviceLineFit ?? []).length === 0) missing.push("Service-line fit");
+                if ((brief.partnerEcosystem ?? []).length === 0) missing.push("Partner ecosystem");
+                if ((brief.mandateAngles ?? []).length === 0) missing.push("Mandate angles");
+                if (missing.length === 0) return null;
+                return (
+                  <div
+                    className="flex items-start justify-between gap-3 border border-dashed border-border-soft rounded p-3"
+                    data-testid="brief-missing-sections"
+                  >
+                    <p className="text-xs text-text-mute leading-relaxed">
+                      <span className="italic text-text-faint">Not researched yet:</span>{" "}
+                      {missing.join(", ")}
+                    </p>
+                    {a.cartographerStatus !== "running" && (
+                      <button
+                        onClick={() =>
+                          refreshBrief.mutate(
+                            { accountId: a.id, data: {} },
+                            { onSuccess: () => invalidateWorkspace() },
+                          )
+                        }
+                        disabled={refreshBrief.isPending}
+                        className="pill-btn pill-btn-ghost text-xs shrink-0"
+                        data-testid="button-research-missing"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${refreshBrief.isPending ? "animate-spin" : ""}`} />
+                        Research this
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="space-y-2">
                 <BriefSection
                   title="What's changing"
@@ -1016,12 +1058,24 @@ function ProfileTab({
                         {s.title}
                         <ExternalLink className="w-3 h-3 text-text-faint" />
                       </div>
-                      <MonoChip tone={s.confidence === "green" ? "green" : s.confidence === "amber" ? "amber" : "default"}>
-                        {s.kind}
-                      </MonoChip>
+                      <div className="flex items-center gap-1.5">
+                        {s.uncorroborated && (
+                          <MonoChip tone="red" data-testid={`chip-uncorroborated-${i}`}>
+                            uncorroborated source
+                          </MonoChip>
+                        )}
+                        <MonoChip tone={s.confidence === "green" ? "green" : s.confidence === "amber" ? "amber" : "default"}>
+                          {s.kind}
+                        </MonoChip>
+                      </div>
                     </div>
                     {s.summary && (
                       <p className="text-text-mute text-sm mt-1 leading-snug">{s.summary}</p>
+                    )}
+                    {s.uncorroborated && (
+                      <p className="text-[11px] text-text-faint mt-1 leading-snug italic">
+                        Search result attached for reference — not cited against a specific claim.
+                      </p>
                     )}
                   </a>
                 ))}
@@ -1144,7 +1198,35 @@ function ProfileTab({
               <Row label="Currency" value={a.primaryCurrency} />
               <Row label="Language" value={a.primaryLanguage} />
               <Row label="Last touch" value={a.lastTouchAt ? new Date(a.lastTouchAt).toLocaleDateString() : "—"} />
-              <Row label="Last enriched" value={a.enrichedAt ? new Date(a.enrichedAt).toLocaleDateString() : "—"} />
+              <Row
+                label="Last enriched"
+                value={
+                  a.enrichedAt
+                    ? (() => {
+                        // Task #9 — research staleness. 30 days matches the
+                        // brief threshold on the opportunity side.
+                        const ageDays = Math.max(
+                          0,
+                          Math.floor((Date.now() - new Date(a.enrichedAt).getTime()) / 86_400_000),
+                        );
+                        const stale = ageDays >= 30;
+                        return (
+                          <span className="inline-flex items-center gap-1.5 flex-wrap justify-end">
+                            {new Date(a.enrichedAt).toLocaleDateString()}
+                            <MonoChip tone={stale ? "amber" : "default"} data-testid="chip-enriched-age">
+                              {ageDays === 0 ? "today" : `${ageDays}d`}
+                            </MonoChip>
+                            {stale && (
+                              <MonoChip tone="amber" data-testid="chip-enriched-stale">
+                                refresh recommended
+                              </MonoChip>
+                            )}
+                          </span>
+                        );
+                      })()
+                    : "—"
+                }
+              />
             </dl>
           </Card>
 

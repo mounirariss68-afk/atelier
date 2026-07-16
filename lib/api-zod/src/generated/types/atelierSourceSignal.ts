@@ -18,4 +18,5 @@ export interface AtelierSourceSignal {
   publishedAt?: string | null;
   /** @nullable */
   confidence?: AtelierSourceSignalConfidence;
+  uncorroborated?: boolean;
 }

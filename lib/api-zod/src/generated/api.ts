@@ -1240,6 +1240,38 @@ export const AtelierGetBriefResponse = zod.object({
   runId: zod.string().nullish(),
   createdAt: zod.coerce.date().nullish(),
   confidence: zod.enum(["green", "amber", "red"]).optional(),
+  fiveCFactIds: zod
+    .object({
+      client: zod.array(zod.string()),
+      competition: zod.array(zod.string()),
+      capability: zod.array(zod.string()),
+      capacity: zod.array(zod.string()),
+      contract: zod.array(zod.string()),
+    })
+    .optional()
+    .describe(
+      "Research-fact ids supporting each 5C draft section (deterministic token-overlap match).",
+    ),
+  completeness: zod
+    .object({
+      sections: zod.record(zod.string(), zod.boolean()),
+      missingSections: zod.array(zod.string()),
+      factCount: zod.number(),
+      sourcedFactCount: zod.number(),
+      sourcedFactRatio: zod.number().nullable(),
+      confidenceMix: zod.object({
+        green: zod.number(),
+        amber: zod.number(),
+        red: zod.number(),
+      }),
+      score: zod.number(),
+    })
+    .optional()
+    .describe(
+      "Per-brief completeness summary so partners can judge research quality at a glance.",
+    ),
+  ageDays: zod.number().nullish(),
+  refreshRecommended: zod.boolean().optional(),
 });
 
 /**
@@ -1299,6 +1331,38 @@ export const AtelierRunPursuitScoutResponse = zod.object({
   runId: zod.string().nullish(),
   createdAt: zod.coerce.date().nullish(),
   confidence: zod.enum(["green", "amber", "red"]).optional(),
+  fiveCFactIds: zod
+    .object({
+      client: zod.array(zod.string()),
+      competition: zod.array(zod.string()),
+      capability: zod.array(zod.string()),
+      capacity: zod.array(zod.string()),
+      contract: zod.array(zod.string()),
+    })
+    .optional()
+    .describe(
+      "Research-fact ids supporting each 5C draft section (deterministic token-overlap match).",
+    ),
+  completeness: zod
+    .object({
+      sections: zod.record(zod.string(), zod.boolean()),
+      missingSections: zod.array(zod.string()),
+      factCount: zod.number(),
+      sourcedFactCount: zod.number(),
+      sourcedFactRatio: zod.number().nullable(),
+      confidenceMix: zod.object({
+        green: zod.number(),
+        amber: zod.number(),
+        red: zod.number(),
+      }),
+      score: zod.number(),
+    })
+    .optional()
+    .describe(
+      "Per-brief completeness summary so partners can judge research quality at a glance.",
+    ),
+  ageDays: zod.number().nullish(),
+  refreshRecommended: zod.boolean().optional(),
 });
 
 export const AtelierListResearchFactsParams = zod.object({
@@ -2665,6 +2729,7 @@ export const AtelierCreateAccountBody = zod.object({
                     zod.literal(null),
                   ])
                   .nullish(),
+                uncorroborated: zod.boolean().optional(),
               }),
             )
             .max(atelierCreateAccountBodyResearchOneSourceSignalsMax)
@@ -3500,6 +3565,7 @@ export const AtelierMergeAccountsResponse = zod.object({
                     zod.literal(null),
                   ])
                   .nullish(),
+                uncorroborated: zod.boolean().optional(),
               }),
             )
             .optional(),
@@ -4525,6 +4591,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -5776,6 +5843,7 @@ export const AtelierUpdateAccountResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -6798,6 +6866,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -8411,6 +8480,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -9438,6 +9508,7 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -10478,6 +10549,7 @@ export const AtelierCreateAccountInsightResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -11517,6 +11589,7 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -12540,6 +12613,7 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -13572,6 +13646,7 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -14604,6 +14679,7 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -15629,6 +15705,7 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -16666,6 +16743,7 @@ export const AtelierCreateAccountActionResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -17700,6 +17778,7 @@ export const AtelierUpdateAccountActionResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -18723,6 +18802,7 @@ export const AtelierDeleteAccountActionResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -19755,6 +19835,7 @@ export const AtelierCreateAccountRiskResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -20788,6 +20869,7 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -21811,6 +21893,7 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),
@@ -22840,6 +22923,7 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
                   zod.literal(null),
                 ])
                 .nullish(),
+              uncorroborated: zod.boolean().optional(),
             }),
           )
           .optional(),

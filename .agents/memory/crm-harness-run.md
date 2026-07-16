@@ -31,3 +31,9 @@ skips the slow scout group and finishes in <60s. Delete the probe afterward.
 
 **Why:** the new code mirrors the probe's logic, so a green probe == green group
 in the real harness (which a proper CI env with an API key runs end to end).
+
+**Probe auth gotcha:** persona cookie is only honored when `NODE_ENV=test` (or
+a real auth session exists) — `attachPersona` otherwise 401s. Run probes as
+`NODE_ENV=test pnpm exec tsx tests/crm/<probe>.ts`. Also: direct
+`db.insert(atelierAccounts)` needs notNull `sector` and text `tier` ('A'–'D');
+POST /opportunities zod body requires `description` (+ dealSizeUsd sensible).

@@ -581,74 +581,95 @@ async function proposeProfileUpdatesFromScout(args: {
     .where(and(eq(atelierAccounts.id, opp.accountId), isNull(atelierAccounts.deletedAt)));
   if (!account) return;
 
-  const proposals: Array<{
-    id: string;
-    proposedBy: string;
-    proposedAt: string;
-    field: string;
-    fromValue: unknown;
-    toValue: unknown;
-    rationale: string;
-    oppId?: string;
-    status: "pending" | "approved" | "rejected";
-  }> = [];
+  const proposals: PendingProfileUpdate[] = [];
 
   const now = new Date().toISOString();
   const facts = (args.output as {
     facts?: Array<{ statement?: string; sourceUrl?: string; sourceTitle?: string; topic?: string }>;
   }).facts ?? [];
 
+  // Task #9 — proposal dedupe. Creating several opportunities on one account
+  // re-runs the Scout each time; without a guard the queue floods with
+  // repeated identical suggestions. Mirror buildCartographerProposals: skip
+  // any candidate whose field+value key matches an existing pending OR
+  // rejected proposal, and skip no-ops whose value is already live.
+  const existingQueue = (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[];
+  const blockedKeys = new Set<string>();
+  for (const u of existingQueue) {
+    if (u.status === "pending" || u.status === "rejected") {
+      blockedKeys.add(proposalKey(u));
+    }
+  }
+  const push = (
+    field: string,
+    fromValue: unknown,
+    toValue: unknown,
+    rationale: string,
+  ) => {
+    if (materiallyEqual(toValue, fromValue)) return;
+    const key = proposalKey({ field, toValue });
+    if (blockedKeys.has(key)) return;
+    blockedKeys.add(key);
+    proposals.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: args.proposedBy,
+      proposedAt: now,
+      field,
+      fromValue,
+      toValue,
+      rationale,
+      oppId: args.opportunityId,
+      status: "pending",
+    });
+  };
+
   // 1) strategicPriorities deltas
   const existingPriorities = (account.strategicPriorities as string[] | null) ?? [];
   const priorityFacts = facts.filter((f) => /priorit|strateg|initiative/i.test(f.statement ?? ""));
   for (const f of priorityFacts.slice(0, 3)) {
     if (!f.statement) continue;
-    proposals.push({
-      id: `pp_${rid("x").slice(2)}`,
-      proposedBy: args.proposedBy,
-      proposedAt: now,
-      field: "strategicPriorities",
-      fromValue: existingPriorities,
-      toValue: [...existingPriorities, f.statement.slice(0, 200)],
-      rationale: `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`,
-      oppId: args.opportunityId,
-      status: "pending",
-    });
+    const candidate = f.statement.slice(0, 200);
+    // Already a live priority — nothing to propose.
+    if (existingPriorities.includes(candidate)) continue;
+    push(
+      "strategicPriorities",
+      existingPriorities,
+      [...existingPriorities, candidate],
+      `Pursuit Scout fact: ${f.sourceTitle ?? f.sourceUrl ?? "evidence pending"}`,
+    );
   }
 
   // 2) hqCity / sector enrichment
   const hqMatch = facts.find((f) => /headquarter|HQ|based in|head office/i.test(f.statement ?? ""));
   if (hqMatch?.statement && !account.hqCity) {
-    proposals.push({
-      id: `pp_${rid("x").slice(2)}`,
-      proposedBy: args.proposedBy,
-      proposedAt: now,
-      field: "hqCity",
-      fromValue: account.hqCity,
-      toValue: hqMatch.statement.slice(0, 100),
-      rationale: `Pursuit Scout HQ enrichment: ${hqMatch.sourceTitle ?? hqMatch.sourceUrl ?? "evidence pending"}`,
-      oppId: args.opportunityId,
-      status: "pending",
-    });
+    push(
+      "hqCity",
+      account.hqCity,
+      hqMatch.statement.slice(0, 100),
+      `Pursuit Scout HQ enrichment: ${hqMatch.sourceTitle ?? hqMatch.sourceUrl ?? "evidence pending"}`,
+    );
   }
   const sectorMatch = facts.find((f) => /sector|industry|vertical/i.test(f.statement ?? ""));
   if (sectorMatch?.statement) {
-    proposals.push({
-      id: `pp_${rid("x").slice(2)}`,
-      proposedBy: args.proposedBy,
-      proposedAt: now,
-      field: "sector",
-      fromValue: account.sector,
-      toValue: sectorMatch.statement.slice(0, 100),
-      rationale: `Pursuit Scout sector signal: ${sectorMatch.sourceTitle ?? sectorMatch.sourceUrl ?? "evidence pending"}`,
-      oppId: args.opportunityId,
-      status: "pending",
-    });
+    push(
+      "sector",
+      account.sector,
+      sectorMatch.statement.slice(0, 100),
+      `Pursuit Scout sector signal: ${sectorMatch.sourceTitle ?? sectorMatch.sourceUrl ?? "evidence pending"}`,
+    );
   }
 
-  // 3) sourceSignals enrichment — every fact with a URL becomes a candidate signal
+  // 3) sourceSignals enrichment — every fact with a URL becomes a candidate signal.
+  // Also skip URLs already sitting in a pending sourceSignals proposal so a
+  // repeat scout doesn't re-propose the same links with a different base array.
   const existingSignals = (account.sourceSignals as Array<{ url: string }> | null) ?? [];
   const knownUrls = new Set(existingSignals.map((s) => s.url));
+  for (const u of existingQueue) {
+    if (u.status !== "pending" || u.field !== "sourceSignals") continue;
+    for (const s of (u.toValue as Array<{ url?: string }> | null) ?? []) {
+      if (s?.url) knownUrls.add(s.url);
+    }
+  }
   const newSignals = facts
     .filter((f) => f.sourceUrl && !knownUrls.has(f.sourceUrl))
     .slice(0, 5)
@@ -661,17 +682,12 @@ async function proposeProfileUpdatesFromScout(args: {
       confidence: "amber" as const,
     }));
   if (newSignals.length > 0) {
-    proposals.push({
-      id: `pp_${rid("x").slice(2)}`,
-      proposedBy: args.proposedBy,
-      proposedAt: now,
-      field: "sourceSignals",
-      fromValue: existingSignals,
-      toValue: [...existingSignals, ...newSignals],
-      rationale: `Pursuit Scout surfaced ${newSignals.length} new signal(s) for review.`,
-      oppId: args.opportunityId,
-      status: "pending",
-    });
+    push(
+      "sourceSignals",
+      existingSignals,
+      [...existingSignals, ...newSignals],
+      `Pursuit Scout surfaced ${newSignals.length} new signal(s) for review.`,
+    );
   }
 
   if (proposals.length === 0) return;
@@ -2111,6 +2127,10 @@ export interface CartographerOutput {
     summary?: string;
     publishedAt?: string;
     confidence?: "green" | "amber" | "red";
+    // True when the URL was backfilled from raw search citations rather than
+    // cited by the model against a specific claim. Rendered as
+    // "uncorroborated source" in the UI — never presented as claim evidence.
+    uncorroborated?: boolean;
   }>;
   // Task #275 — named decision-makers with provenance. Replaces the old
   // proposedProfileUpdates queue; cartographer now direct-writes.
@@ -2803,8 +2823,13 @@ export async function runAccountCartographer(args: {
     // apex title mis-scoped to a subsidiary/brand even if the model slipped.
     guardCartographerEntityScope(normalised);
 
-    // If the model produced fewer signals than the search returned,
-    // backfill with raw citation URLs so the UI still surfaces evidence.
+    // If the model produced fewer signals than the search returned, backfill
+    // with raw citation URLs so the UI still surfaces where the research
+    // looked. Task #9 citation integrity: these URLs were NOT cited by the
+    // model against any specific claim, so they are explicitly flagged
+    // `uncorroborated: true` (and capped at red confidence) — the UI labels
+    // them "uncorroborated source" and they must never be presented as claim
+    // evidence.
     if (normalised.sourceSignals.length < 3 && citationUrls.length > 0) {
       const seen = new Set(normalised.sourceSignals.map((s) => s.url));
       for (const c of citationUrls) {
@@ -2813,7 +2838,8 @@ export async function runAccountCartographer(args: {
           kind: "news",
           title: c.title ?? c.url,
           url: c.url,
-          confidence: "amber",
+          confidence: "red",
+          uncorroborated: true,
         });
         seen.add(c.url);
         if (normalised.sourceSignals.length >= 8) break;

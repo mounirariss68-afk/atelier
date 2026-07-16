@@ -77,6 +77,11 @@ import {
   type PursuitScoutOutput,
   type PovOutline,
 } from "../../lib/atelier-agents/runner.js";
+import {
+  linkFactsToFiveC,
+  computeBriefCompleteness,
+  briefAge,
+} from "../../lib/atelier-agents/brief-quality.js";
 import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
 
@@ -772,18 +777,34 @@ router.get("/opportunities/:oppId/brief", async (req, res) => {
     res.json({});
     return;
   }
+  const facts = (row.citations as AgentFact[]) ?? [];
+  // Task #9 — quality signals derived server-side so every consumer (UI, CLI)
+  // sees the same evidence links, completeness summary, and staleness flags.
+  const age = briefAge(row.createdAt);
   res.json({
     brief: {
       accountSnapshot: row.accountSnapshot,
       buyerLandscape: row.buyerLandscape,
       fiveCDraft: row.fiveCDraft,
       openQuestions: row.openQuestions,
-      facts: (row.citations as AgentFact[]) ?? [],
+      facts,
       confidence: row.confidence,
     },
     runId: row.runId,
     createdAt: row.createdAt.toISOString(),
     confidence: row.confidence ?? "amber",
+    fiveCFactIds: linkFactsToFiveC(row.fiveCDraft as Record<string, string> | null, facts),
+    completeness: computeBriefCompleteness(
+      {
+        accountSnapshot: row.accountSnapshot as PursuitScoutOutput["accountSnapshot"],
+        buyerLandscape: row.buyerLandscape as PursuitScoutOutput["buyerLandscape"],
+        fiveCDraft: row.fiveCDraft as PursuitScoutOutput["fiveCDraft"],
+        openQuestions: (row.openQuestions as string[]) ?? [],
+      },
+      facts,
+    ),
+    ageDays: age.ageDays,
+    refreshRecommended: age.refreshRecommended,
   });
 });
 
@@ -823,6 +844,8 @@ router.post("/opportunities/:oppId/scout", async (req, res) => {
       .where(and(eq(atelierBriefs.opportunityId, opp.id), isNull(atelierBriefs.deletedAt)))
       .orderBy(desc(atelierBriefs.createdAt))
       .limit(1);
+    const briefFacts = (briefRow?.citations as AgentFact[]) ?? [];
+    const briefAgeInfo = briefAge(briefRow?.createdAt ?? null);
     res.json({
       brief: briefRow
         ? {
@@ -830,13 +853,32 @@ router.post("/opportunities/:oppId/scout", async (req, res) => {
             buyerLandscape: briefRow.buyerLandscape,
             fiveCDraft: briefRow.fiveCDraft,
             openQuestions: briefRow.openQuestions,
-            facts: (briefRow.citations as AgentFact[]) ?? [],
+            facts: briefFacts,
             confidence: briefRow.confidence,
           }
         : undefined,
       runId,
       createdAt: briefRow?.createdAt.toISOString() ?? null,
       confidence: briefRow?.confidence ?? "amber",
+      ...(briefRow
+        ? {
+            fiveCFactIds: linkFactsToFiveC(
+              briefRow.fiveCDraft as Record<string, string> | null,
+              briefFacts,
+            ),
+            completeness: computeBriefCompleteness(
+              {
+                accountSnapshot: briefRow.accountSnapshot as PursuitScoutOutput["accountSnapshot"],
+                buyerLandscape: briefRow.buyerLandscape as PursuitScoutOutput["buyerLandscape"],
+                fiveCDraft: briefRow.fiveCDraft as PursuitScoutOutput["fiveCDraft"],
+                openQuestions: (briefRow.openQuestions as string[]) ?? [],
+              },
+              briefFacts,
+            ),
+            ageDays: briefAgeInfo.ageDays,
+            refreshRecommended: briefAgeInfo.refreshRecommended,
+          }
+        : {}),
     });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "scout-failed" });
