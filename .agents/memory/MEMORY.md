@@ -39,3 +39,4 @@
 - [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
+- [cli-catalog run.ts broken](cli-catalog-suite-broken.md) — tests/cli-catalog/run.ts fails at import (removed pinnedPromptDrift export); put new catalog guards in standalone files (e.g. suggestion-jargon.ts).
