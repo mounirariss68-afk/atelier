@@ -25,3 +25,12 @@ fi
 if [ "${SKIP_ATELIER_SEED:-0}" != "1" ]; then
   pnpm --filter @workspace/scripts run seed:atelier
 fi
+
+# The user wiped all dummy CRM data (Task #12) to test client/opportunity
+# flows from a clean slate. The Atelier seeder above re-inserts demo
+# accounts/opportunities, so while the marker file exists, re-apply the
+# wipe after seeding (idempotent; preserves users/auth/HR/reference data).
+# Delete the marker to restore demo CRM data on future merges.
+if [ -f .local/state/atelier-crm-wiped ]; then
+  pnpm --filter @workspace/scripts exec tsx src/wipe-crm-dummy-data.ts
+fi

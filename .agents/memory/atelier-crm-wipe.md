@@ -9,3 +9,5 @@ The Atelier dev DB CRM slate (accounts, opportunities, and every dependent recor
 **Why:** the user tests CRM flows from a clean slate; silent re-seeding on restart would corrupt that.
 
 **How to apply:** if dummy rows reappear, re-run `cd scripts && pnpm tsx src/wipe-crm-dummy-data.ts` (idempotent, self-verifying, preserves users/auth/org/reference data). The test-crm harness transiently creates+cleans its own tagged rows — that is not reseeding.
+
+**Post-merge gotcha:** `scripts/post-merge.sh` re-runs the full seed:atelier on every task merge, which resurrects the CRM demo rows. It now re-applies the wipe after seeding while the marker `.local/state/atelier-crm-wiped` exists. Delete that marker if the user wants demo CRM data back.
