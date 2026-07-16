@@ -3899,6 +3899,11 @@ components:
                   oneOf:
                     - $ref: "#/components/schemas/AtelierResearchBrief"
                     - type: "null"
+                # Task #9 — deterministic research-quality signals over the
+                # persisted brief: completeness checklist/score, narrative→
+                # evidence links (section:index fact refs), age + staleness.
+                researchQuality:
+                  $ref: "#/components/schemas/AtelierAccountResearchQuality"
                 # Task #566 — parent / subsidiary hierarchy.
                 parentAccountId: { type: ["string", "null"] }
                 parent:
@@ -5179,6 +5184,33 @@ components:
             amber: { type: integer }
             red: { type: integer }
         score: { type: integer }
+
+    AtelierAccountResearchQuality:
+      type: object
+      description: |
+        Task #9 — deterministic research-quality signals for the ACCOUNT
+        Cartographer brief: completeness checklist/score, narrative→evidence
+        links (fact refs of the form `section:index`, e.g. `whatsChanging:0`),
+        and age/staleness of the last enrichment.
+      required: [completeness, narrativeLinks, ageDays, refreshRecommended]
+      properties:
+        completeness:
+          $ref: "#/components/schemas/AtelierBriefCompleteness"
+        narrativeLinks:
+          type: object
+          required: [whyNowHypothesis, singleMostImportant, revisedHypothesis]
+          properties:
+            whyNowHypothesis:
+              type: array
+              items: { type: string }
+            singleMostImportant:
+              type: array
+              items: { type: string }
+            revisedHypothesis:
+              type: array
+              items: { type: string }
+        ageDays: { type: ["integer", "null"] }
+        refreshRecommended: { type: boolean }
 
     AtelierScoutInput:
       type: object

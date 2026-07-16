@@ -47,6 +47,29 @@ async function main() {
   check("completeness sourcedFactCount", comp.sourcedFactCount === 1, comp);
   check("completeness confidenceMix", comp.confidenceMix.green === 1 && comp.confidenceMix.amber === 1 && comp.confidenceMix.red === 1, comp.confidenceMix);
 
+  // --- account-side helpers (Task #9 account brief quality) ---
+  const acctBrief = {
+    whatsChanging: [
+      { text: "Acme expanding regional logistics footprint into Saudi market", evidence: "press release", sourceUrls: ["https://x.com/a"] },
+    ],
+    executiveTensions: [{ text: "COO under margin pressure from fuel costs", evidence: "", sourceUrls: [] }],
+    serviceLineFit: [],
+    partnerEcosystem: [],
+    mandateAngles: [],
+    whyNowHypothesis: "Acme regional logistics expansion into Saudi creates an ops mandate now",
+    openQuestions: ["Budget owner?"],
+    singleMostImportant: "Saudi expansion of the regional logistics footprint is the wedge",
+  } as any;
+  const nl = bq.linkAccountNarrativeToFacts(acctBrief);
+  check("account narrative links whyNow→whatsChanging:0", nl.whyNowHypothesis.includes("whatsChanging:0"), nl);
+  check("account narrative links oneThing→whatsChanging:0", nl.singleMostImportant.includes("whatsChanging:0"), nl);
+  const acomp = bq.computeAccountBriefCompleteness(acctBrief, [
+    { confidence: "green" }, { confidence: "red" },
+  ] as any);
+  check("account completeness missing serviceLineFit", acomp.missingSections.includes("serviceLineFit"), acomp.missingSections);
+  check("account completeness sourced 1/2", acomp.sourcedFactCount === 1 && acomp.factCount === 2, acomp);
+  check("account completeness signal mix", acomp.confidenceMix.green === 1 && acomp.confidenceMix.red === 1, acomp.confidenceMix);
+
   const fresh = bq.briefAge(new Date());
   const old = bq.briefAge(new Date(Date.now() - 40 * 86_400_000));
   check("briefAge fresh", fresh.ageDays === 0 && !fresh.refreshRecommended, fresh);
@@ -94,6 +117,12 @@ async function main() {
       sector: "Logistics",
       tier: "C",
       partnerOwnerId: userId,
+      researchBrief: acctBrief,
+      sourceSignals: [
+        { kind: "news", title: "Expansion", url: "https://x.com/a", confidence: "green" },
+        { kind: "manual", title: "Search", url: "https://s.com/q", confidence: "red" },
+      ],
+      enrichedAt: new Date(Date.now() - 45 * 86_400_000),
     } as any);
 
     const created = await api("POST", "/opportunities", {
@@ -129,6 +158,16 @@ async function main() {
     check("envelope completeness score number", typeof env.completeness?.score === "number", env.completeness);
     check("envelope ageDays ~45", env.ageDays === 45, env.ageDays);
     check("envelope refreshRecommended", env.refreshRecommended === true, env.refreshRecommended);
+
+    // --- account workspace researchQuality envelope ---
+    const wsRes = await api("GET", `/accounts/${acctId}`);
+    check("GET account workspace 200", wsRes.status === 200, wsRes.status);
+    const rq = wsRes.body?.account?.researchQuality;
+    check("account researchQuality present", !!rq, wsRes.body?.account ? Object.keys(wsRes.body.account) : wsRes.body);
+    check("account rq completeness score number", typeof rq?.completeness?.score === "number", rq?.completeness);
+    check("account rq missing serviceLineFit", rq?.completeness?.missingSections?.includes("serviceLineFit") === true, rq?.completeness?.missingSections);
+    check("account rq narrative link whyNow", rq?.narrativeLinks?.whyNowHypothesis?.includes("whatsChanging:0") === true, rq?.narrativeLinks);
+    check("account rq ageDays 45 + refresh", rq?.ageDays === 45 && rq?.refreshRecommended === true, { ageDays: rq?.ageDays, refresh: rq?.refreshRecommended });
   } finally {
     try {
       await db.delete(atelierBriefs).where(eq(atelierBriefs.id, briefId));

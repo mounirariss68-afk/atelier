@@ -57,6 +57,11 @@ import {
 } from "../../lib/atelier-dedupe.js";
 import { buildAccountPlan } from "../../lib/atelier-account-plan.js";
 import {
+  computeAccountBriefCompleteness,
+  linkAccountNarrativeToFacts,
+  briefAge,
+} from "../../lib/atelier-agents/brief-quality.js";
+import {
   buildAccountTimeline,
   isOverdue,
   type ActivityWire,
@@ -1209,6 +1214,16 @@ async function buildWorkspace(
       accountStrategy: a.accountStrategy ?? null,
       competitors: a.competitors ?? [],
       researchBrief: a.researchBrief ?? null,
+      // Task #9 — deterministic research-quality signals over the persisted
+      // brief: completeness checklist/score, narrative→evidence links, age.
+      researchQuality: {
+        completeness: computeAccountBriefCompleteness(
+          a.researchBrief ?? null,
+          a.sourceSignals ?? [],
+        ),
+        narrativeLinks: linkAccountNarrativeToFacts(a.researchBrief ?? null),
+        ...briefAge(a.enrichedAt ?? null),
+      },
       parentAccountId: a.parentAccountId ?? null,
       parent: parentRow ? hierarchyRef(parentRow) : null,
       children: childRows.map(hierarchyRef),

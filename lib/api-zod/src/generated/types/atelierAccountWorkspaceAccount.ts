@@ -12,6 +12,7 @@ import type { AtelierAccountHealth } from "./atelierAccountHealth";
 import type { AtelierAccountHierarchyRef } from "./atelierAccountHierarchyRef";
 import type { AtelierAccountHierarchyRollup } from "./atelierAccountHierarchyRollup";
 import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
+import type { AtelierAccountResearchQuality } from "./atelierAccountResearchQuality";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
 import type { AtelierAccountWorkspaceAccountEntityRole } from "./atelierAccountWorkspaceAccountEntityRole";
@@ -31,6 +32,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   accountStrategy?: AtelierAccountStrategy | null;
   competitors?: AtelierAccountCompetitor[];
   researchBrief?: AtelierResearchBrief | null;
+  researchQuality?: AtelierAccountResearchQuality;
   /** @nullable */
   parentAccountId?: string | null;
   parent?: AtelierAccountHierarchyRef | null;

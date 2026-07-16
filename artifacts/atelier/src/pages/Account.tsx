@@ -670,6 +670,48 @@ function FactList({ facts, testid }: { facts: { text: string; evidence: string; 
   );
 }
 
+// Task #9 — human labels for account research-brief sections (used by the
+// completeness checklist and the narrative→evidence chips).
+const ACCOUNT_BRIEF_SECTION_LABELS: Record<string, string> = {
+  whatsChanging: "What's changing",
+  executiveTensions: "Executive tensions",
+  serviceLineFit: "Service-line fit",
+  partnerEcosystem: "Partner ecosystem",
+  businessUnits: "Business units",
+  mandateAngles: "Mandate angles",
+  stressTest: "Stress test",
+  whyNowHypothesis: "Why-now hypothesis",
+  openQuestions: "Open questions",
+  singleMostImportant: "The one thing",
+};
+
+/** Renders `section:index` fact refs as compact evidence chips. */
+function NarrativeEvidenceChips({
+  refs,
+  testid,
+}: {
+  refs: string[];
+  testid: string;
+}) {
+  if (!refs || refs.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-1.5" data-testid={testid}>
+      <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+        Supported by:
+      </span>
+      {refs.map((r) => {
+        const [section, idx] = r.split(":");
+        const label = ACCOUNT_BRIEF_SECTION_LABELS[section] ?? section;
+        return (
+          <MonoChip key={r}>
+            {label} #{Number(idx) + 1}
+          </MonoChip>
+        );
+      })}
+    </div>
+  );
+}
+
 function ProfileTab({
   ws,
   pending,
@@ -695,6 +737,9 @@ function ProfileTab({
   const [editStrategy, setEditStrategy] = useState(false);
   const [editProfile, setEditProfile] = useState(false);
   const brief = a.researchBrief ?? null;
+  // Task #9 — server-computed research-quality signals (completeness,
+  // narrative→evidence links, staleness) over the persisted brief.
+  const rq = a.researchQuality ?? null;
   const strat = a.accountStrategy ?? null;
   const competitors = a.competitors ?? [];
   const hasStrategy =
@@ -728,6 +773,10 @@ function ProfileTab({
             <div>
               <Eyebrow>The one thing that matters</Eyebrow>
               <p className="text-text leading-relaxed mt-1">{brief.singleMostImportant}</p>
+              <NarrativeEvidenceChips
+                refs={rq?.narrativeLinks?.singleMostImportant ?? []}
+                testid="evidence-single-most-important"
+              />
               {brief.whyNowHypothesis && (
                 <p className="text-text-mute text-sm mt-2">
                   <span className="font-mono uppercase tracking-wider text-xs text-text-faint">
@@ -736,6 +785,10 @@ function ProfileTab({
                   {brief.whyNowHypothesis}
                 </p>
               )}
+              <NarrativeEvidenceChips
+                refs={rq?.narrativeLinks?.whyNowHypothesis ?? []}
+                testid="evidence-why-now"
+              />
             </div>
           </div>
         </Card>
@@ -902,6 +955,54 @@ function ProfileTab({
                   </div>
                 );
               })()}
+              {/* Task #9 — server-computed completeness summary. */}
+              {rq && (
+                <div
+                  className="border border-border-soft rounded p-3 space-y-2"
+                  data-testid="account-brief-completeness"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+                      Research completeness
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <MonoChip
+                        tone={
+                          rq.completeness.score >= 70
+                            ? "green"
+                            : rq.completeness.score >= 40
+                              ? "amber"
+                              : "red"
+                        }
+                      >
+                        {rq.completeness.score}/100
+                      </MonoChip>
+                      {rq.ageDays != null && (
+                        <MonoChip tone={rq.refreshRecommended ? "amber" : undefined}>
+                          {rq.ageDays}d old
+                          {rq.refreshRecommended ? " · refresh recommended" : ""}
+                        </MonoChip>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-text-mute">
+                    {Object.values(rq.completeness.sections).filter(Boolean).length}/
+                    {Object.keys(rq.completeness.sections).length} sections researched ·{" "}
+                    {rq.completeness.sourcedFactCount}/{rq.completeness.factCount} facts cite a
+                    source · signals {rq.completeness.confidenceMix.green} green /{" "}
+                    {rq.completeness.confidenceMix.amber} amber /{" "}
+                    {rq.completeness.confidenceMix.red} red
+                  </p>
+                  {rq.completeness.missingSections.length > 0 && (
+                    <p className="text-xs text-text-faint italic">
+                      Missing:{" "}
+                      {rq.completeness.missingSections
+                        .map((k) => ACCOUNT_BRIEF_SECTION_LABELS[k] ?? k)
+                        .join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 <BriefSection
                   title="What's changing"

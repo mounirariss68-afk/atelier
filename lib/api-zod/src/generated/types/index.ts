@@ -48,6 +48,8 @@ export * from "./atelierAccountOpportunityRef";
 export * from "./atelierAccountRenewal";
 export * from "./atelierAccountRenewalKind";
 export * from "./atelierAccountRenewalRefKind";
+export * from "./atelierAccountResearchQuality";
+export * from "./atelierAccountResearchQualityNarrativeLinks";
 export * from "./atelierAccountRisk";
 export * from "./atelierAccountRiskKind";
 export * from "./atelierAccountRiskSeverity";

@@ -990,6 +990,49 @@ export interface AtelierAccountHealth {
   factors: AtelierAccountHealthFactor[];
 }
 
+export type AtelierBriefCompletenessSections = { [key: string]: boolean };
+
+export type AtelierBriefCompletenessConfidenceMix = {
+  green: number;
+  amber: number;
+  red: number;
+};
+
+/**
+ * Per-brief completeness summary so partners can judge research quality at a glance.
+ */
+export interface AtelierBriefCompleteness {
+  sections: AtelierBriefCompletenessSections;
+  missingSections: string[];
+  factCount: number;
+  sourcedFactCount: number;
+  /** @nullable */
+  sourcedFactRatio: number | null;
+  confidenceMix: AtelierBriefCompletenessConfidenceMix;
+  score: number;
+}
+
+export type AtelierAccountResearchQualityNarrativeLinks = {
+  whyNowHypothesis: string[];
+  singleMostImportant: string[];
+  revisedHypothesis: string[];
+};
+
+/**
+ * Task #9 — deterministic research-quality signals for the ACCOUNT
+Cartographer brief: completeness checklist/score, narrative→evidence
+links (fact refs of the form `section:index`, e.g. `whatsChanging:0`),
+and age/staleness of the last enrichment.
+
+ */
+export interface AtelierAccountResearchQuality {
+  completeness: AtelierBriefCompleteness;
+  narrativeLinks: AtelierAccountResearchQualityNarrativeLinks;
+  /** @nullable */
+  ageDays: number | null;
+  refreshRecommended: boolean;
+}
+
 export interface AtelierAccountHierarchyRollup {
   /** Family size incl. this account. */
   accountCount: number;
@@ -1464,6 +1507,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   accountStrategy?: AtelierAccountStrategy | null;
   competitors?: AtelierAccountCompetitor[];
   researchBrief?: AtelierResearchBrief | null;
+  researchQuality?: AtelierAccountResearchQuality;
   /** @nullable */
   parentAccountId?: string | null;
   parent?: AtelierAccountHierarchyRef | null;
@@ -2787,28 +2831,6 @@ export interface AtelierFiveCFactIds {
   capability: string[];
   capacity: string[];
   contract: string[];
-}
-
-export type AtelierBriefCompletenessSections = { [key: string]: boolean };
-
-export type AtelierBriefCompletenessConfidenceMix = {
-  green: number;
-  amber: number;
-  red: number;
-};
-
-/**
- * Per-brief completeness summary so partners can judge research quality at a glance.
- */
-export interface AtelierBriefCompleteness {
-  sections: AtelierBriefCompletenessSections;
-  missingSections: string[];
-  factCount: number;
-  sourcedFactCount: number;
-  /** @nullable */
-  sourcedFactRatio: number | null;
-  confidenceMix: AtelierBriefCompletenessConfidenceMix;
-  score: number;
 }
 
 export interface AtelierBriefEnvelope {

@@ -3460,6 +3460,37 @@ export const AtelierMergeAccountsResponse = zod.object({
               zod.null(),
             ])
             .optional(),
+          researchQuality: zod
+            .object({
+              completeness: zod
+                .object({
+                  sections: zod.record(zod.string(), zod.boolean()),
+                  missingSections: zod.array(zod.string()),
+                  factCount: zod.number(),
+                  sourcedFactCount: zod.number(),
+                  sourcedFactRatio: zod.number().nullable(),
+                  confidenceMix: zod.object({
+                    green: zod.number(),
+                    amber: zod.number(),
+                    red: zod.number(),
+                  }),
+                  score: zod.number(),
+                })
+                .describe(
+                  "Per-brief completeness summary so partners can judge research quality at a glance.",
+                ),
+              narrativeLinks: zod.object({
+                whyNowHypothesis: zod.array(zod.string()),
+                singleMostImportant: zod.array(zod.string()),
+                revisedHypothesis: zod.array(zod.string()),
+              }),
+              ageDays: zod.number().nullable(),
+              refreshRecommended: zod.boolean(),
+            })
+            .optional()
+            .describe(
+              "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+            ),
           parentAccountId: zod.string().nullish(),
           parent: zod
             .union([
@@ -4492,6 +4523,37 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -5744,6 +5806,37 @@ export const AtelierUpdateAccountResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -6767,6 +6860,37 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -8381,6 +8505,37 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -9409,6 +9564,37 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -10450,6 +10636,37 @@ export const AtelierCreateAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -11490,6 +11707,37 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -12514,6 +12762,37 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -13547,6 +13826,37 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -14580,6 +14890,37 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -15606,6 +15947,37 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -16644,6 +17016,37 @@ export const AtelierCreateAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -17679,6 +18082,37 @@ export const AtelierUpdateAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -18703,6 +19137,37 @@ export const AtelierDeleteAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -19736,6 +20201,37 @@ export const AtelierCreateAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -20770,6 +21266,37 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -21794,6 +22321,37 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
@@ -22824,6 +23382,37 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        researchQuality: zod
+          .object({
+            completeness: zod
+              .object({
+                sections: zod.record(zod.string(), zod.boolean()),
+                missingSections: zod.array(zod.string()),
+                factCount: zod.number(),
+                sourcedFactCount: zod.number(),
+                sourcedFactRatio: zod.number().nullable(),
+                confidenceMix: zod.object({
+                  green: zod.number(),
+                  amber: zod.number(),
+                  red: zod.number(),
+                }),
+                score: zod.number(),
+              })
+              .describe(
+                "Per-brief completeness summary so partners can judge research quality at a glance.",
+              ),
+            narrativeLinks: zod.object({
+              whyNowHypothesis: zod.array(zod.string()),
+              singleMostImportant: zod.array(zod.string()),
+              revisedHypothesis: zod.array(zod.string()),
+            }),
+            ageDays: zod.number().nullable(),
+            refreshRecommended: zod.boolean(),
+          })
+          .optional()
+          .describe(
+            "Task #9 — deterministic research-quality signals for the ACCOUNT\nCartographer brief: completeness checklist\/score, narrative→evidence\nlinks (fact refs of the form `section:index`, e.g. `whatsChanging:0`),\nand age\/staleness of the last enrichment.\n",
+          ),
         parentAccountId: zod.string().nullish(),
         parent: zod
           .union([
