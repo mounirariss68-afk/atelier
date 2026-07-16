@@ -7,7 +7,7 @@
  * Mirrors the upsertById pattern in atelier-seed-l2c.ts; safe to call on
  * every cold start.
  */
-import { eq, type InferInsertModel } from "drizzle-orm";
+import { eq, inArray, type InferInsertModel } from "drizzle-orm";
 import type { PgTable, PgColumn } from "drizzle-orm/pg-core";
 import {
   db,
@@ -186,13 +186,41 @@ let accountPlanSeedPromise: Promise<void> | null = null;
 export async function ensureAtelierAccountPlanSeed(): Promise<void> {
   if (accountPlanSeedPromise) return accountPlanSeedPromise;
   accountPlanSeedPromise = (async () => {
+    // Task #12 — the dummy CRM accounts were wiped for a clean slate. Only
+    // seed account-plan demo rows when the demo accounts actually exist;
+    // otherwise skip entirely so boot never resurrects orphaned CRM data.
+    const demoAccountIds = [
+      ...new Set([
+        ...ACTIONS.map((a) => a.accountId),
+        ...RISKS.map((r) => r.accountId),
+        ...GOAL_PROGRESS.map((g) => g.accountId),
+      ]),
+    ];
+    const existing = await db
+      .select({ id: atelierAccounts.id })
+      .from(atelierAccounts)
+      .where(inArray(atelierAccounts.id, demoAccountIds));
+    if (existing.length === 0) {
+      logger.info(
+        { module: "atelier-seed-account-plan" },
+        "Account-plan demo seed skipped — demo accounts not present (clean CRM slate)",
+      );
+      return;
+    }
+    // Partial-state guard: only seed rows whose parent account actually
+    // exists, so a DB holding just SOME demo accounts never gets rows tied
+    // to missing parents.
+    const present = new Set(existing.map((r) => r.id));
+    const actions = ACTIONS.filter((a) => present.has(a.accountId));
+    const risks = RISKS.filter((r) => present.has(r.accountId));
+    const goals = GOAL_PROGRESS.filter((g) => present.has(g.accountId));
     await ensureStrategyObjectives();
-    await upsertById(atelierAccountActions, ACTIONS);
-    await upsertById(atelierAccountRisks, RISKS);
-    await upsertById(atelierAccountGoalProgress, GOAL_PROGRESS);
+    await upsertById(atelierAccountActions, actions);
+    await upsertById(atelierAccountRisks, risks);
+    await upsertById(atelierAccountGoalProgress, goals);
     logger.info(
       { module: "atelier-seed-account-plan" },
-      `Account-plan demo seed verified (${ACTIONS.length} actions, ${RISKS.length} risks, ${GOAL_PROGRESS.length} goal-progress).`,
+      `Account-plan demo seed verified (${actions.length} actions, ${risks.length} risks, ${goals.length} goal-progress).`,
     );
   })().catch((err) => {
     accountPlanSeedPromise = null; // allow retry on next call

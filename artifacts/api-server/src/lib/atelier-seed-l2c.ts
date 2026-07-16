@@ -51,7 +51,14 @@ const REQUIRED_ENGAGEMENT_IDS = [
   "eng_dge_effortless_v1",
 ] as const;
 
-async function preflightReferentialIntegrity(): Promise<void> {
+/**
+ * Task #12 — the dummy CRM data (accounts/opportunities/engagements) has been
+ * wiped so the user can start from a clean slate. When the demo accounts or
+ * engagements this seed depends on are absent, we SKIP the seed entirely
+ * (returning false) instead of throwing: recreating L2C demo rows against
+ * deleted accounts would resurrect dummy CRM data on every boot.
+ */
+async function demoParentsPresent(): Promise<boolean> {
   const [accountRows, engagementRows] = await Promise.all([
     db
       .select({ id: atelierAccounts.id })
@@ -71,10 +78,17 @@ async function preflightReferentialIntegrity(): Promise<void> {
     (id) => !haveEngagements.has(id),
   );
   if (missingAccounts.length > 0 || missingEngagements.length > 0) {
-    throw new Error(
-      `atelier-seed-l2c preflight failed — missing accounts=[${missingAccounts.join(",")}] engagements=[${missingEngagements.join(",")}]`,
+    logger.info(
+      {
+        module: "atelier-seed-l2c",
+        missingAccounts,
+        missingEngagements,
+      },
+      "L2C demo seed skipped — demo accounts/engagements not present (clean CRM slate)",
     );
+    return false;
   }
+  return true;
 }
 
 const COUNTERPARTIES: CounterpartyRow[] = [
@@ -603,7 +617,7 @@ let l2cSeedPromise: Promise<void> | null = null;
 export async function ensureAtelierL2cSeed(): Promise<void> {
   if (l2cSeedPromise) return l2cSeedPromise;
   l2cSeedPromise = (async () => {
-    await preflightReferentialIntegrity();
+    if (!(await demoParentsPresent())) return;
     await upsertById(atelierCounterparty, COUNTERPARTIES);
     await upsertById(atelierClause, CLAUSES);
     await upsertById(atelierContract, CONTRACTS);

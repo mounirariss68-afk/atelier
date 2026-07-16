@@ -341,6 +341,11 @@ async function main(): Promise<void> {
     debriefs: new Set<string>(),
     paneAItems: new Set<string>(),
     engAccess: new Set<string>(),
+    // Fixture accounts/engagements provisioned by THIS run (only when the
+    // live rows are absent — e.g. after the CRM dummy-data wipe). Tracked
+    // separately so we never delete real seeded rows on a seeded DB.
+    fixtureAccounts: new Set<string>(),
+    fixtureEngagements: new Set<string>(),
   };
 
   // Boot an ephemeral server on a random port.
@@ -428,6 +433,106 @@ async function main(): Promise<void> {
           })
           .onConflictDoNothing();
         created.engAccess.add(grantId);
+      }
+    }
+
+    // =====================================================================
+    // Task #12 — provision EPHEMERAL fixture accounts + engagements. The CRM
+    // dummy-data wipe removed the seeded acc_tasama / acc_dge rows this
+    // harness anchors on, and boot no longer re-seeds them. Recreate
+    // equivalents only when absent (so a seeded DB is left untouched) and
+    // tear down exactly what we created in `finally`.
+    // =====================================================================
+    {
+      const FIXTURE_ACCOUNTS = [
+        {
+          id: ACC,
+          name: "Tasama",
+          country: "KSA",
+          sector: "Shared Services / BPO",
+          tier: "A",
+          status: "active",
+          primaryCurrency: "SAR",
+          primaryLanguage: "en",
+          partnerOwnerId: PERSONA.fp,
+          // The goal-progress route resolves PUT /goals/:objectiveId against
+          // accountStrategy.objectives — obj_a must exist for that check.
+          accountStrategy: {
+            objectives: [
+              { id: "obj_a", text: "Grow Tasama agentic BPO run-rate", targetValue: "SAR 1.5M/mo", targetDate: null },
+            ],
+            targetServiceLines: ["Agentic BPO"],
+            winHypothesis: "Named agents with senior oversight cut handle time 40%.",
+            keyPlays: ["Marketplace expansion"],
+          },
+        },
+        {
+          id: ACC_OOS,
+          name: "Department of Government Enablement",
+          country: "UAE · Abu Dhabi",
+          sector: "Government Enablement",
+          tier: "A",
+          status: "active",
+          primaryCurrency: "AED",
+          primaryLanguage: "en",
+          partnerOwnerId: PERSONA.fp,
+          accountStrategy: null,
+        },
+      ];
+      const FIXTURE_ENGAGEMENTS = [
+        {
+          id: ENG,
+          slug: "tasama-bpo-phase1",
+          name: "Tasama Agentic BPO — phase 1",
+          accountId: ACC,
+          plmStage: "deliver",
+        },
+        {
+          id: ENG2,
+          slug: "dge-effortless-v1",
+          name: "DGE Effortless v1 — pilot delivery",
+          accountId: ACC_OOS,
+          plmStage: "compound",
+        },
+      ];
+      for (const a of FIXTURE_ACCOUNTS) {
+        const [existing] = await db
+          .select({ id: atelierAccounts.id })
+          .from(atelierAccounts)
+          .where(eq(atelierAccounts.id, a.id));
+        if (!existing) {
+          await db
+            .insert(atelierAccounts)
+            .values({ ...a, createdByUserId: PERSONA.fp })
+            .onConflictDoNothing();
+          created.fixtureAccounts.add(a.id);
+        }
+      }
+      for (const e of FIXTURE_ENGAGEMENTS) {
+        const [existing] = await db
+          .select({ id: atelierEngagements.id })
+          .from(atelierEngagements)
+          .where(eq(atelierEngagements.id, e.id));
+        if (!existing) {
+          await db
+            .insert(atelierEngagements)
+            .values({
+              ...e,
+              opportunityId: null,
+              partnerOwnerId: PERSONA.fp,
+              engagementLeadId: PERSONA.fp,
+              charter: null,
+              workstreams: [],
+              valueCase: null,
+              startDate: new Date(Date.now() - 60 * 86400_000).toISOString().slice(0, 10),
+              plannedEndDate: new Date(Date.now() + 120 * 86400_000).toISOString().slice(0, 10),
+              raidStatus: "green",
+              deliverablesDueThisWeek: 0,
+              createdByUserId: PERSONA.fp,
+            })
+            .onConflictDoNothing();
+          created.fixtureEngagements.add(e.id);
+        }
       }
     }
 
@@ -2884,6 +2989,20 @@ async function main(): Promise<void> {
       // removed before their owning users so no orphan ACL rows are left behind.
       for (const id of created.engAccess)
         await db.delete(atelierEngagementAccess).where(eq(atelierEngagementAccess.id, id));
+      // Task #12 — fixture engagements/accounts provisioned by this run (only
+      // present when the DB had no seeded acc_tasama/acc_dge). Best-effort
+      // sweep of residual rows the run may have hung off them first.
+      for (const id of created.fixtureEngagements) {
+        await db.execute(sql`delete from atelier_audit_events where entity_id = ${id}`).catch(() => undefined);
+        await db.delete(atelierEngagements).where(eq(atelierEngagements.id, id));
+      }
+      for (const id of created.fixtureAccounts) {
+        await db.execute(sql`delete from atelier_agent_runs where target_id = ${id}`).catch(() => undefined);
+        await db.execute(sql`delete from atelier_account_goal_progress where account_id = ${id}`).catch(() => undefined);
+        await db.execute(sql`delete from atelier_contacts where account_id = ${id}`).catch(() => undefined);
+        await db.execute(sql`delete from atelier_audit_events where entity_id = ${id}`).catch(() => undefined);
+        await db.delete(atelierAccounts).where(eq(atelierAccounts.id, id));
+      }
       // Users created by this run (ephemeral RBAC personas + the Task #576
       // board-observer persona).
       for (const id of created.users) await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
