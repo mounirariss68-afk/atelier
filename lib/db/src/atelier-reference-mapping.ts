@@ -438,6 +438,6 @@ const INDUSTRY_CODES = new Set([
 /**
  * Hard-coded list of valid industry codes for synchronous validation
  * (avoids a DB round-trip in route handlers). Mirror of the `INDUSTRIES`
- * array in `scripts/src/data/atelier-countries.ts`.
+ * array in `artifacts/api-server/src/lib/data/atelier-reference-data.ts`.
  */
 export const VALID_INDUSTRY_CODES = INDUSTRY_CODES;

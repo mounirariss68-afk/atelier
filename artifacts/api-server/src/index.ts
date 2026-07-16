@@ -2,6 +2,8 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
+import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
+import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 import { warmEmbedder } from "./lib/atelier-cli/embeddings";
@@ -37,9 +39,25 @@ app.listen(port, (err) => {
   void ensureAtelierAuthSeed().catch((err) => {
     logger.error({ err }, "Auth credential seed failed — logins will not work");
   });
-  // All demo-data seeding was removed for production (2026-07-16): the only
-  // boot-time seed left is the auth credential seed above. Real data is
-  // entered through the app.
+  // All demo-data seeding was removed for production (2026-07-16). The only
+  // boot-time seeds left are configuration, not demo data: the auth
+  // credential seed above, the reference-data seed (countries / industries /
+  // sub-industries — the dropdowns are unusable without it), and the
+  // baseline rate-card + margin-policy seed (Pricing is a wall of 409s
+  // without an active rate card). All are gated on empty tables so user
+  // edits are never overwritten. Real CRM data is entered through the app.
+  void ensureAtelierReferenceSeed().catch((err) => {
+    logger.error(
+      { err },
+      "Reference-data seed failed — country/industry dropdowns will be empty",
+    );
+  });
+  void ensureAtelierPricingSeed().catch((err) => {
+    logger.error(
+      { err },
+      "Pricing seed failed — Pricing module has no active rate card",
+    );
+  });
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
