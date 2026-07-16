@@ -79,12 +79,14 @@ function requireFinanceLeader(me: Me, res: Response): boolean {
 // ============================================================
 // Vendors
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/vendors", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
   res.json({ items: listVendors() });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/vendors/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -96,6 +98,7 @@ router.get("/finance/payables/vendors/:id", (req, res) => {
 /** Initiate a vendor bank-detail change request (maker step). The change
  *  starts in `pending_oob` and must be confirmed out-of-band, then
  *  approved by a different Finance leader. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/vendors/:id/bank-change", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -143,6 +146,7 @@ router.post("/finance/payables/vendors/:id/bank-change", (req, res) => {
 });
 
 /** Confirm OOB step. Must NOT be the same actor as the requester. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/vendors/:id/bank-change/:changeId/oob-confirm", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -171,6 +175,7 @@ router.post("/finance/payables/vendors/:id/bank-change/:changeId/oob-confirm", (
 
 /** Bank-detail change-control: maker-checker decision (approve/reject).
  *  The decider must not be the original requester. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/vendors/:id/bank-change/:changeId/decide", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -231,12 +236,14 @@ router.post("/finance/payables/vendors/:id/bank-change/:changeId/decide", (req, 
 // ============================================================
 // Purchase Orders + GRNs
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/po", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
   res.json({ items: listPurchaseOrders() });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/po/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -248,12 +255,14 @@ router.get("/finance/payables/po/:id", (req, res) => {
 // ============================================================
 // Vendor invoices + 3-way match
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/invoices", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
   res.json({ items: listVendorInvoices() });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/invoices/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -265,6 +274,7 @@ router.get("/finance/payables/invoices/:id", (req, res) => {
 /** Re-run the 3-way match engine on this invoice and apply the result.
  *  Computes price/qty deltas from the linked PO + GRNs and either moves
  *  the invoice to `matched` or `exception`. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/invoices/:id/match", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -283,6 +293,7 @@ router.post("/finance/payables/invoices/:id/match", (req, res) => {
 /** Approve a matched (or overridden) invoice for payment. Subcontractor
  *  invoices whose linked AR receipt has not cleared land on `on_hold_pwp`
  *  rather than `approved_for_payment`. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/invoices/:id/approve", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -302,6 +313,7 @@ router.post("/finance/payables/invoices/:id/approve", (req, res) => {
 });
 
 /** 3-way match override: supply a reason; only Finance leaders may override. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/invoices/:id/override", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -327,6 +339,7 @@ router.post("/finance/payables/invoices/:id/override", (req, res) => {
 // ============================================================
 // Payment runs (maker-checker + dual signatories + bank-file)
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/payment-runs", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -338,6 +351,7 @@ router.get("/finance/payables/payment-runs", (req, res) => {
  *  holds and invoices already in an open run), batches by entity ·
  *  bank-account · currency, and picks the required dual signatories
  *  from the entity's bank-account signatory matrix. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/payment-runs/build", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -356,6 +370,7 @@ router.post("/finance/payables/payment-runs/build", (req, res) => {
   res.json({ run: result.run, eligibleCount: result.eligibleCount, excluded: result.excluded });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/payment-runs/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -366,6 +381,7 @@ router.get("/finance/payables/payment-runs/:id", (req, res) => {
 
 /** Maker-checker step: the checker (must not be the maker) approves
  *  the run, advancing it to `pending_signatories`. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/payment-runs/:id/check", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -393,6 +409,7 @@ router.post("/finance/payables/payment-runs/:id/check", (req, res) => {
 /** Signatory step: each required signatory signs in turn. When all signs
  *  are present, the run advances to `approved` and a simulated bank-file
  *  payload is generated. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/payment-runs/:id/sign", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -425,6 +442,7 @@ router.post("/finance/payables/payment-runs/:id/sign", (req, res) => {
 });
 
 /** Mark exported (i.e. file dispatched to bank): only after all signs. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/payment-runs/:id/export", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -445,6 +463,7 @@ router.post("/finance/payables/payment-runs/:id/export", (req, res) => {
 // ============================================================
 // WHT register
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/wht", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -462,6 +481,7 @@ router.get("/finance/payables/wht", (req, res) => {
   res.json({ items: certs, remittance: Object.values(summary).sort((a, b) => a.dueAt.localeCompare(b.dueAt)) });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/wht/:id/issue", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -474,6 +494,7 @@ router.post("/finance/payables/wht/:id/issue", (req, res) => {
   res.json({ certificate: c });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/wht/:id/send", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -485,6 +506,7 @@ router.post("/finance/payables/wht/:id/send", (req, res) => {
   res.json({ certificate: c });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/wht/:id/acknowledge", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -499,6 +521,7 @@ router.post("/finance/payables/wht/:id/acknowledge", (req, res) => {
 // ============================================================
 // Subcontractors
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/subcontractors", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -510,6 +533,7 @@ router.get("/finance/payables/subcontractors", (req, res) => {
 /** Mark a pay-when-paid AR receipt as received (or partial). When the
  *  receipt is fully received, any subcontractor invoice on that link
  *  with status `on_hold_pwp` is auto-released to `approved_for_payment`. */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/payables/subcontractors/links/:id/ar-receipt", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res) || requireFinanceLeader(me, res)) return;
@@ -529,6 +553,7 @@ router.post("/finance/payables/subcontractors/links/:id/ar-receipt", (req, res) 
 // ============================================================
 // Audit trail
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/audit", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -540,6 +565,7 @@ router.get("/finance/payables/audit", (req, res) => {
 // ============================================================
 // Dashboard tile + inbox producers (Wave-1 wiring)
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/dashboard/expected-disbursements", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;
@@ -547,6 +573,7 @@ router.get("/finance/payables/dashboard/expected-disbursements", (req, res) => {
   res.json({ items: topExpectedDisbursements(n) });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/payables/dashboard/stalled-approvals", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me || denyRecruiter(me, res)) return;

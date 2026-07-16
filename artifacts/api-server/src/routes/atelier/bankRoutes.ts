@@ -64,6 +64,7 @@ async function audit(args: {
 }
 
 // ─────────────────────── bank accounts ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -72,6 +73,7 @@ router.get("/accounts", async (req, res) => {
   return res.json({ ok: true, data: rows });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -91,6 +93,7 @@ router.post("/accounts", async (req, res) => {
 });
 
 // ─────────────────────── statement import ───────────────────────
+// @cli-skip: file-upload statement import; no CLI tool shape
 router.post("/import", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -130,6 +133,7 @@ router.post("/import", async (req, res) => {
   return res.json({ ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors } });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/transactions", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -144,6 +148,7 @@ router.get("/transactions", async (req, res) => {
 });
 
 // ─────────────────────── reconciliation ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/recon", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -155,6 +160,7 @@ router.get("/recon", async (req, res) => {
   return res.json({ ok: true, data: { rows } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/recon", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -187,6 +193,7 @@ router.post("/recon", async (req, res) => {
   return res.json({ ok: true, data: { id, computedReceipts: receipts, computedPayments: payments, variance } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/recon/:id/finalise", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;

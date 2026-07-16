@@ -289,6 +289,7 @@ const router: IRouter = Router();
 // COUNTERPARTIES
 // ===============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/counterparties", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -312,6 +313,7 @@ router.get("/codex/counterparties", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/counterparties/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -338,6 +340,7 @@ router.get("/codex/counterparties/:id", async (req, res) => {
   res.json(row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/counterparties", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -384,6 +387,7 @@ router.post("/codex/counterparties", async (req, res) => {
   res.status(201).json(row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/codex/counterparties/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -436,6 +440,7 @@ router.patch("/codex/counterparties/:id", async (req, res) => {
 // CLAUSE LIBRARY
 // ===============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/clauses", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -474,6 +479,7 @@ router.get("/codex/clauses", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/clauses/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -500,6 +506,7 @@ router.get("/codex/clauses/:id", async (req, res) => {
   res.json(row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/clauses", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -554,6 +561,7 @@ router.post("/codex/clauses", async (req, res) => {
   res.status(201).json(row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/codex/clauses/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -612,6 +620,7 @@ router.patch("/codex/clauses/:id", async (req, res) => {
   res.json(row.row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/clauses/:id/publish", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -665,6 +674,7 @@ router.post("/codex/clauses/:id/publish", async (req, res) => {
   res.json(result.row);
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/clauses/:id/retire", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -712,6 +722,7 @@ router.post("/codex/clauses/:id/retire", async (req, res) => {
   res.json(result.row);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/clauses/:id/acceptance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -733,6 +744,7 @@ router.get("/codex/clauses/:id/acceptance", async (req, res) => {
 // CONTRACT (record + state machine)
 // ===============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/contracts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -767,6 +779,7 @@ router.get("/codex/contracts", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/contracts/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -828,6 +841,7 @@ router.get("/codex/contracts/:id", async (req, res) => {
   });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/contracts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -885,6 +899,7 @@ router.post("/codex/contracts", async (req, res) => {
   res.status(201).json(maskContractValue(created, me.role));
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/codex/contracts/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -953,6 +968,7 @@ router.patch("/codex/contracts/:id", async (req, res) => {
  * Hard gates:
  *   - external_dispatched only reachable from two_partner_countersigned.
  */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/contracts/:id/transition", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1064,6 +1080,7 @@ router.post("/codex/contracts/:id/transition", async (req, res) => {
 // CONTRACT PARTIES
 // ===============================================================
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/contracts/:id/parties", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1138,6 +1155,7 @@ router.post("/codex/contracts/:id/parties", async (req, res) => {
 //
 // Both signers MUST be leadership (partner | founding_partner).
 //
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/codex/contracts/:id/countersign", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1303,6 +1321,7 @@ router.post("/codex/contracts/:id/countersign", async (req, res) => {
 // runner (`codex.dpa_review`) and engagement-scoped DPA flows.
 // ===============================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/dpas", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1329,6 +1348,7 @@ router.get("/codex/dpas", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/codex/dpas/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1363,6 +1383,7 @@ router.get("/codex/dpas/:id", async (req, res) => {
 // Default windows: contracts 90d, DPAs 60d. Caller can override via
 // query params for ad-hoc sweeps.
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/renewal-watchdog/run", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;

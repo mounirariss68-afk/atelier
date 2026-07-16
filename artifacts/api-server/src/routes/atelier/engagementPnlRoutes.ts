@@ -194,6 +194,7 @@ function buildHealthRow(
 // Firm-level Engagement Health register
 // GET /finance/engagement-pnl
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-pnl", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -241,6 +242,7 @@ router.get("/finance/engagement-pnl", async (req, res) => {
 // Dashboard-tile aggregates (Wave-1 placeholders go live)
 // GET /finance/engagement-pnl/summary
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-pnl/summary", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -291,6 +293,7 @@ router.get("/finance/engagement-pnl/summary", async (req, res) => {
 // Per-engagement P&L
 // GET /finance/engagement-pnl/:engagementId
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -346,6 +349,7 @@ router.get("/finance/engagement-pnl/:engagementId", async (req, res) => {
 // Returns audit rows newest-first with actor display names resolved.
 // Read-gate matches the per-engagement P&L (recruiter denied).
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-pnl/:engagementId/audit", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -371,6 +375,7 @@ router.get("/finance/engagement-pnl/:engagementId/audit", async (req, res) => {
 // ---------------------------------------------------------------
 // ETC override
 // ---------------------------------------------------------------
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -408,6 +413,7 @@ router.post("/finance/engagement-pnl/:engagementId/etc", async (req, res) => {
 // POST /finance/engagement-pnl/recompute
 // POST /finance/engagement-pnl/:engagementId/recompute
 // ---------------------------------------------------------------
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/engagement-pnl/recompute", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -419,6 +425,7 @@ router.post("/finance/engagement-pnl/recompute", async (req, res) => {
   res.json({ results });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/engagement-pnl/:engagementId/recompute", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -439,6 +446,7 @@ router.post("/finance/engagement-pnl/:engagementId/recompute", async (req, res) 
 // ---------------------------------------------------------------
 // Debug-friendly listings
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-pnl-debug/budgets", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

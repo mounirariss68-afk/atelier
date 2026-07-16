@@ -866,10 +866,15 @@ function gatedList(items: unknown) {
   };
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/comply/controls", gatedList(CONTROLS));
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/comply/sod", gatedList(SOD_CONFLICTS));
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/comply/statutory", gatedList(STATUTORY_FILINGS));
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/comply/tp", gatedList(TP_REGISTER));
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/comply/insurance", gatedList(INSURANCE));
 
 export default router;

@@ -809,6 +809,7 @@ function pickEntity(req: Request): string | null {
   return ENTITIES.some((x) => x.id === e) ? e : null;
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/cash-13w", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -817,6 +818,7 @@ router.get("/finance/plan/cash-13w", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/cash-13w/lines", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -830,6 +832,7 @@ router.get("/finance/plan/cash-13w/lines", async (req, res) => {
   res.json({ receipts: inLines, disbursements: outLines, asOf: AS_OF_MONDAY, presentationCurrency: presentation });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/plan/cash-13w/override", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -906,6 +909,7 @@ router.post("/finance/plan/cash-13w/override", async (req, res) => {
   res.json({ ok: true, override: ovr });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/cash-13w/audit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -921,12 +925,14 @@ router.get("/finance/plan/cash-13w/audit", async (req, res) => {
   res.json({ items });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/backlog", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   res.json(computeBacklog(pickPresentation(req), pickEntity(req)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/entities", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -941,6 +947,7 @@ function pickScenario(req: Request): string {
   return FPA_SCENARIOS.some((x) => x.id === s) ? s : "base";
 }
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/budget", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -955,12 +962,14 @@ router.get("/finance/plan/budget", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/headcount", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   res.json(computeFpaHeadcount(pickScenario(req), pickEntity(req)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/scenarios", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -979,6 +988,7 @@ router.get("/finance/plan/scenarios", async (req, res) => {
 // Finance-leadership only. Append-only: every commit gets its own row,
 // the most recent row is the active "committed" forecast.
 // ──────────────────────────────────────────────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1076,6 +1086,7 @@ async function uncommitForecast(me: Me, noteIn?: string, periodLabelIn?: string)
   };
 }
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.delete("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1093,6 +1104,7 @@ router.delete("/finance/plan/scenarios/commit", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1107,12 +1119,14 @@ router.get("/finance/plan/scenarios/commit", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/renewals", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   res.json(computeFpaRenewals(pickPresentation(req), pickEntity(req)));
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/plan/bonus", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;

@@ -323,6 +323,7 @@ export async function autoDraftOnClientSign(args: {
 // ---------------------------------------------------------------
 // GET /finance/engagement-financials/:engId
 // ---------------------------------------------------------------
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/engagement-financials/:engId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

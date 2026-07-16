@@ -111,6 +111,7 @@ const KIND = z.enum(["scope", "rate", "term", "team"]);
 // LIST + GET
 // ---------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/change-orders", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -139,6 +140,7 @@ router.get("/change-orders", async (req: Request, res: Response) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/change-orders/:id", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -188,6 +190,7 @@ const ProposeBody = z.object({
   linkedRaidId: z.string().nullable().optional(),
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/change-orders", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -255,6 +258,7 @@ const PatchBody = z.object({
   subsDeltaUsd: z.number().optional(),
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/change-orders/:id", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;

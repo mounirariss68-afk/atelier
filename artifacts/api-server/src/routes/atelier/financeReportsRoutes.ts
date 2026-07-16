@@ -753,6 +753,7 @@ function buildCube(scopePeriods: Period[]): CubeRow[] {
 // Endpoints
 // ──────────────────────────────────────────────────────────────
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/periods", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -777,6 +778,7 @@ function entitiesIn(scope: string | null): { id: string; baseCurrency: string; s
 }
 
 // ----- P&L
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/pnl", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -915,6 +917,7 @@ function buildPnlCommentary(v: PnlVariance): string[] {
 }
 
 // ----- BS
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/bs", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -982,6 +985,7 @@ function convertBs(b: BsLines, target: string, period: Period): BsLines {
 }
 
 // ----- CF
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/cf", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1035,6 +1039,7 @@ function convertCf(c: CfLines, target: string, period: Period): CfLines {
 }
 
 // ----- Profitability cube
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/profitability", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1066,6 +1071,7 @@ router.get("/finance/reports/profitability", (req, res) => {
 });
 
 // ----- Board pack assembly
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/board-pack", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1149,6 +1155,7 @@ function deriveRisks(v: PnlVariance, bs: BsLines): string[] {
 }
 
 // ----- Board pack PDF
+// @cli-skip: binary PDF export stream; no CLI tool shape
 router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
@@ -1320,11 +1327,13 @@ interface Schedule { id: string; name: string; cron: string; nextRunOn: string; 
 const SCHEDULES: Schedule[] = [
   { id: "sch_board_monthly", name: "Monthly Board Pack", cron: "0 8 5 * *", nextRunOn: "2026-06-05", recipients: ["board@cognirise.example", "yara.nasser@cognirise.example"], enabled: true, createdBy: "system", createdAt: "2026-01-05T08:00:00Z" },
 ];
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/schedules", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   res.json({ items: SCHEDULES });
 });
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/finance/reports/schedules", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;

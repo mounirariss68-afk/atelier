@@ -124,6 +124,7 @@ const SetMethodSchema = z.object({
   notes: z.string().optional().default(""),
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/methods", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -148,6 +149,7 @@ router.get("/revrec/methods", async (req: Request, res: Response) => {
   res.json({ methods: rows });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/methods", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -209,6 +211,7 @@ const CreateMilestoneSchema = z.object({
   contractClauseId: z.string().optional(),
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/milestones", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -233,6 +236,7 @@ router.get("/revrec/milestones", async (req: Request, res: Response) => {
   res.json({ milestones: rows });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -350,6 +354,7 @@ async function transitionMilestone(
   res.json({ milestone: result.row });
 }
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones/:id/claim", (req, res) =>
   transitionMilestone(
     req,
@@ -360,6 +365,7 @@ router.post("/revrec/milestones/:id/claim", (req, res) =>
   ),
 );
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones/:id/partner-attest", (req, res) => {
   if (!isLeadership(req.atelierPersona?.role)) {
     res.status(403).json({ error: "leadership-required" });
@@ -377,6 +383,7 @@ router.post("/revrec/milestones/:id/partner-attest", (req, res) => {
   );
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones/:id/client-accept", (req, res) =>
   // Critical contract: the client_accepted transition can only fire if a
   // matching `atelier_milestone_acceptance_view` row exists. Server-side
@@ -413,6 +420,7 @@ router.post("/revrec/milestones/:id/client-accept", (req, res) =>
   ),
 );
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones/:id/earn", (req, res) => {
   if (!canWriteFinance(req.atelierPersona?.role)) {
     res.status(403).json({ error: "finance-required" });
@@ -427,6 +435,7 @@ router.post("/revrec/milestones/:id/earn", (req, res) => {
   );
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/milestones/:id/mark-invoiceable", (req, res) => {
   if (!canWriteFinance(req.atelierPersona?.role)) {
     res.status(403).json({ error: "finance-required" });
@@ -450,6 +459,7 @@ const ComputeSchedSchema = z.object({
   engagementId: z.string().optional(), // omit ⇒ compute for all eligible engagements
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/schedules/compute", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -591,6 +601,7 @@ router.post("/revrec/schedules/compute", async (req: Request, res: Response) => 
   res.json({ schedules: out, period: parsed.data.periodLabel });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/schedules/:id/freeze", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -625,6 +636,7 @@ router.post("/revrec/schedules/:id/freeze", async (req, res) => {
   res.json({ schedule: out });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/schedules", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -657,6 +669,7 @@ const InitPostingSchema = z.object({
   rationaleText: z.string().optional().default(""),
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/period-postings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -760,6 +773,7 @@ router.post("/revrec/period-postings", async (req, res) => {
   });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/period-postings/:id/confirm-post", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -873,6 +887,7 @@ router.post("/revrec/period-postings/:id/confirm-post", async (req, res) => {
   res.json({ posting: out.posting, locked: true });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/period-postings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -891,6 +906,7 @@ router.get("/revrec/period-postings", async (req, res) => {
   res.json({ postings: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/period-postings/:id/lines", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -925,6 +941,7 @@ const AdjustmentSchema = z.object({
   rationaleText: z.string().min(20, "rationale_text must be at least 20 chars"),
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/revrec/adjustments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -998,6 +1015,7 @@ router.post("/revrec/adjustments", async (req, res) => {
   res.status(201).json({ adjustment: out.line, id: out.adjustmentId });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/adjustments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1023,6 +1041,7 @@ router.get("/revrec/adjustments", async (req, res) => {
 // PERIOD CLOSE LOCK
 // ===========================================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/revrec/period-locks", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1045,6 +1064,7 @@ router.get("/revrec/period-locks", async (req, res) => {
 // WIP SNAPSHOT — daemon refresh + reads
 // ===========================================================================
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wip/snapshots/refresh", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1137,6 +1157,7 @@ router.post("/wip/snapshots/refresh", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wip/snapshots/latest", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1177,6 +1198,7 @@ router.get("/wip/snapshots/latest", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wip/run-log", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1198,6 +1220,7 @@ router.get("/wip/run-log", async (req, res) => {
 // MARGIN
 // ===========================================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/margin/firm", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1263,6 +1286,7 @@ router.get("/margin/firm", async (req, res) => {
   res.json(out);
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/margin/engagements/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1288,6 +1312,7 @@ router.get("/margin/engagements/:id", async (req, res) => {
 });
 
 // Compute margin snapshots (callable by finance; cost-capped via daemon).
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/margin/refresh", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1388,6 +1413,7 @@ router.post("/margin/refresh", async (req, res) => {
 // LEAKAGE
 // ===========================================================================
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/leakage", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

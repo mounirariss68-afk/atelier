@@ -68,6 +68,7 @@ type AccRow = typeof atelierDeliverableAcceptance.$inferSelect;
 // LIST + GET
 // ---------------------------------------------------------------
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/deliverable-acceptances", async (req: Request, res: Response) => {
   const me = ensurePersona(req, res);
   if (!me) return;

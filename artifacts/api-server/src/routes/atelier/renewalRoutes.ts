@@ -60,6 +60,7 @@ async function audit(args: {
 }
 
 // ─────────────────────── list ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -78,6 +79,7 @@ router.get("/", async (req, res) => {
   return res.json({ ok: true, data: { rows: out } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -107,6 +109,7 @@ router.post("/", async (req, res) => {
   return res.json({ ok: true, data: { id } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/:id/risk", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -129,6 +132,7 @@ router.post("/:id/risk", async (req, res) => {
   return res.json({ ok: true, data: { id, nrrDeltaPct: nrr } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/:id/link-opportunity", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -146,6 +150,7 @@ router.post("/:id/link-opportunity", async (req, res) => {
   return res.json({ ok: true });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/:id/won", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -165,6 +170,7 @@ router.post("/:id/won", async (req, res) => {
   return res.json({ ok: true });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/:id/lost", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -186,6 +192,7 @@ router.post("/:id/lost", async (req, res) => {
 });
 
 // ─────────── auto-open T-90 sweep (Renewal Watchdog hook) ───────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/auto-open", async (req, res) => {
   if (denyRestricted(req, res)) return;
   const me = ensure(req, res); if (!me) return;

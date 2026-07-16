@@ -122,6 +122,7 @@ function audit(args: {
 // ============================================================
 // READS
 // ============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/specs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -133,6 +134,7 @@ router.get("/agents-lens/specs", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/versions", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -144,6 +146,7 @@ router.get("/agents-lens/versions", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/eval-suites", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -155,6 +158,7 @@ router.get("/agents-lens/eval-suites", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/deployments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -166,6 +170,7 @@ router.get("/agents-lens/deployments", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/incidents", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -181,6 +186,7 @@ router.get("/agents-lens/incidents", async (req, res) => {
 // fix version. Closes the Improve loop: the Improve page can render the
 // failing transcripts that triggered each incident and link the proposed
 // fix back to the candidate version in Build.
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/incidents/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -247,6 +253,7 @@ router.get("/agents-lens/incidents/:id", async (req, res) => {
   });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/agents-lens/retirements", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -261,6 +268,7 @@ router.get("/agents-lens/retirements", async (req, res) => {
 // ============================================================
 // WRITES — Design: approve / request-changes on a spec
 // ============================================================
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/agents-lens/specs/:id/review", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -334,6 +342,7 @@ router.post("/agents-lens/specs/:id/review", async (req, res) => {
 // ============================================================
 // WRITES — Build: promote a version draft → candidate → shipped
 // ============================================================
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/agents-lens/versions/:id/promote", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -403,6 +412,7 @@ router.post("/agents-lens/versions/:id/promote", async (req, res) => {
 // ============================================================
 // WRITES — Retire: advance scheduled → deprecated → archived
 // ============================================================
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/agents-lens/retirements/:id/advance", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

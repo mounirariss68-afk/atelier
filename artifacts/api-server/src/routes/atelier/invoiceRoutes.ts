@@ -172,6 +172,7 @@ async function loadFull(orgId: string, invoiceId: string) {
 }
 
 // =============================================================== list/get
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/invoices", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -189,6 +190,7 @@ router.get("/wallet/invoices", async (req, res) => {
   res.json({ invoices: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/invoices/:id", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -203,6 +205,7 @@ router.get("/wallet/invoices/:id", async (req, res) => {
 });
 
 // =============================================================== create draft
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -248,6 +251,7 @@ router.post("/wallet/invoices", async (req, res) => {
 });
 
 // =============================================================== compose lines (time + expenses)
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices/:id/compose", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -391,6 +395,7 @@ router.post("/wallet/invoices/:id/compose", async (req, res) => {
 });
 
 // =============================================================== add manual line
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices/:id/lines", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -444,6 +449,7 @@ router.post("/wallet/invoices/:id/lines", async (req, res) => {
 });
 
 // =============================================================== issue (mint number + e-invoice)
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices/:id/issue", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -570,6 +576,7 @@ router.post("/wallet/invoices/:id/issue", async (req, res) => {
 });
 
 // =============================================================== void (irreversible)
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices/:id/void", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -606,6 +613,7 @@ router.post("/wallet/invoices/:id/void", async (req, res) => {
 });
 
 // =============================================================== record payment
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/invoices/:id/payment", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -639,6 +647,7 @@ router.post("/wallet/invoices/:id/payment", async (req, res) => {
 });
 
 // =============================================================== AR aging
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/ar/aging", async (req, res) => {
   // AR aging is the rollup view — board_observer is allowed here per L2C
   // §C.3 ("ar_aging_report" rollup-only access). Restricted personas
@@ -731,6 +740,7 @@ router.get("/wallet/ar/aging", async (req, res) => {
 });
 
 // =============================================================== dunning ladders
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/dunning/ladders", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -739,6 +749,7 @@ router.get("/wallet/dunning/ladders", async (req, res) => {
 });
 
 // =============================================================== next-action (recommend ladder step)
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/wallet/dunning/next-action", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -809,6 +820,7 @@ router.get("/wallet/dunning/next-action", async (req, res) => {
 });
 
 // =============================================================== send next dunning step
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/dunning/:invoiceId/send", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -893,6 +905,7 @@ router.post("/wallet/dunning/:invoiceId/send", async (req, res) => {
 });
 
 // =============================================================== promise-to-pay
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/dunning/:invoiceId/promise", async (req, res) => {
   if (denyRestricted(req, res)) return;
   if (denyBoardObserver(req, res)) return;
@@ -951,7 +964,9 @@ async function transitionPromise(req: Request, res: Response, status: "kept" | "
   });
   res.json(await loadFull(me.orgId, invoiceId));
 }
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/dunning/:invoiceId/promise/:pid/keep", (req, res) => transitionPromise(req, res, "kept"));
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/wallet/dunning/:invoiceId/promise/:pid/break", (req, res) => transitionPromise(req, res, "broken"));
 
 export default router;

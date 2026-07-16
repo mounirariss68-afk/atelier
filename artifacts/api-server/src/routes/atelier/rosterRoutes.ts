@@ -716,6 +716,7 @@ router.get("/roster/people", async (req, res, next) => {
 // Wire-format: { gender?: "female"|"male"|"non_binary"|"unspecified",
 //                nationality?: string|null  // ISO-3166 alpha-2 or null }
 const ALLOWED_GENDERS = new Set(["female", "male", "non_binary", "unspecified"]);
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/roster/people/:id/demographics", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -782,6 +783,7 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
 // At least one cell with a non-empty number is mandatory; up to 3 are allowed,
 // each labelled by the country the line belongs to. Employees only.
 const MAX_CELLS = 3;
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/roster/people/:id/contact", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

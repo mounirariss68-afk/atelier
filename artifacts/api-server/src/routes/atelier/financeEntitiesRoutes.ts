@@ -277,6 +277,7 @@ export const ENTITIES_SEED: FinanceEntity[] = [
   },
 ];
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/entities", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -284,6 +285,7 @@ router.get("/finance/entities", (req, res) => {
   res.json({ items: ENTITIES_SEED });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/entities/:id", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

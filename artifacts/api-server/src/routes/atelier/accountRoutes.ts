@@ -796,6 +796,7 @@ router.post("/accounts", async (req, res) => {
 // visibility-filtered) so a scoped creator is still warned about a clashing
 // account they cannot otherwise see — the warning carries only id/name/brand/
 // country/tier, and opening it still goes through the normal account ACL.
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/check-duplicates", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -1562,6 +1563,7 @@ async function guardAccountAgent(req: Request, res: Response) {
 }
 
 // ---------- Next-Best-Action: rank next moves on the account ----------
+// @cli-skip: bespoke UI agent run/dismiss surface (raw-fetch contract); agents reach the CLI via run_* capabilities
 router.post("/accounts/:accountId/agents/next-best-action/run", async (req, res) => {
   const guard = await guardAccountAgent(req, res);
   if (!guard) return;
@@ -1580,6 +1582,7 @@ router.post("/accounts/:accountId/agents/next-best-action/run", async (req, res)
 });
 
 // ---------- Relationship-Health / Churn-Risk: score the relationship ----------
+// @cli-skip: bespoke UI agent run/dismiss surface (raw-fetch contract); agents reach the CLI via run_* capabilities
 router.post("/accounts/:accountId/agents/relationship-health/run", async (req, res) => {
   const guard = await guardAccountAgent(req, res);
   if (!guard) return;
@@ -1595,6 +1598,7 @@ router.post("/accounts/:accountId/agents/relationship-health/run", async (req, r
 });
 
 // ---------- Relationship-Health: governed dismiss (audit-logged) ----------
+// @cli-skip: bespoke UI agent run/dismiss surface (raw-fetch contract); agents reach the CLI via run_* capabilities
 router.post("/accounts/:accountId/agents/relationship-health/dismiss", async (req, res) => {
   const guard = await guardAccountAgent(req, res);
   if (!guard) return;
@@ -1619,6 +1623,7 @@ router.post("/accounts/:accountId/agents/relationship-health/dismiss", async (re
 });
 
 // ---------- Pre-Meeting Briefing: citable brief for a meeting ----------
+// @cli-skip: bespoke UI agent run/dismiss surface (raw-fetch contract); agents reach the CLI via run_* capabilities
 router.post("/accounts/:accountId/agents/pre-meeting-briefing/run", async (req, res) => {
   const guard = await guardAccountAgent(req, res);
   if (!guard) return;
@@ -3209,6 +3214,7 @@ router.patch("/accounts/:accountId", async (req, res) => {
 // restricted destructive path (founding partner only, financial-gated).
 const ARCHIVE_ROLES = new Set(["founding_partner", "partner"]);
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/:accountId/archive", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -3233,6 +3239,7 @@ router.post("/accounts/:accountId/archive", async (req, res) => {
   res.json({ ok: true, status: result.status, workspace: ws });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/:accountId/restore", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -3257,6 +3264,7 @@ router.post("/accounts/:accountId/restore", async (req, res) => {
   res.json({ ok: true, status: result.status, workspace: ws });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.delete("/accounts/:accountId", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -3304,6 +3312,7 @@ router.delete("/accounts/:accountId", async (req, res) => {
 // roles + visibility as editing an account (CREATE_ROLES + canSeeAccount on
 // BOTH the survivor and the duplicate so a scoped editor can't fold in an
 // account they cannot otherwise see).
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/:accountId/merge", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -3789,6 +3798,7 @@ async function applyProfileUpdateDecisions(args: {
   });
 }
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/:accountId/profile-updates/:updateId/decision", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -4073,6 +4083,7 @@ router.post("/accounts/:accountId/contacts/check-duplicates", async (req, res) =
   res.json({ candidates });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/accounts/:accountId/contacts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -4334,6 +4345,7 @@ router.delete("/contacts/:contactId", async (req, res) => {
 // on the same account. Re-points relationship edges, activities and audit
 // history, then soft-deletes the duplicate. Gated by the same roles as editing
 // an account (CREATE_ROLES) + visibility on the owning account.
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/contacts/:contactId/merge", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

@@ -103,6 +103,7 @@ function orgScope(
 // =============================================================
 // PRESS
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/editorial-calendar", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -114,6 +115,7 @@ router.get("/press/editorial-calendar", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/in-flight", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -125,6 +127,7 @@ router.get("/press/in-flight", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/partner-cadence", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -136,6 +139,7 @@ router.get("/press/partner-cadence", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/newsletter", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -148,6 +152,7 @@ router.get("/press/newsletter", async (req, res) => {
   res.json({ newsletter: row ?? null });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/speaking-opportunities", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -159,6 +164,7 @@ router.get("/press/speaking-opportunities", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/press/mentions", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -173,6 +179,7 @@ router.get("/press/mentions", async (req, res) => {
 // =============================================================
 // ALLIANCES
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/alliances/partner-firms", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -184,6 +191,7 @@ router.get("/alliances/partner-firms", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/alliances/joint-pipeline", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -195,6 +203,7 @@ router.get("/alliances/joint-pipeline", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/alliances/certifications", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -206,6 +215,7 @@ router.get("/alliances/certifications", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/alliances/conflicts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -296,6 +306,7 @@ const PARTNER_OFFBOARDINGS = [
   { id: "ob_001", partnerFirm: "Beacon Cloud Co.", reason: "Acquired by competitor; conflict baseline broken.", initiatedAt: "2026-03-01", phase: "wind_down_in_flight", openObligationsUsdK: 40, dataReturnDue: "2026-06-30" },
 ];
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/target-partners", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -303,6 +314,7 @@ router.get("/partners/target-partners", async (req, res) => {
   res.json({ items: PARTNER_TARGETS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/capability-matrix", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -310,6 +322,7 @@ router.get("/partners/capability-matrix", async (req, res) => {
   res.json({ items: PARTNER_CAPABILITIES });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/mdf", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -317,6 +330,7 @@ router.get("/partners/mdf", async (req, res) => {
   res.json({ items: PARTNER_MDF });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/joint-marketing", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -324,6 +338,7 @@ router.get("/partners/joint-marketing", async (req, res) => {
   res.json({ items: PARTNER_JOINT_MARKETING });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/sub-contracts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -331,6 +346,7 @@ router.get("/partners/sub-contracts", async (req, res) => {
   res.json({ items: PARTNER_SUBCONTRACTS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/framework-agreements", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -338,6 +354,7 @@ router.get("/partners/framework-agreements", async (req, res) => {
   res.json({ items: PARTNER_FRAMEWORKS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/qbrs", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -345,6 +362,7 @@ router.get("/partners/qbrs", async (req, res) => {
   res.json({ items: PARTNER_QBRS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/scorecards", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -352,6 +370,7 @@ router.get("/partners/scorecards", async (req, res) => {
   res.json({ items: PARTNER_SCORECARDS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/renewals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -359,6 +378,7 @@ router.get("/partners/renewals", async (req, res) => {
   res.json({ items: PARTNER_RENEWALS });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/tier-changes", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -366,6 +386,7 @@ router.get("/partners/tier-changes", async (req, res) => {
   res.json({ items: PARTNER_TIER_CHANGES });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/partners/offboardings", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -376,6 +397,7 @@ router.get("/partners/offboardings", async (req, res) => {
 // =============================================================
 // STUDIO  (recruiter has read access here; this is their workspace)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/open-roles", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -386,6 +408,7 @@ router.get("/studio/open-roles", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/candidates", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -396,6 +419,7 @@ router.get("/studio/candidates", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/interview-panels", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -406,6 +430,7 @@ router.get("/studio/interview-panels", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/reference-checks", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -416,6 +441,7 @@ router.get("/studio/reference-checks", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/offers", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -426,6 +452,7 @@ router.get("/studio/offers", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/studio/referrals", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -439,6 +466,7 @@ router.get("/studio/referrals", async (req, res) => {
 // =============================================================
 // GUARDHOUSE  (compliance_officer is the canonical owner)
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/controls", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -450,6 +478,7 @@ router.get("/guardhouse/controls", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/evidence", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -461,6 +490,7 @@ router.get("/guardhouse/evidence", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/pentests", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -472,6 +502,7 @@ router.get("/guardhouse/pentests", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/vendors", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -483,6 +514,7 @@ router.get("/guardhouse/vendors", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/incidents", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -494,6 +526,7 @@ router.get("/guardhouse/incidents", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/dsars", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -505,6 +538,7 @@ router.get("/guardhouse/dsars", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/guardhouse/backups", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -519,6 +553,7 @@ router.get("/guardhouse/backups", async (req, res) => {
 // =============================================================
 // IP CATALOG
 // =============================================================
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ip/code-assets", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -530,6 +565,7 @@ router.get("/ip/code-assets", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ip/oss-dependencies", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -541,6 +577,7 @@ router.get("/ip/oss-dependencies", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ip/demo-environments", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -552,6 +589,7 @@ router.get("/ip/demo-environments", async (req, res) => {
   res.json({ items: rows });
 });
 
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/ip/license-grants", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;

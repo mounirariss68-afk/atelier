@@ -58,6 +58,7 @@ async function audit(args: {
 }
 
 // ─────────────────────── receipts ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
 router.get("/receipts", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -67,6 +68,7 @@ router.get("/receipts", async (req, res) => {
   return res.json({ ok: true, data: { rows } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/receipt", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -94,6 +96,7 @@ router.post("/receipt", async (req, res) => {
 });
 
 // ─────────────────────── matcher ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/match", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -127,6 +130,7 @@ router.post("/match", async (req, res) => {
 });
 
 // ─────────────────────── apply ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/apply", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
@@ -181,6 +185,7 @@ router.post("/apply", async (req, res) => {
   return res.json({ ok: true, data: { applicationIds: created } });
 });
 
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.post("/apply/:id/reverse", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
