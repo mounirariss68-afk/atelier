@@ -27,6 +27,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { useToast } from "@/hooks/use-toast";
+import { fmtMoney } from "@/lib/utils";
 import {
   SALES_STAGES,
   WORKING_STAGES,
@@ -45,10 +46,14 @@ import {
 
 type OppItem = Opportunity;
 
+// Opportunity deal sizes are stored normalised in USD (`dealSizeUsd`); the
+// opportunity wire model carries no per-deal currency, so pipeline totals are
+// intrinsically USD. We route through the shared currency-aware formatter
+// (defaulting to USD) so the presentation is consistent with the rest of the
+// app; showing an account's `primaryCurrency` here would require the API to
+// expose FX-converted amounts, which it does not — we never fabricate a rate.
 function fmtUsd(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
-  return `$${n.toFixed(0)}`;
+  return fmtMoney(n, "USD");
 }
 
 function StageColumn({
@@ -508,8 +513,20 @@ export default function Pipeline() {
           </div>
         )}
 
-        {/* Forecast summary strip — pipeline mode only. */}
+        {/* Forecast summary strip — pipeline mode only. These cards come from
+            the server /pipeline/forecast roll-up and always reflect the full
+            org pipeline; they are NOT affected by the stage/owner filters
+            above (those only re-scope the Kanban board / list below). */}
         {mode === "pipeline" && forecast && (
+          <>
+          <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+            <span className="text-gold">Forecast · whole pipeline</span>
+            {(stageFilter !== "all" || ownerFilter !== "all") && (
+              <span className="text-text-faint normal-case tracking-normal">
+                (filters below don't change these totals)
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Card className="p-4">
               <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">In-flight deals</div>
@@ -530,6 +547,7 @@ export default function Pipeline() {
               </div>
             </Card>
           </div>
+          </>
         )}
       </div>
 
@@ -666,6 +684,8 @@ export default function Pipeline() {
           oppId={moveTarget.id}
           oppName={moveTarget.name}
           currentStage={(moveTarget as { salesStage?: SalesStage }).salesStage ?? "suspect"}
+          dealSizeUsd={moveTarget.dealSizeUsd}
+          currentNextMilestone={moveTarget.nextMilestone}
           open={true}
           onOpenChange={(o) => { if (!o) setMoveTarget(null); }}
         />

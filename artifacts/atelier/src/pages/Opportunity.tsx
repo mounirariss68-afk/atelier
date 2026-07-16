@@ -35,6 +35,7 @@ import { PrototypeButton } from "@/components/tabs/PrototypeButton";
 import { QualifierSheet } from "@/components/QualifierSheet";
 import { StageTransitionDialog } from "@/components/StageTransitionDialog";
 import { OpportunityEditDialog } from "@/components/OpportunityEditDialog";
+import { fmtMoney } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -114,7 +115,12 @@ export default function Opportunity() {
   if (isError || !opp) return <div className="container-atelier py-12 text-danger">Failed to load opportunity.</div>;
 
   const personaName = me?.name ?? "You";
-  const dealLabel = `$${(opp.dealSizeUsd / 1000).toFixed(0)}k`;
+  // Deal sizes are stored USD-normalised (`dealSizeUsd`); the opportunity wire
+  // model has no per-deal currency, so this is intrinsically a USD figure. We
+  // route through the shared currency-aware formatter (defaulting to USD) for
+  // presentation consistency — showing the account's primaryCurrency would need
+  // an FX-converted amount from the API, which we never fabricate client-side.
+  const dealLabel = fmtMoney(opp.dealSizeUsd, "USD");
   const salesStage: SalesStage =
     (opp as { salesStage?: SalesStage }).salesStage ?? ("lead" as SalesStage);
   const isStalled =
@@ -321,6 +327,8 @@ export default function Opportunity() {
         oppId={opp.id}
         oppName={opp.name}
         currentStage={salesStage}
+        dealSizeUsd={opp.dealSizeUsd}
+        currentNextMilestone={opp.nextMilestone}
         open={moveOpen}
         onOpenChange={setMoveOpen}
       />

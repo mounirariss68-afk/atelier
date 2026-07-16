@@ -277,6 +277,16 @@ router.post("/opportunities/:oppId/win-loss/approve", async (req, res) => {
     res.status(404).json({ error: "opportunity-not-found" });
     return;
   }
+  // Task #8 — the debrief's own author and the buyer-interview author are
+  // just as conflicted as the deal team: nobody approves their own writeup.
+  if (debrief.createdByUserId === me.id || debrief.buyerInterviewConductedByUserId === me.id) {
+    res.status(403).json({
+      error: "author-cannot-approve",
+      detail:
+        "You authored this debrief or its buyer interview. A different off-deal partner must approve it.",
+    });
+    return;
+  }
   if (opp.partnerOwnerId === me.id || opp.engagementLeadId === me.id) {
     res.status(403).json({
       error: "deal-team-cannot-conduct",

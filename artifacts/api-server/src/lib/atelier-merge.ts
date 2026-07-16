@@ -38,6 +38,7 @@ import {
   atelierSalonWorkspaces,
   atelierSalonUsers,
   atelierInvoice,
+  atelierCredentials,
   atelierAuditEvents,
   atelierAgentRuns,
 } from "@workspace/db";
@@ -173,7 +174,8 @@ export async function mergeAccounts(
         | typeof atelierActivities
         | typeof atelierSalonWorkspaces
         | typeof atelierSalonUsers
-        | typeof atelierInvoice,
+        | typeof atelierInvoice
+        | typeof atelierCredentials,
     ) => {
       const moved = await tx
         .update(table)
@@ -215,6 +217,10 @@ export async function mergeAccounts(
     await repoint("salonWorkspaces", atelierSalonWorkspaces);
     await repoint("salonUsers", atelierSalonUsers);
     await repoint("invoices", atelierInvoice);
+    // Task #8 — credentials (case studies) reference accounts too; without
+    // this they dangle at the soft-deleted duplicate and vanish from the
+    // survivor's credential library.
+    await repoint("credentials", atelierCredentials);
 
     // Hierarchy: any account whose parent is the duplicate now points at the
     // survivor, so the family tree stays intact.

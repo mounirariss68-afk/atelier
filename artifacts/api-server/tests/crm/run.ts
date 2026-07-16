@@ -1637,7 +1637,7 @@ async function main(): Promise<void> {
         check("opportunity_create phase1 \u2192 confirmation envelope (missing account)", p1ok);
 
         const capOppName = uniq("CapOpp");
-        const phase2 = await oppCap.run({ name: capOppName, accountId: ACC, dealSizeUsd: 333000, confirm: true }, ctx);
+        const phase2 = await oppCap.run({ name: capOppName, accountId: ACC, dealSizeUsd: 333000, runScout: false, confirm: true }, ctx);
         const id = (phase2.data as any)?.id as string | undefined;
         check("opportunity_create phase2 (confirm) \u2192 ok + id", phase2.ok === true && !!id, JSON.stringify(phase2).slice(0, 160));
         if (id) {
@@ -1657,7 +1657,7 @@ async function main(): Promise<void> {
       check("capability opportunity_archive registered", !!oppArchiveCap);
       if (oppCap && oppEditCap && oppArchiveCap) {
         // Seed a throwaway opp to edit then archive (isolated from rows other groups assert against).
-        const seed = await oppCap.run({ name: uniq("CapEditOpp"), accountId: ACC, dealSizeUsd: 100000, confirm: true }, ctx);
+        const seed = await oppCap.run({ name: uniq("CapEditOpp"), accountId: ACC, dealSizeUsd: 100000, runScout: false, confirm: true }, ctx);
         const seedId = (seed.data as any)?.id as string | undefined;
         check("opportunity edit/archive: seed opp created", seed.ok === true && !!seedId, JSON.stringify(seed).slice(0, 120));
         if (seedId) {
@@ -1724,6 +1724,89 @@ async function main(): Promise<void> {
           makeCtx(PERSONA.consultant, "consultant", "Omar Najjar"),
         );
         check("account_create (consultant) \u2192 ok:false forbidden", denied.ok === false, JSON.stringify(denied).slice(0, 120));
+
+        // Task #8 — chat/REST financial parity: annualRevenue smuggled into
+        // the (whitelisted) chat create payload is explicitly rejected, not
+        // silently dropped.
+        const revDenied = await acctCap.run(
+          {
+            name: uniq("CapAcctRev"),
+            country: "AE",
+            sector: "Technology",
+            confirm: true,
+            annualRevenue: { amount: 1_000_000, currency: "USD" },
+          } as any,
+          makeCtx(PERSONA.sm, "senior_manager", "Layla Haddad"),
+        );
+        check(
+          "account_create with annualRevenue (chat) \u2192 ok:false forbidden",
+          revDenied.ok === false && (revDenied as any).errorCode === "forbidden",
+          JSON.stringify(revDenied).slice(0, 160),
+        );
+
+        // Task #8 — senior_manager chat create defaults owner to creator.
+        const smAcctName = uniq("CapAcctSmOwner");
+        const smAcct = await acctCap.run(
+          { name: smAcctName, country: "AE", sector: "Technology", confirm: true },
+          makeCtx(PERSONA.sm, "senior_manager", "Layla Haddad"),
+        );
+        const smAcctId = (smAcct.data as any)?.id as string | undefined;
+        if (smAcctId) created.accounts.add(smAcctId);
+        let smAcctOwner: string | null | undefined;
+        if (smAcctId) {
+          const [r] = await db
+            .select({ owner: atelierAccounts.partnerOwnerId })
+            .from(atelierAccounts)
+            .where(eq(atelierAccounts.id, smAcctId));
+          smAcctOwner = r?.owner;
+        }
+        check(
+          "account_create (senior_manager, chat) defaults partnerOwnerId to creator",
+          smAcct.ok === true && smAcctOwner === PERSONA.sm,
+          `owner=${smAcctOwner}`,
+        );
+      }
+
+      // Task #8 — chat opportunity_create parity fixes.
+      if (oppCap) {
+        // Role gate: consultant is now denied (REST parity).
+        const oppDenied = await oppCap.run(
+          { name: uniq("CapOppDenied"), accountId: ACC, confirm: true },
+          makeCtx(PERSONA.consultant, "consultant", "Omar Najjar"),
+        );
+        check(
+          "opportunity_create (consultant, chat) \u2192 ok:false forbidden",
+          oppDenied.ok === false,
+          JSON.stringify(oppDenied).slice(0, 120),
+        );
+
+        // Default probability = 25 (REST parity) + runScout:false is honoured
+        // and surfaced as scout.status "skipped".
+        const parName = uniq("CapOppParity");
+        const par = await oppCap.run(
+          { name: parName, accountId: ACC, runScout: false, confirm: true },
+          ctx,
+        );
+        const parId = (par.data as any)?.id as string | undefined;
+        if (parId) created.opps.add(parId);
+        let parProb: number | undefined;
+        if (parId) {
+          const [r] = await db
+            .select({ prob: atelierOpportunities.probabilityPct })
+            .from(atelierOpportunities)
+            .where(eq(atelierOpportunities.id, parId));
+          parProb = Number(r?.prob);
+        }
+        check(
+          "opportunity_create default probabilityPct = 25 (REST parity)",
+          par.ok === true && parProb === 25,
+          `prob=${parProb}`,
+        );
+        check(
+          "opportunity_create runScout:false \u2192 scout.status 'skipped' surfaced",
+          (par.data as any)?.scout?.status === "skipped",
+          JSON.stringify((par.data as any)?.scout),
+        );
       }
 
       // Task #609 — branch-vs-HQ clarification on the smarter auto-fill
@@ -2245,11 +2328,12 @@ async function main(): Promise<void> {
     group("REST \u00b7 Annual-revenue create gate (Task #619)");
     // The PATCH /accounts/:id gate (Task #618) is meaningless if revenue can be
     // seeded at CREATE time, so POST /accounts honours the same financials gate.
-    // PERSONA.sm (senior_manager p_layla_haddad) is in CREATE_ROLES \u2014 she may
-    // create accounts \u2014 but she is not firm-wide and not the would-be partner
-    // owner, so canEditFinancials is false. She must be blocked from seeding
-    // annualRevenue at create (no row persisted) while a revenue-free create
-    // still succeeds; an account-wide partner (PERSONA.fp) can set it.
+    // Task #8 update: every CREATE_ROLES creator (incl. senior_manager) now
+    // defaults to owning the account she creates, and the would-be-owner
+    // check in the create gate follows the same rule. An owner has
+    // account-wide financial authority (same as PATCH after create), so a
+    // senior_manager creating WITHOUT naming another owner MAY seed revenue.
+    // She is still blocked when the account would be owned by someone else.
     // =====================================================================
     {
       const baseBody = {
@@ -2268,15 +2352,17 @@ async function main(): Promise<void> {
         note: uniq("create revenue note"),
       };
 
-      // 1) senior_manager (scoped, not account-wide) creating WITH revenue \u2192 403.
+      // 1) senior_manager creating WITH revenue for an account that would be
+      //    owned by SOMEONE ELSE \u2192 403 (no account-wide authority there).
       const smName = uniq("CreateGateRevenue");
       const smCreate = await api("POST", "/accounts", PERSONA.sm, {
         ...baseBody,
         name: smName,
+        partnerOwnerId: PERSONA.fp,
         annualRevenue: revenuePayload,
       });
       check(
-        "POST /accounts annualRevenue (scoped senior_manager) \u2192 403 financials-forbidden",
+        "POST /accounts annualRevenue (senior_manager, other owner) \u2192 403 financials-forbidden",
         smCreate.status === 403 && smCreate.body?.error === "financials-forbidden",
         `status=${smCreate.status} body=${JSON.stringify(smCreate.body)?.slice(0, 160)}`,
       );
@@ -2292,6 +2378,35 @@ async function main(): Promise<void> {
         "blocked revenue create persisted no account row",
         blockedRows.length === 0,
         `rows=${JSON.stringify(blockedRows)?.slice(0, 160)}`,
+      );
+
+      // 2b) Task #8 — sm creating with NO owner named: she becomes the owner
+      //     (never an ownerless account) and, as would-be owner, MAY seed
+      //     revenue at create (identical to PATCHing it as owner post-create).
+      const smOwnName = uniq("CreateGateOwnRevenue");
+      const smOwnCreate = await api("POST", "/accounts", PERSONA.sm, {
+        ...baseBody,
+        name: smOwnName,
+        annualRevenue: revenuePayload,
+      });
+      check(
+        "POST /accounts annualRevenue (senior_manager, self-owned) \u2192 200/201",
+        smOwnCreate.status === 200 || smOwnCreate.status === 201,
+        `status=${smOwnCreate.status} body=${JSON.stringify(smOwnCreate.body)?.slice(0, 160)}`,
+      );
+      const [smOwnRow] = await db
+        .select({
+          id: atelierAccounts.id,
+          partnerOwnerId: atelierAccounts.partnerOwnerId,
+          annualRevenue: atelierAccounts.annualRevenue,
+        })
+        .from(atelierAccounts)
+        .where(eq(atelierAccounts.name, smOwnName));
+      if (smOwnRow?.id) created.accounts.add(smOwnRow.id);
+      check(
+        "senior_manager create defaults partnerOwnerId to creator (not ownerless)",
+        smOwnRow?.partnerOwnerId === PERSONA.sm,
+        `partnerOwnerId=${smOwnRow?.partnerOwnerId}`,
       );
 
       // 3) the SAME persona CAN create an account with NON-financial fields when
@@ -2338,6 +2453,39 @@ async function main(): Promise<void> {
         "account-wide partner revenue create persisted (amount written)",
         fpRow?.annualRevenue?.amount === 555_000_000 && fpRow?.annualRevenue?.asOf === revenuePayload.asOf,
         `annualRevenue=${JSON.stringify(fpRow?.annualRevenue)?.slice(0, 160)}`,
+      );
+    }
+
+    // =====================================================================
+    group("REST \u00b7 Forecast hardening (Task #8)");
+    // Org scoping is explicit, money honours the account-financials gate
+    // (redacted opps keep their count but contribute zero value), and totals
+    // carry per-currency groupings + a mixedCurrency flag.
+    // =====================================================================
+    {
+      const fpFc = await api("GET", "/forecast?by=partner", PERSONA.fp);
+      check(
+        "GET /forecast (fp) \u2192 200 with byCurrency + mixedCurrency totals",
+        fpFc.status === 200 &&
+          typeof fpFc.body?.totals?.byCurrency === "object" &&
+          typeof fpFc.body?.totals?.mixedCurrency === "boolean" &&
+          typeof fpFc.body?.totals?.redactedCount === "number",
+        `status=${fpFc.status} totals=${JSON.stringify(fpFc.body?.totals)?.slice(0, 160)}`,
+      );
+
+      // Consultant: employee (passes the non-employee boundary) but scoped —
+      // owns no accounts, so every deal's money is redacted while occupancy
+      // counts survive.
+      const cFc = await api("GET", "/forecast?by=partner", PERSONA.consultant);
+      const cTotals = cFc.body?.totals;
+      check(
+        "GET /forecast (scoped consultant) \u2192 money fully redacted, counts kept",
+        cFc.status === 200 &&
+          cTotals?.weightedValueUsd === 0 &&
+          cTotals?.rawValueUsd === 0 &&
+          (cTotals?.count ?? 0) > 0 &&
+          cTotals?.redactedCount === cTotals?.count,
+        `status=${cFc.status} totals=${JSON.stringify(cTotals)?.slice(0, 200)}`,
       );
     }
 

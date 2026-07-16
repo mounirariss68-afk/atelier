@@ -99,6 +99,10 @@ export type ApplyStageTransitionResult =
       opportunity: OppRow;
       transition: StageTransitionWire;
       firedCharter: boolean;
+      // Task #8 — when the contract-entry engagement auto-create/charter
+      // hook fails, the stage move still succeeds but the failure is
+      // surfaced here (and in an audit event) instead of being swallowed.
+      engagementHookError: string | null;
     };
 
 /** Resolve the canonical from-stage for a row that may still carry a legacy label. */
@@ -296,8 +300,11 @@ export async function applyStageTransition(
 
   // Contract entry → ensure a linked engagement exists + charter it.
   let firedCharter = false;
+  let engagementHookError: string | null = null;
   if (to === "contract" && !opp.contractSignedAt) {
-    firedCharter = await ensureEngagementForContract(updated, actor);
+    const hook = await ensureEngagementForContract(updated, actor);
+    firedCharter = hook.firedCharter;
+    engagementHookError = hook.error;
   }
 
   // Closed-deal Win/Loss debrief enqueue (contract is the working "won").
@@ -310,6 +317,7 @@ export async function applyStageTransition(
     ok: true,
     opportunity: updated,
     firedCharter,
+    engagementHookError,
     transition: {
       id: transitionId,
       opportunityId: opp.id,
@@ -340,7 +348,7 @@ export async function applyStageTransition(
 export async function ensureEngagementForContract(
   opp: OppRow,
   actor: StageActor,
-): Promise<boolean> {
+): Promise<{ firedCharter: boolean; error: string | null }> {
   try {
     let [eng] = await db
       .select({ id: atelierEngagements.id, name: atelierEngagements.name })
@@ -396,7 +404,7 @@ export async function ensureEngagementForContract(
       .from(atelierCharterVersions)
       .where(eq(atelierCharterVersions.engagementId, eng.id))
       .limit(1);
-    if (existingCharter) return false;
+    if (existingCharter) return { firedCharter: false, error: null };
 
     await runCharterArchitect({
       engagementId: eng.id,
@@ -407,10 +415,29 @@ export async function ensureEngagementForContract(
       triggeredByUserId: actor.id,
       actorLabel: "Charter Architect",
     });
-    return true;
+    return { firedCharter: true, error: null };
   } catch (err) {
-    console.warn("[atelier] charter auto-fire failed (non-blocking)", err);
-    return false;
+    // Task #8 — the failure must never block the stage move, but it must be
+    // surfaced: audit row for the ops trail + error string for the caller,
+    // never a silent success.
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[atelier] engagement auto-create/charter failed (non-blocking)", err);
+    try {
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "opportunity",
+        entityId: opp.id,
+        actorType: "system",
+        actorId: "stage-transition-hook",
+        actorLabel: "Atelier",
+        action: "engagement.auto_create_failed",
+        payload: { opportunityId: opp.id, accountId: opp.accountId, error: message },
+        payloadSummary: `Automatic delivery-engagement setup failed for "${opp.name}" on Contract entry: ${message.slice(0, 160)}`,
+      });
+    } catch (auditErr) {
+      console.warn("[atelier] failed to record engagement auto-create failure", auditErr);
+    }
+    return { firedCharter: false, error: message };
   }
 }
 

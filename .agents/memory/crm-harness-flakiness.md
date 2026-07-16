@@ -9,7 +9,7 @@ harness triggers, not assertion bugs. `ATELIER_MOCK_AGENTS=1` is set by the harn
 honored by NO code; agents always call the real API.
 
 **Rule:** keep harness write paths that aren't testing an agent decoupled from live LLM
-runs. Opportunity creates pass `runScout: false` (the route awaits `runPursuitScout` ~45s
+runs. Opportunity creates pass `runScout: false` — BOTH the REST route and the chat opportunity_create capability await `runPursuitScout` (~45s
 otherwise). Account creates still fire a background Cartographer (fire-and-forget, no skip
 flag) — that's tolerated because it never blocks the HTTP response or a check.
 

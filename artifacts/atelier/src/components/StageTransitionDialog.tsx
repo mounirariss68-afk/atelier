@@ -32,6 +32,7 @@ import {
   SUB_STATUS_LABEL,
   TERMINAL_REASON_CODES,
   TERMINAL_STAGES,
+  isForwardAdvance,
 } from "@/lib/sales-stages";
 
 interface Props {
@@ -41,6 +42,10 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialToStage?: SalesStage;
+  /** Current deal size (USD) — used to preview the server advance-hygiene gate. */
+  dealSizeUsd?: number;
+  /** Existing next-milestone on the opportunity — satisfies the gate if set. */
+  currentNextMilestone?: string | null;
 }
 
 export function StageTransitionDialog({
@@ -50,6 +55,8 @@ export function StageTransitionDialog({
   open,
   onOpenChange,
   initialToStage,
+  dealSizeUsd,
+  currentNextMilestone,
 }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -104,8 +111,23 @@ export function StageTransitionDialog({
   // instead of a 412 round-trip.
   const isSuspectToProspect = currentStage === "suspect" && toStage === "prospect";
   const isConvertToRunner = currentStage === "convert" && toStage === "runner";
+  // Any forward jump INTO Runner (e.g. a direct prospect→runner skip) should
+  // still surface the verbal-commit gate fields so the "verbal yes" evidence
+  // is captured even though the server only strictly enforces it on the
+  // convert→runner edge.
+  const isEnteringRunner = toStage === "runner" && currentStage !== "runner";
   const isRunnerToContract = currentStage === "runner" && toStage === "contract";
   const isTerminalEntry = (TERMINAL_STAGES as readonly SalesStage[]).includes(toStage);
+
+  // Advance-hygiene gate preview (mirrors stage-service.ts): forward moves
+  // through the working pipeline need a concrete next step + a positive deal
+  // size. NOT bypassable by partner override — it's a data-quality invariant.
+  const isForward = isForwardAdvance(currentStage, toStage);
+  const effectiveNextMilestone =
+    (milestone.trim() || (currentNextMilestone ?? "").trim());
+  const missingNextStep = isForward && !effectiveNextMilestone;
+  const missingDealSize =
+    isForward && !(typeof dealSizeUsd === "number" && dealSizeUsd > 0);
 
   const subStatusOptions = SUB_STATUS_BY_STAGE[toStage] ?? [];
   const reasonOptions = isTerminalEntry
@@ -118,17 +140,34 @@ export function StageTransitionDialog({
       toast({ title: "Rationale required", variant: "destructive" });
       return;
     }
+    // Advance-hygiene gate — NOT bypassable by override (mirrors the server).
+    if (missingNextStep) {
+      toast({
+        title: "Next step required",
+        description: `A concrete next step is required before advancing to ${SALES_STAGE_LABEL[toStage]}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (missingDealSize) {
+      toast({
+        title: "Deal size required",
+        description: `Set a deal size greater than zero before advancing to ${SALES_STAGE_LABEL[toStage]}. Edit the opportunity to add it.`,
+        variant: "destructive",
+      });
+      return;
+    }
     // Client-side gate previews — partner-override skips them all.
     if (!override) {
-      if (isConvertToRunner) {
+      if (isEnteringRunner) {
         const missing: string[] = [];
         if (!decider.trim()) missing.push("decider");
         if (!verbalCommitDate.trim()) missing.push("verbal-commit date");
         if (!signaturePath.trim()) missing.push("signature path");
         if (missing.length) {
           toast({
-            title: "Convert → Runner gate",
-            description: `Provide ${missing.join(", ")} or use partner override.`,
+            title: `${SALES_STAGE_LABEL[currentStage]} → Runner gate`,
+            description: `Runner means a verbal yes — provide ${missing.join(", ")} or use partner override.`,
             variant: "destructive",
           });
           return;
@@ -173,9 +212,9 @@ export function StageTransitionDialog({
           nextMilestoneDate: milestoneDate.trim() || null,
           partnerOverride: override,
           subStatus: subStatus || null,
-          decider: isConvertToRunner ? decider.trim() || null : null,
-          verbalCommitDate: isConvertToRunner ? verbalCommitDate || null : null,
-          signaturePath: isConvertToRunner ? signaturePath.trim() || null : null,
+          decider: isEnteringRunner ? decider.trim() || null : null,
+          verbalCommitDate: isEnteringRunner ? verbalCommitDate || null : null,
+          signaturePath: isEnteringRunner ? signaturePath.trim() || null : null,
           signedInstrumentFileId: isRunnerToContract
             ? signedInstrumentFileId.trim() || null
             : null,
@@ -318,8 +357,14 @@ export function StageTransitionDialog({
                     value={milestone}
                     onChange={(e) => setMilestone(e.target.value)}
                     placeholder="e.g. POV demo with COO"
-                    className="bg-bg-deep border-border-soft"
+                    className={`bg-bg-deep ${missingNextStep ? "border-danger" : "border-border-soft"}`}
+                    aria-invalid={missingNextStep}
                   />
+                  {missingNextStep && (
+                    <p className="text-[10px] text-danger font-mono">
+                      A concrete next step is required to advance to {SALES_STAGE_LABEL[toStage]}.
+                    </p>
+                  )}
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="t-milestone-date" className="text-xs uppercase tracking-widest font-mono text-text-faint">
@@ -352,6 +397,18 @@ export function StageTransitionDialog({
               </p>
             </div>
 
+            {missingDealSize && (
+              <div className="rounded border border-danger/40 bg-danger/10 p-3 text-xs text-danger sm:col-span-2">
+                <span className="block font-mono uppercase tracking-wider mb-1">
+                  Deal size required
+                </span>
+                A deal size greater than zero is required before advancing to{" "}
+                {SALES_STAGE_LABEL[toStage]}. Close this dialog, edit the
+                opportunity to set a deal size, then retry. Partner override does
+                not bypass this data-quality check.
+              </div>
+            )}
+
             {isSuspectToProspect && (
               <div className="rounded border border-gold/40 bg-gold/5 p-3 text-xs text-text-mute sm:col-span-2">
                 <span className="block font-mono uppercase tracking-wider text-gold mb-1">
@@ -362,11 +419,17 @@ export function StageTransitionDialog({
               </div>
             )}
 
-            {isConvertToRunner && (
+            {isEnteringRunner && (
               <div className="grid gap-3 rounded border border-gold/40 bg-gold/5 p-3 sm:col-span-2">
                 <span className="font-mono uppercase tracking-wider text-gold text-xs">
-                  Convert → Runner gate
+                  {SALES_STAGE_LABEL[currentStage]} → Runner gate
                 </span>
+                {!isConvertToRunner && (
+                  <p className="text-[10px] text-text-mute">
+                    Skipping straight into Runner — capture the verbal-yes evidence
+                    (a Runner is a committed verbal agreement).
+                  </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="grid gap-2">
                     <Label htmlFor="t-decider" className="text-[10px] uppercase tracking-widest font-mono text-text-faint">
@@ -474,7 +537,11 @@ export function StageTransitionDialog({
             <PillButton type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </PillButton>
-            <PillButton type="submit" variant="primary" disabled={transition.isPending}>
+            <PillButton
+              type="submit"
+              variant="primary"
+              disabled={transition.isPending || missingNextStep || missingDealSize}
+            >
               {transition.isPending ? "Moving…" : "Commit move"}
             </PillButton>
           </div>

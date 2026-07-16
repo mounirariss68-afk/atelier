@@ -30,7 +30,7 @@
  * callers (route guards + capability requiredRoles), not here.
  */
 
-import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, notInArray } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
@@ -54,6 +54,10 @@ export interface LifecycleActor {
 const TERMINAL_OPP_STAGES = new Set(["contract", "lost", "no_decision", "withdrawn"]);
 // Engagement plmStage that represents a closed engagement.
 const ENGAGEMENT_CLOSED_STAGE = "closed";
+// Task #8 — engagement stages that are already terminal. Archive must not
+// clobber these (legacy rows may carry "won"/"lost"), and restore must not
+// reactivate them. Mirrors the activeEngs filter in accountRoutes.
+const ENGAGEMENT_TERMINAL_STAGES = ["closed", "won", "lost"];
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -204,7 +208,7 @@ export async function archiveAccount(
         eq(atelierEngagements.accountId, acc.id),
         eq(atelierEngagements.orgId, actor.orgId),
         isNull(atelierEngagements.deletedAt),
-        ne(atelierEngagements.plmStage, ENGAGEMENT_CLOSED_STAGE),
+        notInArray(atelierEngagements.plmStage, ENGAGEMENT_TERMINAL_STAGES),
       ),
     );
   for (const e of engRows) {

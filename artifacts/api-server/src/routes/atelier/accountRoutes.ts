@@ -424,13 +424,23 @@ async function persistReviewedResearch(args: {
 
     // Resolve reports_to edges now that every contact has an id. We only link
     // when the named manager is also in the seeded set (no dangling edges).
+    // Task #8 — track the batch's edges in-memory and reject any edge that
+    // would close a reporting cycle (agent output can name A→B and B→A).
     let edgeCount = 0;
+    const seededManagers = new Map<string, string[]>();
     for (const dm of decisionMakers) {
       const reportsToName = (dm.reportsToName ?? "").trim();
       if (!reportsToName) continue;
       const fromId = nameToId.get(dm.fullName.trim().toLowerCase());
       const toId = nameToId.get(reportsToName.toLowerCase());
       if (fromId && toId && fromId !== toId) {
+        if (cycleInManagers(seededManagers, fromId, toId)) {
+          console.warn(
+            `[atelier] skipped seeded reports_to edge ${fromId} -> ${toId}: would create a reporting cycle`,
+          );
+          continue;
+        }
+        seededManagers.set(fromId, [...(seededManagers.get(fromId) ?? []), toId]);
         await tx.insert(atelierContactRelationships).values({
           id: rid("cr"),
           orgId: account.orgId,
@@ -489,8 +499,7 @@ router.post("/accounts", async (req, res) => {
   if (input.annualRevenue != null) {
     const access = await accessibleEngagementIds(me);
     const wouldBeOwner =
-      input.partnerOwnerId ??
-      (me.role === "partner" || me.role === "founding_partner" ? me.id : null);
+      input.partnerOwnerId ?? (CREATE_ROLES.has(me.role) ? me.id : null);
     const accountWide =
       access.all || (wouldBeOwner != null && wouldBeOwner === me.id);
     const canEditFinancials =
@@ -554,7 +563,10 @@ router.post("/accounts", async (req, res) => {
         primaryLanguage: input.primaryLanguage,
         tier: input.tier,
         status: input.status,
-        partnerOwnerId: input.partnerOwnerId ?? ((me.role === "partner" || me.role === "founding_partner") ? me.id : null),
+        // Task #8 — default the owner to the creator for EVERY role allowed to
+        // create accounts (incl. senior_manager); an ownerless account is
+        // invisible to owner-scoped views and forecast partner roll-ups.
+        partnerOwnerId: input.partnerOwnerId ?? (CREATE_ROLES.has(me.role) ? me.id : null),
         relationshipStrength: 0,
         sourceSignals: [],
         strategicPriorities: (input.strategicPriorities ?? []).map((s) => s.trim()).filter(Boolean),
@@ -3676,13 +3688,42 @@ async function applyProfileUpdateDecisions(args: {
                     ),
                   );
                 if (!edge) {
-                  await tx.insert(atelierContactRelationships).values({
-                    id: rid("cr"),
-                    accountId: a.id,
-                    fromContactId: fromId,
-                    toContactId: toId,
-                    type: "reports_to",
-                  });
+                  // Task #8 — cycle guard: walk EVERY existing live
+                  // reports_to edge on the account (within this tx) before
+                  // inserting; agent proposals can otherwise close a loop.
+                  const existingEdges = await tx
+                    .select({
+                      fromContactId: atelierContactRelationships.fromContactId,
+                      toContactId: atelierContactRelationships.toContactId,
+                    })
+                    .from(atelierContactRelationships)
+                    .where(
+                      and(
+                        eq(atelierContactRelationships.accountId, a.id),
+                        eq(atelierContactRelationships.type, "reports_to"),
+                        isNull(atelierContactRelationships.deletedAt),
+                      ),
+                    );
+                  const managersOf = new Map<string, string[]>();
+                  for (const e of existingEdges) {
+                    managersOf.set(e.fromContactId, [
+                      ...(managersOf.get(e.fromContactId) ?? []),
+                      e.toContactId,
+                    ]);
+                  }
+                  if (cycleInManagers(managersOf, fromId, toId)) {
+                    console.warn(
+                      `[atelier] skipped proposed reports_to edge ${fromId} -> ${toId}: would create a reporting cycle`,
+                    );
+                  } else {
+                    await tx.insert(atelierContactRelationships).values({
+                      id: rid("cr"),
+                      accountId: a.id,
+                      fromContactId: fromId,
+                      toContactId: toId,
+                      type: "reports_to",
+                    });
+                  }
                 }
               }
             }
@@ -4344,6 +4385,29 @@ router.post("/contacts/:contactId/merge", async (req, res) => {
 // ---------- contact relationships (Task #567) ----------
 // Detect whether adding `from reports_to to` would create a reporting cycle by
 // walking the existing reports_to chain upward from `to`.
+// Task #8 — pure in-memory variant of the cycle walk, for seed paths that
+// insert several reports_to edges inside one transaction (the async DB-backed
+// guard below can't see uncommitted rows). `managersOf` maps contactId -> its
+// managers; returns true when adding from->to would close a cycle.
+function cycleInManagers(
+  managersOf: Map<string, string[]>,
+  fromContactId: string,
+  toContactId: string,
+): boolean {
+  if (fromContactId === toContactId) return true;
+  const seen = new Set<string>();
+  const stack: string[] = [toContactId];
+  while (stack.length) {
+    const cursor = stack.pop()!;
+    if (cursor === fromContactId) return true;
+    if (seen.has(cursor)) continue;
+    seen.add(cursor);
+    const next = managersOf.get(cursor);
+    if (next) stack.push(...next);
+  }
+  return false;
+}
+
 async function wouldCreateReportsCycle(
   accountId: string,
   fromContactId: string,

@@ -78,6 +78,7 @@ import {
   type PovOutline,
 } from "../../lib/atelier-agents/runner.js";
 import { getAgent } from "@workspace/agents";
+import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -109,6 +110,19 @@ async function loadOpp(id: string) {
   return row;
 }
 
+// Task #8 — canonical stalled-aging basis: opportunities sitting in the
+// runner stage age from runnerEnteredAt (sticky timestamp set on entry);
+// daysInStage is used as the fallback and for every other stage.
+function effectiveDaysInStage(
+  o: { daysInStage: number; runnerEnteredAt: Date | null },
+  salesStage: string,
+): number {
+  if (salesStage === "runner" && o.runnerEnteredAt) {
+    return Math.floor((Date.now() - o.runnerEnteredAt.getTime()) / 86_400_000);
+  }
+  return o.daysInStage;
+}
+
 async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
   const [acct] = await db.select().from(atelierAccounts).where(eq(atelierAccounts.id, o.accountId));
   const [partner] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, o.partnerOwnerId));
@@ -135,8 +149,11 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
     closeDate: o.closeDate ?? null,
     forecastCategory: o.forecastCategory,
     sourceLead: o.sourceLead,
+    // Task #8 — stalled aging: in the runner stage, age from the sticky
+    // runnerEnteredAt timestamp (daysInStage is reset by sub-status churn
+    // and undercounts); everywhere else keep daysInStage.
     stalled:
-      o.daysInStage > STALLED_THRESHOLD_DAYS &&
+      effectiveDaysInStage(o, salesStage) > STALLED_THRESHOLD_DAYS &&
       salesStage !== "contract" &&
       salesStage !== "lost" &&
       salesStage !== "no_decision" &&
@@ -593,63 +610,8 @@ router.post("/opportunities/:oppId/qualification-rubric", async (req, res) => {
   res.json(rubric);
 });
 
-async function persistBriefAndFacts(
-  oppId: string,
-  runId: string,
-  out: PursuitScoutOutput,
-): Promise<{ persisted: boolean; reason?: "empty" }> {
-  // Task #653 — validate the Scout output before it becomes the brief of
-  // record. The model can return a structurally-valid-but-empty object (a soft
-  // refusal for accounts with no public footprint). Persisting that would put a
-  // blank brief in front of the partner as if it were research. Require at least
-  // one narrative section to carry content; otherwise skip persistence and leave
-  // the prior brief (if any) intact rather than overwriting it with nothing.
-  if (isScoutBriefEmpty(out)) {
-    console.warn(`[atelier] scout produced an empty brief for ${oppId} — skipping persist`);
-    return { persisted: false, reason: "empty" };
-  }
-  // Run facts through the citation guardrail so any claim without a real source
-  // URL is confidence-downgraded (never silently promoted as green evidence).
-  const guardedFacts = applyCitationGuardrail(out.facts ?? []);
-  // Soft-delete prior briefs so the latest is the source of truth.
-  await db
-    .update(atelierBriefs)
-    .set({ deletedAt: new Date() })
-    .where(and(eq(atelierBriefs.opportunityId, oppId), isNull(atelierBriefs.deletedAt)));
-  await db.insert(atelierBriefs).values({
-    id: rid("brief"),
-    opportunityId: oppId,
-    runId,
-    accountSnapshot: out.accountSnapshot,
-    buyerLandscape: out.buyerLandscape,
-    fiveCDraft: out.fiveCDraft,
-    openQuestions: out.openQuestions ?? [],
-    citations: guardedFacts,
-    confidence: out.confidence ?? "amber",
-  });
-  // Insert facts (don't dedupe — run history is the audit).
-  // Every fact emitted by the scout into the brief is by definition
-  // `included_in_brief=true`; the partner can later flip POV inclusion
-  // on a per-fact basis via the promote endpoint.
-  if (guardedFacts.length) {
-    await db.insert(atelierResearchFacts).values(
-      guardedFacts.map((f) => ({
-        id: f.id ?? rid("fact"),
-        opportunityId: oppId,
-        runId,
-        topic: f.topic,
-        statement: f.statement,
-        sourceUrl: f.sourceUrl ?? null,
-        sourceTitle: f.sourceTitle ?? null,
-        snippet: f.snippet ?? null,
-        confidence: f.confidence,
-        retrievedAt: new Date(),
-        includedInBrief: true,
-      })),
-    );
-  }
-  return { persisted: true };
-}
+// Task #8 — persistBriefAndFacts moved to lib/atelier-agents/scout-persist.ts
+// so the chat opportunity_create capability shares the exact same logic.
 
 // =============================================================
 // PATCH stage  (5C gate enforced for `pursue`)
@@ -1747,7 +1709,8 @@ async function computeForecast() {
       totalCount += 1;
       totalDeal += o.dealSizeHypothesis;
       weightedTotal += w;
-      if (o.daysInStage > STALLED_THRESHOLD_DAYS) stalled += 1;
+      // Task #8 — same runner-aware aging as buildOppWire.
+      if (effectiveDaysInStage(o, s) > STALLED_THRESHOLD_DAYS) stalled += 1;
     }
   }
   const bucketsWire = Array.from(buckets.entries()).map(([stage, b]) => ({

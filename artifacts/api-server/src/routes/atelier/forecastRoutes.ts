@@ -6,10 +6,21 @@
  * Each row exposes count, weightedValueUsd, and (where appropriate) a
  * breakdown by sales stage. Forecast values are derived from
  * dealSizeHypothesis * probabilityPct, matching the home pipeline math.
+ *
+ * Task #8 hardening:
+ *  - Every query is explicitly org-scoped (previously relied solely on
+ *    connection-level RLS, which the app connection bypasses).
+ *  - Financial redaction: personas without account-wide financial authority
+ *    over an opportunity's account see it counted but with its money values
+ *    excluded from all roll-ups (rows carry redactedCount so the UI can say
+ *    "N deals withheld" instead of silently under-reporting).
+ *  - Currency awareness: totals are grouped per account primaryCurrency in
+ *    totals.byCurrency and flagged mixedCurrency so the UI never presents a
+ *    cross-currency sum under a bare "$" label.
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { isNull, gte } from "drizzle-orm";
+import { isNull, gte, and, eq } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -18,6 +29,8 @@ import {
   atelierOpportunityStageTransitions,
 } from "@workspace/db";
 import { rejectNonEmployeePersona } from "./rosterRoutes";
+import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
+import { accessibleEngagementIds } from "./engagementRoutes";
 
 function ensurePersona(req: Request, res: Response): typeof atelierUsers.$inferSelect | null {
   if (!req.atelierPersona) {
@@ -64,14 +77,45 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const by = String(req.query.by ?? "partner");
+  // Task #8 — explicit org scoping on every query (defence in depth on top
+  // of RLS; the pooled app connection is BYPASSRLS in some environments).
   const opps = await db
     .select()
     .from(atelierOpportunities)
-    .where(isNull(atelierOpportunities.deletedAt));
-  const accts = await db.select().from(atelierAccounts);
+    .where(
+      and(
+        eq(atelierOpportunities.orgId, me.orgId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  const accts = await db
+    .select()
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.orgId, me.orgId));
   const acctMap = new Map(accts.map((a) => [a.id, a]));
-  const users = await db.select().from(atelierUsers);
+  const users = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.orgId, me.orgId));
   const userMap = new Map(users.map((u) => [u.id, u]));
+
+  // Task #8 — per-opportunity financial visibility, mirroring the account
+  // financials gate (accountRoutes): account-wide authority = firm-wide
+  // engagement access OR owning the account; restricted / board personas
+  // never see money. Redacted opportunities stay in `count` (occupancy is
+  // not financial) but contribute nothing to any *ValueUsd figure.
+  const access = await accessibleEngagementIds(me);
+  const personaMaySeeMoney =
+    !isRestrictedPersona(me.role ?? null) && !isBoardObserver(me.role ?? null);
+  const myUserId = me.id;
+  function canSeeMoney(o: (typeof opps)[number]): boolean {
+    if (!personaMaySeeMoney) return false;
+    if (access.all) return true;
+    const acct = acctMap.get(o.accountId);
+    return acct?.partnerOwnerId === myUserId;
+  }
+  const currencyOf = (o: (typeof opps)[number]): string =>
+    acctMap.get(o.accountId)?.primaryCurrency ?? "USD";
 
   type Row = {
     key: string;
@@ -80,6 +124,8 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
     weightedValueUsd: number;
     rawValueUsd: number;
     byStage: Record<string, number>;
+    redactedCount: number;
+    byCurrency: Record<string, { weightedValue: number; rawValue: number; count: number }>;
   };
   const buckets = new Map<string, Row>();
   function bump(key: string, label: string, o: typeof opps[number]) {
@@ -92,10 +138,22 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
         weightedValueUsd: 0,
         rawValueUsd: 0,
         byStage: {},
+        redactedCount: 0,
+        byCurrency: {},
       };
     r.count += 1;
-    r.weightedValueUsd += (o.dealSizeHypothesis * o.probabilityPct) / 100;
-    r.rawValueUsd += o.dealSizeHypothesis;
+    if (canSeeMoney(o)) {
+      const ccy = currencyOf(o);
+      r.weightedValueUsd += (o.dealSizeHypothesis * o.probabilityPct) / 100;
+      r.rawValueUsd += o.dealSizeHypothesis;
+      const c = r.byCurrency[ccy] ?? { weightedValue: 0, rawValue: 0, count: 0 };
+      c.weightedValue += (o.dealSizeHypothesis * o.probabilityPct) / 100;
+      c.rawValue += o.dealSizeHypothesis;
+      c.count += 1;
+      r.byCurrency[ccy] = c;
+    } else {
+      r.redactedCount += 1;
+    }
     r.byStage[o.salesStage] = (r.byStage[o.salesStage] ?? 0) + 1;
     buckets.set(key, r);
   }
@@ -134,19 +192,39 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
       count: acc.count + r.count,
       weightedValueUsd: acc.weightedValueUsd + r.weightedValueUsd,
       rawValueUsd: acc.rawValueUsd + r.rawValueUsd,
+      redactedCount: acc.redactedCount + r.redactedCount,
     }),
-    { count: 0, weightedValueUsd: 0, rawValueUsd: 0 },
+    { count: 0, weightedValueUsd: 0, rawValueUsd: 0, redactedCount: 0 },
   );
+  // Task #8 — currency-aware totals: sums grouped per account currency plus
+  // a mixedCurrency flag so the UI never labels a cross-currency sum "USD".
+  const totalsByCurrency: Record<
+    string,
+    { weightedValue: number; rawValue: number; count: number }
+  > = {};
+  for (const r of rows) {
+    for (const [ccy, c] of Object.entries(r.byCurrency)) {
+      const t = totalsByCurrency[ccy] ?? { weightedValue: 0, rawValue: 0, count: 0 };
+      t.weightedValue += c.weightedValue;
+      t.rawValue += c.rawValue;
+      t.count += c.count;
+      totalsByCurrency[ccy] = t;
+    }
+  }
+  const mixedCurrency = Object.keys(totalsByCurrency).length > 1;
 
   // Week-over-week deltas: rebuild the same buckets at "as-of last Monday"
   // by rewinding probabilityPct to the priorProbabilityPct of any stage
   // transition that happened in the last 7 days. Opps with no transitions
   // are assumed unchanged.
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const recentTrans = await db
-    .select()
-    .from(atelierOpportunityStageTransitions)
-    .where(gte(atelierOpportunityStageTransitions.createdAt, sevenDaysAgo));
+  const oppIds = new Set(opps.map((o) => o.id));
+  const recentTrans = (
+    await db
+      .select()
+      .from(atelierOpportunityStageTransitions)
+      .where(gte(atelierOpportunityStageTransitions.createdAt, sevenDaysAgo))
+  ).filter((t) => oppIds.has(t.opportunityId)); // Task #8 — org scope via this org's opps.
   const lastWeekProb = new Map<string, number>(); // oppId -> earliest prior prob in window
   for (const t of recentTrans) {
     const cur = lastWeekProb.get(t.opportunityId);
@@ -156,6 +234,7 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
   }
   const lastWeekBuckets = new Map<string, number>(); // key -> weighted
   function priorBump(key: string, o: typeof opps[number]) {
+    if (!canSeeMoney(o)) return; // Task #8 — deltas honour redaction too.
     const prevProb = lastWeekProb.has(o.id)
       ? lastWeekProb.get(o.id)!
       : o.probabilityPct;
@@ -234,6 +313,8 @@ router.get("/forecast", rejectNonEmployeePersona, async (req, res) => {
       ...totals,
       weightedValueUsdLastWeek: lastWeekTotalWeighted,
       deltaWeightedValueUsd: totals.weightedValueUsd - lastWeekTotalWeighted,
+      byCurrency: totalsByCurrency,
+      mixedCurrency,
     },
     movers,
     funnel,

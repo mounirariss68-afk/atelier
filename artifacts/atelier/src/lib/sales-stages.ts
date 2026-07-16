@@ -141,6 +141,27 @@ export function runnerAgeTier(days: number | null): RunnerAgeTier {
   return "red";
 }
 
+/**
+ * Working-pipeline ordering — mirrors WORKING_ORDER in the server's
+ * stage-service.ts. Used client-side to detect a *forward* advance so the
+ * StageTransitionDialog can preview the server's advance-hygiene gate
+ * (a concrete next step + a positive deal size are required to advance).
+ */
+export const WORKING_ORDER: Record<string, number> = {
+  suspect: 0,
+  prospect: 1,
+  convert: 2,
+  runner: 3,
+  contract: 4,
+};
+
+/** True when moving `from` → `to` advances forward through the working pipeline. */
+export function isForwardAdvance(from: SalesStage, to: SalesStage): boolean {
+  const f = WORKING_ORDER[from];
+  const t = WORKING_ORDER[to];
+  return f !== undefined && t !== undefined && t > f;
+}
+
 export function stageTone(s: SalesStage): "default" | "gold" | "green" | "amber" | "red" {
   if (s === "contract") return "green";
   if (s === "lost" || s === "no_decision" || s === "withdrawn") return "red";

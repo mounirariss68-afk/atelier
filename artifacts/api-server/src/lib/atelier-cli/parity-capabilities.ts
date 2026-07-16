@@ -36,6 +36,8 @@ import {
   atelierExpenses,
   atelierAuditEvents,
 } from "@workspace/db";
+import { runPursuitScout } from "../atelier-agents/runner.js";
+import { persistBriefAndFacts } from "../atelier-agents/scout-persist.js";
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
@@ -160,6 +162,16 @@ defineCapability({
     if (name.length < 3) return denyInvalid("name must be at least 3 characters");
     if (ACCOUNT_NAME_STOP_WORDS.has(name.toLowerCase()))
       return denyInvalid(`"${name}" is too generic — please supply the actual account name`);
+    // Task #8 — financial-authority gate, mirroring POST /accounts. The chat
+    // schema doesn't advertise annualRevenue, but the orchestrator can pass
+    // arbitrary extra fields; explicitly reject a revenue write from any
+    // persona without account-wide financial authority instead of relying on
+    // the field being silently dropped.
+    if ((input as Record<string, unknown>).annualRevenue != null) {
+      return denyForbidden(
+        "Annual revenue can only be set by personas with account-wide financial authority — use the account edit dialog.",
+      );
+    }
     const country = String(input.country ?? "").trim();
     const sector = String(input.sector ?? "").trim();
     if (input.confirm !== true) {
@@ -230,9 +242,13 @@ defineCapability({
         primaryLanguage: (input.primaryLanguage === "ar" ? "ar" : "en"),
         tier: (input.tier as string) ?? "C",
         status: "active",
+        // Task #8 — a senior_manager creator without an explicit partner
+        // owner previously produced an OWNERLESS account (invisible to
+        // owner-scoped views). Default the owner to the creator for every
+        // role allowed to create accounts, matching the REST route.
         partnerOwnerId:
           (input.partnerOwnerId as string | undefined) ??
-          (PARTNER_TIER.has(ctx.persona.role) ? ctx.persona.id : null),
+          (LEADERSHIP_OR_SM.has(ctx.persona.role) ? ctx.persona.id : null),
         relationshipStrength: 0,
         sourceSignals: [],
         strategicPriorities: [],
@@ -459,18 +475,26 @@ defineCapability({
       dealSizeUsd: { type: "number" },
       probabilityPct: { type: "number" },
       nextMilestone: { type: "string" },
+      runScout: { type: "boolean" },
       confirm: { type: "boolean" },
     },
     required: ["name"],
   },
   isWrite: true,
   irreversible: false,
-  requiredRoles: [...ALL_BUT_OBSERVER],
+  // Task #8 — parity with REST/account creation: opportunity creation is a
+  // leadership action (founding_partner/partner/senior_manager), the same
+  // CREATE_ROLES gate the account routes enforce. Contractors/consultants
+  // can no longer create opportunities from chat.
+  requiredRoles: ["founding_partner", "partner", "senior_manager"],
   surfaceOn: ["global", "account_workspace", "opportunity_workspace"],
   twoPhaseConfirm: true,
   outboundChannel: null,
   resultCard: "opportunity_card",
   async run(input, ctx) {
+    if (!LEADERSHIP_OR_SM.has(ctx.persona.role)) {
+      return denyForbidden("Only Partner or Senior Manager personas can create opportunities.");
+    }
     const name = String(input.name ?? "").trim();
     if (!name) return denyInvalid("name required");
     let accountId = String(input.accountId ?? "");
@@ -509,13 +533,49 @@ defineCapability({
         partnerOwnerId: (input.partnerOwnerId as string | undefined) ?? ctx.persona.id,
         engagementLeadId: (input.engagementLeadId as string | undefined) ?? ctx.persona.id,
         dealSizeHypothesis: Number(input.dealSizeUsd ?? 0),
-        probabilityPct: Number(input.probabilityPct ?? 10),
+        // Task #8 — default probability aligned with the REST create route
+        // (25%), so chat- and UI-created opportunities land in the same
+        // forecast band.
+        probabilityPct: Number(input.probabilityPct ?? 25),
         nextMilestone: String(input.nextMilestone ?? "Initial qualification"),
         sourceLead: String(input.sourceLead ?? "cli"),
         createdByUserId: ctx.persona.id,
       })
       .returning();
     await recordAudit(ctx, "opportunity", row.id, "opportunity.created.cli", { name, accountId }, `${ctx.persona.name} created opportunity "${name}" via CLI.`);
+    // Task #8 — chat/REST parity: auto-run Pursuit Scout exactly like the
+    // REST create route. The opportunity is already committed, so a failed
+    // or empty Scout run never blocks creation — but it IS surfaced in the
+    // result payload instead of being silently absent.
+    let scout: { status: "completed" | "empty" | "failed" | "skipped"; error?: string } = {
+      status: "skipped",
+    };
+    let scoutRunId: string | null = null;
+    if (input.runScout !== false) {
+      try {
+        const [acct] = await db
+          .select({ name: atelierAccounts.name, country: atelierAccounts.country, sector: atelierAccounts.sector })
+          .from(atelierAccounts)
+          .where(and(eq(atelierAccounts.id, accountId), eq(atelierAccounts.orgId, ctx.persona.orgId)));
+        const { runId, output } = await runPursuitScout({
+          opportunityId: row.id,
+          accountName: acct?.name ?? accountId,
+          accountCountry: acct?.country ?? "",
+          accountSector: acct?.sector ?? "",
+          opportunityName: row.name,
+          contextBlurb: String(input.description ?? "").trim(),
+          triggeredByUserId: ctx.persona.id,
+          actorLabel: "Pursuit Scout",
+        });
+        scoutRunId = runId;
+        const persisted = await persistBriefAndFacts(row.id, runId, output);
+        scout = persisted.persisted ? { status: "completed" } : { status: "empty" };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn("[atelier-cli] scout failed on chat opportunity create", err);
+        scout = { status: "failed", error: message };
+      }
+    }
     // Task #511 — newly created opportunity opens its workspace.
     return {
       ok: true,
@@ -523,6 +583,8 @@ defineCapability({
         id: row.id,
         name: row.name,
         accountId,
+        scout,
+        scoutRunId,
         navigateTo: { path: `/opportunities/${row.id}`, when: "on_commit" as const },
       },
     };

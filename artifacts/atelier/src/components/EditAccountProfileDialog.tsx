@@ -26,6 +26,16 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
+// Scope decision (T005): firmographic identity fields — sector, hqCity,
+// country, and tier — are intentionally NOT editable here. They are owned by
+// the Cartographer research pipeline and are not part of
+// AtelierUpdateAccountInput, so the PATCH endpoint would reject them. This
+// dialog only exposes the partner-editable enrichment fields the server
+// accepts (notes, parent, strategy, competitors, employeeCount, annualRevenue,
+// holdingStructure, countryPresence, entityRole, primaryCurrency). Surfacing
+// the read-only firmographics as inputs would imply an edit capability that
+// does not exist, so they are shown elsewhere (Account header) as read-only.
+
 const CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "EGP", "TRY"];
 
 // Server-enforced caps (mirror CreateAccountDialog so the PATCH body never
