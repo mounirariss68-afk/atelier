@@ -36,6 +36,7 @@ import {
   ChevronUp,
   AlertCircle,
   CheckCircle2,
+  Loader2,
   Clock,
   Copy,
   ExternalLink,
@@ -513,6 +514,8 @@ export function CommandBar(props: CommandBarProps) {
   }
 
   function handleConfirm() {
+    // Task #24 — duplicate click while a confirm is streaming: no-op.
+    if (cli.confirming) return;
     const required = cli.current?.pending?.typedNameRequired;
     if (required && typedName.trim() !== required.trim()) {
       // Server will also reject; we surface the local check immediately
@@ -738,6 +741,7 @@ export function CommandBar(props: CommandBarProps) {
               setEditingPlanRow={setEditingPlanRow}
               typedName={typedName}
               setTypedName={setTypedName}
+              confirming={cli.confirming}
               onConfirm={handleConfirm}
               onCancelTurn={() => void cli.cancel()}
               onPickDisambig={(id, label) => void cli.pickDisambig(id, label)}
@@ -1084,6 +1088,7 @@ function Transcript({
   setEditingPlanRow,
   typedName,
   setTypedName,
+  confirming,
   onConfirm,
   onCancelTurn,
   onPickDisambig,
@@ -1110,6 +1115,7 @@ function Transcript({
   setEditingPlanRow: (n: number | null) => void;
   typedName: string;
   setTypedName: (v: string) => void;
+  confirming: boolean;
   onConfirm: () => void;
   onCancelTurn: () => void;
   onPickDisambig: (id: string, label: string) => void;
@@ -1191,6 +1197,7 @@ function Transcript({
                   setEditingPlanRow={setEditingPlanRow}
                   typedName={typedName}
                   setTypedName={setTypedName}
+                  confirming={confirming}
                   onConfirm={onConfirm}
                   onCancelTurn={onCancelTurn}
                   onPickDisambig={onPickDisambig}
@@ -1289,6 +1296,7 @@ function TurnBody({
   setEditingPlanRow,
   typedName,
   setTypedName,
+  confirming,
   onConfirm,
   onCancelTurn,
   onPickDisambig,
@@ -1313,6 +1321,7 @@ function TurnBody({
   setEditingPlanRow: (n: number | null) => void;
   typedName: string;
   setTypedName: (v: string) => void;
+  confirming: boolean;
   onConfirm: () => void;
   onCancelTurn: () => void;
   onPickDisambig: (id: string, label: string) => void;
@@ -1632,15 +1641,24 @@ function TurnBody({
             <button
               type="button"
               onClick={onConfirm}
+              // Task #24 — disabled while the confirm request is in
+              // flight so a double-click can't fire twice, with a
+              // visible "Confirming…" state.
               disabled={
-                !!turn.pending.typedNameRequired &&
-                typedName.trim() !== turn.pending.typedNameRequired.trim()
+                confirming ||
+                (!!turn.pending.typedNameRequired &&
+                  typedName.trim() !== turn.pending.typedNameRequired.trim())
               }
+              aria-busy={confirming}
               className="inline-flex items-center gap-1.5 bg-gold text-bg-deep font-semibold text-xs px-3 py-1.5 rounded hover:bg-gold/90 disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="cli-confirm"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              {s("confirm", locale)}
+              {confirming ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4" />
+              )}
+              {confirming ? s("confirming", locale) : s("confirm", locale)}
             </button>
             <button
               type="button"
@@ -1662,7 +1680,8 @@ function TurnBody({
             <button
               type="button"
               onClick={onCancelTurn}
-              className="text-xs text-text-mute hover:text-danger px-3 py-1.5 rounded hover:bg-bg-elevate-2"
+              disabled={confirming}
+              className="text-xs text-text-mute hover:text-danger px-3 py-1.5 rounded hover:bg-bg-elevate-2 disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="cli-cancel"
             >
               {s("cancel", locale)}

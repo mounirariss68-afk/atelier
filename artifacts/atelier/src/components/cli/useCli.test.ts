@@ -10,7 +10,7 @@
  * Throws on the first failed assertion.
  */
 import assert from "node:assert/strict";
-import { applyFrame, tryFireNavigation } from "./useCli";
+import { applyFrame, tryFireNavigation, confirmGate, abortOutcome } from "./useCli";
 import type { CliFrame, CliTurn } from "./types";
 
 let pass = 0;
@@ -255,6 +255,62 @@ test("swallows onNavigate exceptions so the stream keeps going", () => {
   });
   assert.equal(result.fired, true);
   assert.equal(result.navigatedTo, "/accounts/a");
+});
+
+console.log("\nconfirmGate — Task #24 confirm race protection");
+
+test("double-click while confirming is a no-op (never aborts in-flight confirm)", () => {
+  assert.equal(
+    confirmGate({ confirming: true, serverTurnId: "turn_1" }),
+    "noop_in_flight",
+  );
+  // Even mid-wait (no serverTurnId yet), a second click is still gated.
+  assert.equal(
+    confirmGate({ confirming: true, serverTurnId: null }),
+    "noop_in_flight",
+  );
+});
+
+test("confirm before serverTurnId lands waits instead of silently returning", () => {
+  assert.equal(
+    confirmGate({ confirming: false, serverTurnId: null }),
+    "wait_for_turn_id",
+  );
+  assert.equal(
+    confirmGate({ confirming: false, serverTurnId: undefined }),
+    "wait_for_turn_id",
+  );
+});
+
+test("normal confirm with a turn id starts immediately", () => {
+  assert.equal(confirmGate({ confirming: false, serverTurnId: "turn_1" }), "start");
+});
+
+console.log("abortOutcome — Task #24 abort vs user-cancel mapping");
+
+test("explicit user cancel publishes cancelled", () => {
+  assert.equal(
+    abortOutcome({ isActiveTurn: true, userCancelRequested: true }),
+    "publish_cancelled",
+  );
+});
+
+test("supersede/duplicate abort is dropped silently (no phantom Cancelled)", () => {
+  assert.equal(
+    abortOutcome({ isActiveTurn: true, userCancelRequested: false }),
+    "drop",
+  );
+});
+
+test("abort on a superseded (inactive) turn is always dropped", () => {
+  assert.equal(
+    abortOutcome({ isActiveTurn: false, userCancelRequested: true }),
+    "drop",
+  );
+  assert.equal(
+    abortOutcome({ isActiveTurn: false, userCancelRequested: false }),
+    "drop",
+  );
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

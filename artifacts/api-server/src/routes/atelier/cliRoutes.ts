@@ -143,6 +143,10 @@ router.post("/cli/turn", async (req, res) => {
     stopHeartbeat();
   });
 
+  // Task #24 — emit a progress frame immediately so the user sees
+  // feedback before the (potentially queued + LLM-bound) turn starts.
+  emit({ type: "progress", data: { pct: 2, message: "Working on it…" } });
+
   try {
     await runTurn(
       {
@@ -183,9 +187,20 @@ router.post("/cli/turn/:id/confirm", async (req, res) => {
   if (!me) return;
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);
-  req.on("close", stopHeartbeat);
   const persona = { id: me.id, name: me.name, role: me.role, orgId: me.orgId };
-  const emit = (frame: CliFrame) => writeSseFrame(res, frame);
+  // Task #24 — client-disconnect safety: if the confirming client
+  // drops (tab close, abort), the committed write must still finish;
+  // we only stop WRITING frames to the dead socket, never interrupt
+  // the orchestrator run itself.
+  let closed = false;
+  req.on("close", () => {
+    closed = true;
+    stopHeartbeat();
+  });
+  const emit = (frame: CliFrame) => (closed ? undefined : writeSseFrame(res, frame));
+  // Task #24 — immediate feedback while the confirm serializes through
+  // the per-user queue and commits.
+  emit({ type: "progress", data: { pct: 2, message: "Confirming…" } });
   // Task #332 — irreversible ops require the client to retype the
   // entity name; we forward it to the orchestrator which checks it
   // against the saved pendingWrite hint before the run callback fires.

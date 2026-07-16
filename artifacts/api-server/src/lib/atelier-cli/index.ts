@@ -450,6 +450,16 @@ export interface ToolResult {
     pageHref?: string | null;
     suggestion?: string | null;
   };
+  /**
+   * Task #24 — deferred post-commit work (e.g. Pursuit Scout after an
+   * opportunity create). The orchestrator emits the tool_result/final
+   * frames FIRST, then awaits this closure and emits the frame it
+   * returns, so slow follow-up work never delays the success feedback.
+   * The write is already committed when this runs; a failure here is
+   * surfaced as a frame, never a rollback. Not persisted by the
+   * idempotency job (only `data` is), so replays skip it by design.
+   */
+  after?: () => Promise<CliFrame | null>;
 }
 
 // ---- Tool: present_choices (no-op, used by the model to surface chips) ----
@@ -2120,7 +2130,12 @@ export async function runTurn(
     // throughout the atelier-cli capability files.
     const ID_TOKEN_RE = /\b([a-z]{2,6})_[a-z0-9_]{3,}/gi;
     const preLlmResolved: Array<{ kind: string; id: string; label: string }> = [];
-    {
+    // Task #24 — the id-token lookups and the name-hint hybrid
+    // resolution are independent DB reads; run each lookup and the two
+    // blocks concurrently to shave pre-LLM latency. Both still finish
+    // BEFORE classifyIntentTyped (Task #411: resolver before any LLM).
+    const idLookupWork = (async () => {
+      const out: Array<{ kind: string; id: string; label: string }> = [];
       const tokens = Array.from(new Set((input.prompt ?? "").match(ID_TOKEN_RE) ?? []));
       const PREFIX_TO_KIND: Record<string, string> = {
         // Reads + standard entities (matches `rid("<prefix>")` tags
@@ -2151,18 +2166,21 @@ export async function runTurn(
         tse: "timesheet_entry",
         exp: "expense",
       };
-      for (const tok of tokens) {
-        const prefix = String(tok).split("_")[0]?.toLowerCase() ?? "";
-        const kind = PREFIX_TO_KIND[prefix];
-        if (!kind) continue;
-        try {
-          const hit = await directIdLookup(kind as never, String(tok), persona.orgId);
-          if (hit) preLlmResolved.push({ kind, id: hit.id, label: hit.label });
-        } catch {
-          // best-effort
-        }
-      }
-    }
+      await Promise.all(
+        tokens.map(async (tok) => {
+          const prefix = String(tok).split("_")[0]?.toLowerCase() ?? "";
+          const kind = PREFIX_TO_KIND[prefix];
+          if (!kind) return;
+          try {
+            const hit = await directIdLookup(kind as never, String(tok), persona.orgId);
+            if (hit) out.push({ kind, id: hit.id, label: hit.label });
+          } catch {
+            // best-effort
+          }
+        }),
+      );
+      return out;
+    })();
 
     // Task #411 round-5 — DETERMINISTIC named-entity resolution
     // (no LLM). Run the regex-only `deterministicClassify` to derive
@@ -2173,28 +2191,43 @@ export async function runTurn(
     // typed entity row before any LLM call, satisfying the
     // "deterministic resolution before any LLM call" requirement
     // for both id-token and name-based hints.
-    {
+    const nameHintWork = (async () => {
+      const out: Array<{ kind: string; id: string; label: string }> = [];
       const { deterministicClassify } = await import("./intent-router.js");
       const { hybridResolveEntity, pickConfident } = await import("./entity-resolver.js");
       const det = deterministicClassify(input.prompt ?? "");
       if (det.kind !== "unknown" && det.hints.length > 0) {
-        const seen = new Set(preLlmResolved.map((h) => `${h.kind}:${h.id}`));
-        for (const hint of det.hints.slice(0, 3)) {
-          try {
-            const candidates = await hybridResolveEntity(
-              det.kind as never,
-              hint,
-              persona.orgId,
-            );
-            const top = pickConfident(candidates);
-            if (top && !seen.has(`${det.kind}:${top.id}`)) {
-              preLlmResolved.push({ kind: det.kind, id: top.id, label: top.label });
-              seen.add(`${det.kind}:${top.id}`);
+        const resolved = await Promise.all(
+          det.hints.slice(0, 3).map(async (hint) => {
+            try {
+              const candidates = await hybridResolveEntity(
+                det.kind as never,
+                hint,
+                persona.orgId,
+              );
+              return pickConfident(candidates);
+            } catch {
+              return null; // best-effort
             }
-          } catch {
-            // best-effort
-          }
+          }),
+        );
+        for (const top of resolved) {
+          if (top) out.push({ kind: det.kind, id: top.id, label: top.label });
         }
+      }
+      return out;
+    })();
+
+    // Merge with id-token hits winning and de-dup on kind:id (preserves
+    // the original sequential-loop semantics).
+    {
+      const [idHits, nameHits] = await Promise.all([idLookupWork, nameHintWork]);
+      const seen = new Set<string>();
+      for (const h of [...idHits, ...nameHits]) {
+        const key = `${h.kind}:${h.id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        preLlmResolved.push(h);
       }
     }
 
@@ -3000,6 +3033,24 @@ export async function runTurn(
         });
       }
 
+      // Task #24 — deferred post-commit work (e.g. Pursuit Scout after
+      // opportunity create). The write is already committed and its
+      // success tool_result recorded above; run the follow-up now and
+      // surface its outcome as a frame. Failure is never a rollback.
+      if (toolResult.after) {
+        try {
+          const afterFrame = await toolResult.after();
+          if (afterFrame) record(afterFrame);
+        } catch (err) {
+          record({
+            type: "progress",
+            data: {
+              message: `Post-commit follow-up failed: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          });
+        }
+      }
+
       if (toolResult.ok) {
         ingestEntitiesFromToolResult(session.id, tc.name, toolResult.data);
         recordSessionResult(session.id, { lastTurnId: turnId });
@@ -3608,6 +3659,25 @@ export async function confirmPendingWrite(
     data: { status: newStatus, turnId, sessionId: turn.sessionId, confirmed: true },
   });
 
+  // Task #24 — deferred post-commit work (e.g. Pursuit Scout). The
+  // success/final frames are already on the wire, so a slow follow-up
+  // never delays confirm feedback. The write is committed; a failure
+  // here is surfaced as a frame, never a rollback.
+  let afterFrame: CliFrame | null = null;
+  if (result.after) {
+    try {
+      afterFrame = await result.after();
+    } catch (err) {
+      afterFrame = {
+        type: "progress",
+        data: {
+          message: `Post-commit follow-up failed: ${err instanceof Error ? err.message : String(err)}`,
+        },
+      };
+    }
+    if (afterFrame) emit(afterFrame);
+  }
+
   const newFrames = [
     ...((turn.frames as CliFrame[]) ?? []),
     {
@@ -3626,6 +3696,9 @@ export async function confirmPendingWrite(
       },
     },
     { type: "final" as const, data: { status: newStatus, confirmed: true } },
+    // Task #24 — persist the deferred follow-up outcome (scout status)
+    // so historical turn replays show it too.
+    ...(afterFrame ? [afterFrame] : []),
   ];
   const priorStepResults = Array.isArray(turn.stepResults)
     ? (turn.stepResults as Array<Record<string, unknown>>)

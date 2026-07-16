@@ -9,4 +9,6 @@ On `POST /opportunities`, the opportunity row + audit are committed BEFORE the P
 
 **Why:** an empty soft-refusal brief persisted as the "brief of record" looks like real research to the partner; and a clean 201 on a failed scout hides data-quality loss. Partial-success is the correct contract because the write is already durable.
 
+**CLI path variant:** in the Atelier chat CLI, `opportunity_create` confirm no longer awaits the Scout inline (it made confirm feel hung). The tool result carries `scout: { status: "running"|"skipped" }` and the Scout runs via a deferred `after()` hook on the ToolResult, which emits+persists a follow-up progress frame with the final scout outcome after the success frame. The idempotent replay path deliberately skips `after()` (only the persisted frames replay) — don't "fix" that by re-running the Scout on replay.
+
 **How to apply:** if you add another Scout persistence path (e.g. the `/scout` rerun), gate persistence with `isScoutBriefEmpty` and consider surfacing `empty` there too. The create response shape is codegen'd — `scout` lives in `lib/api-spec/openapi.yaml` (AtelierCreateOpportunityResponse); change the spec + run `pnpm --filter @workspace/api-spec run codegen`, never hand-edit generated types. (Optional later: normalize `scout.error` to a stable taxonomy rather than the raw thrown message.)

@@ -29,6 +29,7 @@ export const STRINGS = {
   thinking: { en: "Thinking…", ar: "يفكّر…" },
   proposedPlan: { en: "Proposed plan", ar: "الخطّة المقترحة" },
   confirm: { en: "Confirm", ar: "تأكيد" },
+  confirming: { en: "Confirming…", ar: "جارٍ التأكيد…" },
   edit: { en: "Edit", ar: "تعديل" },
   cancel: { en: "Cancel", ar: "إلغاء" },
   typedNameLabel: {

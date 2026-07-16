@@ -543,39 +543,56 @@ defineCapability({
       })
       .returning();
     await recordAudit(ctx, "opportunity", row.id, "opportunity.created.cli", { name, accountId }, `${ctx.persona.name} created opportunity "${name}" via CLI.`);
-    // Task #8 — chat/REST parity: auto-run Pursuit Scout exactly like the
-    // REST create route. The opportunity is already committed, so a failed
-    // or empty Scout run never blocks creation — but it IS surfaced in the
-    // result payload instead of being silently absent.
-    let scout: { status: "completed" | "empty" | "failed" | "skipped"; error?: string } = {
-      status: "skipped",
-    };
-    let scoutRunId: string | null = null;
-    if (input.runScout !== false) {
-      try {
-        const [acct] = await db
-          .select({ name: atelierAccounts.name, country: atelierAccounts.country, sector: atelierAccounts.sector })
-          .from(atelierAccounts)
-          .where(and(eq(atelierAccounts.id, accountId), eq(atelierAccounts.orgId, ctx.persona.orgId)));
-        const { runId, output } = await runPursuitScout({
-          opportunityId: row.id,
-          accountName: acct?.name ?? accountId,
-          accountCountry: acct?.country ?? "",
-          accountSector: acct?.sector ?? "",
-          opportunityName: row.name,
-          contextBlurb: String(input.description ?? "").trim(),
-          triggeredByUserId: ctx.persona.id,
-          actorLabel: "Pursuit Scout",
-        });
-        scoutRunId = runId;
-        const persisted = await persistBriefAndFacts(row.id, runId, output);
-        scout = persisted.persisted ? { status: "completed" } : { status: "empty" };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.warn("[atelier-cli] scout failed on chat opportunity create", err);
-        scout = { status: "failed", error: message };
-      }
-    }
+    // Task #8 / Task #24 — chat/REST parity: auto-run Pursuit Scout like
+    // the REST create route, but DECOUPLED from the confirm success
+    // frame: creation is committed and the success card is emitted
+    // first; the scout runs afterwards via the `after` closure and its
+    // status (completed/empty/failed) is streamed as a follow-up frame.
+    // A failed or empty Scout run never blocks or rolls back creation.
+    const runScout = input.runScout !== false;
+    const after = runScout
+      ? async () => {
+          let scout: { status: "completed" | "empty" | "failed"; error?: string };
+          let scoutRunId: string | null = null;
+          try {
+            const [acct] = await db
+              .select({ name: atelierAccounts.name, country: atelierAccounts.country, sector: atelierAccounts.sector })
+              .from(atelierAccounts)
+              .where(and(eq(atelierAccounts.id, accountId), eq(atelierAccounts.orgId, ctx.persona.orgId)));
+            const { runId, output } = await runPursuitScout({
+              opportunityId: row.id,
+              accountName: acct?.name ?? accountId,
+              accountCountry: acct?.country ?? "",
+              accountSector: acct?.sector ?? "",
+              opportunityName: row.name,
+              contextBlurb: String(input.description ?? "").trim(),
+              triggeredByUserId: ctx.persona.id,
+              actorLabel: "Pursuit Scout",
+            });
+            scoutRunId = runId;
+            const persisted = await persistBriefAndFacts(row.id, runId, output);
+            scout = persisted.persisted ? { status: "completed" } : { status: "empty" };
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn("[atelier-cli] scout failed on chat opportunity create", err);
+            scout = { status: "failed", error: message };
+          }
+          return {
+            type: "progress" as const,
+            data: {
+              message:
+                scout.status === "completed"
+                  ? "Pursuit Scout completed — brief attached to the opportunity."
+                  : scout.status === "empty"
+                    ? "Pursuit Scout ran but found nothing to attach."
+                    : `Pursuit Scout failed: ${scout.error ?? "unknown error"}`,
+              opportunityId: row.id,
+              scout,
+              scoutRunId,
+            },
+          };
+        }
+      : undefined;
     // Task #511 — newly created opportunity opens its workspace.
     return {
       ok: true,
@@ -583,10 +600,14 @@ defineCapability({
         id: row.id,
         name: row.name,
         accountId,
-        scout,
-        scoutRunId,
+        // Task #24 — the create response reports the scout as running
+        // (or skipped); the definitive status arrives in the follow-up
+        // frame emitted from `after`.
+        scout: { status: runScout ? ("running" as const) : ("skipped" as const) },
+        scoutRunId: null,
         navigateTo: { path: `/opportunities/${row.id}`, when: "on_commit" as const },
       },
+      after,
     };
   },
 });

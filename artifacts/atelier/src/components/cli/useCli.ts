@@ -71,11 +71,50 @@ interface UseCliOptions {
   onNavigate?: (path: string, when: "on_propose" | "on_commit") => void;
 }
 
+/**
+ * Task #24 — pure confirm-gate decision, exported for unit testing.
+ * Decides what `confirm()` should do at click time:
+ *   - "noop_in_flight": a confirm is already streaming — the click is a
+ *     duplicate and must be ignored (never abort the in-flight confirm).
+ *   - "wait_for_turn_id": the server turn id hasn't landed yet — defer
+ *     the confirm until it does (with explicit feedback on timeout)
+ *     instead of silently returning.
+ *   - "start": proceed with the confirm request.
+ */
+export function confirmGate(args: {
+  confirming: boolean;
+  serverTurnId: string | null | undefined;
+}): "noop_in_flight" | "wait_for_turn_id" | "start" {
+  if (args.confirming) return "noop_in_flight";
+  if (!args.serverTurnId) return "wait_for_turn_id";
+  return "start";
+}
+
+/**
+ * Task #24 — pure abort→status mapping, exported for unit testing.
+ * An AbortError on the SSE stream only means "Cancelled" when the user
+ * explicitly asked to cancel. Supersede aborts (a newer submit taking
+ * the slot) and duplicate-confirm aborts must be dropped silently —
+ * publishing "cancelled" for those was a client-side hallucination
+ * while the server write might still be committing.
+ */
+export function abortOutcome(args: {
+  isActiveTurn: boolean;
+  userCancelRequested: boolean;
+}): "publish_cancelled" | "drop" {
+  if (!args.isActiveTurn) return "drop";
+  return args.userCancelRequested ? "publish_cancelled" : "drop";
+}
+
 export interface UseCliReturn {
   sessionId: string | null;
   turns: CliTurn[];
   current: CliTurn | null;
   status: CliTurnStatus;
+  /** Task #24 — true while a confirm request is in flight. Consumers
+   * must disable the Confirm/Cancel actions and show an in-progress
+   * indicator; `confirm()` itself is a no-op while this is true. */
+  confirming: boolean;
   submit: (args: SubmitArgs) => Promise<void>;
   /**
    * Confirm a pending two-phase write. `typedName` is required when the
@@ -482,7 +521,21 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   const [capabilities, setCapabilities] = useState<CliCapability[]>([]);
   const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
   const [catalogSchemaVersion, setCatalogSchemaVersion] = useState<number | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  /** Task #24 — mirrors the `confirming` state synchronously so a
+   * rapid double-click is gated before React re-renders. */
+  const confirmingRef = useRef(false);
+  /** Task #24 — set only by an explicit user cancel/abort action.
+   * consumeStream maps AbortError → "cancelled" ONLY when this is set;
+   * supersede/duplicate aborts are dropped silently. */
+  const userCancelRef = useRef(false);
+  /** Task #24 — live mirror of `current` so confirm() can wait for a
+   * late-arriving serverTurnId without stale-closure issues. */
+  const currentRef = useRef<CliTurn | null>(null);
+  useEffect(() => {
+    currentRef.current = current;
+  }, [current]);
   /**
    * Token of the in-flight turn. Stream callbacks read this on every
    * frame; when a new submit() bumps the token, late frames from the
@@ -582,10 +635,17 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         }
       } catch (e) {
         if ((e as { name?: string }).name === "AbortError") {
-          // If we were superseded by a newer submit(), do NOT publish a
-          // cancelled state — that would overwrite the new turn that
-          // just took the active slot.
-          if (!isActive()) return;
+          // Task #24 — only an explicit user cancel maps to a
+          // "cancelled" turn. Supersede aborts (newer submit) and
+          // duplicate-confirm aborts are dropped silently; publishing
+          // "cancelled" for those was a client-side hallucination while
+          // the server write might still be committing.
+          const outcome = abortOutcome({
+            isActiveTurn: isActive(),
+            userCancelRequested: userCancelRef.current,
+          });
+          userCancelRef.current = false;
+          if (outcome === "drop") return;
           live = { ...live, status: "cancelled" };
         } else {
           if (!isActive()) return;
@@ -606,6 +666,8 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     async (args: SubmitArgs): Promise<void> => {
       // Cancel any prior in-flight turn — the server idempotency key
       // makes a re-submit safe but the UI should only show one stream.
+      // Task #24 — this is a supersede abort, not a user cancel.
+      userCancelRef.current = false;
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -674,59 +736,111 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
       excludedStepIndexes?: number[],
       planEdits?: Record<number, string>,
     ): Promise<void> => {
-      if (!current?.serverTurnId) return;
-      abortRef.current?.abort();
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      // Re-key the in-flight turn so frames from a stale stream can't
-      // clobber the renewed confirm stream.
-      activeTurnKeyRef.current = current.clientTurnKey;
-      const seed: CliTurn = { ...current, status: "streaming", trace: [...current.trace] };
-      setCurrent(seed);
+      // Task #24 — confirm is idempotent while in flight: a duplicate
+      // click is a no-op and NEVER aborts the in-flight confirm stream
+      // (that abort was what produced phantom "Cancelled" turns).
+      const gate = confirmGate({
+        confirming: confirmingRef.current,
+        serverTurnId: currentRef.current?.serverTurnId ?? null,
+      });
+      if (gate === "noop_in_flight") return;
+      confirmingRef.current = true;
+      setConfirming(true);
       try {
-        const r = await fetch(
-          `/api/atelier/cli/turn/${encodeURIComponent(current.serverTurnId)}/confirm`,
-          {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-            body: JSON.stringify({
-              typedName: typedName ?? null,
-              // Forwarded for #334/#335 enforcement. Current server
-              // confirm route ignores unknown fields (see cliRoutes.ts:
-              // body destructures only `typedName`).
-              excludedStepIndexes: excludedStepIndexes ?? [],
-              planEdits: planEdits ?? {},
-            }),
-            signal: ctrl.signal,
-          },
-        );
-        if (!r.ok) {
+        // Task #24 — clicked before the server turn id landed (the
+        // final frame of the propose stream hasn't arrived yet). Show
+        // the in-progress state immediately and wait for the id to
+        // land instead of silently doing nothing.
+        if (gate === "wait_for_turn_id") {
+          const deadline = Date.now() + 8_000;
+          while (!currentRef.current?.serverTurnId && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 100));
+          }
+          if (!currentRef.current?.serverTurnId) {
+            const base = currentRef.current;
+            if (base) {
+              const err: CliTurn = {
+                ...base,
+                status: "error",
+                error: {
+                  code: "confirm_not_ready",
+                  message:
+                    "The turn isn't ready to confirm yet — please try again in a moment.",
+                },
+              };
+              setCurrent(err);
+              setTurns((t) => [
+                err,
+                ...t.filter((x) => x.clientTurnKey !== err.clientTurnKey),
+              ]);
+            }
+            return;
+          }
+        }
+        const turn = currentRef.current!;
+        // Supersede any stale prior stream (the propose stream is
+        // normally finished by now). Not a user cancel — the abort is
+        // dropped silently by consumeStream's mapping.
+        userCancelRef.current = false;
+        abortRef.current?.abort();
+        const ctrl = new AbortController();
+        abortRef.current = ctrl;
+        // Re-key the in-flight turn so frames from a stale stream can't
+        // clobber the renewed confirm stream.
+        activeTurnKeyRef.current = turn.clientTurnKey;
+        const seed: CliTurn = { ...turn, status: "streaming", trace: [...turn.trace] };
+        setCurrent(seed);
+        try {
+          const r = await fetch(
+            `/api/atelier/cli/turn/${encodeURIComponent(turn.serverTurnId!)}/confirm`,
+            {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+              body: JSON.stringify({
+                typedName: typedName ?? null,
+                // Forwarded for #334/#335 enforcement. Current server
+                // confirm route ignores unknown fields (see cliRoutes.ts:
+                // body destructures only `typedName`).
+                excludedStepIndexes: excludedStepIndexes ?? [],
+                planEdits: planEdits ?? {},
+              }),
+              signal: ctrl.signal,
+            },
+          );
+          if (!r.ok) {
+            const err: CliTurn = {
+              ...seed,
+              status: "error",
+              error: { code: `http_${r.status}`, message: r.statusText },
+            };
+            setCurrent(err);
+            setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== seed.clientTurnKey)]);
+            return;
+          }
+          await consumeStream(r, seed.clientTurnKey, seed);
+        } catch (e) {
+          if ((e as { name?: string }).name === "AbortError") return;
           const err: CliTurn = {
             ...seed,
             status: "error",
-            error: { code: `http_${r.status}`, message: r.statusText },
+            error: { code: "network", message: (e as Error).message },
           };
           setCurrent(err);
-          setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== seed.clientTurnKey)]);
-          return;
         }
-        await consumeStream(r, seed.clientTurnKey, seed);
-      } catch (e) {
-        if ((e as { name?: string }).name === "AbortError") return;
-        const err: CliTurn = {
-          ...seed,
-          status: "error",
-          error: { code: "network", message: (e as Error).message },
-        };
-        setCurrent(err);
+      } finally {
+        confirmingRef.current = false;
+        setConfirming(false);
       }
     },
-    [current, consumeStream],
+    [consumeStream],
   );
 
   const cancel = useCallback(async (): Promise<void> => {
+    // Task #24 — explicit user cancel: mark the intent BEFORE aborting
+    // so consumeStream's AbortError mapping publishes "cancelled".
     if (!current?.serverTurnId) {
+      userCancelRef.current = true;
       abortRef.current?.abort();
       return;
     }
@@ -785,6 +899,9 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   }, []);
 
   const abort = useCallback(() => {
+    // Task #24 — the public abort() is an explicit user action, so an
+    // in-flight stream aborted here does surface as "cancelled".
+    userCancelRef.current = true;
     abortRef.current?.abort();
   }, []);
 
@@ -818,6 +935,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     turns,
     current,
     status: current?.status ?? "idle",
+    confirming,
     submit,
     confirm,
     cancel,
