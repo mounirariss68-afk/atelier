@@ -74,6 +74,7 @@ import type {
   AtelierCredentialInput,
   AtelierCritiqueInput,
   AtelierCritiqueResult,
+  AtelierDeactivateJoinerInput,
   AtelierDealPricingComputed,
   AtelierDealPricingEnvelope,
   AtelierDealPricingInput,
@@ -90,6 +91,8 @@ import type {
   AtelierHome,
   AtelierHypothesisTree,
   AtelierJoiner,
+  AtelierLeaverHandover,
+  AtelierLeaverReassignInput,
   AtelierListAccountsParams,
   AtelierListAuditParams,
   AtelierMarginOverrideInput,
@@ -823,11 +826,14 @@ export const getAtelierDeactivateJoinerUrl = (userId: string) => {
 
 export const atelierDeactivateJoiner = async (
   userId: string,
+  atelierDeactivateJoinerInput?: AtelierDeactivateJoinerInput,
   options?: RequestInit,
 ): Promise<AtelierJoiner> => {
   return customFetch<AtelierJoiner>(getAtelierDeactivateJoinerUrl(userId), {
     ...options,
     method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierDeactivateJoinerInput),
   });
 };
 
@@ -838,14 +844,14 @@ export const getAtelierDeactivateJoinerMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
     TError,
-    { userId: string },
+    { userId: string; data: BodyType<AtelierDeactivateJoinerInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
   TError,
-  { userId: string },
+  { userId: string; data: BodyType<AtelierDeactivateJoinerInput> },
   TContext
 > => {
   const mutationKey = ["atelierDeactivateJoiner"];
@@ -859,11 +865,11 @@ export const getAtelierDeactivateJoinerMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
-    { userId: string }
+    { userId: string; data: BodyType<AtelierDeactivateJoinerInput> }
   > = (props) => {
-    const { userId } = props ?? {};
+    const { userId, data } = props ?? {};
 
-    return atelierDeactivateJoiner(userId, requestOptions);
+    return atelierDeactivateJoiner(userId, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -872,7 +878,8 @@ export const getAtelierDeactivateJoinerMutationOptions = <
 export type AtelierDeactivateJoinerMutationResult = NonNullable<
   Awaited<ReturnType<typeof atelierDeactivateJoiner>>
 >;
-
+export type AtelierDeactivateJoinerMutationBody =
+  BodyType<AtelierDeactivateJoinerInput>;
 export type AtelierDeactivateJoinerMutationError = ErrorType<unknown>;
 
 /**
@@ -885,17 +892,200 @@ export const useAtelierDeactivateJoiner = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
     TError,
-    { userId: string },
+    { userId: string; data: BodyType<AtelierDeactivateJoinerInput> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
   TError,
-  { userId: string },
+  { userId: string; data: BodyType<AtelierDeactivateJoinerInput> },
   TContext
 > => {
   return useMutation(getAtelierDeactivateJoinerMutationOptions(options));
+};
+
+/**
+ * @summary HR — everything a leaver still owns (accounts, opportunities, tasks)
+ */
+export const getAtelierGetLeaverHandoverUrl = (userId: string) => {
+  return `/api/atelier/roster/joiners/${userId}/handover`;
+};
+
+export const atelierGetLeaverHandover = async (
+  userId: string,
+  options?: RequestInit,
+): Promise<AtelierLeaverHandover> => {
+  return customFetch<AtelierLeaverHandover>(
+    getAtelierGetLeaverHandoverUrl(userId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetLeaverHandoverQueryKey = (userId: string) => {
+  return [`/api/atelier/roster/joiners/${userId}/handover`] as const;
+};
+
+export const getAtelierGetLeaverHandoverQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetLeaverHandover>>,
+  TError = ErrorType<unknown>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetLeaverHandover>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetLeaverHandoverQueryKey(userId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetLeaverHandover>>
+  > = ({ signal }) =>
+    atelierGetLeaverHandover(userId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!userId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetLeaverHandover>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetLeaverHandoverQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetLeaverHandover>>
+>;
+export type AtelierGetLeaverHandoverQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — everything a leaver still owns (accounts, opportunities, tasks)
+ */
+
+export function useAtelierGetLeaverHandover<
+  TData = Awaited<ReturnType<typeof atelierGetLeaverHandover>>,
+  TError = ErrorType<unknown>,
+>(
+  userId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetLeaverHandover>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetLeaverHandoverQueryOptions(userId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — reassign a leaver's accounts / opportunities / tasks to another user
+ */
+export const getAtelierReassignLeaverItemsUrl = (userId: string) => {
+  return `/api/atelier/roster/joiners/${userId}/handover/reassign`;
+};
+
+export const atelierReassignLeaverItems = async (
+  userId: string,
+  atelierLeaverReassignInput: AtelierLeaverReassignInput,
+  options?: RequestInit,
+): Promise<AtelierLeaverHandover> => {
+  return customFetch<AtelierLeaverHandover>(
+    getAtelierReassignLeaverItemsUrl(userId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierLeaverReassignInput),
+    },
+  );
+};
+
+export const getAtelierReassignLeaverItemsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReassignLeaverItems>>,
+    TError,
+    { userId: string; data: BodyType<AtelierLeaverReassignInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReassignLeaverItems>>,
+  TError,
+  { userId: string; data: BodyType<AtelierLeaverReassignInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierReassignLeaverItems"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReassignLeaverItems>>,
+    { userId: string; data: BodyType<AtelierLeaverReassignInput> }
+  > = (props) => {
+    const { userId, data } = props ?? {};
+
+    return atelierReassignLeaverItems(userId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReassignLeaverItemsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReassignLeaverItems>>
+>;
+export type AtelierReassignLeaverItemsMutationBody =
+  BodyType<AtelierLeaverReassignInput>;
+export type AtelierReassignLeaverItemsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HR — reassign a leaver's accounts / opportunities / tasks to another user
+ */
+export const useAtelierReassignLeaverItems = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReassignLeaverItems>>,
+    TError,
+    { userId: string; data: BodyType<AtelierLeaverReassignInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReassignLeaverItems>>,
+  TError,
+  { userId: string; data: BodyType<AtelierLeaverReassignInput> },
+  TContext
+> => {
+  return useMutation(getAtelierReassignLeaverItemsMutationOptions(options));
 };
 
 /**

@@ -2286,6 +2286,84 @@ export interface AtelierJoiner {
   mustChangePassword?: boolean;
 }
 
+export interface AtelierDeactivateJoinerInput {
+  markLeaver?: boolean;
+  /**
+   * @maxLength 10
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  endDate?: string;
+}
+
+export interface AtelierLeaverHandoverAccount {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export type AtelierLeaverHandoverOpportunityRolesItem =
+  (typeof AtelierLeaverHandoverOpportunityRolesItem)[keyof typeof AtelierLeaverHandoverOpportunityRolesItem];
+
+export const AtelierLeaverHandoverOpportunityRolesItem = {
+  owner: "owner",
+  lead: "lead",
+} as const;
+
+export interface AtelierLeaverHandoverOpportunity {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  salesStage: string;
+  roles: AtelierLeaverHandoverOpportunityRolesItem[];
+}
+
+export interface AtelierLeaverHandoverTask {
+  id: string;
+  title: string;
+  accountId: string;
+  accountName: string;
+  dueDate?: string | null;
+  status: string;
+}
+
+export type AtelierLeaverHandoverRosterPersonType =
+  (typeof AtelierLeaverHandoverRosterPersonType)[keyof typeof AtelierLeaverHandoverRosterPersonType];
+
+export const AtelierLeaverHandoverRosterPersonType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export interface AtelierLeaverHandoverRoster {
+  personType: AtelierLeaverHandoverRosterPersonType;
+  personId: string;
+  status: string;
+  endDate?: string | null;
+}
+
+export interface AtelierLeaverHandover {
+  userId: string;
+  name: string;
+  roster?: AtelierLeaverHandoverRoster | null;
+  accounts: AtelierLeaverHandoverAccount[];
+  opportunities: AtelierLeaverHandoverOpportunity[];
+  tasks: AtelierLeaverHandoverTask[];
+  totalOwned: number;
+}
+
+export interface AtelierLeaverReassignInput {
+  /** @minLength 1 */
+  toUserId: string;
+  /** @maxItems 200 */
+  accountIds?: string[];
+  /** @maxItems 200 */
+  opportunityIds?: string[];
+  /** @maxItems 500 */
+  taskIds?: string[];
+  all?: boolean;
+}
+
 export type AtelierAddJoinerInputWorkerType =
   (typeof AtelierAddJoinerInputWorkerType)[keyof typeof AtelierAddJoinerInputWorkerType];
 

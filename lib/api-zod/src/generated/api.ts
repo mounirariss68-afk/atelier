@@ -209,6 +209,21 @@ export const AtelierDeactivateJoinerParams = zod.object({
   userId: zod.coerce.string(),
 });
 
+export const atelierDeactivateJoinerBodyEndDateMax = 10;
+
+export const atelierDeactivateJoinerBodyEndDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+
+export const AtelierDeactivateJoinerBody = zod.object({
+  markLeaver: zod.boolean().optional(),
+  endDate: zod
+    .string()
+    .max(atelierDeactivateJoinerBodyEndDateMax)
+    .regex(atelierDeactivateJoinerBodyEndDateRegExp)
+    .optional(),
+});
+
 export const AtelierDeactivateJoinerResponse = zod.object({
   userId: zod.string(),
   name: zod.string(),
@@ -231,6 +246,125 @@ export const AtelierDeactivateJoinerResponse = zod.object({
   title: zod.string(),
   status: zod.enum(["active", "deactivated"]),
   mustChangePassword: zod.boolean().optional(),
+});
+
+/**
+ * @summary HR — everything a leaver still owns (accounts, opportunities, tasks)
+ */
+export const AtelierGetLeaverHandoverParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const AtelierGetLeaverHandoverResponse = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  roster: zod
+    .object({
+      personType: zod.enum(["employee", "contractor"]),
+      personId: zod.string(),
+      status: zod.string(),
+      endDate: zod.string().nullish(),
+    })
+    .nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      status: zod.string(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string(),
+      salesStage: zod.string(),
+      roles: zod.array(zod.enum(["owner", "lead"])),
+    }),
+  ),
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string(),
+      dueDate: zod.string().nullish(),
+      status: zod.string(),
+    }),
+  ),
+  totalOwned: zod.number(),
+});
+
+/**
+ * @summary HR — reassign a leaver's accounts / opportunities / tasks to another user
+ */
+export const AtelierReassignLeaverItemsParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const atelierReassignLeaverItemsBodyAccountIdsMax = 200;
+
+export const atelierReassignLeaverItemsBodyOpportunityIdsMax = 200;
+
+export const atelierReassignLeaverItemsBodyTaskIdsMax = 500;
+
+export const AtelierReassignLeaverItemsBody = zod.object({
+  toUserId: zod.string().min(1),
+  accountIds: zod
+    .array(zod.string())
+    .max(atelierReassignLeaverItemsBodyAccountIdsMax)
+    .optional(),
+  opportunityIds: zod
+    .array(zod.string())
+    .max(atelierReassignLeaverItemsBodyOpportunityIdsMax)
+    .optional(),
+  taskIds: zod
+    .array(zod.string())
+    .max(atelierReassignLeaverItemsBodyTaskIdsMax)
+    .optional(),
+  all: zod.boolean().optional(),
+});
+
+export const AtelierReassignLeaverItemsResponse = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  roster: zod
+    .object({
+      personType: zod.enum(["employee", "contractor"]),
+      personId: zod.string(),
+      status: zod.string(),
+      endDate: zod.string().nullish(),
+    })
+    .nullish(),
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      status: zod.string(),
+    }),
+  ),
+  opportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string(),
+      salesStage: zod.string(),
+      roles: zod.array(zod.enum(["owner", "lead"])),
+    }),
+  ),
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string(),
+      dueDate: zod.string().nullish(),
+      status: zod.string(),
+    }),
+  ),
+  totalOwned: zod.number(),
 });
 
 /**

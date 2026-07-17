@@ -159,6 +159,12 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierDeactivateJoinerInput"
       responses:
         "200":
           description: Updated joiner row
@@ -166,6 +172,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierJoiner"
+  /atelier/roster/joiners/{userId}/handover:
+    get:
+      operationId: atelierGetLeaverHandover
+      tags: [atelier]
+      summary: HR — everything a leaver still owns (accounts, opportunities, tasks)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Ownership checklist for the leaver
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierLeaverHandover"
+  /atelier/roster/joiners/{userId}/handover/reassign:
+    post:
+      operationId: atelierReassignLeaverItems
+      tags: [atelier]
+      summary: HR — reassign a leaver's accounts / opportunities / tasks to another user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierLeaverReassignInput"
+      responses:
+        "200":
+          description: Refreshed ownership checklist after the reassignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierLeaverHandover"
   /atelier/roster/joiners/{userId}/reactivate:
     post:
       operationId: atelierReactivateJoiner
@@ -4804,6 +4850,92 @@ components:
         title: { type: string }
         status: { type: string, enum: [active, deactivated] }
         mustChangePassword: { type: boolean }
+
+    AtelierDeactivateJoinerInput:
+      type: object
+      properties:
+        markLeaver: { type: boolean }
+        endDate: { type: string, maxLength: 10, pattern: '^\d{4}-\d{2}-\d{2}$' }
+
+    AtelierLeaverHandoverAccount:
+      type: object
+      required: [id, name, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string }
+
+    AtelierLeaverHandoverOpportunity:
+      type: object
+      required: [id, name, accountId, accountName, salesStage, roles]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        salesStage: { type: string }
+        roles:
+          type: array
+          items: { type: string, enum: [owner, lead] }
+
+    AtelierLeaverHandoverTask:
+      type: object
+      required: [id, title, accountId, accountName, status]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+        dueDate: { type: string, nullable: true }
+        status: { type: string }
+
+    AtelierLeaverHandoverRoster:
+      type: object
+      required: [personType, personId, status]
+      properties:
+        personType: { type: string, enum: [employee, contractor] }
+        personId: { type: string }
+        status: { type: string }
+        endDate: { type: string, nullable: true }
+
+    AtelierLeaverHandover:
+      type: object
+      required: [userId, name, accounts, opportunities, tasks, totalOwned]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        roster:
+          $ref: "#/components/schemas/AtelierLeaverHandoverRoster"
+          nullable: true
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierLeaverHandoverAccount" }
+        opportunities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierLeaverHandoverOpportunity" }
+        tasks:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierLeaverHandoverTask" }
+        totalOwned: { type: integer }
+
+    AtelierLeaverReassignInput:
+      type: object
+      required: [toUserId]
+      properties:
+        toUserId: { type: string, minLength: 1 }
+        accountIds:
+          type: array
+          maxItems: 200
+          items: { type: string }
+        opportunityIds:
+          type: array
+          maxItems: 200
+          items: { type: string }
+        taskIds:
+          type: array
+          maxItems: 500
+          items: { type: string }
+        all: { type: boolean }
 
     AtelierAddJoinerInput:
       type: object

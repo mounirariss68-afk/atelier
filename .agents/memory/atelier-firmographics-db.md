@@ -16,3 +16,8 @@ selects all schema columns and they don't exist in the table.
 
 **Why:** Drizzle schema is the source of truth; the DB can lag in fresh/isolated
 environments. Push before testing any feature that touches new columns.
+
+**Push can also fail on FK violations:** drizzle push adds FKs (e.g.
+stage_transitions/winloss_debriefs/engagements → opportunities) and aborts on
+orphaned rows left by old tests. Delete orphan child rows (or NULL the nullable
+ref for engagements) then re-push.

@@ -19,20 +19,27 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomBytes, randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierEmployees,
   atelierContractors,
+  atelierAccounts,
+  atelierOpportunities,
+  atelierActivities,
   atelierAuthCredentials,
   atelierAuditEvents,
 } from "@workspace/db";
 import {
   AtelierAddJoinerBody,
   AtelierListJoinersResponse,
+  AtelierDeactivateJoinerBody,
   AtelierDeactivateJoinerResponse,
   AtelierReactivateJoinerResponse,
+  AtelierGetLeaverHandoverResponse,
+  AtelierReassignLeaverItemsBody,
+  AtelierReassignLeaverItemsResponse,
 } from "@workspace/api-zod";
 import { hashPassword } from "../../lib/auth/passwords";
 import { revokeAllSessions } from "../../lib/auth/session";
@@ -315,6 +322,184 @@ router.post("/roster/joiners", async (req, res, next) => {
   }
 });
 
+/**
+ * Task #60 — resolve the leaver's roster record. Employees link by
+ * user_id FK; contractors link by email (their table has no user_id
+ * column — the same rule resolveLinkedUserId / resolveSelfPerson use).
+ */
+async function resolveRoster(
+  orgId: string,
+  user: typeof atelierUsers.$inferSelect,
+): Promise<
+  | {
+      personType: "employee" | "contractor";
+      personId: string;
+      status: string;
+      endDate: string | null;
+    }
+  | null
+> {
+  const [emp] = await db
+    .select()
+    .from(atelierEmployees)
+    .where(
+      and(
+        eq(atelierEmployees.orgId, orgId),
+        eq(atelierEmployees.userId, user.id),
+        isNull(atelierEmployees.deletedAt),
+      ),
+    );
+  if (emp) {
+    return {
+      personType: "employee",
+      personId: emp.id,
+      status: emp.status,
+      endDate: emp.endDate ?? null,
+    };
+  }
+  const email = user.email.trim().toLowerCase();
+  const contractors = await db
+    .select()
+    .from(atelierContractors)
+    .where(and(eq(atelierContractors.orgId, orgId), isNull(atelierContractors.deletedAt)));
+  const ct = contractors.find((c) => c.email.trim().toLowerCase() === email);
+  if (ct) {
+    return {
+      personType: "contractor",
+      personId: ct.id,
+      status: ct.status,
+      endDate: ct.endDate ?? null,
+    };
+  }
+  return null;
+}
+
+/** Terminal opportunity stages that no longer need a live owner handover. */
+const TERMINAL_STAGES = ["lost", "no_decision", "withdrawn"];
+
+/**
+ * Task #60 — everything a leaver still owns: accounts (partner owner),
+ * live opportunities (partner owner or engagement lead), and open tasks
+ * (activity assignee). Org-scoped, soft-deletes excluded.
+ */
+async function buildHandover(
+  orgId: string,
+  user: typeof atelierUsers.$inferSelect,
+): Promise<Record<string, unknown>> {
+  const accounts = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      status: atelierAccounts.status,
+    })
+    .from(atelierAccounts)
+    .where(
+      and(
+        eq(atelierAccounts.orgId, orgId),
+        eq(atelierAccounts.partnerOwnerId, user.id),
+        isNull(atelierAccounts.deletedAt),
+        notInArray(atelierAccounts.status, ["archived"]),
+      ),
+    );
+
+  const opps = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.orgId, orgId),
+        or(
+          eq(atelierOpportunities.partnerOwnerId, user.id),
+          eq(atelierOpportunities.engagementLeadId, user.id),
+        ),
+        isNull(atelierOpportunities.deletedAt),
+        notInArray(atelierOpportunities.salesStage, TERMINAL_STAGES),
+      ),
+    );
+
+  const tasks = await db
+    .select()
+    .from(atelierActivities)
+    .where(
+      and(
+        eq(atelierActivities.orgId, orgId),
+        eq(atelierActivities.ownerId, user.id),
+        eq(atelierActivities.status, "open"),
+        isNull(atelierActivities.deletedAt),
+      ),
+    );
+
+  // Resolve account names for opps/tasks in one pass.
+  const nameByAccount = new Map(accounts.map((a) => [a.id, a.name]));
+  const missing = [
+    ...new Set(
+      [...opps.map((o) => o.accountId), ...tasks.map((t) => t.accountId)].filter(
+        (id) => !nameByAccount.has(id),
+      ),
+    ),
+  ];
+  if (missing.length > 0) {
+    const rows = await db
+      .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.orgId, orgId),
+          inArray(atelierAccounts.id, missing),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      );
+    for (const r of rows) nameByAccount.set(r.id, r.name);
+  }
+
+  const roster = await resolveRoster(orgId, user);
+  const wireOpps = opps.map((o) => ({
+    id: o.id,
+    name: o.name,
+    accountId: o.accountId,
+    accountName: nameByAccount.get(o.accountId) ?? o.accountId,
+    salesStage: o.salesStage,
+    roles: [
+      ...(o.partnerOwnerId === user.id ? (["owner"] as const) : []),
+      ...(o.engagementLeadId === user.id ? (["lead"] as const) : []),
+    ],
+  }));
+  const wireTasks = tasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    accountId: t.accountId,
+    accountName: nameByAccount.get(t.accountId) ?? t.accountId,
+    dueDate: t.dueDate ?? null,
+    status: t.status,
+  }));
+  return {
+    userId: user.id,
+    name: user.name,
+    roster,
+    accounts: accounts.sort((a, b) => a.name.localeCompare(b.name)),
+    opportunities: wireOpps.sort((a, b) => a.name.localeCompare(b.name)),
+    tasks: wireTasks.sort((a, b) => a.title.localeCompare(b.title)),
+    totalOwned: accounts.length + wireOpps.length + wireTasks.length,
+  };
+}
+
+async function loadOrgUser(
+  orgId: string,
+  userId: string,
+): Promise<typeof atelierUsers.$inferSelect | null> {
+  const [user] = await db
+    .select()
+    .from(atelierUsers)
+    .where(
+      and(
+        eq(atelierUsers.id, userId),
+        eq(atelierUsers.orgId, orgId),
+        isNull(atelierUsers.deletedAt),
+      ),
+    );
+  return user ?? null;
+}
+
 async function setDisabled(
   req: Request,
   res: Response,
@@ -361,6 +546,20 @@ async function setDisabled(
     });
     return;
   }
+  // Task #60 — deactivation may also mark the roster record as a leaver
+  // (status=offboarded + end date). We stash the prior roster state in the
+  // audit payload so reactivation can restore it precisely.
+  const parsedBody = disabled
+    ? AtelierDeactivateJoinerBody.safeParse(req.body ?? {})
+    : null;
+  if (parsedBody && !parsedBody.success) {
+    res.status(400).json({ error: "invalid-body", details: parsedBody.error.flatten() });
+    return;
+  }
+  const markLeaver = parsedBody?.data?.markLeaver === true;
+  const endDate =
+    parsedBody?.data?.endDate?.trim() || new Date().toISOString().slice(0, 10);
+
   await db
     .update(atelierAuthCredentials)
     .set({ disabled, updatedAt: new Date() })
@@ -369,14 +568,92 @@ async function setDisabled(
     // Kill every live session immediately — a leaver's open tab dies now.
     await revokeAllSessions(userId);
   }
+
+  let rosterPrior: Record<string, unknown> | null = null;
+  let rosterMarked: Record<string, unknown> | null = null;
+  if (disabled && markLeaver) {
+    const roster = await resolveRoster(me.orgId, user);
+    if (roster) {
+      rosterPrior = {
+        personType: roster.personType,
+        personId: roster.personId,
+        status: roster.status,
+        endDate: roster.endDate,
+      };
+      if (roster.personType === "employee") {
+        await db
+          .update(atelierEmployees)
+          .set({ status: "offboarded", endDate, updatedAt: new Date() })
+          .where(eq(atelierEmployees.id, roster.personId));
+      } else {
+        await db
+          .update(atelierContractors)
+          .set({ status: "offboarded", endDate, updatedAt: new Date() })
+          .where(eq(atelierContractors.id, roster.personId));
+      }
+      rosterMarked = { ...rosterPrior, newStatus: "offboarded", newEndDate: endDate };
+    }
+  }
+
+  let rosterRestored: Record<string, unknown> | null = null;
+  if (!disabled) {
+    // Reactivation reverses a prior leaver marking: find the most recent
+    // deactivation audit that captured roster state and restore it.
+    const events = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(
+        and(
+          eq(atelierAuditEvents.entityType, "joiner"),
+          eq(atelierAuditEvents.entityId, userId),
+          eq(atelierAuditEvents.action, "leaver_deactivated"),
+        ),
+      )
+      .orderBy(desc(atelierAuditEvents.createdAt))
+      .limit(1);
+    const prior = (events[0]?.payload as { rosterPrior?: Record<string, unknown> } | null)
+      ?.rosterPrior;
+    if (prior && typeof prior.personId === "string") {
+      const restoreStatus = typeof prior.status === "string" ? prior.status : "active";
+      const restoreEnd = typeof prior.endDate === "string" ? prior.endDate : null;
+      if (prior.personType === "employee") {
+        await db
+          .update(atelierEmployees)
+          .set({ status: restoreStatus, endDate: restoreEnd, updatedAt: new Date() })
+          .where(
+            and(
+              eq(atelierEmployees.id, prior.personId),
+              eq(atelierEmployees.status, "offboarded"),
+            ),
+          );
+      } else if (prior.personType === "contractor") {
+        await db
+          .update(atelierContractors)
+          .set({ status: restoreStatus, endDate: restoreEnd, updatedAt: new Date() })
+          .where(
+            and(
+              eq(atelierContractors.id, prior.personId),
+              eq(atelierContractors.status, "offboarded"),
+            ),
+          );
+      }
+      rosterRestored = prior;
+    }
+  }
+
   await audit({
     actor: me,
     action: disabled ? "leaver_deactivated" : "leaver_reactivated",
     entityId: userId,
-    payload: { email: cred.email, disabled },
+    payload: {
+      email: cred.email,
+      disabled,
+      ...(rosterPrior ? { rosterPrior, rosterMarked } : {}),
+      ...(rosterRestored ? { rosterRestored } : {}),
+    },
     summary: disabled
-      ? `${me.name} deactivated the login for ${user.name} (${cred.email}) and revoked all sessions`
-      : `${me.name} reactivated the login for ${user.name} (${cred.email})`,
+      ? `${me.name} deactivated the login for ${user.name} (${cred.email}) and revoked all sessions${rosterMarked ? `; roster marked leaver (end date ${endDate})` : ""}`
+      : `${me.name} reactivated the login for ${user.name} (${cred.email})${rosterRestored ? "; roster record restored" : ""}`,
   });
   const wire = await joinerWire(me.orgId, user);
   res.json(
@@ -392,6 +669,168 @@ router.post("/roster/joiners/:userId/deactivate", (req, res, next) => {
 // @cli-skip: HR admin mutation; no CLI shape (Task #50)
 router.post("/roster/joiners/:userId/reactivate", (req, res, next) => {
   setDisabled(req, res, false).catch(next);
+});
+
+// @cli-skip: HR admin surface; no CLI shape (Task #60)
+router.get("/roster/joiners/:userId/handover", async (req, res, next) => {
+  try {
+    const me = ensureHrActor(req, res);
+    if (!me) return;
+    const user = await loadOrgUser(me.orgId, String(req.params.userId));
+    if (!user) {
+      res.status(404).json({ error: "not-found", message: "No such user." });
+      return;
+    }
+    const handover = await buildHandover(me.orgId, user);
+    res.json(AtelierGetLeaverHandoverResponse.parse(handover));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin mutation; no CLI shape (Task #60)
+router.post("/roster/joiners/:userId/handover/reassign", async (req, res, next) => {
+  try {
+    const me = ensureHrActor(req, res);
+    if (!me) return;
+    const leaver = await loadOrgUser(me.orgId, String(req.params.userId));
+    if (!leaver) {
+      res.status(404).json({ error: "not-found", message: "No such user." });
+      return;
+    }
+    const parsed = AtelierReassignLeaverItemsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", details: parsed.error.flatten() });
+      return;
+    }
+    const toUserId = parsed.data.toUserId.trim();
+    if (toUserId === leaver.id) {
+      res.status(400).json({
+        error: "invalid-target",
+        message: "Items cannot be reassigned to the leaver themselves.",
+      });
+      return;
+    }
+    const target = await loadOrgUser(me.orgId, toUserId);
+    if (!target) {
+      res.status(404).json({ error: "target-not-found", message: "No such target user." });
+      return;
+    }
+    // Refuse handover to a deactivated login — that just re-orphans the work.
+    const [targetCred] = await db
+      .select()
+      .from(atelierAuthCredentials)
+      .where(eq(atelierAuthCredentials.userId, target.id));
+    if (targetCred?.disabled) {
+      res.status(400).json({
+        error: "target-deactivated",
+        message: "Cannot reassign to a deactivated user.",
+      });
+      return;
+    }
+
+    // Resolve which items to move: either the explicit id lists, or — with
+    // all=true — everything the leaver still owns right now.
+    const current = (await buildHandover(me.orgId, leaver)) as {
+      accounts: { id: string; name: string }[];
+      opportunities: { id: string; name: string; roles: string[] }[];
+      tasks: { id: string; title: string }[];
+    };
+    const wantAll = parsed.data.all === true;
+    const ownedAccountIds = new Set(current.accounts.map((a) => a.id));
+    const ownedOppIds = new Set(current.opportunities.map((o) => o.id));
+    const ownedTaskIds = new Set(current.tasks.map((t) => t.id));
+    const accountIds = (wantAll ? [...ownedAccountIds] : (parsed.data.accountIds ?? [])).filter(
+      (id) => ownedAccountIds.has(id),
+    );
+    const opportunityIds = (wantAll ? [...ownedOppIds] : (parsed.data.opportunityIds ?? [])).filter(
+      (id) => ownedOppIds.has(id),
+    );
+    const taskIds = (wantAll ? [...ownedTaskIds] : (parsed.data.taskIds ?? [])).filter((id) =>
+      ownedTaskIds.has(id),
+    );
+    if (accountIds.length === 0 && opportunityIds.length === 0 && taskIds.length === 0) {
+      res.status(400).json({
+        error: "nothing-to-reassign",
+        message: "None of the selected items are still owned by this user.",
+      });
+      return;
+    }
+
+    // Atomic handover: every selected item moves together, with one audit
+    // row capturing exactly what moved (so it's reviewable + reversible by
+    // re-running a reassignment back to the original owner).
+    await db.transaction(async (tx) => {
+      if (accountIds.length > 0) {
+        await tx
+          .update(atelierAccounts)
+          .set({ partnerOwnerId: target.id, updatedAt: new Date() })
+          .where(
+            and(
+              eq(atelierAccounts.orgId, me.orgId),
+              inArray(atelierAccounts.id, accountIds),
+              eq(atelierAccounts.partnerOwnerId, leaver.id),
+            ),
+          );
+      }
+      for (const oppId of opportunityIds) {
+        const opp = current.opportunities.find((o) => o.id === oppId)!;
+        const patch: Record<string, unknown> = { updatedAt: new Date() };
+        if (opp.roles.includes("owner")) patch.partnerOwnerId = target.id;
+        if (opp.roles.includes("lead")) patch.engagementLeadId = target.id;
+        await tx
+          .update(atelierOpportunities)
+          .set(patch)
+          .where(
+            and(
+              eq(atelierOpportunities.orgId, me.orgId),
+              eq(atelierOpportunities.id, oppId),
+              // Guard against concurrent owner changes between the checklist
+              // read and this update — only move it if the leaver still holds
+              // a role on it.
+              or(
+                eq(atelierOpportunities.partnerOwnerId, leaver.id),
+                eq(atelierOpportunities.engagementLeadId, leaver.id),
+              ),
+            ),
+          );
+      }
+      if (taskIds.length > 0) {
+        await tx
+          .update(atelierActivities)
+          .set({ ownerId: target.id, updatedAt: new Date() })
+          .where(
+            and(
+              eq(atelierActivities.orgId, me.orgId),
+              inArray(atelierActivities.id, taskIds),
+              eq(atelierActivities.ownerId, leaver.id),
+            ),
+          );
+      }
+      await tx.insert(atelierAuditEvents).values({
+        id: `audit_${randomUUID()}`,
+        entityType: "joiner",
+        entityId: leaver.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "leaver_handover_reassigned",
+        payload: {
+          fromUserId: leaver.id,
+          toUserId: target.id,
+          accountIds,
+          opportunityIds,
+          taskIds,
+        },
+        payloadSummary: `${me.name} reassigned ${accountIds.length} account(s), ${opportunityIds.length} opportunity(ies) and ${taskIds.length} task(s) from ${leaver.name} to ${target.name}`,
+      });
+    });
+
+    const refreshed = await buildHandover(me.orgId, leaver);
+    res.json(AtelierReassignLeaverItemsResponse.parse(refreshed));
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
