@@ -54,6 +54,34 @@ function statusTone(s: string): "default" | "amber" | "green" | "gold" | "red" {
   return "default";
 }
 
+// Task #76 — inline receipt thumbnail in claim history. Receipts may be
+// images or PDFs; try an <img> first and fall back to a text link when the
+// bytes are not renderable as an image.
+function ReceiptThumb({ src, id }: { src: string; id: string }) {
+  const [imgFailed, setImgFailed] = React.useState(false);
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-block"
+      data-testid={`exp-receipt-link-${id}`}
+    >
+      {imgFailed ? (
+        <span className="text-xs text-gold hover:underline">open receipt</span>
+      ) : (
+        <img
+          src={src}
+          alt="Receipt"
+          className="max-h-24 rounded border border-border-soft object-contain"
+          onError={() => setImgFailed(true)}
+          data-testid={`exp-receipt-thumb-${id}`}
+        />
+      )}
+    </a>
+  );
+}
+
 const inputCls =
   "w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text min-h-[44px] focus:outline-none focus:ring-1 focus:ring-gold/50";
 
@@ -438,17 +466,8 @@ export default function MeExpenses() {
                   </span>
                   <MonoChip>{c.contextType}</MonoChip>
                   <span className="text-xs text-text-faint">{c.expenseDate}</span>
-                  {c.hasReceipt && (
-                    <a
-                      className="text-xs text-gold hover:underline"
-                      href={`${API}/expenses/${c.id}/receipt`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      receipt
-                    </a>
-                  )}
                 </div>
+                {c.hasReceipt && <ReceiptThumb src={`${API}/expenses/${c.id}/receipt`} id={c.id} />}
                 {c.rejectedReason && (
                   <p className="text-xs text-red-300">Rejected: {c.rejectedReason}</p>
                 )}

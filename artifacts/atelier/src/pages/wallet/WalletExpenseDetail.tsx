@@ -41,6 +41,7 @@ interface Expense {
   markupPct: number;
   status: string;
   policyStatus: string;
+  receiptFileRef: string | null;
   policyFindings: Finding[];
   overrideRationale: string | null;
   auditorRunId: string | null;
@@ -50,6 +51,33 @@ interface Expense {
   approvedAt: string | null;
   rejectedAt: string | null;
   rejectedReason: string | null;
+}
+
+// Task #76 — inline receipt preview. Receipts may be images or PDFs; try an
+// <img> thumbnail first and fall back to a plain "open receipt" link when the
+// bytes are not renderable as an image (e.g. PDF).
+function ReceiptPreview({ src }: { src: string }) {
+  const [imgFailed, setImgFailed] = React.useState(false);
+  return (
+    <div>
+      <a href={src} target="_blank" rel="noreferrer" data-testid="receipt-open-full">
+        {imgFailed ? (
+          <span className="text-sm text-stone-700 underline">Open receipt (not an image preview)</span>
+        ) : (
+          <img
+            src={src}
+            alt="Attached receipt"
+            className="max-h-64 rounded border border-stone-200 object-contain"
+            onError={() => setImgFailed(true)}
+            data-testid="receipt-thumbnail"
+          />
+        )}
+      </a>
+      {!imgFailed ? (
+        <p className="mt-1 text-xs text-stone-500">Click to open the full-size receipt in a new tab.</p>
+      ) : null}
+    </div>
+  );
 }
 
 export default function WalletExpenseDetail() {
@@ -137,6 +165,15 @@ export default function WalletExpenseDetail() {
             </dl>
             {expense.description ? <p className="mt-3 text-sm text-stone-700">{expense.description}</p> : null}
           </Card>
+
+          {expense.receiptFileRef?.startsWith("/objects/") ? (
+            <Card>
+              <h2 className="font-serif text-lg">Receipt</h2>
+              <div className="mt-3">
+                <ReceiptPreview src={`/api/atelier/wallet/expenses/${expense.id}/receipt`} />
+              </div>
+            </Card>
+          ) : null}
 
           {expense.policyFindings.length > 0 ? (
             <Card>

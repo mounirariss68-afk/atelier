@@ -48,6 +48,8 @@ import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-
 import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
 import { runInvoiceComposer, expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
+// Task #76 — stream stored receipt images to approvers/finance.
+import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
 
 const router: IRouter = Router();
 
@@ -335,6 +337,48 @@ router.get("/wallet/expenses/:id", async (req, res) => {
     return;
   }
   res.json({ expense: expenseToWire(row, me) });
+});
+
+// Task #76 — stream the attached receipt so approvers/finance can inspect it
+// before deciding. Same app-level ACL as the detail route (owner or
+// leadership); the object lives in private object storage, so the app ACL is
+// the authorization boundary here — leadership are not the object owner and
+// would fail the storage-level owner check, hence no canAccessObjectEntity.
+// @cli-skip: binary receipt stream; no CLI shape (Task #76)
+router.get("/wallet/expenses/:id/receipt", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [row] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+  if (!row) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (row.personId !== me.id && !isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (!row.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
+    res.status(404).json({ error: "no-receipt" });
+    return;
+  }
+  try {
+    const svc = new ObjectStorageService();
+    const file = await svc.getObjectEntityFile(row.receiptFileRef);
+    const response = await svc.downloadObject(file, 60);
+    res.status(response.status);
+    response.headers.forEach((v, k) => res.setHeader(k, v));
+    const buf = Buffer.from(await response.arrayBuffer());
+    res.end(buf);
+  } catch (err) {
+    if (err instanceof ObjectNotFoundError) {
+      res.status(404).json({ error: "no-receipt" });
+      return;
+    }
+    throw err;
+  }
 });
 
 interface CreateExpenseBody {
