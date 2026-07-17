@@ -80,9 +80,21 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function RequestCard({ request }: { request: AtelierSignatureRequest }) {
+function RequestCard({
+  request,
+  highlighted,
+}: {
+  request: AtelierSignatureRequest;
+  highlighted?: boolean;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const cardRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (highlighted) {
+      cardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [highlighted]);
   const invalidate = () =>
     void qc.invalidateQueries({ queryKey: getAtelierListSignatureRequestsQueryKey() });
 
@@ -110,7 +122,11 @@ function RequestCard({ request }: { request: AtelierSignatureRequest }) {
   const open = request.status === "sent" || request.status === "partially_signed";
 
   return (
-    <Card className="p-4" data-testid={`card-esign-${request.id}`}>
+    <Card
+      ref={cardRef}
+      className={`p-4 ${highlighted ? "border-gold ring-1 ring-gold/40" : ""}`}
+      data-testid={`card-esign-${request.id}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -132,7 +148,7 @@ function RequestCard({ request }: { request: AtelierSignatureRequest }) {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           {request.signedDocumentId ? (
-            <Link href="/documents">
+            <Link href={`/documents?open=${request.signedDocumentId}`}>
               <Button variant="outline" size="sm" data-testid={`button-esign-signeddoc-${request.id}`}>
                 <FileText className="w-4 h-4 mr-1" /> Signed PDF
               </Button>
@@ -199,6 +215,12 @@ export default function Agreements() {
 
   const [statusFilter, setStatusFilter] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
+  // Deep-link support: `/agreements?request=<id>` (used by e-sign
+  // notifications) highlights and scrolls to that request's card.
+  const highlightId = React.useMemo(
+    () => new URLSearchParams(window.location.search).get("request"),
+    [],
+  );
 
   const listParams = statusFilter ? { status: statusFilter } : undefined;
   const { data, isLoading, error } = useAtelierListSignatureRequests(listParams, {
@@ -296,7 +318,7 @@ export default function Agreements() {
       ) : (
         <div className="space-y-3">
           {requests.map((r) => (
-            <RequestCard key={r.id} request={r} />
+            <RequestCard key={r.id} request={r} highlighted={r.id === highlightId} />
           ))}
         </div>
       )}

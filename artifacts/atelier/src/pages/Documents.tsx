@@ -568,6 +568,8 @@ export function DocumentLibraryPanel(props: {
   accountId?: string;
   engagementId?: string;
   compact?: boolean;
+  /** Deep-link: open this document's detail dialog on mount (`/documents?open=<id>`). */
+  initialOpenId?: string | null;
 }) {
   const qc = useQueryClient();
   const params = {
@@ -580,7 +582,7 @@ export function DocumentLibraryPanel(props: {
   const [q, setQ] = React.useState("");
   const [category, setCategory] = React.useState("");
   const [uploadOpen, setUploadOpen] = React.useState(false);
-  const [openId, setOpenId] = React.useState<string | null>(null);
+  const [openId, setOpenId] = React.useState<string | null>(props.initialOpenId ?? null);
 
   const refresh = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: getAtelierListDocumentsQueryKey() });
@@ -686,6 +688,12 @@ export function DocumentLibraryPanel(props: {
 }
 
 export default function Documents() {
+  // Deep-link support: `/documents?open=<docId>` (used by e-sign
+  // notifications to jump straight to the archived signed contract).
+  const initialOpenId = React.useMemo(
+    () => new URLSearchParams(window.location.search).get("open"),
+    [],
+  );
   return (
     <div className="space-y-6">
       <LensPageHeader
@@ -693,7 +701,7 @@ export default function Documents() {
         lede="The firm's library of externally-produced files — proposals, deliverables, contracts and templates — versioned, access-controlled, and available to AI retrieval."
       />
       <div className="container-atelier py-6">
-        <DocumentLibraryPanel />
+        <DocumentLibraryPanel initialOpenId={initialOpenId} />
       </div>
     </div>
   );

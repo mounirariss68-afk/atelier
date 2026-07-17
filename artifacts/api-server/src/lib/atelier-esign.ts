@@ -28,6 +28,7 @@ import {
   db,
   atelierSignatureRequests,
   atelierSignatureSigners,
+  atelierSelfNotifications,
   atelierAuditEvents,
 } from "@workspace/db";
 import {
@@ -277,6 +278,76 @@ async function archiveCompletedDocuments(
   return result.document.id;
 }
 
+// Terminal transitions the requesting partner should hear about promptly.
+const NOTIFY_STATUSES = ["completed", "declined", "expired"] as const;
+
+/**
+ * In-app notification to the request creator when their agreement reaches
+ * a terminal state. Non-blocking: a notification failure is logged but
+ * must never break (or roll back) the sync itself.
+ */
+async function notifyRequesterOfTerminalStatus(
+  row: SigRequestRow,
+  status: string,
+): Promise<void> {
+  if (!NOTIFY_STATUSES.includes(status as (typeof NOTIFY_STATUSES)[number])) return;
+  const wording =
+    status === "completed"
+      ? {
+          kind: "agreement_signed",
+          title: `Agreement signed: ${row.title}`,
+          body: `All signers have completed "${row.title}". The signed contract has been archived to the Document Library.`,
+        }
+      : status === "declined"
+        ? {
+            kind: "agreement_declined",
+            title: `Agreement declined: ${row.title}`,
+            body: `A signer declined "${row.title}". Open Agreements to review and follow up.`,
+          }
+        : {
+            kind: "agreement_expired",
+            title: `Agreement expired: ${row.title}`,
+            body: `"${row.title}" expired before all signers completed it. Open Agreements to resend if needed.`,
+          };
+  try {
+    // Deterministic ids keep re-syncs idempotent (terminal states never
+    // regress, but belt-and-braces against double-delivery).
+    await db
+      .insert(atelierSelfNotifications)
+      .values({
+        id: `selfnotif_esign_${row.id}_${status}`,
+        orgId: row.orgId,
+        userId: row.createdBy,
+        kind: wording.kind,
+        title: wording.title,
+        body: wording.body,
+        href: `/agreements?request=${row.id}`,
+      })
+      .onConflictDoNothing({ target: atelierSelfNotifications.id });
+    // On completion, a companion card links straight to the archived
+    // signed contract in the Document Library.
+    if (status === "completed" && row.signedDocumentId) {
+      await db
+        .insert(atelierSelfNotifications)
+        .values({
+          id: `selfnotif_esign_${row.id}_contract`,
+          orgId: row.orgId,
+          userId: row.createdBy,
+          kind: "contract_archived",
+          title: `Signed contract archived: ${row.title}`,
+          body: `The signed PDF for "${row.title}" is in the Document Library as "${row.title} (signed)".`,
+          href: `/documents?open=${row.signedDocumentId}`,
+        })
+        .onConflictDoNothing({ target: atelierSelfNotifications.id });
+    }
+  } catch (err) {
+    console.error(
+      `[esign-sync] failed to notify requester for ${row.id} (${status}):`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
 export interface SyncOutcome {
   request: SigRequestRow;
   changed: boolean;
@@ -363,6 +434,10 @@ export async function syncSignatureRequest(requestId: string): Promise<SyncOutco
     })
     .where(eq(atelierSignatureRequests.id, row.id))
     .returning();
+
+  if (changed && nextStatus !== row.status) {
+    await notifyRequesterOfTerminalStatus(updated, nextStatus);
+  }
 
   if (changed) {
     await auditSignatureRequest({
