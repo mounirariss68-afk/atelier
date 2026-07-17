@@ -769,7 +769,11 @@ export const atelierOpportunityStageTransitions = pgTable(
   "atelier_opportunity_stage_transitions",
   {
     id: text("id").primaryKey(),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup) —
+    // hard deletes of an opportunity (tests/scripts) take stage history along.
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     fromStage: text("from_stage"), // null on initial create
     toStage: text("to_stage").notNull(),
     transitionedByUserId: text("transitioned_by_user_id").notNull(),
@@ -849,7 +853,12 @@ export const atelierEngagements = pgTable(
     orgId: ORG("org_id"),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
-    opportunityId: text("opportunity_id"),
+    // FK with ON DELETE SET NULL — an engagement outlives its originating
+    // opportunity; a hard opp delete must not destroy the engagement, only
+    // detach the pointer so reads never dangle.
+    opportunityId: text("opportunity_id").references(() => atelierOpportunities.id, {
+      onDelete: "set null",
+    }),
     accountId: text("account_id").notNull(),
     plmStage: text("plm_stage").notNull(), // mobilize | deliver | compound | closed
     partnerOwnerId: text("partner_owner_id").notNull(),
@@ -1334,7 +1343,10 @@ export const atelierBriefs = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup).
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     runId: text("run_id"),
     accountSnapshot: jsonb("account_snapshot").notNull().default({}),
     buyerLandscape: jsonb("buyer_landscape").notNull().default({}),
@@ -1361,7 +1373,10 @@ export const atelierResearchFacts = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup).
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     runId: text("run_id"),
     topic: text("topic").notNull(),
     statement: text("statement").notNull(),
@@ -1391,7 +1406,10 @@ export const atelierPovs = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup).
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     audience: text("audience"),
     objective: text("objective"),
@@ -1465,7 +1483,10 @@ export const atelierProposals = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup).
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     runId: text("run_id"),
     title: text("title").notNull(),
     sectionsRequired: jsonb("sections_required").notNull().$type<string[]>().default([]),
@@ -1521,7 +1542,11 @@ export const atelierPrototypes = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id"),
+    // FK with ON DELETE SET NULL — prototype may also hang off an engagement,
+    // so an opp hard-delete detaches rather than destroys it.
+    opportunityId: text("opportunity_id").references(() => atelierOpportunities.id, {
+      onDelete: "set null",
+    }),
     engagementId: text("engagement_id"),
     runId: text("run_id"),
     name: text("name").notNull(),
@@ -1611,7 +1636,10 @@ export const atelierDealPricings = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: opportunity-child orphan cleanup).
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     rateCardId: text("rate_card_id").notNull(),
     pricingModel: text("pricing_model").notNull().default("time_and_materials"), // time_and_materials | fixed_fee | outcome_based | retainer
     durationWeeks: doublePrecision("duration_weeks").notNull().default(8),

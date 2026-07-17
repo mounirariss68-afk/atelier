@@ -43,3 +43,4 @@
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.
 - [Win/Loss orphan defenses](winloss-orphan-defenses.md) — debriefs FK-cascade on opp delete (schema's only FK); Pane A hrefs polymorphic: /home filters missing/deleted opp+eng+deliverable targets; delete/close paths must resolve their pane items (org-scoped).
 - [Long LLM jobs need a workflow](long-llm-jobs-need-workflow.md) — multi-minute web-search LLM probes stall/die under nohup in the shell; run one-offs as a temp console workflow.
+- [Opportunity-child FK integrity](atelier-opp-child-fks.md) — opp children FK-cascade (or SET NULL); meetings/transcripts are polymorphic → sweep manually; clean orphans before any FK-adding push.

@@ -2992,6 +2992,21 @@ async function main(): Promise<void> {
           .delete(atelierPaneAItems)
           .where(and(eq(atelierPaneAItems.hrefKind, "opportunity"), eq(atelierPaneAItems.hrefTargetId, oppId)))
           .catch(() => undefined);
+        // Meetings/transcripts are polymorphic (parent_type/parent_id) so no
+        // FK can cascade them — sweep opp-parented meetings + their
+        // transcripts here before the opp rows go. Other opp children
+        // (transitions, briefs, facts, povs, proposals, deal pricings)
+        // cascade via FK; engagements/prototypes detach via SET NULL.
+        const oppMeetings = await db
+          .select({ id: atelierMeetings.id, transcriptId: atelierMeetings.transcriptId })
+          .from(atelierMeetings)
+          .where(and(eq(atelierMeetings.parentType, "opportunity"), eq(atelierMeetings.parentId, oppId)))
+          .catch(() => [] as { id: string; transcriptId: string | null }[]);
+        for (const m of oppMeetings) {
+          await db.delete(atelierMeetings).where(eq(atelierMeetings.id, m.id)).catch(() => undefined);
+          if (m.transcriptId)
+            await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, m.transcriptId)).catch(() => undefined);
+        }
       }
       for (const id of created.opps) await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, id));
       for (const id of created.contacts) await db.delete(atelierContacts).where(eq(atelierContacts.id, id));
