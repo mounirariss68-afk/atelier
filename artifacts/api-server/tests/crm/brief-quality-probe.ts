@@ -171,7 +171,10 @@ async function main() {
   } finally {
     try {
       await db.delete(atelierBriefs).where(eq(atelierBriefs.id, briefId));
-      if (oppId) await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppId));
+      if (oppId) {
+        const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+        await hardDeleteOpportunities([oppId]);
+      }
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, userId));
     } catch (e) {

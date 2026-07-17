@@ -135,8 +135,8 @@ async function main() {
     r = await get(`/opportunities/check-duplicates?accountId=${acctId}&name=abc`);
     check("unauthenticated → 401", r.status === 401, r);
   } finally {
-    await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppOpen));
-    await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppArchived));
+    const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+    await hardDeleteOpportunities([oppOpen, oppArchived]);
     await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
     server.close();
   }

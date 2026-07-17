@@ -363,10 +363,18 @@ async function main() {
     try {
       if (created.rels.size) await db.delete(atelierContactRelationships).where(inArray(atelierContactRelationships.id, [...created.rels]));
       if (created.contacts.size) await db.delete(atelierContacts).where(inArray(atelierContacts.id, [...created.contacts]));
-      if (created.opps.size) await db.delete(atelierOpportunities).where(inArray(atelierOpportunities.id, [...created.opps]));
+      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+      const oppIdsToDelete = new Set<string>(created.opps);
       // opportunities created as side effects on tagged accounts
       if (created.accounts.size) {
-        await db.delete(atelierOpportunities).where(inArray(atelierOpportunities.accountId, [...created.accounts]));
+        const sideEffectOpps = await db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(inArray(atelierOpportunities.accountId, [...created.accounts]));
+        for (const o of sideEffectOpps) oppIdsToDelete.add(o.id);
+      }
+      if (oppIdsToDelete.size) await hardDeleteOpportunities([...oppIdsToDelete]);
+      if (created.accounts.size) {
         await db.delete(atelierContacts).where(inArray(atelierContacts.accountId, [...created.accounts]));
         await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, [...created.accounts]));
       }

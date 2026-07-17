@@ -264,9 +264,10 @@ async function main() {
           .execute(sql`delete from atelier_agent_runs where target_id = ${o.id}`)
           .catch(() => undefined);
       }
-      await db
-        .delete(atelierOpportunities)
-        .where(eq(atelierOpportunities.accountId, acctId));
+      if (opps.length) {
+        const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+        await hardDeleteOpportunities(opps.map((o: any) => o.id));
+      }
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, userId));
     } catch (e) {

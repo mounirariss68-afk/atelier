@@ -27,6 +27,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { runTurn, type CliFrame } from "../../src/lib/atelier-cli/index.ts";
+import { hardDeleteOpportunities } from "../../src/lib/atelier-opportunity-delete.ts";
 
 const PERSONA_ID = "p_mounir_ariss";
 const tag = Date.now().toString(36);
@@ -42,8 +43,8 @@ async function cleanup(orgId: string): Promise<void> {
     .where(eq(atelierOpportunities.accountId, ACCT_ID));
   for (const o of opps) {
     await db.delete(atelierAuditEvents).where(eq(atelierAuditEvents.entityId, o.id));
-    await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, o.id));
   }
+  if (opps.length) await hardDeleteOpportunities(opps.map((o) => o.id));
   await db.delete(atelierCliJobs).where(eq(atelierCliJobs.turnId, TURN_ID));
   await db.delete(atelierAuditEvents).where(eq(atelierAuditEvents.entityId, TURN_ID));
   await db.delete(atelierCliTurns).where(eq(atelierCliTurns.id, TURN_ID));

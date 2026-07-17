@@ -192,7 +192,8 @@ async function main() {
       await db
         .delete(atelierAuditEvents)
         .where(and(eq(atelierAuditEvents.entityType, "account"), eq(atelierAuditEvents.entityId, acctId)));
-      await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppId));
+      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+      await hardDeleteOpportunities([oppId]);
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, userId));
     } catch (e) {

@@ -278,7 +278,8 @@ async function main() {
         await db.delete(atelierBriefs).where(eq(atelierBriefs.opportunityId, oppId));
         await db.execute(sql`delete from atelier_agent_runs where target_id = ${oppId}`).catch(() => undefined);
         await db.execute(sql`delete from atelier_audit_events where entity_id = ${oppId}`).catch(() => undefined);
-        await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppId));
+        const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+        await hardDeleteOpportunities([oppId]);
       }
       await db.execute(sql`delete from atelier_audit_events where entity_id = ${acctId}`).catch(() => undefined);
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));

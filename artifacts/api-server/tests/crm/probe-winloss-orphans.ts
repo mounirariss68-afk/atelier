@@ -72,6 +72,9 @@ async function main() {
     const shown1 = (home1.body?.paneA ?? []).some((i: any) => i.hrefTargetId === opp1);
     check("/home shows pane item while opp exists", shown1);
 
+    // Intentionally a RAW row delete (not hardDeleteOpportunities): this
+    // scenario simulates an orphaning hard-delete to verify FK cascade +
+    // defensive read filters. Do not "fix" this to use the shared helper.
     await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, opp1));
     debriefs = await db.select().from(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.opportunityId, opp1));
     check("hard delete cascades debrief (FK)", debriefs.length === 0, `left=${debriefs.length}`);
@@ -96,9 +99,8 @@ async function main() {
     check("archive soft-deletes debrief + resolves pane items", d2.length === 0 && p2.length === 0, `d=${d2.length} p=${p2.length}`);
 
     // Final cleanup.
-    await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.opportunityId, opp2));
-    await db.delete(atelierPaneAItems).where(and(eq(atelierPaneAItems.hrefKind, "opportunity"), eq(atelierPaneAItems.hrefTargetId, opp2)));
-    await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, opp2));
+    const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+    await hardDeleteOpportunities([opp2]);
     await db.execute(dsql`delete from atelier_opportunity_stage_transitions where opportunity_id in (${opp1}, ${opp2})`).catch(() => undefined);
     await db.execute(dsql`delete from atelier_engagements where opportunity_id in (${opp1}, ${opp2})`).catch(() => undefined);
     await db.execute(dsql`delete from atelier_audit_events where entity_id in (${opp1}, ${opp2}, ${accId})`).catch(() => undefined);

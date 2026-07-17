@@ -228,7 +228,10 @@ async function main() {
     try {
       const oppIds = [...created.opps];
       const accIds = [...created.accounts];
-      if (oppIds.length) await db.delete(atelierOpportunities).where(inArray(atelierOpportunities.id, oppIds));
+      if (oppIds.length) {
+        const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+        await hardDeleteOpportunities(oppIds);
+      }
       if (accIds.length) await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, accIds));
       if (oppIds.length || accIds.length) {
         await db
