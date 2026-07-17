@@ -67,6 +67,8 @@ import meRoutes from "./meRoutes";
 import payRoutes from "./payRoutes";
 // Task #53 — Me lens self-service: timesheets, leave, expense claims.
 import meSelfServiceRoutes from "./meSelfServiceRoutes";
+// Task #55 — performance reviews/goals + training library.
+import performanceRoutes from "./performanceRoutes";
 import joinerRoutes from "./joinerRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
@@ -235,6 +237,8 @@ router.use(payRoutes);
 // surfaces under /roster/leave-*). Mounted with meRoutes so /me/* wins
 // before broader router patterns.
 router.use(meSelfServiceRoutes);
+// Task #55 — performance reviews/goals + training library.
+router.use(performanceRoutes);
 router.use(joinerRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

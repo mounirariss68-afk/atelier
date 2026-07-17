@@ -2608,6 +2608,365 @@ export interface AtelierMyPay {
   bankRequests: AtelierBankChangeRequest[];
 }
 
+export type AtelierSelfReviewStatus =
+  (typeof AtelierSelfReviewStatus)[keyof typeof AtelierSelfReviewStatus];
+
+export const AtelierSelfReviewStatus = {
+  released: "released",
+} as const;
+
+/**
+ * Self-scope wire shape — released reviews only; NO hrNotes.
+ */
+export interface AtelierSelfReview {
+  id: string;
+  cycle: string;
+  /** @nullable */
+  reviewedOn?: string | null;
+  /** @nullable */
+  selfRating?: string | null;
+  /** @nullable */
+  managerRating?: string | null;
+  strengths: string;
+  growthAreas: string;
+  managerSummary: string;
+  status: AtelierSelfReviewStatus;
+  /** @nullable */
+  releasedAt?: string | null;
+}
+
+export type AtelierSelfGoalStatus =
+  (typeof AtelierSelfGoalStatus)[keyof typeof AtelierSelfGoalStatus];
+
+export const AtelierSelfGoalStatus = {
+  on_track: "on_track",
+  at_risk: "at_risk",
+  complete: "complete",
+} as const;
+
+export interface AtelierSelfGoal {
+  id: string;
+  cycle: string;
+  title: string;
+  description: string;
+  weightPct: number;
+  status: AtelierSelfGoalStatus;
+}
+
+export type AtelierSelfTrainingMaterialKind =
+  (typeof AtelierSelfTrainingMaterialKind)[keyof typeof AtelierSelfTrainingMaterialKind];
+
+export const AtelierSelfTrainingMaterialKind = {
+  link: "link",
+  file: "file",
+} as const;
+
+export type AtelierSelfTrainingMaterialAudience =
+  (typeof AtelierSelfTrainingMaterialAudience)[keyof typeof AtelierSelfTrainingMaterialAudience];
+
+export const AtelierSelfTrainingMaterialAudience = {
+  all: "all",
+  employees: "employees",
+  contractors: "contractors",
+} as const;
+
+export interface AtelierSelfTrainingMaterial {
+  id: string;
+  title: string;
+  description: string;
+  topic: string;
+  kind: AtelierSelfTrainingMaterialKind;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  mime?: string | null;
+  /** @nullable */
+  sizeBytes?: number | null;
+  audience: AtelierSelfTrainingMaterialAudience;
+  completed: boolean;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export type AtelierPerformanceReviewStatus =
+  (typeof AtelierPerformanceReviewStatus)[keyof typeof AtelierPerformanceReviewStatus];
+
+export const AtelierPerformanceReviewStatus = {
+  draft: "draft",
+  released: "released",
+} as const;
+
+/**
+ * HR wire shape — includes drafts + internal hrNotes.
+ */
+export interface AtelierPerformanceReview {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  cycle: string;
+  /** @nullable */
+  reviewedOn?: string | null;
+  /** @nullable */
+  selfRating?: string | null;
+  /** @nullable */
+  managerRating?: string | null;
+  strengths: string;
+  growthAreas: string;
+  managerSummary: string;
+  hrNotes: string;
+  status: AtelierPerformanceReviewStatus;
+  /** @nullable */
+  releasedAt?: string | null;
+}
+
+export interface AtelierPerformanceReviewInput {
+  employeeId: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  cycle: string;
+  /** @maxLength 10 */
+  reviewedOn?: string;
+  /** @maxLength 50 */
+  selfRating?: string;
+  /** @maxLength 50 */
+  managerRating?: string;
+  /** @maxLength 8000 */
+  strengths?: string;
+  /** @maxLength 8000 */
+  growthAreas?: string;
+  /** @maxLength 8000 */
+  managerSummary?: string;
+  /** @maxLength 8000 */
+  hrNotes?: string;
+}
+
+export interface AtelierPerformanceReviewPatch {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  cycle?: string;
+  /** @maxLength 10 */
+  reviewedOn?: string;
+  /** @maxLength 50 */
+  selfRating?: string;
+  /** @maxLength 50 */
+  managerRating?: string;
+  /** @maxLength 8000 */
+  strengths?: string;
+  /** @maxLength 8000 */
+  growthAreas?: string;
+  /** @maxLength 8000 */
+  managerSummary?: string;
+  /** @maxLength 8000 */
+  hrNotes?: string;
+}
+
+export interface AtelierReviewReleaseInput {
+  released: boolean;
+}
+
+export type AtelierPerformanceGoalStatus =
+  (typeof AtelierPerformanceGoalStatus)[keyof typeof AtelierPerformanceGoalStatus];
+
+export const AtelierPerformanceGoalStatus = {
+  on_track: "on_track",
+  at_risk: "at_risk",
+  complete: "complete",
+} as const;
+
+export interface AtelierPerformanceGoal {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  cycle: string;
+  title: string;
+  description: string;
+  weightPct: number;
+  status: AtelierPerformanceGoalStatus;
+}
+
+export type AtelierPerformanceGoalInputStatus =
+  (typeof AtelierPerformanceGoalInputStatus)[keyof typeof AtelierPerformanceGoalInputStatus];
+
+export const AtelierPerformanceGoalInputStatus = {
+  on_track: "on_track",
+  at_risk: "at_risk",
+  complete: "complete",
+} as const;
+
+export interface AtelierPerformanceGoalInput {
+  employeeId: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  cycle: string;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title: string;
+  /** @maxLength 4000 */
+  description?: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  weightPct?: number;
+  status?: AtelierPerformanceGoalInputStatus;
+}
+
+export type AtelierPerformanceGoalPatchStatus =
+  (typeof AtelierPerformanceGoalPatchStatus)[keyof typeof AtelierPerformanceGoalPatchStatus];
+
+export const AtelierPerformanceGoalPatchStatus = {
+  on_track: "on_track",
+  at_risk: "at_risk",
+  complete: "complete",
+} as const;
+
+export interface AtelierPerformanceGoalPatch {
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  cycle?: string;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  /** @maxLength 4000 */
+  description?: string;
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  weightPct?: number;
+  status?: AtelierPerformanceGoalPatchStatus;
+}
+
+export type AtelierTrainingMaterialKind =
+  (typeof AtelierTrainingMaterialKind)[keyof typeof AtelierTrainingMaterialKind];
+
+export const AtelierTrainingMaterialKind = {
+  link: "link",
+  file: "file",
+} as const;
+
+export type AtelierTrainingMaterialAudience =
+  (typeof AtelierTrainingMaterialAudience)[keyof typeof AtelierTrainingMaterialAudience];
+
+export const AtelierTrainingMaterialAudience = {
+  all: "all",
+  employees: "employees",
+  contractors: "contractors",
+} as const;
+
+export interface AtelierTrainingMaterial {
+  id: string;
+  title: string;
+  description: string;
+  topic: string;
+  kind: AtelierTrainingMaterialKind;
+  /** @nullable */
+  url?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  mime?: string | null;
+  /** @nullable */
+  sizeBytes?: number | null;
+  audience: AtelierTrainingMaterialAudience;
+  completionCount: number;
+  /** @nullable */
+  createdAt?: string | null;
+}
+
+export type AtelierTrainingMaterialInputKind =
+  (typeof AtelierTrainingMaterialInputKind)[keyof typeof AtelierTrainingMaterialInputKind];
+
+export const AtelierTrainingMaterialInputKind = {
+  link: "link",
+} as const;
+
+export type AtelierTrainingMaterialInputAudience =
+  (typeof AtelierTrainingMaterialInputAudience)[keyof typeof AtelierTrainingMaterialInputAudience];
+
+export const AtelierTrainingMaterialInputAudience = {
+  all: "all",
+  employees: "employees",
+  contractors: "contractors",
+} as const;
+
+export interface AtelierTrainingMaterialInput {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title: string;
+  /** @maxLength 4000 */
+  description?: string;
+  /** @maxLength 200 */
+  topic?: string;
+  kind: AtelierTrainingMaterialInputKind;
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  url?: string;
+  audience?: AtelierTrainingMaterialInputAudience;
+}
+
+export type AtelierTrainingMaterialPatchAudience =
+  (typeof AtelierTrainingMaterialPatchAudience)[keyof typeof AtelierTrainingMaterialPatchAudience];
+
+export const AtelierTrainingMaterialPatchAudience = {
+  all: "all",
+  employees: "employees",
+  contractors: "contractors",
+} as const;
+
+export interface AtelierTrainingMaterialPatch {
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  /** @maxLength 4000 */
+  description?: string;
+  /** @maxLength 200 */
+  topic?: string;
+  /**
+   * @minLength 1
+   * @maxLength 2000
+   */
+  url?: string;
+  audience?: AtelierTrainingMaterialPatchAudience;
+}
+
+export type AtelierTrainingCompletionRowWorkerType =
+  (typeof AtelierTrainingCompletionRowWorkerType)[keyof typeof AtelierTrainingCompletionRowWorkerType];
+
+export const AtelierTrainingCompletionRowWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export interface AtelierTrainingCompletionRow {
+  userId: string;
+  name: string;
+  workerType: AtelierTrainingCompletionRowWorkerType;
+  completed: boolean;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
 export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
 
 export const PlmStage = {
@@ -4583,6 +4942,14 @@ export interface AtelierAgentRunSummary {
   /** @nullable */
   durationMs?: number | null;
 }
+
+export type AtelierListPerformanceReviewsParams = {
+  employeeId?: string;
+};
+
+export type AtelierListPerformanceGoalsParams = {
+  employeeId?: string;
+};
 
 export type AtelierGetActivityParams = {
   limit?: number;

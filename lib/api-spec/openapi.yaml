@@ -159,6 +159,125 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/me/reviews:
+    get:
+      operationId: atelierListMyReviews
+      tags: [atelier]
+      summary: Me lens — the caller's own RELEASED performance reviews (employees only)
+      responses:
+        "200":
+          description: Released reviews for the caller's own employee record
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierSelfReview"
+        "403":
+          description: Contractors have no performance-review section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/me/goals:
+    get:
+      operationId: atelierListMyGoals
+      tags: [atelier]
+      summary: Me lens — the caller's own goals (employees only)
+      responses:
+        "200":
+          description: Goals for the caller's own employee record
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierSelfGoal"
+        "403":
+          description: Contractors have no performance section
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/me/learning:
+    get:
+      operationId: atelierListMyLearning
+      tags: [atelier]
+      summary: Me lens — training materials targeted at the caller
+      responses:
+        "200":
+          description: Audience-filtered materials with own completion status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierSelfTrainingMaterial"
+  /atelier/me/learning/{id}/complete:
+    post:
+      operationId: atelierCompleteMyTraining
+      tags: [atelier]
+      summary: Me lens — mark a training material as completed (idempotent)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The material with updated completion status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfTrainingMaterial"
+        "404":
+          description: Not found or not targeted at the caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/performance/reviews:
+    get:
+      operationId: atelierListPerformanceReviews
+      tags: [atelier]
+      summary: HR — list performance reviews (drafts + released)
+      parameters:
+        - in: query
+          name: employeeId
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reviews with employee names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPerformanceReview"
+    post:
+      operationId: atelierCreatePerformanceReview
+      tags: [atelier]
+      summary: HR — create a draft performance review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPerformanceReviewInput"
+      responses:
+        "201":
+          description: Created draft review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPerformanceReview"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/roster/pay/people/{personId}/documents:
     get:
       operationId: atelierListPersonPayDocuments
@@ -259,6 +378,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/people/performance/reviews/{id}:
+    patch:
+      operationId: atelierUpdatePerformanceReview
+      tags: [atelier]
+      summary: HR — edit a performance review's shareable fields / notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPerformanceReviewPatch"
+      responses:
+        "200":
+          description: Updated review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPerformanceReview"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/roster/pay/bank-change-requests:
     get:
       operationId: atelierListBankChangeRequests
@@ -327,6 +475,213 @@ paths:
                 $ref: "#/components/schemas/AtelierBankChangeRequestAdmin"
         "404":
           description: Request not found or not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/performance/reviews/{id}/release:
+    post:
+      operationId: atelierReleasePerformanceReview
+      tags: [atelier]
+      summary: HR — release (or pull back) a review to the employee
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierReviewReleaseInput"
+      responses:
+        "200":
+          description: Updated review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPerformanceReview"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/performance/goals:
+    get:
+      operationId: atelierListPerformanceGoals
+      tags: [atelier]
+      summary: HR — list goals
+      parameters:
+        - in: query
+          name: employeeId
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Goals with employee names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPerformanceGoal"
+    post:
+      operationId: atelierCreatePerformanceGoal
+      tags: [atelier]
+      summary: HR — create a goal for an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPerformanceGoalInput"
+      responses:
+        "201":
+          description: Created goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPerformanceGoal"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/performance/goals/{id}:
+    patch:
+      operationId: atelierUpdatePerformanceGoal
+      tags: [atelier]
+      summary: HR — edit a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPerformanceGoalPatch"
+      responses:
+        "200":
+          description: Updated goal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPerformanceGoal"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/training-materials:
+    get:
+      operationId: atelierListTrainingMaterials
+      tags: [atelier]
+      summary: HR — list training materials with completion counts
+      responses:
+        "200":
+          description: All (non-archived) materials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierTrainingMaterial"
+    post:
+      operationId: atelierCreateTrainingMaterial
+      tags: [atelier]
+      summary: HR — add a link-type training material (file uploads use the multipart route)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierTrainingMaterialInput"
+      responses:
+        "201":
+          description: Created material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierTrainingMaterial"
+  /atelier/people/training-materials/{id}:
+    patch:
+      operationId: atelierUpdateTrainingMaterial
+      tags: [atelier]
+      summary: HR — edit a training material's metadata
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierTrainingMaterialPatch"
+      responses:
+        "200":
+          description: Updated material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierTrainingMaterial"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+    delete:
+      operationId: atelierArchiveTrainingMaterial
+      tags: [atelier]
+      summary: HR — archive (soft-delete) a training material
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Archived material
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierTrainingMaterial"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/training-materials/{id}/completions:
+    get:
+      operationId: atelierListTrainingCompletions
+      tags: [atelier]
+      summary: HR — per-person completion status for one material
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: People in the material's audience with completion status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierTrainingCompletionRow"
+        "404":
+          description: Not found
           content:
             application/json:
               schema:
@@ -5322,6 +5677,182 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AtelierBankChangeRequest"
+
+    # ---- Performance & Learning (Task #55) ----
+    AtelierSelfReview:
+      type: object
+      description: Self-scope wire shape — released reviews only; NO hrNotes.
+      required: [id, cycle, status, strengths, growthAreas, managerSummary]
+      properties:
+        id: { type: string }
+        cycle: { type: string }
+        reviewedOn: { type: ["string", "null"] }
+        selfRating: { type: ["string", "null"] }
+        managerRating: { type: ["string", "null"] }
+        strengths: { type: string }
+        growthAreas: { type: string }
+        managerSummary: { type: string }
+        status: { type: string, enum: [released] }
+        releasedAt: { type: ["string", "null"] }
+
+    AtelierSelfGoal:
+      type: object
+      required: [id, cycle, title, description, weightPct, status]
+      properties:
+        id: { type: string }
+        cycle: { type: string }
+        title: { type: string }
+        description: { type: string }
+        weightPct: { type: integer }
+        status: { type: string, enum: [on_track, at_risk, complete] }
+
+    AtelierSelfTrainingMaterial:
+      type: object
+      required: [id, title, description, topic, kind, audience, completed]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        topic: { type: string }
+        kind: { type: string, enum: [link, file] }
+        url: { type: ["string", "null"] }
+        fileName: { type: ["string", "null"] }
+        mime: { type: ["string", "null"] }
+        sizeBytes: { type: ["integer", "null"] }
+        audience: { type: string, enum: [all, employees, contractors] }
+        completed: { type: boolean }
+        completedAt: { type: ["string", "null"] }
+
+    AtelierPerformanceReview:
+      type: object
+      description: HR wire shape — includes drafts + internal hrNotes.
+      required: [id, employeeId, employeeName, cycle, status, strengths, growthAreas, managerSummary, hrNotes]
+      properties:
+        id: { type: string }
+        employeeId: { type: string }
+        employeeName: { type: string }
+        cycle: { type: string }
+        reviewedOn: { type: ["string", "null"] }
+        selfRating: { type: ["string", "null"] }
+        managerRating: { type: ["string", "null"] }
+        strengths: { type: string }
+        growthAreas: { type: string }
+        managerSummary: { type: string }
+        hrNotes: { type: string }
+        status: { type: string, enum: [draft, released] }
+        releasedAt: { type: ["string", "null"] }
+
+    AtelierPerformanceReviewInput:
+      type: object
+      required: [employeeId, cycle]
+      properties:
+        employeeId: { type: string }
+        cycle: { type: string, minLength: 1, maxLength: 100 }
+        reviewedOn: { type: string, maxLength: 10 }
+        selfRating: { type: string, maxLength: 50 }
+        managerRating: { type: string, maxLength: 50 }
+        strengths: { type: string, maxLength: 8000 }
+        growthAreas: { type: string, maxLength: 8000 }
+        managerSummary: { type: string, maxLength: 8000 }
+        hrNotes: { type: string, maxLength: 8000 }
+
+    AtelierPerformanceReviewPatch:
+      type: object
+      properties:
+        cycle: { type: string, minLength: 1, maxLength: 100 }
+        reviewedOn: { type: string, maxLength: 10 }
+        selfRating: { type: string, maxLength: 50 }
+        managerRating: { type: string, maxLength: 50 }
+        strengths: { type: string, maxLength: 8000 }
+        growthAreas: { type: string, maxLength: 8000 }
+        managerSummary: { type: string, maxLength: 8000 }
+        hrNotes: { type: string, maxLength: 8000 }
+
+    AtelierReviewReleaseInput:
+      type: object
+      required: [released]
+      properties:
+        released: { type: boolean }
+
+    AtelierPerformanceGoal:
+      type: object
+      required: [id, employeeId, employeeName, cycle, title, description, weightPct, status]
+      properties:
+        id: { type: string }
+        employeeId: { type: string }
+        employeeName: { type: string }
+        cycle: { type: string }
+        title: { type: string }
+        description: { type: string }
+        weightPct: { type: integer }
+        status: { type: string, enum: [on_track, at_risk, complete] }
+
+    AtelierPerformanceGoalInput:
+      type: object
+      required: [employeeId, cycle, title]
+      properties:
+        employeeId: { type: string }
+        cycle: { type: string, minLength: 1, maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: string, maxLength: 4000 }
+        weightPct: { type: integer, minimum: 0, maximum: 100 }
+        status: { type: string, enum: [on_track, at_risk, complete] }
+
+    AtelierPerformanceGoalPatch:
+      type: object
+      properties:
+        cycle: { type: string, minLength: 1, maxLength: 100 }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: string, maxLength: 4000 }
+        weightPct: { type: integer, minimum: 0, maximum: 100 }
+        status: { type: string, enum: [on_track, at_risk, complete] }
+
+    AtelierTrainingMaterial:
+      type: object
+      required: [id, title, description, topic, kind, audience, completionCount]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        topic: { type: string }
+        kind: { type: string, enum: [link, file] }
+        url: { type: ["string", "null"] }
+        fileName: { type: ["string", "null"] }
+        mime: { type: ["string", "null"] }
+        sizeBytes: { type: ["integer", "null"] }
+        audience: { type: string, enum: [all, employees, contractors] }
+        completionCount: { type: integer }
+        createdAt: { type: ["string", "null"] }
+
+    AtelierTrainingMaterialInput:
+      type: object
+      required: [title, kind]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: string, maxLength: 4000 }
+        topic: { type: string, maxLength: 200 }
+        kind: { type: string, enum: [link] }
+        url: { type: string, minLength: 1, maxLength: 2000 }
+        audience: { type: string, enum: [all, employees, contractors] }
+
+    AtelierTrainingMaterialPatch:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 300 }
+        description: { type: string, maxLength: 4000 }
+        topic: { type: string, maxLength: 200 }
+        url: { type: string, minLength: 1, maxLength: 2000 }
+        audience: { type: string, enum: [all, employees, contractors] }
+
+    AtelierTrainingCompletionRow:
+      type: object
+      required: [userId, name, workerType, completed]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        workerType: { type: string, enum: [employee, contractor] }
+        completed: { type: boolean }
+        completedAt: { type: ["string", "null"] }
 
     PlmStage:
       type: string

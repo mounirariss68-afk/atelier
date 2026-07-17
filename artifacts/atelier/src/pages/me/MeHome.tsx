@@ -15,6 +15,11 @@ import {
   useAtelierListMyNotifications,
   useAtelierDismissMyNotification,
   getAtelierListMyNotificationsQueryKey,
+  useAtelierListMyReviews,
+  useAtelierListMyGoals,
+  useAtelierListMyLearning,
+  useAtelierCompleteMyTraining,
+  getAtelierListMyLearningQueryKey,
   type AtelierSelfProfile,
 } from "@workspace/api-client-react";
 import {
@@ -47,6 +52,12 @@ export default function MeHome() {
   const { data: profile, isLoading } = useAtelierGetMyProfile();
 
   const firstName = profile?.user?.name?.split(/\s+/)[0] ?? "";
+  // Contractors have no performance section — reviews & goals are an
+  // employee-only surface (the server 403s them too).
+  const isContractor =
+    profile?.person?.workerType === "contractor" ||
+    profile?.user?.role === "contractor";
+  const sections = SECTIONS.filter((s) => !(isContractor && s.id === "performance"));
 
   return (
     <div className="animate-in fade-in" data-testid="me-home">
@@ -56,7 +67,7 @@ export default function MeHome() {
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
-          {SECTIONS.map((s) => (
+          {sections.map((s) => (
             <TabNavLink key={s.id} href={s.href} active={section === s.id}>
               {s.label}
             </TabNavLink>
@@ -68,18 +79,15 @@ export default function MeHome() {
           {section === "time" && <MeTime />}
           {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
-          {section === "performance" && (
-            <PlaceholderSection
-              title="Performance"
-              body="Your goals, check-ins and review cycles will appear here."
-            />
-          )}
-          {section === "learning" && (
-            <PlaceholderSection
-              title="Learning"
-              body="Your assigned courses, certifications and skill development plan will appear here."
-            />
-          )}
+          {section === "performance" &&
+            (isContractor ? (
+              <Card className="p-6 text-sm text-text-mute" data-testid="me-performance-restricted">
+                Performance reviews are an employee-only section.
+              </Card>
+            ) : (
+              <PerformanceSection />
+            ))}
+          {section === "learning" && <LearningSection />}
         </div>
       </div>
     </div>
@@ -219,6 +227,175 @@ function RosterCard({ loading, profile }: { loading: boolean; profile: Profile }
         </p>
       )}
     </Card>
+  );
+}
+
+// ---------------------------------------------------------------
+// Task #55 — My Performance (released reviews + goals, employees only)
+// ---------------------------------------------------------------
+function PerformanceSection() {
+  const { data: reviews, isLoading: loadingReviews } = useAtelierListMyReviews();
+  const { data: goals, isLoading: loadingGoals } = useAtelierListMyGoals();
+  return (
+    <div className="space-y-6" data-testid="me-performance">
+      <div>
+        <h3 className="text-sm font-semibold text-text mb-2">Released reviews</h3>
+        {loadingReviews ? (
+          <p className="text-sm text-text-faint">Loading…</p>
+        ) : !reviews || reviews.length === 0 ? (
+          <Card className="p-4 text-sm text-text-mute" data-testid="me-reviews-empty">
+            No released reviews yet. Reviews appear here once HR releases them
+            to you at the end of a cycle.
+          </Card>
+        ) : (
+          <div className="space-y-3" data-testid="me-reviews">
+            {reviews.map((r) => (
+              <Card key={r.id} className="p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-text font-medium">{r.cycle}</div>
+                  <div className="flex items-center gap-1.5">
+                    <MonoChip>self · {r.selfRating ?? "—"}</MonoChip>
+                    <MonoChip tone="gold">mgr · {r.managerRating ?? "—"}</MonoChip>
+                  </div>
+                </div>
+                {r.reviewedOn ? (
+                  <div className="text-xs text-text-faint">reviewed {r.reviewedOn}</div>
+                ) : null}
+                {r.managerSummary ? (
+                  <p className="text-sm text-text-mute">{r.managerSummary}</p>
+                ) : null}
+                <div className="grid gap-3 md:grid-cols-2 text-sm">
+                  {r.strengths ? (
+                    <div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Strengths</div>
+                      <p className="text-text-mute mt-1">{r.strengths}</p>
+                    </div>
+                  ) : null}
+                  {r.growthAreas ? (
+                    <div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Growth areas</div>
+                      <p className="text-text-mute mt-1">{r.growthAreas}</p>
+                    </div>
+                  ) : null}
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-text mb-2">Goals</h3>
+        {loadingGoals ? (
+          <p className="text-sm text-text-faint">Loading…</p>
+        ) : !goals || goals.length === 0 ? (
+          <Card className="p-4 text-sm text-text-mute" data-testid="me-goals-empty">
+            No goals set for you yet.
+          </Card>
+        ) : (
+          <div className="space-y-2" data-testid="me-goals">
+            {goals.map((g) => (
+              <Card key={g.id} className="p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-text">
+                      {g.title} <span className="text-text-faint text-xs">· {g.cycle}</span>
+                    </div>
+                    {g.description ? (
+                      <div className="text-sm text-text-mute mt-0.5">{g.description}</div>
+                    ) : null}
+                  </div>
+                  <MonoChip>{g.weightPct}%</MonoChip>
+                  <MonoChip
+                    tone={
+                      g.status === "complete" ? "green" : g.status === "on_track" ? "gold" : "amber"
+                    }
+                  >
+                    {g.status.replace("_", " ")}
+                  </MonoChip>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------
+// Task #55 — My Learning (audience-targeted training library)
+// ---------------------------------------------------------------
+function LearningSection() {
+  const qc = useQueryClient();
+  const { data: materials, isLoading } = useAtelierListMyLearning();
+  const complete = useAtelierCompleteMyTraining({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getAtelierListMyLearningQueryKey() });
+      },
+    },
+  });
+
+  if (isLoading) return <p className="text-sm text-text-faint">Loading…</p>;
+  if (!materials || materials.length === 0) {
+    return (
+      <Card className="p-6 text-sm text-text-mute" data-testid="me-learning-empty">
+        No training materials have been shared with you yet. HR curates the
+        library — new items will show up here automatically.
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-2" data-testid="me-learning">
+      {materials.map((m) => (
+        <Card key={m.id} className="p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-text font-medium truncate">{m.title}</span>
+                {m.topic ? <MonoChip>{m.topic}</MonoChip> : null}
+                {m.completed ? <MonoChip tone="green">completed</MonoChip> : null}
+              </div>
+              {m.description ? (
+                <p className="mt-1 text-sm text-text-mute">{m.description}</p>
+              ) : null}
+              <div className="mt-2 flex items-center gap-3">
+                {m.kind === "link" && m.url ? (
+                  <a
+                    href={m.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-gold hover:underline"
+                    data-testid={`learning-open-${m.id}`}
+                  >
+                    Open link →
+                  </a>
+                ) : null}
+                {m.kind === "file" ? (
+                  <a
+                    href={`/api/atelier/me/learning/${m.id}/download`}
+                    className="text-xs text-gold hover:underline"
+                    data-testid={`learning-download-${m.id}`}
+                  >
+                    Download {m.fileName ?? "file"} →
+                  </a>
+                ) : null}
+              </div>
+            </div>
+            {!m.completed ? (
+              <button
+                className="shrink-0 px-2.5 py-1 rounded font-mono text-[10px] uppercase tracking-wider border border-border text-text-mute hover:text-text hover:border-gold transition-colors"
+                onClick={() => complete.mutate({ id: m.id })}
+                disabled={complete.isPending}
+                data-testid={`learning-complete-${m.id}`}
+              >
+                Mark complete
+              </button>
+            ) : null}
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }
 

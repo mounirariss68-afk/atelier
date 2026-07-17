@@ -279,6 +279,165 @@ export const AtelierCreateBankChangeRequestBody = zod.object({
 });
 
 /**
+ * @summary Me lens — the caller's own RELEASED performance reviews (employees only)
+ */
+export const AtelierListMyReviewsResponseItem = zod
+  .object({
+    id: zod.string(),
+    cycle: zod.string(),
+    reviewedOn: zod.string().nullish(),
+    selfRating: zod.string().nullish(),
+    managerRating: zod.string().nullish(),
+    strengths: zod.string(),
+    growthAreas: zod.string(),
+    managerSummary: zod.string(),
+    status: zod.enum(["released"]),
+    releasedAt: zod.string().nullish(),
+  })
+  .describe("Self-scope wire shape — released reviews only; NO hrNotes.");
+export const AtelierListMyReviewsResponse = zod.array(
+  AtelierListMyReviewsResponseItem,
+);
+
+/**
+ * @summary Me lens — the caller's own goals (employees only)
+ */
+export const AtelierListMyGoalsResponseItem = zod.object({
+  id: zod.string(),
+  cycle: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  weightPct: zod.number(),
+  status: zod.enum(["on_track", "at_risk", "complete"]),
+});
+export const AtelierListMyGoalsResponse = zod.array(
+  AtelierListMyGoalsResponseItem,
+);
+
+/**
+ * @summary Me lens — training materials targeted at the caller
+ */
+export const AtelierListMyLearningResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  topic: zod.string(),
+  kind: zod.enum(["link", "file"]),
+  url: zod.string().nullish(),
+  fileName: zod.string().nullish(),
+  mime: zod.string().nullish(),
+  sizeBytes: zod.number().nullish(),
+  audience: zod.enum(["all", "employees", "contractors"]),
+  completed: zod.boolean(),
+  completedAt: zod.string().nullish(),
+});
+export const AtelierListMyLearningResponse = zod.array(
+  AtelierListMyLearningResponseItem,
+);
+
+/**
+ * @summary Me lens — mark a training material as completed (idempotent)
+ */
+export const AtelierCompleteMyTrainingParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierCompleteMyTrainingResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  topic: zod.string(),
+  kind: zod.enum(["link", "file"]),
+  url: zod.string().nullish(),
+  fileName: zod.string().nullish(),
+  mime: zod.string().nullish(),
+  sizeBytes: zod.number().nullish(),
+  audience: zod.enum(["all", "employees", "contractors"]),
+  completed: zod.boolean(),
+  completedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary HR — list performance reviews (drafts + released)
+ */
+export const AtelierListPerformanceReviewsQueryParams = zod.object({
+  employeeId: zod.coerce.string().optional(),
+});
+
+export const AtelierListPerformanceReviewsResponseItem = zod
+  .object({
+    id: zod.string(),
+    employeeId: zod.string(),
+    employeeName: zod.string(),
+    cycle: zod.string(),
+    reviewedOn: zod.string().nullish(),
+    selfRating: zod.string().nullish(),
+    managerRating: zod.string().nullish(),
+    strengths: zod.string(),
+    growthAreas: zod.string(),
+    managerSummary: zod.string(),
+    hrNotes: zod.string(),
+    status: zod.enum(["draft", "released"]),
+    releasedAt: zod.string().nullish(),
+  })
+  .describe("HR wire shape — includes drafts + internal hrNotes.");
+export const AtelierListPerformanceReviewsResponse = zod.array(
+  AtelierListPerformanceReviewsResponseItem,
+);
+
+/**
+ * @summary HR — create a draft performance review
+ */
+export const atelierCreatePerformanceReviewBodyCycleMax = 100;
+
+export const atelierCreatePerformanceReviewBodyReviewedOnMax = 10;
+
+export const atelierCreatePerformanceReviewBodySelfRatingMax = 50;
+
+export const atelierCreatePerformanceReviewBodyManagerRatingMax = 50;
+
+export const atelierCreatePerformanceReviewBodyStrengthsMax = 8000;
+
+export const atelierCreatePerformanceReviewBodyGrowthAreasMax = 8000;
+
+export const atelierCreatePerformanceReviewBodyManagerSummaryMax = 8000;
+
+export const atelierCreatePerformanceReviewBodyHrNotesMax = 8000;
+
+export const AtelierCreatePerformanceReviewBody = zod.object({
+  employeeId: zod.string(),
+  cycle: zod.string().min(1).max(atelierCreatePerformanceReviewBodyCycleMax),
+  reviewedOn: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyReviewedOnMax)
+    .optional(),
+  selfRating: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodySelfRatingMax)
+    .optional(),
+  managerRating: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyManagerRatingMax)
+    .optional(),
+  strengths: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyStrengthsMax)
+    .optional(),
+  growthAreas: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyGrowthAreasMax)
+    .optional(),
+  managerSummary: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyManagerSummaryMax)
+    .optional(),
+  hrNotes: zod
+    .string()
+    .max(atelierCreatePerformanceReviewBodyHrNotesMax)
+    .optional(),
+});
+
+/**
  * @summary HR — all pay/benefit documents for one person (incl. unpublished)
  */
 export const AtelierListPersonPayDocumentsParams = zod.object({
@@ -429,6 +588,83 @@ export const AtelierUpsertPersonInsuranceResponse = zod.object({
 });
 
 /**
+ * @summary HR — edit a performance review's shareable fields / notes
+ */
+export const AtelierUpdatePerformanceReviewParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdatePerformanceReviewBodyCycleMax = 100;
+
+export const atelierUpdatePerformanceReviewBodyReviewedOnMax = 10;
+
+export const atelierUpdatePerformanceReviewBodySelfRatingMax = 50;
+
+export const atelierUpdatePerformanceReviewBodyManagerRatingMax = 50;
+
+export const atelierUpdatePerformanceReviewBodyStrengthsMax = 8000;
+
+export const atelierUpdatePerformanceReviewBodyGrowthAreasMax = 8000;
+
+export const atelierUpdatePerformanceReviewBodyManagerSummaryMax = 8000;
+
+export const atelierUpdatePerformanceReviewBodyHrNotesMax = 8000;
+
+export const AtelierUpdatePerformanceReviewBody = zod.object({
+  cycle: zod
+    .string()
+    .min(1)
+    .max(atelierUpdatePerformanceReviewBodyCycleMax)
+    .optional(),
+  reviewedOn: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyReviewedOnMax)
+    .optional(),
+  selfRating: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodySelfRatingMax)
+    .optional(),
+  managerRating: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyManagerRatingMax)
+    .optional(),
+  strengths: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyStrengthsMax)
+    .optional(),
+  growthAreas: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyGrowthAreasMax)
+    .optional(),
+  managerSummary: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyManagerSummaryMax)
+    .optional(),
+  hrNotes: zod
+    .string()
+    .max(atelierUpdatePerformanceReviewBodyHrNotesMax)
+    .optional(),
+});
+
+export const AtelierUpdatePerformanceReviewResponse = zod
+  .object({
+    id: zod.string(),
+    employeeId: zod.string(),
+    employeeName: zod.string(),
+    cycle: zod.string(),
+    reviewedOn: zod.string().nullish(),
+    selfRating: zod.string().nullish(),
+    managerRating: zod.string().nullish(),
+    strengths: zod.string(),
+    growthAreas: zod.string(),
+    managerSummary: zod.string(),
+    hrNotes: zod.string(),
+    status: zod.enum(["draft", "released"]),
+    releasedAt: zod.string().nullish(),
+  })
+  .describe("HR wire shape — includes drafts + internal hrNotes.");
+
+/**
  * @summary HR — bank-detail change requests queue (pending first)
  */
 export const AtelierListBankChangeRequestsResponseItem = zod
@@ -513,6 +749,271 @@ export const AtelierRejectBankChangeRequestResponse = zod
     decisionNote: zod.string().nullish(),
   })
   .describe("HR verification view — includes the full new IBAN.");
+
+/**
+ * @summary HR — release (or pull back) a review to the employee
+ */
+export const AtelierReleasePerformanceReviewParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierReleasePerformanceReviewBody = zod.object({
+  released: zod.boolean(),
+});
+
+export const AtelierReleasePerformanceReviewResponse = zod
+  .object({
+    id: zod.string(),
+    employeeId: zod.string(),
+    employeeName: zod.string(),
+    cycle: zod.string(),
+    reviewedOn: zod.string().nullish(),
+    selfRating: zod.string().nullish(),
+    managerRating: zod.string().nullish(),
+    strengths: zod.string(),
+    growthAreas: zod.string(),
+    managerSummary: zod.string(),
+    hrNotes: zod.string(),
+    status: zod.enum(["draft", "released"]),
+    releasedAt: zod.string().nullish(),
+  })
+  .describe("HR wire shape — includes drafts + internal hrNotes.");
+
+/**
+ * @summary HR — list goals
+ */
+export const AtelierListPerformanceGoalsQueryParams = zod.object({
+  employeeId: zod.coerce.string().optional(),
+});
+
+export const AtelierListPerformanceGoalsResponseItem = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  cycle: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  weightPct: zod.number(),
+  status: zod.enum(["on_track", "at_risk", "complete"]),
+});
+export const AtelierListPerformanceGoalsResponse = zod.array(
+  AtelierListPerformanceGoalsResponseItem,
+);
+
+/**
+ * @summary HR — create a goal for an employee
+ */
+export const atelierCreatePerformanceGoalBodyCycleMax = 100;
+
+export const atelierCreatePerformanceGoalBodyTitleMax = 300;
+
+export const atelierCreatePerformanceGoalBodyDescriptionMax = 4000;
+
+export const atelierCreatePerformanceGoalBodyWeightPctMin = 0;
+export const atelierCreatePerformanceGoalBodyWeightPctMax = 100;
+
+export const AtelierCreatePerformanceGoalBody = zod.object({
+  employeeId: zod.string(),
+  cycle: zod.string().min(1).max(atelierCreatePerformanceGoalBodyCycleMax),
+  title: zod.string().min(1).max(atelierCreatePerformanceGoalBodyTitleMax),
+  description: zod
+    .string()
+    .max(atelierCreatePerformanceGoalBodyDescriptionMax)
+    .optional(),
+  weightPct: zod
+    .number()
+    .min(atelierCreatePerformanceGoalBodyWeightPctMin)
+    .max(atelierCreatePerformanceGoalBodyWeightPctMax)
+    .optional(),
+  status: zod.enum(["on_track", "at_risk", "complete"]).optional(),
+});
+
+/**
+ * @summary HR — edit a goal
+ */
+export const AtelierUpdatePerformanceGoalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdatePerformanceGoalBodyCycleMax = 100;
+
+export const atelierUpdatePerformanceGoalBodyTitleMax = 300;
+
+export const atelierUpdatePerformanceGoalBodyDescriptionMax = 4000;
+
+export const atelierUpdatePerformanceGoalBodyWeightPctMin = 0;
+export const atelierUpdatePerformanceGoalBodyWeightPctMax = 100;
+
+export const AtelierUpdatePerformanceGoalBody = zod.object({
+  cycle: zod
+    .string()
+    .min(1)
+    .max(atelierUpdatePerformanceGoalBodyCycleMax)
+    .optional(),
+  title: zod
+    .string()
+    .min(1)
+    .max(atelierUpdatePerformanceGoalBodyTitleMax)
+    .optional(),
+  description: zod
+    .string()
+    .max(atelierUpdatePerformanceGoalBodyDescriptionMax)
+    .optional(),
+  weightPct: zod
+    .number()
+    .min(atelierUpdatePerformanceGoalBodyWeightPctMin)
+    .max(atelierUpdatePerformanceGoalBodyWeightPctMax)
+    .optional(),
+  status: zod.enum(["on_track", "at_risk", "complete"]).optional(),
+});
+
+export const AtelierUpdatePerformanceGoalResponse = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  cycle: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  weightPct: zod.number(),
+  status: zod.enum(["on_track", "at_risk", "complete"]),
+});
+
+/**
+ * @summary HR — list training materials with completion counts
+ */
+export const AtelierListTrainingMaterialsResponseItem = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  topic: zod.string(),
+  kind: zod.enum(["link", "file"]),
+  url: zod.string().nullish(),
+  fileName: zod.string().nullish(),
+  mime: zod.string().nullish(),
+  sizeBytes: zod.number().nullish(),
+  audience: zod.enum(["all", "employees", "contractors"]),
+  completionCount: zod.number(),
+  createdAt: zod.string().nullish(),
+});
+export const AtelierListTrainingMaterialsResponse = zod.array(
+  AtelierListTrainingMaterialsResponseItem,
+);
+
+/**
+ * @summary HR — add a link-type training material (file uploads use the multipart route)
+ */
+export const atelierCreateTrainingMaterialBodyTitleMax = 300;
+
+export const atelierCreateTrainingMaterialBodyDescriptionMax = 4000;
+
+export const atelierCreateTrainingMaterialBodyTopicMax = 200;
+
+export const atelierCreateTrainingMaterialBodyUrlMax = 2000;
+
+export const AtelierCreateTrainingMaterialBody = zod.object({
+  title: zod.string().min(1).max(atelierCreateTrainingMaterialBodyTitleMax),
+  description: zod
+    .string()
+    .max(atelierCreateTrainingMaterialBodyDescriptionMax)
+    .optional(),
+  topic: zod.string().max(atelierCreateTrainingMaterialBodyTopicMax).optional(),
+  kind: zod.enum(["link"]),
+  url: zod
+    .string()
+    .min(1)
+    .max(atelierCreateTrainingMaterialBodyUrlMax)
+    .optional(),
+  audience: zod.enum(["all", "employees", "contractors"]).optional(),
+});
+
+/**
+ * @summary HR — edit a training material's metadata
+ */
+export const AtelierUpdateTrainingMaterialParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateTrainingMaterialBodyTitleMax = 300;
+
+export const atelierUpdateTrainingMaterialBodyDescriptionMax = 4000;
+
+export const atelierUpdateTrainingMaterialBodyTopicMax = 200;
+
+export const atelierUpdateTrainingMaterialBodyUrlMax = 2000;
+
+export const AtelierUpdateTrainingMaterialBody = zod.object({
+  title: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateTrainingMaterialBodyTitleMax)
+    .optional(),
+  description: zod
+    .string()
+    .max(atelierUpdateTrainingMaterialBodyDescriptionMax)
+    .optional(),
+  topic: zod.string().max(atelierUpdateTrainingMaterialBodyTopicMax).optional(),
+  url: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateTrainingMaterialBodyUrlMax)
+    .optional(),
+  audience: zod.enum(["all", "employees", "contractors"]).optional(),
+});
+
+export const AtelierUpdateTrainingMaterialResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  topic: zod.string(),
+  kind: zod.enum(["link", "file"]),
+  url: zod.string().nullish(),
+  fileName: zod.string().nullish(),
+  mime: zod.string().nullish(),
+  sizeBytes: zod.number().nullish(),
+  audience: zod.enum(["all", "employees", "contractors"]),
+  completionCount: zod.number(),
+  createdAt: zod.string().nullish(),
+});
+
+/**
+ * @summary HR — archive (soft-delete) a training material
+ */
+export const AtelierArchiveTrainingMaterialParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchiveTrainingMaterialResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string(),
+  topic: zod.string(),
+  kind: zod.enum(["link", "file"]),
+  url: zod.string().nullish(),
+  fileName: zod.string().nullish(),
+  mime: zod.string().nullish(),
+  sizeBytes: zod.number().nullish(),
+  audience: zod.enum(["all", "employees", "contractors"]),
+  completionCount: zod.number(),
+  createdAt: zod.string().nullish(),
+});
+
+/**
+ * @summary HR — per-person completion status for one material
+ */
+export const AtelierListTrainingCompletionsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierListTrainingCompletionsResponseItem = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  workerType: zod.enum(["employee", "contractor"]),
+  completed: zod.boolean(),
+  completedAt: zod.string().nullish(),
+});
+export const AtelierListTrainingCompletionsResponse = zod.array(
+  AtelierListTrainingCompletionsResponseItem,
+);
 
 /**
  * @summary HR — list login-holding users with activation status

@@ -4038,3 +4038,113 @@ export const atelierAuthSessions = pgTable(
     index("idx_atelier_auth_sessions_exp").on(t.expiresAt),
   ],
 );
+
+// ============================================================
+// PERFORMANCE & LEARNING (Task #55) — Me lens "My Performance"
+// and the training-material library.
+// ============================================================
+
+/**
+ * Employee performance reviews — employee-facing read model with an HR
+ * release switch. `status`: draft (HR-only) | released (visible to the
+ * subject employee via /me/reviews). `hrNotes` is internal and is NEVER
+ * included in the self-scope wire shape.
+ */
+export const atelierPerformanceReviews = pgTable(
+  "atelier_performance_reviews",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // atelier_employees.id — reviews are employee-only by design.
+    employeeId: text("employee_id").notNull(),
+    cycle: text("cycle").notNull(), // e.g. "FY26 H1"
+    reviewedOn: text("reviewed_on"), // ISO date (YYYY-MM-DD)
+    selfRating: text("self_rating"),
+    managerRating: text("manager_rating"), // exceeds | meets | developing
+    // Shareable narrative — released to the employee with the review.
+    strengths: text("strengths").notNull().default(""),
+    growthAreas: text("growth_areas").notNull().default(""),
+    managerSummary: text("manager_summary").notNull().default(""),
+    // Internal HR notes — never in the /me wire shape.
+    hrNotes: text("hr_notes").notNull().default(""),
+    status: text("status").notNull().default("draft"), // draft | released
+    releasedAt: timestamp("released_at"),
+    releasedByUserId: text("released_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_perf_reviews_org").on(t.orgId),
+    index("idx_atelier_perf_reviews_emp").on(t.employeeId),
+  ],
+);
+
+/** Employee goals for a review cycle — released reviews' companion data. */
+export const atelierPerformanceGoals = pgTable(
+  "atelier_performance_goals",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    employeeId: text("employee_id").notNull(), // atelier_employees.id
+    cycle: text("cycle").notNull(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    weightPct: integer("weight_pct").notNull().default(0), // 0-100
+    status: text("status").notNull().default("on_track"), // on_track | at_risk | complete
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_perf_goals_org").on(t.orgId),
+    index("idx_atelier_perf_goals_emp").on(t.employeeId),
+  ],
+);
+
+/**
+ * Training-material library — HR-managed; audience-targeted. `kind`:
+ * link (external URL) | file (object-storage blob referenced by
+ * `objectKey`, streamed via the download route — bytes never live in DB).
+ */
+export const atelierTrainingMaterials = pgTable(
+  "atelier_training_materials",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    topic: text("topic").notNull().default(""), // free-text topic/track
+    kind: text("kind").notNull(), // link | file
+    url: text("url"), // kind=link
+    objectKey: text("object_key"), // kind=file — key under the training blob subdir
+    fileName: text("file_name"),
+    mime: text("mime"),
+    sizeBytes: integer("size_bytes"),
+    audience: text("audience").notNull().default("all"), // all | employees | contractors
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [index("idx_atelier_training_mat_org").on(t.orgId)],
+);
+
+/** Per-person completion marks — one row per (material, user). */
+export const atelierTrainingCompletions = pgTable(
+  "atelier_training_completions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    materialId: text("material_id").notNull(),
+    userId: text("user_id").notNull(), // atelier_users.id
+    completedAt: timestamp("completed_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_training_done_org").on(t.orgId),
+    index("idx_atelier_training_done_mat").on(t.materialId),
+    uniqueIndex("uq_atelier_training_done").on(t.materialId, t.userId),
+  ],
+);

@@ -15,19 +15,28 @@
  * card on someone's Me home ("timesheet due Friday", "expense approved").
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierEmployees,
   atelierContractors,
   atelierSelfNotifications,
+  atelierPerformanceReviews,
+  atelierPerformanceGoals,
+  atelierTrainingMaterials,
+  atelierTrainingCompletions,
 } from "@workspace/db";
 import {
   AtelierGetMyProfileResponse,
   AtelierListMyNotificationsResponse,
   AtelierDismissMyNotificationResponse,
+  AtelierListMyReviewsResponse,
+  AtelierListMyGoalsResponse,
+  AtelierListMyLearningResponse,
+  AtelierCompleteMyTrainingResponse,
 } from "@workspace/api-zod";
+import { loadTrainingFileBytes } from "./performanceRoutes";
 import { personaToWire } from "./personaCookie";
 
 const router: IRouter = Router();
@@ -272,6 +281,270 @@ router.post("/me/notifications/:id/dismiss", async (req, res, next) => {
       return;
     }
     res.json(AtelierDismissMyNotificationResponse.parse(notifToWire(row)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// Task #55 — My Performance (employees only) + My Learning
+// =============================================================
+
+/**
+ * Resolve the caller for the performance section. Contractors are 403'd
+ * (the section does not exist for them); everyone else resolves to their
+ * own employee record — personas with no roster record get an empty list.
+ */
+async function resolvePerformanceSubject(
+  me: typeof atelierUsers.$inferSelect,
+  res: Response,
+): Promise<{ employeeId: string | null } | null> {
+  const person = await resolveSelfPerson(me);
+  if (person?.workerType === "contractor" || me.role === "contractor") {
+    res.status(403).json({
+      error: "contractor-no-performance",
+      message: "Performance reviews are an employee-only section.",
+    });
+    return null;
+  }
+  return { employeeId: person?.workerType === "employee" ? person.id : null };
+}
+
+// @cli-skip: self-scope performance read; no CLI shape (Task #55)
+router.get("/me/reviews", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const subject = await resolvePerformanceSubject(me, res);
+    if (!subject) return;
+    if (!subject.employeeId) {
+      res.json(AtelierListMyReviewsResponse.parse([]));
+      return;
+    }
+    // Strictly self-scoped + released-only. hrNotes NEVER leaves the org side.
+    const rows = await db
+      .select()
+      .from(atelierPerformanceReviews)
+      .where(
+        and(
+          eq(atelierPerformanceReviews.orgId, me.orgId),
+          eq(atelierPerformanceReviews.employeeId, subject.employeeId),
+          eq(atelierPerformanceReviews.status, "released"),
+          isNull(atelierPerformanceReviews.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPerformanceReviews.createdAt));
+    res.json(
+      AtelierListMyReviewsResponse.parse(
+        rows.map((r) => ({
+          id: r.id,
+          cycle: r.cycle,
+          reviewedOn: r.reviewedOn,
+          selfRating: r.selfRating,
+          managerRating: r.managerRating,
+          strengths: r.strengths,
+          growthAreas: r.growthAreas,
+          managerSummary: r.managerSummary,
+          status: "released" as const,
+          releasedAt: r.releasedAt ? r.releasedAt.toISOString() : null,
+        })),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope goals read; no CLI shape (Task #55)
+router.get("/me/goals", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const subject = await resolvePerformanceSubject(me, res);
+    if (!subject) return;
+    if (!subject.employeeId) {
+      res.json(AtelierListMyGoalsResponse.parse([]));
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(atelierPerformanceGoals)
+      .where(
+        and(
+          eq(atelierPerformanceGoals.orgId, me.orgId),
+          eq(atelierPerformanceGoals.employeeId, subject.employeeId),
+          isNull(atelierPerformanceGoals.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPerformanceGoals.createdAt));
+    res.json(
+      AtelierListMyGoalsResponse.parse(
+        rows.map((g) => ({
+          id: g.id,
+          cycle: g.cycle,
+          title: g.title,
+          description: g.description,
+          weightPct: g.weightPct,
+          status: g.status as "on_track" | "at_risk" | "complete",
+        })),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** Audience filter — which worker types a material is visible to. */
+async function callerAudience(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<"employee" | "contractor"> {
+  if (me.role === "contractor") return "contractor";
+  const person = await resolveSelfPerson(me);
+  return person?.workerType === "contractor" ? "contractor" : "employee";
+}
+
+function audienceValuesFor(workerType: "employee" | "contractor"): string[] {
+  return workerType === "contractor" ? ["all", "contractors"] : ["all", "employees"];
+}
+
+function selfMaterialToWire(
+  m: typeof atelierTrainingMaterials.$inferSelect,
+  completedAt: Date | null,
+) {
+  return {
+    id: m.id,
+    title: m.title,
+    description: m.description,
+    topic: m.topic,
+    kind: m.kind as "link" | "file",
+    url: m.url,
+    fileName: m.fileName,
+    mime: m.mime,
+    sizeBytes: m.sizeBytes,
+    audience: m.audience as "all" | "employees" | "contractors",
+    completed: !!completedAt,
+    completedAt: completedAt ? completedAt.toISOString() : null,
+  };
+}
+
+/** Load one material IF it is targeted at the caller; null otherwise. */
+async function loadMyMaterial(
+  me: typeof atelierUsers.$inferSelect,
+  id: string,
+): Promise<typeof atelierTrainingMaterials.$inferSelect | null> {
+  const aud = audienceValuesFor(await callerAudience(me));
+  const [m] = await db
+    .select()
+    .from(atelierTrainingMaterials)
+    .where(
+      and(
+        eq(atelierTrainingMaterials.id, id),
+        eq(atelierTrainingMaterials.orgId, me.orgId),
+        inArray(atelierTrainingMaterials.audience, aud),
+        isNull(atelierTrainingMaterials.deletedAt),
+      ),
+    );
+  return m ?? null;
+}
+
+// @cli-skip: self-scope learning read; no CLI shape (Task #55)
+router.get("/me/learning", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const aud = audienceValuesFor(await callerAudience(me));
+    const rows = await db
+      .select()
+      .from(atelierTrainingMaterials)
+      .where(
+        and(
+          eq(atelierTrainingMaterials.orgId, me.orgId),
+          inArray(atelierTrainingMaterials.audience, aud),
+          isNull(atelierTrainingMaterials.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierTrainingMaterials.createdAt));
+    const done = rows.length
+      ? await db
+          .select()
+          .from(atelierTrainingCompletions)
+          .where(
+            and(
+              eq(atelierTrainingCompletions.orgId, me.orgId),
+              eq(atelierTrainingCompletions.userId, me.id),
+              inArray(
+                atelierTrainingCompletions.materialId,
+                rows.map((r) => r.id),
+              ),
+            ),
+          )
+      : [];
+    const doneByMaterial = new Map(done.map((d) => [d.materialId, d.completedAt]));
+    res.json(
+      AtelierListMyLearningResponse.parse(
+        rows.map((m) => selfMaterialToWire(m, doneByMaterial.get(m.id) ?? null)),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope completion write; no CLI shape (Task #55)
+router.post("/me/learning/:id/complete", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const m = await loadMyMaterial(me, req.params.id);
+    if (!m) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    // Idempotent — the unique (materialId, userId) index makes re-marks no-ops.
+    await db
+      .insert(atelierTrainingCompletions)
+      .values({ id: rid("traindone"), orgId: me.orgId, materialId: m.id, userId: me.id })
+      .onConflictDoNothing();
+    const [row] = await db
+      .select()
+      .from(atelierTrainingCompletions)
+      .where(
+        and(
+          eq(atelierTrainingCompletions.materialId, m.id),
+          eq(atelierTrainingCompletions.userId, me.id),
+        ),
+      );
+    res.json(
+      AtelierCompleteMyTrainingResponse.parse(
+        selfMaterialToWire(m, row?.completedAt ?? new Date()),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope binary download; not an OpenAPI JSON surface (Task #55)
+router.get("/me/learning/:id/download", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const m = await loadMyMaterial(me, req.params.id);
+    if (!m || m.kind !== "file" || !m.objectKey) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const bytes = await loadTrainingFileBytes(m.objectKey);
+    if (!bytes) {
+      res.status(404).json({ error: "file-missing" });
+      return;
+    }
+    res.setHeader("Content-Type", m.mime || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${(m.fileName || "material").replace(/"/g, "")}"`,
+    );
+    res.send(bytes);
   } catch (err) {
     next(err);
   }

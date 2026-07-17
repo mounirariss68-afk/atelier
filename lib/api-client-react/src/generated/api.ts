@@ -99,6 +99,8 @@ import type {
   AtelierLeaverReassignInput,
   AtelierListAccountsParams,
   AtelierListAuditParams,
+  AtelierListPerformanceGoalsParams,
+  AtelierListPerformanceReviewsParams,
   AtelierMarginOverrideInput,
   AtelierMarginPolicy,
   AtelierMarginPolicyInput,
@@ -114,6 +116,12 @@ import type {
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
   AtelierPayDocumentAdmin,
+  AtelierPerformanceGoal,
+  AtelierPerformanceGoalInput,
+  AtelierPerformanceGoalPatch,
+  AtelierPerformanceReview,
+  AtelierPerformanceReviewInput,
+  AtelierPerformanceReviewPatch,
   AtelierPersonInsurance,
   AtelierPersonInsuranceInput,
   AtelierPersona,
@@ -146,14 +154,22 @@ import type {
   AtelierRateCardRowInput,
   AtelierRejectProposalSectionInput,
   AtelierResearchFact,
+  AtelierReviewReleaseInput,
   AtelierScoutInput,
+  AtelierSelfGoal,
   AtelierSelfNotification,
   AtelierSelfProfile,
+  AtelierSelfReview,
+  AtelierSelfTrainingMaterial,
   AtelierSendDeliverableInput,
   AtelierStageChangeInput,
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierTrainingCompletionRow,
+  AtelierTrainingMaterial,
+  AtelierTrainingMaterialInput,
+  AtelierTrainingMaterialPatch,
   AtelierUpdateAccountActionInput,
   AtelierUpdateAccountInput,
   AtelierUpdateAccountInsightInput,
@@ -836,6 +852,521 @@ export const useAtelierCreateBankChangeRequest = <
 };
 
 /**
+ * @summary Me lens — the caller's own RELEASED performance reviews (employees only)
+ */
+export const getAtelierListMyReviewsUrl = () => {
+  return `/api/atelier/me/reviews`;
+};
+
+export const atelierListMyReviews = async (
+  options?: RequestInit,
+): Promise<AtelierSelfReview[]> => {
+  return customFetch<AtelierSelfReview[]>(getAtelierListMyReviewsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyReviewsQueryKey = () => {
+  return [`/api/atelier/me/reviews`] as const;
+};
+
+export const getAtelierListMyReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyReviews>>,
+  TError = ErrorType<AtelierError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListMyReviewsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyReviews>>
+  > = ({ signal }) => atelierListMyReviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyReviews>>
+>;
+export type AtelierListMyReviewsQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary Me lens — the caller's own RELEASED performance reviews (employees only)
+ */
+
+export function useAtelierListMyReviews<
+  TData = Awaited<ReturnType<typeof atelierListMyReviews>>,
+  TError = ErrorType<AtelierError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyReviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyReviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — the caller's own goals (employees only)
+ */
+export const getAtelierListMyGoalsUrl = () => {
+  return `/api/atelier/me/goals`;
+};
+
+export const atelierListMyGoals = async (
+  options?: RequestInit,
+): Promise<AtelierSelfGoal[]> => {
+  return customFetch<AtelierSelfGoal[]>(getAtelierListMyGoalsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyGoalsQueryKey = () => {
+  return [`/api/atelier/me/goals`] as const;
+};
+
+export const getAtelierListMyGoalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyGoals>>,
+  TError = ErrorType<AtelierError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyGoals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListMyGoalsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyGoals>>
+  > = ({ signal }) => atelierListMyGoals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyGoals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyGoalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyGoals>>
+>;
+export type AtelierListMyGoalsQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary Me lens — the caller's own goals (employees only)
+ */
+
+export function useAtelierListMyGoals<
+  TData = Awaited<ReturnType<typeof atelierListMyGoals>>,
+  TError = ErrorType<AtelierError>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyGoals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyGoalsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — training materials targeted at the caller
+ */
+export const getAtelierListMyLearningUrl = () => {
+  return `/api/atelier/me/learning`;
+};
+
+export const atelierListMyLearning = async (
+  options?: RequestInit,
+): Promise<AtelierSelfTrainingMaterial[]> => {
+  return customFetch<AtelierSelfTrainingMaterial[]>(
+    getAtelierListMyLearningUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListMyLearningQueryKey = () => {
+  return [`/api/atelier/me/learning`] as const;
+};
+
+export const getAtelierListMyLearningQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyLearning>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyLearning>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListMyLearningQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyLearning>>
+  > = ({ signal }) => atelierListMyLearning({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyLearning>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyLearningQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyLearning>>
+>;
+export type AtelierListMyLearningQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — training materials targeted at the caller
+ */
+
+export function useAtelierListMyLearning<
+  TData = Awaited<ReturnType<typeof atelierListMyLearning>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyLearning>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyLearningQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — mark a training material as completed (idempotent)
+ */
+export const getAtelierCompleteMyTrainingUrl = (id: string) => {
+  return `/api/atelier/me/learning/${id}/complete`;
+};
+
+export const atelierCompleteMyTraining = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSelfTrainingMaterial> => {
+  return customFetch<AtelierSelfTrainingMaterial>(
+    getAtelierCompleteMyTrainingUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierCompleteMyTrainingMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCompleteMyTraining>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCompleteMyTraining>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierCompleteMyTraining"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCompleteMyTraining>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierCompleteMyTraining(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCompleteMyTrainingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCompleteMyTraining>>
+>;
+
+export type AtelierCompleteMyTrainingMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Me lens — mark a training material as completed (idempotent)
+ */
+export const useAtelierCompleteMyTraining = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCompleteMyTraining>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCompleteMyTraining>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierCompleteMyTrainingMutationOptions(options));
+};
+
+/**
+ * @summary HR — list performance reviews (drafts + released)
+ */
+export const getAtelierListPerformanceReviewsUrl = (
+  params?: AtelierListPerformanceReviewsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/people/performance/reviews?${stringifiedParams}`
+    : `/api/atelier/people/performance/reviews`;
+};
+
+export const atelierListPerformanceReviews = async (
+  params?: AtelierListPerformanceReviewsParams,
+  options?: RequestInit,
+): Promise<AtelierPerformanceReview[]> => {
+  return customFetch<AtelierPerformanceReview[]>(
+    getAtelierListPerformanceReviewsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPerformanceReviewsQueryKey = (
+  params?: AtelierListPerformanceReviewsParams,
+) => {
+  return [
+    `/api/atelier/people/performance/reviews`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListPerformanceReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPerformanceReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListPerformanceReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPerformanceReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPerformanceReviewsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPerformanceReviews>>
+  > = ({ signal }) =>
+    atelierListPerformanceReviews(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPerformanceReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPerformanceReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPerformanceReviews>>
+>;
+export type AtelierListPerformanceReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list performance reviews (drafts + released)
+ */
+
+export function useAtelierListPerformanceReviews<
+  TData = Awaited<ReturnType<typeof atelierListPerformanceReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListPerformanceReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPerformanceReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPerformanceReviewsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — create a draft performance review
+ */
+export const getAtelierCreatePerformanceReviewUrl = () => {
+  return `/api/atelier/people/performance/reviews`;
+};
+
+export const atelierCreatePerformanceReview = async (
+  atelierPerformanceReviewInput: AtelierPerformanceReviewInput,
+  options?: RequestInit,
+): Promise<AtelierPerformanceReview> => {
+  return customFetch<AtelierPerformanceReview>(
+    getAtelierCreatePerformanceReviewUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPerformanceReviewInput),
+    },
+  );
+};
+
+export const getAtelierCreatePerformanceReviewMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePerformanceReview>>,
+    TError,
+    { data: BodyType<AtelierPerformanceReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePerformanceReview>>,
+  TError,
+  { data: BodyType<AtelierPerformanceReviewInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePerformanceReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePerformanceReview>>,
+    { data: BodyType<AtelierPerformanceReviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePerformanceReview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePerformanceReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePerformanceReview>>
+>;
+export type AtelierCreatePerformanceReviewMutationBody =
+  BodyType<AtelierPerformanceReviewInput>;
+export type AtelierCreatePerformanceReviewMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — create a draft performance review
+ */
+export const useAtelierCreatePerformanceReview = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePerformanceReview>>,
+    TError,
+    { data: BodyType<AtelierPerformanceReviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePerformanceReview>>,
+  TError,
+  { data: BodyType<AtelierPerformanceReviewInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreatePerformanceReviewMutationOptions(options));
+};
+
+/**
  * @summary HR — all pay/benefit documents for one person (incl. unpublished)
  */
 export const getAtelierListPersonPayDocumentsUrl = (personId: string) => {
@@ -1197,6 +1728,98 @@ export const useAtelierUpsertPersonInsurance = <
 };
 
 /**
+ * @summary HR — edit a performance review's shareable fields / notes
+ */
+export const getAtelierUpdatePerformanceReviewUrl = (id: string) => {
+  return `/api/atelier/people/performance/reviews/${id}`;
+};
+
+export const atelierUpdatePerformanceReview = async (
+  id: string,
+  atelierPerformanceReviewPatch: AtelierPerformanceReviewPatch,
+  options?: RequestInit,
+): Promise<AtelierPerformanceReview> => {
+  return customFetch<AtelierPerformanceReview>(
+    getAtelierUpdatePerformanceReviewUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPerformanceReviewPatch),
+    },
+  );
+};
+
+export const getAtelierUpdatePerformanceReviewMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>,
+    TError,
+    { id: string; data: BodyType<AtelierPerformanceReviewPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>,
+  TError,
+  { id: string; data: BodyType<AtelierPerformanceReviewPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePerformanceReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>,
+    { id: string; data: BodyType<AtelierPerformanceReviewPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePerformanceReview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePerformanceReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>
+>;
+export type AtelierUpdatePerformanceReviewMutationBody =
+  BodyType<AtelierPerformanceReviewPatch>;
+export type AtelierUpdatePerformanceReviewMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — edit a performance review's shareable fields / notes
+ */
+export const useAtelierUpdatePerformanceReview = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>,
+    TError,
+    { id: string; data: BodyType<AtelierPerformanceReviewPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceReview>>,
+  TError,
+  { id: string; data: BodyType<AtelierPerformanceReviewPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePerformanceReviewMutationOptions(options));
+};
+
+/**
  * @summary HR — bank-detail change requests queue (pending first)
  */
 export const getAtelierListBankChangeRequestsUrl = () => {
@@ -1461,6 +2084,835 @@ export const useAtelierRejectBankChangeRequest = <
 > => {
   return useMutation(getAtelierRejectBankChangeRequestMutationOptions(options));
 };
+
+/**
+ * @summary HR — release (or pull back) a review to the employee
+ */
+export const getAtelierReleasePerformanceReviewUrl = (id: string) => {
+  return `/api/atelier/people/performance/reviews/${id}/release`;
+};
+
+export const atelierReleasePerformanceReview = async (
+  id: string,
+  atelierReviewReleaseInput: AtelierReviewReleaseInput,
+  options?: RequestInit,
+): Promise<AtelierPerformanceReview> => {
+  return customFetch<AtelierPerformanceReview>(
+    getAtelierReleasePerformanceReviewUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierReviewReleaseInput),
+    },
+  );
+};
+
+export const getAtelierReleasePerformanceReviewMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReleasePerformanceReview>>,
+    TError,
+    { id: string; data: BodyType<AtelierReviewReleaseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReleasePerformanceReview>>,
+  TError,
+  { id: string; data: BodyType<AtelierReviewReleaseInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierReleasePerformanceReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReleasePerformanceReview>>,
+    { id: string; data: BodyType<AtelierReviewReleaseInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierReleasePerformanceReview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReleasePerformanceReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReleasePerformanceReview>>
+>;
+export type AtelierReleasePerformanceReviewMutationBody =
+  BodyType<AtelierReviewReleaseInput>;
+export type AtelierReleasePerformanceReviewMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — release (or pull back) a review to the employee
+ */
+export const useAtelierReleasePerformanceReview = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReleasePerformanceReview>>,
+    TError,
+    { id: string; data: BodyType<AtelierReviewReleaseInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReleasePerformanceReview>>,
+  TError,
+  { id: string; data: BodyType<AtelierReviewReleaseInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierReleasePerformanceReviewMutationOptions(options),
+  );
+};
+
+/**
+ * @summary HR — list goals
+ */
+export const getAtelierListPerformanceGoalsUrl = (
+  params?: AtelierListPerformanceGoalsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/people/performance/goals?${stringifiedParams}`
+    : `/api/atelier/people/performance/goals`;
+};
+
+export const atelierListPerformanceGoals = async (
+  params?: AtelierListPerformanceGoalsParams,
+  options?: RequestInit,
+): Promise<AtelierPerformanceGoal[]> => {
+  return customFetch<AtelierPerformanceGoal[]>(
+    getAtelierListPerformanceGoalsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPerformanceGoalsQueryKey = (
+  params?: AtelierListPerformanceGoalsParams,
+) => {
+  return [
+    `/api/atelier/people/performance/goals`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListPerformanceGoalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPerformanceGoals>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListPerformanceGoalsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPerformanceGoals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPerformanceGoalsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPerformanceGoals>>
+  > = ({ signal }) =>
+    atelierListPerformanceGoals(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPerformanceGoals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPerformanceGoalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPerformanceGoals>>
+>;
+export type AtelierListPerformanceGoalsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list goals
+ */
+
+export function useAtelierListPerformanceGoals<
+  TData = Awaited<ReturnType<typeof atelierListPerformanceGoals>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListPerformanceGoalsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPerformanceGoals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPerformanceGoalsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — create a goal for an employee
+ */
+export const getAtelierCreatePerformanceGoalUrl = () => {
+  return `/api/atelier/people/performance/goals`;
+};
+
+export const atelierCreatePerformanceGoal = async (
+  atelierPerformanceGoalInput: AtelierPerformanceGoalInput,
+  options?: RequestInit,
+): Promise<AtelierPerformanceGoal> => {
+  return customFetch<AtelierPerformanceGoal>(
+    getAtelierCreatePerformanceGoalUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPerformanceGoalInput),
+    },
+  );
+};
+
+export const getAtelierCreatePerformanceGoalMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>,
+    TError,
+    { data: BodyType<AtelierPerformanceGoalInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>,
+  TError,
+  { data: BodyType<AtelierPerformanceGoalInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePerformanceGoal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>,
+    { data: BodyType<AtelierPerformanceGoalInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePerformanceGoal(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePerformanceGoalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>
+>;
+export type AtelierCreatePerformanceGoalMutationBody =
+  BodyType<AtelierPerformanceGoalInput>;
+export type AtelierCreatePerformanceGoalMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — create a goal for an employee
+ */
+export const useAtelierCreatePerformanceGoal = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>,
+    TError,
+    { data: BodyType<AtelierPerformanceGoalInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePerformanceGoal>>,
+  TError,
+  { data: BodyType<AtelierPerformanceGoalInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreatePerformanceGoalMutationOptions(options));
+};
+
+/**
+ * @summary HR — edit a goal
+ */
+export const getAtelierUpdatePerformanceGoalUrl = (id: string) => {
+  return `/api/atelier/people/performance/goals/${id}`;
+};
+
+export const atelierUpdatePerformanceGoal = async (
+  id: string,
+  atelierPerformanceGoalPatch: AtelierPerformanceGoalPatch,
+  options?: RequestInit,
+): Promise<AtelierPerformanceGoal> => {
+  return customFetch<AtelierPerformanceGoal>(
+    getAtelierUpdatePerformanceGoalUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPerformanceGoalPatch),
+    },
+  );
+};
+
+export const getAtelierUpdatePerformanceGoalMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>,
+    TError,
+    { id: string; data: BodyType<AtelierPerformanceGoalPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>,
+  TError,
+  { id: string; data: BodyType<AtelierPerformanceGoalPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePerformanceGoal"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>,
+    { id: string; data: BodyType<AtelierPerformanceGoalPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePerformanceGoal(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePerformanceGoalMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>
+>;
+export type AtelierUpdatePerformanceGoalMutationBody =
+  BodyType<AtelierPerformanceGoalPatch>;
+export type AtelierUpdatePerformanceGoalMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — edit a goal
+ */
+export const useAtelierUpdatePerformanceGoal = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>,
+    TError,
+    { id: string; data: BodyType<AtelierPerformanceGoalPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePerformanceGoal>>,
+  TError,
+  { id: string; data: BodyType<AtelierPerformanceGoalPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePerformanceGoalMutationOptions(options));
+};
+
+/**
+ * @summary HR — list training materials with completion counts
+ */
+export const getAtelierListTrainingMaterialsUrl = () => {
+  return `/api/atelier/people/training-materials`;
+};
+
+export const atelierListTrainingMaterials = async (
+  options?: RequestInit,
+): Promise<AtelierTrainingMaterial[]> => {
+  return customFetch<AtelierTrainingMaterial[]>(
+    getAtelierListTrainingMaterialsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListTrainingMaterialsQueryKey = () => {
+  return [`/api/atelier/people/training-materials`] as const;
+};
+
+export const getAtelierListTrainingMaterialsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListTrainingMaterials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListTrainingMaterials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListTrainingMaterialsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListTrainingMaterials>>
+  > = ({ signal }) =>
+    atelierListTrainingMaterials({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListTrainingMaterials>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListTrainingMaterialsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListTrainingMaterials>>
+>;
+export type AtelierListTrainingMaterialsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list training materials with completion counts
+ */
+
+export function useAtelierListTrainingMaterials<
+  TData = Awaited<ReturnType<typeof atelierListTrainingMaterials>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListTrainingMaterials>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListTrainingMaterialsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — add a link-type training material (file uploads use the multipart route)
+ */
+export const getAtelierCreateTrainingMaterialUrl = () => {
+  return `/api/atelier/people/training-materials`;
+};
+
+export const atelierCreateTrainingMaterial = async (
+  atelierTrainingMaterialInput: AtelierTrainingMaterialInput,
+  options?: RequestInit,
+): Promise<AtelierTrainingMaterial> => {
+  return customFetch<AtelierTrainingMaterial>(
+    getAtelierCreateTrainingMaterialUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierTrainingMaterialInput),
+    },
+  );
+};
+
+export const getAtelierCreateTrainingMaterialMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>,
+    TError,
+    { data: BodyType<AtelierTrainingMaterialInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>,
+  TError,
+  { data: BodyType<AtelierTrainingMaterialInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateTrainingMaterial"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>,
+    { data: BodyType<AtelierTrainingMaterialInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateTrainingMaterial(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateTrainingMaterialMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>
+>;
+export type AtelierCreateTrainingMaterialMutationBody =
+  BodyType<AtelierTrainingMaterialInput>;
+export type AtelierCreateTrainingMaterialMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HR — add a link-type training material (file uploads use the multipart route)
+ */
+export const useAtelierCreateTrainingMaterial = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>,
+    TError,
+    { data: BodyType<AtelierTrainingMaterialInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateTrainingMaterial>>,
+  TError,
+  { data: BodyType<AtelierTrainingMaterialInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateTrainingMaterialMutationOptions(options));
+};
+
+/**
+ * @summary HR — edit a training material's metadata
+ */
+export const getAtelierUpdateTrainingMaterialUrl = (id: string) => {
+  return `/api/atelier/people/training-materials/${id}`;
+};
+
+export const atelierUpdateTrainingMaterial = async (
+  id: string,
+  atelierTrainingMaterialPatch: AtelierTrainingMaterialPatch,
+  options?: RequestInit,
+): Promise<AtelierTrainingMaterial> => {
+  return customFetch<AtelierTrainingMaterial>(
+    getAtelierUpdateTrainingMaterialUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierTrainingMaterialPatch),
+    },
+  );
+};
+
+export const getAtelierUpdateTrainingMaterialMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>,
+    TError,
+    { id: string; data: BodyType<AtelierTrainingMaterialPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>,
+  TError,
+  { id: string; data: BodyType<AtelierTrainingMaterialPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateTrainingMaterial"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>,
+    { id: string; data: BodyType<AtelierTrainingMaterialPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateTrainingMaterial(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateTrainingMaterialMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>
+>;
+export type AtelierUpdateTrainingMaterialMutationBody =
+  BodyType<AtelierTrainingMaterialPatch>;
+export type AtelierUpdateTrainingMaterialMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — edit a training material's metadata
+ */
+export const useAtelierUpdateTrainingMaterial = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>,
+    TError,
+    { id: string; data: BodyType<AtelierTrainingMaterialPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateTrainingMaterial>>,
+  TError,
+  { id: string; data: BodyType<AtelierTrainingMaterialPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateTrainingMaterialMutationOptions(options));
+};
+
+/**
+ * @summary HR — archive (soft-delete) a training material
+ */
+export const getAtelierArchiveTrainingMaterialUrl = (id: string) => {
+  return `/api/atelier/people/training-materials/${id}`;
+};
+
+export const atelierArchiveTrainingMaterial = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierTrainingMaterial> => {
+  return customFetch<AtelierTrainingMaterial>(
+    getAtelierArchiveTrainingMaterialUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierArchiveTrainingMaterialMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchiveTrainingMaterial"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchiveTrainingMaterial(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchiveTrainingMaterialMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>
+>;
+
+export type AtelierArchiveTrainingMaterialMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — archive (soft-delete) a training material
+ */
+export const useAtelierArchiveTrainingMaterial = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchiveTrainingMaterial>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchiveTrainingMaterialMutationOptions(options));
+};
+
+/**
+ * @summary HR — per-person completion status for one material
+ */
+export const getAtelierListTrainingCompletionsUrl = (id: string) => {
+  return `/api/atelier/people/training-materials/${id}/completions`;
+};
+
+export const atelierListTrainingCompletions = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierTrainingCompletionRow[]> => {
+  return customFetch<AtelierTrainingCompletionRow[]>(
+    getAtelierListTrainingCompletionsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListTrainingCompletionsQueryKey = (id: string) => {
+  return [`/api/atelier/people/training-materials/${id}/completions`] as const;
+};
+
+export const getAtelierListTrainingCompletionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListTrainingCompletions>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListTrainingCompletions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListTrainingCompletionsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListTrainingCompletions>>
+  > = ({ signal }) =>
+    atelierListTrainingCompletions(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListTrainingCompletions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListTrainingCompletionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListTrainingCompletions>>
+>;
+export type AtelierListTrainingCompletionsQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — per-person completion status for one material
+ */
+
+export function useAtelierListTrainingCompletions<
+  TData = Awaited<ReturnType<typeof atelierListTrainingCompletions>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListTrainingCompletions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListTrainingCompletionsQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary HR — list login-holding users with activation status
