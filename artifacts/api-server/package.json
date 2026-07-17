@@ -28,6 +28,7 @@
     "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
     "test:suggestion-jargon": "tsx ./tests/cli-catalog/suggestion-jargon.ts",
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
+    "test:person-dedupe": "tsx ./tests/person-dedupe/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts",
     "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts"
   },
