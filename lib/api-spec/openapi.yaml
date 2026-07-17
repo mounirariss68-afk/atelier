@@ -118,6 +118,219 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfNotification"
+  /atelier/me/pay:
+    get:
+      operationId: atelierGetMyPay
+      tags: [atelier]
+      summary: Me lens — the caller's own Pay & Benefits bundle (self-scope)
+      description: |
+        Published pay/benefit documents, compensation summary, insurance
+        scheme details, masked bank details and bank-change requests — all
+        strictly for the signed-in person. File downloads go through
+        `/api/atelier/me/pay/documents/{id}/download` (owner-gated).
+      responses:
+        "200":
+          description: Self pay & benefits bundle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMyPay"
+  /atelier/me/pay/bank-change-request:
+    post:
+      operationId: atelierCreateBankChangeRequest
+      tags: [atelier]
+      summary: Me lens — request a change to own payment details (HR must approve)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierBankChangeRequestInput"
+      responses:
+        "201":
+          description: Pending change request (masked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierBankChangeRequest"
+        "400":
+          description: Invalid IBAN, no employee roster record, or a request is already pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/people/{personId}/documents:
+    get:
+      operationId: atelierListPersonPayDocuments
+      tags: [atelier]
+      summary: HR — all pay/benefit documents for one person (incl. unpublished)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Documents, newest period first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierPayDocumentAdmin"
+        "404":
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/documents/{docId}/publish:
+    post:
+      operationId: atelierPublishPayDocument
+      tags: [atelier]
+      summary: HR — publish a pay document to its person (emits a Me-home card)
+      parameters:
+        - name: docId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Published document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPayDocumentAdmin"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/documents/{docId}/retract:
+    post:
+      operationId: atelierRetractPayDocument
+      tags: [atelier]
+      summary: HR — retract a published pay document (hides it from the person)
+      parameters:
+        - name: docId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Retracted document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPayDocumentAdmin"
+        "404":
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/people/{personId}/insurance:
+    put:
+      operationId: atelierUpsertPersonInsurance
+      tags: [atelier]
+      summary: HR — set a person's insurance scheme details (display-only for the person)
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierPersonInsuranceInput"
+      responses:
+        "200":
+          description: Upserted insurance details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPersonInsurance"
+        "404":
+          description: Person not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/bank-change-requests:
+    get:
+      operationId: atelierListBankChangeRequests
+      tags: [atelier]
+      summary: HR — bank-detail change requests queue (pending first)
+      responses:
+        "200":
+          description: Requests, pending first then newest decided
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierBankChangeRequestAdmin"
+  /atelier/roster/pay/bank-change-requests/{id}/approve:
+    post:
+      operationId: atelierApproveBankChangeRequest
+      tags: [atelier]
+      summary: HR — approve a bank change; applies the new details to the roster record
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierBankChangeDecisionInput"
+      responses:
+        "200":
+          description: Approved request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierBankChangeRequestAdmin"
+        "404":
+          description: Request not found or not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/roster/pay/bank-change-requests/{id}/reject:
+    post:
+      operationId: atelierRejectBankChangeRequest
+      tags: [atelier]
+      summary: HR — reject a bank change request (nothing is applied)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierBankChangeDecisionInput"
+      responses:
+        "200":
+          description: Rejected request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierBankChangeRequestAdmin"
+        "404":
+          description: Request not found or not pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/roster/joiners:
     get:
       operationId: atelierListJoiners
@@ -4956,6 +5169,159 @@ components:
         tempPassword:
           type: string
           description: Shown exactly once — never persisted in plaintext.
+
+    # ---- Personal pay hub (Task #54) ----
+    AtelierPayDocument:
+      type: object
+      description: A published pay/benefit document, self-scope view.
+      required: [id, category, title, fileName, mime, sizeBytes, downloadUrl]
+      properties:
+        id: { type: string }
+        category:
+          type: string
+          enum: [contract, salary_letter, bonus_letter, comp_letter, payslip, remittance, insurance]
+        title: { type: string }
+        periodDate: { type: ["string", "null"] }
+        fileName: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: number }
+        publishedAt: { type: ["string", "null"] }
+        downloadUrl: { type: string }
+
+    AtelierPayDocumentAdmin:
+      type: object
+      description: HR view of a pay/benefit document (includes publish state).
+      required: [id, personId, personType, category, title, fileName, mime, sizeBytes, published, uploadedAt, downloadUrl]
+      properties:
+        id: { type: string }
+        personId: { type: string }
+        personType: { type: string, enum: [employee, contractor] }
+        category:
+          type: string
+          enum: [contract, salary_letter, bonus_letter, comp_letter, payslip, remittance, insurance]
+        title: { type: string }
+        periodDate: { type: ["string", "null"] }
+        fileName: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: number }
+        published: { type: boolean }
+        publishedAt: { type: ["string", "null"] }
+        retractedAt: { type: ["string", "null"] }
+        uploadedAt: { type: string }
+        notes: { type: ["string", "null"] }
+        downloadUrl: { type: string }
+
+    AtelierPersonInsurance:
+      type: object
+      required: [provider, policyNumber, memberNumber, coverageSummary]
+      properties:
+        provider: { type: string }
+        policyNumber: { type: string }
+        memberNumber: { type: string }
+        coverageSummary: { type: string }
+        updatedAt: { type: ["string", "null"] }
+
+    AtelierPersonInsuranceInput:
+      type: object
+      required: [provider]
+      properties:
+        provider: { type: string, minLength: 1, maxLength: 200 }
+        policyNumber: { type: string, maxLength: 100 }
+        memberNumber: { type: string, maxLength: 100 }
+        coverageSummary: { type: string, maxLength: 4000 }
+
+    AtelierCompSummary:
+      type: object
+      description: The person's own comp facts (self-scope, read-only).
+      properties:
+        baseCompensation: { type: ["number", "null"] }
+        baseCurrency: { type: ["string", "null"] }
+        dayRateAmount: { type: ["number", "null"] }
+        dayRateCurrency: { type: ["string", "null"] }
+
+    AtelierBankChangeRequest:
+      type: object
+      description: Self-scope view of a bank-detail change request (masked).
+      required: [id, newIbanMasked, status, createdAt]
+      properties:
+        id: { type: string }
+        newIbanMasked: { type: string }
+        newSwift: { type: ["string", "null"] }
+        reason: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, approved, rejected] }
+        createdAt: { type: string }
+        decidedAt: { type: ["string", "null"] }
+        decisionNote: { type: ["string", "null"] }
+
+    AtelierBankChangeRequestInput:
+      type: object
+      required: [newIban]
+      properties:
+        newIban: { type: string, minLength: 8, maxLength: 34 }
+        newSwift: { type: string, maxLength: 11 }
+        reason: { type: string, maxLength: 1000 }
+
+    AtelierBankChangeDecisionInput:
+      type: object
+      properties:
+        note: { type: string, maxLength: 1000 }
+
+    AtelierBankChangeRequestAdmin:
+      type: object
+      description: HR verification view — includes the full new IBAN.
+      required: [id, personId, personType, personName, newIban, status, createdAt]
+      properties:
+        id: { type: string }
+        personId: { type: string }
+        personType: { type: string }
+        personName: { type: string }
+        previousIbanMasked: { type: ["string", "null"] }
+        newIban: { type: string }
+        newSwift: { type: ["string", "null"] }
+        reason: { type: ["string", "null"] }
+        status: { type: string, enum: [pending, approved, rejected] }
+        createdAt: { type: string }
+        decidedAt: { type: ["string", "null"] }
+        decidedByName: { type: ["string", "null"] }
+        decisionNote: { type: ["string", "null"] }
+
+    AtelierMyPayBank:
+      type: object
+      description: Masked view of own payment details.
+      required: [canRequestChange]
+      properties:
+        ibanMasked: { type: ["string", "null"] }
+        swift: { type: ["string", "null"] }
+        canRequestChange: { type: boolean }
+
+    AtelierMyPay:
+      type: object
+      required: [documents, bankRequests]
+      properties:
+        person:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierSelfPerson"
+            - type: "null"
+        documents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierPayDocument"
+        compSummary:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierCompSummary"
+            - type: "null"
+        insurance:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierPersonInsurance"
+            - type: "null"
+        bank:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierMyPayBank"
+            - type: "null"
+        bankRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierBankChangeRequest"
 
     PlmStage:
       type: string

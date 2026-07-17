@@ -2397,6 +2397,217 @@ export interface AtelierAddJoinerResponse {
   tempPassword: string;
 }
 
+export type AtelierPayDocumentCategory =
+  (typeof AtelierPayDocumentCategory)[keyof typeof AtelierPayDocumentCategory];
+
+export const AtelierPayDocumentCategory = {
+  contract: "contract",
+  salary_letter: "salary_letter",
+  bonus_letter: "bonus_letter",
+  comp_letter: "comp_letter",
+  payslip: "payslip",
+  remittance: "remittance",
+  insurance: "insurance",
+} as const;
+
+/**
+ * A published pay/benefit document, self-scope view.
+ */
+export interface AtelierPayDocument {
+  id: string;
+  category: AtelierPayDocumentCategory;
+  title: string;
+  /** @nullable */
+  periodDate?: string | null;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  /** @nullable */
+  publishedAt?: string | null;
+  downloadUrl: string;
+}
+
+export type AtelierPayDocumentAdminPersonType =
+  (typeof AtelierPayDocumentAdminPersonType)[keyof typeof AtelierPayDocumentAdminPersonType];
+
+export const AtelierPayDocumentAdminPersonType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export type AtelierPayDocumentAdminCategory =
+  (typeof AtelierPayDocumentAdminCategory)[keyof typeof AtelierPayDocumentAdminCategory];
+
+export const AtelierPayDocumentAdminCategory = {
+  contract: "contract",
+  salary_letter: "salary_letter",
+  bonus_letter: "bonus_letter",
+  comp_letter: "comp_letter",
+  payslip: "payslip",
+  remittance: "remittance",
+  insurance: "insurance",
+} as const;
+
+/**
+ * HR view of a pay/benefit document (includes publish state).
+ */
+export interface AtelierPayDocumentAdmin {
+  id: string;
+  personId: string;
+  personType: AtelierPayDocumentAdminPersonType;
+  category: AtelierPayDocumentAdminCategory;
+  title: string;
+  /** @nullable */
+  periodDate?: string | null;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  published: boolean;
+  /** @nullable */
+  publishedAt?: string | null;
+  /** @nullable */
+  retractedAt?: string | null;
+  uploadedAt: string;
+  /** @nullable */
+  notes?: string | null;
+  downloadUrl: string;
+}
+
+export interface AtelierPersonInsurance {
+  provider: string;
+  policyNumber: string;
+  memberNumber: string;
+  coverageSummary: string;
+  /** @nullable */
+  updatedAt?: string | null;
+}
+
+export interface AtelierPersonInsuranceInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  provider: string;
+  /** @maxLength 100 */
+  policyNumber?: string;
+  /** @maxLength 100 */
+  memberNumber?: string;
+  /** @maxLength 4000 */
+  coverageSummary?: string;
+}
+
+/**
+ * The person's own comp facts (self-scope, read-only).
+ */
+export interface AtelierCompSummary {
+  /** @nullable */
+  baseCompensation?: number | null;
+  /** @nullable */
+  baseCurrency?: string | null;
+  /** @nullable */
+  dayRateAmount?: number | null;
+  /** @nullable */
+  dayRateCurrency?: string | null;
+}
+
+export type AtelierBankChangeRequestStatus =
+  (typeof AtelierBankChangeRequestStatus)[keyof typeof AtelierBankChangeRequestStatus];
+
+export const AtelierBankChangeRequestStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+/**
+ * Self-scope view of a bank-detail change request (masked).
+ */
+export interface AtelierBankChangeRequest {
+  id: string;
+  newIbanMasked: string;
+  /** @nullable */
+  newSwift?: string | null;
+  /** @nullable */
+  reason?: string | null;
+  status: AtelierBankChangeRequestStatus;
+  createdAt: string;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decisionNote?: string | null;
+}
+
+export interface AtelierBankChangeRequestInput {
+  /**
+   * @minLength 8
+   * @maxLength 34
+   */
+  newIban: string;
+  /** @maxLength 11 */
+  newSwift?: string;
+  /** @maxLength 1000 */
+  reason?: string;
+}
+
+export interface AtelierBankChangeDecisionInput {
+  /** @maxLength 1000 */
+  note?: string;
+}
+
+export type AtelierBankChangeRequestAdminStatus =
+  (typeof AtelierBankChangeRequestAdminStatus)[keyof typeof AtelierBankChangeRequestAdminStatus];
+
+export const AtelierBankChangeRequestAdminStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+/**
+ * HR verification view — includes the full new IBAN.
+ */
+export interface AtelierBankChangeRequestAdmin {
+  id: string;
+  personId: string;
+  personType: string;
+  personName: string;
+  /** @nullable */
+  previousIbanMasked?: string | null;
+  newIban: string;
+  /** @nullable */
+  newSwift?: string | null;
+  /** @nullable */
+  reason?: string | null;
+  status: AtelierBankChangeRequestAdminStatus;
+  createdAt: string;
+  /** @nullable */
+  decidedAt?: string | null;
+  /** @nullable */
+  decidedByName?: string | null;
+  /** @nullable */
+  decisionNote?: string | null;
+}
+
+/**
+ * Masked view of own payment details.
+ */
+export interface AtelierMyPayBank {
+  /** @nullable */
+  ibanMasked?: string | null;
+  /** @nullable */
+  swift?: string | null;
+  canRequestChange: boolean;
+}
+
+export interface AtelierMyPay {
+  person?: AtelierSelfPerson | null;
+  documents: AtelierPayDocument[];
+  compSummary?: AtelierCompSummary | null;
+  insurance?: AtelierPersonInsurance | null;
+  bank?: AtelierMyPayBank | null;
+  bankRequests: AtelierBankChangeRequest[];
+}
+
 export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];
 
 export const PlmStage = {

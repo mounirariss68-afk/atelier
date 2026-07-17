@@ -135,6 +135,9 @@ const TOLERATED_PREFIXES = [
   "access.",
   "document.",
   "person_document.",
+  "pay_document.",
+  "bank_change.",
+  "person_insurance.",
 ];
 
 export function assertAuditAction(action: string): void {

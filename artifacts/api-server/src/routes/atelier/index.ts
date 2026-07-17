@@ -64,6 +64,7 @@ import reportsRoutes from "./reportsRoutes";
 import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 // Task #50 — Me lens self-scope routes + HR joiner lifecycle.
 import meRoutes from "./meRoutes";
+import payRoutes from "./payRoutes";
 import joinerRoutes from "./joinerRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
@@ -225,6 +226,9 @@ router.get("/accounts/:accountId/meeting-prep.html", accountPrepCardHandler);
 // routes self-only personas can reach) + HR joiner lifecycle. Mounted
 // early so /me/* wins before any broader router pattern.
 router.use(meRoutes);
+// Task #54 — Personal pay hub: self-scope /me/pay/* + HR /roster/pay/*.
+// Mounted with meRoutes so employee/contractor allowlists cover /me/pay.
+router.use(payRoutes);
 router.use(joinerRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

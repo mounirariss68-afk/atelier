@@ -24,6 +24,7 @@ import {
   TabNavLink,
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
+import MePay from "./MePay";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -73,12 +74,7 @@ export default function MeHome() {
               body="Submit and track your expense claims here. Approved claims are reimbursed with the next pay run."
             />
           )}
-          {section === "pay" && (
-            <PlaceholderSection
-              title="Pay & Benefits"
-              body="Your payslips, compensation summary and benefits enrolment will appear here."
-            />
-          )}
+          {section === "pay" && <MePay />}
           {section === "performance" && (
             <PlaceholderSection
               title="Performance"

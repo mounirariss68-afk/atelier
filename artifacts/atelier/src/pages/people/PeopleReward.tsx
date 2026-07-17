@@ -4,12 +4,15 @@ import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useCompBands, useCompReview, useRecognition } from "./peopleSeed";
 import { useCanSeeRewardAndSuccession } from "./peoplePerms";
+import { PayDocsAdminView, BankChangesAdminView } from "./PeoplePayAdmin";
 
 const SUBS = [
   { id: "bands",        label: "Comp bands" },
   { id: "review",       label: "Comp review" },
   { id: "rewards",      label: "Total rewards" },
   { id: "recognition",  label: "Recognition" },
+  { id: "paydocs",      label: "Pay documents" },
+  { id: "bankchanges",  label: "Bank changes" },
 ];
 
 export default function PeopleReward() {
@@ -57,6 +60,8 @@ export default function PeopleReward() {
           {section === "review" && <ReviewView />}
           {section === "rewards" && <TotalRewardsView />}
           {section === "recognition" && <RecognitionView />}
+          {section === "paydocs" && <PayDocsAdminView />}
+          {section === "bankchanges" && <BankChangesAdminView />}
         </div>
       </div>
     </PeopleShell>

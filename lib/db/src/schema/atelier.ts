@@ -2399,6 +2399,108 @@ export const atelierPersonDocuments = pgTable(
 );
 
 // ============================================================
+// Task #54 — Personal pay hub (Me lens Pay & Benefits)
+// ============================================================
+
+// Pay/benefit documents HR publishes to one person: contracts, salary /
+// bonus / other comp letters, payslips (remittances for contractors) and
+// insurance documents. File bytes live in-row (base64) — small PDFs only,
+// capped at the route layer — so the hub works without object-storage
+// configuration and downloads stream through the ACL-gated route only.
+export const atelierPayDocuments = pgTable(
+  "atelier_pay_documents",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor
+    personId: text("person_id").notNull(),
+    // contract | salary_letter | bonus_letter | comp_letter | payslip |
+    // remittance | insurance
+    category: text("category").notNull(),
+    title: text("title").notNull(),
+    // Pay period / letter date (ISO date or YYYY-MM), display + sort key.
+    periodDate: text("period_date"),
+    published: boolean("published").notNull().default(false),
+    publishedAt: timestamp("published_at"),
+    publishedByUserId: text("published_by_user_id"),
+    retractedAt: timestamp("retracted_at"),
+    fileName: text("file_name").notNull(),
+    mime: text("mime").notNull().default("application/octet-stream"),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    // Base64-encoded file body. Never returned by list endpoints.
+    fileData: text("file_data").notNull(),
+    uploadedByUserId: text("uploaded_by_user_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pay_docs_org").on(t.orgId),
+    index("idx_atelier_pay_docs_person").on(t.personType, t.personId),
+    index("idx_atelier_pay_docs_category").on(t.category),
+  ],
+);
+
+// Per-person insurance scheme details (display-only; HR-maintained).
+export const atelierPersonInsurance = pgTable(
+  "atelier_person_insurance",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor
+    personId: text("person_id").notNull(),
+    provider: text("provider").notNull().default(""),
+    policyNumber: text("policy_number").notNull().default(""),
+    memberNumber: text("member_number").notNull().default(""),
+    coverageSummary: text("coverage_summary").notNull().default(""),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_person_ins_org").on(t.orgId),
+    uniqueIndex("uniq_atelier_person_ins_person").on(t.personType, t.personId),
+  ],
+);
+
+// Bank-detail change requests. Self-submit only; applied to the roster
+// row exclusively by an HR/leadership approval — direct self-edit of
+// banking data is never allowed. Both sides are audited.
+export const atelierBankChangeRequests = pgTable(
+  "atelier_bank_change_requests",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee (contractors have no stored IBAN)
+    personId: text("person_id").notNull(),
+    requestedByUserId: text("requested_by_user_id").notNull(),
+    // Masked snapshot of the IBAN on file when the request was made.
+    previousIbanMasked: text("previous_iban_masked"),
+    newIban: text("new_iban").notNull(),
+    newSwift: text("new_swift"),
+    reason: text("reason"),
+    status: text("status").notNull().default("pending"), // pending | approved | rejected
+    decidedByUserId: text("decided_by_user_id"),
+    decidedByName: text("decided_by_name"),
+    decidedAt: timestamp("decided_at"),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_bankreq_org").on(t.orgId),
+    index("idx_atelier_bankreq_person").on(t.personType, t.personId),
+    index("idx_atelier_bankreq_status").on(t.status),
+  ],
+);
+
+// ============================================================
 // Task #255 — Onboarding / Offboarding sequences + Compliance + Invitations
 // ============================================================
 

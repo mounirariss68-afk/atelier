@@ -150,6 +150,371 @@ export const AtelierDismissMyNotificationResponse = zod.object({
 });
 
 /**
+ * Published pay/benefit documents, compensation summary, insurance
+scheme details, masked bank details and bank-change requests — all
+strictly for the signed-in person. File downloads go through
+`/api/atelier/me/pay/documents/{id}/download` (owner-gated).
+
+ * @summary Me lens — the caller's own Pay & Benefits bundle (self-scope)
+ */
+export const AtelierGetMyPayResponse = zod.object({
+  person: zod
+    .union([
+      zod
+        .object({
+          id: zod.string(),
+          workerType: zod.enum(["employee", "contractor"]),
+          fullName: zod.string(),
+          email: zod.string(),
+          title: zod.string().nullish(),
+          startDate: zod.string().nullish(),
+          employmentType: zod.string().nullish(),
+          homeOffice: zod.string().nullish(),
+          country: zod.string().nullish(),
+          status: zod.string().nullish(),
+        })
+        .describe("The caller's own roster\/person record (self-scope view)."),
+      zod.null(),
+    ])
+    .optional(),
+  documents: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        category: zod.enum([
+          "contract",
+          "salary_letter",
+          "bonus_letter",
+          "comp_letter",
+          "payslip",
+          "remittance",
+          "insurance",
+        ]),
+        title: zod.string(),
+        periodDate: zod.string().nullish(),
+        fileName: zod.string(),
+        mime: zod.string(),
+        sizeBytes: zod.number(),
+        publishedAt: zod.string().nullish(),
+        downloadUrl: zod.string(),
+      })
+      .describe("A published pay\/benefit document, self-scope view."),
+  ),
+  compSummary: zod
+    .union([
+      zod
+        .object({
+          baseCompensation: zod.number().nullish(),
+          baseCurrency: zod.string().nullish(),
+          dayRateAmount: zod.number().nullish(),
+          dayRateCurrency: zod.string().nullish(),
+        })
+        .describe("The person's own comp facts (self-scope, read-only)."),
+      zod.null(),
+    ])
+    .optional(),
+  insurance: zod
+    .union([
+      zod.object({
+        provider: zod.string(),
+        policyNumber: zod.string(),
+        memberNumber: zod.string(),
+        coverageSummary: zod.string(),
+        updatedAt: zod.string().nullish(),
+      }),
+      zod.null(),
+    ])
+    .optional(),
+  bank: zod
+    .union([
+      zod
+        .object({
+          ibanMasked: zod.string().nullish(),
+          swift: zod.string().nullish(),
+          canRequestChange: zod.boolean(),
+        })
+        .describe("Masked view of own payment details."),
+      zod.null(),
+    ])
+    .optional(),
+  bankRequests: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        newIbanMasked: zod.string(),
+        newSwift: zod.string().nullish(),
+        reason: zod.string().nullish(),
+        status: zod.enum(["pending", "approved", "rejected"]),
+        createdAt: zod.string(),
+        decidedAt: zod.string().nullish(),
+        decisionNote: zod.string().nullish(),
+      })
+      .describe("Self-scope view of a bank-detail change request (masked)."),
+  ),
+});
+
+/**
+ * @summary Me lens — request a change to own payment details (HR must approve)
+ */
+export const atelierCreateBankChangeRequestBodyNewIbanMin = 8;
+export const atelierCreateBankChangeRequestBodyNewIbanMax = 34;
+
+export const atelierCreateBankChangeRequestBodyNewSwiftMax = 11;
+
+export const atelierCreateBankChangeRequestBodyReasonMax = 1000;
+
+export const AtelierCreateBankChangeRequestBody = zod.object({
+  newIban: zod
+    .string()
+    .min(atelierCreateBankChangeRequestBodyNewIbanMin)
+    .max(atelierCreateBankChangeRequestBodyNewIbanMax),
+  newSwift: zod
+    .string()
+    .max(atelierCreateBankChangeRequestBodyNewSwiftMax)
+    .optional(),
+  reason: zod
+    .string()
+    .max(atelierCreateBankChangeRequestBodyReasonMax)
+    .optional(),
+});
+
+/**
+ * @summary HR — all pay/benefit documents for one person (incl. unpublished)
+ */
+export const AtelierListPersonPayDocumentsParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const AtelierListPersonPayDocumentsResponseItem = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.enum(["employee", "contractor"]),
+    category: zod.enum([
+      "contract",
+      "salary_letter",
+      "bonus_letter",
+      "comp_letter",
+      "payslip",
+      "remittance",
+      "insurance",
+    ]),
+    title: zod.string(),
+    periodDate: zod.string().nullish(),
+    fileName: zod.string(),
+    mime: zod.string(),
+    sizeBytes: zod.number(),
+    published: zod.boolean(),
+    publishedAt: zod.string().nullish(),
+    retractedAt: zod.string().nullish(),
+    uploadedAt: zod.string(),
+    notes: zod.string().nullish(),
+    downloadUrl: zod.string(),
+  })
+  .describe("HR view of a pay\/benefit document (includes publish state).");
+export const AtelierListPersonPayDocumentsResponse = zod.array(
+  AtelierListPersonPayDocumentsResponseItem,
+);
+
+/**
+ * @summary HR — publish a pay document to its person (emits a Me-home card)
+ */
+export const AtelierPublishPayDocumentParams = zod.object({
+  docId: zod.coerce.string(),
+});
+
+export const AtelierPublishPayDocumentResponse = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.enum(["employee", "contractor"]),
+    category: zod.enum([
+      "contract",
+      "salary_letter",
+      "bonus_letter",
+      "comp_letter",
+      "payslip",
+      "remittance",
+      "insurance",
+    ]),
+    title: zod.string(),
+    periodDate: zod.string().nullish(),
+    fileName: zod.string(),
+    mime: zod.string(),
+    sizeBytes: zod.number(),
+    published: zod.boolean(),
+    publishedAt: zod.string().nullish(),
+    retractedAt: zod.string().nullish(),
+    uploadedAt: zod.string(),
+    notes: zod.string().nullish(),
+    downloadUrl: zod.string(),
+  })
+  .describe("HR view of a pay\/benefit document (includes publish state).");
+
+/**
+ * @summary HR — retract a published pay document (hides it from the person)
+ */
+export const AtelierRetractPayDocumentParams = zod.object({
+  docId: zod.coerce.string(),
+});
+
+export const AtelierRetractPayDocumentResponse = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.enum(["employee", "contractor"]),
+    category: zod.enum([
+      "contract",
+      "salary_letter",
+      "bonus_letter",
+      "comp_letter",
+      "payslip",
+      "remittance",
+      "insurance",
+    ]),
+    title: zod.string(),
+    periodDate: zod.string().nullish(),
+    fileName: zod.string(),
+    mime: zod.string(),
+    sizeBytes: zod.number(),
+    published: zod.boolean(),
+    publishedAt: zod.string().nullish(),
+    retractedAt: zod.string().nullish(),
+    uploadedAt: zod.string(),
+    notes: zod.string().nullish(),
+    downloadUrl: zod.string(),
+  })
+  .describe("HR view of a pay\/benefit document (includes publish state).");
+
+/**
+ * @summary HR — set a person's insurance scheme details (display-only for the person)
+ */
+export const AtelierUpsertPersonInsuranceParams = zod.object({
+  personId: zod.coerce.string(),
+});
+
+export const atelierUpsertPersonInsuranceBodyProviderMax = 200;
+
+export const atelierUpsertPersonInsuranceBodyPolicyNumberMax = 100;
+
+export const atelierUpsertPersonInsuranceBodyMemberNumberMax = 100;
+
+export const atelierUpsertPersonInsuranceBodyCoverageSummaryMax = 4000;
+
+export const AtelierUpsertPersonInsuranceBody = zod.object({
+  provider: zod
+    .string()
+    .min(1)
+    .max(atelierUpsertPersonInsuranceBodyProviderMax),
+  policyNumber: zod
+    .string()
+    .max(atelierUpsertPersonInsuranceBodyPolicyNumberMax)
+    .optional(),
+  memberNumber: zod
+    .string()
+    .max(atelierUpsertPersonInsuranceBodyMemberNumberMax)
+    .optional(),
+  coverageSummary: zod
+    .string()
+    .max(atelierUpsertPersonInsuranceBodyCoverageSummaryMax)
+    .optional(),
+});
+
+export const AtelierUpsertPersonInsuranceResponse = zod.object({
+  provider: zod.string(),
+  policyNumber: zod.string(),
+  memberNumber: zod.string(),
+  coverageSummary: zod.string(),
+  updatedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary HR — bank-detail change requests queue (pending first)
+ */
+export const AtelierListBankChangeRequestsResponseItem = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.string(),
+    personName: zod.string(),
+    previousIbanMasked: zod.string().nullish(),
+    newIban: zod.string(),
+    newSwift: zod.string().nullish(),
+    reason: zod.string().nullish(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    createdAt: zod.string(),
+    decidedAt: zod.string().nullish(),
+    decidedByName: zod.string().nullish(),
+    decisionNote: zod.string().nullish(),
+  })
+  .describe("HR verification view — includes the full new IBAN.");
+export const AtelierListBankChangeRequestsResponse = zod.array(
+  AtelierListBankChangeRequestsResponseItem,
+);
+
+/**
+ * @summary HR — approve a bank change; applies the new details to the roster record
+ */
+export const AtelierApproveBankChangeRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierApproveBankChangeRequestBodyNoteMax = 1000;
+
+export const AtelierApproveBankChangeRequestBody = zod.object({
+  note: zod.string().max(atelierApproveBankChangeRequestBodyNoteMax).optional(),
+});
+
+export const AtelierApproveBankChangeRequestResponse = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.string(),
+    personName: zod.string(),
+    previousIbanMasked: zod.string().nullish(),
+    newIban: zod.string(),
+    newSwift: zod.string().nullish(),
+    reason: zod.string().nullish(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    createdAt: zod.string(),
+    decidedAt: zod.string().nullish(),
+    decidedByName: zod.string().nullish(),
+    decisionNote: zod.string().nullish(),
+  })
+  .describe("HR verification view — includes the full new IBAN.");
+
+/**
+ * @summary HR — reject a bank change request (nothing is applied)
+ */
+export const AtelierRejectBankChangeRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierRejectBankChangeRequestBodyNoteMax = 1000;
+
+export const AtelierRejectBankChangeRequestBody = zod.object({
+  note: zod.string().max(atelierRejectBankChangeRequestBodyNoteMax).optional(),
+});
+
+export const AtelierRejectBankChangeRequestResponse = zod
+  .object({
+    id: zod.string(),
+    personId: zod.string(),
+    personType: zod.string(),
+    personName: zod.string(),
+    previousIbanMasked: zod.string().nullish(),
+    newIban: zod.string(),
+    newSwift: zod.string().nullish(),
+    reason: zod.string().nullish(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    createdAt: zod.string(),
+    decidedAt: zod.string().nullish(),
+    decidedByName: zod.string().nullish(),
+    decisionNote: zod.string().nullish(),
+  })
+  .describe("HR verification view — includes the full new IBAN.");
+
+/**
  * @summary HR — list login-holding users with activation status
  */
 export const AtelierListJoinersResponseItem = zod.object({

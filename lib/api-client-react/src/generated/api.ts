@@ -42,6 +42,10 @@ import type {
   AtelierArtifact,
   AtelierArtifactInput,
   AtelierAsset,
+  AtelierBankChangeDecisionInput,
+  AtelierBankChangeRequest,
+  AtelierBankChangeRequestAdmin,
+  AtelierBankChangeRequestInput,
   AtelierBriefEnvelope,
   AtelierBulkDecideProfileUpdatesInput,
   AtelierCartographerRefreshInput,
@@ -104,10 +108,14 @@ import type {
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
   AtelierMyOpenTasks,
+  AtelierMyPay,
   AtelierOpportunityDuplicateCandidates,
   AtelierOpportunityDuplicateError,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
+  AtelierPayDocumentAdmin,
+  AtelierPersonInsurance,
+  AtelierPersonInsuranceInput,
   AtelierPersona,
   AtelierPersonaSwitchInput,
   AtelierPov,
@@ -654,6 +662,804 @@ export const useAtelierDismissMyNotification = <
   TContext
 > => {
   return useMutation(getAtelierDismissMyNotificationMutationOptions(options));
+};
+
+/**
+ * Published pay/benefit documents, compensation summary, insurance
+scheme details, masked bank details and bank-change requests — all
+strictly for the signed-in person. File downloads go through
+`/api/atelier/me/pay/documents/{id}/download` (owner-gated).
+
+ * @summary Me lens — the caller's own Pay & Benefits bundle (self-scope)
+ */
+export const getAtelierGetMyPayUrl = () => {
+  return `/api/atelier/me/pay`;
+};
+
+export const atelierGetMyPay = async (
+  options?: RequestInit,
+): Promise<AtelierMyPay> => {
+  return customFetch<AtelierMyPay>(getAtelierGetMyPayUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyPayQueryKey = () => {
+  return [`/api/atelier/me/pay`] as const;
+};
+
+export const getAtelierGetMyPayQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyPay>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPay>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetMyPayQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof atelierGetMyPay>>> = ({
+    signal,
+  }) => atelierGetMyPay({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPay>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyPayQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyPay>>
+>;
+export type AtelierGetMyPayQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own Pay & Benefits bundle (self-scope)
+ */
+
+export function useAtelierGetMyPay<
+  TData = Awaited<ReturnType<typeof atelierGetMyPay>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPay>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyPayQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — request a change to own payment details (HR must approve)
+ */
+export const getAtelierCreateBankChangeRequestUrl = () => {
+  return `/api/atelier/me/pay/bank-change-request`;
+};
+
+export const atelierCreateBankChangeRequest = async (
+  atelierBankChangeRequestInput: AtelierBankChangeRequestInput,
+  options?: RequestInit,
+): Promise<AtelierBankChangeRequest> => {
+  return customFetch<AtelierBankChangeRequest>(
+    getAtelierCreateBankChangeRequestUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierBankChangeRequestInput),
+    },
+  );
+};
+
+export const getAtelierCreateBankChangeRequestMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>,
+    TError,
+    { data: BodyType<AtelierBankChangeRequestInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>,
+  TError,
+  { data: BodyType<AtelierBankChangeRequestInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateBankChangeRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>,
+    { data: BodyType<AtelierBankChangeRequestInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateBankChangeRequest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateBankChangeRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>
+>;
+export type AtelierCreateBankChangeRequestMutationBody =
+  BodyType<AtelierBankChangeRequestInput>;
+export type AtelierCreateBankChangeRequestMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Me lens — request a change to own payment details (HR must approve)
+ */
+export const useAtelierCreateBankChangeRequest = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>,
+    TError,
+    { data: BodyType<AtelierBankChangeRequestInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateBankChangeRequest>>,
+  TError,
+  { data: BodyType<AtelierBankChangeRequestInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateBankChangeRequestMutationOptions(options));
+};
+
+/**
+ * @summary HR — all pay/benefit documents for one person (incl. unpublished)
+ */
+export const getAtelierListPersonPayDocumentsUrl = (personId: string) => {
+  return `/api/atelier/roster/pay/people/${personId}/documents`;
+};
+
+export const atelierListPersonPayDocuments = async (
+  personId: string,
+  options?: RequestInit,
+): Promise<AtelierPayDocumentAdmin[]> => {
+  return customFetch<AtelierPayDocumentAdmin[]>(
+    getAtelierListPersonPayDocumentsUrl(personId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPersonPayDocumentsQueryKey = (personId: string) => {
+  return [`/api/atelier/roster/pay/people/${personId}/documents`] as const;
+};
+
+export const getAtelierListPersonPayDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPersonPayDocuments>>,
+  TError = ErrorType<AtelierError>,
+>(
+  personId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPersonPayDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierListPersonPayDocumentsQueryKey(personId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPersonPayDocuments>>
+  > = ({ signal }) =>
+    atelierListPersonPayDocuments(personId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!personId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPersonPayDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPersonPayDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPersonPayDocuments>>
+>;
+export type AtelierListPersonPayDocumentsQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — all pay/benefit documents for one person (incl. unpublished)
+ */
+
+export function useAtelierListPersonPayDocuments<
+  TData = Awaited<ReturnType<typeof atelierListPersonPayDocuments>>,
+  TError = ErrorType<AtelierError>,
+>(
+  personId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPersonPayDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPersonPayDocumentsQueryOptions(
+    personId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — publish a pay document to its person (emits a Me-home card)
+ */
+export const getAtelierPublishPayDocumentUrl = (docId: string) => {
+  return `/api/atelier/roster/pay/documents/${docId}/publish`;
+};
+
+export const atelierPublishPayDocument = async (
+  docId: string,
+  options?: RequestInit,
+): Promise<AtelierPayDocumentAdmin> => {
+  return customFetch<AtelierPayDocumentAdmin>(
+    getAtelierPublishPayDocumentUrl(docId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierPublishPayDocumentMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPublishPayDocument>>,
+    TError,
+    { docId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPublishPayDocument>>,
+  TError,
+  { docId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierPublishPayDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPublishPayDocument>>,
+    { docId: string }
+  > = (props) => {
+    const { docId } = props ?? {};
+
+    return atelierPublishPayDocument(docId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPublishPayDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPublishPayDocument>>
+>;
+
+export type AtelierPublishPayDocumentMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — publish a pay document to its person (emits a Me-home card)
+ */
+export const useAtelierPublishPayDocument = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPublishPayDocument>>,
+    TError,
+    { docId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPublishPayDocument>>,
+  TError,
+  { docId: string },
+  TContext
+> => {
+  return useMutation(getAtelierPublishPayDocumentMutationOptions(options));
+};
+
+/**
+ * @summary HR — retract a published pay document (hides it from the person)
+ */
+export const getAtelierRetractPayDocumentUrl = (docId: string) => {
+  return `/api/atelier/roster/pay/documents/${docId}/retract`;
+};
+
+export const atelierRetractPayDocument = async (
+  docId: string,
+  options?: RequestInit,
+): Promise<AtelierPayDocumentAdmin> => {
+  return customFetch<AtelierPayDocumentAdmin>(
+    getAtelierRetractPayDocumentUrl(docId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierRetractPayDocumentMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRetractPayDocument>>,
+    TError,
+    { docId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRetractPayDocument>>,
+  TError,
+  { docId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierRetractPayDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRetractPayDocument>>,
+    { docId: string }
+  > = (props) => {
+    const { docId } = props ?? {};
+
+    return atelierRetractPayDocument(docId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRetractPayDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRetractPayDocument>>
+>;
+
+export type AtelierRetractPayDocumentMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — retract a published pay document (hides it from the person)
+ */
+export const useAtelierRetractPayDocument = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRetractPayDocument>>,
+    TError,
+    { docId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRetractPayDocument>>,
+  TError,
+  { docId: string },
+  TContext
+> => {
+  return useMutation(getAtelierRetractPayDocumentMutationOptions(options));
+};
+
+/**
+ * @summary HR — set a person's insurance scheme details (display-only for the person)
+ */
+export const getAtelierUpsertPersonInsuranceUrl = (personId: string) => {
+  return `/api/atelier/roster/pay/people/${personId}/insurance`;
+};
+
+export const atelierUpsertPersonInsurance = async (
+  personId: string,
+  atelierPersonInsuranceInput: AtelierPersonInsuranceInput,
+  options?: RequestInit,
+): Promise<AtelierPersonInsurance> => {
+  return customFetch<AtelierPersonInsurance>(
+    getAtelierUpsertPersonInsuranceUrl(personId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPersonInsuranceInput),
+    },
+  );
+};
+
+export const getAtelierUpsertPersonInsuranceMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>,
+    TError,
+    { personId: string; data: BodyType<AtelierPersonInsuranceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>,
+  TError,
+  { personId: string; data: BodyType<AtelierPersonInsuranceInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpsertPersonInsurance"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>,
+    { personId: string; data: BodyType<AtelierPersonInsuranceInput> }
+  > = (props) => {
+    const { personId, data } = props ?? {};
+
+    return atelierUpsertPersonInsurance(personId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpsertPersonInsuranceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>
+>;
+export type AtelierUpsertPersonInsuranceMutationBody =
+  BodyType<AtelierPersonInsuranceInput>;
+export type AtelierUpsertPersonInsuranceMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — set a person's insurance scheme details (display-only for the person)
+ */
+export const useAtelierUpsertPersonInsurance = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>,
+    TError,
+    { personId: string; data: BodyType<AtelierPersonInsuranceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpsertPersonInsurance>>,
+  TError,
+  { personId: string; data: BodyType<AtelierPersonInsuranceInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpsertPersonInsuranceMutationOptions(options));
+};
+
+/**
+ * @summary HR — bank-detail change requests queue (pending first)
+ */
+export const getAtelierListBankChangeRequestsUrl = () => {
+  return `/api/atelier/roster/pay/bank-change-requests`;
+};
+
+export const atelierListBankChangeRequests = async (
+  options?: RequestInit,
+): Promise<AtelierBankChangeRequestAdmin[]> => {
+  return customFetch<AtelierBankChangeRequestAdmin[]>(
+    getAtelierListBankChangeRequestsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListBankChangeRequestsQueryKey = () => {
+  return [`/api/atelier/roster/pay/bank-change-requests`] as const;
+};
+
+export const getAtelierListBankChangeRequestsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListBankChangeRequests>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListBankChangeRequests>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListBankChangeRequestsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListBankChangeRequests>>
+  > = ({ signal }) =>
+    atelierListBankChangeRequests({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListBankChangeRequests>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListBankChangeRequestsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListBankChangeRequests>>
+>;
+export type AtelierListBankChangeRequestsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — bank-detail change requests queue (pending first)
+ */
+
+export function useAtelierListBankChangeRequests<
+  TData = Awaited<ReturnType<typeof atelierListBankChangeRequests>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListBankChangeRequests>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListBankChangeRequestsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — approve a bank change; applies the new details to the roster record
+ */
+export const getAtelierApproveBankChangeRequestUrl = (id: string) => {
+  return `/api/atelier/roster/pay/bank-change-requests/${id}/approve`;
+};
+
+export const atelierApproveBankChangeRequest = async (
+  id: string,
+  atelierBankChangeDecisionInput?: AtelierBankChangeDecisionInput,
+  options?: RequestInit,
+): Promise<AtelierBankChangeRequestAdmin> => {
+  return customFetch<AtelierBankChangeRequestAdmin>(
+    getAtelierApproveBankChangeRequestUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierBankChangeDecisionInput),
+    },
+  );
+};
+
+export const getAtelierApproveBankChangeRequestMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>,
+    TError,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>,
+  TError,
+  { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierApproveBankChangeRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierApproveBankChangeRequest(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierApproveBankChangeRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>
+>;
+export type AtelierApproveBankChangeRequestMutationBody =
+  BodyType<AtelierBankChangeDecisionInput>;
+export type AtelierApproveBankChangeRequestMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — approve a bank change; applies the new details to the roster record
+ */
+export const useAtelierApproveBankChangeRequest = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>,
+    TError,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierApproveBankChangeRequest>>,
+  TError,
+  { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierApproveBankChangeRequestMutationOptions(options),
+  );
+};
+
+/**
+ * @summary HR — reject a bank change request (nothing is applied)
+ */
+export const getAtelierRejectBankChangeRequestUrl = (id: string) => {
+  return `/api/atelier/roster/pay/bank-change-requests/${id}/reject`;
+};
+
+export const atelierRejectBankChangeRequest = async (
+  id: string,
+  atelierBankChangeDecisionInput?: AtelierBankChangeDecisionInput,
+  options?: RequestInit,
+): Promise<AtelierBankChangeRequestAdmin> => {
+  return customFetch<AtelierBankChangeRequestAdmin>(
+    getAtelierRejectBankChangeRequestUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierBankChangeDecisionInput),
+    },
+  );
+};
+
+export const getAtelierRejectBankChangeRequestMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>,
+    TError,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>,
+  TError,
+  { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRejectBankChangeRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierRejectBankChangeRequest(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRejectBankChangeRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>
+>;
+export type AtelierRejectBankChangeRequestMutationBody =
+  BodyType<AtelierBankChangeDecisionInput>;
+export type AtelierRejectBankChangeRequestMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary HR — reject a bank change request (nothing is applied)
+ */
+export const useAtelierRejectBankChangeRequest = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>,
+    TError,
+    { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRejectBankChangeRequest>>,
+  TError,
+  { id: string; data: BodyType<AtelierBankChangeDecisionInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRejectBankChangeRequestMutationOptions(options));
 };
 
 /**
