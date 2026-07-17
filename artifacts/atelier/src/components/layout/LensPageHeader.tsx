@@ -63,7 +63,7 @@ export function LensPageHeader({
     <PageHero>
       {actions ? (
         <div className="flex items-start justify-between gap-6 flex-wrap">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-[280px]">
             <SectionHead
               eyebrow={resolvedEyebrow}
               headline={headline}
@@ -71,7 +71,7 @@ export function LensPageHeader({
               className={className}
             />
           </div>
-          <div className="flex items-center gap-2 shrink-0">{actions}</div>
+          <div className="flex items-center gap-2 flex-wrap min-w-0">{actions}</div>
         </div>
       ) : (
         <SectionHead
