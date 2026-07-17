@@ -50,7 +50,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sales-stages";
-import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle, Pencil, Archive } from "lucide-react";
+import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "lucide-react";
+import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -91,6 +92,7 @@ export default function Opportunity() {
   const [moveOpen, setMoveOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
   const [archiveOpen, setArchiveOpen] = React.useState(false);
+  const [esignOpen, setEsignOpen] = React.useState(false);
 
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -224,6 +226,17 @@ export default function Opportunity() {
                 <ArrowRight className="w-3.5 h-3.5" /> Move stage
               </span>
             </PillButton>
+            {(me?.role === "founding_partner" || me?.role === "partner") && (
+              <PillButton
+                variant="ghost"
+                onClick={() => setEsignOpen(true)}
+                data-testid="button-send-for-signature"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <PenLine className="w-3.5 h-3.5" /> Send for signature
+                </span>
+              </PillButton>
+            )}
           </div>
           {/* Secondary references row — research + lifecycle controls. */}
           <div className="flex flex-wrap items-center gap-3">
@@ -331,6 +344,13 @@ export default function Opportunity() {
         onOpenChange={setMoveOpen}
       />
       <OpportunityEditDialog opp={opp} open={editOpen} onOpenChange={setEditOpen} />
+      <SendForSignatureDialog
+        open={esignOpen}
+        onOpenChange={setEsignOpen}
+        lockedAccount={{ id: opp.accountId, name: opp.accountName }}
+        defaultTitle={`Agreement — ${opp.name}`}
+      />
+
       <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
         <AlertDialogContent className="bg-bg-elevate border-border text-text">
           <AlertDialogHeader>

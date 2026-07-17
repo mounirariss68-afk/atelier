@@ -13,36 +13,24 @@ import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMe,
-  useAtelierListDocuments,
-  useAtelierListAccounts,
   useAtelierListSignatureRequests,
   getAtelierListSignatureRequestsQueryKey,
-  getAtelierListDocumentsQueryKey,
-  useAtelierCreateSignatureRequest,
   useAtelierVoidSignatureRequest,
   useAtelierRemindSignatureRequest,
   useAtelierSyncAllSignatureRequests,
   type AtelierSignatureRequest,
 } from "@workspace/api-client-react";
+import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Card } from "@/components/ui/primitives";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  PenLine,
   Plus,
   RefreshCw,
   BellRing,
   Ban,
   FileText,
-  Trash2,
 } from "lucide-react";
 
 const selectCls =
@@ -89,234 +77,6 @@ function StatusBadge({ status }: { status: string }) {
     >
       {meta.label}
     </span>
-  );
-}
-
-interface SignerDraft {
-  name: string;
-  email: string;
-}
-
-function NewRequestDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const { data: docsData } = useAtelierListDocuments(undefined, {
-    query: { enabled: open, queryKey: getAtelierListDocumentsQueryKey() },
-  });
-  const { data: accounts } = useAtelierListAccounts();
-
-  const [title, setTitle] = React.useState("");
-  const [message, setMessage] = React.useState("");
-  const [documentId, setDocumentId] = React.useState("");
-  const [accountId, setAccountId] = React.useState("");
-  const [expiresInDays, setExpiresInDays] = React.useState("");
-  const [signers, setSigners] = React.useState<SignerDraft[]>([{ name: "", email: "" }]);
-
-  const pdfDocs = React.useMemo(
-    () =>
-      (docsData?.documents ?? []).filter(
-        (d) => d.currentVersion?.mime === "application/pdf" && d.status === "active",
-      ),
-    [docsData],
-  );
-
-  const create = useAtelierCreateSignatureRequest({
-    mutation: {
-      onSuccess: () => {
-        void qc.invalidateQueries({ queryKey: getAtelierListSignatureRequestsQueryKey() });
-        toast({ title: "Signature request sent" });
-        onOpenChange(false);
-        setTitle("");
-        setMessage("");
-        setDocumentId("");
-        setAccountId("");
-        setExpiresInDays("");
-        setSigners([{ name: "", email: "" }]);
-      },
-      onError: (err: unknown) => {
-        const e = err as { response?: { data?: { message?: string; error?: string } } };
-        toast({
-          title: "Could not send request",
-          description:
-            e.response?.data?.message ?? e.response?.data?.error ?? "Unexpected error",
-          variant: "destructive",
-        });
-      },
-    },
-  });
-
-  const valid =
-    title.trim().length > 0 &&
-    documentId &&
-    signers.length > 0 &&
-    signers.every((s) => s.name.trim() && /.+@.+\..+/.test(s.email.trim()));
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Send for signature</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-text-mute">Title</label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Consulting agreement — Acme"
-              maxLength={200}
-              data-testid="input-esign-title"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-text-mute">Document (PDF from the library)</label>
-            <select
-              className={`${selectCls} w-full`}
-              value={documentId}
-              onChange={(e) => setDocumentId(e.target.value)}
-              data-testid="select-esign-document"
-            >
-              <option value="">Select a PDF…</option>
-              {pdfDocs.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.title}
-                </option>
-              ))}
-            </select>
-            {pdfDocs.length === 0 ? (
-              <p className="mt-1 text-xs text-text-faint">
-                No PDF documents in the library yet — upload one under Documents first.
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <label className="text-xs text-text-mute">Signers (in signing order)</label>
-            <div className="space-y-2">
-              {signers.map((s, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="w-4 text-xs text-text-faint font-mono">{i + 1}.</span>
-                  <Input
-                    value={s.name}
-                    onChange={(e) =>
-                      setSigners((prev) =>
-                        prev.map((p, j) => (j === i ? { ...p, name: e.target.value } : p)),
-                      )
-                    }
-                    placeholder="Name"
-                    className="flex-1"
-                    data-testid={`input-signer-name-${i}`}
-                  />
-                  <Input
-                    value={s.email}
-                    onChange={(e) =>
-                      setSigners((prev) =>
-                        prev.map((p, j) => (j === i ? { ...p, email: e.target.value } : p)),
-                      )
-                    }
-                    placeholder="email@example.com"
-                    className="flex-1"
-                    data-testid={`input-signer-email-${i}`}
-                  />
-                  {signers.length > 1 ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setSigners((prev) => prev.filter((_, j) => j !== i))}
-                      data-testid={`button-remove-signer-${i}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
-              {signers.length < 10 ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSigners((prev) => [...prev, { name: "", email: "" }])}
-                  data-testid="button-add-signer"
-                >
-                  <Plus className="w-4 h-4 mr-1" /> Add signer
-                </Button>
-              ) : null}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-text-mute">Account (optional)</label>
-              <select
-                className={`${selectCls} w-full`}
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                data-testid="select-esign-account"
-              >
-                <option value="">None</option>
-                {(accounts ?? []).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-text-mute">Expires in (days, optional)</label>
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                value={expiresInDays}
-                onChange={(e) => setExpiresInDays(e.target.value)}
-                placeholder="e.g. 30"
-                data-testid="input-esign-expires"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-text-mute">Message to signers (optional)</label>
-            <textarea
-              className="w-full min-h-[70px] rounded-md border border-border bg-bg-elevate px-2 py-1.5 text-sm text-text outline-none focus-visible:border-gold"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              maxLength={2000}
-              data-testid="input-esign-message"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button variant="ghost" onClick={() => onOpenChange(false)} data-testid="button-esign-cancel">
-              Cancel
-            </Button>
-            <Button
-              disabled={!valid || create.isPending}
-              onClick={() =>
-                create.mutate({
-                  data: {
-                    title: title.trim(),
-                    message: message.trim() || undefined,
-                    documentId,
-                    signers: signers.map((s) => ({
-                      name: s.name.trim(),
-                      email: s.email.trim(),
-                    })),
-                    accountId: accountId || undefined,
-                    expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
-                  },
-                })
-              }
-              data-testid="button-esign-send"
-            >
-              <PenLine className="w-4 h-4 mr-1" />
-              {create.isPending ? "Sending…" : "Send for signature"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -541,7 +301,7 @@ export default function Agreements() {
         </div>
       )}
 
-      <NewRequestDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      <SendForSignatureDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
   );
 }

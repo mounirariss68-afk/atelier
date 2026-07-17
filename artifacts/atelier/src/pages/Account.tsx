@@ -98,7 +98,10 @@ import {
   CalendarClock,
   Zap,
   AlertTriangle,
+  PenLine,
 } from "lucide-react";
+import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
+import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
 
 type TabKey =
   | "profile"
@@ -198,6 +201,7 @@ export default function Account() {
   });
   const refresh = useAtelierRefreshAccountCartographer();
   const [tab, setTab] = useState<TabKey>("profile");
+  const [esignOpen, setEsignOpen] = useState(false);
 
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
@@ -321,6 +325,17 @@ export default function Account() {
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${refresh.isPending ? "animate-spin" : ""}`} />
                 Refresh from web
+              </button>
+            )}
+            {canArchive && !isArchived && (
+              <button
+                type="button"
+                onClick={() => setEsignOpen(true)}
+                className="pill-btn pill-btn-ghost text-xs"
+                data-testid="button-send-for-signature"
+              >
+                <PenLine className="w-3.5 h-3.5" />
+                Send for signature
               </button>
             )}
             {canMerge && !isArchived && (
@@ -454,9 +469,21 @@ export default function Account() {
         {tab === "account_ai" && (
           <AccountAgentsTab accountId={accountId} contacts={ws.contacts} />
         )}
-        {tab === "documents" && <DocumentLibraryPanel accountId={ws.account.id} />}
+        {tab === "documents" && (
+          <>
+            <AccountAgreementsPanel accountId={ws.account.id} />
+            <DocumentLibraryPanel accountId={ws.account.id} />
+          </>
+        )}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}
       </div>
+
+      <SendForSignatureDialog
+        open={esignOpen}
+        onOpenChange={setEsignOpen}
+        lockedAccount={{ id: accountId, name: a.brandName ?? a.name }}
+        defaultTitle={`Agreement — ${a.brandName ?? a.name}`}
+      />
     </div>
   );
 }
