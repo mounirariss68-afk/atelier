@@ -30,14 +30,27 @@
  * application ACL helpers. This keeps the suite deterministic and green.
  *
  * Isolation: every row this suite creates is tagged (TAG) and removed in a
- * `finally` cleanup. Set TEST_DATABASE_URL to point at a throwaway database;
- * otherwise it falls back to DATABASE_URL and cleans up after itself.
+ * `finally` cleanup. TEST_DATABASE_URL is REQUIRED and must point at a
+ * throwaway database — the suite refuses to run against the live DB.
  */
 
 // --- env setup MUST run before any value-import of @workspace/db / app ---
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+if (!process.env.TEST_DATABASE_URL) {
+  console.error(
+    "FATAL: TEST_DATABASE_URL is not set. The CRM harness writes rows and " +
+      "will NOT fall back to the live DATABASE_URL. Point TEST_DATABASE_URL " +
+      "at a throwaway database and re-run.",
+  );
+  process.exit(1);
 }
+if (process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) {
+  console.error(
+    "FATAL: TEST_DATABASE_URL equals DATABASE_URL — refusing to run the CRM " +
+      "harness against the live database.",
+  );
+  process.exit(1);
+}
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
 process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 

@@ -67,6 +67,35 @@ app.listen(port, (err) => {
       "Pricing seed failed — Pricing module has no active rate card",
     );
   });
+  // Task #108 — regression tripwire: dummy/test data was permanently purged
+  // (2026-07-17). Count accounts and scream if any row matching the old test
+  // tag patterns ever reappears, so reintroduction is visible immediately.
+  void (async () => {
+    const res = await db.execute<{ accounts: string; tagged: string }>(sql`
+      SELECT
+        (SELECT count(*) FROM atelier_accounts WHERE deleted_at IS NULL) AS accounts,
+        (
+          (SELECT count(*) FROM atelier_accounts WHERE id ~ 't542|t627' OR name ~ '__t542|t627')
+          + (SELECT count(*) FROM atelier_opportunities WHERE id ~ 't542|t627' OR name ~ '__t542|t627')
+          + (SELECT count(*) FROM atelier_engagements WHERE id ~ 't542|t627' OR name ~ '__t542|t627')
+          + (SELECT count(*) FROM atelier_users WHERE id LIKE 'p_test_%')
+        ) AS tagged
+    `);
+    const row = res.rows[0];
+    const tagged = Number(row?.tagged ?? 0);
+    logger.info(
+      { accounts: Number(row?.accounts ?? 0), taggedTestRows: tagged },
+      "Data tripwire: account count at boot",
+    );
+    if (tagged > 0) {
+      logger.error(
+        { taggedTestRows: tagged },
+        "DATA TRIPWIRE: rows matching test tag patterns (t542/t627/p_test_*) exist — test data is leaking into the live database again",
+      );
+    }
+  })().catch((err) => {
+    logger.warn({ err }, "Data tripwire check failed");
+  });
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
