@@ -44,6 +44,7 @@ process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
 import type { AddressInfo } from "node:net";
 import zlib from "node:zlib";
 import { sql, eq, and, gte, inArray, isNull } from "drizzle-orm";
+import { hardDeleteOpportunities } from "../../src/lib/atelier-opportunity-delete.js";
 
 // ---- seed fixtures (live seed, org_id = "aico") ----
 const ORG = "aico";
@@ -2982,33 +2983,14 @@ async function main(): Promise<void> {
       for (const id of created.transcripts) await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, id));
       for (const id of created.debriefs) await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.id, id));
       for (const id of created.paneAItems) await db.delete(atelierPaneAItems).where(eq(atelierPaneAItems.id, id));
-      // Orphan-prevention sweep (Task: orphaned Win/Loss cleanup) — the
-      // stage-transition hook creates debrief + Pane A rows this run never
-      // tracked. Sweep them by opportunity id BEFORE deleting the opps so no
-      // orphaned dashboard/debrief rows leak from the harness.
-      for (const oppId of created.opps) {
-        await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.opportunityId, oppId)).catch(() => undefined);
-        await db
-          .delete(atelierPaneAItems)
-          .where(and(eq(atelierPaneAItems.hrefKind, "opportunity"), eq(atelierPaneAItems.hrefTargetId, oppId)))
-          .catch(() => undefined);
-        // Meetings/transcripts are polymorphic (parent_type/parent_id) so no
-        // FK can cascade them — sweep opp-parented meetings + their
-        // transcripts here before the opp rows go. Other opp children
-        // (transitions, briefs, facts, povs, proposals, deal pricings)
-        // cascade via FK; engagements/prototypes detach via SET NULL.
-        const oppMeetings = await db
-          .select({ id: atelierMeetings.id, transcriptId: atelierMeetings.transcriptId })
-          .from(atelierMeetings)
-          .where(and(eq(atelierMeetings.parentType, "opportunity"), eq(atelierMeetings.parentId, oppId)))
-          .catch(() => [] as { id: string; transcriptId: string | null }[]);
-        for (const m of oppMeetings) {
-          await db.delete(atelierMeetings).where(eq(atelierMeetings.id, m.id)).catch(() => undefined);
-          if (m.transcriptId)
-            await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, m.transcriptId)).catch(() => undefined);
-        }
-      }
-      for (const id of created.opps) await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, id));
+      // Hard-delete opps via the shared cascade helper (Task #47) — it sweeps
+      // the non-FK children first (opp-parented meetings + their transcripts,
+      // win/loss debriefs, opportunity-targeted Pane A rows the
+      // stage-transition hook created without this run tracking them), then
+      // removes the opp rows. Other opp children (transitions, briefs, facts,
+      // povs, proposals, deal pricings) cascade via FK; engagements/prototypes
+      // detach via SET NULL.
+      await hardDeleteOpportunities([...created.opps]).catch(() => undefined);
       for (const id of created.contacts) await db.delete(atelierContacts).where(eq(atelierContacts.id, id));
       for (const id of created.accounts) {
         await db.execute(sql`delete from atelier_agent_runs where target_id = ${id}`).catch(() => undefined);

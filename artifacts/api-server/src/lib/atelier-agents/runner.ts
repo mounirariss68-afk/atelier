@@ -4421,7 +4421,28 @@ export async function runTimeSteward(args: {
       .select()
       .from(atelierMeetings)
       .where(isNull(atelierMeetings.deletedAt));
+    // Meetings hang off a polymorphic parent (opportunity | engagement) with
+    // no FK cascade, so a hard-deleted parent can leave orphan rows behind.
+    // Defensively drop any meeting whose parent no longer exists (or is
+    // soft-deleted) before scoring attendance.
+    const meetingParentIds = [...new Set(meetings.map((m) => m.parentId).filter(Boolean))];
+    const liveParentIds = new Set<string>();
+    if (meetingParentIds.length) {
+      const [liveOpps, liveEngs] = await Promise.all([
+        db
+          .select({ id: atelierOpportunities.id })
+          .from(atelierOpportunities)
+          .where(and(inArray(atelierOpportunities.id, meetingParentIds), isNull(atelierOpportunities.deletedAt))),
+        db
+          .select({ id: atelierEngagements.id })
+          .from(atelierEngagements)
+          .where(and(inArray(atelierEngagements.id, meetingParentIds), isNull(atelierEngagements.deletedAt))),
+      ]);
+      for (const r of liveOpps) liveParentIds.add(r.id);
+      for (const r of liveEngs) liveParentIds.add(r.id);
+    }
     const meetingsHit = meetings.filter((m) => {
+      if (!liveParentIds.has(m.parentId)) return false;
       if (!m.date) return false;
       const d = new Date(`${m.date}T00:00:00Z`);
       if (d < weekStart || d >= weekEnd) return false;

@@ -253,12 +253,27 @@ export async function directIdLookup(
           .where(and(eq(atelierWinLossDebriefs.id, id), eq(atelierWinLossDebriefs.orgId, orgId), isNull(atelierWinLossDebriefs.deletedAt))).limit(1),
         (r) => `debrief ${r.id}`, (r) => r.outcome,
       );
-    case "meeting":
-      return probe(
-        await db.select({ id: atelierMeetings.id }).from(atelierMeetings)
-          .where(and(eq(atelierMeetings.id, id), eq(atelierMeetings.orgId, orgId), isNull(atelierMeetings.deletedAt))).limit(1),
-        (r) => `meeting ${r.id}`,
-      );
+    case "meeting": {
+      // Meetings hang off a polymorphic parent (opportunity | engagement)
+      // with no FK cascade — a hard-deleted parent can leave orphan rows.
+      // Only resolve a meeting whose parent still exists (and isn't
+      // soft-deleted) so orphans never surface via entity resolution.
+      const [mtg] = await db
+        .select({ id: atelierMeetings.id, parentType: atelierMeetings.parentType, parentId: atelierMeetings.parentId })
+        .from(atelierMeetings)
+        .where(and(eq(atelierMeetings.id, id), eq(atelierMeetings.orgId, orgId), isNull(atelierMeetings.deletedAt)))
+        .limit(1);
+      if (!mtg) return null;
+      const parentAlive =
+        mtg.parentType === "opportunity"
+          ? (await db.select({ id: atelierOpportunities.id }).from(atelierOpportunities)
+              .where(and(eq(atelierOpportunities.id, mtg.parentId), eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt))).limit(1)).length > 0
+          : mtg.parentType === "engagement"
+            ? (await db.select({ id: atelierEngagements.id }).from(atelierEngagements)
+                .where(and(eq(atelierEngagements.id, mtg.parentId), eq(atelierEngagements.orgId, orgId), isNull(atelierEngagements.deletedAt))).limit(1)).length > 0
+            : false;
+      return parentAlive ? { id: mtg.id, label: `meeting ${mtg.id}` } : null;
+    }
     case "raid_item":
       return probe(
         await db.select({ id: atelierRaidItems.id }).from(atelierRaidItems)
