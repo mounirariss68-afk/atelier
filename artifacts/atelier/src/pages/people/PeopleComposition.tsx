@@ -13,6 +13,7 @@ import { Card, MonoChip } from "@/components/ui/primitives";
 import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import {
   COMPOSITION_AS_OF, COMPOSITION_SOFT_SKILLS,
   useCompositionPeople, useOrgUnits, useReviews, useGoals, useSuccession, useSkillGaps,
@@ -134,30 +135,36 @@ export default function PeopleComposition() {
   return (
     <PeopleShell module="composition">
       <LensPageHeader
-        eyebrow={`People · Composition · as of ${COMPOSITION_AS_OF}`}
+        eyebrow="People · Composition"
         headline="Team composition — who do we have?"
         lede="A snapshot of the firm's makeup: demographics, languages, hard- and soft-skills, performance distribution, seniority pyramid and tenure. Filters apply to every panel; numbers reflect data we have on file today."
       />
 
       <div className="container-atelier py-6 space-y-6" data-testid="page-composition">
-        <SnapshotBanner />
-        <FilterBar people={allPeople} filters={filters} onChange={setFilters} />
-        <KpiStrip people={filtered} succession={succession} />
-        <DemographicsPanel people={filtered} cohortHref={cohortHref} />
-        <SeniorityStructurePanel people={filtered} orgUnits={orgUnits} cohortHref={cohortHref} />
-        <LanguagesPanel people={filtered} cohortHref={cohortHref} />
-        <HardSkillsPanel people={filtered} skillGaps={skillGaps} />
-        <SoftSkillsPanel people={filtered} />
-        <PerformancePanel
-          people={filtered}
-          inScopeNames={inScopeNames}
-          reviews={reviews}
-          goals={goals}
-          succession={succession}
-        />
-        <CrossCutPanel people={filtered} />
-        <DataCoverageStrip people={filtered} />
-        <CrossLinks cohortHref={cohortHref} />
+        {allPeople.length === 0 ? (
+          <PeopleEmptyState message="No composition snapshot yet. Demographic, language and skill breakdowns will appear here once HR captures those fields for the roster." />
+        ) : (
+          <>
+            <SnapshotBanner />
+            <FilterBar people={allPeople} filters={filters} onChange={setFilters} />
+            <KpiStrip people={filtered} succession={succession} />
+            <DemographicsPanel people={filtered} cohortHref={cohortHref} />
+            <SeniorityStructurePanel people={filtered} orgUnits={orgUnits} cohortHref={cohortHref} />
+            <LanguagesPanel people={filtered} cohortHref={cohortHref} />
+            <HardSkillsPanel people={filtered} skillGaps={skillGaps} />
+            <SoftSkillsPanel people={filtered} />
+            <PerformancePanel
+              people={filtered}
+              inScopeNames={inScopeNames}
+              reviews={reviews}
+              goals={goals}
+              succession={succession}
+            />
+            <CrossCutPanel people={filtered} />
+            <DataCoverageStrip people={filtered} />
+            <CrossLinks cohortHref={cohortHref} />
+          </>
+        )}
       </div>
     </PeopleShell>
   );

@@ -35,7 +35,9 @@ export function LearningCompliance() {
                 {expiring.length}
               </MonoChip>
             </div>
-            {expiring.length === 0 ? (
+            {certs.length === 0 ? (
+              <div className="text-xs text-text-faint">No certification records yet.</div>
+            ) : expiring.length === 0 ? (
               <div className="text-xs text-text-faint">All certifications current.</div>
             ) : (
               <div className="space-y-1.5">
@@ -62,7 +64,9 @@ export function LearningCompliance() {
             </div>
             <div className="text-3xl font-light text-gold leading-none">{inFlight.length}</div>
             <div className="mt-2 text-xs text-text-mute">
-              {completion}% of tracked items completed
+              {myLearning.length === 0
+                ? "No learning records tracked yet."
+                : `${completion}% of tracked items completed`}
             </div>
             <div className="mt-3 space-y-1.5 text-xs">
               {inFlight.slice(0, 3).map((r) => (
@@ -89,7 +93,9 @@ export function LearningCompliance() {
               Mentoring program
             </div>
             <div className="text-3xl font-light text-gold leading-none">{mentoring.length}</div>
-            <div className="mt-1 text-xs text-text-mute">active pairings</div>
+            <div className="mt-1 text-xs text-text-mute">
+              {mentoring.length === 0 ? "No mentoring pairings yet." : "active pairings"}
+            </div>
             <div className="mt-3 space-y-1 text-xs text-text-mute">
               {mentoring.slice(0, 3).map((m) => (
                 <div key={m.id} className="flex justify-between">

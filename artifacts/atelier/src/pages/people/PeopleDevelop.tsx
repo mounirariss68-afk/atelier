@@ -12,6 +12,7 @@ import {
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import {
   useLearningCatalogue, useMyLearning, useCertifications, useMentoringPairs, useSkillGaps,
 } from "./peopleSeed";
@@ -293,6 +294,9 @@ function NewMaterialForm({ onSaved }: { onSaved: () => void }) {
 
 function CatalogueView() {
   const rows = useLearningCatalogue();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No catalogue courses yet. External course records will appear here once they are added." />;
+  }
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {rows.map((c) => (
@@ -315,6 +319,9 @@ function CatalogueView() {
 
 function MyLearningView() {
   const rows = useMyLearning();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No learning enrolments yet. Assign training from the Training library to see progress here." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((r) => (
@@ -341,6 +348,9 @@ function MyLearningView() {
 
 function CertificationsView() {
   const rows = useCertifications();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No certification records yet." />;
+  }
   return (
     <Card className="p-4">
       <table className="w-full text-sm">
@@ -367,6 +377,9 @@ function CertificationsView() {
 
 function MentoringView() {
   const rows = useMentoringPairs();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No mentoring pairings recorded yet." />;
+  }
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {rows.map((p) => (
@@ -392,6 +405,9 @@ function SkillGapsView() {
       <p className="text-sm text-text-mute">
         Reads from the firm Skill Graph. <Link href="/people/skills" className="text-gold hover:underline">Open Skill graph →</Link>
       </p>
+      {rows.length === 0 && (
+        <PeopleEmptyState message="No skill-gap analysis yet. Gaps appear once demand roles and the Skill Graph carry enough data." />
+      )}
       {rows.map((g) => (
         <Card key={g.id} className="p-4">
           <div className="flex items-center justify-between">

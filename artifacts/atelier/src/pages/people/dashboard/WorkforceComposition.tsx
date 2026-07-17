@@ -140,7 +140,7 @@ export function WorkforceComposition() {
               By business unit
             </div>
             {businessUnits.length === 0 ? (
-              <div className="text-xs text-text-faint">No org units in seed.</div>
+              <div className="text-xs text-text-faint">No business units recorded yet.</div>
             ) : (
               <BarRows rows={businessUnits} />
             )}

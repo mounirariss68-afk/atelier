@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import { useOrgUnits, useRoleDefinitions } from "./peopleSeed";
 
 const SUBS = [
@@ -38,6 +39,9 @@ export default function PeopleOrg() {
 
 function UnitsView() {
   const rows = useOrgUnits();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No org units defined yet." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((u) => {
@@ -61,6 +65,9 @@ function UnitsView() {
 
 function RolesView() {
   const rows = useRoleDefinitions();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No role definitions published yet." />;
+  }
   return (
     <Card className="p-4">
       <table className="w-full text-sm">

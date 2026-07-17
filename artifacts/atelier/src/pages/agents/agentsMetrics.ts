@@ -12,8 +12,7 @@
  * and across components — mirroring the deterministic seed approach
  * used in the People dashboard.
  *
- * NOTE: numbers here are seed-driven, not telemetry. The CFO and CHRO
- * dashboards take the same approach (see `cfoData.ts`, `peopleSeed.ts`).
+ * NOTE: numbers here are seed-driven, not telemetry (see `cfoData.ts`).
  */
 import * as React from "react";
 import {

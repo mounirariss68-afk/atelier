@@ -15,6 +15,7 @@ import {
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import {
   useGoals, useCheckIns, useReviews, useCalibrationCohorts, useSuccession,
 } from "./peopleSeed";
@@ -86,6 +87,9 @@ export default function PeoplePerform() {
 
 function GoalsView() {
   const rows = useGoals();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No goals recorded yet. Set goals under the Releases tab to see them here." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((g) => (
@@ -109,6 +113,9 @@ function GoalsView() {
 
 function CheckInsView() {
   const rows = useCheckIns();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No check-ins logged yet." />;
+  }
   return (
     <Card className="p-4">
       <table className="w-full text-sm">
@@ -135,6 +142,9 @@ function CheckInsView() {
 
 function ReviewsView() {
   const rows = useReviews();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No review cycles yet. Draft and release reviews from the Releases tab." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((r) => (
@@ -394,6 +404,9 @@ function NewGoalForm({
 
 function CalibrationView() {
   const rows = useCalibrationCohorts();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No calibration cohorts yet. Cohorts form once a review cycle is underway." />;
+  }
   return (
     <Card className="p-4">
       <table className="w-full text-sm">
@@ -421,6 +434,9 @@ function CalibrationView() {
 
 function SuccessionView() {
   const rows = useSuccession();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No succession slates yet." />;
+  }
   return (
     <div className="space-y-3">
       {rows.map((s) => (

@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import { useEngagementSurveys, useFlightRisk, useInternalMobility, useStayInterviews } from "./peopleSeed";
 
 const SUBS = [
@@ -42,6 +43,9 @@ export default function PeopleRetain() {
 
 function EngagementView() {
   const rows = useEngagementSurveys();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No engagement surveys run yet." />;
+  }
   return (
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
       {rows.map((s) => (
@@ -64,6 +68,9 @@ function EngagementView() {
 
 function FlightRiskView() {
   const rows = useFlightRisk();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No flight-risk records yet." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((r) => (
@@ -88,6 +95,9 @@ function FlightRiskView() {
 
 function MobilityView() {
   const rows = useInternalMobility();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No internal moves recorded yet." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((m) => (
@@ -108,6 +118,9 @@ function MobilityView() {
 
 function StayView() {
   const rows = useStayInterviews();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No stay interviews logged yet." />;
+  }
   return (
     <div className="space-y-3">
       {rows.map((s) => (

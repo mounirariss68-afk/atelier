@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
+import { PeopleEmptyState } from "./PeopleEmptyState";
 import { useCompBands, useCompReview, useRecognition } from "./peopleSeed";
 import { useCanSeeRewardAndSuccession } from "./peoplePerms";
 import { PayDocsAdminView, BankChangesAdminView } from "./PeoplePayAdmin";
@@ -70,6 +71,9 @@ export default function PeopleReward() {
 
 function BandsView() {
   const rows = useCompBands();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No compensation bands published yet." />;
+  }
   return (
     <Card className="p-4">
       <table className="w-full text-sm">
@@ -101,6 +105,9 @@ function BandsView() {
 
 function ReviewView() {
   const rows = useCompReview();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No comp-review proposals yet." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((r) => (
@@ -142,6 +149,9 @@ function TotalRewardsView() {
 
 function RecognitionView() {
   const rows = useRecognition();
+  if (rows.length === 0) {
+    return <PeopleEmptyState message="No recognition awards recorded yet." />;
+  }
   return (
     <div className="space-y-2">
       {rows.map((r) => (

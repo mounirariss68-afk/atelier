@@ -70,12 +70,18 @@ export function PerformanceDevelopment() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
               Goal completion
             </div>
-            <div className="text-3xl font-light text-gold leading-none">{goalCompletionPct}%</div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              <MonoChip tone="green">{goalsComplete} done</MonoChip>
-              <MonoChip tone="gold">{goalsOnTrack} on-track</MonoChip>
-              {goalsAtRisk > 0 && <MonoChip tone="amber">{goalsAtRisk} at-risk</MonoChip>}
-            </div>
+            {goals.length === 0 ? (
+              <div className="text-xs text-text-faint">No goals recorded yet.</div>
+            ) : (
+              <>
+                <div className="text-3xl font-light text-gold leading-none">{goalCompletionPct}%</div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <MonoChip tone="green">{goalsComplete} done</MonoChip>
+                  <MonoChip tone="gold">{goalsOnTrack} on-track</MonoChip>
+                  {goalsAtRisk > 0 && <MonoChip tone="amber">{goalsAtRisk} at-risk</MonoChip>}
+                </div>
+              </>
+            )}
           </Card>
         </Link>
 
@@ -84,14 +90,20 @@ export function PerformanceDevelopment() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
               Check-in cadence
             </div>
-            <div className="text-3xl font-light text-gold leading-none">
-              {checkInsCompleted}/{checkIns.length}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              <MonoChip tone="green">{checkInsCompleted} done</MonoChip>
-              <MonoChip tone="default">{checkInsScheduled} scheduled</MonoChip>
-              {checkInsMissed > 0 && <MonoChip tone="red">{checkInsMissed} missed</MonoChip>}
-            </div>
+            {checkIns.length === 0 ? (
+              <div className="text-xs text-text-faint">No check-ins logged yet.</div>
+            ) : (
+              <>
+                <div className="text-3xl font-light text-gold leading-none">
+                  {checkInsCompleted}/{checkIns.length}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <MonoChip tone="green">{checkInsCompleted} done</MonoChip>
+                  <MonoChip tone="default">{checkInsScheduled} scheduled</MonoChip>
+                  {checkInsMissed > 0 && <MonoChip tone="red">{checkInsMissed} missed</MonoChip>}
+                </div>
+              </>
+            )}
           </Card>
         </Link>
 

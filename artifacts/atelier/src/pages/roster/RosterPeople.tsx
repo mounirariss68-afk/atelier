@@ -3,7 +3,6 @@ import { Link, useLocation } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { Input } from "@/components/ui/input";
 import { Users, Filter, X } from "lucide-react";
-import { useCompositionPeople } from "@/pages/people/peopleSeed";
 
 type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 
@@ -75,21 +74,6 @@ export default function RosterPeople() {
   });
   const [q, setQ] = React.useState("");
   const [cohort, setCohort] = React.useState<Record<CohortKey, string>>(readCohortFromUrl);
-  // Task #412 — language data lives in the People Lens snapshot, not the
-  // roster API yet, so we intersect the API result by name on the client
-  // when a `?language=<slug>` deep-link from the Composition dashboard is
-  // active. Names match against the seeded composition snapshot.
-  const compositionPeople = useCompositionPeople();
-  const languageNameSet = React.useMemo(() => {
-    if (!cohort.language) return null;
-    const names = new Set<string>();
-    for (const p of compositionPeople) {
-      if (p.languages.some((l) => l.slug === cohort.language)) {
-        names.add(p.fullName.trim().toLowerCase());
-      }
-    }
-    return names;
-  }, [cohort.language, compositionPeople]);
 
   /** Reflect filter state back into the URL so the slice is shareable
    *  and survives reloads. The directory + Composition dashboard share
@@ -121,15 +105,10 @@ export default function RosterPeople() {
     })
       .then((r) => r.json())
       .then((d) => {
-        const list: PersonRow[] = d.people ?? [];
-        if (languageNameSet) {
-          setPeople(list.filter((p) => languageNameSet.has(p.fullName.trim().toLowerCase())));
-        } else {
-          setPeople(list);
-        }
+        setPeople(d.people ?? []);
       })
       .catch(() => setPeople([]));
-  }, [filter, q, cohort, languageNameSet]);
+  }, [filter, q, cohort]);
 
   const counts = React.useMemo(() => {
     const c = { all: 0, employee: 0, contractor: 0, partner_firm_resource: 0 };

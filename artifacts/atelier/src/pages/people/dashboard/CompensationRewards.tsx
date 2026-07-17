@@ -39,10 +39,16 @@ export function CompensationRewards() {
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
               Band coverage
             </div>
-            <div className="text-3xl font-light text-gold leading-none">{bands.length}</div>
-            <div className="mt-1 text-xs text-text-mute">
-              levels published · jurisdictions {Array.from(new Set(bands.map((b) => b.jurisdiction))).join(", ")}
-            </div>
+            {bands.length === 0 ? (
+              <div className="text-xs text-text-faint">No compensation bands published yet.</div>
+            ) : (
+              <>
+                <div className="text-3xl font-light text-gold leading-none">{bands.length}</div>
+                <div className="mt-1 text-xs text-text-mute">
+                  levels published · jurisdictions {Array.from(new Set(bands.map((b) => b.jurisdiction))).join(", ")}
+                </div>
+              </>
+            )}
             <div className="mt-3 space-y-1 text-xs">
               {bands.slice(0, 4).map((b) => (
                 <div key={b.id} className="flex justify-between text-text-mute">
@@ -77,7 +83,9 @@ export function CompensationRewards() {
             </div>
             <div className="text-xs text-text-mute">
               Pay-equity:{" "}
-              {equityFlags > 0 ? (
+              {compReview.length === 0 ? (
+                <MonoChip tone="default">no data yet</MonoChip>
+              ) : equityFlags > 0 ? (
                 <MonoChip tone="amber">{equityFlags} below-band flag{equityFlags === 1 ? "" : "s"}</MonoChip>
               ) : (
                 <MonoChip tone="green">No flags</MonoChip>
