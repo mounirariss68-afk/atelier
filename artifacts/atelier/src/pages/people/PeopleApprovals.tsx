@@ -153,8 +153,26 @@ interface LeaveQueueRow {
   createdAt: string;
 }
 
+interface CalendarEntry {
+  id: string;
+  personId: string;
+  personName: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  workingDays: number;
+  status: string;
+}
+
+/** Inclusive date-range intersection on YYYY-MM-DD strings. */
+function rangesOverlap(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
+  return aStart <= bEnd && bStart <= aEnd;
+}
+
 function LeaveApprovalsCard() {
   const [rows, setRows] = React.useState<LeaveQueueRow[]>([]);
+  const [calendar, setCalendar] = React.useState<CalendarEntry[]>([]);
+  const [calErr, setCalErr] = React.useState(false);
   const [allowed, setAllowed] = React.useState(true);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -165,13 +183,53 @@ function LeaveApprovalsCard() {
       if (r.status === 403) return void setAllowed(false);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = await r.json();
-      setRows(j.requests ?? []);
+      const reqs: LeaveQueueRow[] = j.requests ?? [];
+      setRows(reqs);
+      // Team calendar for the combined window of all pending requests, so
+      // overlapping absences are visible before anything is approved.
+      if (reqs.length > 0) {
+        const start = reqs.reduce((s, q) => (q.startDate < s ? q.startDate : s), reqs[0].startDate);
+        const end = reqs.reduce((s, q) => (q.endDate > s ? q.endDate : s), reqs[0].endDate);
+        try {
+          const cr = await fetch(
+            `/api/atelier/roster/leave-calendar?start=${start}&end=${end}`,
+            { credentials: "include" },
+          );
+          if (!cr.ok) throw new Error(`HTTP ${cr.status}`);
+          const cj = await cr.json();
+          setCalendar(cj.entries ?? []);
+          setCalErr(false);
+        } catch {
+          setCalendar([]);
+          setCalErr(true);
+        }
+      } else {
+        setCalendar([]);
+        setCalErr(false);
+      }
     } catch (e) {
       setErr((e as Error).message);
     }
   }, []);
 
   React.useEffect(() => { void load(); }, [load]);
+
+  // Per pending request: everyone ELSE already off (approved or pending)
+  // during the same dates.
+  const overlapsByRequest = React.useMemo(() => {
+    const m = new Map<string, CalendarEntry[]>();
+    for (const r of rows) {
+      m.set(
+        r.id,
+        calendar.filter(
+          (c) =>
+            c.id !== r.id &&
+            rangesOverlap(r.startDate, r.endDate, c.startDate, c.endDate),
+        ),
+      );
+    }
+    return m;
+  }, [rows, calendar]);
 
   const decide = async (id: string, action: "approve" | "reject") => {
     const reason = action === "reject" ? prompt("Rejection reason (required):") : null;
@@ -208,28 +266,74 @@ function LeaveApprovalsCard() {
         <p className="text-sm text-text-mute">No leave requests waiting.</p>
       ) : (
         <ul className="divide-y divide-border-soft">
-          {rows.map((r) => (
-            <li key={r.id} className="flex flex-wrap items-center gap-2 py-2 text-sm" data-testid={`leave-row-${r.id}`}>
-              <span className="font-medium text-text">{r.personName}</span>
-              <MonoChip>{r.leaveType}</MonoChip>
-              <span className="text-text-mute">{r.startDate} → {r.endDate}</span>
-              <MonoChip tone="amber">{r.workingDays}d</MonoChip>
-              {r.note && <span className="text-xs text-text-faint truncate max-w-[24ch]" title={r.note}>“{r.note}”</span>}
-              {r.isOwn ? (
-                <span className="ml-auto text-xs text-text-faint">your own request — a colleague must decide</span>
-              ) : (
-                <span className="ml-auto flex gap-2">
-                  <PillButton onClick={() => decide(r.id, "approve")} disabled={busy === r.id} className="min-h-[44px]" data-testid={`leave-approve-${r.id}`}>
-                    Approve
-                  </PillButton>
-                  <PillButton variant="ghost" onClick={() => decide(r.id, "reject")} disabled={busy === r.id} className="min-h-[44px]" data-testid={`leave-reject-${r.id}`}>
-                    Reject
-                  </PillButton>
-                </span>
-              )}
-            </li>
-          ))}
+          {rows.map((r) => {
+            const overlaps = overlapsByRequest.get(r.id) ?? [];
+            return (
+              <li key={r.id} className="py-2 text-sm" data-testid={`leave-row-${r.id}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-text">{r.personName}</span>
+                  <MonoChip>{r.leaveType}</MonoChip>
+                  <span className="text-text-mute">{r.startDate} → {r.endDate}</span>
+                  <MonoChip tone="amber">{r.workingDays}d</MonoChip>
+                  {overlaps.length > 0 && (
+                    <MonoChip tone="red" data-testid={`leave-overlap-chip-${r.id}`}>
+                      {overlaps.length} overlap{overlaps.length > 1 ? "s" : ""}
+                    </MonoChip>
+                  )}
+                  {r.note && <span className="text-xs text-text-faint truncate max-w-[24ch]" title={r.note}>“{r.note}”</span>}
+                  {r.isOwn ? (
+                    <span className="ml-auto text-xs text-text-faint">your own request — a colleague must decide</span>
+                  ) : (
+                    <span className="ml-auto flex gap-2">
+                      <PillButton onClick={() => decide(r.id, "approve")} disabled={busy === r.id} className="min-h-[44px]" data-testid={`leave-approve-${r.id}`}>
+                        Approve
+                      </PillButton>
+                      <PillButton variant="ghost" onClick={() => decide(r.id, "reject")} disabled={busy === r.id} className="min-h-[44px]" data-testid={`leave-reject-${r.id}`}>
+                        Reject
+                      </PillButton>
+                    </span>
+                  )}
+                </div>
+                {overlaps.length > 0 && (
+                  <div
+                    className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-md border border-red-400/30 bg-red-400/5 px-2 py-1.5"
+                    data-testid={`leave-overlap-detail-${r.id}`}
+                  >
+                    <span className="text-xs font-medium text-red-300">Also off during this window:</span>
+                    {overlaps.map((o) => (
+                      <span key={o.id} className="text-xs text-text-mute">
+                        {o.personName} · {o.startDate} → {o.endDate}
+                        <MonoChip tone={o.status === "approved" ? "green" : "gold"} className="ml-1">{o.status}</MonoChip>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
+      )}
+      {rows.length > 0 && (
+        <div className="mt-4 border-t border-border-soft pt-3" data-testid="team-leave-calendar">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <h4 className="text-xs text-text-mute font-mono uppercase">Team availability in this window</h4>
+            {calErr && <span className="text-xs text-text-faint">team calendar unavailable</span>}
+          </div>
+          {calendar.length === 0 && !calErr ? (
+            <p className="text-xs text-text-faint">No other leave in this window.</p>
+          ) : (
+            <ul className="space-y-1">
+              {calendar.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-2 text-xs" data-testid={`team-calendar-entry-${c.id}`}>
+                  <span className="text-text">{c.personName}</span>
+                  <MonoChip>{c.leaveType}</MonoChip>
+                  <span className="text-text-mute">{c.startDate} → {c.endDate}</span>
+                  <MonoChip tone={c.status === "approved" ? "green" : "gold"}>{c.status}</MonoChip>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </Card>
   );

@@ -36,7 +36,7 @@
  * via emitSelfNotification.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -841,6 +841,72 @@ router.get("/roster/leave-requests", async (req, res, next) => {
         ...leaveToWire(r),
         personName: nameById.get(r.personId) ?? r.personId,
         isOwn: r.userId === me.id,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * Team availability for the approvals surface: every approved/pending leave
+ * across the roster that intersects the requested [start, end] window, so an
+ * approver can spot double-booked absences BEFORE deciding. Read-only,
+ * pre-gated on the same approver-surface roles as the queue itself.
+ */
+// @cli-skip: approver team-calendar read backing PeopleApprovals UI (Task #77)
+router.get("/roster/leave-calendar", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canReachApproverSurface(me)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const start = req.query.start;
+    const end = req.query.end;
+    if (!isIsoDate(start) || !isIsoDate(end) || start > end) {
+      res.status(400).json({ error: "invalid-window", detail: "start and end must be YYYY-MM-DD with start <= end" });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(atelierLeaveRequests)
+      .where(
+        and(
+          eq(atelierLeaveRequests.orgId, me.orgId),
+          inArray(atelierLeaveRequests.status, ["pending", "approved"]),
+          isNull(atelierLeaveRequests.deletedAt),
+          // Interval intersection: leave.start <= window.end AND leave.end >= window.start
+          lte(atelierLeaveRequests.startDate, end),
+          gte(atelierLeaveRequests.endDate, start),
+        ),
+      )
+      .orderBy(atelierLeaveRequests.startDate);
+    const personIds = Array.from(new Set(rows.map((r) => r.personId)));
+    const [emps, cons] = await Promise.all([
+      personIds.length
+        ? db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, personIds))
+        : Promise.resolve([] as Array<typeof atelierEmployees.$inferSelect>),
+      personIds.length
+        ? db.select().from(atelierContractors).where(inArray(atelierContractors.id, personIds))
+        : Promise.resolve([] as Array<typeof atelierContractors.$inferSelect>),
+    ]);
+    const nameById = new Map<string, string>([
+      ...emps.map((e) => [e.id, e.fullName] as const),
+      ...cons.map((c) => [c.id, c.fullName] as const),
+    ]);
+    res.json({
+      window: { start, end },
+      entries: rows.map((r) => ({
+        id: r.id,
+        personId: r.personId,
+        personName: nameById.get(r.personId) ?? r.personId,
+        leaveType: r.leaveType,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        workingDays: r.workingDays,
+        status: r.status,
       })),
     });
   } catch (err) {
