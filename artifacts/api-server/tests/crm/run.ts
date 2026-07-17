@@ -3030,6 +3030,42 @@ async function main(): Promise<void> {
       // Users created by this run (ephemeral RBAC personas + the Task #576
       // board-observer persona).
       for (const id of created.users) await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
+      // --- TAG-pattern safety sweep (self-healing) ---------------------------
+      // Two engagement rows per run historically escaped the tracked-ID
+      // cleanup: the `eng_arch_${STAMP}` archive-cascade fixture (inserted
+      // directly, never tracked) and the "<opp> — delivery" engagement the
+      // stage-won hook auto-creates server-side. Rather than only tracking
+      // them (fragile — the next untracked row leaks again), sweep EVERYTHING
+      // carrying the harness tag. The tag is exclusively ours, so a pattern
+      // delete is safe even on a shared DB, and it also self-heals leftovers
+      // from any earlier run that was SIGKILLed before this cleanup ran.
+      const tagLike = `%${TAG}%`;
+      const sweep = (label: string) => (err: unknown) =>
+        console.warn(`[t542] tag sweep failed (${label}):`, (err as Error)?.message ?? err);
+      await db.execute(sql`
+        delete from atelier_audit_events
+        where entity_id in (select id from atelier_engagements where name like ${tagLike})
+           or entity_id like ${tagLike}
+           or payload::text like ${tagLike}
+      `).catch(sweep("audit_events"));
+      await db.execute(sql`
+        delete from atelier_agent_runs
+        where coalesce(target_label, '') like ${tagLike}
+           or target_id in (select id from atelier_engagements where name like ${tagLike})
+           or target_id in (select id from atelier_accounts where name like ${tagLike})
+           or target_id in (select id from atelier_opportunities where name like ${tagLike})
+      `).catch(sweep("agent_runs"));
+      await db.execute(sql`
+        delete from atelier_timesheet_entries
+        where engagement_id in (select id from atelier_engagements where name like ${tagLike})
+      `).catch(sweep("timesheet_entries"));
+      await db.execute(sql`delete from atelier_engagements where name like ${tagLike}`).catch(sweep("engagements"));
+      await db.execute(sql`delete from atelier_opportunities where name like ${tagLike}`).catch(sweep("opportunities"));
+      await db.execute(sql`
+        delete from atelier_contacts
+        where account_id in (select id from atelier_accounts where name like ${tagLike})
+      `).catch(sweep("contacts"));
+      await db.execute(sql`delete from atelier_accounts where name like ${tagLike}`).catch(sweep("accounts"));
       // Audit cleanup is scoped to BOTH the entities this run touched AND the
       // actor personas it acted as, so concurrent activity by any other actor
       // (possible on a shared, non-isolated DB) is never deleted.
