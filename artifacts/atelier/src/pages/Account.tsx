@@ -49,6 +49,7 @@ import {
 import { Account360Tab } from "@/components/tabs/Account360Tab";
 import { AccountPlanTab } from "@/components/tabs/AccountPlanTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
+import { DocumentLibraryPanel } from "@/pages/Documents";
 import { CreateContactDialog } from "@/components/CreateContactDialog";
 import { EditContactDialog } from "@/components/EditContactDialog";
 import { MergeAccountDialog } from "@/components/MergeAccountDialog";
@@ -112,6 +113,7 @@ type TabKey =
   | "whitespace"
   | "qbr"
   | "account_ai"
+  | "documents"
   | "audit";
 
 const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
@@ -127,6 +129,7 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "account_ai", label: "Account AI", icon: <Bot className="w-3.5 h-3.5" /> },
+  { key: "documents", label: "Documents", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
 ];
 
@@ -451,6 +454,7 @@ export default function Account() {
         {tab === "account_ai" && (
           <AccountAgentsTab accountId={accountId} contacts={ws.contacts} />
         )}
+        {tab === "documents" && <DocumentLibraryPanel accountId={ws.account.id} />}
         {tab === "audit" && <AuditTab accountId={ws.account.id} events={ws.audit} />}
       </div>
     </div>

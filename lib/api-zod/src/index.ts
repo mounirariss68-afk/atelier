@@ -7,4 +7,10 @@ export type {
   AtelierCreateMyDocumentBody,
   AtelierReplaceMyDocumentScanBody,
   AtelierUploadMyPhotoBody,
+  AtelierCreateDocumentBody,
+  AtelierUpdateDocumentBody,
+  AtelierUploadDocumentVersionBody,
+  AtelierGrantDocumentAccessBody,
+  AtelierListDocumentsParams,
+  AtelierDownloadDocumentParams,
 } from "./generated/types";

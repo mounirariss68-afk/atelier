@@ -81,6 +81,7 @@ import principleOverrideRoutes from "./principleOverrideRoutes";
 import firmProfileRoutes from "./firmProfileRoutes";
 import cliRoutes from "./cliRoutes";
 import cliAttachmentRoutes from "./cliAttachmentRoutes";
+import documentRoutes from "./documentRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
@@ -290,6 +291,7 @@ router.use(firmProfileRoutes);
 // Task #331 — Atelier CLI: SSE turn endpoint, sessions, confirm/cancel.
 router.use(cliRoutes);
 router.use(cliAttachmentRoutes);
+router.use(documentRoutes);
 router.use(cliAdminRoutes);
 // Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
 // Guardhouse / IP catalog) backed by Postgres.

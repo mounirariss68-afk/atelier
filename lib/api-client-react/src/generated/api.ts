@@ -71,6 +71,8 @@ import type {
   AtelierCreateActivityInput,
   AtelierCreateContactInput,
   AtelierCreateContactRelationshipInput,
+  AtelierCreateDocument201,
+  AtelierCreateDocumentBody,
   AtelierCreateMyDependent201,
   AtelierCreateMyDocument201,
   AtelierCreateMyDocumentBody,
@@ -86,6 +88,7 @@ import type {
   AtelierDealPricingComputed,
   AtelierDealPricingEnvelope,
   AtelierDealPricingInput,
+  AtelierDeleteDocument200,
   AtelierDeliverable,
   AtelierDeliverableDetail,
   AtelierDeliverableDraftInput,
@@ -93,6 +96,7 @@ import type {
   AtelierDeliverableVersion,
   AtelierDependentInput,
   AtelierDependentList,
+  AtelierDownloadDocumentParams,
   AtelierEditProposalSectionInput,
   AtelierEmergencyContactInput,
   AtelierEmergencyContactList,
@@ -100,13 +104,18 @@ import type {
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
+  AtelierGrantDocumentAccess201,
+  AtelierGrantDocumentAccessBody,
   AtelierHome,
   AtelierHypothesisTree,
   AtelierJoiner,
   AtelierLeaverHandover,
   AtelierLeaverReassignInput,
+  AtelierLibraryDocumentDetail,
   AtelierListAccountsParams,
   AtelierListAuditParams,
+  AtelierListDocuments200,
+  AtelierListDocumentsParams,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
   AtelierMarginOverrideInput,
@@ -168,6 +177,7 @@ import type {
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
   AtelierReviewReleaseInput,
+  AtelierRevokeDocumentAccess200,
   AtelierRosterPersonalView,
   AtelierScoutInput,
   AtelierSelfDocumentList,
@@ -195,10 +205,14 @@ import type {
   AtelierUpdateAccountTeamMemberInput,
   AtelierUpdateActivityInput,
   AtelierUpdateContactInput,
+  AtelierUpdateDocument200,
+  AtelierUpdateDocumentBody,
   AtelierUpdateMyDependent200,
   AtelierUpdateMyDocument200,
   AtelierUpdateMyEmergencyContact200,
   AtelierUpdateOpportunityInput,
+  AtelierUploadDocumentVersion201,
+  AtelierUploadDocumentVersionBody,
   AtelierUploadMyPhoto200,
   AtelierUploadMyPhotoBody,
   AtelierUpsertAccountGoalProgressInput,
@@ -1176,6 +1190,874 @@ export function useAtelierDownloadMyDocument<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Document Library — list documents visible to the caller (ACL-filtered)
+ */
+export const getAtelierListDocumentsUrl = (
+  params?: AtelierListDocumentsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/documents?${stringifiedParams}`
+    : `/api/atelier/documents`;
+};
+
+export const atelierListDocuments = async (
+  params?: AtelierListDocumentsParams,
+  options?: RequestInit,
+): Promise<AtelierListDocuments200> => {
+  return customFetch<AtelierListDocuments200>(
+    getAtelierListDocumentsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListDocumentsQueryKey = (
+  params?: AtelierListDocumentsParams,
+) => {
+  return [`/api/atelier/documents`, ...(params ? [params] : [])] as const;
+};
+
+export const getAtelierListDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListDocumentsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListDocuments>>
+  > = ({ signal }) =>
+    atelierListDocuments(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListDocuments>>
+>;
+export type AtelierListDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — list documents visible to the caller (ACL-filtered)
+ */
+
+export function useAtelierListDocuments<
+  TData = Awaited<ReturnType<typeof atelierListDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListDocumentsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListDocumentsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Document Library — upload a new document (multipart)
+ */
+export const getAtelierCreateDocumentUrl = () => {
+  return `/api/atelier/documents`;
+};
+
+export const atelierCreateDocument = async (
+  atelierCreateDocumentBody: AtelierCreateDocumentBody,
+  options?: RequestInit,
+): Promise<AtelierCreateDocument201> => {
+  const formData = new FormData();
+  formData.append(`title`, atelierCreateDocumentBody.title);
+  if (atelierCreateDocumentBody.category !== undefined) {
+    formData.append(`category`, atelierCreateDocumentBody.category);
+  }
+  if (atelierCreateDocumentBody.accountId !== undefined) {
+    formData.append(`accountId`, atelierCreateDocumentBody.accountId);
+  }
+  if (atelierCreateDocumentBody.engagementId !== undefined) {
+    formData.append(`engagementId`, atelierCreateDocumentBody.engagementId);
+  }
+  if (atelierCreateDocumentBody.notes !== undefined) {
+    formData.append(`notes`, atelierCreateDocumentBody.notes);
+  }
+  if (atelierCreateDocumentBody.aiRetrieval !== undefined) {
+    formData.append(`aiRetrieval`, atelierCreateDocumentBody.aiRetrieval);
+  }
+  formData.append(`file`, atelierCreateDocumentBody.file);
+
+  return customFetch<AtelierCreateDocument201>(getAtelierCreateDocumentUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getAtelierCreateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateDocument>>,
+    TError,
+    { data: BodyType<AtelierCreateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateDocument>>,
+  TError,
+  { data: BodyType<AtelierCreateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateDocument>>,
+    { data: BodyType<AtelierCreateDocumentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateDocument>>
+>;
+export type AtelierCreateDocumentMutationBody =
+  BodyType<AtelierCreateDocumentBody>;
+export type AtelierCreateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — upload a new document (multipart)
+ */
+export const useAtelierCreateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateDocument>>,
+    TError,
+    { data: BodyType<AtelierCreateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateDocument>>,
+  TError,
+  { data: BodyType<AtelierCreateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Document Library — one document with versions, grants and audit trail
+ */
+export const getAtelierGetDocumentUrl = (id: string) => {
+  return `/api/atelier/documents/${id}`;
+};
+
+export const atelierGetDocument = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierLibraryDocumentDetail> => {
+  return customFetch<AtelierLibraryDocumentDetail>(
+    getAtelierGetDocumentUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetDocumentQueryKey = (id: string) => {
+  return [`/api/atelier/documents/${id}`] as const;
+};
+
+export const getAtelierGetDocumentQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetDocumentQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetDocument>>
+  > = ({ signal }) => atelierGetDocument(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetDocument>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetDocumentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetDocument>>
+>;
+export type AtelierGetDocumentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — one document with versions, grants and audit trail
+ */
+
+export function useAtelierGetDocument<
+  TData = Awaited<ReturnType<typeof atelierGetDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetDocumentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Document Library — edit title/category/notes or flip the AI-retrieval toggle
+ */
+export const getAtelierUpdateDocumentUrl = (id: string) => {
+  return `/api/atelier/documents/${id}`;
+};
+
+export const atelierUpdateDocument = async (
+  id: string,
+  atelierUpdateDocumentBody: AtelierUpdateDocumentBody,
+  options?: RequestInit,
+): Promise<AtelierUpdateDocument200> => {
+  return customFetch<AtelierUpdateDocument200>(
+    getAtelierUpdateDocumentUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateDocumentBody),
+    },
+  );
+};
+
+export const getAtelierUpdateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierUpdateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierUpdateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateDocument>>,
+    { id: string; data: BodyType<AtelierUpdateDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateDocument>>
+>;
+export type AtelierUpdateDocumentMutationBody =
+  BodyType<AtelierUpdateDocumentBody>;
+export type AtelierUpdateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — edit title/category/notes or flip the AI-retrieval toggle
+ */
+export const useAtelierUpdateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierUpdateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierUpdateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Document Library — delete a document (purges blobs, versions and embeddings)
+ */
+export const getAtelierDeleteDocumentUrl = (id: string) => {
+  return `/api/atelier/documents/${id}`;
+};
+
+export const atelierDeleteDocument = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierDeleteDocument200> => {
+  return customFetch<AtelierDeleteDocument200>(
+    getAtelierDeleteDocumentUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteDocument>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteDocument>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteDocument>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteDocument>>
+>;
+
+export type AtelierDeleteDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — delete a document (purges blobs, versions and embeddings)
+ */
+export const useAtelierDeleteDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteDocument>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteDocument>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Document Library — upload a new version (supersedes prior version in retrieval)
+ */
+export const getAtelierUploadDocumentVersionUrl = (id: string) => {
+  return `/api/atelier/documents/${id}/versions`;
+};
+
+export const atelierUploadDocumentVersion = async (
+  id: string,
+  atelierUploadDocumentVersionBody: AtelierUploadDocumentVersionBody,
+  options?: RequestInit,
+): Promise<AtelierUploadDocumentVersion201> => {
+  const formData = new FormData();
+  formData.append(`file`, atelierUploadDocumentVersionBody.file);
+
+  return customFetch<AtelierUploadDocumentVersion201>(
+    getAtelierUploadDocumentVersionUrl(id),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getAtelierUploadDocumentVersionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadDocumentVersion>>,
+    TError,
+    { id: string; data: BodyType<AtelierUploadDocumentVersionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUploadDocumentVersion>>,
+  TError,
+  { id: string; data: BodyType<AtelierUploadDocumentVersionBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUploadDocumentVersion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUploadDocumentVersion>>,
+    { id: string; data: BodyType<AtelierUploadDocumentVersionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUploadDocumentVersion(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUploadDocumentVersionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUploadDocumentVersion>>
+>;
+export type AtelierUploadDocumentVersionMutationBody =
+  BodyType<AtelierUploadDocumentVersionBody>;
+export type AtelierUploadDocumentVersionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — upload a new version (supersedes prior version in retrieval)
+ */
+export const useAtelierUploadDocumentVersion = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadDocumentVersion>>,
+    TError,
+    { id: string; data: BodyType<AtelierUploadDocumentVersionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUploadDocumentVersion>>,
+  TError,
+  { id: string; data: BodyType<AtelierUploadDocumentVersionBody> },
+  TContext
+> => {
+  return useMutation(getAtelierUploadDocumentVersionMutationOptions(options));
+};
+
+/**
+ * @summary Document Library — stream a version's bytes (defaults to the current version)
+ */
+export const getAtelierDownloadDocumentUrl = (
+  id: string,
+  params?: AtelierDownloadDocumentParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/documents/${id}/download?${stringifiedParams}`
+    : `/api/atelier/documents/${id}/download`;
+};
+
+export const atelierDownloadDocument = async (
+  id: string,
+  params?: AtelierDownloadDocumentParams,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getAtelierDownloadDocumentUrl(id, params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierDownloadDocumentQueryKey = (
+  id: string,
+  params?: AtelierDownloadDocumentParams,
+) => {
+  return [
+    `/api/atelier/documents/${id}/download`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierDownloadDocumentQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierDownloadDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  params?: AtelierDownloadDocumentParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierDownloadDocumentQueryKey(id, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierDownloadDocument>>
+  > = ({ signal }) =>
+    atelierDownloadDocument(id, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierDownloadDocument>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierDownloadDocumentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDownloadDocument>>
+>;
+export type AtelierDownloadDocumentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — stream a version's bytes (defaults to the current version)
+ */
+
+export function useAtelierDownloadDocument<
+  TData = Awaited<ReturnType<typeof atelierDownloadDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  params?: AtelierDownloadDocumentParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierDownloadDocumentQueryOptions(
+    id,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Document Library — grant a person access to an org-level document
+ */
+export const getAtelierGrantDocumentAccessUrl = (id: string) => {
+  return `/api/atelier/documents/${id}/access`;
+};
+
+export const atelierGrantDocumentAccess = async (
+  id: string,
+  atelierGrantDocumentAccessBody: AtelierGrantDocumentAccessBody,
+  options?: RequestInit,
+): Promise<AtelierGrantDocumentAccess201> => {
+  return customFetch<AtelierGrantDocumentAccess201>(
+    getAtelierGrantDocumentAccessUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierGrantDocumentAccessBody),
+    },
+  );
+};
+
+export const getAtelierGrantDocumentAccessMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierGrantDocumentAccess>>,
+    TError,
+    { id: string; data: BodyType<AtelierGrantDocumentAccessBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierGrantDocumentAccess>>,
+  TError,
+  { id: string; data: BodyType<AtelierGrantDocumentAccessBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierGrantDocumentAccess"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierGrantDocumentAccess>>,
+    { id: string; data: BodyType<AtelierGrantDocumentAccessBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierGrantDocumentAccess(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierGrantDocumentAccessMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGrantDocumentAccess>>
+>;
+export type AtelierGrantDocumentAccessMutationBody =
+  BodyType<AtelierGrantDocumentAccessBody>;
+export type AtelierGrantDocumentAccessMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — grant a person access to an org-level document
+ */
+export const useAtelierGrantDocumentAccess = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierGrantDocumentAccess>>,
+    TError,
+    { id: string; data: BodyType<AtelierGrantDocumentAccessBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierGrantDocumentAccess>>,
+  TError,
+  { id: string; data: BodyType<AtelierGrantDocumentAccessBody> },
+  TContext
+> => {
+  return useMutation(getAtelierGrantDocumentAccessMutationOptions(options));
+};
+
+/**
+ * @summary Document Library — revoke a person's access grant
+ */
+export const getAtelierRevokeDocumentAccessUrl = (
+  id: string,
+  userId: string,
+) => {
+  return `/api/atelier/documents/${id}/access/${userId}`;
+};
+
+export const atelierRevokeDocumentAccess = async (
+  id: string,
+  userId: string,
+  options?: RequestInit,
+): Promise<AtelierRevokeDocumentAccess200> => {
+  return customFetch<AtelierRevokeDocumentAccess200>(
+    getAtelierRevokeDocumentAccessUrl(id, userId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierRevokeDocumentAccessMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>,
+    TError,
+    { id: string; userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>,
+  TError,
+  { id: string; userId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierRevokeDocumentAccess"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>,
+    { id: string; userId: string }
+  > = (props) => {
+    const { id, userId } = props ?? {};
+
+    return atelierRevokeDocumentAccess(id, userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRevokeDocumentAccessMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>
+>;
+
+export type AtelierRevokeDocumentAccessMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Document Library — revoke a person's access grant
+ */
+export const useAtelierRevokeDocumentAccess = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>,
+    TError,
+    { id: string; userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRevokeDocumentAccess>>,
+  TError,
+  { id: string; userId: string },
+  TContext
+> => {
+  return useMutation(getAtelierRevokeDocumentAccessMutationOptions(options));
+};
 
 /**
  * @summary Me lens — upload/replace the caller's own profile photo

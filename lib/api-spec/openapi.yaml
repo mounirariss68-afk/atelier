@@ -234,6 +234,238 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /atelier/documents:
+    get:
+      operationId: atelierListDocuments
+      tags: [atelier]
+      summary: Document Library — list documents visible to the caller (ACL-filtered)
+      parameters:
+        - name: accountId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: engagementId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: category
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Visible documents, most recently updated first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [documents]
+                properties:
+                  documents:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierLibraryDocument" }
+    post:
+      operationId: atelierCreateDocument
+      tags: [atelier]
+      summary: Document Library — upload a new document (multipart)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, file]
+              properties:
+                title: { type: string, maxLength: 200 }
+                category: { type: string, enum: [proposal, client_deliverable, contract, template, other] }
+                accountId: { type: string }
+                engagementId: { type: string }
+                notes: { type: string, maxLength: 2000 }
+                aiRetrieval: { type: string, enum: ["true", "false"] }
+                file: { type: string, format: binary, description: "Document file, ≤50 MB" }
+      responses:
+        "201":
+          description: Created document with its first version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/AtelierLibraryDocument" }
+                  rag: { $ref: "#/components/schemas/AtelierLibraryRagResult" }
+  /atelier/documents/{id}:
+    get:
+      operationId: atelierGetDocument
+      tags: [atelier]
+      summary: Document Library — one document with versions, grants and audit trail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Document detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierLibraryDocumentDetail"
+    patch:
+      operationId: atelierUpdateDocument
+      tags: [atelier]
+      summary: Document Library — edit title/category/notes or flip the AI-retrieval toggle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200 }
+                category: { type: string, enum: [proposal, client_deliverable, contract, template, other] }
+                notes: { type: string, maxLength: 2000, nullable: true }
+                aiRetrieval: { type: boolean }
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/AtelierLibraryDocument" }
+    delete:
+      operationId: atelierDeleteDocument
+      tags: [atelier]
+      summary: Document Library — delete a document (purges blobs, versions and embeddings)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, id]
+                properties:
+                  status: { type: string }
+                  id: { type: string }
+  /atelier/documents/{id}/versions:
+    post:
+      operationId: atelierUploadDocumentVersion
+      tags: [atelier]
+      summary: Document Library — upload a new version (supersedes prior version in retrieval)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: "Document file, ≤50 MB" }
+      responses:
+        "201":
+          description: Created version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version: { $ref: "#/components/schemas/AtelierLibraryDocumentVersion" }
+                  rag: { $ref: "#/components/schemas/AtelierLibraryRagResult" }
+  /atelier/documents/{id}/download:
+    get:
+      operationId: atelierDownloadDocument
+      tags: [atelier]
+      summary: Document Library — stream a version's bytes (defaults to the current version)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: versionId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: The stored document bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /atelier/documents/{id}/access:
+    post:
+      operationId: atelierGrantDocumentAccess
+      tags: [atelier]
+      summary: Document Library — grant a person access to an org-level document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId]
+              properties:
+                userId: { type: string }
+      responses:
+        "201":
+          description: Granted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, userId]
+                properties:
+                  status: { type: string }
+                  userId: { type: string }
+  /atelier/documents/{id}/access/{userId}:
+    delete:
+      operationId: atelierRevokeDocumentAccess
+      tags: [atelier]
+      summary: Document Library — revoke a person's access grant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, userId]
+                properties:
+                  status: { type: string }
+                  userId: { type: string }
   /atelier/me/photo:
     post:
       operationId: atelierUploadMyPhoto
@@ -5794,6 +6026,86 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AtelierSelfPerson"
             - type: "null"
+
+    AtelierLibraryDocumentVersion:
+      type: object
+      required: [id, versionNumber, fileName, mime, sizeBytes, sha256, chunkCount, createdAt]
+      properties:
+        id: { type: string }
+        versionNumber: { type: number }
+        fileName: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: number }
+        sha256: { type: string }
+        uploaderUserId: { type: ["string", "null"] }
+        extractedKind: { type: ["string", "null"] }
+        chunkCount: { type: number }
+        extractionWarnings:
+          type: array
+          items: { type: string }
+        createdAt: { type: string }
+
+    AtelierLibraryDocument:
+      type: object
+      required: [id, title, category, uploaderUserId, uploaderLabel, aiRetrieval, status, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        category: { type: string }
+        accountId: { type: ["string", "null"] }
+        engagementId: { type: ["string", "null"] }
+        uploaderUserId: { type: string }
+        uploaderLabel: { type: string }
+        currentVersionId: { type: ["string", "null"] }
+        aiRetrieval: { type: boolean }
+        notes: { type: ["string", "null"] }
+        status: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        currentVersion:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierLibraryDocumentVersion"
+            - type: "null"
+
+    AtelierLibraryRagResult:
+      type: object
+      required: [kind, chunkCount, warnings]
+      properties:
+        kind: { type: string }
+        chunkCount: { type: number }
+        warnings:
+          type: array
+          items: { type: string }
+
+    AtelierLibraryDocumentDetail:
+      type: object
+      required: [document, versions, access, audit]
+      properties:
+        document: { $ref: "#/components/schemas/AtelierLibraryDocument" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierLibraryDocumentVersion" }
+        access:
+          type: array
+          items:
+            type: object
+            required: [id, userId, grantedBy, createdAt]
+            properties:
+              id: { type: string }
+              userId: { type: string }
+              grantedBy: { type: string }
+              createdAt: { type: string }
+        audit:
+          type: array
+          items:
+            type: object
+            required: [id, action, actorLabel, createdAt]
+            properties:
+              id: { type: string }
+              action: { type: string }
+              actorLabel: { type: string }
+              summary: { type: ["string", "null"] }
+              createdAt: { type: string }
 
     AtelierSelfDocument:
       type: object

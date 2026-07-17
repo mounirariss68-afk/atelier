@@ -18,6 +18,7 @@ import { CharterTab } from "@/components/tabs/CharterTab";
 import { WorkplanTab } from "@/components/tabs/WorkplanTab";
 import { DeliverablesTab } from "@/components/tabs/DeliverablesTab";
 import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
+import { DocumentLibraryPanel } from "@/pages/Documents";
 import { AgentsTab } from "@/components/tabs/AgentsTab";
 import { ProcessesTab } from "@/components/tabs/ProcessesTab";
 import { FinancialsTab } from "@/components/tabs/FinancialsTab";
@@ -30,6 +31,7 @@ const TABS = [
   { id: 'agents', label: 'Agents' },
   { id: 'processes', label: 'Processes' },
   { id: 'artifacts', label: 'Artifacts' },
+  { id: 'documents', label: 'Documents' },
   { id: 'audit', label: 'Audit Trail' }
 ];
 
@@ -144,6 +146,7 @@ export default function Engagement() {
           {activeTab === 'deliverables' && <DeliverablesTab engId={eng.id} />}
           {activeTab === 'financials' && <FinancialsTab engId={eng.id} />}
           {activeTab === 'artifacts' && <ArtifactsTab engId={eng.id} />}
+          {activeTab === 'documents' && <DocumentLibraryPanel engagementId={eng.id} />}
           {activeTab === 'agents' && <AgentsTab engId={eng.id} />}
           {activeTab === 'audit' && <AuditTab entityType="engagement" entityId={eng.id} />}
           {activeTab === 'processes' && <ProcessesTab engId={eng.id} />}

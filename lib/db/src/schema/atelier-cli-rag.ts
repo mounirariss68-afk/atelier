@@ -31,6 +31,7 @@ import {
   pgTable,
   text,
   jsonb,
+  boolean,
   timestamp,
   integer,
   index,
@@ -76,6 +77,13 @@ export const atelierDocumentChunkEmbeddings = pgTable(
     provider: text("provider").notNull(),
     dim: integer("dim").notNull(),
     vec: jsonb("vec").$type<number[]>().notNull(),
+    /**
+     * Task #61 — retrieval opt-out. Rows with retrievable=false stay
+     * stored (and access-controlled) but are never surfaced by
+     * searchDocumentChunks. Used by the Document Library's per-document
+     * "available to AI retrieval" toggle.
+     */
+    retrievable: boolean("retrievable").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

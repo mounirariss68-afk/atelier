@@ -146,6 +146,7 @@ export function TopNav() {
     { href: "/press", label: "Press" },
     { href: "/guardhouse", label: "Guardhouse" },
     { href: "/reports", label: "Reports" },
+    { href: "/documents", label: "Documents" },
     { href: "/wallet", label: "Wallet" },
     { href: "/settings", label: "Settings" },
     { href: "/admin", label: "Admin", gated: true },

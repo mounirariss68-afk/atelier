@@ -438,6 +438,261 @@ export const AtelierDownloadMyDocumentParams = zod.object({
 });
 
 /**
+ * @summary Document Library — list documents visible to the caller (ACL-filtered)
+ */
+export const AtelierListDocumentsQueryParams = zod.object({
+  accountId: zod.coerce.string().optional(),
+  engagementId: zod.coerce.string().optional(),
+  category: zod.coerce.string().optional(),
+});
+
+export const AtelierListDocumentsResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      category: zod.string(),
+      accountId: zod.string().nullish(),
+      engagementId: zod.string().nullish(),
+      uploaderUserId: zod.string(),
+      uploaderLabel: zod.string(),
+      currentVersionId: zod.string().nullish(),
+      aiRetrieval: zod.boolean(),
+      notes: zod.string().nullish(),
+      status: zod.string(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      currentVersion: zod
+        .union([
+          zod.object({
+            id: zod.string(),
+            versionNumber: zod.number(),
+            fileName: zod.string(),
+            mime: zod.string(),
+            sizeBytes: zod.number(),
+            sha256: zod.string(),
+            uploaderUserId: zod.string().nullish(),
+            extractedKind: zod.string().nullish(),
+            chunkCount: zod.number(),
+            extractionWarnings: zod.array(zod.string()).optional(),
+            createdAt: zod.string(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Document Library — upload a new document (multipart)
+ */
+export const atelierCreateDocumentBodyTitleMax = 200;
+
+export const atelierCreateDocumentBodyNotesMax = 2000;
+
+export const AtelierCreateDocumentBody = zod.object({
+  title: zod.string().max(atelierCreateDocumentBodyTitleMax),
+  category: zod
+    .enum(["proposal", "client_deliverable", "contract", "template", "other"])
+    .optional(),
+  accountId: zod.string().optional(),
+  engagementId: zod.string().optional(),
+  notes: zod.string().max(atelierCreateDocumentBodyNotesMax).optional(),
+  aiRetrieval: zod.enum(["true", "false"]).optional(),
+  file: zod.instanceof(File).describe("Document file, ≤50 MB"),
+});
+
+/**
+ * @summary Document Library — one document with versions, grants and audit trail
+ */
+export const AtelierGetDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierGetDocumentResponse = zod.object({
+  document: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    category: zod.string(),
+    accountId: zod.string().nullish(),
+    engagementId: zod.string().nullish(),
+    uploaderUserId: zod.string(),
+    uploaderLabel: zod.string(),
+    currentVersionId: zod.string().nullish(),
+    aiRetrieval: zod.boolean(),
+    notes: zod.string().nullish(),
+    status: zod.string(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    currentVersion: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          mime: zod.string(),
+          sizeBytes: zod.number(),
+          sha256: zod.string(),
+          uploaderUserId: zod.string().nullish(),
+          extractedKind: zod.string().nullish(),
+          chunkCount: zod.number(),
+          extractionWarnings: zod.array(zod.string()).optional(),
+          createdAt: zod.string(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+  }),
+  versions: zod.array(
+    zod.object({
+      id: zod.string(),
+      versionNumber: zod.number(),
+      fileName: zod.string(),
+      mime: zod.string(),
+      sizeBytes: zod.number(),
+      sha256: zod.string(),
+      uploaderUserId: zod.string().nullish(),
+      extractedKind: zod.string().nullish(),
+      chunkCount: zod.number(),
+      extractionWarnings: zod.array(zod.string()).optional(),
+      createdAt: zod.string(),
+    }),
+  ),
+  access: zod.array(
+    zod.object({
+      id: zod.string(),
+      userId: zod.string(),
+      grantedBy: zod.string(),
+      createdAt: zod.string(),
+    }),
+  ),
+  audit: zod.array(
+    zod.object({
+      id: zod.string(),
+      action: zod.string(),
+      actorLabel: zod.string(),
+      summary: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Document Library — edit title/category/notes or flip the AI-retrieval toggle
+ */
+export const AtelierUpdateDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateDocumentBodyTitleMax = 200;
+
+export const atelierUpdateDocumentBodyNotesMax = 2000;
+
+export const AtelierUpdateDocumentBody = zod.object({
+  title: zod.string().max(atelierUpdateDocumentBodyTitleMax).optional(),
+  category: zod
+    .enum(["proposal", "client_deliverable", "contract", "template", "other"])
+    .optional(),
+  notes: zod.string().max(atelierUpdateDocumentBodyNotesMax).nullish(),
+  aiRetrieval: zod.boolean().optional(),
+});
+
+export const AtelierUpdateDocumentResponse = zod.object({
+  document: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    category: zod.string(),
+    accountId: zod.string().nullish(),
+    engagementId: zod.string().nullish(),
+    uploaderUserId: zod.string(),
+    uploaderLabel: zod.string(),
+    currentVersionId: zod.string().nullish(),
+    aiRetrieval: zod.boolean(),
+    notes: zod.string().nullish(),
+    status: zod.string(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    currentVersion: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          mime: zod.string(),
+          sizeBytes: zod.number(),
+          sha256: zod.string(),
+          uploaderUserId: zod.string().nullish(),
+          extractedKind: zod.string().nullish(),
+          chunkCount: zod.number(),
+          extractionWarnings: zod.array(zod.string()).optional(),
+          createdAt: zod.string(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+  }),
+});
+
+/**
+ * @summary Document Library — delete a document (purges blobs, versions and embeddings)
+ */
+export const AtelierDeleteDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteDocumentResponse = zod.object({
+  status: zod.string(),
+  id: zod.string(),
+});
+
+/**
+ * @summary Document Library — upload a new version (supersedes prior version in retrieval)
+ */
+export const AtelierUploadDocumentVersionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUploadDocumentVersionBody = zod.object({
+  file: zod.instanceof(File).describe("Document file, ≤50 MB"),
+});
+
+/**
+ * @summary Document Library — stream a version's bytes (defaults to the current version)
+ */
+export const AtelierDownloadDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDownloadDocumentQueryParams = zod.object({
+  versionId: zod.coerce.string().optional(),
+});
+
+/**
+ * @summary Document Library — grant a person access to an org-level document
+ */
+export const AtelierGrantDocumentAccessParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierGrantDocumentAccessBody = zod.object({
+  userId: zod.string(),
+});
+
+/**
+ * @summary Document Library — revoke a person's access grant
+ */
+export const AtelierRevokeDocumentAccessParams = zod.object({
+  id: zod.coerce.string(),
+  userId: zod.coerce.string(),
+});
+
+export const AtelierRevokeDocumentAccessResponse = zod.object({
+  status: zod.string(),
+  userId: zod.string(),
+});
+
+/**
  * @summary Me lens — upload/replace the caller's own profile photo
  */
 export const AtelierUploadMyPhotoBody = zod.object({

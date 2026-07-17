@@ -11,3 +11,4 @@ export * from "./atelier-l2c-cash";
 export * from "./atelier-cash-overrides";
 export * from "./atelier-finance-plan-commits";
 export * from "./atelier-cli-rag";
+export * from "./atelier-documents";

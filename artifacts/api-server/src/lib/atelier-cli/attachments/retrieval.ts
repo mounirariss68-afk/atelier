@@ -254,10 +254,33 @@ async function aclPredicate(persona: {
     role: persona.role,
   } as Parameters<typeof accessibleEngagementIds>[0]);
 
+  // Task #61 — org-level Document Library grants: chunks of a granted
+  // document's current version are retrievable by the grantee. Chunk
+  // rows are keyed on the version id via attachment_id. Grants only
+  // exist for ORG-LEVEL documents (no account/engagement scope) — the
+  // routes enforce that — but we re-assert it here so a stray grant row
+  // on a scoped document can never widen the account/engagement ACL.
+  const granted = await db.execute<{ current_version_id: string }>(sql`
+    SELECT d.current_version_id
+    FROM atelier_documents d
+    JOIN atelier_document_access a ON a.document_id = d.id
+    WHERE a.user_id = ${persona.id}
+      AND a.status = 'active'
+      AND d.status = 'active'
+      AND d.account_id IS NULL
+      AND d.engagement_id IS NULL
+      AND d.current_version_id IS NOT NULL
+  `);
+  const grantedVersionIds = granted.rows.map((r) => r.current_version_id);
+  const grantClause =
+    grantedVersionIds.length > 0
+      ? sql` OR attachment_id IN ${grantedVersionIds}`
+      : sql``;
+
   if (acl.all === true) {
     // Can see all engagements → effectively org-wide for scoped docs,
     // but still hide other people's unscoped personal uploads.
-    return sql`(uploader_user_id = ${persona.id} OR engagement_id IS NOT NULL OR account_id IS NOT NULL)`;
+    return sql`(uploader_user_id = ${persona.id} OR engagement_id IS NOT NULL OR account_id IS NOT NULL${grantClause})`;
   }
 
   const engIds = [...acl.ids];
@@ -279,7 +302,7 @@ async function aclPredicate(persona: {
     engIds.length > 0 ? sql`engagement_id IN ${engIds}` : sql`false`;
   const accClause =
     accountIds.length > 0 ? sql`account_id IN ${accountIds}` : sql`false`;
-  return sql`(uploader_user_id = ${persona.id} OR ${engClause} OR ${accClause})`;
+  return sql`(uploader_user_id = ${persona.id} OR ${engClause} OR ${accClause}${grantClause})`;
 }
 
 /**
@@ -336,6 +359,7 @@ export async function searchDocumentChunks(args: {
       FROM atelier_document_chunk_embeddings
       WHERE org_id = ${args.persona.orgId}
         AND provider = ${provider}
+        AND retrievable = true
         AND embedding IS NOT NULL${aclSql}${attClause}
       ORDER BY embedding <=> ${lit}::vector
       LIMIT ${k * 3}
@@ -365,6 +389,7 @@ export async function searchDocumentChunks(args: {
       FROM atelier_document_chunk_embeddings
       WHERE org_id = ${args.persona.orgId}
         AND provider = ${provider}
+        AND retrievable = true
         AND text % ${q}${aclSql}${attClause}
       ORDER BY score DESC
       LIMIT ${k * 3}
@@ -424,7 +449,8 @@ async function bruteForceCosine(args: {
            summary, text, vec
     FROM atelier_document_chunk_embeddings
     WHERE org_id = ${args.persona.orgId}
-      AND provider = ${args.provider}${args.aclSql}${args.attClause}
+      AND provider = ${args.provider}
+      AND retrievable = true${args.aclSql}${args.attClause}
   `);
   return res.rows
     .map((r) => {

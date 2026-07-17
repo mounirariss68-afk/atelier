@@ -2337,6 +2337,72 @@ export interface AtelierSelfProfilePatchResponse {
   person: AtelierSelfPerson | null;
 }
 
+export interface AtelierLibraryDocumentVersion {
+  id: string;
+  versionNumber: number;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  sha256: string;
+  /** @nullable */
+  uploaderUserId?: string | null;
+  /** @nullable */
+  extractedKind?: string | null;
+  chunkCount: number;
+  extractionWarnings?: string[];
+  createdAt: string;
+}
+
+export interface AtelierLibraryDocument {
+  id: string;
+  title: string;
+  category: string;
+  /** @nullable */
+  accountId?: string | null;
+  /** @nullable */
+  engagementId?: string | null;
+  uploaderUserId: string;
+  uploaderLabel: string;
+  /** @nullable */
+  currentVersionId?: string | null;
+  aiRetrieval: boolean;
+  /** @nullable */
+  notes?: string | null;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion?: AtelierLibraryDocumentVersion | null;
+}
+
+export interface AtelierLibraryRagResult {
+  kind: string;
+  chunkCount: number;
+  warnings: string[];
+}
+
+export type AtelierLibraryDocumentDetailAccessItem = {
+  id: string;
+  userId: string;
+  grantedBy: string;
+  createdAt: string;
+};
+
+export type AtelierLibraryDocumentDetailAuditItem = {
+  id: string;
+  action: string;
+  actorLabel: string;
+  /** @nullable */
+  summary?: string | null;
+  createdAt: string;
+};
+
+export interface AtelierLibraryDocumentDetail {
+  document: AtelierLibraryDocument;
+  versions: AtelierLibraryDocumentVersion[];
+  access: AtelierLibraryDocumentDetailAccessItem[];
+  audit: AtelierLibraryDocumentDetailAuditItem[];
+}
+
 export interface AtelierSelfDocument {
   id: string;
   kind: string;
@@ -5312,6 +5378,110 @@ export type AtelierReplaceMyDocumentScanBody = {
 
 export type AtelierReplaceMyDocumentScan200 = {
   document: AtelierSelfDocument;
+};
+
+export type AtelierListDocumentsParams = {
+  accountId?: string;
+  engagementId?: string;
+  category?: string;
+};
+
+export type AtelierListDocuments200 = {
+  documents: AtelierLibraryDocument[];
+};
+
+export type AtelierCreateDocumentBodyCategory =
+  (typeof AtelierCreateDocumentBodyCategory)[keyof typeof AtelierCreateDocumentBodyCategory];
+
+export const AtelierCreateDocumentBodyCategory = {
+  proposal: "proposal",
+  client_deliverable: "client_deliverable",
+  contract: "contract",
+  template: "template",
+  other: "other",
+} as const;
+
+export type AtelierCreateDocumentBodyAiRetrieval =
+  (typeof AtelierCreateDocumentBodyAiRetrieval)[keyof typeof AtelierCreateDocumentBodyAiRetrieval];
+
+export const AtelierCreateDocumentBodyAiRetrieval = {
+  true: "true",
+  false: "false",
+} as const;
+
+export type AtelierCreateDocumentBody = {
+  /** @maxLength 200 */
+  title: string;
+  category?: AtelierCreateDocumentBodyCategory;
+  accountId?: string;
+  engagementId?: string;
+  /** @maxLength 2000 */
+  notes?: string;
+  aiRetrieval?: AtelierCreateDocumentBodyAiRetrieval;
+  /** Document file, ≤50 MB */
+  file: Blob;
+};
+
+export type AtelierCreateDocument201 = {
+  document: AtelierLibraryDocument;
+  rag?: AtelierLibraryRagResult;
+};
+
+export type AtelierUpdateDocumentBodyCategory =
+  (typeof AtelierUpdateDocumentBodyCategory)[keyof typeof AtelierUpdateDocumentBodyCategory];
+
+export const AtelierUpdateDocumentBodyCategory = {
+  proposal: "proposal",
+  client_deliverable: "client_deliverable",
+  contract: "contract",
+  template: "template",
+  other: "other",
+} as const;
+
+export type AtelierUpdateDocumentBody = {
+  /** @maxLength 200 */
+  title?: string;
+  category?: AtelierUpdateDocumentBodyCategory;
+  /** @maxLength 2000 */
+  notes?: string | null;
+  aiRetrieval?: boolean;
+};
+
+export type AtelierUpdateDocument200 = {
+  document: AtelierLibraryDocument;
+};
+
+export type AtelierDeleteDocument200 = {
+  status: string;
+  id: string;
+};
+
+export type AtelierUploadDocumentVersionBody = {
+  /** Document file, ≤50 MB */
+  file: Blob;
+};
+
+export type AtelierUploadDocumentVersion201 = {
+  version: AtelierLibraryDocumentVersion;
+  rag?: AtelierLibraryRagResult;
+};
+
+export type AtelierDownloadDocumentParams = {
+  versionId?: string;
+};
+
+export type AtelierGrantDocumentAccessBody = {
+  userId: string;
+};
+
+export type AtelierGrantDocumentAccess201 = {
+  status: string;
+  userId: string;
+};
+
+export type AtelierRevokeDocumentAccess200 = {
+  status: string;
+  userId: string;
 };
 
 export type AtelierUploadMyPhotoBody = {

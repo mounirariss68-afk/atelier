@@ -42,6 +42,7 @@ import {
   atelierPaneAItems,
 } from "@workspace/db";
 import { purgeAttachmentsByScope } from "./atelier-cli/attachments/index.js";
+import { purgeDocumentsByScope } from "./atelier-documents.js";
 
 export interface LifecycleActor {
   id: string;
@@ -444,6 +445,24 @@ export async function permanentlyDeleteAccount(
   });
   for (const eng of engRows) {
     await purgeAttachmentsByScope({
+      orgId: actor.orgId,
+      engagementId: eng.id,
+      actorId: actor.id,
+      actorLabel: actor.name,
+    });
+  }
+
+  // Task #61 — Document Library: purge library documents (metadata,
+  // versions, blobs, chunk vectors) scoped to this account or any of
+  // its engagements.
+  await purgeDocumentsByScope({
+    orgId: actor.orgId,
+    accountId: acc.id,
+    actorId: actor.id,
+    actorLabel: actor.name,
+  });
+  for (const eng of engRows) {
+    await purgeDocumentsByScope({
       orgId: actor.orgId,
       engagementId: eng.id,
       actorId: actor.id,
