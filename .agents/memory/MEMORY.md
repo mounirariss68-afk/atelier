@@ -50,3 +50,4 @@
 - [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
 - [Atelier performance & learning](atelier-perf-learning.md) — hrNotes never in self shape; contractors 403 on reviews/goals but DO get audience-filtered /me/learning; name inline orval bodies.
 - [Me-lens self-service profile](atelier-me-lens.md) — person docs/photos live in private object storage (persondoc: refs), readable only by owner or HR; sensitive HR fields must stay out of the self-PATCH whitelist.
+- [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF is server-side pdf-lib from real 90×50mm template EMUs; rasterize checks via pdftoppm (no gs).

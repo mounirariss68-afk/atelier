@@ -52,6 +52,12 @@ import {
   dropPersonDocBytes,
   PERSON_DOC_PREFIX,
 } from "../../lib/personDocStorage.js";
+import {
+  loadBioTemplate,
+  generateBusinessCardPdf,
+  BIO_TEMPLATE_FILENAME,
+  PPTX_MIME,
+} from "../../lib/atelier-business-card.js";
 import { assertAuditAction } from "./auditContract";
 
 const router: IRouter = Router();
@@ -371,7 +377,9 @@ router.get("/me/documents", async (req, res, next) => {
       )
       .orderBy(desc(atelierPersonDocuments.uploadedAt));
     res.json({
-      documents: docs.filter((d) => d.kind !== "profile_photo").map(docWire),
+      documents: docs
+        .filter((d) => d.kind !== "profile_photo" && d.kind !== "biography")
+        .map(docWire),
     });
   } catch (err) {
     next(err);
@@ -659,6 +667,171 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
     );
     res.setHeader("Cache-Control", "private, no-store");
     res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------
+// Task #52 — Biography PPTX (download template → fill offline → upload)
+// and the business-card PDF with the person's real vCard QR.
+//
+// Uploaded bios are atelier_person_documents rows with kind "biography"
+// (excluded from the generic /me/documents list above). Re-uploads create
+// a NEW row (version = prior count + 1) so history is preserved; bytes
+// live in private object storage and stream only through the owner route
+// (/me/documents/:id/download works for biography rows) or the HR-tier
+// roster download route.
+// ------------------------------------------------------------------
+const BIO_MAX_BYTES = 40 * 1024 * 1024; // the template itself is ~37 MB
+const bioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: BIO_MAX_BYTES, files: 1 },
+});
+
+function isPptxUpload(file: Express.Multer.File): boolean {
+  if (file.mimetype === PPTX_MIME) return true;
+  // Browsers occasionally send octet-stream; accept when the extension
+  // AND the OOXML zip magic (PK\x03\x04) both agree.
+  return (
+    file.mimetype === "application/octet-stream" &&
+    /\.pptx$/i.test(file.originalname || "") &&
+    file.buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+  );
+}
+
+// @cli-skip: self-scope static template download; no CLI shape (Task #52)
+router.get("/me/bio/template", async (req, res, next) => {
+  try {
+    const ctx = await requireSelfPerson(req, res);
+    if (!ctx) return;
+    const bytes = loadBioTemplate();
+    res.setHeader("Content-Type", PPTX_MIME);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${BIO_TEMPLATE_FILENAME}"`,
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(bytes);
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function ownBioRows(ctx: {
+  person: SelfPersonRow;
+}): Promise<Array<typeof atelierPersonDocuments.$inferSelect>> {
+  return db
+    .select()
+    .from(atelierPersonDocuments)
+    .where(
+      and(
+        eq(atelierPersonDocuments.personType, ctx.person.workerType),
+        eq(atelierPersonDocuments.personId, ctx.person.row.id),
+        eq(atelierPersonDocuments.kind, "biography"),
+        isNull(atelierPersonDocuments.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierPersonDocuments.uploadedAt));
+}
+
+function bioWire(d: typeof atelierPersonDocuments.$inferSelect) {
+  return {
+    ...docWire(d),
+    downloadUrl: `/api/atelier/me/documents/${d.id}/download`,
+  };
+}
+
+// @cli-skip: self-scope biography list; no CLI shape (Task #52)
+router.get("/me/bio", async (req, res, next) => {
+  try {
+    const ctx = await requireSelfPerson(req, res);
+    if (!ctx) return;
+    const rows = await ownBioRows(ctx);
+    res.json({ biographies: rows.map(bioWire) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope multipart biography upload; no CLI shape (Task #52)
+router.post(
+  "/me/bio",
+  multerWrapped(bioUpload.single("file")),
+  async (req, res, next) => {
+    try {
+      const ctx = await requireSelfPerson(req, res);
+      if (!ctx) return;
+      const file = (req as Request & { file?: Express.Multer.File }).file;
+      if (!file) {
+        res.status(400).json({ error: "file-required" });
+        return;
+      }
+      if (!isPptxUpload(file)) {
+        res.status(415).json({ error: "unsupported-file-type", allowed: [PPTX_MIME] });
+        return;
+      }
+      const prior = await ownBioRows(ctx);
+      const version = prior.length + 1;
+      const stored = await storePersonDocBytes(file.buffer, PPTX_MIME);
+      const id = rid("pdoc");
+      const [doc] = await db
+        .insert(atelierPersonDocuments)
+        .values({
+          id,
+          orgId: ctx.me.orgId,
+          personType: ctx.person.workerType,
+          personId: ctx.person.row.id,
+          kind: "biography",
+          title: `Biography v${version}`,
+          fileRef: stored.fileRef,
+          fileName: file.originalname || `biography-v${version}.pptx`,
+          mime: PPTX_MIME,
+          sizeBytes: stored.sizeBytes,
+          uploadedByUserId: ctx.me.id,
+          createdByUserId: ctx.me.id,
+        })
+        .returning();
+      await audit({
+        me: ctx.me,
+        entityType: "person_document",
+        entityId: id,
+        action: "person_document.self_uploaded",
+        payload: { kind: "biography", version, fileName: doc.fileName },
+        summary: `${ctx.me.name} uploaded their biography (v${version})`,
+      });
+      res.status(201).json({ biography: bioWire(doc), version });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// @cli-skip: self-scope generated PDF download; no CLI shape (Task #52)
+router.get("/me/business-card.pdf", async (req, res, next) => {
+  try {
+    const ctx = await requireSelfPerson(req, res);
+    if (!ctx) return;
+    const row = ctx.person.row;
+    const { pdf, filename } = await generateBusinessCardPdf({
+      fullName: row.fullName,
+      title: ctx.person.workerType === "employee" ? (ctx.person.row.title ?? null) : null,
+      email: row.email ?? null,
+      cellPhones: (row.cellPhones ?? []) as Array<{ country: string; number: string }>,
+      officeAddress: row.officeAddress ?? null,
+    });
+    await audit({
+      me: ctx.me,
+      entityType: ctx.person.workerType,
+      entityId: row.id,
+      action: "document.downloaded",
+      payload: { personId: row.id, kind: "business_card_pdf", self: true },
+      summary: `${ctx.me.name} generated their business-card PDF`,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(pdf);
   } catch (err) {
     next(err);
   }

@@ -70,6 +70,7 @@ export default function MeProfileSection({
         <PhotoAndContactCard loading={loading} profile={profile} />
         <EmploymentCard loading={loading} profile={profile} />
       </div>
+      <BioAndCardCard />
       <DocumentsCard />
       <div className="grid gap-4 md:grid-cols-2">
         <DependentsCard />
@@ -399,6 +400,168 @@ function EmploymentCard({ loading, profile }: { loading: boolean; profile: Profi
         </div>
       ) : (
         <p className="text-sm text-text-mute">No roster record linked yet.</p>
+      )}
+    </Card>
+  );
+}
+
+// ------------------------------------------------------------------
+// Task #52 — Biography PPTX template flow + business-card PDF.
+// Download the official template, fill it offline, upload the completed
+// deck (versioned on re-upload); and generate a print-ready two-sided
+// business-card PDF with the person's real vCard QR.
+// ------------------------------------------------------------------
+interface BioVersion {
+  id: string;
+  title: string;
+  fileName: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string;
+  downloadUrl: string;
+}
+
+function fmtBytes(n: number | null): string {
+  if (n == null) return "";
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+function BioAndCardCard() {
+  const [bios, setBios] = React.useState<BioVersion[] | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  const load = React.useCallback(async () => {
+    try {
+      const r = await fetch(`${API_BASE}/me/bio`, { credentials: "include" });
+      if (!r.ok) throw new Error(`Could not load biographies (${r.status})`);
+      const d = (await r.json()) as { biographies?: BioVersion[] };
+      setBios(d.biographies ?? []);
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+      setBios([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function upload(file: File) {
+    setBusy(true);
+    setErr(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`${API_BASE}/me/bio`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = (await r.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(
+          body?.error === "unsupported-file-type"
+            ? "Please upload a .pptx file (the filled-in Cognirise template)."
+            : body?.error ?? `Upload failed (${r.status})`,
+        );
+      }
+      await load();
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const latest = bios?.[0] ?? null;
+
+  return (
+    <Card className="p-4" data-testid="me-bio-card">
+      <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+        <h3 className="text-sm font-semibold text-text">Biography &amp; business card</h3>
+        <a
+          className={btnCls}
+          href={`${API_BASE}/me/business-card.pdf`}
+          download
+          data-testid="me-download-card-pdf"
+        >
+          Download business card PDF
+        </a>
+      </div>
+      <p className="text-xs text-text-mute mb-3">
+        Download the official Cognirise biography template, fill it in offline, then
+        upload the completed deck here. Re-uploading keeps every previous version.
+        The business-card PDF is generated from your current profile — name, title,
+        mobile, email — with a QR code that saves your contact when scanned.
+      </p>
+      <div className="flex flex-wrap gap-2 mb-3">
+        <a
+          className={btnCls}
+          href={`${API_BASE}/me/bio/template`}
+          download
+          data-testid="me-download-bio-template"
+        >
+          Download bio template (.pptx)
+        </a>
+        <button
+          className={btnGoldCls}
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          data-testid="me-upload-bio"
+        >
+          {busy ? "Uploading…" : latest ? "Upload new version" : "Upload completed bio"}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void upload(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {err && <p className="text-xs text-red-400 mb-2">{err}</p>}
+      {bios === null ? (
+        <p className="text-sm text-text-faint">Loading…</p>
+      ) : bios.length === 0 ? (
+        <p className="text-sm text-text-mute" data-testid="me-bio-empty">
+          No biography uploaded yet.
+        </p>
+      ) : (
+        <ul className="divide-y divide-border-soft" data-testid="me-bio-versions">
+          {bios.map((b, i) => (
+            <li key={b.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
+              <span className="min-w-0 truncate">
+                <span className="text-text">{b.title}</span>
+                {i === 0 && (
+                  <span className="ml-2">
+                    <MonoChip tone="gold">current</MonoChip>
+                  </span>
+                )}
+                <span className="ml-2 text-text-faint text-xs">
+                  {b.fileName ?? ""} {fmtBytes(b.sizeBytes)}
+                </span>
+              </span>
+              <span className="flex items-center gap-3 shrink-0">
+                <span className="font-mono text-[10px] text-text-faint">
+                  {new Date(b.uploadedAt).toLocaleDateString()}
+                </span>
+                <a
+                  className="text-xs text-gold hover:underline"
+                  href={`${import.meta.env.BASE_URL}${b.downloadUrl.replace(/^\//, "")}`}
+                  download
+                >
+                  Download
+                </a>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </Card>
   );

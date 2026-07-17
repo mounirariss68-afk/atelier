@@ -1,5 +1,6 @@
 import * as React from "react";
 import QRCode from "qrcode";
+import { useAtelierGetMyProfile } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { buildVCard, vcardFilename, type VCardCell } from "@/lib/vcard";
 
@@ -100,6 +101,13 @@ export function BusinessCardQR({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  // Task #52 — the printable card PDF is generated server-side from the
+  // caller's own profile (self-scoped endpoint), so the button only shows
+  // when the viewed person IS the signed-in person.
+  const { data: myProfile } = useAtelierGetMyProfile();
+  const isSelf = myProfile?.person?.id === person.id;
+  const cardPdfHref = `${import.meta.env.BASE_URL}api/atelier/me/business-card.pdf`;
+
   const hasContact = cells.length > 0;
 
   return (
@@ -143,6 +151,16 @@ export function BusinessCardQR({
               <DownloadBtn onClick={downloadVcf} testid="qr-download-vcf">
                 .vcf
               </DownloadBtn>
+              {isSelf && (
+                <a
+                  href={cardPdfHref}
+                  download
+                  data-testid="qr-download-card-pdf"
+                  className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
+                >
+                  Card · PDF
+                </a>
+              )}
             </div>
           </div>
 
