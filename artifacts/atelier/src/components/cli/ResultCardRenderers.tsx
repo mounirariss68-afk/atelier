@@ -38,6 +38,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useCreateAccount } from "@/components/CreateAccountContext";
 import type { CliCapability, CliLocale } from "./types";
+import { s } from "./locale";
 
 type Json = Record<string, unknown>;
 
@@ -394,6 +395,150 @@ function WriteSuccess({ data, locale }: { data: Json; locale: CliLocale }) {
   );
 }
 
+/* ───────────────── duplicate-opportunity cards (Task #39) ───────────────── */
+
+type DupMatch = { id?: string; name?: string; salesStage?: string | null; exact?: boolean };
+
+function asDupMatch(v: unknown): DupMatch | null {
+  const o = asObj(v);
+  if (!o.id && !o.name) return null;
+  return {
+    id: asStr(o.id),
+    name: asStr(o.name),
+    salesStage: o.salesStage == null ? null : asStr(o.salesStage),
+    exact: o.exact === true,
+  };
+}
+
+/**
+ * Prominent warning block rendered inside the confirm card when the
+ * opportunity_create proposal carries `diff.duplicateWarning`. Confirming
+ * a card that shows this warning is the explicit duplicate override, so
+ * the warning must never be buried in the summary text alone.
+ */
+export function DuplicateWarningBlock({
+  warning,
+  locale,
+}: {
+  warning: unknown;
+  locale: CliLocale;
+}) {
+  const w = asObj(warning);
+  const exact = asDupMatch(w.exact);
+  const similar = asArr(w.similar)
+    .map(asDupMatch)
+    .filter((d): d is DupMatch => d !== null)
+    // The exact match already has its own callout — don't repeat it.
+    .filter((d) => !exact || d.id !== exact.id);
+  if (!exact && similar.length === 0) return null;
+  const danger = !!exact;
+  return (
+    <div
+      className={cn(
+        "rounded p-2 space-y-1.5 border",
+        danger ? "bg-danger/10 border-danger/50" : "bg-warning/10 border-warning/50",
+      )}
+      data-testid="cli-duplicate-warning"
+      data-dup-kind={danger ? "exact" : "similar"}
+    >
+      <div
+        className={cn(
+          "flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider",
+          danger ? "text-danger" : "text-warning",
+        )}
+      >
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        {s("dupWarnTitle", locale)}
+      </div>
+      {exact && (
+        <div className="text-[11px] text-text leading-relaxed" data-testid="cli-duplicate-exact">
+          {s("dupWarnExact", locale)}
+        </div>
+      )}
+      {similar.length > 0 && (
+        <>
+          <div className="text-[11px] text-text-mute">{s("dupWarnSimilar", locale)}</div>
+          <ul className="text-[11px] text-text space-y-0.5">
+            {similar.map((d, i) => (
+              <li
+                key={d.id || i}
+                className="flex items-center gap-2"
+                data-testid="cli-duplicate-similar-row"
+              >
+                <span className="truncate">
+                  · {d.name}
+                  {d.salesStage ? ` (${s("dupStage", locale)}: ${humanLabel(d.salesStage)})` : ""}
+                </span>
+                {d.id && <OpenLink href={`/opportunities/${d.id}`} locale={locale} />}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {exact?.id && (
+        <div className="flex items-center gap-2 text-[11px] text-text" data-testid="cli-duplicate-existing">
+          <span className="truncate">
+            · {exact.name}
+            {exact.salesStage ? ` (${s("dupStage", locale)}: ${humanLabel(exact.salesStage)})` : ""}
+          </span>
+          <OpenLink href={`/opportunities/${exact.id}`} locale={locale} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Friendly rejection card for the `duplicate_opportunity` errorCode —
+ * a bare commit was blocked because an open deal with the same name
+ * already exists. Links straight to the existing deal instead of
+ * dumping the raw error string.
+ */
+export function DuplicateRejectionCard({
+  data,
+  locale,
+}: {
+  data: unknown;
+  locale: CliLocale;
+}) {
+  const d = asObj(data);
+  const dup = asObj(d.duplicate);
+  const existing = asDupMatch(dup.existing);
+  const href = existing?.id ? `/opportunities/${existing.id}` : asStr(asObj(d.navigateTo).path);
+  return (
+    <div
+      className="bg-warning/10 border border-warning/50 rounded-md p-3 space-y-1.5"
+      data-testid="cli-duplicate-rejection"
+    >
+      <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-warning">
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        {s("dupRejectTitle", locale)}
+      </div>
+      <div className="text-xs text-text leading-relaxed">{s("dupRejectBody", locale)}</div>
+      {existing && (
+        <div className="flex items-center gap-2 text-[11px] text-text">
+          <span className="truncate">
+            · {existing.name}
+            {existing.salesStage
+              ? ` (${s("dupStage", locale)}: ${humanLabel(existing.salesStage)})`
+              : ""}
+          </span>
+        </div>
+      )}
+      {href && (
+        <a
+          href={href}
+          className="inline-flex items-center gap-1 text-[11px] text-gold hover:underline"
+          data-testid="cli-duplicate-rejection-link"
+        >
+          {s("dupRejectOpen", locale)}
+          <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
 /* ─────────────────────────── dispatcher ─────────────────────────── */
 
 export function ToolResultCardList({
@@ -441,6 +586,14 @@ export function ToolResultCardList({
         // not the raw {stage,verb,payload,…} entity_card debug echo.
         if (shape === "write_success" && tr.ok) {
           return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} locale={locale} />;
+        }
+
+        // Task #39 — a blocked duplicate commit gets a friendly card
+        // that links to the existing deal, not a raw error dump.
+        if (!tr.ok && tr.errorCode === "duplicate_opportunity") {
+          return (
+            <DuplicateRejectionCard key={`${tr.tool}-${i}`} data={tr.data} locale={locale} />
+          );
         }
 
         return (

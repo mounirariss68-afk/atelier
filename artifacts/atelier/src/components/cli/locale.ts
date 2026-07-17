@@ -161,6 +161,24 @@ export const STRINGS = {
   impactContact: { en: "contacts", ar: "جهات اتصال" },
   impactInvoice: { en: "invoices", ar: "فواتير" },
   impactContactRelationship: { en: "org-chart links", ar: "روابط الهيكل التنظيمي" },
+  // Task #39 — duplicate-opportunity warning on the confirm card and
+  // the friendly rejection card when a bare commit is blocked.
+  dupWarnTitle: { en: "Possible duplicate", ar: "احتمال تكرار" },
+  dupWarnExact: {
+    en: "An open deal with this exact name already exists on this account. Confirming will create a second one anyway.",
+    ar: "توجد بالفعل صفقة مفتوحة بهذا الاسم على هذا الحساب. التأكيد سينشئ صفقة ثانية على أي حال.",
+  },
+  dupWarnSimilar: {
+    en: "Similar existing deals on this account:",
+    ar: "صفقات مشابهة موجودة على هذا الحساب:",
+  },
+  dupRejectTitle: { en: "Duplicate deal blocked", ar: "تم حظر صفقة مكررة" },
+  dupRejectBody: {
+    en: "An open deal with this name already exists on this account, so nothing was created. Use the existing deal, or ask explicitly for a second one.",
+    ar: "توجد بالفعل صفقة مفتوحة بهذا الاسم على هذا الحساب، لذلك لم يتم إنشاء شيء. استخدم الصفقة الموجودة أو اطلب صراحةً إنشاء صفقة ثانية.",
+  },
+  dupRejectOpen: { en: "Open existing deal", ar: "افتح الصفقة الموجودة" },
+  dupStage: { en: "stage", ar: "المرحلة" },
   // Task #573 — Edit affordance on the confirm card.
   editHint: {
     en: "Edit reopens your request so you can adjust it.",

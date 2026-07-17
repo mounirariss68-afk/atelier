@@ -11,7 +11,8 @@
     "test:reference-data": "tsx src/lib/reference-data.test.ts",
     "test:cli-reducer": "tsx src/components/cli/useCli.test.ts",
     "test:rail-width": "tsx src/components/layout/Shell.rail-width.test.ts",
-    "test:revenue-gate": "tsx src/components/EditAccountProfileDialog.revenue-gate.test.tsx"
+    "test:revenue-gate": "tsx src/components/EditAccountProfileDialog.revenue-gate.test.tsx",
+    "test:cli-duplicate-card": "tsx src/components/cli/ResultCardRenderers.duplicate.test.tsx"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

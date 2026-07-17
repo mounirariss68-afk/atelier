@@ -62,7 +62,7 @@ import {
 } from "./savedPrompts";
 import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
-import { ToolResultCardList } from "./ResultCardRenderers";
+import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
 import { Markdown } from "./Markdown";
 
 const MAX_INPUT_CHARS = 4000;
@@ -1562,6 +1562,17 @@ function TurnBody({
           data-testid="cli-confirm-card"
         >
           <div className="text-xs">{turn.pending.summary}</div>
+          {/* Task #39 — duplicate-opportunity warning. The proposal diff
+              carries `duplicateWarning` when an exact or similar open deal
+              already exists; confirming this card IS the explicit override,
+              so the warning must be visually prominent, not buried in the
+              summary text. */}
+          {(() => {
+            const diff = turn.pending.diff as Record<string, unknown> | null | undefined;
+            const dup = diff?.duplicateWarning;
+            if (!dup) return null;
+            return <DuplicateWarningBlock warning={dup} locale={locale} />;
+          })()}
           {/* Task #573 — dependency-impact summary for destructive deletes.
               `diff.impact` is only present on delete proposals; for non-empty
               dependency lists we tell the user exactly what stays behind but
