@@ -68,6 +68,7 @@ async function main(): Promise<void> {
     atelierSelfNotifications,
     atelierAuditEvents,
     atelierTimesheetWeeks,
+    atelierTimesheetEntries,
     atelierExpenses,
   } = D as any;
   const appMod = await import("../../src/app.js");
@@ -280,6 +281,121 @@ async function main(): Promise<void> {
       ctPerf.status === 200 && ctPerf.body?.weeksTracked === 0 && ctPerf.body?.totalHours12w === 0,
       `status=${ctPerf.status}`,
     );
+
+    // =====================================================================
+    group("me \u00b7 timesheet writes self-scope (Task #79)");
+    // =====================================================================
+    // Employee opens their current week (shell auto-created as draft),
+    // adds/edits/deletes own draft entries, then submits draft -> submitted.
+    // Every path derives the person from the caller; foreign weeks 404.
+    const curWeek = await call("GET", "/me/timesheets/current", EMP_ID);
+    const weekId: string | undefined = curWeek.body?.week?.id;
+    check(
+      "employee /me/timesheets/current creates own draft week shell",
+      curWeek.status === 200 && !!weekId && curWeek.body?.week?.status === "draft" &&
+        curWeek.body?.week?.personId === `emp_test_${STAMP}`,
+      `status=${curWeek.status} week=${JSON.stringify(curWeek.body?.week)?.slice(0, 200)}`,
+    );
+
+    // No-roster persona cannot even resolve a week.
+    const hrCur = await call("GET", "/me/timesheets/current", HR_ID);
+    check(
+      "persona without roster record \u2192 404 person-not-found",
+      hrCur.status === 404 && hrCur.body?.error === "person-not-found",
+      `status=${hrCur.status} error=${hrCur.body?.error}`,
+    );
+
+    // Owner adds a draft entry.
+    const addEntry = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: curWeek.body?.week?.weekStartDate,
+      hours: 6,
+      narrative: "probe internal work",
+    });
+    check("owner adds draft entry \u2192 200", addEntry.status === 200 && addEntry.body?.ok === true, `status=${addEntry.status}`);
+
+    const afterAdd = await call("GET", "/me/timesheets/current", EMP_ID);
+    const myEntry = afterAdd.body?.entries?.find?.((e: any) => e.narrative === "probe internal work");
+    check(
+      "entry lands on own week with recomputed totals",
+      !!myEntry && afterAdd.body?.week?.totalHours === 6,
+      `entries=${afterAdd.body?.entries?.length} total=${afterAdd.body?.week?.totalHours}`,
+    );
+
+    // Owner edits the entry in place (upsert by id).
+    const editEntry = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      id: myEntry?.id,
+      workDate: curWeek.body?.week?.weekStartDate,
+      hours: 7.5,
+      narrative: "probe internal work (edited)",
+    });
+    const afterEdit = await call("GET", "/me/timesheets/current", EMP_ID);
+    check(
+      "owner edits own entry \u2192 hours updated",
+      editEntry.status === 200 && afterEdit.body?.week?.totalHours === 7.5,
+      `status=${editEntry.status} total=${afterEdit.body?.week?.totalHours}`,
+    );
+
+    // Owner can delete their own draft entry while the week is still draft.
+    const scratch = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: curWeek.body?.week?.weekStartDate,
+      hours: 1,
+      narrative: "probe scratch entry",
+    });
+    const afterScratch = await call("GET", "/me/timesheets/current", EMP_ID);
+    const scratchEntry = afterScratch.body?.entries?.find?.((e: any) => e.narrative === "probe scratch entry");
+    const ownDelete = scratchEntry
+      ? await call("DELETE", `/me/timesheets/entries/${scratchEntry.id}`, EMP_ID)
+      : { status: 0, body: null };
+    const afterOwnDelete = await call("GET", "/me/timesheets/current", EMP_ID);
+    check(
+      "owner deletes own draft entry \u2192 200, totals recomputed",
+      scratch.status === 200 && ownDelete.status === 200 &&
+        afterOwnDelete.body?.week?.totalHours === 7.5 &&
+        !afterOwnDelete.body?.entries?.some?.((e: any) => e.id === scratchEntry?.id),
+      `add=${scratch.status} del=${ownDelete.status} total=${afterOwnDelete.body?.week?.totalHours}`,
+    );
+
+    // Contractor (a different person) cannot touch the employee's week —
+    // foreign week ids 404, never 403, so ids cannot be probed.
+    const foreignAdd = await call("POST", `/me/timesheets/${weekId}/entries`, CT_ID, {
+      workDate: curWeek.body?.week?.weekStartDate,
+      hours: 8,
+    });
+    check("foreign entry write \u2192 404", foreignAdd.status === 404, `status=${foreignAdd.status}`);
+    const foreignSubmit = await call("POST", `/me/timesheets/${weekId}/submit`, CT_ID, {});
+    check("foreign submit \u2192 404", foreignSubmit.status === 404, `status=${foreignSubmit.status}`);
+    const foreignDelete = await call("DELETE", `/me/timesheets/entries/${myEntry?.id}`, CT_ID);
+    check("foreign entry delete \u2192 404", foreignDelete.status === 404, `status=${foreignDelete.status}`);
+
+    // Owner submits the week: draft -> submitted, self-notification emitted.
+    const submitWeek = await call("POST", `/me/timesheets/${weekId}/submit`, EMP_ID, {});
+    check(
+      "owner submit \u2192 200",
+      submitWeek.status === 200 && submitWeek.body?.ok === true,
+      `status=${submitWeek.status} body=${JSON.stringify(submitWeek.body)?.slice(0, 200)}`,
+    );
+    const afterSubmit = await call("GET", "/me/timesheets/current", EMP_ID);
+    check(
+      "week status is submitted after submit",
+      afterSubmit.body?.week?.status === "submitted",
+      `status=${afterSubmit.body?.week?.status}`,
+    );
+    const submitNotifs = await call("GET", "/me/notifications", EMP_ID);
+    check(
+      "submit emits timesheet_submitted self-notification",
+      submitNotifs.body?.some?.((n: any) => n.kind === "timesheet_submitted"),
+    );
+
+    // Submitted week is locked for further self-service writes.
+    const lockedAdd = await call("POST", `/me/timesheets/${weekId}/entries`, EMP_ID, {
+      workDate: curWeek.body?.week?.weekStartDate,
+      hours: 1,
+    });
+    check("entry write on submitted week \u2192 409 week-locked", lockedAdd.status === 409, `status=${lockedAdd.status}`);
+    const lockedResubmit = await call("POST", `/me/timesheets/${weekId}/submit`, EMP_ID, {});
+    check("re-submit of submitted week \u2192 409", lockedResubmit.status === 409, `status=${lockedResubmit.status}`);
+    const lockedDelete = await call("DELETE", `/me/timesheets/entries/${myEntry?.id}`, EMP_ID);
+    check("entry delete on submitted week \u2192 409", lockedDelete.status === 409, `status=${lockedDelete.status}`);
 
     // =====================================================================
     group("employee persona \u00b7 self-only boundary");
@@ -555,6 +671,12 @@ async function main(): Promise<void> {
         await db.delete(atelierUsers).where(eq(atelierUsers.id, joinerUserId));
       }
       await db.delete(atelierSelfNotifications).where(eq(atelierSelfNotifications.id, `selfnotif_test_${STAMP}`));
+      // Task #79 — timesheet-write probe rows (entries, current-week shell,
+      // submit notification + audit rows keyed by the shell week's id).
+      await db.delete(atelierTimesheetEntries).where(eq(atelierTimesheetEntries.personId, `emp_test_${STAMP}`));
+      await db.delete(atelierAuditEvents).where(and(eq(atelierAuditEvents.entityType, "timesheet_week"), like(atelierAuditEvents.entityId, `tsw_emp_test_${STAMP}_%`)));
+      await db.delete(atelierSelfNotifications).where(eq(atelierSelfNotifications.userId, EMP_ID));
+      await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.personId, `emp_test_${STAMP}`));
       await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.id, `tsw_test_${STAMP}`));
       await db.delete(atelierExpenses).where(eq(atelierExpenses.id, `exp_test_${STAMP}`));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, `emp_test_${STAMP}`));
