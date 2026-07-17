@@ -101,6 +101,7 @@ import type {
   AtelierEmergencyContactInput,
   AtelierEmergencyContactList,
   AtelierError,
+  AtelierEsignUpstreamError,
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
@@ -118,6 +119,7 @@ import type {
   AtelierListDocumentsParams,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
+  AtelierListSignatureRequestsParams,
   AtelierMarginOverrideInput,
   AtelierMarginPolicy,
   AtelierMarginPolicyInput,
@@ -173,6 +175,7 @@ import type {
   AtelierRateCardRow,
   AtelierRateCardRowInput,
   AtelierRejectProposalSectionInput,
+  AtelierRemindSignatureRequest200,
   AtelierReplaceMyDocumentScan200,
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
@@ -190,10 +193,14 @@ import type {
   AtelierSelfReview,
   AtelierSelfTrainingMaterial,
   AtelierSendDeliverableInput,
+  AtelierSignatureRequestCreate,
+  AtelierSignatureRequestEnvelope,
+  AtelierSignatureRequestList,
   AtelierStageChangeInput,
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierSyncAllSignatureRequests200,
   AtelierTrainingCompletionRow,
   AtelierTrainingMaterial,
   AtelierTrainingMaterialInput,
@@ -2057,6 +2064,645 @@ export const useAtelierRevokeDocumentAccess = <
   TContext
 > => {
   return useMutation(getAtelierRevokeDocumentAccessMutationOptions(options));
+};
+
+/**
+ * @summary E-sign — list signature requests (partner-tier only)
+ */
+export const getAtelierListSignatureRequestsUrl = (
+  params?: AtelierListSignatureRequestsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/esign/requests?${stringifiedParams}`
+    : `/api/atelier/esign/requests`;
+};
+
+export const atelierListSignatureRequests = async (
+  params?: AtelierListSignatureRequestsParams,
+  options?: RequestInit,
+): Promise<AtelierSignatureRequestList> => {
+  return customFetch<AtelierSignatureRequestList>(
+    getAtelierListSignatureRequestsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListSignatureRequestsQueryKey = (
+  params?: AtelierListSignatureRequestsParams,
+) => {
+  return [`/api/atelier/esign/requests`, ...(params ? [params] : [])] as const;
+};
+
+export const getAtelierListSignatureRequestsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListSignatureRequests>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListSignatureRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListSignatureRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListSignatureRequestsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListSignatureRequests>>
+  > = ({ signal }) =>
+    atelierListSignatureRequests(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListSignatureRequests>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListSignatureRequestsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListSignatureRequests>>
+>;
+export type AtelierListSignatureRequestsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary E-sign — list signature requests (partner-tier only)
+ */
+
+export function useAtelierListSignatureRequests<
+  TData = Awaited<ReturnType<typeof atelierListSignatureRequests>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListSignatureRequestsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListSignatureRequests>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListSignatureRequestsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary E-sign — send a Document Library PDF out for signature via DocuSeal
+ */
+export const getAtelierCreateSignatureRequestUrl = () => {
+  return `/api/atelier/esign/requests`;
+};
+
+export const atelierCreateSignatureRequest = async (
+  atelierSignatureRequestCreate: AtelierSignatureRequestCreate,
+  options?: RequestInit,
+): Promise<AtelierSignatureRequestEnvelope> => {
+  return customFetch<AtelierSignatureRequestEnvelope>(
+    getAtelierCreateSignatureRequestUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSignatureRequestCreate),
+    },
+  );
+};
+
+export const getAtelierCreateSignatureRequestMutationOptions = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateSignatureRequest>>,
+    TError,
+    { data: BodyType<AtelierSignatureRequestCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateSignatureRequest>>,
+  TError,
+  { data: BodyType<AtelierSignatureRequestCreate> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateSignatureRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateSignatureRequest>>,
+    { data: BodyType<AtelierSignatureRequestCreate> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateSignatureRequest(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateSignatureRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateSignatureRequest>>
+>;
+export type AtelierCreateSignatureRequestMutationBody =
+  BodyType<AtelierSignatureRequestCreate>;
+export type AtelierCreateSignatureRequestMutationError =
+  ErrorType<AtelierEsignUpstreamError>;
+
+/**
+ * @summary E-sign — send a Document Library PDF out for signature via DocuSeal
+ */
+export const useAtelierCreateSignatureRequest = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateSignatureRequest>>,
+    TError,
+    { data: BodyType<AtelierSignatureRequestCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateSignatureRequest>>,
+  TError,
+  { data: BodyType<AtelierSignatureRequestCreate> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateSignatureRequestMutationOptions(options));
+};
+
+/**
+ * @summary E-sign — one signature request with its signers
+ */
+export const getAtelierGetSignatureRequestUrl = (id: string) => {
+  return `/api/atelier/esign/requests/${id}`;
+};
+
+export const atelierGetSignatureRequest = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSignatureRequestEnvelope> => {
+  return customFetch<AtelierSignatureRequestEnvelope>(
+    getAtelierGetSignatureRequestUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetSignatureRequestQueryKey = (id: string) => {
+  return [`/api/atelier/esign/requests/${id}`] as const;
+};
+
+export const getAtelierGetSignatureRequestQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetSignatureRequest>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetSignatureRequest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetSignatureRequestQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetSignatureRequest>>
+  > = ({ signal }) =>
+    atelierGetSignatureRequest(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetSignatureRequest>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetSignatureRequestQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetSignatureRequest>>
+>;
+export type AtelierGetSignatureRequestQueryError = ErrorType<unknown>;
+
+/**
+ * @summary E-sign — one signature request with its signers
+ */
+
+export function useAtelierGetSignatureRequest<
+  TData = Awaited<ReturnType<typeof atelierGetSignatureRequest>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetSignatureRequest>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetSignatureRequestQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary E-sign — void/cancel a pending signature request
+ */
+export const getAtelierVoidSignatureRequestUrl = (id: string) => {
+  return `/api/atelier/esign/requests/${id}/void`;
+};
+
+export const atelierVoidSignatureRequest = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSignatureRequestEnvelope> => {
+  return customFetch<AtelierSignatureRequestEnvelope>(
+    getAtelierVoidSignatureRequestUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierVoidSignatureRequestMutationOptions = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierVoidSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierVoidSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierVoidSignatureRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierVoidSignatureRequest>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierVoidSignatureRequest(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierVoidSignatureRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierVoidSignatureRequest>>
+>;
+
+export type AtelierVoidSignatureRequestMutationError =
+  ErrorType<AtelierEsignUpstreamError>;
+
+/**
+ * @summary E-sign — void/cancel a pending signature request
+ */
+export const useAtelierVoidSignatureRequest = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierVoidSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierVoidSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierVoidSignatureRequestMutationOptions(options));
+};
+
+/**
+ * @summary E-sign — re-send the signature email to pending signers
+ */
+export const getAtelierRemindSignatureRequestUrl = (id: string) => {
+  return `/api/atelier/esign/requests/${id}/remind`;
+};
+
+export const atelierRemindSignatureRequest = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierRemindSignatureRequest200> => {
+  return customFetch<AtelierRemindSignatureRequest200>(
+    getAtelierRemindSignatureRequestUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierRemindSignatureRequestMutationOptions = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRemindSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRemindSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierRemindSignatureRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRemindSignatureRequest>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierRemindSignatureRequest(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRemindSignatureRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRemindSignatureRequest>>
+>;
+
+export type AtelierRemindSignatureRequestMutationError =
+  ErrorType<AtelierEsignUpstreamError>;
+
+/**
+ * @summary E-sign — re-send the signature email to pending signers
+ */
+export const useAtelierRemindSignatureRequest = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRemindSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRemindSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierRemindSignatureRequestMutationOptions(options));
+};
+
+/**
+ * @summary E-sign — reconcile one request against DocuSeal now
+ */
+export const getAtelierSyncSignatureRequestUrl = (id: string) => {
+  return `/api/atelier/esign/requests/${id}/sync`;
+};
+
+export const atelierSyncSignatureRequest = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSignatureRequestEnvelope> => {
+  return customFetch<AtelierSignatureRequestEnvelope>(
+    getAtelierSyncSignatureRequestUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierSyncSignatureRequestMutationOptions = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSyncSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSyncSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierSyncSignatureRequest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSyncSignatureRequest>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierSyncSignatureRequest(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSyncSignatureRequestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSyncSignatureRequest>>
+>;
+
+export type AtelierSyncSignatureRequestMutationError =
+  ErrorType<AtelierEsignUpstreamError>;
+
+/**
+ * @summary E-sign — reconcile one request against DocuSeal now
+ */
+export const useAtelierSyncSignatureRequest = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSyncSignatureRequest>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSyncSignatureRequest>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierSyncSignatureRequestMutationOptions(options));
+};
+
+/**
+ * @summary E-sign — reconcile every open request (polling fallback)
+ */
+export const getAtelierSyncAllSignatureRequestsUrl = () => {
+  return `/api/atelier/esign/sync`;
+};
+
+export const atelierSyncAllSignatureRequests = async (
+  options?: RequestInit,
+): Promise<AtelierSyncAllSignatureRequests200> => {
+  return customFetch<AtelierSyncAllSignatureRequests200>(
+    getAtelierSyncAllSignatureRequestsUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierSyncAllSignatureRequestsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["atelierSyncAllSignatureRequests"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>,
+    void
+  > = () => {
+    return atelierSyncAllSignatureRequests(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSyncAllSignatureRequestsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>
+>;
+
+export type AtelierSyncAllSignatureRequestsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary E-sign — reconcile every open request (polling fallback)
+ */
+export const useAtelierSyncAllSignatureRequests = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSyncAllSignatureRequests>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getAtelierSyncAllSignatureRequestsMutationOptions(options),
+  );
 };
 
 /**

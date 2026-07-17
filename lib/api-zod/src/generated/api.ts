@@ -693,6 +693,271 @@ export const AtelierRevokeDocumentAccessResponse = zod.object({
 });
 
 /**
+ * @summary E-sign — list signature requests (partner-tier only)
+ */
+export const AtelierListSignatureRequestsQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+  accountId: zod.coerce.string().optional(),
+});
+
+export const AtelierListSignatureRequestsResponse = zod.object({
+  configured: zod
+    .boolean()
+    .describe("Whether a DocuSeal API key is configured server-side."),
+  requests: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      message: zod.string().nullish(),
+      status: zod.string(),
+      documentId: zod.string(),
+      documentVersionId: zod.string(),
+      accountId: zod.string().nullish(),
+      contactId: zod.string().nullish(),
+      personId: zod.string().nullish(),
+      signedDocumentId: zod.string().nullish(),
+      expiresAt: zod.string().nullish(),
+      createdBy: zod.string(),
+      createdByLabel: zod.string(),
+      lastSyncError: zod.string().nullish(),
+      lastSyncedAt: zod.string().nullish(),
+      voidedAt: zod.string().nullish(),
+      completedAt: zod.string().nullish(),
+      declinedAt: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      signers: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            name: zod.string(),
+            email: zod.string(),
+            signingOrder: zod.number(),
+            status: zod.string(),
+            openedAt: zod.string().nullish(),
+            completedAt: zod.string().nullish(),
+            declinedAt: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary E-sign — send a Document Library PDF out for signature via DocuSeal
+ */
+export const atelierCreateSignatureRequestBodyTitleMax = 200;
+
+export const atelierCreateSignatureRequestBodyMessageMax = 2000;
+
+export const atelierCreateSignatureRequestBodySignersItemNameMax = 120;
+
+export const atelierCreateSignatureRequestBodySignersItemEmailMax = 254;
+
+export const atelierCreateSignatureRequestBodySignersMax = 10;
+
+export const atelierCreateSignatureRequestBodyExpiresInDaysMax = 365;
+
+export const AtelierCreateSignatureRequestBody = zod.object({
+  title: zod.string().min(1).max(atelierCreateSignatureRequestBodyTitleMax),
+  message: zod
+    .string()
+    .max(atelierCreateSignatureRequestBodyMessageMax)
+    .optional(),
+  documentId: zod.string(),
+  signers: zod
+    .array(
+      zod.object({
+        name: zod
+          .string()
+          .min(1)
+          .max(atelierCreateSignatureRequestBodySignersItemNameMax),
+        email: zod
+          .string()
+          .email()
+          .max(atelierCreateSignatureRequestBodySignersItemEmailMax),
+      }),
+    )
+    .min(1)
+    .max(atelierCreateSignatureRequestBodySignersMax),
+  accountId: zod.string().optional(),
+  contactId: zod.string().optional(),
+  personId: zod.string().optional(),
+  expiresInDays: zod
+    .number()
+    .min(1)
+    .max(atelierCreateSignatureRequestBodyExpiresInDaysMax)
+    .optional(),
+});
+
+/**
+ * @summary E-sign — one signature request with its signers
+ */
+export const AtelierGetSignatureRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierGetSignatureRequestResponse = zod.object({
+  request: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    message: zod.string().nullish(),
+    status: zod.string(),
+    documentId: zod.string(),
+    documentVersionId: zod.string(),
+    accountId: zod.string().nullish(),
+    contactId: zod.string().nullish(),
+    personId: zod.string().nullish(),
+    signedDocumentId: zod.string().nullish(),
+    expiresAt: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    lastSyncError: zod.string().nullish(),
+    lastSyncedAt: zod.string().nullish(),
+    voidedAt: zod.string().nullish(),
+    completedAt: zod.string().nullish(),
+    declinedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    signers: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          email: zod.string(),
+          signingOrder: zod.number(),
+          status: zod.string(),
+          openedAt: zod.string().nullish(),
+          completedAt: zod.string().nullish(),
+          declinedAt: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  changed: zod.boolean().optional(),
+});
+
+/**
+ * @summary E-sign — void/cancel a pending signature request
+ */
+export const AtelierVoidSignatureRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierVoidSignatureRequestResponse = zod.object({
+  request: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    message: zod.string().nullish(),
+    status: zod.string(),
+    documentId: zod.string(),
+    documentVersionId: zod.string(),
+    accountId: zod.string().nullish(),
+    contactId: zod.string().nullish(),
+    personId: zod.string().nullish(),
+    signedDocumentId: zod.string().nullish(),
+    expiresAt: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    lastSyncError: zod.string().nullish(),
+    lastSyncedAt: zod.string().nullish(),
+    voidedAt: zod.string().nullish(),
+    completedAt: zod.string().nullish(),
+    declinedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    signers: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          email: zod.string(),
+          signingOrder: zod.number(),
+          status: zod.string(),
+          openedAt: zod.string().nullish(),
+          completedAt: zod.string().nullish(),
+          declinedAt: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  changed: zod.boolean().optional(),
+});
+
+/**
+ * @summary E-sign — re-send the signature email to pending signers
+ */
+export const AtelierRemindSignatureRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierRemindSignatureRequestResponse = zod.object({
+  reminded: zod.number(),
+});
+
+/**
+ * @summary E-sign — reconcile one request against DocuSeal now
+ */
+export const AtelierSyncSignatureRequestParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierSyncSignatureRequestResponse = zod.object({
+  request: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    message: zod.string().nullish(),
+    status: zod.string(),
+    documentId: zod.string(),
+    documentVersionId: zod.string(),
+    accountId: zod.string().nullish(),
+    contactId: zod.string().nullish(),
+    personId: zod.string().nullish(),
+    signedDocumentId: zod.string().nullish(),
+    expiresAt: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    lastSyncError: zod.string().nullish(),
+    lastSyncedAt: zod.string().nullish(),
+    voidedAt: zod.string().nullish(),
+    completedAt: zod.string().nullish(),
+    declinedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+    updatedAt: zod.string(),
+    signers: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          name: zod.string(),
+          email: zod.string(),
+          signingOrder: zod.number(),
+          status: zod.string(),
+          openedAt: zod.string().nullish(),
+          completedAt: zod.string().nullish(),
+          declinedAt: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+  }),
+  changed: zod.boolean().optional(),
+});
+
+/**
+ * @summary E-sign — reconcile every open request (polling fallback)
+ */
+export const AtelierSyncAllSignatureRequestsResponse = zod.object({
+  synced: zod.number(),
+  changed: zod.number(),
+  failures: zod.array(
+    zod.object({
+      requestId: zod.string(),
+      error: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary Me lens — upload/replace the caller's own profile photo
  */
 export const AtelierUploadMyPhotoBody = zod.object({

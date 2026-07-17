@@ -22,6 +22,7 @@
     "test:cli-smoke": "tsx ./tests/cli-smoke/run.ts",
     "test:cli-navigation": "tsx ./tests/cli-navigation/run.ts",
     "test:crm": "tsx ./tests/crm/run.ts",
+    "test:esign": "tsx ./tests/esign/run.ts",
     "test:me-profile": "tsx ./tests/me-profile/run.ts",
     "test:brief-envelope": "tsx ./tests/crm/brief-envelope-contract-probe.ts",
     "test:proposal-enrich": "tsx ./tests/crm/proposal-contact-enrich-probe.ts",

@@ -39,6 +39,7 @@ import WinLoss from "@/pages/WinLoss";
 import WinLossIntake from "@/pages/WinLossIntake";
 import Reports from "@/pages/Reports";
 import Documents from "@/pages/Documents";
+import Agreements from "@/pages/Agreements";
 // Task #364 — RosterPeople/RosterPerson/RosterAccessMatrix/RosterInvitations/
 // RosterOnboarding/RosterOffboarding/RosterCompliance/RosterSkillGraph and
 // Timesheet are now mounted under /people/* via PeopleShell wrappers; the
@@ -279,6 +280,8 @@ function Router() {
         </Route>
         <Route path="/reports" component={Reports} />
         <Route path="/documents" component={Documents} />
+        {/* Task #62 — e-signing (DocuSeal) surface, partner-tier. */}
+        <Route path="/agreements" component={Agreements} />
         {/* Task #375 — engagement workspace re-mounted under the Clients
             lens. Listing + detail + deliverable detail (with the optional
             `:tab` deep-link segment) all live under

@@ -466,6 +466,163 @@ paths:
                 properties:
                   status: { type: string }
                   userId: { type: string }
+  /atelier/esign/requests:
+    get:
+      operationId: atelierListSignatureRequests
+      tags: [atelier]
+      summary: E-sign — list signature requests (partner-tier only)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: accountId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Signature requests, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSignatureRequestList"
+    post:
+      operationId: atelierCreateSignatureRequest
+      tags: [atelier]
+      summary: E-sign — send a Document Library PDF out for signature via DocuSeal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSignatureRequestCreate"
+      responses:
+        "201":
+          description: Created signature request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSignatureRequestEnvelope"
+        "502":
+          description: DocuSeal rejected the request or is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEsignUpstreamError"
+  /atelier/esign/requests/{id}:
+    get:
+      operationId: atelierGetSignatureRequest
+      tags: [atelier]
+      summary: E-sign — one signature request with its signers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Signature request detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSignatureRequestEnvelope"
+  /atelier/esign/requests/{id}/void:
+    post:
+      operationId: atelierVoidSignatureRequest
+      tags: [atelier]
+      summary: E-sign — void/cancel a pending signature request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Voided request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSignatureRequestEnvelope"
+        "502":
+          description: DocuSeal rejected the request or is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEsignUpstreamError"
+  /atelier/esign/requests/{id}/remind:
+    post:
+      operationId: atelierRemindSignatureRequest
+      tags: [atelier]
+      summary: E-sign — re-send the signature email to pending signers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reminder result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reminded]
+                properties:
+                  reminded: { type: number }
+        "502":
+          description: DocuSeal rejected the request or is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEsignUpstreamError"
+  /atelier/esign/requests/{id}/sync:
+    post:
+      operationId: atelierSyncSignatureRequest
+      tags: [atelier]
+      summary: E-sign — reconcile one request against DocuSeal now
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Reconciled request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSignatureRequestEnvelope"
+        "502":
+          description: DocuSeal rejected the request or is unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEsignUpstreamError"
+  /atelier/esign/sync:
+    post:
+      operationId: atelierSyncAllSignatureRequests
+      tags: [atelier]
+      summary: E-sign — reconcile every open request (polling fallback)
+      responses:
+        "200":
+          description: Sync summary
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [synced, changed, failures]
+                properties:
+                  synced: { type: number }
+                  changed: { type: number }
+                  failures:
+                    type: array
+                    items:
+                      type: object
+                      required: [requestId, error]
+                      properties:
+                        requestId: { type: string }
+                        error: { type: string }
   /atelier/me/photo:
     post:
       operationId: atelierUploadMyPhoto
@@ -6106,6 +6263,94 @@ components:
               actorLabel: { type: string }
               summary: { type: ["string", "null"] }
               createdAt: { type: string }
+
+    AtelierSignatureSigner:
+      type: object
+      required: [id, name, email, signingOrder, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string }
+        signingOrder: { type: number }
+        status: { type: string }
+        openedAt: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"] }
+        declinedAt: { type: ["string", "null"] }
+
+    AtelierSignatureRequest:
+      type: object
+      required: [id, title, status, documentId, documentVersionId, createdBy, createdByLabel, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        message: { type: ["string", "null"] }
+        status: { type: string }
+        documentId: { type: string }
+        documentVersionId: { type: string }
+        accountId: { type: ["string", "null"] }
+        contactId: { type: ["string", "null"] }
+        personId: { type: ["string", "null"] }
+        signedDocumentId: { type: ["string", "null"] }
+        expiresAt: { type: ["string", "null"] }
+        createdBy: { type: string }
+        createdByLabel: { type: string }
+        lastSyncError: { type: ["string", "null"] }
+        lastSyncedAt: { type: ["string", "null"] }
+        voidedAt: { type: ["string", "null"] }
+        completedAt: { type: ["string", "null"] }
+        declinedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        signers:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierSignatureSigner" }
+
+    AtelierSignatureRequestList:
+      type: object
+      required: [configured, requests]
+      properties:
+        configured:
+          type: boolean
+          description: Whether a DocuSeal API key is configured server-side.
+        requests:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierSignatureRequest" }
+
+    AtelierSignatureRequestEnvelope:
+      type: object
+      required: [request]
+      properties:
+        request: { $ref: "#/components/schemas/AtelierSignatureRequest" }
+        changed: { type: boolean }
+
+    AtelierSignatureRequestCreate:
+      type: object
+      required: [title, documentId, signers]
+      properties:
+        title: { type: string, maxLength: 200, minLength: 1 }
+        message: { type: string, maxLength: 2000 }
+        documentId: { type: string }
+        signers:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            required: [name, email]
+            properties:
+              name: { type: string, maxLength: 120, minLength: 1 }
+              email: { type: string, format: email, maxLength: 254 }
+        accountId: { type: string }
+        contactId: { type: string }
+        personId: { type: string }
+        expiresInDays: { type: integer, minimum: 1, maximum: 365 }
+
+    AtelierEsignUpstreamError:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string }
+        message: { type: string }
 
     AtelierSelfDocument:
       type: object

@@ -6,6 +6,7 @@ import { ensureAtelierSelfLinkage } from "./lib/atelier-self-linkage";
 import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
+import { startEsignPolling } from "./lib/atelier-esign";
 import { applyAtelierCliRagSql } from "./lib/atelier-cli/rag-bootstrap";
 import { warmEmbedder } from "./lib/atelier-cli/embeddings";
 import { backfillChunkEmbeddings } from "./lib/atelier-cli/attachments/retrieval";
@@ -99,6 +100,9 @@ app.listen(port, (err) => {
   // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
   // (writes audit_event rows; idempotent per (week, kind)).
   startLedgerNudgeJob();
+  // Task #62 — polling fallback that reconciles open signature requests
+  // against DocuSeal (webhooks can't always reach the dev environment).
+  startEsignPolling();
   // Task #411 — install pg_trgm + pgvector (when available) and the
   // GIN trgm indexes the hybrid resolver hits. Idempotent.
   void applyAtelierCliRagSql()

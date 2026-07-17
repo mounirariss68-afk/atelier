@@ -7,6 +7,7 @@ import tasamaRouter from "./tasama";
 import atelierRouter from "./atelier";
 import salonRouter from "./salon";
 import authRouter from "./auth";
+import esignWebhookRouter from "./esignWebhook";
 import { requireAuthSession } from "../lib/auth/session";
 
 const router: IRouter = Router();
@@ -14,6 +15,10 @@ const router: IRouter = Router();
 // Public surfaces: health check + the auth endpoints themselves.
 router.use(healthRouter);
 router.use("/auth", authRouter);
+// Task #62 — DocuSeal webhook (no session; optionally secret-gated, and
+// the payload is never trusted — it only triggers an authoritative
+// re-fetch from the DocuSeal API).
+router.use("/esign/webhook", esignWebhookRouter);
 
 // Task #1 — everything else requires a valid server-side session. There is
 // no default-persona fallback anywhere behind this gate; unauthenticated

@@ -25,6 +25,7 @@
 import router from "../../src/routes/index.js";
 import healthRouter from "../../src/routes/health.js";
 import authRouter from "../../src/routes/auth/index.js";
+import esignWebhookRouter from "../../src/routes/esignWebhook.js";
 import { requireAuthSession } from "../../src/lib/auth/session.js";
 
 type Check = (name: string, cond: boolean, detail?: string) => void;
@@ -69,10 +70,13 @@ export async function runAuthGateChecks(
 
   // --- 1. Structural: nothing public except health + auth ---
   const preGate = stack.slice(0, gateIdx);
-  const allowedPublic = new Set<unknown>([healthRouter, authRouter]);
+  // esign webhook is deliberately public: DocuSeal calls it without a
+  // session; it is trigger-only (never trusted) and optionally guarded by
+  // DOCUSEAL_WEBHOOK_SECRET inside the router itself (Task #62).
+  const allowedPublic = new Set<unknown>([healthRouter, authRouter, esignWebhookRouter]);
   const rogue = preGate.filter((l) => !allowedPublic.has(l.handle));
   check(
-    "gate: only health + auth routers are mounted before the gate",
+    "gate: only health + auth + esign-webhook routers are mounted before the gate",
     rogue.length === 0,
     rogue.length
       ? `${rogue.length} unexpected pre-gate layer(s): ` +

@@ -1,0 +1,366 @@
+/**
+ * Task #62 — E-signing routes (DocuSeal-backed).
+ *
+ *   GET    /esign/requests            — list (leadership-gated)
+ *   POST   /esign/requests            — send a library PDF for signature
+ *   GET    /esign/requests/:id        — detail incl. signers
+ *   POST   /esign/requests/:id/void   — cancel a pending request
+ *   POST   /esign/requests/:id/remind — re-send email to pending signers
+ *   POST   /esign/requests/:id/sync   — manual reconcile against DocuSeal
+ *   POST   /esign/sync                — reconcile all open requests
+ *
+ * Access model: partner-tier leadership only (founding_partner |
+ * partner), per task spec. Account-linked requests additionally respect
+ * account visibility on read via canSeeAccount, though leadership sees
+ * every account anyway — the check is defense-in-depth for future role
+ * widening.
+ *
+ * All DocuSeal failures surface as 502 with the upstream message — no
+ * silent fallbacks.
+ */
+
+import { Router, type IRouter, type Request, type Response } from "express";
+import { z } from "zod";
+import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  db,
+  atelierUsers,
+  atelierSignatureRequests,
+  atelierSignatureSigners,
+} from "@workspace/db";
+import { canApproveAsPartner } from "./personaRoles";
+import { canSeeAccount } from "./accountRoutes";
+import { accessibleEngagementIds } from "./engagementRoutes";
+import { loadDocBytes } from "../../lib/atelier-documents.js";
+import { atelierDocuments, atelierDocumentVersions } from "@workspace/db";
+import {
+  sendSignatureRequest,
+  syncSignatureRequest,
+  syncAllOpenRequests,
+  voidSignatureRequest,
+  remindSignatureRequest,
+  type SigRequestRow,
+  type SigSignerRow,
+} from "../../lib/atelier-esign.js";
+import { DocusealError, docusealConfigured } from "../../lib/docuseal.js";
+
+type Me = typeof atelierUsers.$inferSelect;
+
+function ensurePersona(req: Request, res: Response): Me | null {
+  if (!req.atelierPersona) {
+    res.status(401).json({ error: "no-active-persona" });
+    return null;
+  }
+  return req.atelierPersona;
+}
+
+/** Partner-tier gate for every e-sign surface. */
+function ensureEsignRole(me: Me, res: Response): boolean {
+  if (canApproveAsPartner(me.role)) return true;
+  res.status(403).json({
+    error: "esign-role",
+    message: "Only partners and founding partners may manage signature requests.",
+  });
+  return false;
+}
+
+function handleUpstreamError(res: Response, err: unknown): void {
+  if (err instanceof DocusealError) {
+    res.status(502).json({ error: "docuseal-error", message: err.message });
+    return;
+  }
+  throw err;
+}
+
+function signerShape(s: SigSignerRow) {
+  return {
+    id: s.id,
+    name: s.name,
+    email: s.email,
+    signingOrder: s.signingOrder,
+    status: s.status,
+    openedAt: s.openedAt,
+    completedAt: s.completedAt,
+    declinedAt: s.declinedAt,
+  };
+}
+
+function requestShape(r: SigRequestRow, signers?: SigSignerRow[]) {
+  return {
+    id: r.id,
+    title: r.title,
+    message: r.message,
+    status: r.status,
+    documentId: r.documentId,
+    documentVersionId: r.documentVersionId,
+    accountId: r.accountId,
+    contactId: r.contactId,
+    personId: r.personId,
+    signedDocumentId: r.signedDocumentId,
+    expiresAt: r.expiresAt,
+    createdBy: r.createdBy,
+    createdByLabel: r.createdByLabel,
+    lastSyncError: r.lastSyncError,
+    lastSyncedAt: r.lastSyncedAt,
+    voidedAt: r.voidedAt,
+    completedAt: r.completedAt,
+    declinedAt: r.declinedAt,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    ...(signers ? { signers: signers.map(signerShape) } : {}),
+  };
+}
+
+async function loadRequestSigners(requestIds: string[]): Promise<Map<string, SigSignerRow[]>> {
+  if (requestIds.length === 0) return new Map();
+  const rows = await db
+    .select()
+    .from(atelierSignatureSigners)
+    .where(inArray(atelierSignatureSigners.requestId, requestIds));
+  const map = new Map<string, SigSignerRow[]>();
+  for (const row of rows) {
+    map.set(row.requestId, [...(map.get(row.requestId) ?? []), row]);
+  }
+  for (const list of map.values()) list.sort((a, b) => a.signingOrder - b.signingOrder);
+  return map;
+}
+
+const router: IRouter = Router();
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.get("/esign/requests", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+
+  const conds = [eq(atelierSignatureRequests.orgId, me.orgId)];
+  const status = typeof req.query.status === "string" ? req.query.status : null;
+  if (status) conds.push(eq(atelierSignatureRequests.status, status));
+  const accountId = typeof req.query.accountId === "string" ? req.query.accountId : null;
+  if (accountId) conds.push(eq(atelierSignatureRequests.accountId, accountId));
+
+  const rowsAll = await db
+    .select()
+    .from(atelierSignatureRequests)
+    .where(and(...conds))
+    .orderBy(desc(atelierSignatureRequests.createdAt));
+
+  // Account visibility (defense-in-depth; leadership sees all accounts).
+  const access = await accessibleEngagementIds(me);
+  const rows: SigRequestRow[] = [];
+  for (const r of rowsAll) {
+    if (r.accountId && !(await canSeeAccount(access, me, r.accountId))) continue;
+    rows.push(r);
+  }
+
+  const signerMap = await loadRequestSigners(rows.map((r) => r.id));
+  res.json({
+    configured: docusealConfigured(),
+    requests: rows.map((r) => requestShape(r, signerMap.get(r.id) ?? [])),
+  });
+});
+
+const CreateBody = z.object({
+  title: z.string().trim().min(1).max(200),
+  message: z.string().trim().max(2000).optional(),
+  documentId: z.string().min(1),
+  signers: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(120),
+        email: z.string().trim().email().max(254),
+      }),
+    )
+    .min(1)
+    .max(10),
+  accountId: z.string().optional(),
+  contactId: z.string().optional(),
+  personId: z.string().optional(),
+  /** Days until the request lapses (DocuSeal expire_at + local lapse). */
+  expiresInDays: z.number().int().min(1).max(365).optional(),
+});
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.post("/esign/requests", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+
+  const parsed = CreateBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const body = parsed.data;
+
+  // Duplicate signer emails break DocuSeal submitter matching.
+  const emails = body.signers.map((s) => s.email.toLowerCase());
+  if (new Set(emails).size !== emails.length) {
+    res.status(400).json({ error: "duplicate-signer-email" });
+    return;
+  }
+
+  const [doc] = await db
+    .select()
+    .from(atelierDocuments)
+    .where(
+      and(
+        eq(atelierDocuments.id, body.documentId),
+        eq(atelierDocuments.orgId, me.orgId),
+        eq(atelierDocuments.status, "active"),
+      ),
+    );
+  if (!doc || !doc.currentVersionId) {
+    res.status(404).json({ error: "document-not-found" });
+    return;
+  }
+  const [version] = await db
+    .select()
+    .from(atelierDocumentVersions)
+    .where(eq(atelierDocumentVersions.id, doc.currentVersionId));
+  if (!version) {
+    res.status(404).json({ error: "document-version-not-found" });
+    return;
+  }
+  if (version.mime !== "application/pdf") {
+    res.status(400).json({
+      error: "document-not-pdf",
+      message: "Only PDF documents can be sent for signature.",
+    });
+    return;
+  }
+  const bytes = await loadDocBytes(version.blobRef);
+  if (!bytes) {
+    res.status(500).json({ error: "document-bytes-missing" });
+    return;
+  }
+
+  const expiresAt = body.expiresInDays
+    ? new Date(Date.now() + body.expiresInDays * 24 * 60 * 60 * 1000)
+    : null;
+
+  try {
+    const out = await sendSignatureRequest({
+      orgId: me.orgId,
+      actor: { id: me.id, name: me.name },
+      title: body.title,
+      message: body.message ?? null,
+      documentId: doc.id,
+      documentVersionId: version.id,
+      fileName: version.fileName,
+      pdfBytes: bytes,
+      signers: body.signers,
+      accountId: body.accountId ?? doc.accountId ?? null,
+      contactId: body.contactId ?? null,
+      personId: body.personId ?? null,
+      expiresAt,
+    });
+    res.status(201).json({ request: requestShape(out.request, out.signers) });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
+});
+
+async function loadOwnRequest(
+  req: Request,
+  res: Response,
+  me: Me,
+): Promise<SigRequestRow | null> {
+  const [row] = await db
+    .select()
+    .from(atelierSignatureRequests)
+    .where(
+      and(
+        eq(atelierSignatureRequests.id, String(req.params.id ?? "")),
+        eq(atelierSignatureRequests.orgId, me.orgId),
+      ),
+    );
+  if (!row) {
+    res.status(404).json({ error: "signature-request-not-found" });
+    return null;
+  }
+  return row;
+}
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.get("/esign/requests/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  const signerMap = await loadRequestSigners([row.id]);
+  res.json({ request: requestShape(row, signerMap.get(row.id) ?? []) });
+});
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.post("/esign/requests/:id/void", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  if (row.status === "voided") {
+    res.json({ request: requestShape(row) });
+    return;
+  }
+  if (row.status !== "sent" && row.status !== "partially_signed") {
+    res.status(409).json({ error: "not-voidable", status: row.status });
+    return;
+  }
+  try {
+    const updated = await voidSignatureRequest({ row, actor: { id: me.id, name: me.name } });
+    res.json({ request: requestShape(updated) });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
+});
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.post("/esign/requests/:id/remind", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  if (row.status !== "sent" && row.status !== "partially_signed") {
+    res.status(409).json({ error: "not-remindable", status: row.status });
+    return;
+  }
+  try {
+    const out = await remindSignatureRequest({ row, actor: { id: me.id, name: me.name } });
+    res.json({ reminded: out.reminded });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
+});
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.post("/esign/requests/:id/sync", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  try {
+    const out = await syncSignatureRequest(row.id);
+    const signerMap = await loadRequestSigners([row.id]);
+    res.json({
+      request: requestShape(out.request, signerMap.get(row.id) ?? []),
+      changed: out.changed,
+    });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
+});
+
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.post("/esign/sync", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const out = await syncAllOpenRequests();
+  res.json(out);
+});
+
+export default router;

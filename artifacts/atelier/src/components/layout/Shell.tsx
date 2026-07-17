@@ -147,6 +147,7 @@ export function TopNav() {
     { href: "/guardhouse", label: "Guardhouse" },
     { href: "/reports", label: "Reports" },
     { href: "/documents", label: "Documents" },
+    { href: "/agreements", label: "Agreements" },
     { href: "/wallet", label: "Wallet" },
     { href: "/settings", label: "Settings" },
     { href: "/admin", label: "Admin", gated: true },

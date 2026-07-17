@@ -2403,6 +2403,105 @@ export interface AtelierLibraryDocumentDetail {
   audit: AtelierLibraryDocumentDetailAuditItem[];
 }
 
+export interface AtelierSignatureSigner {
+  id: string;
+  name: string;
+  email: string;
+  signingOrder: number;
+  status: string;
+  /** @nullable */
+  openedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  declinedAt?: string | null;
+}
+
+export interface AtelierSignatureRequest {
+  id: string;
+  title: string;
+  /** @nullable */
+  message?: string | null;
+  status: string;
+  documentId: string;
+  documentVersionId: string;
+  /** @nullable */
+  accountId?: string | null;
+  /** @nullable */
+  contactId?: string | null;
+  /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  signedDocumentId?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  createdBy: string;
+  createdByLabel: string;
+  /** @nullable */
+  lastSyncError?: string | null;
+  /** @nullable */
+  lastSyncedAt?: string | null;
+  /** @nullable */
+  voidedAt?: string | null;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  declinedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  signers?: AtelierSignatureSigner[];
+}
+
+export interface AtelierSignatureRequestList {
+  /** Whether a DocuSeal API key is configured server-side. */
+  configured: boolean;
+  requests: AtelierSignatureRequest[];
+}
+
+export interface AtelierSignatureRequestEnvelope {
+  request: AtelierSignatureRequest;
+  changed?: boolean;
+}
+
+export type AtelierSignatureRequestCreateSignersItem = {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /** @maxLength 254 */
+  email: string;
+};
+
+export interface AtelierSignatureRequestCreate {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  title: string;
+  /** @maxLength 2000 */
+  message?: string;
+  documentId: string;
+  /**
+   * @minItems 1
+   * @maxItems 10
+   */
+  signers: AtelierSignatureRequestCreateSignersItem[];
+  accountId?: string;
+  contactId?: string;
+  personId?: string;
+  /**
+   * @minimum 1
+   * @maximum 365
+   */
+  expiresInDays?: number;
+}
+
+export interface AtelierEsignUpstreamError {
+  error: string;
+  message: string;
+}
+
 export interface AtelierSelfDocument {
   id: string;
   kind: string;
@@ -5482,6 +5581,26 @@ export type AtelierGrantDocumentAccess201 = {
 export type AtelierRevokeDocumentAccess200 = {
   status: string;
   userId: string;
+};
+
+export type AtelierListSignatureRequestsParams = {
+  status?: string;
+  accountId?: string;
+};
+
+export type AtelierRemindSignatureRequest200 = {
+  reminded: number;
+};
+
+export type AtelierSyncAllSignatureRequests200FailuresItem = {
+  requestId: string;
+  error: string;
+};
+
+export type AtelierSyncAllSignatureRequests200 = {
+  synced: number;
+  changed: number;
+  failures: AtelierSyncAllSignatureRequests200FailuresItem[];
 };
 
 export type AtelierUploadMyPhotoBody = {
