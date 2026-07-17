@@ -27,7 +27,8 @@
     "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
     "test:suggestion-jargon": "tsx ./tests/cli-catalog/suggestion-jargon.ts",
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
-    "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts"
+    "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts",
+    "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

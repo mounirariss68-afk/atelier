@@ -53,6 +53,15 @@ export const V3_AUDIT_ACTIONS = {
   INVOICE_DRAFT_GENERATED: "wallet.invoice_draft.generated",
   PUBLISH_SENTINEL_BLOCK: "wallet.publish_sentinel.block",
 
+  // Me lens self-service — Task #53 ---------------------------------------
+  LEAVE_REQUEST: "leave.request",
+  LEAVE_APPROVE: "leave.approve",
+  LEAVE_REJECT: "leave.reject",
+  LEAVE_CANCEL: "leave.cancel",
+  LEAVE_ENTITLEMENT_SET: "leave.entitlement.set",
+  ROSTER_REPORTS_TO_SET: "roster.reports_to.set",
+  EXPENSE_REIMBURSE: "expense.reimburse",
+
   // Compensation column policy lock --------------------------------------
   POLICY_READ_RESTRICTED: "policy.read.restricted",
 

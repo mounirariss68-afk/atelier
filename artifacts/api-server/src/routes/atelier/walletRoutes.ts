@@ -42,6 +42,8 @@ import {
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
 import { assertAuditAction } from "./auditContract.js";
+// Task #53 — Me-home notification cards on expense status changes.
+import { emitSelfNotification } from "./meRoutes";
 import { RECEIPT_FIXTURES, resolveFixtureDate } from "../../lib/atelier-receipt-fixtures.js";
 import { runExpenseAuditor, runPublishSentinel } from "../../lib/atelier-agents/runner.js";
 import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
@@ -215,6 +217,11 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
     approvedAt: e.approvedAt?.toISOString() ?? null,
     rejectedAt: e.rejectedAt?.toISOString() ?? null,
     rejectedReason: e.rejectedReason,
+    // Task #53 — Me-lens claim context + reimbursement lifecycle.
+    contextType: e.contextType,
+    accountId: e.accountId,
+    internalProjectLabel: e.internalProjectLabel,
+    reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
   };
 }
@@ -874,6 +881,16 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     summary: `Approved ${existing.merchant ?? existing.id} ($${existing.usdAmount.toFixed(2)}); VAT register row written.`,
   });
 
+  // Task #53 — expense personId IS the atelier_users id; notify directly.
+  await emitSelfNotification({
+    orgId: me.orgId,
+    userId: existing.personId,
+    kind: "expense_approved",
+    title: "Expense claim approved",
+    body: `${existing.merchant ?? existing.id} — ${existing.currency} ${existing.amount.toFixed(2)} was approved.`,
+    href: "/me",
+  });
+
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });
 });
@@ -930,6 +947,75 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
     action: "expense.reject",
     payload: { reason },
     summary: `Rejected ${existing.merchant ?? existing.id}: ${reason}`,
+  });
+
+  // Task #53 — notify the claimant on their Me home.
+  await emitSelfNotification({
+    orgId: me.orgId,
+    userId: existing.personId,
+    kind: "expense_rejected",
+    title: "Expense claim rejected",
+    body: `${existing.merchant ?? existing.id} — ${existing.currency} ${existing.amount.toFixed(2)} was rejected: ${reason}`,
+    href: "/me",
+  });
+
+  const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
+  res.json({ expense: expenseToWire(final, me) });
+});
+
+// =====================================================================
+// POST /wallet/expenses/:id/reimburse — Task #53
+// Finance/leadership marks an APPROVED claim as paid out.
+// =====================================================================
+// @cli-skip: finance reimbursement action backing Wallet UI (Task #53)
+router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!(isLeadership(me) || me.role === "finance")) {
+    res.status(403).json({ error: "forbidden", message: "Reimbursement is a finance/leadership action." });
+    return;
+  }
+  const [existing] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (existing.status === "reimbursed") {
+    // Idempotent — repeat calls return the current row.
+    res.json({ expense: expenseToWire(existing, me), alreadyReimbursed: true });
+    return;
+  }
+  if (existing.status !== "approved") {
+    res.status(409).json({ error: "not-approved", status: existing.status });
+    return;
+  }
+  await db
+    .update(atelierExpenses)
+    .set({
+      status: "reimbursed",
+      reimbursedAt: new Date(),
+      reimbursedByUserId: me.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierExpenses.id, existing.id));
+  await audit({
+    entityType: "expense",
+    entityId: existing.id,
+    actor: me,
+    action: "expense.reimburse",
+    payload: { usdGross: existing.usdAmount },
+    summary: `Reimbursed ${existing.merchant ?? existing.id} ($${existing.usdAmount.toFixed(2)}).`,
+  });
+  await emitSelfNotification({
+    orgId: me.orgId,
+    userId: existing.personId,
+    kind: "expense_reimbursed",
+    title: "Expense reimbursed",
+    body: `${existing.merchant ?? existing.id} — ${existing.currency} ${existing.amount.toFixed(2)} has been paid out.`,
+    href: "/me",
   });
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, existing.id));
   res.json({ expense: expenseToWire(final, me) });

@@ -48,6 +48,15 @@ interface WeekResp {
   };
   entries: Entry[];
   signals: Signal[];
+  // Me-lens only: approved leave intersecting this week, so timesheet and
+  // leave can never visually disagree. Absent on the ledger surface.
+  approvedLeave?: Array<{
+    id: string;
+    leaveType: string;
+    startDate: string;
+    endDate: string;
+    dates: string[];
+  }>;
 }
 
 interface EngagementOption {
@@ -110,15 +119,28 @@ interface RowModel {
   hasEntries: boolean;
 }
 
-export default function Timesheet() {
+// Task #53 — the grid is reused by the Me lens (self-service personas who
+// can only reach /me/* routes). Props swap the API base + the engagement
+// option source; defaults preserve the original /ledger behaviour.
+interface TimesheetProps {
+  apiBase?: string;
+  engagementsUrl?: string;
+  eyebrow?: string;
+}
+
+export default function Timesheet({
+  apiBase = "/api/atelier/ledger/timesheets",
+  engagementsUrl = "/api/atelier/engagements",
+  eyebrow = "Firm \u00b7 Ledger",
+}: TimesheetProps = {}) {
   // Past-week routes pass /:personId/:weekIso. When absent we load the
   // active persona's current week via /ledger/timesheets/current.
   const params = useParams<{ personId?: string; weekIso?: string }>();
   const personId = params.personId;
   const weekIso = params.weekIso;
   const fetchUrl = personId && weekIso
-    ? `/api/atelier/ledger/timesheets/${personId}/${weekIso}`
-    : `/api/atelier/ledger/timesheets/current`;
+    ? `${apiBase}/${personId}/${weekIso}`
+    : `${apiBase}/current`;
 
   const [data, setData] = React.useState<WeekResp | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -153,7 +175,7 @@ export default function Timesheet() {
   // Load engagements for the add-row dropdown. The endpoint returns a bare
   // array; tolerate a { engagements } envelope too.
   React.useEffect(() => {
-    fetch("/api/atelier/engagements", { credentials: "include" })
+    fetch(engagementsUrl, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : []))
       .then((j: unknown) => {
         const list: Array<{ id: string; name: string }> = Array.isArray(j)
@@ -162,11 +184,11 @@ export default function Timesheet() {
         setEngagements(list.map((e) => ({ id: e.id, name: e.name })));
       })
       .catch(() => setEngagements([]));
-  }, []);
+  }, [engagementsUrl]);
 
   const runSteward = async () => {
     if (!data) return;
-    const r = await fetch(`/api/atelier/ledger/timesheets/${data.week.id}/draft`, { method: "POST", credentials: "include" });
+    const r = await fetch(`${apiBase}/${data.week.id}/draft`, { method: "POST", credentials: "include" });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       setError(j.reason || j.error || `HTTP ${r.status}`);
@@ -177,7 +199,7 @@ export default function Timesheet() {
 
   const submit = async (acknowledgeFlags: boolean) => {
     if (!data) return;
-    const r = await fetch(`/api/atelier/ledger/timesheets/${data.week.id}/submit`, {
+    const r = await fetch(`${apiBase}/${data.week.id}/submit`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -219,7 +241,7 @@ export default function Timesheet() {
       if (next === null) {
         // Clear: delete every entry in the cell.
         for (const e of cell.entries) {
-          const r = await fetch(`/api/atelier/ledger/timesheets/entries/${e.id}`, {
+          const r = await fetch(`${apiBase}/entries/${e.id}`, {
             method: "DELETE", credentials: "include",
           });
           if (!r.ok) return apiErr(r);
@@ -227,7 +249,7 @@ export default function Timesheet() {
       } else {
         // Remove any extra entries beyond the primary (consolidate).
         for (const e of cell.entries.slice(1)) {
-          const r = await fetch(`/api/atelier/ledger/timesheets/entries/${e.id}`, {
+          const r = await fetch(`${apiBase}/entries/${e.id}`, {
             method: "DELETE", credentials: "include",
           });
           if (!r.ok) return apiErr(r);
@@ -239,7 +261,7 @@ export default function Timesheet() {
           engagementId: row.engagementId,
           narrative: cell.narrative || null,
         };
-        const r = await fetch(`/api/atelier/ledger/timesheets/${weekId}/entries`, {
+        const r = await fetch(`${apiBase}/${weekId}/entries`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -259,7 +281,7 @@ export default function Timesheet() {
     for (const e of cell.entries) {
       if (!(e.source === "agent_drafted" && e.status === "draft")) continue;
       const r = await fetch(
-        `/api/atelier/ledger/timesheets/${weekId}/entries/${e.id}/confirm`,
+        `${apiBase}/${weekId}/entries/${e.id}/confirm`,
         { method: "POST", credentials: "include" },
       );
       if (!r.ok) return apiErr(r);
@@ -269,7 +291,7 @@ export default function Timesheet() {
 
   const saveNarrative = async (row: RowModel, date: string, cell: CellModel, text: string) => {
     if (!data || !cell.primaryId) return;
-    const r = await fetch(`/api/atelier/ledger/timesheets/${data.week.id}/entries`, {
+    const r = await fetch(`${apiBase}/${data.week.id}/entries`, {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -380,7 +402,7 @@ export default function Timesheet() {
         const cell = row.cells[c];
         if (next === cell.hours && cell.entries.length <= 1) continue; // unchanged
         for (const e of cell.entries.slice(1)) {
-          const r = await fetch(`/api/atelier/ledger/timesheets/entries/${e.id}`, {
+          const r = await fetch(`${apiBase}/entries/${e.id}`, {
             method: "DELETE", credentials: "include",
           });
           if (!r.ok) return apiErr(r);
@@ -392,7 +414,7 @@ export default function Timesheet() {
           engagementId: row.engagementId,
           narrative: cell.narrative || null,
         };
-        const r = await fetch(`/api/atelier/ledger/timesheets/${weekId}/entries`, {
+        const r = await fetch(`${apiBase}/${weekId}/entries`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -423,7 +445,7 @@ export default function Timesheet() {
     <div className="p-4 md:p-6 space-y-6">
       <PageHero>
         <SectionHead
-          eyebrow="Firm · Ledger"
+          eyebrow={eyebrow}
           headline={`Timesheet — ${w.weekIso}`}
           lede={`${w.personName} · week of ${w.weekStartDate}`}
         />
@@ -438,6 +460,14 @@ export default function Timesheet() {
         {w.rejectionReason && (
           <Card className="mt-3 border-red-500/40 p-3 text-sm text-red-300">
             Rejected: {w.rejectionReason}
+          </Card>
+        )}
+        {(data?.approvedLeave?.length ?? 0) > 0 && (
+          <Card className="mt-3 border-emerald-500/40 bg-emerald-500/5 p-3 text-sm" data-testid="approved-leave-banner">
+            <span className="text-emerald-300 font-medium">On leave this week: </span>
+            <span className="text-text">
+              {data!.approvedLeave!.map((l) => `${l.leaveType} ${l.dates[0]}${l.dates.length > 1 ? ` → ${l.dates[l.dates.length - 1]}` : ""}`).join(" · ")}
+            </span>
           </Card>
         )}
       </PageHero>

@@ -56,6 +56,8 @@ import {
 } from "@workspace/db";
 import { gte, sql } from "drizzle-orm";
 import { assertAuditAction } from "./auditContract.js";
+// Task #53 — Me-home notification cards on timesheet decisions.
+import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
 
 const router: IRouter = Router();
 
@@ -162,7 +164,7 @@ async function audit(args: {
 }
 
 // --- ISO week helpers (Mon-anchored) ----------------------------------
-function isoWeekOf(d: Date): { weekIso: string; weekStart: Date } {
+export function isoWeekOf(d: Date): { weekIso: string; weekStart: Date } {
   // Copy to UTC, set to Thursday of current week (ISO-8601 anchor).
   const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const dayNum = date.getUTCDay() || 7; // Mon=1..Sun=7
@@ -176,7 +178,7 @@ function isoWeekOf(d: Date): { weekIso: string; weekStart: Date } {
   return { weekIso: `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`, weekStart: monday };
 }
 
-function parseWeekIso(weekIso: string): Date {
+export function parseWeekIso(weekIso: string): Date {
   // Returns the Monday of the given ISO week.
   const m = /^(\d{4})-W(\d{2})$/.exec(weekIso);
   if (!m) throw new Error(`invalid week_iso: ${weekIso}`);
@@ -193,7 +195,7 @@ function parseWeekIso(weekIso: string): Date {
 }
 
 // --- Person resolution ------------------------------------------------
-type PersonRow = {
+export type PersonRow = {
   id: string;
   type: "employee" | "contractor";
   fullName: string;
@@ -201,7 +203,7 @@ type PersonRow = {
   userId: string | null;
 };
 
-async function resolvePerson(personIdOrUserId: string): Promise<PersonRow | null> {
+export async function resolvePerson(personIdOrUserId: string): Promise<PersonRow | null> {
   const [emp] = await db
     .select()
     .from(atelierEmployees)
@@ -227,7 +229,7 @@ async function resolvePerson(personIdOrUserId: string): Promise<PersonRow | null
 // them. atelier_contractors has no user_id column, so contractor personas
 // won't resolve via id alone — fall back to email match against the
 // atelier_users persona to keep contractor self-timesheet routes working.
-async function resolvePersonForCaller(me: typeof atelierUsers.$inferSelect): Promise<PersonRow | null> {
+export async function resolvePersonForCaller(me: typeof atelierUsers.$inferSelect): Promise<PersonRow | null> {
   const direct = await resolvePerson(me.id);
   if (direct) return direct;
   if (!me.email) return null;
@@ -263,7 +265,7 @@ async function assertCanMutateWeek(
 }
 
 // --- Week shell -------------------------------------------------------
-async function ensureWeekShell(person: PersonRow, weekIso: string): Promise<typeof atelierTimesheetWeeks.$inferSelect> {
+export async function ensureWeekShell(person: PersonRow, weekIso: string): Promise<typeof atelierTimesheetWeeks.$inferSelect> {
   const [existing] = await db
     .select()
     .from(atelierTimesheetWeeks)
@@ -293,7 +295,7 @@ async function ensureWeekShell(person: PersonRow, weekIso: string): Promise<type
 }
 
 // --- Wire shape -------------------------------------------------------
-function entryWire(e: typeof atelierTimesheetEntries.$inferSelect) {
+export function entryWire(e: typeof atelierTimesheetEntries.$inferSelect) {
   return {
     id: e.id,
     workDate: e.workDate,
@@ -309,7 +311,7 @@ function entryWire(e: typeof atelierTimesheetEntries.$inferSelect) {
   };
 }
 
-function signalWire(s: typeof atelierTimesheetSignals.$inferSelect) {
+export function signalWire(s: typeof atelierTimesheetSignals.$inferSelect) {
   return {
     id: s.id,
     workDate: s.workDate,
@@ -323,7 +325,7 @@ function signalWire(s: typeof atelierTimesheetSignals.$inferSelect) {
   };
 }
 
-async function recomputeWeekTotals(weekId: string): Promise<typeof atelierTimesheetWeeks.$inferSelect | null> {
+export async function recomputeWeekTotals(weekId: string): Promise<typeof atelierTimesheetWeeks.$inferSelect | null> {
   const entries = await db
     .select()
     .from(atelierTimesheetEntries)
@@ -338,7 +340,7 @@ async function recomputeWeekTotals(weekId: string): Promise<typeof atelierTimesh
   return row ?? null;
 }
 
-function detectSuspiciousFlags(entries: ReturnType<typeof entryWire>[], signals: ReturnType<typeof signalWire>[]): string[] {
+export function detectSuspiciousFlags(entries: ReturnType<typeof entryWire>[], signals: ReturnType<typeof signalWire>[]): string[] {
   const flags: string[] = [];
   // (a) any day > 14h
   const byDay = new Map<string, number>();
@@ -389,7 +391,7 @@ router.get("/ledger/timesheets/current", async (req, res) => {
 // has no agent_drafted entries yet. Spec calls for "draft already populated"
 // on /ledger/timesheets — this is the on-load path; the daily steward tick
 // (registerLedgerNudges below) handles the morning prepopulation.
-async function maybeAutoDraft(
+export async function maybeAutoDraft(
   week: typeof atelierTimesheetWeeks.$inferSelect,
   me: typeof atelierUsers.$inferSelect,
 ): Promise<void> {
@@ -443,10 +445,11 @@ router.get("/ledger/timesheets/:personId/:weekIso", async (req, res) => {
   return getWeekResponse(res, week, person);
 });
 
-async function getWeekResponse(
+export async function getWeekResponse(
   res: Response,
   week: typeof atelierTimesheetWeeks.$inferSelect,
   person: PersonRow,
+  extra?: Record<string, unknown>,
 ) {
   const entries = await db
     .select()
@@ -477,6 +480,7 @@ async function getWeekResponse(
     },
     entries: wireEntries,
     signals: wireSignals,
+    ...(extra ?? {}),
   });
 }
 
@@ -962,6 +966,19 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
     payload: { role, engagementId, entriesAdvanced: updated.length },
     summary: `${me.name} ${role}-approved ${updated.length} entr${updated.length === 1 ? "y" : "ies"} on week ${week.weekIso} (eng=${engagementId ?? "internal"})`,
   });
+
+  // Task #53 — drop a card on the week owner's Me home.
+  const ownerUserId = await resolveUserIdForPerson(me.orgId, week.personId);
+  if (ownerUserId && ownerUserId !== me.id) {
+    await emitSelfNotification({
+      orgId: me.orgId,
+      userId: ownerUserId,
+      kind: "timesheet_approved",
+      title: `Timesheet ${week.weekIso} ${role}-approved`,
+      body: `${me.name} approved ${updated.length} entr${updated.length === 1 ? "y" : "ies"} on your week.`,
+      href: "/me",
+    });
+  }
   res.json({ ok: true, entriesAdvanced: updated.length });
 });
 
@@ -1004,6 +1021,19 @@ router.post("/ledger/approvals/:weekId/reject", async (req, res) => {
     payload: { reason },
     summary: `${me.name} rejected week ${week.weekIso}: ${reason.slice(0, 80)}`,
   });
+
+  // Task #53 — drop a card on the week owner's Me home.
+  const ownerUserId = await resolveUserIdForPerson(me.orgId, week.personId);
+  if (ownerUserId && ownerUserId !== me.id) {
+    await emitSelfNotification({
+      orgId: me.orgId,
+      userId: ownerUserId,
+      kind: "timesheet_rejected",
+      title: `Timesheet ${week.weekIso} rejected`,
+      body: `${me.name} sent your week back: ${reason.slice(0, 200)}`,
+      href: "/me",
+    });
+  }
   res.json({ ok: true });
 });
 

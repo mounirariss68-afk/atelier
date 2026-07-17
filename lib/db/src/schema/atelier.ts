@@ -2921,6 +2921,109 @@ export const atelierTimesheetSignals = pgTable(
   ],
 );
 
+// ============================================================
+// LEAVE (Task #53) — self-service leave requests + per-person
+// entitlements. Requests are owned by an atelier_users id (the signed-in
+// person) AND carry the resolved roster person id so the timesheet and
+// leave views can never disagree about who took the time.
+// ============================================================
+export const atelierLeaveRequests = pgTable(
+  "atelier_leave_requests",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(), // atelier_users.id of the requester
+    personId: text("person_id").notNull(), // employee.id or contractor.id
+    personType: text("person_type").notNull(), // employee | contractor
+    leaveType: text("leave_type").notNull(), // annual | sick | unpaid | other
+    startDate: text("start_date").notNull(), // ISO date, inclusive
+    endDate: text("end_date").notNull(), // ISO date, inclusive
+    // Working days (Mon–Fri) covered by the range, computed at request time
+    // so balance arithmetic is stable even if the calendar rules evolve.
+    workingDays: doublePrecision("working_days").notNull().default(0),
+    note: text("note"),
+    status: text("status").notNull().default("pending"),
+    // pending | approved | rejected | cancelled
+    decidedAt: timestamp("decided_at"),
+    decidedByUserId: text("decided_by_user_id"),
+    decisionReason: text("decision_reason"),
+    cancelledAt: timestamp("cancelled_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_leave_req_person").on(t.personId, t.startDate),
+    index("idx_atelier_leave_req_user").on(t.userId),
+    index("idx_atelier_leave_req_status").on(t.status),
+    index("idx_atelier_leave_req_org").on(t.orgId),
+  ],
+);
+
+// Per-person, per-year leave entitlement (HR-configured). When absent, the
+// app-level defaults apply (annual 25, sick 10 working days).
+export const atelierLeaveEntitlements = pgTable(
+  "atelier_leave_entitlements",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(),
+    personType: text("person_type").notNull(), // employee | contractor
+    year: integer("year").notNull(),
+    annualDays: doublePrecision("annual_days").notNull().default(25),
+    sickDays: doublePrecision("sick_days").notNull().default(10),
+    notes: text("notes"),
+    updatedByUserId: text("updated_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_leave_ent").on(t.personId, t.year),
+    index("idx_atelier_leave_ent_org").on(t.orgId),
+  ],
+);
+
+// Internal roster reporting lines (org chart for approval routing). A
+// person may hold MULTIPLE live edges (multiple managers) — deliberately
+// no uniqueness on personId alone; approval logic must accept any of them.
+export const atelierRosterReportsTo = pgTable(
+  "atelier_roster_reports_to",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personId: text("person_id").notNull(), // employee.id or contractor.id
+    managerPersonId: text("manager_person_id").notNull(), // employee.id
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_roster_reports_edge").on(t.personId, t.managerPersonId),
+    index("idx_atelier_roster_reports_person").on(t.personId),
+    index("idx_atelier_roster_reports_mgr").on(t.managerPersonId),
+    index("idx_atelier_roster_reports_org").on(t.orgId),
+  ],
+);
+
+// Per-employment-type, per-year leave entitlement defaults (HR-configured).
+// Precedence: per-person row > employment-type row > app defaults.
+export const atelierLeaveTypeEntitlements = pgTable(
+  "atelier_leave_type_entitlements",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    employmentType: text("employment_type").notNull(), // FTE | fixed_term | intern | contractor
+    year: integer("year").notNull(),
+    annualDays: doublePrecision("annual_days").notNull().default(25),
+    sickDays: doublePrecision("sick_days").notNull().default(10),
+    updatedByUserId: text("updated_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_leave_type_ent").on(t.orgId, t.employmentType, t.year),
+  ],
+);
+
 export const atelierPartnerFirmHours = pgTable(
   "atelier_partner_firm_hours",
   {
@@ -3116,7 +3219,7 @@ export const atelierExpenses = pgTable(
     vatCountryCode: text("vat_country_code"),
     clientBillable: boolean("client_billable").notNull().default(false),
     markupPct: doublePrecision("markup_pct").notNull().default(0),
-    status: text("status").notNull().default("draft"), // draft | submitted | approved | rejected
+    status: text("status").notNull().default("draft"), // draft | submitted | approved | rejected | reimbursed
     policyStatus: text("policy_status").notNull().default("green"), // green | amber | red
     policyFindings: jsonb("policy_findings").notNull().default([]).$type<
       Array<{
@@ -3148,6 +3251,16 @@ export const atelierExpenses = pgTable(
     approvedByUserId: text("approved_by_user_id"),
     rejectedAt: timestamp("rejected_at"),
     rejectedReason: text("rejected_reason"),
+    // Task #53 — Me lens self-service expense claims.
+    // Every claim must be tagged to a context: business development, a
+    // client account, an engagement, or a named internal project. Legacy
+    // wallet rows predate this and default to 'bd' (engagement-bound rows
+    // read as context via engagementId).
+    contextType: text("context_type").notNull().default("bd"), // bd | account | engagement | internal
+    accountId: text("account_id"), // when contextType='account'
+    internalProjectLabel: text("internal_project_label"), // when contextType='internal'
+    reimbursedAt: timestamp("reimbursed_at"),
+    reimbursedByUserId: text("reimbursed_by_user_id"),
     createdByUserId: text("created_by_user_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

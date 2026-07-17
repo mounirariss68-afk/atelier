@@ -193,6 +193,16 @@ export default function WalletExpenseDetail() {
                 </button>
               </>
             ) : null}
+            {expense.status === "approved" ? (
+              <button
+                className="rounded bg-emerald-700 px-4 py-2 text-sm text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={() => action("reimburse")}
+                data-testid="btn-reimburse"
+              >
+                Mark reimbursed
+              </button>
+            ) : null}
             {expense.status === "submitted" ? (
               <>
                 <button

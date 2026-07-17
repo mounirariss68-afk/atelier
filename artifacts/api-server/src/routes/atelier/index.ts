@@ -65,6 +65,8 @@ import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
 // Task #50 — Me lens self-scope routes + HR joiner lifecycle.
 import meRoutes from "./meRoutes";
 import payRoutes from "./payRoutes";
+// Task #53 — Me lens self-service: timesheets, leave, expense claims.
+import meSelfServiceRoutes from "./meSelfServiceRoutes";
 import joinerRoutes from "./joinerRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
@@ -229,6 +231,10 @@ router.use(meRoutes);
 // Task #54 — Personal pay hub: self-scope /me/pay/* + HR /roster/pay/*.
 // Mounted with meRoutes so employee/contractor allowlists cover /me/pay.
 router.use(payRoutes);
+// Task #53 — self-service timesheets / leave / expenses (+ approver
+// surfaces under /roster/leave-*). Mounted with meRoutes so /me/* wins
+// before broader router patterns.
+router.use(meSelfServiceRoutes);
 router.use(joinerRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

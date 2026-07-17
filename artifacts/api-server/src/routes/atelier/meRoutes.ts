@@ -155,6 +155,48 @@ export async function emitSelfNotification(
   return id;
 }
 
+/**
+ * Task #53 — resolve the atelier_users id that owns a roster person row so
+ * status-change surfaces (timesheet/leave/expense decisions) can drop a
+ * card on the right person's Me home. Employees link via employees.userId;
+ * contractors link by lower-cased email. Org-scoped. Returns null when the
+ * person has no login — callers should just skip the notification.
+ */
+export async function resolveUserIdForPerson(
+  orgId: string,
+  personId: string,
+): Promise<string | null> {
+  const [emp] = await db
+    .select({ userId: atelierEmployees.userId })
+    .from(atelierEmployees)
+    .where(
+      and(
+        eq(atelierEmployees.orgId, orgId),
+        eq(atelierEmployees.id, personId),
+        isNull(atelierEmployees.deletedAt),
+      ),
+    );
+  if (emp?.userId) return emp.userId;
+  const [con] = await db
+    .select({ email: atelierContractors.email })
+    .from(atelierContractors)
+    .where(
+      and(
+        eq(atelierContractors.orgId, orgId),
+        eq(atelierContractors.id, personId),
+        isNull(atelierContractors.deletedAt),
+      ),
+    );
+  if (!con?.email) return null;
+  const email = con.email.trim().toLowerCase();
+  const users = await db
+    .select({ id: atelierUsers.id, email: atelierUsers.email })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.orgId, orgId));
+  const hit = users.find((u) => u.email.trim().toLowerCase() === email);
+  return hit?.id ?? null;
+}
+
 function notifToWire(n: typeof atelierSelfNotifications.$inferSelect) {
   return {
     id: n.id,

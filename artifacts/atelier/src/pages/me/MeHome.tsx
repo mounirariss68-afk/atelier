@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import MePay from "./MePay";
+// Task #53 — self-service Time (timesheet grid + leave) and Expenses tabs.
+import MeTime from "./MeTime";
+import MeExpenses from "./MeExpenses";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -62,18 +65,8 @@ export default function MeHome() {
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
           {section === "profile" && <ProfileSection loading={isLoading} profile={profile} />}
-          {section === "time" && (
-            <PlaceholderSection
-              title="Time"
-              body="Your timesheets and submission history will appear here. Weekly submissions open Monday and are due Tuesday 12:00 GST."
-            />
-          )}
-          {section === "expenses" && (
-            <PlaceholderSection
-              title="Expenses"
-              body="Submit and track your expense claims here. Approved claims are reimbursed with the next pay run."
-            />
-          )}
+          {section === "time" && <MeTime />}
+          {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
           {section === "performance" && (
             <PlaceholderSection

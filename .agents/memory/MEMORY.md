@@ -47,3 +47,4 @@
 - [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions (no revoked_at); orval may skip response zod consts.
 - [db push blocked by orphaned FK rows](db-push-orphan-fk.md) — schema push re-validates FKs; delete orphaned child rows (old test data) before re-push; stale api-zod dist mimics missing exports.
 - [Atelier pay hub invariants](atelier-pay-hub.md) — pay doc bytes base64 in-row behind ACL routes on purpose; HR approve is sole IBAN write path; contractor variant has no bank/insurance.
+- [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
