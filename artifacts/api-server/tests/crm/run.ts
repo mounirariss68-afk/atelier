@@ -29,30 +29,22 @@
  * where it is observable here: the RLS helper functions (pure SQL) and the
  * application ACL helpers. This keeps the suite deterministic and green.
  *
- * Isolation: every row this suite creates is tagged (TAG) and removed in a
- * `finally` cleanup. TEST_DATABASE_URL is REQUIRED and must point at a
- * throwaway database — the suite refuses to run against the live DB.
+ * Isolation (Task #40): the suite NEVER touches the live database. The
+ * ./scratch-db.js bootstrap (first import below) auto-provisions an isolated
+ * scratch database (`crm_test`) on the same Postgres server, pushes the
+ * current Drizzle schema + RLS SQL into it, and rewrites DATABASE_URL before
+ * any db import. An explicitly set TEST_DATABASE_URL is honored as an
+ * override. If isolation cannot be established the harness aborts — there is
+ * no fallback to the live DB. Rows are still tagged (TAG) and cleaned up in
+ * `finally` to keep re-runs idempotent.
  */
 
-// --- env setup MUST run before any value-import of @workspace/db / app ---
-if (!process.env.TEST_DATABASE_URL) {
-  console.error(
-    "FATAL: TEST_DATABASE_URL is not set. The CRM harness writes rows and " +
-      "will NOT fall back to the live DATABASE_URL. Point TEST_DATABASE_URL " +
-      "at a throwaway database and re-run.",
-  );
-  process.exit(1);
-}
-if (process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) {
-  console.error(
-    "FATAL: TEST_DATABASE_URL equals DATABASE_URL — refusing to run the CRM " +
-      "harness against the live database.",
-  );
-  process.exit(1);
-}
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
-process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+// --- isolation bootstrap: MUST be the first import so DATABASE_URL is
+// rewritten to the auto-provisioned scratch DB before any value-import of
+// @workspace/db / app binds the pg pool (Task #40). It also sets
+// ATELIER_MOCK_AGENTS / NODE_ENV defaults and exits fatally (never falling
+// back to the live DB) if isolation cannot be established.
+import "./scratch-db.js";
 
 import type { AddressInfo } from "node:net";
 import zlib from "node:zlib";
@@ -262,22 +254,8 @@ const FINANCIAL_LABELS = [
 const FINANCIAL_PLACEHOLDER = "Financial detail is restricted for this persona.";
 
 async function main(): Promise<void> {
-  if (!process.env.DATABASE_URL) {
-    // Fail fast rather than skip: this is a regression gate, and a silent
-    // skip would let the validation check pass without running any assertion.
-    console.error(
-      "\u2717 DATABASE_URL is not set \u2014 the CRM harness requires a database connection. " +
-        "Set TEST_DATABASE_URL (preferred, isolated) or DATABASE_URL.",
-    );
-    process.exit(1);
-  }
-  if (!process.env.TEST_DATABASE_URL) {
-    console.warn(
-      "\u26a0 TEST_DATABASE_URL not set \u2014 running against DATABASE_URL (NOT an isolated DB). " +
-        "Every row created here is tagged and removed in the finally cleanup, and audit cleanup is " +
-        "scoped to this run's actor personas; set TEST_DATABASE_URL for a fully isolated run.",
-    );
-  }
+  // DATABASE_URL is guaranteed by ./scratch-db.js to point at the isolated
+  // scratch database (the bootstrap aborts otherwise).
 
   // Dynamic imports AFTER env is finalised so the pool binds the right URL.
   const D = await import("@workspace/db");
@@ -406,6 +384,55 @@ async function main(): Promise<void> {
   }
 
   try {
+    // =====================================================================
+    // Task #40 — minimal boot seed for the fresh scratch database. The live
+    // boot (src/index.ts) seeds auth credentials, reference data and pricing;
+    // the harness mirrors the pieces its assertions depend on. The founder
+    // users (PERSONA.fp acts as founding_partner throughout) are data-only
+    // rows the auth seed does not create, so insert them idempotently here.
+    // =====================================================================
+    {
+      const { ensureAtelierAuthSeed } = await import(
+        "../../src/lib/atelier-seed-auth.js"
+      );
+      const { ensureAtelierReferenceSeed } = await import(
+        "../../src/lib/atelier-seed-reference.js"
+      );
+      const FOUNDERS = [
+        {
+          id: "p_mounir_ariss",
+          email: "mounir@cognirise.ai",
+          name: "Mounir Ariss",
+          initials: "MA",
+          role: "founding_partner",
+          roleLabel: "Founding Partner",
+          title: "Founding Partner",
+        },
+        {
+          id: "p_gokhan_guney",
+          email: "gokhan@cognirise.ai",
+          name: "Gokhan Guney",
+          initials: "GG",
+          role: "founding_partner",
+          roleLabel: "Founding Partner",
+          title: "Founding Partner",
+        },
+      ];
+      for (const f of FOUNDERS) {
+        await db
+          .insert(atelierUsers)
+          .values({
+            ...f,
+            orgId: ORG,
+            permissions: ["*"],
+            bdActive: true,
+          })
+          .onConflictDoNothing();
+      }
+      await ensureAtelierAuthSeed();
+      await ensureAtelierReferenceSeed();
+    }
+
     // =====================================================================
     // Task T003 — provision the EPHEMERAL RBAC personas this harness acts as.
     // The demo personas that used to carry these roles/scopes were removed

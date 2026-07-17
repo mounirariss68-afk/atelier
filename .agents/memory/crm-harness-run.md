@@ -5,6 +5,16 @@ description: How to actually run/verify artifacts/api-server tests/crm/run.ts in
 `pnpm --filter @workspace/api-server test:crm` (= `tsx ./tests/crm/run.ts`) is a
 single-shot test that boots the app and exits.
 
+**Isolation (2026-07-17):** the harness NEVER touches the live DB. Its first
+import (`tests/crm/scratch-db.ts`) synchronously auto-provisions a `crm_test`
+database on the same server, drizzle-pushes the schema + applies
+atelier-rls.sql each run, and rewrites DATABASE_URL before @workspace/db loads.
+TEST_DATABASE_URL is only an explicit override; there is no live-DB fallback.
+The harness seeds the two founder user rows + auth/reference seeds itself.
+CRITICAL lesson: the bootstrap must stay **synchronous** (spawnSync child
+processes for pg/push work) — top-level await in an ESM module does NOT block
+sibling imports, so an async bootstrap lets @workspace/db bind the LIVE URL.
+
 Gotchas observed:
 - It takes **>120s** wall time. A large chunk is one REAL Anthropic "pursuit
   scout" call in the Opportunities group that aborts after ~45s when no API key

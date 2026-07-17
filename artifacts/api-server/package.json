@@ -75,8 +75,10 @@
     "@types/node": "catalog:",
     "@types/node-cron": "^3.0.11",
     "@types/pdfkit": "^0.13.4",
+    "@types/pg": "^8.18.0",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",
+    "pg": "^8.20.0",
     "pino-pretty": "^13",
     "thread-stream": "3.1.0",
     "tsx": "catalog:"
