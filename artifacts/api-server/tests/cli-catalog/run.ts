@@ -37,6 +37,7 @@ import {
 import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 import { ATELIER_AGENTS } from "@workspace/agents";
 import { lintAtelierRoutes } from "../../src/scripts/atelier-lint-routes.js";
+import { lintOpportunityDeletes } from "../../src/scripts/atelier-lint-opportunity-deletes.js";
 import {
   wrapAttachment,
   attachmentMentionsDestructive,
@@ -286,6 +287,28 @@ async function main() {
         `${fresh.length} NEW route(s) missing capability metadata. ` +
         `Wrap with defineRouteCapability(...) or add \`// @cli-skip: <reason>\`.\n${head}` +
         (fresh.length > 5 ? `\n  ... and ${fresh.length - 5} more` : ""),
+      );
+    }
+  });
+
+  console.log("\n[7] Task #49 — no raw opportunity deletes outside the shared helper");
+  await test("every raw opportunity-row delete goes through hardDeleteOpportunities()", () => {
+    // Opportunity children (meetings, transcripts, debriefs, pane rows)
+    // are only swept together by the shared cascade helper. The one
+    // intentional raw delete (tests/crm/probe-winloss-orphans.ts, which
+    // deliberately simulates an orphaning delete) is allow-listed inside
+    // the lint script itself.
+    const violations = lintOpportunityDeletes();
+    if (violations.length > 0) {
+      const head = violations
+        .slice(0, 5)
+        .map((v) => `  ${v.file}:${v.line}  ${v.snippet}`)
+        .join("\n");
+      assert.fail(
+        `${violations.length} raw opportunity delete(s) found — use ` +
+        `hardDeleteOpportunities() from src/lib/atelier-opportunity-delete.ts ` +
+        `or extend the allow-list with justification.\n${head}` +
+        (violations.length > 5 ? `\n  ... and ${violations.length - 5} more` : ""),
       );
     }
   });
