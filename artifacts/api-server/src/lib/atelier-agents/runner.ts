@@ -29,6 +29,7 @@ import { getAgent } from "@workspace/agents";
 import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
+import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import {
   STALLED_THRESHOLD_DAYS,
   SALES_STAGE_DEFAULT_PROB,
@@ -2923,6 +2924,7 @@ export interface ExecutiveMapperOutput {
 export async function runExecutiveMapper(args: {
   accountId: string;
   accountName: string;
+  accountBrandName?: string | null;
   accountSector: string;
   accountCountry: string;
   accountHqCity?: string | null;
@@ -3003,6 +3005,90 @@ export async function runExecutiveMapper(args: {
         ? value.openQuestions.filter((q): q is string => typeof q === "string")
         : [],
     };
+
+    // Second source: People Data Labs licensed records. Catches executives
+    // whose LinkedIn profiles are confidential or unindexed and therefore
+    // invisible to the public-web sweep above. Degrades loudly, never
+    // silently: unconfigured or failed lookups land in openQuestions.
+    if (isPdlConfigured()) {
+      await progressRun(runId, 92, "Cross-checking People Data Labs records");
+      try {
+        const pdl = await fetchPdlExecutivesForCompany({
+          name: args.accountName,
+          brandName: args.accountBrandName ?? null,
+          country: args.accountCountry || null,
+        });
+        if (!pdl) {
+          normalised.openQuestions.push(
+            `People Data Labs has no company record matching "${args.accountName}" — provider cross-check returned nothing.`,
+          );
+        } else {
+          const byName = new Map<string, (typeof normalised.decisionMakers)[number]>();
+          for (const d of normalised.decisionMakers) byName.set(d.fullName.toLowerCase(), d);
+          const knownByName = new Map(
+            args.knownContacts.map((c) => [c.fullName.toLowerCase(), c] as const),
+          );
+          let added = 0;
+          for (const p of pdl.people) {
+            const key = p.fullName.toLowerCase();
+            const pdlLinkedin = normaliseLinkedinProfileUrl(p.linkedinUrl);
+            const existing = byName.get(key);
+            if (existing) {
+              // Already in this run's roster — enrich in place instead of duplicating.
+              if (!existing.linkedinUrl && pdlLinkedin) existing.linkedinUrl = pdlLinkedin;
+              if (!existing.title && p.title) existing.title = p.title;
+              continue;
+            }
+            const known = knownByName.get(key);
+            if (known) {
+              // Existing CRM contact: re-list only when PDL brings something new
+              // (e.g. a LinkedIn URL the contact record lacks) so the downstream
+              // proposal flow can offer an enrichment update; otherwise skip.
+              const bringsNewLinkedin = Boolean(pdlLinkedin) && !known.linkedinUrl;
+              const bringsNewTitle = Boolean(p.title) && !known.title;
+              if (!bringsNewLinkedin && !bringsNewTitle) continue;
+            }
+            const entry = {
+              fullName: p.fullName,
+              title: p.title ?? undefined,
+              entityName: null,
+              entityScope: null,
+              seniority: undefined,
+              buyerPersona: undefined,
+              sourceUrl: null,
+              linkedinUrl: pdlLinkedin,
+              confidence: "inferred",
+              reportsToName: null,
+              rationale: `People Data Labs licensed record lists this person at ${pdl.company.displayName}${p.title ? ` as ${p.title}` : ""}; not found in the public web sweep.`,
+              timeInRole: null,
+              careerHistory: [],
+              education: [],
+            } as (typeof normalised.decisionMakers)[number];
+            normalised.decisionMakers.push(entry);
+            byName.set(key, entry);
+            added += 1;
+          }
+          if (added > 0) {
+            normalised.sourceSignals.push({
+              kind: "manual",
+              title: `People Data Labs: ${added} additional senior ${added === 1 ? "person" : "people"} at ${pdl.company.displayName}`,
+              url: "https://www.peopledatalabs.com/",
+              confidence: "amber",
+            });
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[executive-mapper] PDL lookup failed:", msg);
+        normalised.openQuestions.push(
+          `People Data Labs cross-check failed (${msg.slice(0, 160)}) — roster reflects the public web only.`,
+        );
+      }
+    } else {
+      normalised.openQuestions.push(
+        "People Data Labs cross-check skipped: PDL_API_KEY is not configured.",
+      );
+    }
 
     // Same deterministic safety net as the Cartographer — a subsidiary CEO is
     // never promoted to group apex, regardless of what the model wrote.

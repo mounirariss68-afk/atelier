@@ -3558,6 +3558,7 @@ async function runExecutiveMapperAndQueueInner(
   const { runId, output } = await runExecutiveMapper({
     accountId: a.id,
     accountName: a.brandName ?? a.name,
+    accountBrandName: a.brandName ?? null,
     accountSector: a.sector,
     accountCountry: a.country,
     accountHqCity: a.hqCity ?? null,
