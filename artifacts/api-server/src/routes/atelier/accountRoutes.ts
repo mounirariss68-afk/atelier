@@ -130,6 +130,8 @@ import {
 } from "@workspace/api-zod";
 import {
   runAccountCartographer,
+  runExecutiveMapper,
+  buildExecutiveMapperProposals,
   runWhitespaceMapper,
   runQbrComposer,
   buildCartographerProposals,
@@ -3446,6 +3448,89 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   res.json(ws);
 });
 
+// ---------- executive mapper (Task #32) ----------
+// People-only deep leadership sweep. Same governed queue as the Cartographer:
+// the Mapper PROPOSES contacts (with LinkedIn profile links); a partner then
+// approves / edits / rejects each person on the Profile tab.
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const a = await loadAccount(req.params.accountId);
+  if (!a) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+
+  const existingContacts = await db
+    .select({
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      linkedinUrl: atelierContacts.linkedinUrl,
+    })
+    .from(atelierContacts)
+    .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
+
+  const { runId, output } = await runExecutiveMapper({
+    accountId: a.id,
+    accountName: a.name,
+    accountSector: a.sector,
+    accountCountry: a.country,
+    accountHqCity: a.hqCity ?? null,
+    knownContacts: existingContacts,
+    triggeredByUserId: me.id,
+    actorLabel: "Executive Mapper",
+  });
+
+  const proposals = buildExecutiveMapperProposals({
+    output,
+    account: a,
+    existingContacts,
+  });
+
+  const queue = ((a.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []).concat(
+    proposals,
+  );
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccounts)
+      .set({ pendingProfileUpdates: queue, updatedAt: new Date() })
+      .where(eq(atelierAccounts.id, a.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "account",
+      entityId: a.id,
+      actorType: "agent",
+      actorId: "ag_executive_mapper",
+      actorLabel: "Executive Mapper",
+      action: "account.profile.proposeUpdate",
+      payload: {
+        count: proposals.length,
+        fields: proposals.map((p) => p.field),
+        openQuestions: output.openQuestions,
+      },
+      payloadSummary:
+        proposals.length > 0
+          ? `Executive Mapper proposed ${proposals.length} contact update(s) for ${a.name} (awaiting partner review).`
+          : `Executive Mapper sweep found no new executives to propose for ${a.name}.`,
+    });
+  });
+
+  const ws = await buildWorkspace(a.id, access, me);
+  res.json({
+    runId,
+    proposedCount: proposals.length,
+    openQuestions: output.openQuestions,
+    workspace: ws,
+  });
+});
+
 // ---------- contacts (graph) ----------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId/contacts", async (req, res) => {
@@ -3630,6 +3715,7 @@ async function applyProfileUpdateDecisions(args: {
             seniority?: string | null;
             buyerPersona?: string | null;
             sourceUrl?: string | null;
+            linkedinUrl?: string | null;
             confidence?: string | null;
             reportsToName?: string | null;
             rationale?: string | null;
@@ -3665,6 +3751,9 @@ async function applyProfileUpdateDecisions(args: {
                   careerHistory: dm.careerHistory ?? [],
                   education: dm.education ?? [],
                   sourceUrl: dm.sourceUrl ?? null,
+                  // Never blank an existing LinkedIn link when the agent
+                  // simply didn't find one this run.
+                  ...(dm.linkedinUrl ? { linkedinUrl: dm.linkedinUrl } : {}),
                   confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
                   updatedAt: now,
                 })
@@ -3687,6 +3776,7 @@ async function applyProfileUpdateDecisions(args: {
                 disposition: "unknown",
                 notes: dm.rationale ?? null,
                 sourceUrl: dm.sourceUrl ?? null,
+                linkedinUrl: dm.linkedinUrl ?? null,
                 confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
                 createdByUserId: me.id,
               });

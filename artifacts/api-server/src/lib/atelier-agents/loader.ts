@@ -44,6 +44,7 @@ export type AtelierAgentId =
   | "burn_sentinel"
   | "expense_auditor"
   | "account_cartographer"
+  | "executive_mapper"
   | "brand_profile_writer"
   // v5 — Press
   | "linkedin_composer"

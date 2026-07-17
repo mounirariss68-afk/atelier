@@ -899,6 +899,7 @@ export function buildCartographerProposals(args: {
         seniority: dm.seniority ?? null,
         buyerPersona: dm.buyerPersona ?? null,
         sourceUrl: dm.sourceUrl ?? null,
+        linkedinUrl: dm.linkedinUrl ?? null,
         confidence: dm.confidence,
         reportsToName: dm.reportsToName ?? null,
         rationale: dm.rationale ?? null,
@@ -2144,6 +2145,10 @@ export interface CartographerOutput {
     seniority?: "c_suite" | "vp" | "director" | "manager" | "ic";
     buyerPersona?: string;
     sourceUrl?: string | null;
+    // Task #32 — LinkedIn profile URL captured from public search results.
+    // Only ever a real linkedin.com/in/… URL the model actually saw; never
+    // fabricated (normaliser enforces the shape).
+    linkedinUrl?: string | null;
     confidence: "verified" | "inferred";
     reportsToName?: string | null;
     rationale?: string;
@@ -2571,6 +2576,28 @@ async function callClaudeJsonWithWebSearch<T>(
 }
 
 /**
+ * Task #32 — accept only a plausible public LinkedIn PROFILE url
+ * (linkedin.com/in/…). Company pages, search pages, non-LinkedIn urls and
+ * anything malformed coerce to null — the applier then simply leaves the
+ * contact's LinkedIn field untouched. Never invents, never rewrites.
+ */
+export function normaliseLinkedinProfileUrl(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const s = raw.trim();
+  if (!/^https?:\/\//i.test(s)) return null;
+  try {
+    const u = new URL(s);
+    const host = u.hostname.toLowerCase();
+    if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return null;
+    // Only person profiles: /in/<slug> (any locale subdomain is fine).
+    if (!/^\/in\/[^/]+\/?$/.test(u.pathname)) return null;
+    return u.origin + u.pathname.replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Deterministic entity-scope guard (entity-scope fix). The prompt (v1/v2) tells
  * the model never to promote a subsidiary executive to group apex, but this is
  * the safety net that does NOT depend on the model getting it right: any
@@ -2582,10 +2609,16 @@ async function callClaudeJsonWithWebSearch<T>(
  * a real, useful contact, just not the group's CEO. Mutates and returns `output`
  * (returned for chaining / unit testing).
  */
-export function guardCartographerEntityScope(
-  output: CartographerOutput,
+export function guardCartographerEntityScope<
+  T extends {
+    decisionMakers: CartographerOutput["decisionMakers"];
+    account?: { canonicalName?: string };
+    researchBrief?: { openQuestions?: string[] };
+  },
+>(
+  output: T,
   canonicalName?: string | null,
-): CartographerOutput {
+): T {
   const normName = (s: string) =>
     s
       .trim()
@@ -2789,6 +2822,7 @@ export async function runAccountCartographer(args: {
               seniority: d.seniority,
               buyerPersona: d.buyerPersona ?? undefined,
               sourceUrl: d.sourceUrl ?? null,
+              linkedinUrl: normaliseLinkedinProfileUrl(d.linkedinUrl),
               confidence: d.confidence === "verified" ? "verified" : "inferred",
               reportsToName: d.reportsToName ?? null,
               rationale: d.rationale ?? undefined,
@@ -2871,6 +2905,224 @@ export async function runAccountCartographer(args: {
     }
     throw err;
   }
+}
+
+// ----- Executive Mapper (Task #32) -----
+
+/**
+ * People-only research output. Reuses the Cartographer's decision-maker
+ * element shape (same proposal queue, same applier) but carries no account
+ * brief — the Mapper's entire search budget goes to the leadership roster.
+ */
+export interface ExecutiveMapperOutput {
+  decisionMakers: CartographerOutput["decisionMakers"];
+  sourceSignals: CartographerOutput["sourceSignals"];
+  openQuestions: string[];
+}
+
+export async function runExecutiveMapper(args: {
+  accountId: string;
+  accountName: string;
+  accountSector: string;
+  accountCountry: string;
+  accountHqCity?: string | null;
+  /** Already-known contacts so the model only re-lists people it can enrich. */
+  knownContacts: Array<{ fullName: string; title: string | null; linkedinUrl: string | null }>;
+  triggeredByUserId: string | null;
+  actorLabel: string;
+}): Promise<{ runId: string; output: ExecutiveMapperOutput; costUsd: number }> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "executive_mapper",
+    triggeredByUserId: args.triggeredByUserId,
+    targetType: "account",
+    targetId: args.accountId,
+    targetLabel: args.accountName,
+    inputs: { knownContactCount: args.knownContacts.length },
+    actorLabel: args.actorLabel,
+  });
+  try {
+    const system = loadPrompt("executive_mapper");
+    await progressRun(runId, 20, "Sweeping the leadership roster");
+    const { value, costUsd, citationUrls } =
+      await callClaudeJsonWithWebSearch<ExecutiveMapperOutput>(
+        "claude-sonnet-4-5",
+        system,
+        JSON.stringify({
+          accountName: args.accountName,
+          accountCountry: args.accountCountry,
+          accountSector: args.accountSector,
+          accountHqCity: args.accountHqCity ?? null,
+          knownContacts: args.knownContacts,
+        }),
+        { progressRunId: runId },
+      );
+    await progressRun(runId, 98, "Finalising the roster", {
+      name: "execmap.synth",
+      durationMs: Date.now() - t0,
+    });
+
+    const normalised: ExecutiveMapperOutput = {
+      decisionMakers: Array.isArray(value?.decisionMakers)
+        ? value.decisionMakers
+            .filter(
+              (d) => typeof d?.fullName === "string" && d.fullName.trim().length > 0,
+            )
+            .map((d) => ({
+              fullName: d.fullName.trim(),
+              title: d.title ?? undefined,
+              entityName:
+                typeof d.entityName === "string" && d.entityName.trim().length > 0
+                  ? d.entityName.trim()
+                  : null,
+              entityScope:
+                d.entityScope === "parent_group" ||
+                d.entityScope === "subsidiary" ||
+                d.entityScope === "division" ||
+                d.entityScope === "standalone"
+                  ? d.entityScope
+                  : null,
+              seniority: d.seniority,
+              buyerPersona: d.buyerPersona ?? undefined,
+              sourceUrl: d.sourceUrl ?? null,
+              linkedinUrl: normaliseLinkedinProfileUrl(d.linkedinUrl),
+              confidence: d.confidence === "verified" ? "verified" : "inferred",
+              reportsToName: d.reportsToName ?? null,
+              rationale: d.rationale ?? undefined,
+              timeInRole: null,
+              careerHistory: [],
+              education: [],
+            }))
+        : [],
+      sourceSignals: Array.isArray(value?.sourceSignals)
+        ? value.sourceSignals.filter(
+            (s) => typeof s?.url === "string" && /^https?:\/\//.test(s.url),
+          )
+        : [],
+      openQuestions: Array.isArray(value?.openQuestions)
+        ? value.openQuestions.filter((q): q is string => typeof q === "string")
+        : [],
+    };
+
+    // Same deterministic safety net as the Cartographer — a subsidiary CEO is
+    // never promoted to group apex, regardless of what the model wrote.
+    guardCartographerEntityScope(normalised, args.accountName);
+
+    // Backfill uncorroborated citations so the review queue still shows where
+    // the sweep looked even when the model under-reported its sources.
+    if (normalised.sourceSignals.length < 2 && citationUrls.length > 0) {
+      const seen = new Set(normalised.sourceSignals.map((s) => s.url));
+      for (const c of citationUrls) {
+        if (seen.has(c.url)) continue;
+        normalised.sourceSignals.push({
+          kind: "news",
+          title: c.title ?? c.url,
+          url: c.url,
+          confidence: "red",
+          uncorroborated: true,
+        });
+        seen.add(c.url);
+        if (normalised.sourceSignals.length >= 6) break;
+      }
+    }
+
+    await completeRun({
+      runId,
+      output: normalised as unknown,
+      confidence: "green",
+      costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: normalised.sourceSignals.length,
+      actorLabel: args.actorLabel,
+      targetType: "account",
+      targetId: args.accountId,
+      targetLabel: args.accountName,
+    });
+    return { runId, output: normalised, costUsd };
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "account",
+      targetId: args.accountId,
+    });
+    throw err;
+  }
+}
+
+/**
+ * Task #32 — contact proposals from an Executive Mapper run. Same governed
+ * queue and applier as the Cartographer; people-only. Known contacts the
+ * model merely re-confirmed (no new LinkedIn URL, same title) are dropped so
+ * the queue only carries genuinely new information.
+ */
+export function buildExecutiveMapperProposals(args: {
+  output: ExecutiveMapperOutput;
+  account: typeof atelierAccounts.$inferSelect;
+  existingContacts: Array<{
+    fullName: string;
+    title: string | null;
+    linkedinUrl: string | null;
+  }>;
+}): PendingProfileUpdate[] {
+  const { output, account } = args;
+  const now = new Date().toISOString();
+  const blockedKeys = new Set<string>();
+  for (const u of (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[]) {
+    if (u.status === "pending" || u.status === "rejected") {
+      blockedKeys.add(proposalKey(u));
+    }
+  }
+  const existingByName = new Map(
+    args.existingContacts.map((c) => [c.fullName.toLowerCase(), c]),
+  );
+  const candidates: PendingProfileUpdate[] = [];
+  for (const dm of output.decisionMakers ?? []) {
+    if (!dm.fullName || !dm.fullName.trim()) continue;
+    const existing = existingByName.get(dm.fullName.toLowerCase());
+    const addsLinkedin = Boolean(dm.linkedinUrl && !existing?.linkedinUrl);
+    const changesTitle = Boolean(
+      existing && dm.title && dm.title.trim() !== (existing.title ?? "").trim(),
+    );
+    // Known person with nothing new — skip (prompt asks the model not to
+    // re-list these, but enforce it here too).
+    if (existing && !addsLinkedin && !changesTitle) continue;
+    const toValue = {
+      fullName: dm.fullName,
+      title: dm.title ?? existing?.title ?? null,
+      entityName: dm.entityName ?? null,
+      entityScope: dm.entityScope ?? null,
+      seniority: dm.seniority ?? null,
+      buyerPersona: dm.buyerPersona ?? null,
+      sourceUrl: dm.sourceUrl ?? null,
+      linkedinUrl: dm.linkedinUrl ?? null,
+      confidence: dm.confidence,
+      reportsToName: dm.reportsToName ?? null,
+      rationale: dm.rationale ?? null,
+      timeInRole: null,
+      careerHistory: [],
+      education: [],
+    };
+    const key = proposalKey({ field: "contact", toValue });
+    if (blockedKeys.has(key)) continue;
+    blockedKeys.add(key);
+    const what = existing
+      ? addsLinkedin
+        ? `found the LinkedIn profile for existing contact ${dm.fullName}`
+        : `updated the title for existing contact ${dm.fullName}`
+      : `discovered executive ${dm.fullName}${dm.title ? ` (${dm.title})` : ""}`;
+    candidates.push({
+      id: `pp_${rid("x").slice(2)}`,
+      proposedBy: "ag_executive_mapper",
+      proposedAt: now,
+      field: "contact",
+      fromValue: null,
+      toValue,
+      rationale: `Executive Mapper ${what}.`,
+      status: "pending",
+      meta: { reportsToName: dm.reportsToName ?? null },
+    });
+  }
+  return candidates;
 }
 
 // ----- Whitespace Mapper -----

@@ -2006,6 +2006,80 @@ function EntityScopeChip({ contact }: { contact: AtelierContact }) {
   );
 }
 
+/**
+ * Task #32 — Executive Mapper trigger. Bespoke route (not in the OpenAPI
+ * spec), so this uses a raw fetch like the other account-agent runs. The
+ * Mapper proposes contacts into the governed review queue on the Profile tab
+ * — nothing is written to the contact list until a partner approves.
+ */
+function MapExecutivesButton({ accountId }: { accountId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [running, setRunning] = useState(false);
+  async function run() {
+    setRunning(true);
+    try {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/executive-mapper/run`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({}),
+        },
+      );
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(
+          (detail as { error?: string }).error ?? `Run failed (${res.status})`,
+        );
+      }
+      const data = (await res.json()) as {
+        proposedCount: number;
+        openQuestions: string[];
+      };
+      qc.invalidateQueries({
+        queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+      });
+      toast({
+        title:
+          data.proposedCount > 0
+            ? `${data.proposedCount} executive update${data.proposedCount === 1 ? "" : "s"} proposed`
+            : "No new executives found",
+        description:
+          data.proposedCount > 0
+            ? "Review and approve them in the update queue on the Profile tab."
+            : data.openQuestions[0] ??
+              "The public record didn't surface anyone new this run.",
+      });
+    } catch (err: unknown) {
+      toast({
+        title: "Executive mapping failed",
+        description: (err as Error)?.message ?? String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setRunning(false);
+    }
+  }
+  return (
+    <PillButton
+      variant="ghost"
+      onClick={() => void run()}
+      disabled={running}
+      data-testid="button-map-executives"
+    >
+      {running ? (
+        <>
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Mapping executives…
+        </>
+      ) : (
+        "Map executives"
+      )}
+    </PillButton>
+  );
+}
+
 function DecisionMakersTab({
   contacts,
   relationships,
@@ -2029,14 +2103,17 @@ function DecisionMakersTab({
     return (
       <Card className="p-8 text-center text-text-mute font-mono text-sm space-y-4">
         <div>No contacts mapped yet for this account.</div>
-        <CreateContactDialog
-          accountId={accountId}
-          trigger={
-            <PillButton variant="primary" data-testid="button-add-contact-empty">
-              + Add contact
-            </PillButton>
-          }
-        />
+        <div className="flex items-center justify-center gap-2">
+          <MapExecutivesButton accountId={accountId} />
+          <CreateContactDialog
+            accountId={accountId}
+            trigger={
+              <PillButton variant="primary" data-testid="button-add-contact-empty">
+                + Add contact
+              </PillButton>
+            }
+          />
+        </div>
       </Card>
     );
   }
@@ -2085,6 +2162,7 @@ function DecisionMakersTab({
           >
             <PillButton variant="ghost">Meeting prep card ↗</PillButton>
           </a>
+          <MapExecutivesButton accountId={accountId} />
           {canMerge && contacts.length >= 2 && (
             <PillButton
               variant="ghost"
