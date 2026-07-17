@@ -45,7 +45,7 @@ import {
   Users,
 } from "lucide-react";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
 const CATEGORIES = [
   { value: "proposal", label: "Proposal" },

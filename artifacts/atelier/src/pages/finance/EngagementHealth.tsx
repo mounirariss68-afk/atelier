@@ -13,7 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
 type Rag = "green" | "amber" | "red";
 

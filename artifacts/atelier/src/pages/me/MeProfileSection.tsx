@@ -34,7 +34,7 @@ import {
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
 type Profile = AtelierSelfProfile | undefined;
 

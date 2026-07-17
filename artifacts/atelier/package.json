@@ -12,7 +12,8 @@
     "test:cli-reducer": "tsx src/components/cli/useCli.test.ts",
     "test:rail-width": "tsx src/components/layout/Shell.rail-width.test.ts",
     "test:revenue-gate": "tsx src/components/EditAccountProfileDialog.revenue-gate.test.tsx",
-    "test:cli-duplicate-card": "tsx src/components/cli/ResultCardRenderers.duplicate.test.tsx"
+    "test:cli-duplicate-card": "tsx src/components/cli/ResultCardRenderers.duplicate.test.tsx",
+    "test:board-layer": "tsx --tsconfig tsconfig.test.json src/pages/Account.relationships-board.test.tsx"
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.10.0",

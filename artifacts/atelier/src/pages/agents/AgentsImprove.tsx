@@ -69,7 +69,7 @@ interface IncidentDetail {
   fixVersion: AgentVersion | null;
 }
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
 function useIncidentDetail(id: string) {
   return useQuery<IncidentDetail | null>({

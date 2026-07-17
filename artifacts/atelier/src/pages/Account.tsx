@@ -2649,7 +2649,7 @@ function EngagementsTab({
   );
 }
 
-function RelationshipsTab({
+export function RelationshipsTab({
   contacts,
   relationships,
 }: {

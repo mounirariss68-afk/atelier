@@ -20,7 +20,7 @@
 import * as React from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 const LENS_KEY = "atelier-agents-lens";
 
 async function get<T>(path: string): Promise<T> {

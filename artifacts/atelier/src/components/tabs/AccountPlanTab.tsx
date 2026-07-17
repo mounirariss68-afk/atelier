@@ -46,7 +46,7 @@ import {
   Pencil,
   X,
 } from "lucide-react";
-const apiBase = `${import.meta.env.BASE_URL}api`;
+const apiBase = `${import.meta.env?.BASE_URL ?? "/"}api`;
 
 const ACTION_STATUS_LABEL: Record<string, string> = {
   open: "Open",

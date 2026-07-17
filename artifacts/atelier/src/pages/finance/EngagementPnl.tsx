@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Calculator, History } from "lucide-react";
 import { ChangeOrdersSection } from "@/components/tabs/ChangeOrdersSection";
 
-const API_BASE = `${import.meta.env.BASE_URL}api/atelier`;
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
 type Rag = "green" | "amber" | "red";
 
