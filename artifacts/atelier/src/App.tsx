@@ -158,6 +158,9 @@ import { Redirect } from "@/components/Redirect";
 
 // Task #364 — People Studio (the People lens).
 import PeopleHome from "@/pages/people/PeopleHome";
+// Task #50 — the self-service Me lens (visible to all; only lens for
+// self-only personas).
+import MeHome from "@/pages/me/MeHome";
 import PeopleAttract from "@/pages/people/PeopleAttract";
 import PeopleHire from "@/pages/people/PeopleHire";
 import PeopleOnboard from "@/pages/people/PeopleOnboard";
@@ -592,6 +595,9 @@ function Router() {
         <Route path="/people/time" component={PeopleTime} />
         <Route path="/people/time/:personId/:weekIso" component={PeopleTime} />
         <Route path="/people" component={PeopleHome} />
+        {/* Task #50 — Me lens: one page, section tabs. */}
+        <Route path="/me" component={MeHome} />
+        <Route path="/me/:section" component={MeHome} />
         {/* Task #371 — Partners lens (alliance lifecycle). The index +
             stage views all live in PartnersIndex, which keys off the
             :section param. */}

@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LENSES, type LensId, getLens } from "@/lib/lens";
+import { type LensId, getLens, visibleLensesForRole } from "@/lib/lens";
 import { useActiveLens } from "@/hooks/useActiveLens";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +65,9 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
 export function ManagePicker({ userId, role }: ManagePickerProps) {
   const { active, setLens } = useActiveLens({ userId, role });
   const [open, setOpen] = React.useState(false);
+  // Task #50 — self-only personas (employee/contractor) see only the Me
+  // lens; everyone else sees all six.
+  const lenses = visibleLensesForRole(role);
 
   // ⌘1–⌘5 / Ctrl+1–5 — global lens shortcuts. Skipped while the user is
   // typing in an editable element so the CLI / forms keep their digits.
@@ -84,14 +87,14 @@ export function ManagePicker({ userId, role }: ManagePickerProps) {
         }
       }
       const key = e.key;
-      const lens = LENSES.find((l) => l.shortcutKey === key);
+      const lens = visibleLensesForRole(role).find((l) => l.shortcutKey === key);
       if (!lens) return;
       e.preventDefault();
       setLens(lens.id);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [setLens]);
+  }, [setLens, role]);
 
   const activeLens = getLens(active);
 
@@ -116,7 +119,7 @@ export function ManagePicker({ userId, role }: ManagePickerProps) {
         sideOffset={6}
         className="w-44 bg-bg-elevate border-border text-text"
       >
-        {LENSES.map((l) => {
+        {lenses.map((l) => {
           const isActive = l.id === active;
           return (
             <DropdownMenuItem

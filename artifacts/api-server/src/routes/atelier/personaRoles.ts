@@ -32,6 +32,10 @@ export const ATELIER_PERSONA_ROLES = [
   // read-only across audit-relevant surfaces (audit log, access reviews,
   // backups, incidents, DSARs).
   "compliance_officer",
+  // Task #50 — self-service employee. Created by the HR add-joiner flow;
+  // sees ONLY the Me lens (/me self-scope routes + /personas). No org-wide
+  // data, no client work surfaces.
+  "employee",
 ] as const;
 
 export type AtelierRole = (typeof ATELIER_PERSONA_ROLES)[number];

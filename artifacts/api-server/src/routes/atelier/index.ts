@@ -62,6 +62,9 @@ import winLossRoutes from "./winLossRoutes";
 import forecastRoutes from "./forecastRoutes";
 import reportsRoutes from "./reportsRoutes";
 import rosterRoutes, { rejectNonEmployeePersona } from "./rosterRoutes";
+// Task #50 — Me lens self-scope routes + HR joiner lifecycle.
+import meRoutes from "./meRoutes";
+import joinerRoutes from "./joinerRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
@@ -135,11 +138,13 @@ router.use((req, res, next) => {
   // applied per-route as defense-in-depth.
   if (me.role === "recruiter") {
     const rp = req.path;
-    // Strictly: /studio (their workspace) + /me + /personas (persona
-    // switcher). /users is intentionally NOT allowed — recruiters do not
-    // need org-wide user enumeration; panelist/interviewer lookups belong
-    // inside /studio with a recruiter-safe shape.
-    if (rp === "/me" || rp.startsWith("/personas")) return next();
+    // Strictly: /studio (their workspace) + /me + /me/* (Task #50 Me-lens
+    // self-scope) + /personas (persona switcher). /users is intentionally
+    // NOT allowed — recruiters do not need org-wide user enumeration;
+    // panelist/interviewer lookups belong inside /studio with a
+    // recruiter-safe shape.
+    if (rp === "/me" || rp.startsWith("/me/") || rp.startsWith("/personas"))
+      return next();
     if (rp.startsWith("/studio/")) return next();
     res.status(403).json({
       error: "recruiter-scope",
@@ -148,17 +153,43 @@ router.use((req, res, next) => {
     });
     return;
   }
-  if (me.role !== "contractor" && me.role !== "partner_firm_resource")
-    return next();
+  // Task #50 — self-only employee persona (created by the HR add-joiner
+  // flow). Their whole world is the Me lens: identity, self-scope /me/*
+  // routes and the persona list. Nothing org-wide, no client surfaces.
+  if (me.role === "employee") {
+    const p = req.path;
+    if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
+      return next();
+    res.status(403).json({
+      error: "employee-self-scope",
+      message: "Employee persona may only access /me and /personas.",
+    });
+    return;
+  }
+  // Task #50 — contractors are a self-only persona exactly like employees:
+  // their whole world is the Me lens. The legacy contractor allowlist
+  // (/engagements, /ledger/timesheets, /wallet/expenses) is retired — those
+  // capabilities return as self-scoped /me/* sections in dependent tasks.
+  if (me.role === "contractor") {
+    const p = req.path;
+    if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
+      return next();
+    res.status(403).json({
+      error: "contractor-self-scope",
+      message: "Contractor persona may only access /me and /personas.",
+    });
+    return;
+  }
+  if (me.role !== "partner_firm_resource") return next();
   const p = req.path;
-  if (p === "/me" || p.startsWith("/personas")) return next();
+  // Task #50 — the Me lens self-scope routes are safe for every persona:
+  // they only ever answer for the caller's own identity.
+  if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
+    return next();
   if (p === "/engagements" || p.startsWith("/engagements/")) return next();
-  // Contractors may view/submit their OWN timesheet; partner-firm resources
-  // never appear in the ledger UI but DO upload their firm's hours via the
-  // partner-firm CSV endpoint and may read their own engagement's economics.
-  if (me.role === "contractor" && p.startsWith("/ledger/timesheets")) return next();
-  // Contractors may submit/view their OWN wallet expenses (scope=self).
-  if (me.role === "contractor" && p.startsWith("/wallet/expenses")) return next();
+  // Partner-firm resources never appear in the ledger UI but DO upload
+  // their firm's hours via the partner-firm CSV endpoint and may read
+  // their own engagement's economics.
   if (me.role === "partner_firm_resource" && p.startsWith("/ledger/partner-firm-hours")) return next();
   if (me.role === "partner_firm_resource" && p.startsWith("/ledger/engagement-economics")) return next();
   // Allow per-person dossier endpoints only for the caller's OWN identity
@@ -190,6 +221,11 @@ router.get("/accounts/:accountId/plan.pdf", accountPlanPdfHandler);
 // Task #589 — Self-contained first-meeting prep card (HTML).
 router.get("/accounts/:accountId/meeting-prep.html", accountPrepCardHandler);
 
+// Task #50 — Me lens self-scope routes (safe for every persona; the only
+// routes self-only personas can reach) + HR joiner lifecycle. Mounted
+// early so /me/* wins before any broader router pattern.
+router.use(meRoutes);
+router.use(joinerRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);
 router.use(accountRoutes);
@@ -300,11 +336,20 @@ router.get("/me", async (req, res) => {
   res.json(AtelierGetMeResponse.parse(personaToWire(me)));
 });
 
-router.get("/personas", async (_req, res) => {
+router.get("/personas", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  // Self-only personas (employee/contractor) never see the org directory:
+  // they get exactly their own persona back — nothing to switch to. Everyone
+  // else is org-scoped, so no cross-org identity exposure either.
+  if (me.role === "employee" || me.role === "contractor") {
+    res.json(AtelierListPersonasResponse.parse([personaToWire(me)]));
+    return;
+  }
   const rows = await db
     .select()
     .from(atelierUsers)
-    .where(isNull(atelierUsers.deletedAt));
+    .where(and(eq(atelierUsers.orgId, me.orgId), isNull(atelierUsers.deletedAt)));
   res.json(AtelierListPersonasResponse.parse(rows.map(personaToWire)));
 });
 

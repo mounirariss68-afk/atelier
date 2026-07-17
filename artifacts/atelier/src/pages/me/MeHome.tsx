@@ -1,0 +1,246 @@
+/**
+ * MeHome — Task #50: the self-service "Me" lens.
+ *
+ * One page, section tabs (Overview · Profile · Time · Expenses ·
+ * Pay & Benefits · Performance · Learning). Everything rendered here is
+ * self-scope: the server's /me/* routes only ever answer for the caller's
+ * own identity, so this page is safe for every persona — and it is the
+ * ONLY page the self-only personas (employee / contractor) can use.
+ */
+import * as React from "react";
+import { useRoute } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useAtelierGetMyProfile,
+  useAtelierListMyNotifications,
+  useAtelierDismissMyNotification,
+  getAtelierListMyNotificationsQueryKey,
+  type AtelierSelfProfile,
+} from "@workspace/api-client-react";
+import {
+  Card,
+  MonoChip,
+  TabNav,
+  TabNavLink,
+} from "@/components/ui/primitives";
+import { LensPageHeader } from "@/components/layout/LensPageHeader";
+
+const SECTIONS = [
+  { id: "overview", label: "Overview", href: "/me" },
+  { id: "profile", label: "Profile", href: "/me/profile" },
+  { id: "time", label: "Time", href: "/me/time" },
+  { id: "expenses", label: "Expenses", href: "/me/expenses" },
+  { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
+  { id: "performance", label: "Performance", href: "/me/performance" },
+  { id: "learning", label: "Learning", href: "/me/learning" },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+export default function MeHome() {
+  const [, params] = useRoute("/me/:section");
+  const section = (params?.section ?? "overview") as SectionId;
+  const { data: profile, isLoading } = useAtelierGetMyProfile();
+
+  const firstName = profile?.user?.name?.split(/\s+/)[0] ?? "";
+
+  return (
+    <div className="animate-in fade-in" data-testid="me-home">
+      <LensPageHeader
+        headline={firstName ? `Your workspace, ${firstName}` : "Your workspace"}
+        lede="Your profile, time, expenses, pay, performance and learning — everything about you at the firm, in one place."
+      />
+      <div className="container-atelier py-6 space-y-6">
+        <TabNav>
+          {SECTIONS.map((s) => (
+            <TabNavLink key={s.id} href={s.href} active={section === s.id}>
+              {s.label}
+            </TabNavLink>
+          ))}
+        </TabNav>
+        <div className="mt-4">
+          {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
+          {section === "profile" && <ProfileSection loading={isLoading} profile={profile} />}
+          {section === "time" && (
+            <PlaceholderSection
+              title="Time"
+              body="Your timesheets and submission history will appear here. Weekly submissions open Monday and are due Tuesday 12:00 GST."
+            />
+          )}
+          {section === "expenses" && (
+            <PlaceholderSection
+              title="Expenses"
+              body="Submit and track your expense claims here. Approved claims are reimbursed with the next pay run."
+            />
+          )}
+          {section === "pay" && (
+            <PlaceholderSection
+              title="Pay & Benefits"
+              body="Your payslips, compensation summary and benefits enrolment will appear here."
+            />
+          )}
+          {section === "performance" && (
+            <PlaceholderSection
+              title="Performance"
+              body="Your goals, check-ins and review cycles will appear here."
+            />
+          )}
+          {section === "learning" && (
+            <PlaceholderSection
+              title="Learning"
+              body="Your assigned courses, certifications and skill development plan will appear here."
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type Profile = AtelierSelfProfile | undefined;
+
+function OverviewSection({ loading, profile }: { loading: boolean; profile: Profile }) {
+  return (
+    <div className="space-y-6">
+      <NotificationCards />
+      <div className="grid gap-4 md:grid-cols-2">
+        <IdentityCard loading={loading} profile={profile} compact />
+        <Card className="p-4">
+          <h3 className="text-sm font-semibold text-text mb-2">Quick actions</h3>
+          <ul className="space-y-2 text-sm text-text-mute">
+            <li>· Review your <a className="text-gold hover:underline" href="/me/profile">profile</a> and check your details are current.</li>
+            <li>· Track your hours in <a className="text-gold hover:underline" href="/me/time">Time</a>.</li>
+            <li>· Submit a claim in <a className="text-gold hover:underline" href="/me/expenses">Expenses</a>.</li>
+          </ul>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function NotificationCards() {
+  const qc = useQueryClient();
+  const { data: notifications, isLoading } = useAtelierListMyNotifications();
+  const dismiss = useAtelierDismissMyNotification({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getAtelierListMyNotificationsQueryKey() });
+      },
+    },
+  });
+
+  if (isLoading) return null;
+  if (!notifications || notifications.length === 0) {
+    return (
+      <Card className="p-4 text-sm text-text-mute" data-testid="me-notifications-empty">
+        You're all caught up — nothing needs your attention right now.
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-3" data-testid="me-notifications">
+      {notifications.map((n) => (
+        <Card key={n.id} className="p-4 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <MonoChip tone="gold">{n.kind}</MonoChip>
+              <h4 className="text-sm font-semibold text-text truncate">{n.title}</h4>
+            </div>
+            {n.body ? <p className="mt-1 text-sm text-text-mute">{n.body}</p> : null}
+            {n.href ? (
+              <a href={n.href} className="mt-1 inline-block text-xs text-gold hover:underline">
+                Open →
+              </a>
+            ) : null}
+          </div>
+          <button
+            className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text transition-colors"
+            onClick={() => dismiss.mutate({ id: n.id })}
+            disabled={dismiss.isPending}
+            data-testid={`dismiss-${n.id}`}
+          >
+            Dismiss
+          </button>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function ProfileSection({ loading, profile }: { loading: boolean; profile: Profile }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      <IdentityCard loading={loading} profile={profile} />
+      <RosterCard loading={loading} profile={profile} />
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between py-1.5 text-sm">
+      <span className="font-mono text-[10px] uppercase tracking-wider text-text-faint">{label}</span>
+      <span className="text-text">{value ?? "—"}</span>
+    </div>
+  );
+}
+
+function IdentityCard({ loading, profile, compact }: { loading: boolean; profile: Profile; compact?: boolean }) {
+  const u = profile?.user;
+  return (
+    <Card className="p-4" data-testid="me-identity-card">
+      <h3 className="text-sm font-semibold text-text mb-2">Identity</h3>
+      {loading ? (
+        <p className="text-sm text-text-faint">Loading…</p>
+      ) : u ? (
+        <div className="divide-y divide-border-soft">
+          <Field label="Name" value={u.name} />
+          <Field label="Email" value={u.email} />
+          <Field label="Role" value={u.roleLabel} />
+          {!compact && <Field label="Title" value={u.title} />}
+        </div>
+      ) : (
+        <p className="text-sm text-text-mute">Could not load your identity.</p>
+      )}
+    </Card>
+  );
+}
+
+function RosterCard({ loading, profile }: { loading: boolean; profile: Profile }) {
+  const p = profile?.person;
+  return (
+    <Card className="p-4" data-testid="me-roster-card">
+      <h3 className="text-sm font-semibold text-text mb-2">Employment</h3>
+      {loading ? (
+        <p className="text-sm text-text-faint">Loading…</p>
+      ) : p ? (
+        <div className="divide-y divide-border-soft">
+          <Field label="Worker type" value={<MonoChip tone="gold">{p.workerType}</MonoChip>} />
+          <Field label="Title" value={p.title} />
+          <Field label="Start date" value={p.startDate} />
+          <Field label="Type" value={p.employmentType} />
+          <Field label="Office" value={p.homeOffice} />
+          <Field label="Country" value={p.country} />
+          <Field label="Status" value={p.status} />
+        </div>
+      ) : (
+        <p className="text-sm text-text-mute">
+          No roster record is linked to your login yet. Ask HR to link your
+          profile from the People lens.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function PlaceholderSection({ title, body }: { title: string; body: string }) {
+  return (
+    <Card className="p-6" data-testid={`me-section-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+      <h3 className="text-sm font-semibold text-text mb-2">{title}</h3>
+      <p className="text-sm text-text-mute max-w-prose">{body}</p>
+      <p className="mt-3 font-mono text-[10px] uppercase tracking-wider text-text-faint">
+        Coming soon — this space is reserved for your self-service {title.toLowerCase()} tools.
+      </p>
+    </Card>
+  );
+}

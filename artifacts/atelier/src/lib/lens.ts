@@ -12,7 +12,13 @@
  * to render or reason about the picker should import from here.
  */
 
-export type LensId = "clients" | "people" | "agents" | "partners" | "finance";
+export type LensId =
+  | "clients"
+  | "people"
+  | "agents"
+  | "partners"
+  | "finance"
+  | "me";
 
 export interface LensSection {
   /** Stable id for the section. */
@@ -29,7 +35,7 @@ export interface LensDef {
   prefix: string;
   description: string;
   shortcut: string;
-  shortcutKey: "1" | "2" | "3" | "4" | "5";
+  shortcutKey: "1" | "2" | "3" | "4" | "5" | "6";
   /**
    * Default section tabs the shell renders next to the picker before the
    * lens's own home page mounts. Each lens task replaces these with its
@@ -129,7 +135,43 @@ export const LENSES: readonly LensDef[] = [
       { id: "comply", label: "Comply", href: "/finance/comply" },
     ],
   },
+  {
+    // Task #50 — the self-service lens. Visible to every persona; the ONLY
+    // lens for the self-only personas (role employee / contractor).
+    id: "me",
+    label: "Me",
+    prefix: "/me",
+    description: "Your profile, time, expenses, pay, performance, learning.",
+    shortcut: "⌘6",
+    shortcutKey: "6",
+    sections: [
+      { id: "overview", label: "Overview", href: "/me" },
+      { id: "profile", label: "Profile", href: "/me/profile" },
+      { id: "time", label: "Time", href: "/me/time" },
+      { id: "expenses", label: "Expenses", href: "/me/expenses" },
+      { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
+      { id: "performance", label: "Performance", href: "/me/performance" },
+      { id: "learning", label: "Learning", href: "/me/learning" },
+    ],
+  },
 ] as const;
+
+/**
+ * Task #50 — personas whose world is ONLY the Me lens. They cannot see the
+ * five org-wide lenses in the picker (the server enforces the same boundary
+ * on /api/atelier — see the non-employee middleware in routes/atelier).
+ */
+export function isSelfOnlyRole(role: string | null | undefined): boolean {
+  return role === "employee" || role === "contractor";
+}
+
+/** Lenses the picker should offer this persona. */
+export function visibleLensesForRole(
+  role: string | null | undefined,
+): readonly LensDef[] {
+  if (isSelfOnlyRole(role)) return LENSES.filter((l) => l.id === "me");
+  return LENSES;
+}
 
 const LENS_BY_ID: Record<LensId, LensDef> = LENSES.reduce(
   (acc, l) => ({ ...acc, [l.id]: l }),
@@ -171,6 +213,8 @@ export function lensFromPath(pathname: string): LensId | null {
  */
 export function defaultLensForRole(role: string | null | undefined): LensId {
   if (!role) return "clients";
+  // Task #50 — self-only personas land on (and stay in) the Me lens.
+  if (isSelfOnlyRole(role)) return "me";
   // Forward-compatible matches for personas that don't exist in the
   // 9-persona model yet but are named in the spec.
   if (role.includes("agent_ops") || role === "agent_ops") return "agents";

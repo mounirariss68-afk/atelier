@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/scheduler";
 import { ensureAtelierAuthSeed } from "./lib/atelier-seed-auth";
+import { ensureAtelierSelfLinkage } from "./lib/atelier-self-linkage";
 import { ensureAtelierReferenceSeed } from "./lib/atelier-seed-reference";
 import { ensureAtelierPricingSeed } from "./lib/atelier-seed-pricing";
 import { startLedgerNudgeJob } from "./lib/atelier-agents/ledgerNudges";
@@ -38,6 +39,14 @@ app.listen(port, (err) => {
   // Fail loudly: without this the API is a wall of 401s.
   void ensureAtelierAuthSeed().catch((err) => {
     logger.error({ err }, "Auth credential seed failed — logins will not work");
+  });
+  // Task #50 — user↔person linkage repair so the Me lens resolves a roster
+  // record for every existing user (data-only identity repair, not seeding).
+  void ensureAtelierSelfLinkage().catch((err) => {
+    logger.error(
+      { err },
+      "Self-linkage repair failed — /me/profile may miss roster records",
+    );
   });
   // All demo-data seeding was removed for production (2026-07-16). The only
   // boot-time seeds left are configuration, not demo data: the auth

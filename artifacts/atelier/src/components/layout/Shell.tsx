@@ -7,7 +7,7 @@ import {
   useAtelierSwitchPersona,
   useAtelierGetActivity
 } from "@workspace/api-client-react";
-import { getAtelierGetMeQueryKey, getAtelierGetHomeQueryKey, getAtelierGetActivityQueryKey } from "@workspace/api-client-react";
+import { getAtelierGetMeQueryKey, getAtelierGetHomeQueryKey, getAtelierGetActivityQueryKey, getAtelierListPersonasQueryKey } from "@workspace/api-client-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { 
   DropdownMenu, 
@@ -68,7 +68,19 @@ export function TopNav() {
   const { logout } = useAuth();
   const [changePwOpen, setChangePwOpen] = React.useState(false);
   const { data: me } = useAtelierGetMe();
-  const { data: personas } = useAtelierListPersonas();
+  // The persona list only feeds the dev-only persona switcher; skip the
+  // org-directory fetch entirely for self-only roles (employee/contractor)
+  // and whenever the switcher is disabled.
+  const personaSwitcherEnabled =
+    import.meta.env.VITE_ATELIER_PERSONA_SWITCHER === "true";
+  const selfOnly = me?.role === "employee" || me?.role === "contractor";
+  const { data: fetchedPersonas } = useAtelierListPersonas({
+    query: {
+      enabled: personaSwitcherEnabled && !!me && !selfOnly,
+      queryKey: getAtelierListPersonasQueryKey(),
+    },
+  });
+  const personas = personaSwitcherEnabled && !selfOnly ? fetchedPersonas : me ? [me] : undefined;
   const switchPersona = useAtelierSwitchPersona();
   const queryClient = useQueryClient();
 

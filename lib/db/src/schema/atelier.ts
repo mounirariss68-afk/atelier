@@ -1476,6 +1476,37 @@ export const atelierPaneAItems = pgTable(
 );
 
 // ============================================================
+// SELF NOTIFICATIONS (Me lens) — Task #50
+// Per-user self-service cards ("timesheet due Friday", "expense
+// approved", "review cycle opens Monday"). Written by emitSelfNotification
+// on the server; read + dismissed only by the owning user via /me routes.
+// ============================================================
+export const atelierSelfNotifications = pgTable(
+  "atelier_self_notifications",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // Owning atelier_users.id — the ONLY user who may read/dismiss it.
+    userId: text("user_id").notNull(),
+    // Machine kind, e.g. timesheet_due | expense_status | review_cycle | generic
+    kind: text("kind").notNull().default("generic"),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    // Optional in-app link (always under /me/... for self-scope).
+    href: text("href"),
+    status: text("status").notNull().default("unread"), // unread | dismissed
+    dismissedAt: timestamp("dismissed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_selfnotif_user").on(t.userId),
+    index("idx_atelier_selfnotif_org").on(t.orgId),
+  ],
+);
+
+// ============================================================
 // PROPOSALS (Proposal Composer output, per opportunity) — Task #223
 // ============================================================
 export const atelierProposals = pgTable(
@@ -3759,6 +3790,10 @@ export const atelierAuthCredentials = pgTable(
     // Task #5 — set to true when a partner resets a colleague's password;
     // the next login must change the temporary password before using the app.
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    // Task #50 — leaver deactivation. Disabled credentials cannot sign in
+    // (login returns the generic invalid-credentials error) and all sessions
+    // are revoked at deactivation time. Reversible by HR / founding partner.
+    disabled: boolean("disabled").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

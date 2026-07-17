@@ -26,6 +26,8 @@ import type {
   AtelierAccountTimeline,
   AtelierAccountWorkspace,
   AtelierAddAccountTeamMemberInput,
+  AtelierAddJoinerInput,
+  AtelierAddJoinerResponse,
   AtelierAdminSettings,
   AtelierAdminSettingsUpdate,
   AtelierAgentDecisionInput,
@@ -87,6 +89,7 @@ import type {
   AtelierGetActivityParams,
   AtelierHome,
   AtelierHypothesisTree,
+  AtelierJoiner,
   AtelierListAccountsParams,
   AtelierListAuditParams,
   AtelierMarginOverrideInput,
@@ -133,6 +136,8 @@ import type {
   AtelierRejectProposalSectionInput,
   AtelierResearchFact,
   AtelierScoutInput,
+  AtelierSelfNotification,
+  AtelierSelfProfile,
   AtelierSendDeliverableInput,
   AtelierStageChangeInput,
   AtelierStageTransitionInput,
@@ -406,6 +411,576 @@ export function useAtelierGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Me lens — the caller's own persona + roster record (self-scope)
+ */
+export const getAtelierGetMyProfileUrl = () => {
+  return `/api/atelier/me/profile`;
+};
+
+export const atelierGetMyProfile = async (
+  options?: RequestInit,
+): Promise<AtelierSelfProfile> => {
+  return customFetch<AtelierSelfProfile>(getAtelierGetMyProfileUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyProfileQueryKey = () => {
+  return [`/api/atelier/me/profile`] as const;
+};
+
+export const getAtelierGetMyProfileQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyProfile>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetMyProfileQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyProfile>>
+  > = ({ signal }) => atelierGetMyProfile({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyProfile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyProfileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyProfile>>
+>;
+export type AtelierGetMyProfileQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own persona + roster record (self-scope)
+ */
+
+export function useAtelierGetMyProfile<
+  TData = Awaited<ReturnType<typeof atelierGetMyProfile>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyProfileQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — the caller's own self-service notification cards
+ */
+export const getAtelierListMyNotificationsUrl = () => {
+  return `/api/atelier/me/notifications`;
+};
+
+export const atelierListMyNotifications = async (
+  options?: RequestInit,
+): Promise<AtelierSelfNotification[]> => {
+  return customFetch<AtelierSelfNotification[]>(
+    getAtelierListMyNotificationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListMyNotificationsQueryKey = () => {
+  return [`/api/atelier/me/notifications`] as const;
+};
+
+export const getAtelierListMyNotificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListMyNotificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyNotifications>>
+  > = ({ signal }) => atelierListMyNotifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyNotifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyNotificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyNotifications>>
+>;
+export type AtelierListMyNotificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own self-service notification cards
+ */
+
+export function useAtelierListMyNotifications<
+  TData = Awaited<ReturnType<typeof atelierListMyNotifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyNotifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyNotificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — dismiss one of the caller's own notification cards
+ */
+export const getAtelierDismissMyNotificationUrl = (id: string) => {
+  return `/api/atelier/me/notifications/${id}/dismiss`;
+};
+
+export const atelierDismissMyNotification = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSelfNotification> => {
+  return customFetch<AtelierSelfNotification>(
+    getAtelierDismissMyNotificationUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierDismissMyNotificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDismissMyNotification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDismissMyNotification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDismissMyNotification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDismissMyNotification>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDismissMyNotification(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDismissMyNotificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDismissMyNotification>>
+>;
+
+export type AtelierDismissMyNotificationMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — dismiss one of the caller's own notification cards
+ */
+export const useAtelierDismissMyNotification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDismissMyNotification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDismissMyNotification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDismissMyNotificationMutationOptions(options));
+};
+
+/**
+ * @summary HR — list login-holding users with activation status
+ */
+export const getAtelierListJoinersUrl = () => {
+  return `/api/atelier/roster/joiners`;
+};
+
+export const atelierListJoiners = async (
+  options?: RequestInit,
+): Promise<AtelierJoiner[]> => {
+  return customFetch<AtelierJoiner[]>(getAtelierListJoinersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListJoinersQueryKey = () => {
+  return [`/api/atelier/roster/joiners`] as const;
+};
+
+export const getAtelierListJoinersQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListJoiners>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListJoiners>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListJoinersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListJoiners>>
+  > = ({ signal }) => atelierListJoiners({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListJoiners>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListJoinersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListJoiners>>
+>;
+export type AtelierListJoinersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list login-holding users with activation status
+ */
+
+export function useAtelierListJoiners<
+  TData = Awaited<ReturnType<typeof atelierListJoiners>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListJoiners>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListJoinersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — add a joiner (roster record + user + one-time temp password)
+ */
+export const getAtelierAddJoinerUrl = () => {
+  return `/api/atelier/roster/joiners`;
+};
+
+export const atelierAddJoiner = async (
+  atelierAddJoinerInput: AtelierAddJoinerInput,
+  options?: RequestInit,
+): Promise<AtelierAddJoinerResponse> => {
+  return customFetch<AtelierAddJoinerResponse>(getAtelierAddJoinerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierAddJoinerInput),
+  });
+};
+
+export const getAtelierAddJoinerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAddJoiner>>,
+    TError,
+    { data: BodyType<AtelierAddJoinerInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAddJoiner>>,
+  TError,
+  { data: BodyType<AtelierAddJoinerInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierAddJoiner"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAddJoiner>>,
+    { data: BodyType<AtelierAddJoinerInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierAddJoiner(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAddJoinerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAddJoiner>>
+>;
+export type AtelierAddJoinerMutationBody = BodyType<AtelierAddJoinerInput>;
+export type AtelierAddJoinerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HR — add a joiner (roster record + user + one-time temp password)
+ */
+export const useAtelierAddJoiner = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAddJoiner>>,
+    TError,
+    { data: BodyType<AtelierAddJoinerInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAddJoiner>>,
+  TError,
+  { data: BodyType<AtelierAddJoinerInput> },
+  TContext
+> => {
+  return useMutation(getAtelierAddJoinerMutationOptions(options));
+};
+
+/**
+ * @summary HR — deactivate a leaver (disable login + revoke sessions)
+ */
+export const getAtelierDeactivateJoinerUrl = (userId: string) => {
+  return `/api/atelier/roster/joiners/${userId}/deactivate`;
+};
+
+export const atelierDeactivateJoiner = async (
+  userId: string,
+  options?: RequestInit,
+): Promise<AtelierJoiner> => {
+  return customFetch<AtelierJoiner>(getAtelierDeactivateJoinerUrl(userId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAtelierDeactivateJoinerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
+    TError,
+    { userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
+  TError,
+  { userId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeactivateJoiner"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
+    { userId: string }
+  > = (props) => {
+    const { userId } = props ?? {};
+
+    return atelierDeactivateJoiner(userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeactivateJoinerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeactivateJoiner>>
+>;
+
+export type AtelierDeactivateJoinerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HR — deactivate a leaver (disable login + revoke sessions)
+ */
+export const useAtelierDeactivateJoiner = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
+    TError,
+    { userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeactivateJoiner>>,
+  TError,
+  { userId: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeactivateJoinerMutationOptions(options));
+};
+
+/**
+ * @summary HR — reactivate a previously deactivated user
+ */
+export const getAtelierReactivateJoinerUrl = (userId: string) => {
+  return `/api/atelier/roster/joiners/${userId}/reactivate`;
+};
+
+export const atelierReactivateJoiner = async (
+  userId: string,
+  options?: RequestInit,
+): Promise<AtelierJoiner> => {
+  return customFetch<AtelierJoiner>(getAtelierReactivateJoinerUrl(userId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAtelierReactivateJoinerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReactivateJoiner>>,
+    TError,
+    { userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReactivateJoiner>>,
+  TError,
+  { userId: string },
+  TContext
+> => {
+  const mutationKey = ["atelierReactivateJoiner"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReactivateJoiner>>,
+    { userId: string }
+  > = (props) => {
+    const { userId } = props ?? {};
+
+    return atelierReactivateJoiner(userId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReactivateJoinerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReactivateJoiner>>
+>;
+
+export type AtelierReactivateJoinerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary HR — reactivate a previously deactivated user
+ */
+export const useAtelierReactivateJoiner = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReactivateJoiner>>,
+    TError,
+    { userId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReactivateJoiner>>,
+  TError,
+  { userId: string },
+  TContext
+> => {
+  return useMutation(getAtelierReactivateJoinerMutationOptions(options));
+};
 
 /**
  * @summary List the seeded personas (Partner, Lead, SME, Engineer, BD)

@@ -58,11 +58,210 @@ export const AtelierGetMeResponse = zod.object({
     "contractor",
     "partner_firm_resource",
     "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
   ]),
   roleLabel: zod.string(),
   title: zod.string(),
   initials: zod.string(),
   avatarUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary Me lens — the caller's own persona + roster record (self-scope)
+ */
+export const AtelierGetMyProfileResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "contractor",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer",
+      "employee",
+    ]),
+    roleLabel: zod.string(),
+    title: zod.string(),
+    initials: zod.string(),
+    avatarUrl: zod.string().nullish(),
+  }),
+  person: zod
+    .union([
+      zod
+        .object({
+          id: zod.string(),
+          workerType: zod.enum(["employee", "contractor"]),
+          fullName: zod.string(),
+          email: zod.string(),
+          title: zod.string().nullish(),
+          startDate: zod.string().nullish(),
+          employmentType: zod.string().nullish(),
+          homeOffice: zod.string().nullish(),
+          country: zod.string().nullish(),
+          status: zod.string().nullish(),
+        })
+        .describe("The caller's own roster\/person record (self-scope view)."),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+/**
+ * @summary Me lens — the caller's own self-service notification cards
+ */
+export const AtelierListMyNotificationsResponseItem = zod.object({
+  id: zod.string(),
+  kind: zod.string(),
+  title: zod.string(),
+  body: zod.string(),
+  href: zod.string().nullish(),
+  status: zod.enum(["unread", "dismissed"]),
+  createdAt: zod.string(),
+});
+export const AtelierListMyNotificationsResponse = zod.array(
+  AtelierListMyNotificationsResponseItem,
+);
+
+/**
+ * @summary Me lens — dismiss one of the caller's own notification cards
+ */
+export const AtelierDismissMyNotificationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDismissMyNotificationResponse = zod.object({
+  id: zod.string(),
+  kind: zod.string(),
+  title: zod.string(),
+  body: zod.string(),
+  href: zod.string().nullish(),
+  status: zod.enum(["unread", "dismissed"]),
+  createdAt: zod.string(),
+});
+
+/**
+ * @summary HR — list login-holding users with activation status
+ */
+export const AtelierListJoinersResponseItem = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "founding_partner",
+    "partner",
+    "finance",
+    "hr",
+    "senior_manager",
+    "consultant",
+    "contractor",
+    "partner_firm_resource",
+    "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  status: zod.enum(["active", "deactivated"]),
+  mustChangePassword: zod.boolean().optional(),
+});
+export const AtelierListJoinersResponse = zod.array(
+  AtelierListJoinersResponseItem,
+);
+
+/**
+ * @summary HR — add a joiner (roster record + user + one-time temp password)
+ */
+export const atelierAddJoinerBodyFullNameMax = 200;
+
+export const atelierAddJoinerBodyEmailMin = 3;
+export const atelierAddJoinerBodyEmailMax = 320;
+
+export const atelierAddJoinerBodyTitleMax = 200;
+
+export const atelierAddJoinerBodyStartDateMax = 10;
+
+export const AtelierAddJoinerBody = zod.object({
+  fullName: zod.string().min(1).max(atelierAddJoinerBodyFullNameMax),
+  email: zod
+    .string()
+    .min(atelierAddJoinerBodyEmailMin)
+    .max(atelierAddJoinerBodyEmailMax),
+  workerType: zod.enum(["employee", "contractor"]),
+  title: zod.string().max(atelierAddJoinerBodyTitleMax).optional(),
+  startDate: zod.string().max(atelierAddJoinerBodyStartDateMax).optional(),
+});
+
+/**
+ * @summary HR — deactivate a leaver (disable login + revoke sessions)
+ */
+export const AtelierDeactivateJoinerParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const AtelierDeactivateJoinerResponse = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "founding_partner",
+    "partner",
+    "finance",
+    "hr",
+    "senior_manager",
+    "consultant",
+    "contractor",
+    "partner_firm_resource",
+    "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  status: zod.enum(["active", "deactivated"]),
+  mustChangePassword: zod.boolean().optional(),
+});
+
+/**
+ * @summary HR — reactivate a previously deactivated user
+ */
+export const AtelierReactivateJoinerParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const AtelierReactivateJoinerResponse = zod.object({
+  userId: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum([
+    "founding_partner",
+    "partner",
+    "finance",
+    "hr",
+    "senior_manager",
+    "consultant",
+    "contractor",
+    "partner_firm_resource",
+    "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
+  ]),
+  roleLabel: zod.string(),
+  title: zod.string(),
+  status: zod.enum(["active", "deactivated"]),
+  mustChangePassword: zod.boolean().optional(),
 });
 
 /**
@@ -82,6 +281,9 @@ export const AtelierListPersonasResponseItem = zod.object({
     "contractor",
     "partner_firm_resource",
     "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
   ]),
   roleLabel: zod.string(),
   title: zod.string(),
@@ -109,6 +311,9 @@ export const AtelierListUsersResponseItem = zod.object({
     "contractor",
     "partner_firm_resource",
     "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
   ]),
   roleLabel: zod.string(),
   title: zod.string(),
@@ -138,6 +343,9 @@ export const AtelierSwitchPersonaResponse = zod.object({
     "contractor",
     "partner_firm_resource",
     "board_observer",
+    "recruiter",
+    "compliance_officer",
+    "employee",
   ]),
   roleLabel: zod.string(),
   title: zod.string(),
@@ -165,6 +373,9 @@ export const AtelierGetHomeResponse = zod.object({
       "contractor",
       "partner_firm_resource",
       "board_observer",
+      "recruiter",
+      "compliance_officer",
+      "employee",
     ]),
     roleLabel: zod.string(),
     title: zod.string(),

@@ -10,6 +10,7 @@ import { s as cliS } from "@/components/cli/locale";
 import { homeSuggestionsFor } from "@/components/cli/pageContext";
 import type { CliCapability, CliLocale } from "@/components/cli/types";
 import { cn } from "@/lib/utils";
+import { isSelfOnlyRole } from "@/lib/lens";
 
 interface ApprovalEntry {
   id: string;
@@ -688,6 +689,14 @@ export default function Home() {
   const { data: me } = useAtelierGetMe();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  // Task #50 — self-only personas (employee/contractor) have no org-wide
+  // Home; their landing page is the Me lens.
+  const selfOnly = isSelfOnlyRole(me?.role);
+  React.useEffect(() => {
+    if (selfOnly) setLocation("/me", { replace: true });
+  }, [selfOnly, setLocation]);
+  if (selfOnly) return null;
 
   if (isPending) {
     return (

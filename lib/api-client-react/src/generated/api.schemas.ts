@@ -2192,6 +2192,9 @@ export const AtelierPersonaRole = {
   contractor: "contractor",
   partner_firm_resource: "partner_firm_resource",
   board_observer: "board_observer",
+  recruiter: "recruiter",
+  compliance_officer: "compliance_officer",
+  employee: "employee",
 } as const;
 
 export interface AtelierPersona {
@@ -2208,6 +2211,112 @@ export interface AtelierPersona {
 
 export interface AtelierPersonaSwitchInput {
   personaId: string;
+}
+
+export type AtelierSelfPersonWorkerType =
+  (typeof AtelierSelfPersonWorkerType)[keyof typeof AtelierSelfPersonWorkerType];
+
+export const AtelierSelfPersonWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+/**
+ * The caller's own roster/person record (self-scope view).
+ */
+export interface AtelierSelfPerson {
+  id: string;
+  workerType: AtelierSelfPersonWorkerType;
+  fullName: string;
+  email: string;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  employmentType?: string | null;
+  /** @nullable */
+  homeOffice?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  status?: string | null;
+}
+
+export interface AtelierSelfProfile {
+  user: AtelierPersona;
+  person?: AtelierSelfPerson | null;
+}
+
+export type AtelierSelfNotificationStatus =
+  (typeof AtelierSelfNotificationStatus)[keyof typeof AtelierSelfNotificationStatus];
+
+export const AtelierSelfNotificationStatus = {
+  unread: "unread",
+  dismissed: "dismissed",
+} as const;
+
+export interface AtelierSelfNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  /** @nullable */
+  href?: string | null;
+  status: AtelierSelfNotificationStatus;
+  createdAt: string;
+}
+
+export type AtelierJoinerStatus =
+  (typeof AtelierJoinerStatus)[keyof typeof AtelierJoinerStatus];
+
+export const AtelierJoinerStatus = {
+  active: "active",
+  deactivated: "deactivated",
+} as const;
+
+export interface AtelierJoiner {
+  userId: string;
+  name: string;
+  email: string;
+  role: AtelierPersonaRole;
+  roleLabel: string;
+  title: string;
+  status: AtelierJoinerStatus;
+  mustChangePassword?: boolean;
+}
+
+export type AtelierAddJoinerInputWorkerType =
+  (typeof AtelierAddJoinerInputWorkerType)[keyof typeof AtelierAddJoinerInputWorkerType];
+
+export const AtelierAddJoinerInputWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export interface AtelierAddJoinerInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  fullName: string;
+  /**
+   * @minLength 3
+   * @maxLength 320
+   */
+  email: string;
+  workerType: AtelierAddJoinerInputWorkerType;
+  /** @maxLength 200 */
+  title?: string;
+  /** @maxLength 10 */
+  startDate?: string;
+}
+
+export interface AtelierAddJoinerResponse {
+  user: AtelierPersona;
+  personId: string;
+  /** Shown exactly once — never persisted in plaintext. */
+  tempPassword: string;
 }
 
 export type PlmStage = (typeof PlmStage)[keyof typeof PlmStage];

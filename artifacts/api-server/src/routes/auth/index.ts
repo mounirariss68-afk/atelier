@@ -131,6 +131,13 @@ router.post("/login", async (req: Request, res: Response) => {
     res.status(401).json(GENERIC_FAIL);
     return;
   }
+  // Task #50 — deactivated leaver. Same generic error as a bad password so
+  // a former colleague cannot distinguish "wrong password" from "disabled".
+  if (cred.disabled) {
+    await audit("login_failed", { actorLabel: email, ip });
+    res.status(401).json(GENERIC_FAIL);
+    return;
+  }
   const [persona] = await db
     .select()
     .from(atelierUsers)

@@ -75,6 +75,114 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierPersona"
+  /atelier/me/profile:
+    get:
+      operationId: atelierGetMyProfile
+      tags: [atelier]
+      summary: Me lens — the caller's own persona + roster record (self-scope)
+      responses:
+        "200":
+          description: Self profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfProfile"
+  /atelier/me/notifications:
+    get:
+      operationId: atelierListMyNotifications
+      tags: [atelier]
+      summary: Me lens — the caller's own self-service notification cards
+      responses:
+        "200":
+          description: Active (non-dismissed) self notifications, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierSelfNotification"
+  /atelier/me/notifications/{id}/dismiss:
+    post:
+      operationId: atelierDismissMyNotification
+      tags: [atelier]
+      summary: Me lens — dismiss one of the caller's own notification cards
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The dismissed notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfNotification"
+  /atelier/roster/joiners:
+    get:
+      operationId: atelierListJoiners
+      tags: [atelier]
+      summary: HR — list login-holding users with activation status
+      responses:
+        "200":
+          description: Users with credentials + activation status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierJoiner"
+    post:
+      operationId: atelierAddJoiner
+      tags: [atelier]
+      summary: HR — add a joiner (roster record + user + one-time temp password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierAddJoinerInput"
+      responses:
+        "201":
+          description: Created joiner; tempPassword is shown exactly once
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierAddJoinerResponse"
+  /atelier/roster/joiners/{userId}/deactivate:
+    post:
+      operationId: atelierDeactivateJoiner
+      tags: [atelier]
+      summary: HR — deactivate a leaver (disable login + revoke sessions)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated joiner row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierJoiner"
+  /atelier/roster/joiners/{userId}/reactivate:
+    post:
+      operationId: atelierReactivateJoiner
+      tags: [atelier]
+      summary: HR — reactivate a previously deactivated user
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Updated joiner row
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierJoiner"
   /atelier/personas:
     get:
       operationId: atelierListPersonas
@@ -4620,7 +4728,10 @@ components:
 
     AtelierPersonaRole:
       type: string
-      enum: [founding_partner, partner, finance, hr, senior_manager, consultant, contractor, partner_firm_resource, board_observer]
+      # employee (Task #50) — self-service persona created by the HR
+      # add-joiner flow; sees only the Me lens. recruiter/compliance_officer
+      # are the v5 Scale & Trust personas (already in personaRoles.ts).
+      enum: [founding_partner, partner, finance, hr, senior_manager, consultant, contractor, partner_firm_resource, board_observer, recruiter, compliance_officer, employee]
 
     AtelierPersona:
       type: object
@@ -4640,6 +4751,79 @@ components:
       required: [personaId]
       properties:
         personaId: { type: string }
+
+    # ---- Me lens (Task #50) — self-scope surfaces ----
+    AtelierSelfPerson:
+      type: object
+      description: The caller's own roster/person record (self-scope view).
+      required: [id, workerType, fullName, email]
+      properties:
+        id: { type: string }
+        workerType: { type: string, enum: [employee, contractor] }
+        fullName: { type: string }
+        email: { type: string }
+        title: { type: ["string", "null"] }
+        startDate: { type: ["string", "null"] }
+        employmentType: { type: ["string", "null"] }
+        homeOffice: { type: ["string", "null"] }
+        country: { type: ["string", "null"] }
+        status: { type: ["string", "null"] }
+
+    AtelierSelfProfile:
+      type: object
+      required: [user]
+      properties:
+        user: { $ref: "#/components/schemas/AtelierPersona" }
+        person:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierSelfPerson"
+            - type: "null"
+
+    AtelierSelfNotification:
+      type: object
+      required: [id, kind, title, body, status, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        body: { type: string }
+        href: { type: ["string", "null"] }
+        status: { type: string, enum: [unread, dismissed] }
+        createdAt: { type: string }
+
+    # ---- HR joiner lifecycle (Task #50) ----
+    AtelierJoiner:
+      type: object
+      required: [userId, name, email, role, roleLabel, title, status]
+      properties:
+        userId: { type: string }
+        name: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/AtelierPersonaRole" }
+        roleLabel: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [active, deactivated] }
+        mustChangePassword: { type: boolean }
+
+    AtelierAddJoinerInput:
+      type: object
+      required: [fullName, email, workerType]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, minLength: 3, maxLength: 320 }
+        workerType: { type: string, enum: [employee, contractor] }
+        title: { type: string, maxLength: 200 }
+        startDate: { type: string, maxLength: 10 }
+
+    AtelierAddJoinerResponse:
+      type: object
+      required: [user, personId, tempPassword]
+      properties:
+        user: { $ref: "#/components/schemas/AtelierPersona" }
+        personId: { type: string }
+        tempPassword:
+          type: string
+          description: Shown exactly once — never persisted in plaintext.
 
     PlmStage:
       type: string
