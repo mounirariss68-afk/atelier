@@ -69,6 +69,7 @@ import payRoutes from "./payRoutes";
 import meSelfServiceRoutes from "./meSelfServiceRoutes";
 // Task #55 — performance reviews/goals + training library.
 import performanceRoutes from "./performanceRoutes";
+import meProfileRoutes from "./meProfileRoutes";
 import joinerRoutes from "./joinerRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
@@ -150,6 +151,8 @@ router.use((req, res, next) => {
     // recruiter-safe shape.
     if (rp === "/me" || rp.startsWith("/me/") || rp.startsWith("/personas"))
       return next();
+    // Task #51 — profile photos are org-visible (roster views, bio flow).
+    if (rp.startsWith("/people-photos/")) return next();
     if (rp.startsWith("/studio/")) return next();
     res.status(403).json({
       error: "recruiter-scope",
@@ -165,6 +168,8 @@ router.use((req, res, next) => {
     const p = req.path;
     if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
       return next();
+    // Task #51 — profile photos are org-visible (roster views, bio flow).
+    if (p.startsWith("/people-photos/")) return next();
     res.status(403).json({
       error: "employee-self-scope",
       message: "Employee persona may only access /me and /personas.",
@@ -179,6 +184,8 @@ router.use((req, res, next) => {
     const p = req.path;
     if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
       return next();
+    // Task #51 — profile photos are org-visible (roster views, bio flow).
+    if (p.startsWith("/people-photos/")) return next();
     res.status(403).json({
       error: "contractor-self-scope",
       message: "Contractor persona may only access /me and /personas.",
@@ -191,6 +198,8 @@ router.use((req, res, next) => {
   // they only ever answer for the caller's own identity.
   if (p === "/me" || p.startsWith("/me/") || p.startsWith("/personas"))
     return next();
+  // Task #51 — profile photos are org-visible (roster views, bio flow).
+  if (p.startsWith("/people-photos/")) return next();
   if (p === "/engagements" || p.startsWith("/engagements/")) return next();
   // Partner-firm resources never appear in the ledger UI but DO upload
   // their firm's hours via the partner-firm CSV endpoint and may read
@@ -239,6 +248,7 @@ router.use(payRoutes);
 router.use(meSelfServiceRoutes);
 // Task #55 — performance reviews/goals + training library.
 router.use(performanceRoutes);
+router.use(meProfileRoutes);
 router.use(joinerRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

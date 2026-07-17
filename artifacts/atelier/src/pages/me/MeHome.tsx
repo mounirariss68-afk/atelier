@@ -33,6 +33,8 @@ import MePay from "./MePay";
 // Task #53 — self-service Time (timesheet grid + leave) and Expenses tabs.
 import MeTime from "./MeTime";
 import MeExpenses from "./MeExpenses";
+// Task #51 — self-service profile section (edit details, docs, dependents…)
+import MeProfileSection from "./MeProfileSection";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -75,7 +77,7 @@ export default function MeHome() {
         </TabNav>
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
-          {section === "profile" && <ProfileSection loading={isLoading} profile={profile} />}
+          {section === "profile" && <MeProfileSection loading={isLoading} profile={profile} />}
           {section === "time" && <MeTime />}
           {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
@@ -160,15 +162,6 @@ function NotificationCards() {
           </button>
         </Card>
       ))}
-    </div>
-  );
-}
-
-function ProfileSection({ loading, profile }: { loading: boolean; profile: Profile }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <IdentityCard loading={loading} profile={profile} />
-      <RosterCard loading={loading} profile={profile} />
     </div>
   );
 }

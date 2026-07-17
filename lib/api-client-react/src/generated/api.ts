@@ -71,6 +71,10 @@ import type {
   AtelierCreateActivityInput,
   AtelierCreateContactInput,
   AtelierCreateContactRelationshipInput,
+  AtelierCreateMyDependent201,
+  AtelierCreateMyDocument201,
+  AtelierCreateMyDocumentBody,
+  AtelierCreateMyEmergencyContact201,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
   AtelierCreateStageTransition200,
@@ -87,7 +91,11 @@ import type {
   AtelierDeliverableDraftInput,
   AtelierDeliverableInput,
   AtelierDeliverableVersion,
+  AtelierDependentInput,
+  AtelierDependentList,
   AtelierEditProposalSectionInput,
+  AtelierEmergencyContactInput,
+  AtelierEmergencyContactList,
   AtelierError,
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
@@ -111,6 +119,7 @@ import type {
   AtelierMergeContactsInput,
   AtelierMyOpenTasks,
   AtelierMyPay,
+  AtelierOkResponse,
   AtelierOpportunityDuplicateCandidates,
   AtelierOpportunityDuplicateError,
   AtelierOverridePricing200,
@@ -153,12 +162,19 @@ import type {
   AtelierRateCardRow,
   AtelierRateCardRowInput,
   AtelierRejectProposalSectionInput,
+  AtelierReplaceMyDocumentScan200,
+  AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
   AtelierReviewReleaseInput,
+  AtelierRosterPersonalView,
   AtelierScoutInput,
+  AtelierSelfDocumentList,
+  AtelierSelfDocumentPatch,
   AtelierSelfGoal,
   AtelierSelfNotification,
   AtelierSelfProfile,
+  AtelierSelfProfilePatch,
+  AtelierSelfProfilePatchResponse,
   AtelierSelfReview,
   AtelierSelfTrainingMaterial,
   AtelierSendDeliverableInput,
@@ -177,7 +193,12 @@ import type {
   AtelierUpdateAccountTeamMemberInput,
   AtelierUpdateActivityInput,
   AtelierUpdateContactInput,
+  AtelierUpdateMyDependent200,
+  AtelierUpdateMyDocument200,
+  AtelierUpdateMyEmergencyContact200,
   AtelierUpdateOpportunityInput,
+  AtelierUploadMyPhoto200,
+  AtelierUploadMyPhotoBody,
   AtelierUpsertAccountGoalProgressInput,
   AtelierWhitespaceCanvas,
   AuditEvent,
@@ -506,6 +527,1525 @@ export function useAtelierGetMyProfile<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetMyProfileQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — edit the caller's own personal fields (self-scope)
+ */
+export const getAtelierUpdateMyProfileUrl = () => {
+  return `/api/atelier/me/profile`;
+};
+
+export const atelierUpdateMyProfile = async (
+  atelierSelfProfilePatch: AtelierSelfProfilePatch,
+  options?: RequestInit,
+): Promise<AtelierSelfProfilePatchResponse> => {
+  return customFetch<AtelierSelfProfilePatchResponse>(
+    getAtelierUpdateMyProfileUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSelfProfilePatch),
+    },
+  );
+};
+
+export const getAtelierUpdateMyProfileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyProfile>>,
+    TError,
+    { data: BodyType<AtelierSelfProfilePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyProfile>>,
+  TError,
+  { data: BodyType<AtelierSelfProfilePatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyProfile>>,
+    { data: BodyType<AtelierSelfProfilePatch> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierUpdateMyProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyProfile>>
+>;
+export type AtelierUpdateMyProfileMutationBody =
+  BodyType<AtelierSelfProfilePatch>;
+export type AtelierUpdateMyProfileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — edit the caller's own personal fields (self-scope)
+ */
+export const useAtelierUpdateMyProfile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyProfile>>,
+    TError,
+    { data: BodyType<AtelierSelfProfilePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyProfile>>,
+  TError,
+  { data: BodyType<AtelierSelfProfilePatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyProfileMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — record a new ID/residency document (optional scan upload)
+ */
+export const getAtelierCreateMyDocumentUrl = () => {
+  return `/api/atelier/me/documents`;
+};
+
+export const atelierCreateMyDocument = async (
+  atelierCreateMyDocumentBody: AtelierCreateMyDocumentBody,
+  options?: RequestInit,
+): Promise<AtelierCreateMyDocument201> => {
+  const formData = new FormData();
+  formData.append(`kind`, atelierCreateMyDocumentBody.kind);
+  formData.append(`title`, atelierCreateMyDocumentBody.title);
+  if (atelierCreateMyDocumentBody.docNumber !== undefined) {
+    formData.append(`docNumber`, atelierCreateMyDocumentBody.docNumber);
+  }
+  if (atelierCreateMyDocumentBody.issuedAt !== undefined) {
+    formData.append(`issuedAt`, atelierCreateMyDocumentBody.issuedAt);
+  }
+  if (atelierCreateMyDocumentBody.expiresAt !== undefined) {
+    formData.append(`expiresAt`, atelierCreateMyDocumentBody.expiresAt);
+  }
+  if (atelierCreateMyDocumentBody.issuingCountry !== undefined) {
+    formData.append(
+      `issuingCountry`,
+      atelierCreateMyDocumentBody.issuingCountry,
+    );
+  }
+  if (atelierCreateMyDocumentBody.dependentId !== undefined) {
+    formData.append(`dependentId`, atelierCreateMyDocumentBody.dependentId);
+  }
+  if (atelierCreateMyDocumentBody.notes !== undefined) {
+    formData.append(`notes`, atelierCreateMyDocumentBody.notes);
+  }
+  if (atelierCreateMyDocumentBody.file !== undefined) {
+    formData.append(`file`, atelierCreateMyDocumentBody.file);
+  }
+
+  return customFetch<AtelierCreateMyDocument201>(
+    getAtelierCreateMyDocumentUrl(),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getAtelierCreateMyDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyDocument>>,
+    TError,
+    { data: BodyType<AtelierCreateMyDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateMyDocument>>,
+  TError,
+  { data: BodyType<AtelierCreateMyDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateMyDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateMyDocument>>,
+    { data: BodyType<AtelierCreateMyDocumentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateMyDocument(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateMyDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateMyDocument>>
+>;
+export type AtelierCreateMyDocumentMutationBody =
+  BodyType<AtelierCreateMyDocumentBody>;
+export type AtelierCreateMyDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — record a new ID/residency document (optional scan upload)
+ */
+export const useAtelierCreateMyDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyDocument>>,
+    TError,
+    { data: BodyType<AtelierCreateMyDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateMyDocument>>,
+  TError,
+  { data: BodyType<AtelierCreateMyDocumentBody> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateMyDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — the caller's own ID/residency documents (self-scope)
+ */
+export const getAtelierListMyDocumentsUrl = () => {
+  return `/api/atelier/me/documents`;
+};
+
+export const atelierListMyDocuments = async (
+  options?: RequestInit,
+): Promise<AtelierSelfDocumentList> => {
+  return customFetch<AtelierSelfDocumentList>(getAtelierListMyDocumentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyDocumentsQueryKey = () => {
+  return [`/api/atelier/me/documents`] as const;
+};
+
+export const getAtelierListMyDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListMyDocumentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyDocuments>>
+  > = ({ signal }) => atelierListMyDocuments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyDocuments>>
+>;
+export type AtelierListMyDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own ID/residency documents (self-scope)
+ */
+
+export function useAtelierListMyDocuments<
+  TData = Awaited<ReturnType<typeof atelierListMyDocuments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDocuments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyDocumentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — edit details of one of the caller's own documents
+ */
+export const getAtelierUpdateMyDocumentUrl = (id: string) => {
+  return `/api/atelier/me/documents/${id}`;
+};
+
+export const atelierUpdateMyDocument = async (
+  id: string,
+  atelierSelfDocumentPatch: AtelierSelfDocumentPatch,
+  options?: RequestInit,
+): Promise<AtelierUpdateMyDocument200> => {
+  return customFetch<AtelierUpdateMyDocument200>(
+    getAtelierUpdateMyDocumentUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSelfDocumentPatch),
+    },
+  );
+};
+
+export const getAtelierUpdateMyDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierSelfDocumentPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierSelfDocumentPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyDocument>>,
+    { id: string; data: BodyType<AtelierSelfDocumentPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateMyDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyDocument>>
+>;
+export type AtelierUpdateMyDocumentMutationBody =
+  BodyType<AtelierSelfDocumentPatch>;
+export type AtelierUpdateMyDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — edit details of one of the caller's own documents
+ */
+export const useAtelierUpdateMyDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierSelfDocumentPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierSelfDocumentPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — remove one of the caller's own documents
+ */
+export const getAtelierDeleteMyDocumentUrl = (id: string) => {
+  return `/api/atelier/me/documents/${id}`;
+};
+
+export const atelierDeleteMyDocument = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierDeleteMyDocumentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteMyDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyDocument>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteMyDocument>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteMyDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteMyDocument>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteMyDocument(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteMyDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteMyDocument>>
+>;
+
+export type AtelierDeleteMyDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — remove one of the caller's own documents
+ */
+export const useAtelierDeleteMyDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyDocument>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteMyDocument>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteMyDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — replace/attach the scan on an existing own document
+ */
+export const getAtelierReplaceMyDocumentScanUrl = (id: string) => {
+  return `/api/atelier/me/documents/${id}/file`;
+};
+
+export const atelierReplaceMyDocumentScan = async (
+  id: string,
+  atelierReplaceMyDocumentScanBody: AtelierReplaceMyDocumentScanBody,
+  options?: RequestInit,
+): Promise<AtelierReplaceMyDocumentScan200> => {
+  const formData = new FormData();
+  formData.append(`file`, atelierReplaceMyDocumentScanBody.file);
+
+  return customFetch<AtelierReplaceMyDocumentScan200>(
+    getAtelierReplaceMyDocumentScanUrl(id),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getAtelierReplaceMyDocumentScanMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>,
+    TError,
+    { id: string; data: BodyType<AtelierReplaceMyDocumentScanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>,
+  TError,
+  { id: string; data: BodyType<AtelierReplaceMyDocumentScanBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierReplaceMyDocumentScan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>,
+    { id: string; data: BodyType<AtelierReplaceMyDocumentScanBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierReplaceMyDocumentScan(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReplaceMyDocumentScanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>
+>;
+export type AtelierReplaceMyDocumentScanMutationBody =
+  BodyType<AtelierReplaceMyDocumentScanBody>;
+export type AtelierReplaceMyDocumentScanMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — replace/attach the scan on an existing own document
+ */
+export const useAtelierReplaceMyDocumentScan = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>,
+    TError,
+    { id: string; data: BodyType<AtelierReplaceMyDocumentScanBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReplaceMyDocumentScan>>,
+  TError,
+  { id: string; data: BodyType<AtelierReplaceMyDocumentScanBody> },
+  TContext
+> => {
+  return useMutation(getAtelierReplaceMyDocumentScanMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — stream the scan of one of the caller's own documents
+ */
+export const getAtelierDownloadMyDocumentUrl = (id: string) => {
+  return `/api/atelier/me/documents/${id}/download`;
+};
+
+export const atelierDownloadMyDocument = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getAtelierDownloadMyDocumentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierDownloadMyDocumentQueryKey = (id: string) => {
+  return [`/api/atelier/me/documents/${id}/download`] as const;
+};
+
+export const getAtelierDownloadMyDocumentQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierDownloadMyDocumentQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierDownloadMyDocument>>
+  > = ({ signal }) =>
+    atelierDownloadMyDocument(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierDownloadMyDocumentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDownloadMyDocument>>
+>;
+export type AtelierDownloadMyDocumentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — stream the scan of one of the caller's own documents
+ */
+
+export function useAtelierDownloadMyDocument<
+  TData = Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierDownloadMyDocumentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — upload/replace the caller's own profile photo
+ */
+export const getAtelierUploadMyPhotoUrl = () => {
+  return `/api/atelier/me/photo`;
+};
+
+export const atelierUploadMyPhoto = async (
+  atelierUploadMyPhotoBody: AtelierUploadMyPhotoBody,
+  options?: RequestInit,
+): Promise<AtelierUploadMyPhoto200> => {
+  const formData = new FormData();
+  formData.append(`file`, atelierUploadMyPhotoBody.file);
+
+  return customFetch<AtelierUploadMyPhoto200>(getAtelierUploadMyPhotoUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getAtelierUploadMyPhotoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadMyPhoto>>,
+    TError,
+    { data: BodyType<AtelierUploadMyPhotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUploadMyPhoto>>,
+  TError,
+  { data: BodyType<AtelierUploadMyPhotoBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUploadMyPhoto"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUploadMyPhoto>>,
+    { data: BodyType<AtelierUploadMyPhotoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierUploadMyPhoto(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUploadMyPhotoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUploadMyPhoto>>
+>;
+export type AtelierUploadMyPhotoMutationBody =
+  BodyType<AtelierUploadMyPhotoBody>;
+export type AtelierUploadMyPhotoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — upload/replace the caller's own profile photo
+ */
+export const useAtelierUploadMyPhoto = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadMyPhoto>>,
+    TError,
+    { data: BodyType<AtelierUploadMyPhotoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUploadMyPhoto>>,
+  TError,
+  { data: BodyType<AtelierUploadMyPhotoBody> },
+  TContext
+> => {
+  return useMutation(getAtelierUploadMyPhotoMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — the caller's own dependents (self-scope)
+ */
+export const getAtelierListMyDependentsUrl = () => {
+  return `/api/atelier/me/dependents`;
+};
+
+export const atelierListMyDependents = async (
+  options?: RequestInit,
+): Promise<AtelierDependentList> => {
+  return customFetch<AtelierDependentList>(getAtelierListMyDependentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyDependentsQueryKey = () => {
+  return [`/api/atelier/me/dependents`] as const;
+};
+
+export const getAtelierListMyDependentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyDependents>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDependents>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListMyDependentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyDependents>>
+  > = ({ signal }) => atelierListMyDependents({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDependents>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyDependentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyDependents>>
+>;
+export type AtelierListMyDependentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own dependents (self-scope)
+ */
+
+export function useAtelierListMyDependents<
+  TData = Awaited<ReturnType<typeof atelierListMyDependents>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyDependents>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyDependentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — add a dependent
+ */
+export const getAtelierCreateMyDependentUrl = () => {
+  return `/api/atelier/me/dependents`;
+};
+
+export const atelierCreateMyDependent = async (
+  atelierDependentInput: AtelierDependentInput,
+  options?: RequestInit,
+): Promise<AtelierCreateMyDependent201> => {
+  return customFetch<AtelierCreateMyDependent201>(
+    getAtelierCreateMyDependentUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierDependentInput),
+    },
+  );
+};
+
+export const getAtelierCreateMyDependentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyDependent>>,
+    TError,
+    { data: BodyType<AtelierDependentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateMyDependent>>,
+  TError,
+  { data: BodyType<AtelierDependentInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateMyDependent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateMyDependent>>,
+    { data: BodyType<AtelierDependentInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateMyDependent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateMyDependentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateMyDependent>>
+>;
+export type AtelierCreateMyDependentMutationBody =
+  BodyType<AtelierDependentInput>;
+export type AtelierCreateMyDependentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — add a dependent
+ */
+export const useAtelierCreateMyDependent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyDependent>>,
+    TError,
+    { data: BodyType<AtelierDependentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateMyDependent>>,
+  TError,
+  { data: BodyType<AtelierDependentInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateMyDependentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — edit one of the caller's own dependents
+ */
+export const getAtelierUpdateMyDependentUrl = (id: string) => {
+  return `/api/atelier/me/dependents/${id}`;
+};
+
+export const atelierUpdateMyDependent = async (
+  id: string,
+  atelierDependentInput: AtelierDependentInput,
+  options?: RequestInit,
+): Promise<AtelierUpdateMyDependent200> => {
+  return customFetch<AtelierUpdateMyDependent200>(
+    getAtelierUpdateMyDependentUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierDependentInput),
+    },
+  );
+};
+
+export const getAtelierUpdateMyDependentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyDependent>>,
+    TError,
+    { id: string; data: BodyType<AtelierDependentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyDependent>>,
+  TError,
+  { id: string; data: BodyType<AtelierDependentInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyDependent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyDependent>>,
+    { id: string; data: BodyType<AtelierDependentInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateMyDependent(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyDependentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyDependent>>
+>;
+export type AtelierUpdateMyDependentMutationBody =
+  BodyType<AtelierDependentInput>;
+export type AtelierUpdateMyDependentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — edit one of the caller's own dependents
+ */
+export const useAtelierUpdateMyDependent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyDependent>>,
+    TError,
+    { id: string; data: BodyType<AtelierDependentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyDependent>>,
+  TError,
+  { id: string; data: BodyType<AtelierDependentInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyDependentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — remove one of the caller's own dependents
+ */
+export const getAtelierDeleteMyDependentUrl = (id: string) => {
+  return `/api/atelier/me/dependents/${id}`;
+};
+
+export const atelierDeleteMyDependent = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierDeleteMyDependentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteMyDependentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyDependent>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteMyDependent>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteMyDependent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteMyDependent>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteMyDependent(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteMyDependentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteMyDependent>>
+>;
+
+export type AtelierDeleteMyDependentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — remove one of the caller's own dependents
+ */
+export const useAtelierDeleteMyDependent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyDependent>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteMyDependent>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteMyDependentMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — the caller's own emergency contacts (self-scope)
+ */
+export const getAtelierListMyEmergencyContactsUrl = () => {
+  return `/api/atelier/me/emergency-contacts`;
+};
+
+export const atelierListMyEmergencyContacts = async (
+  options?: RequestInit,
+): Promise<AtelierEmergencyContactList> => {
+  return customFetch<AtelierEmergencyContactList>(
+    getAtelierListMyEmergencyContactsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListMyEmergencyContactsQueryKey = () => {
+  return [`/api/atelier/me/emergency-contacts`] as const;
+};
+
+export const getAtelierListMyEmergencyContactsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListMyEmergencyContactsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>
+  > = ({ signal }) =>
+    atelierListMyEmergencyContacts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyEmergencyContactsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>
+>;
+export type AtelierListMyEmergencyContactsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own emergency contacts (self-scope)
+ */
+
+export function useAtelierListMyEmergencyContacts<
+  TData = Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyEmergencyContacts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyEmergencyContactsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — add an emergency contact
+ */
+export const getAtelierCreateMyEmergencyContactUrl = () => {
+  return `/api/atelier/me/emergency-contacts`;
+};
+
+export const atelierCreateMyEmergencyContact = async (
+  atelierEmergencyContactInput: AtelierEmergencyContactInput,
+  options?: RequestInit,
+): Promise<AtelierCreateMyEmergencyContact201> => {
+  return customFetch<AtelierCreateMyEmergencyContact201>(
+    getAtelierCreateMyEmergencyContactUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierEmergencyContactInput),
+    },
+  );
+};
+
+export const getAtelierCreateMyEmergencyContactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>,
+    TError,
+    { data: BodyType<AtelierEmergencyContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>,
+  TError,
+  { data: BodyType<AtelierEmergencyContactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateMyEmergencyContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>,
+    { data: BodyType<AtelierEmergencyContactInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateMyEmergencyContact(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateMyEmergencyContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>
+>;
+export type AtelierCreateMyEmergencyContactMutationBody =
+  BodyType<AtelierEmergencyContactInput>;
+export type AtelierCreateMyEmergencyContactMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — add an emergency contact
+ */
+export const useAtelierCreateMyEmergencyContact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>,
+    TError,
+    { data: BodyType<AtelierEmergencyContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateMyEmergencyContact>>,
+  TError,
+  { data: BodyType<AtelierEmergencyContactInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierCreateMyEmergencyContactMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Me lens — edit one of the caller's own emergency contacts
+ */
+export const getAtelierUpdateMyEmergencyContactUrl = (id: string) => {
+  return `/api/atelier/me/emergency-contacts/${id}`;
+};
+
+export const atelierUpdateMyEmergencyContact = async (
+  id: string,
+  atelierEmergencyContactInput: AtelierEmergencyContactInput,
+  options?: RequestInit,
+): Promise<AtelierUpdateMyEmergencyContact200> => {
+  return customFetch<AtelierUpdateMyEmergencyContact200>(
+    getAtelierUpdateMyEmergencyContactUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierEmergencyContactInput),
+    },
+  );
+};
+
+export const getAtelierUpdateMyEmergencyContactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>,
+    TError,
+    { id: string; data: BodyType<AtelierEmergencyContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>,
+  TError,
+  { id: string; data: BodyType<AtelierEmergencyContactInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyEmergencyContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>,
+    { id: string; data: BodyType<AtelierEmergencyContactInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateMyEmergencyContact(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyEmergencyContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>
+>;
+export type AtelierUpdateMyEmergencyContactMutationBody =
+  BodyType<AtelierEmergencyContactInput>;
+export type AtelierUpdateMyEmergencyContactMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — edit one of the caller's own emergency contacts
+ */
+export const useAtelierUpdateMyEmergencyContact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>,
+    TError,
+    { id: string; data: BodyType<AtelierEmergencyContactInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyEmergencyContact>>,
+  TError,
+  { id: string; data: BodyType<AtelierEmergencyContactInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateMyEmergencyContactMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Me lens — remove one of the caller's own emergency contacts
+ */
+export const getAtelierDeleteMyEmergencyContactUrl = (id: string) => {
+  return `/api/atelier/me/emergency-contacts/${id}`;
+};
+
+export const atelierDeleteMyEmergencyContact = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(
+    getAtelierDeleteMyEmergencyContactUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDeleteMyEmergencyContactMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteMyEmergencyContact"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteMyEmergencyContact(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteMyEmergencyContactMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>
+>;
+
+export type AtelierDeleteMyEmergencyContactMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — remove one of the caller's own emergency contacts
+ */
+export const useAtelierDeleteMyEmergencyContact = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteMyEmergencyContact>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(
+    getAtelierDeleteMyEmergencyContactMutationOptions(options),
+  );
+};
+
+/**
+ * @summary HR — personal-data view (dependents, emergency contacts, contact fields)
+ */
+export const getAtelierGetRosterPersonPersonalUrl = (id: string) => {
+  return `/api/atelier/roster/people/${id}/personal`;
+};
+
+export const atelierGetRosterPersonPersonal = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierRosterPersonalView> => {
+  return customFetch<AtelierRosterPersonalView>(
+    getAtelierGetRosterPersonPersonalUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetRosterPersonPersonalQueryKey = (id: string) => {
+  return [`/api/atelier/roster/people/${id}/personal`] as const;
+};
+
+export const getAtelierGetRosterPersonPersonalQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetRosterPersonPersonalQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>
+  > = ({ signal }) =>
+    atelierGetRosterPersonPersonal(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetRosterPersonPersonalQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>
+>;
+export type AtelierGetRosterPersonPersonalQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — personal-data view (dependents, emergency contacts, contact fields)
+ */
+
+export function useAtelierGetRosterPersonPersonal<
+  TData = Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetRosterPersonPersonal>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetRosterPersonPersonalQueryOptions(
+    id,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

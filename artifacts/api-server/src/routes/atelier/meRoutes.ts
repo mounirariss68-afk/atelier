@@ -68,6 +68,16 @@ export interface SelfPersonWire {
   homeOffice: string | null;
   country: string | null;
   status: string | null;
+  // Task #51 — self-service profile fields.
+  preferredName: string | null;
+  personalEmail: string | null;
+  cellPhones: { country: string; number: string }[];
+  homeAddress: string | null;
+  officeAddress: string | null;
+  bio: string | null;
+  nationality: string | null;
+  gender: string;
+  avatarUrl: string | null;
 }
 
 /**
@@ -104,6 +114,16 @@ export async function resolveSelfPerson(
       homeOffice: emp.homeOffice ?? null,
       country: emp.country ?? null,
       status: emp.status ?? null,
+      // Task #51 — self-service profile fields.
+      preferredName: emp.preferredName ?? null,
+      personalEmail: emp.personalEmail ?? null,
+      cellPhones: (emp.cellPhones ?? []) as { country: string; number: string }[],
+      homeAddress: emp.homeAddress ?? null,
+      officeAddress: emp.officeAddress ?? null,
+      bio: emp.bio ?? null,
+      nationality: emp.nationality ?? null,
+      gender: emp.gender ?? "unspecified",
+      avatarUrl: emp.avatarUrl ?? null,
     };
   }
   const email = me.email.trim().toLowerCase();
@@ -129,6 +149,16 @@ export async function resolveSelfPerson(
       homeOffice: null,
       country: ct.country ?? null,
       status: ct.status ?? null,
+      // Task #51 — self-service profile fields.
+      preferredName: null,
+      personalEmail: ct.personalEmail ?? null,
+      cellPhones: (ct.cellPhones ?? []) as { country: string; number: string }[],
+      homeAddress: ct.homeAddress ?? null,
+      officeAddress: ct.officeAddress ?? null,
+      bio: ct.bio ?? null,
+      nationality: ct.nationality ?? null,
+      gender: ct.gender ?? "unspecified",
+      avatarUrl: ct.avatarUrl ?? null,
     };
   }
   return null;

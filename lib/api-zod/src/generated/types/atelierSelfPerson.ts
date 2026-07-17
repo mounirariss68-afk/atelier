@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierCellPhone } from "./atelierCellPhone";
 import type { AtelierSelfPersonWorkerType } from "./atelierSelfPersonWorkerType";
 
 /**
@@ -27,4 +28,21 @@ export interface AtelierSelfPerson {
   country?: string | null;
   /** @nullable */
   status?: string | null;
+  /** @nullable */
+  preferredName?: string | null;
+  /** @nullable */
+  personalEmail?: string | null;
+  cellPhones?: AtelierCellPhone[];
+  /** @nullable */
+  homeAddress?: string | null;
+  /** @nullable */
+  officeAddress?: string | null;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
 }

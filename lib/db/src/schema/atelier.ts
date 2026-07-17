@@ -2174,6 +2174,11 @@ export const atelierEmployees = pgTable(
     utilizationTargetPct: integer("utilization_target_pct"), // PRD §2.1
     partnerEconomicsId: text("partner_economics_id"),
     avatarUrl: text("avatar_url"),
+    // Task #51 — self-service profile fields (Me lens). Personal data the
+    // person maintains themself; never HR-locked.
+    personalEmail: text("personal_email"),
+    homeAddress: text("home_address"),
+    bio: text("bio"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -2227,6 +2232,17 @@ export const atelierContractors = pgTable(
     startDate: text("start_date"),
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | paused | offboarded
+    // Task #51 — self-service profile fields (Me lens), mirroring the
+    // employee columns so contractors get the same self-service surface.
+    cellPhones: jsonb("cell_phones")
+      .$type<Array<{ country: string; number: string }>>()
+      .notNull()
+      .default([]),
+    officeAddress: text("office_address"),
+    avatarUrl: text("avatar_url"),
+    personalEmail: text("personal_email"),
+    homeAddress: text("home_address"),
+    bio: text("bio"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -2382,6 +2398,17 @@ export const atelierPersonDocuments = pgTable(
     title: text("title").notNull(),
     fileRef: text("file_ref"), // PRD §2.1 (object-storage ref; signed-url infra lands later)
     fileUrl: text("file_url"),
+    // Task #51 — self-service ID/residency detail fields + real object-
+    // storage upload metadata. `fileRef` now carries `persondoc:<key>`
+    // for self-uploaded scans (streamed via the owner-or-HR download
+    // routes). `dependentId` links a scan to an atelier_dependents row.
+    docNumber: text("doc_number"),
+    issuedAt: text("issued_at"), // ISO date
+    issuingCountry: text("issuing_country"),
+    dependentId: text("dependent_id"),
+    fileName: text("file_name"),
+    mime: text("mime"),
+    sizeBytes: integer("size_bytes"),
     signedAt: timestamp("signed_at"), // PRD §2.1
     uploadedByUserId: text("uploaded_by_user_id"),
     uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
@@ -2497,6 +2524,56 @@ export const atelierBankChangeRequests = pgTable(
     index("idx_atelier_bankreq_org").on(t.orgId),
     index("idx_atelier_bankreq_person").on(t.personType, t.personId),
     index("idx_atelier_bankreq_status").on(t.status),
+  ],
+);
+
+// ============================================================
+// Task #51 — Me-lens self-service: dependents + emergency contacts.
+// Both are person-scoped exactly like atelier_person_documents
+// (personType employee | contractor). Owner-editable, HR-readable.
+// ============================================================
+export const atelierDependents = pgTable(
+  "atelier_dependents",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor
+    personId: text("person_id").notNull(),
+    fullName: text("full_name").notNull(),
+    relationship: text("relationship").notNull(), // spouse | child | parent | other
+    dateOfBirth: text("date_of_birth"), // ISO date
+    nationality: text("nationality"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_dependents_org").on(t.orgId),
+    index("idx_atelier_dependents_person").on(t.personType, t.personId),
+  ],
+);
+
+export const atelierEmergencyContacts = pgTable(
+  "atelier_emergency_contacts",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    personType: text("person_type").notNull(), // employee | contractor
+    personId: text("person_id").notNull(),
+    name: text("name").notNull(),
+    relationship: text("relationship").notNull(),
+    phones: jsonb("phones").notNull().default([]).$type<string[]>(),
+    email: text("email"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_emergency_contacts_org").on(t.orgId),
+    index("idx_atelier_emergency_contacts_person").on(t.personType, t.personId),
   ],
 );
 

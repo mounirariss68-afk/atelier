@@ -34,7 +34,14 @@ import {
   atelierAuditEvents,
   atelierPersonDocuments,
   atelierConflictDisclosures,
+  atelierDependents,
+  atelierEmergencyContacts,
 } from "@workspace/db";
+// Task #51 — stream self-uploaded scans from private object storage.
+import {
+  loadPersonDocBytes,
+  PERSON_DOC_PREFIX,
+} from "../../lib/personDocStorage.js";
 
 const router: IRouter = Router();
 
@@ -991,6 +998,97 @@ router.get("/roster/people/:id/access", async (req, res, next) => {
   }
 });
 
+// Task #51 — HR parity view of self-service personal data: dependents,
+// emergency contacts and the self-editable contact fields. Gated
+// owner-or-personnel-contract exactly like the documents surface.
+// @cli-skip: HR read-parity personal-data view (Task #51)
+router.get("/roster/people/:id/personal", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const person = await getPerson(req.params.id, canSeeComp(me.role));
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const ownerUserId = await resolveLinkedUserId(person);
+    const isSelf = !!ownerUserId && ownerUserId === me.id;
+    if (!isSelf && !canViewPersonnelContract(me.role)) {
+      res.status(403).json({ error: "personnel-contract-forbidden" });
+      return;
+    }
+    const [deps, contacts] = await Promise.all([
+      db
+        .select()
+        .from(atelierDependents)
+        .where(
+          and(
+            eq(atelierDependents.personType, person.workerType),
+            eq(atelierDependents.personId, person.id),
+            isNull(atelierDependents.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierDependents.createdAt)),
+      db
+        .select()
+        .from(atelierEmergencyContacts)
+        .where(
+          and(
+            eq(atelierEmergencyContacts.personType, person.workerType),
+            eq(atelierEmergencyContacts.personId, person.id),
+            isNull(atelierEmergencyContacts.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierEmergencyContacts.createdAt)),
+    ]);
+    // Fetch the raw row for the self-editable fields not on PersonWire.
+    let raw: Record<string, unknown> = {};
+    if (person.workerType === "employee") {
+      const [row] = await db
+        .select()
+        .from(atelierEmployees)
+        .where(eq(atelierEmployees.id, person.id));
+      raw = (row ?? {}) as Record<string, unknown>;
+    } else if (person.workerType === "contractor") {
+      const [row] = await db
+        .select()
+        .from(atelierContractors)
+        .where(eq(atelierContractors.id, person.id));
+      raw = (row ?? {}) as Record<string, unknown>;
+    }
+    res.json({
+      person: {
+        id: person.id,
+        fullName: person.fullName,
+        workerType: person.workerType,
+        personalEmail: (raw.personalEmail as string | null) ?? null,
+        cellPhones: (raw.cellPhones as unknown[] | null) ?? [],
+        homeAddress: (raw.homeAddress as string | null) ?? null,
+        officeAddress: (raw.officeAddress as string | null) ?? null,
+        bio: (raw.bio as string | null) ?? null,
+        nationality: (raw.nationality as string | null) ?? null,
+      },
+      dependents: deps.map((d) => ({
+        id: d.id,
+        fullName: d.fullName,
+        relationship: d.relationship,
+        dateOfBirth: d.dateOfBirth ?? null,
+        nationality: d.nationality ?? null,
+        notes: d.notes ?? null,
+      })),
+      emergencyContacts: contacts.map((c) => ({
+        id: c.id,
+        name: c.name,
+        relationship: c.relationship,
+        phones: (c.phones ?? []) as string[],
+        email: c.email ?? null,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id/documents", async (req, res, next) => {
   try {
@@ -1138,6 +1236,23 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       payload: { personId: person.id, docId: doc.id, kind: doc.kind },
       payloadSummary: `${me.name} downloaded ${doc.kind} document for ${person.fullName}`,
     });
+    // Task #51 — self-uploaded scans live in private object storage under
+    // a `persondoc:` fileRef; stream those bytes directly.
+    if (doc.fileRef && doc.fileRef.startsWith(PERSON_DOC_PREFIX)) {
+      const bytes = await loadPersonDocBytes(doc.fileRef);
+      if (!bytes) {
+        res.status(404).json({ error: "file-missing" });
+        return;
+      }
+      res.setHeader("Content-Type", doc.mime || "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${(doc.fileName || "document").replace(/[^\w.\- ]+/g, "_")}"`,
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(bytes);
+      return;
+    }
     if (doc.fileUrl) {
       res.redirect(302, doc.fileUrl);
       return;

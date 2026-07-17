@@ -71,6 +71,11 @@ export const AtelierGetMeResponse = zod.object({
 /**
  * @summary Me lens — the caller's own persona + roster record (self-scope)
  */
+export const atelierGetMyProfileResponsePersonOneCellPhonesItemCountryMax = 60;
+
+export const atelierGetMyProfileResponsePersonOneCellPhonesItemNumberMin = 3;
+export const atelierGetMyProfileResponsePersonOneCellPhonesItemNumberMax = 40;
+
 export const AtelierGetMyProfileResponse = zod.object({
   user: zod.object({
     id: zod.string(),
@@ -109,11 +114,597 @@ export const AtelierGetMyProfileResponse = zod.object({
           homeOffice: zod.string().nullish(),
           country: zod.string().nullish(),
           status: zod.string().nullish(),
+          preferredName: zod.string().nullish(),
+          personalEmail: zod.string().nullish(),
+          cellPhones: zod
+            .array(
+              zod.object({
+                country: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierGetMyProfileResponsePersonOneCellPhonesItemCountryMax,
+                  ),
+                number: zod
+                  .string()
+                  .min(
+                    atelierGetMyProfileResponsePersonOneCellPhonesItemNumberMin,
+                  )
+                  .max(
+                    atelierGetMyProfileResponsePersonOneCellPhonesItemNumberMax,
+                  ),
+              }),
+            )
+            .optional(),
+          homeAddress: zod.string().nullish(),
+          officeAddress: zod.string().nullish(),
+          bio: zod.string().nullish(),
+          nationality: zod.string().nullish(),
+          gender: zod.string().nullish(),
+          avatarUrl: zod.string().nullish(),
         })
         .describe("The caller's own roster\/person record (self-scope view)."),
       zod.null(),
     ])
     .optional(),
+});
+
+/**
+ * @summary Me lens — edit the caller's own personal fields (self-scope)
+ */
+export const atelierUpdateMyProfileBodyPreferredNameMax = 200;
+
+export const atelierUpdateMyProfileBodyPersonalEmailMax = 320;
+
+export const atelierUpdateMyProfileBodyCellPhonesItemCountryMax = 60;
+
+export const atelierUpdateMyProfileBodyCellPhonesItemNumberMin = 3;
+export const atelierUpdateMyProfileBodyCellPhonesItemNumberMax = 40;
+
+export const atelierUpdateMyProfileBodyCellPhonesMax = 3;
+
+export const atelierUpdateMyProfileBodyHomeAddressMax = 1000;
+
+export const atelierUpdateMyProfileBodyOfficeAddressMax = 1000;
+
+export const atelierUpdateMyProfileBodyBioMax = 4000;
+
+export const atelierUpdateMyProfileBodyNationalityMax = 2;
+
+export const AtelierUpdateMyProfileBody = zod
+  .object({
+    preferredName: zod
+      .string()
+      .max(atelierUpdateMyProfileBodyPreferredNameMax)
+      .nullish(),
+    personalEmail: zod
+      .string()
+      .max(atelierUpdateMyProfileBodyPersonalEmailMax)
+      .nullish(),
+    cellPhones: zod
+      .array(
+        zod.object({
+          country: zod
+            .string()
+            .min(1)
+            .max(atelierUpdateMyProfileBodyCellPhonesItemCountryMax),
+          number: zod
+            .string()
+            .min(atelierUpdateMyProfileBodyCellPhonesItemNumberMin)
+            .max(atelierUpdateMyProfileBodyCellPhonesItemNumberMax),
+        }),
+      )
+      .max(atelierUpdateMyProfileBodyCellPhonesMax)
+      .optional(),
+    homeAddress: zod
+      .string()
+      .max(atelierUpdateMyProfileBodyHomeAddressMax)
+      .nullish(),
+    officeAddress: zod
+      .string()
+      .max(atelierUpdateMyProfileBodyOfficeAddressMax)
+      .nullish(),
+    bio: zod.string().max(atelierUpdateMyProfileBodyBioMax).nullish(),
+    nationality: zod
+      .string()
+      .max(atelierUpdateMyProfileBodyNationalityMax)
+      .nullish(),
+    gender: zod
+      .enum(["female", "male", "non_binary", "unspecified"])
+      .optional(),
+  })
+  .describe(
+    "Self-editable personal fields only. Sensitive HR fields (compensation, banking, employment type) are never accepted here.\n",
+  );
+
+export const atelierUpdateMyProfileResponsePersonOneCellPhonesItemCountryMax = 60;
+
+export const atelierUpdateMyProfileResponsePersonOneCellPhonesItemNumberMin = 3;
+export const atelierUpdateMyProfileResponsePersonOneCellPhonesItemNumberMax = 40;
+
+export const AtelierUpdateMyProfileResponse = zod.object({
+  person: zod.union([
+    zod
+      .object({
+        id: zod.string(),
+        workerType: zod.enum(["employee", "contractor"]),
+        fullName: zod.string(),
+        email: zod.string(),
+        title: zod.string().nullish(),
+        startDate: zod.string().nullish(),
+        employmentType: zod.string().nullish(),
+        homeOffice: zod.string().nullish(),
+        country: zod.string().nullish(),
+        status: zod.string().nullish(),
+        preferredName: zod.string().nullish(),
+        personalEmail: zod.string().nullish(),
+        cellPhones: zod
+          .array(
+            zod.object({
+              country: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateMyProfileResponsePersonOneCellPhonesItemCountryMax,
+                ),
+              number: zod
+                .string()
+                .min(
+                  atelierUpdateMyProfileResponsePersonOneCellPhonesItemNumberMin,
+                )
+                .max(
+                  atelierUpdateMyProfileResponsePersonOneCellPhonesItemNumberMax,
+                ),
+            }),
+          )
+          .optional(),
+        homeAddress: zod.string().nullish(),
+        officeAddress: zod.string().nullish(),
+        bio: zod.string().nullish(),
+        nationality: zod.string().nullish(),
+        gender: zod.string().nullish(),
+        avatarUrl: zod.string().nullish(),
+      })
+      .describe("The caller's own roster\/person record (self-scope view)."),
+    zod.null(),
+  ]),
+});
+
+/**
+ * @summary Me lens — record a new ID/residency document (optional scan upload)
+ */
+export const atelierCreateMyDocumentBodyTitleMax = 200;
+
+export const atelierCreateMyDocumentBodyDocNumberMax = 100;
+
+export const atelierCreateMyDocumentBodyIssuingCountryMax = 100;
+
+export const atelierCreateMyDocumentBodyNotesMax = 2000;
+
+export const AtelierCreateMyDocumentBody = zod.object({
+  kind: zod.enum([
+    "passport",
+    "national_id",
+    "residency",
+    "visa",
+    "dependent_doc",
+    "other",
+  ]),
+  title: zod.string().max(atelierCreateMyDocumentBodyTitleMax),
+  docNumber: zod
+    .string()
+    .max(atelierCreateMyDocumentBodyDocNumberMax)
+    .optional(),
+  issuedAt: zod.coerce.date().optional(),
+  expiresAt: zod.coerce.date().optional(),
+  issuingCountry: zod
+    .string()
+    .max(atelierCreateMyDocumentBodyIssuingCountryMax)
+    .optional(),
+  dependentId: zod.string().optional(),
+  notes: zod.string().max(atelierCreateMyDocumentBodyNotesMax).optional(),
+  file: zod
+    .instanceof(File)
+    .optional()
+    .describe("PDF\/JPEG\/PNG\/WebP scan, ≤15 MB"),
+});
+
+/**
+ * @summary Me lens — the caller's own ID/residency documents (self-scope)
+ */
+export const AtelierListMyDocumentsResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.string(),
+      title: zod.string(),
+      docNumber: zod.string().nullish(),
+      issuedAt: zod.string().nullish(),
+      issuingCountry: zod.string().nullish(),
+      expiresAt: zod.string().nullish(),
+      daysToExpiry: zod.number().nullish(),
+      dependentId: zod.string().nullish(),
+      fileName: zod.string().nullish(),
+      mime: zod.string().nullish(),
+      sizeBytes: zod.number().nullish(),
+      hasFile: zod.boolean(),
+      uploadedAt: zod.string(),
+      notes: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Me lens — edit details of one of the caller's own documents
+ */
+export const AtelierUpdateMyDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateMyDocumentBodyTitleMax = 200;
+
+export const atelierUpdateMyDocumentBodyDocNumberMax = 100;
+
+export const atelierUpdateMyDocumentBodyIssuingCountryMax = 100;
+
+export const atelierUpdateMyDocumentBodyNotesMax = 2000;
+
+export const AtelierUpdateMyDocumentBody = zod.object({
+  title: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateMyDocumentBodyTitleMax)
+    .optional(),
+  docNumber: zod
+    .string()
+    .max(atelierUpdateMyDocumentBodyDocNumberMax)
+    .nullish(),
+  issuedAt: zod.string().nullish(),
+  issuingCountry: zod
+    .string()
+    .max(atelierUpdateMyDocumentBodyIssuingCountryMax)
+    .nullish(),
+  expiresAt: zod.string().nullish(),
+  notes: zod.string().max(atelierUpdateMyDocumentBodyNotesMax).nullish(),
+});
+
+export const AtelierUpdateMyDocumentResponse = zod.object({
+  document: zod.object({
+    id: zod.string(),
+    kind: zod.string(),
+    title: zod.string(),
+    docNumber: zod.string().nullish(),
+    issuedAt: zod.string().nullish(),
+    issuingCountry: zod.string().nullish(),
+    expiresAt: zod.string().nullish(),
+    daysToExpiry: zod.number().nullish(),
+    dependentId: zod.string().nullish(),
+    fileName: zod.string().nullish(),
+    mime: zod.string().nullish(),
+    sizeBytes: zod.number().nullish(),
+    hasFile: zod.boolean(),
+    uploadedAt: zod.string(),
+    notes: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary Me lens — remove one of the caller's own documents
+ */
+export const AtelierDeleteMyDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteMyDocumentResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Me lens — replace/attach the scan on an existing own document
+ */
+export const AtelierReplaceMyDocumentScanParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierReplaceMyDocumentScanBody = zod.object({
+  file: zod.instanceof(File).describe("PDF\/JPEG\/PNG\/WebP scan, ≤15 MB"),
+});
+
+export const AtelierReplaceMyDocumentScanResponse = zod.object({
+  document: zod.object({
+    id: zod.string(),
+    kind: zod.string(),
+    title: zod.string(),
+    docNumber: zod.string().nullish(),
+    issuedAt: zod.string().nullish(),
+    issuingCountry: zod.string().nullish(),
+    expiresAt: zod.string().nullish(),
+    daysToExpiry: zod.number().nullish(),
+    dependentId: zod.string().nullish(),
+    fileName: zod.string().nullish(),
+    mime: zod.string().nullish(),
+    sizeBytes: zod.number().nullish(),
+    hasFile: zod.boolean(),
+    uploadedAt: zod.string(),
+    notes: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary Me lens — stream the scan of one of the caller's own documents
+ */
+export const AtelierDownloadMyDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Me lens — upload/replace the caller's own profile photo
+ */
+export const AtelierUploadMyPhotoBody = zod.object({
+  file: zod.instanceof(File).describe("JPEG\/PNG\/WebP, ≤8 MB"),
+});
+
+export const AtelierUploadMyPhotoResponse = zod.object({
+  avatarUrl: zod.string(),
+});
+
+/**
+ * @summary Me lens — the caller's own dependents (self-scope)
+ */
+export const AtelierListMyDependentsResponse = zod.object({
+  dependents: zod.array(
+    zod.object({
+      id: zod.string(),
+      fullName: zod.string(),
+      relationship: zod.enum(["spouse", "child", "parent", "other"]),
+      dateOfBirth: zod.string().nullish(),
+      nationality: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Me lens — add a dependent
+ */
+export const atelierCreateMyDependentBodyFullNameMax = 200;
+
+export const atelierCreateMyDependentBodyNationalityMax = 2;
+
+export const atelierCreateMyDependentBodyNotesMax = 2000;
+
+export const AtelierCreateMyDependentBody = zod.object({
+  fullName: zod.string().min(1).max(atelierCreateMyDependentBodyFullNameMax),
+  relationship: zod.enum(["spouse", "child", "parent", "other"]),
+  dateOfBirth: zod.string().nullish(),
+  nationality: zod
+    .string()
+    .max(atelierCreateMyDependentBodyNationalityMax)
+    .nullish(),
+  notes: zod.string().max(atelierCreateMyDependentBodyNotesMax).nullish(),
+});
+
+/**
+ * @summary Me lens — edit one of the caller's own dependents
+ */
+export const AtelierUpdateMyDependentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateMyDependentBodyFullNameMax = 200;
+
+export const atelierUpdateMyDependentBodyNationalityMax = 2;
+
+export const atelierUpdateMyDependentBodyNotesMax = 2000;
+
+export const AtelierUpdateMyDependentBody = zod.object({
+  fullName: zod.string().min(1).max(atelierUpdateMyDependentBodyFullNameMax),
+  relationship: zod.enum(["spouse", "child", "parent", "other"]),
+  dateOfBirth: zod.string().nullish(),
+  nationality: zod
+    .string()
+    .max(atelierUpdateMyDependentBodyNationalityMax)
+    .nullish(),
+  notes: zod.string().max(atelierUpdateMyDependentBodyNotesMax).nullish(),
+});
+
+export const AtelierUpdateMyDependentResponse = zod.object({
+  dependent: zod.object({
+    id: zod.string(),
+    fullName: zod.string(),
+    relationship: zod.enum(["spouse", "child", "parent", "other"]),
+    dateOfBirth: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    createdAt: zod.string().optional(),
+  }),
+});
+
+/**
+ * @summary Me lens — remove one of the caller's own dependents
+ */
+export const AtelierDeleteMyDependentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteMyDependentResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Me lens — the caller's own emergency contacts (self-scope)
+ */
+export const AtelierListMyEmergencyContactsResponse = zod.object({
+  contacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      relationship: zod.string(),
+      phones: zod.array(zod.string()),
+      email: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Me lens — add an emergency contact
+ */
+export const atelierCreateMyEmergencyContactBodyNameMax = 200;
+
+export const atelierCreateMyEmergencyContactBodyRelationshipMax = 100;
+
+export const atelierCreateMyEmergencyContactBodyPhonesItemMin = 3;
+export const atelierCreateMyEmergencyContactBodyPhonesItemMax = 40;
+
+export const atelierCreateMyEmergencyContactBodyPhonesMax = 3;
+
+export const atelierCreateMyEmergencyContactBodyEmailMax = 320;
+
+export const AtelierCreateMyEmergencyContactBody = zod.object({
+  name: zod.string().min(1).max(atelierCreateMyEmergencyContactBodyNameMax),
+  relationship: zod
+    .string()
+    .min(1)
+    .max(atelierCreateMyEmergencyContactBodyRelationshipMax),
+  phones: zod
+    .array(
+      zod
+        .string()
+        .min(atelierCreateMyEmergencyContactBodyPhonesItemMin)
+        .max(atelierCreateMyEmergencyContactBodyPhonesItemMax),
+    )
+    .min(1)
+    .max(atelierCreateMyEmergencyContactBodyPhonesMax),
+  email: zod
+    .string()
+    .max(atelierCreateMyEmergencyContactBodyEmailMax)
+    .nullish(),
+});
+
+/**
+ * @summary Me lens — edit one of the caller's own emergency contacts
+ */
+export const AtelierUpdateMyEmergencyContactParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateMyEmergencyContactBodyNameMax = 200;
+
+export const atelierUpdateMyEmergencyContactBodyRelationshipMax = 100;
+
+export const atelierUpdateMyEmergencyContactBodyPhonesItemMin = 3;
+export const atelierUpdateMyEmergencyContactBodyPhonesItemMax = 40;
+
+export const atelierUpdateMyEmergencyContactBodyPhonesMax = 3;
+
+export const atelierUpdateMyEmergencyContactBodyEmailMax = 320;
+
+export const AtelierUpdateMyEmergencyContactBody = zod.object({
+  name: zod.string().min(1).max(atelierUpdateMyEmergencyContactBodyNameMax),
+  relationship: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateMyEmergencyContactBodyRelationshipMax),
+  phones: zod
+    .array(
+      zod
+        .string()
+        .min(atelierUpdateMyEmergencyContactBodyPhonesItemMin)
+        .max(atelierUpdateMyEmergencyContactBodyPhonesItemMax),
+    )
+    .min(1)
+    .max(atelierUpdateMyEmergencyContactBodyPhonesMax),
+  email: zod
+    .string()
+    .max(atelierUpdateMyEmergencyContactBodyEmailMax)
+    .nullish(),
+});
+
+export const AtelierUpdateMyEmergencyContactResponse = zod.object({
+  contact: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    relationship: zod.string(),
+    phones: zod.array(zod.string()),
+    email: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary Me lens — remove one of the caller's own emergency contacts
+ */
+export const AtelierDeleteMyEmergencyContactParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteMyEmergencyContactResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary HR — personal-data view (dependents, emergency contacts, contact fields)
+ */
+export const AtelierGetRosterPersonPersonalParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierGetRosterPersonPersonalResponsePersonCellPhonesItemCountryMax = 60;
+
+export const atelierGetRosterPersonPersonalResponsePersonCellPhonesItemNumberMin = 3;
+export const atelierGetRosterPersonPersonalResponsePersonCellPhonesItemNumberMax = 40;
+
+export const AtelierGetRosterPersonPersonalResponse = zod.object({
+  person: zod.object({
+    id: zod.string(),
+    fullName: zod.string(),
+    workerType: zod.string(),
+    personalEmail: zod.string().nullish(),
+    cellPhones: zod
+      .array(
+        zod.object({
+          country: zod
+            .string()
+            .min(1)
+            .max(
+              atelierGetRosterPersonPersonalResponsePersonCellPhonesItemCountryMax,
+            ),
+          number: zod
+            .string()
+            .min(
+              atelierGetRosterPersonPersonalResponsePersonCellPhonesItemNumberMin,
+            )
+            .max(
+              atelierGetRosterPersonPersonalResponsePersonCellPhonesItemNumberMax,
+            ),
+        }),
+      )
+      .optional(),
+    homeAddress: zod.string().nullish(),
+    officeAddress: zod.string().nullish(),
+    bio: zod.string().nullish(),
+    nationality: zod.string().nullish(),
+  }),
+  dependents: zod.array(
+    zod.object({
+      id: zod.string(),
+      fullName: zod.string(),
+      relationship: zod.enum(["spouse", "child", "parent", "other"]),
+      dateOfBirth: zod.string().nullish(),
+      nationality: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string().optional(),
+    }),
+  ),
+  emergencyContacts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      relationship: zod.string(),
+      phones: zod.array(zod.string()),
+      email: zod.string().nullish(),
+    }),
+  ),
 });
 
 /**
@@ -157,6 +748,11 @@ strictly for the signed-in person. File downloads go through
 
  * @summary Me lens — the caller's own Pay & Benefits bundle (self-scope)
  */
+export const atelierGetMyPayResponsePersonOneCellPhonesItemCountryMax = 60;
+
+export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMin = 3;
+export const atelierGetMyPayResponsePersonOneCellPhonesItemNumberMax = 40;
+
 export const AtelierGetMyPayResponse = zod.object({
   person: zod
     .union([
@@ -172,6 +768,30 @@ export const AtelierGetMyPayResponse = zod.object({
           homeOffice: zod.string().nullish(),
           country: zod.string().nullish(),
           status: zod.string().nullish(),
+          preferredName: zod.string().nullish(),
+          personalEmail: zod.string().nullish(),
+          cellPhones: zod
+            .array(
+              zod.object({
+                country: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierGetMyPayResponsePersonOneCellPhonesItemCountryMax,
+                  ),
+                number: zod
+                  .string()
+                  .min(atelierGetMyPayResponsePersonOneCellPhonesItemNumberMin)
+                  .max(atelierGetMyPayResponsePersonOneCellPhonesItemNumberMax),
+              }),
+            )
+            .optional(),
+          homeAddress: zod.string().nullish(),
+          officeAddress: zod.string().nullish(),
+          bio: zod.string().nullish(),
+          nationality: zod.string().nullish(),
+          gender: zod.string().nullish(),
+          avatarUrl: zod.string().nullish(),
         })
         .describe("The caller's own roster\/person record (self-scope view)."),
       zod.null(),

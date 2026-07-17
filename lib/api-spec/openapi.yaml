@@ -87,6 +87,342 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfProfile"
+    patch:
+      operationId: atelierUpdateMyProfile
+      tags: [atelier]
+      summary: Me lens — edit the caller's own personal fields (self-scope)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSelfProfilePatch"
+      responses:
+        "200":
+          description: Updated self person record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfProfilePatchResponse"
+  /atelier/me/documents:
+    post:
+      operationId: atelierCreateMyDocument
+      tags: [atelier]
+      summary: Me lens — record a new ID/residency document (optional scan upload)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [kind, title]
+              properties:
+                kind: { type: string, enum: [passport, national_id, residency, visa, dependent_doc, other] }
+                title: { type: string, maxLength: 200 }
+                docNumber: { type: string, maxLength: 100 }
+                issuedAt: { type: string, format: date }
+                expiresAt: { type: string, format: date }
+                issuingCountry: { type: string, maxLength: 100 }
+                dependentId: { type: string }
+                notes: { type: string, maxLength: 2000 }
+                file: { type: string, format: binary, description: "PDF/JPEG/PNG/WebP scan, ≤15 MB" }
+      responses:
+        "201":
+          description: Created document (expiry countdown included)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/AtelierSelfDocument" }
+    get:
+      operationId: atelierListMyDocuments
+      tags: [atelier]
+      summary: Me lens — the caller's own ID/residency documents (self-scope)
+      responses:
+        "200":
+          description: Own documents, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfDocumentList"
+  /atelier/me/documents/{id}:
+    patch:
+      operationId: atelierUpdateMyDocument
+      tags: [atelier]
+      summary: Me lens — edit details of one of the caller's own documents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSelfDocumentPatch"
+      responses:
+        "200":
+          description: Updated document
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/AtelierSelfDocument" }
+    delete:
+      operationId: atelierDeleteMyDocument
+      tags: [atelier]
+      summary: Me lens — remove one of the caller's own documents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/me/documents/{id}/file:
+    post:
+      operationId: atelierReplaceMyDocumentScan
+      tags: [atelier]
+      summary: Me lens — replace/attach the scan on an existing own document
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: "PDF/JPEG/PNG/WebP scan, ≤15 MB" }
+      responses:
+        "200":
+          description: Document with the new scan attached
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document]
+                properties:
+                  document: { $ref: "#/components/schemas/AtelierSelfDocument" }
+  /atelier/me/documents/{id}/download:
+    get:
+      operationId: atelierDownloadMyDocument
+      tags: [atelier]
+      summary: Me lens — stream the scan of one of the caller's own documents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The stored scan bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+  /atelier/me/photo:
+    post:
+      operationId: atelierUploadMyPhoto
+      tags: [atelier]
+      summary: Me lens — upload/replace the caller's own profile photo
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: "JPEG/PNG/WebP, ≤8 MB" }
+      responses:
+        "200":
+          description: New avatar URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [avatarUrl]
+                properties:
+                  avatarUrl: { type: string }
+  /atelier/me/dependents:
+    get:
+      operationId: atelierListMyDependents
+      tags: [atelier]
+      summary: Me lens — the caller's own dependents (self-scope)
+      responses:
+        "200":
+          description: Own dependents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierDependentList"
+    post:
+      operationId: atelierCreateMyDependent
+      tags: [atelier]
+      summary: Me lens — add a dependent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierDependentInput"
+      responses:
+        "201":
+          description: Created dependent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dependent]
+                properties:
+                  dependent: { $ref: "#/components/schemas/AtelierDependent" }
+  /atelier/me/dependents/{id}:
+    patch:
+      operationId: atelierUpdateMyDependent
+      tags: [atelier]
+      summary: Me lens — edit one of the caller's own dependents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierDependentInput"
+      responses:
+        "200":
+          description: Updated dependent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [dependent]
+                properties:
+                  dependent: { $ref: "#/components/schemas/AtelierDependent" }
+    delete:
+      operationId: atelierDeleteMyDependent
+      tags: [atelier]
+      summary: Me lens — remove one of the caller's own dependents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted (its documents are removed too)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/me/emergency-contacts:
+    get:
+      operationId: atelierListMyEmergencyContacts
+      tags: [atelier]
+      summary: Me lens — the caller's own emergency contacts (self-scope)
+      responses:
+        "200":
+          description: Own emergency contacts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEmergencyContactList"
+    post:
+      operationId: atelierCreateMyEmergencyContact
+      tags: [atelier]
+      summary: Me lens — add an emergency contact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierEmergencyContactInput"
+      responses:
+        "201":
+          description: Created emergency contact
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: "#/components/schemas/AtelierEmergencyContact" }
+  /atelier/me/emergency-contacts/{id}:
+    patch:
+      operationId: atelierUpdateMyEmergencyContact
+      tags: [atelier]
+      summary: Me lens — edit one of the caller's own emergency contacts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierEmergencyContactInput"
+      responses:
+        "200":
+          description: Updated emergency contact
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [contact]
+                properties:
+                  contact: { $ref: "#/components/schemas/AtelierEmergencyContact" }
+    delete:
+      operationId: atelierDeleteMyEmergencyContact
+      tags: [atelier]
+      summary: Me lens — remove one of the caller's own emergency contacts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/roster/people/{id}/personal:
+    get:
+      operationId: atelierGetRosterPersonPersonal
+      tags: [atelier]
+      summary: HR — personal-data view (dependents, emergency contacts, contact fields)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Personal data (owner or personnel-contract viewers only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierRosterPersonalView"
   /atelier/me/notifications:
     get:
       operationId: atelierListMyNotifications
@@ -5382,6 +5718,186 @@ components:
         homeOffice: { type: ["string", "null"] }
         country: { type: ["string", "null"] }
         status: { type: ["string", "null"] }
+        # Task #51 — self-service profile fields.
+        preferredName: { type: ["string", "null"] }
+        personalEmail: { type: ["string", "null"] }
+        cellPhones:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierCellPhone" }
+        homeAddress: { type: ["string", "null"] }
+        officeAddress: { type: ["string", "null"] }
+        bio: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        gender: { type: ["string", "null"] }
+        avatarUrl: { type: ["string", "null"] }
+
+    AtelierCellPhone:
+      type: object
+      required: [country, number]
+      properties:
+        country: { type: string, minLength: 1, maxLength: 60 }
+        number: { type: string, minLength: 3, maxLength: 40 }
+
+    # ---- Me lens self-service profile (Task #51) ----
+    AtelierSelfProfilePatch:
+      type: object
+      description: >
+        Self-editable personal fields only. Sensitive HR fields
+        (compensation, banking, employment type) are never accepted here.
+      properties:
+        preferredName: { type: ["string", "null"], maxLength: 200 }
+        personalEmail: { type: ["string", "null"], maxLength: 320 }
+        cellPhones:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/AtelierCellPhone" }
+        homeAddress: { type: ["string", "null"], maxLength: 1000 }
+        officeAddress: { type: ["string", "null"], maxLength: 1000 }
+        bio: { type: ["string", "null"], maxLength: 4000 }
+        nationality: { type: ["string", "null"], maxLength: 2 }
+        gender: { type: string, enum: [female, male, non_binary, unspecified] }
+
+    AtelierSelfProfilePatchResponse:
+      type: object
+      required: [person]
+      properties:
+        person:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierSelfPerson"
+            - type: "null"
+
+    AtelierSelfDocument:
+      type: object
+      required: [id, kind, title, hasFile, uploadedAt]
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        title: { type: string }
+        docNumber: { type: ["string", "null"] }
+        issuedAt: { type: ["string", "null"] }
+        issuingCountry: { type: ["string", "null"] }
+        expiresAt: { type: ["string", "null"] }
+        daysToExpiry: { type: ["number", "null"] }
+        dependentId: { type: ["string", "null"] }
+        fileName: { type: ["string", "null"] }
+        mime: { type: ["string", "null"] }
+        sizeBytes: { type: ["number", "null"] }
+        hasFile: { type: boolean }
+        uploadedAt: { type: string }
+        notes: { type: ["string", "null"] }
+
+    AtelierSelfDocumentList:
+      type: object
+      required: [documents]
+      properties:
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierSelfDocument" }
+
+    AtelierSelfDocumentPatch:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        docNumber: { type: ["string", "null"], maxLength: 100 }
+        issuedAt: { type: ["string", "null"] }
+        issuingCountry: { type: ["string", "null"], maxLength: 100 }
+        expiresAt: { type: ["string", "null"] }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+
+    AtelierDependent:
+      type: object
+      required: [id, fullName, relationship]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        relationship: { type: string, enum: [spouse, child, parent, other] }
+        dateOfBirth: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string }
+
+    AtelierDependentInput:
+      type: object
+      required: [fullName, relationship]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 200 }
+        relationship: { type: string, enum: [spouse, child, parent, other] }
+        dateOfBirth: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"], maxLength: 2 }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+
+    AtelierDependentList:
+      type: object
+      required: [dependents]
+      properties:
+        dependents:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierDependent" }
+
+    AtelierEmergencyContact:
+      type: object
+      required: [id, name, relationship, phones]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        relationship: { type: string }
+        phones:
+          type: array
+          items: { type: string }
+        email: { type: ["string", "null"] }
+
+    AtelierEmergencyContactInput:
+      type: object
+      required: [name, relationship, phones]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        relationship: { type: string, minLength: 1, maxLength: 100 }
+        phones:
+          type: array
+          minItems: 1
+          maxItems: 3
+          items: { type: string, minLength: 3, maxLength: 40 }
+        email: { type: ["string", "null"], maxLength: 320 }
+
+    AtelierEmergencyContactList:
+      type: object
+      required: [contacts]
+      properties:
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierEmergencyContact" }
+
+    AtelierRosterPersonalView:
+      type: object
+      required: [person, dependents, emergencyContacts]
+      properties:
+        person:
+          type: object
+          required: [id, fullName, workerType]
+          properties:
+            id: { type: string }
+            fullName: { type: string }
+            workerType: { type: string }
+            personalEmail: { type: ["string", "null"] }
+            cellPhones:
+              type: array
+              items: { $ref: "#/components/schemas/AtelierCellPhone" }
+            homeAddress: { type: ["string", "null"] }
+            officeAddress: { type: ["string", "null"] }
+            bio: { type: ["string", "null"] }
+            nationality: { type: ["string", "null"] }
+        dependents:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierDependent" }
+        emergencyContacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierEmergencyContact" }
+
+    AtelierOkResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
 
     AtelierSelfProfile:
       type: object

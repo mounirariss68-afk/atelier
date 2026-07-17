@@ -2221,6 +2221,19 @@ export const AtelierSelfPersonWorkerType = {
   contractor: "contractor",
 } as const;
 
+export interface AtelierCellPhone {
+  /**
+   * @minLength 1
+   * @maxLength 60
+   */
+  country: string;
+  /**
+   * @minLength 3
+   * @maxLength 40
+   */
+  number: string;
+}
+
 /**
  * The caller's own roster/person record (self-scope view).
  */
@@ -2241,6 +2254,257 @@ export interface AtelierSelfPerson {
   country?: string | null;
   /** @nullable */
   status?: string | null;
+  /** @nullable */
+  preferredName?: string | null;
+  /** @nullable */
+  personalEmail?: string | null;
+  cellPhones?: AtelierCellPhone[];
+  /** @nullable */
+  homeAddress?: string | null;
+  /** @nullable */
+  officeAddress?: string | null;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export type AtelierSelfProfilePatchGender =
+  (typeof AtelierSelfProfilePatchGender)[keyof typeof AtelierSelfProfilePatchGender];
+
+export const AtelierSelfProfilePatchGender = {
+  female: "female",
+  male: "male",
+  non_binary: "non_binary",
+  unspecified: "unspecified",
+} as const;
+
+/**
+ * Self-editable personal fields only. Sensitive HR fields (compensation, banking, employment type) are never accepted here.
+
+ */
+export interface AtelierSelfProfilePatch {
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  preferredName?: string | null;
+  /**
+   * @maxLength 320
+   * @nullable
+   */
+  personalEmail?: string | null;
+  /** @maxItems 3 */
+  cellPhones?: AtelierCellPhone[];
+  /**
+   * @maxLength 1000
+   * @nullable
+   */
+  homeAddress?: string | null;
+  /**
+   * @maxLength 1000
+   * @nullable
+   */
+  officeAddress?: string | null;
+  /**
+   * @maxLength 4000
+   * @nullable
+   */
+  bio?: string | null;
+  /**
+   * @maxLength 2
+   * @nullable
+   */
+  nationality?: string | null;
+  gender?: AtelierSelfProfilePatchGender;
+}
+
+export interface AtelierSelfProfilePatchResponse {
+  person: AtelierSelfPerson | null;
+}
+
+export interface AtelierSelfDocument {
+  id: string;
+  kind: string;
+  title: string;
+  /** @nullable */
+  docNumber?: string | null;
+  /** @nullable */
+  issuedAt?: string | null;
+  /** @nullable */
+  issuingCountry?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  /** @nullable */
+  daysToExpiry?: number | null;
+  /** @nullable */
+  dependentId?: string | null;
+  /** @nullable */
+  fileName?: string | null;
+  /** @nullable */
+  mime?: string | null;
+  /** @nullable */
+  sizeBytes?: number | null;
+  hasFile: boolean;
+  uploadedAt: string;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface AtelierSelfDocumentList {
+  documents: AtelierSelfDocument[];
+}
+
+export interface AtelierSelfDocumentPatch {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  title?: string;
+  /**
+   * @maxLength 100
+   * @nullable
+   */
+  docNumber?: string | null;
+  /** @nullable */
+  issuedAt?: string | null;
+  /**
+   * @maxLength 100
+   * @nullable
+   */
+  issuingCountry?: string | null;
+  /** @nullable */
+  expiresAt?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export type AtelierDependentRelationship =
+  (typeof AtelierDependentRelationship)[keyof typeof AtelierDependentRelationship];
+
+export const AtelierDependentRelationship = {
+  spouse: "spouse",
+  child: "child",
+  parent: "parent",
+  other: "other",
+} as const;
+
+export interface AtelierDependent {
+  id: string;
+  fullName: string;
+  relationship: AtelierDependentRelationship;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export type AtelierDependentInputRelationship =
+  (typeof AtelierDependentInputRelationship)[keyof typeof AtelierDependentInputRelationship];
+
+export const AtelierDependentInputRelationship = {
+  spouse: "spouse",
+  child: "child",
+  parent: "parent",
+  other: "other",
+} as const;
+
+export interface AtelierDependentInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  fullName: string;
+  relationship: AtelierDependentInputRelationship;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /**
+   * @maxLength 2
+   * @nullable
+   */
+  nationality?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export interface AtelierDependentList {
+  dependents: AtelierDependent[];
+}
+
+export interface AtelierEmergencyContact {
+  id: string;
+  name: string;
+  relationship: string;
+  phones: string[];
+  /** @nullable */
+  email?: string | null;
+}
+
+export interface AtelierEmergencyContactInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  relationship: string;
+  /**
+   * @minItems 1
+   * @maxItems 3
+   */
+  phones: string[];
+  /**
+   * @maxLength 320
+   * @nullable
+   */
+  email?: string | null;
+}
+
+export interface AtelierEmergencyContactList {
+  contacts: AtelierEmergencyContact[];
+}
+
+export type AtelierRosterPersonalViewPerson = {
+  id: string;
+  fullName: string;
+  workerType: string;
+  /** @nullable */
+  personalEmail?: string | null;
+  cellPhones?: AtelierCellPhone[];
+  /** @nullable */
+  homeAddress?: string | null;
+  /** @nullable */
+  officeAddress?: string | null;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+};
+
+export interface AtelierRosterPersonalView {
+  person: AtelierRosterPersonalViewPerson;
+  dependents: AtelierDependent[];
+  emergencyContacts: AtelierEmergencyContact[];
+}
+
+export interface AtelierOkResponse {
+  ok: boolean;
 }
 
 export interface AtelierSelfProfile {
@@ -4942,6 +5206,77 @@ export interface AtelierAgentRunSummary {
   /** @nullable */
   durationMs?: number | null;
 }
+
+export type AtelierCreateMyDocumentBodyKind =
+  (typeof AtelierCreateMyDocumentBodyKind)[keyof typeof AtelierCreateMyDocumentBodyKind];
+
+export const AtelierCreateMyDocumentBodyKind = {
+  passport: "passport",
+  national_id: "national_id",
+  residency: "residency",
+  visa: "visa",
+  dependent_doc: "dependent_doc",
+  other: "other",
+} as const;
+
+export type AtelierCreateMyDocumentBody = {
+  kind: AtelierCreateMyDocumentBodyKind;
+  /** @maxLength 200 */
+  title: string;
+  /** @maxLength 100 */
+  docNumber?: string;
+  issuedAt?: string;
+  expiresAt?: string;
+  /** @maxLength 100 */
+  issuingCountry?: string;
+  dependentId?: string;
+  /** @maxLength 2000 */
+  notes?: string;
+  /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
+  file?: Blob;
+};
+
+export type AtelierCreateMyDocument201 = {
+  document: AtelierSelfDocument;
+};
+
+export type AtelierUpdateMyDocument200 = {
+  document: AtelierSelfDocument;
+};
+
+export type AtelierReplaceMyDocumentScanBody = {
+  /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
+  file: Blob;
+};
+
+export type AtelierReplaceMyDocumentScan200 = {
+  document: AtelierSelfDocument;
+};
+
+export type AtelierUploadMyPhotoBody = {
+  /** JPEG/PNG/WebP, ≤8 MB */
+  file: Blob;
+};
+
+export type AtelierUploadMyPhoto200 = {
+  avatarUrl: string;
+};
+
+export type AtelierCreateMyDependent201 = {
+  dependent: AtelierDependent;
+};
+
+export type AtelierUpdateMyDependent200 = {
+  dependent: AtelierDependent;
+};
+
+export type AtelierCreateMyEmergencyContact201 = {
+  contact: AtelierEmergencyContact;
+};
+
+export type AtelierUpdateMyEmergencyContact200 = {
+  contact: AtelierEmergencyContact;
+};
 
 export type AtelierListPerformanceReviewsParams = {
   employeeId?: string;
