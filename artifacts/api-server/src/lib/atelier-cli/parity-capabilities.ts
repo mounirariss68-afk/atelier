@@ -53,7 +53,7 @@ import { checkAndRecord } from "./outbound-rate-limit.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import { applyStageTransition } from "../atelier-agents/stage-service.js";
 import { deriveSalesStage, SALES_TO_PLM } from "../atelier-agents/pipeline.js";
-import { findOpportunityDuplicates } from "../atelier-dedupe.js";
+import { findAccountDuplicates, findOpportunityDuplicates } from "../atelier-dedupe.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 function rid(prefix: string): string {
@@ -138,6 +138,11 @@ defineCapability({
       primaryCurrency: { type: "string", minLength: 3, maxLength: 3 },
       primaryLanguage: { enum: ["en", "ar"] },
       partnerOwnerId: { type: "string" },
+      allowDuplicate: {
+        type: "boolean",
+        description:
+          "Explicit override for duplicate detection. Required when a non-archived account with the same normalized name already exists in the org.",
+      },
       confirm: { type: "boolean" },
     },
     required: ["name"],
@@ -175,10 +180,51 @@ defineCapability({
     }
     const country = String(input.country ?? "").trim();
     const sector = String(input.sector ?? "").trim();
+    // Task #38 — duplicate detection, mirroring opportunity_create. A
+    // non-archived account in this org whose NORMALIZED name matches (case,
+    // punctuation, diacritics, legal suffixes: "Aldrees Ltd" == "Aldrees
+    // Limited") blocks the commit unless the user explicitly overrides;
+    // fuzzy near-matches warn only.
+    const findAcctDups = async () => {
+      const rows = await db
+        .select({
+          id: atelierAccounts.id,
+          name: atelierAccounts.name,
+          brandName: atelierAccounts.brandName,
+          country: atelierAccounts.country,
+          tier: atelierAccounts.tier,
+        })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.orgId, ctx.persona.orgId),
+            isNull(atelierAccounts.deletedAt),
+          ),
+        );
+      return findAccountDuplicates(
+        {
+          name,
+          brandName: input.brandName ? String(input.brandName) : null,
+          country: country || null,
+        },
+        rows,
+      );
+    };
     if (input.confirm !== true) {
       const missing: string[] = [];
       if (!country) missing.push("country");
       if (!sector) missing.push("sector (industry)");
+      const dups = await findAcctDups();
+      const exactDup = dups.find((d) => d.exact);
+      // Confirming a card that visibly carries the duplicate warning IS the
+      // explicit override — the pending input gets allowDuplicate:true so the
+      // commit-phase guard lets it through. Without the warning shown, the
+      // guard below still blocks a bare confirm:true call.
+      const dupWarning = exactDup
+        ? ` ⚠ Duplicate: an account named "${exactDup.name}" (id: ${exactDup.id}) already exists. Committing creates a second one anyway.`
+        : dups.length > 0
+          ? ` Note: similar existing account${dups.length > 1 ? "s" : ""}: ${dups.map((d) => `"${d.name}"`).join(", ")}.`
+          : "";
       const previewLines = [
         `Name: ${name}`,
         `Country: ${country || "—"}`,
@@ -188,14 +234,26 @@ defineCapability({
       ].filter(Boolean) as string[];
       return {
         ok: true,
-        data: { preview: { name, country, sector }, missingFields: missing },
+        data: {
+          preview: { name, country, sector },
+          missingFields: missing,
+          ...(dups.length > 0 ? { duplicateWarning: { exact: exactDup ?? null, similar: dups } } : {}),
+        },
         confirmation: {
           summary:
-            missing.length > 0
+            (missing.length > 0
               ? `Create account "${name}". Missing: ${missing.join(", ")}. Provide them or confirm to create with defaults.`
-              : `Create account "${name}" (${sector}, ${country}).`,
-          diff: { create: { table: "atelier_accounts", values: { name, country, sector } }, missingFields: missing, preview: previewLines },
-          pending: { tool: "account_create", input: { ...input, confirm: true } },
+              : `Create account "${name}" (${sector}, ${country}).`) + dupWarning,
+          diff: {
+            create: { table: "atelier_accounts", values: { name, country, sector } },
+            missingFields: missing,
+            preview: previewLines,
+            ...(dups.length > 0 ? { duplicateWarning: { exact: exactDup ?? null, similar: dups } } : {}),
+          },
+          pending: {
+            tool: "account_create",
+            input: { ...input, ...(exactDup ? { allowDuplicate: true } : {}), confirm: true },
+          },
         },
       };
     }
@@ -225,6 +283,24 @@ defineCapability({
           navigateTo: { path: `/accounts/${existing.id}`, when: "on_commit" as const },
         },
       };
+    }
+    // Task #38 — normalized-name duplicate guard (beyond the exact ilike reuse
+    // above: legal suffixes, punctuation, diacritics). Blocks the commit with a
+    // structured error unless the pending input carries the explicit override.
+    if (input.allowDuplicate !== true) {
+      const dups = await findAcctDups();
+      const exactDup = dups.find((d) => d.exact);
+      if (exactDup) {
+        return {
+          ok: false,
+          errorCode: "duplicate_account",
+          errorMessage: `An account named "${exactDup.name}" already exists (id: ${exactDup.id}). If this is genuinely a different company, say so explicitly and retry with allowDuplicate:true — otherwise use the existing account.`,
+          data: {
+            duplicate: { existing: exactDup, similar: dups },
+            navigateTo: { path: `/accounts/${exactDup.id}`, when: "on_commit" as const },
+          },
+        };
+      }
     }
     const id = rid("acct");
     const now = new Date();

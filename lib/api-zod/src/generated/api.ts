@@ -358,6 +358,7 @@ export const atelierCreateOpportunityBodyProbabilityPctMax = 100;
 export const atelierCreateOpportunityBodyContextBlurbDefault = ``;
 export const atelierCreateOpportunityBodyRunScoutDefault = true;
 export const atelierCreateOpportunityBodyAllowDuplicateDefault = false;
+export const atelierCreateOpportunityBodyAllowDuplicateAccountDefault = false;
 
 export const AtelierCreateOpportunityBody = zod.object({
   name: zod.string().min(1),
@@ -437,6 +438,12 @@ export const AtelierCreateOpportunityBody = zod.object({
     .default(atelierCreateOpportunityBodyAllowDuplicateDefault)
     .describe(
       "Explicit override for duplicate detection. When an open (non-archived)\nopportunity on the same account has a matching normalized name, the\ncreate is rejected with 409 unless this flag is true.\n",
+    ),
+  allowDuplicateAccount: zod
+    .boolean()
+    .default(atelierCreateOpportunityBodyAllowDuplicateAccountDefault)
+    .describe(
+      "Explicit override for duplicate-ACCOUNT detection (Task #38). Only\nrelevant on the create-with-new-account branch: when a non-archived\naccount in the org has a matching normalized name, the create is\nrejected with 409 `duplicate-account` unless this flag is true (or\n`accountId` is passed to reuse the existing account).\n",
     ),
 });
 
@@ -2484,6 +2491,7 @@ export const atelierCreateAccountBodyPrimaryCurrencyMax = 3;
 export const atelierCreateAccountBodyPrimaryCurrencyRegExp = new RegExp(
   "^[A-Z]{3}$",
 );
+export const atelierCreateAccountBodyAllowDuplicateDefault = false;
 export const atelierCreateAccountBodyStrategicPrioritiesItemMax = 200;
 
 export const atelierCreateAccountBodyStrategicPrioritiesMax = 5;
@@ -2585,6 +2593,12 @@ export const AtelierCreateAccountBody = zod.object({
   primaryLanguage: zod.enum(["en", "ar"]),
   partnerOwnerId: zod.string().nullish(),
   parentAccountId: zod.string().nullish(),
+  allowDuplicate: zod
+    .boolean()
+    .default(atelierCreateAccountBodyAllowDuplicateDefault)
+    .describe(
+      "Explicit override for duplicate detection (Task #38). When a\nnon-archived account in the org has a matching normalized name,\nthe create is rejected with 409 unless this flag is true.\n",
+    ),
   strategicPriorities: zod
     .array(
       zod
@@ -2973,6 +2987,12 @@ export const AtelierCheckAccountDuplicatesResponse = zod.object({
         .number()
         .min(atelierCheckAccountDuplicatesResponseCandidatesItemScoreMin)
         .max(atelierCheckAccountDuplicatesResponseCandidatesItemScoreMax),
+      exact: zod
+        .boolean()
+        .optional()
+        .describe(
+          "True when the normalized names are identical (Task #38 — exact\nmatches block account creation without an explicit override).\n",
+        ),
     }),
   ),
 });

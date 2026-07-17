@@ -525,19 +525,39 @@ router.post("/accounts", async (req, res) => {
 
   const orgId = me.orgId ?? "aico";
   const trimmedName = input.name.trim();
-  const normalisedName = trimmedName.toLowerCase();
 
-  // Duplicate (case-insensitive) within org, excluding soft-deleted rows.
+  // Task #38 — duplicate detection, mirroring the duplicate-opportunity guard.
+  // An existing non-archived account in this org whose NORMALIZED name matches
+  // (case, punctuation, diacritics, legal suffixes: "Aldrees Ltd" ==
+  // "Aldrees Limited") blocks the create with a structured 409 unless the
+  // caller explicitly overrides with allowDuplicate. Fuzzy near-matches ride
+  // along as `similar` warnings but never block on their own.
   const sameOrgRows = await db
-    .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      brandName: atelierAccounts.brandName,
+      country: atelierAccounts.country,
+      tier: atelierAccounts.tier,
+    })
     .from(atelierAccounts)
     .where(and(eq(atelierAccounts.orgId, orgId), isNull(atelierAccounts.deletedAt)));
-  const dup = sameOrgRows.find((r) => r.name.trim().toLowerCase() === normalisedName);
-  if (dup) {
+  const dupMatches = findAccountDuplicates(
+    {
+      name: trimmedName,
+      brandName: input.brandName?.trim() || null,
+      country: input.country.trim() || null,
+    },
+    sameOrgRows,
+  );
+  const exactDup = dupMatches.find((m) => m.exact);
+  if (exactDup && input.allowDuplicate !== true) {
     res.status(409).json({
       error: "duplicate-name",
-      existingAccountId: dup.id,
-      message: `An account with this legal name already exists.`,
+      existingAccountId: exactDup.id,
+      existingAccountName: exactDup.name,
+      similar: dupMatches,
+      message: `An account with this legal name already exists ("${exactDup.name}"). Pass allowDuplicate to create anyway.`,
     });
     return;
   }

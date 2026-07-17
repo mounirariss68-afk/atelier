@@ -58,6 +58,11 @@ export interface AtelierCreateAccountInput {
   partnerOwnerId?: string | null;
   /** @nullable */
   parentAccountId?: string | null;
+  /** Explicit override for duplicate detection (Task #38). When a
+non-archived account in the org has a matching normalized name,
+the create is rejected with 409 unless this flag is true.
+ */
+  allowDuplicate?: boolean;
   /** @maxItems 5 */
   strategicPriorities?: string[];
   /**

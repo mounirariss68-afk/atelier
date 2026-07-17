@@ -78,4 +78,11 @@ opportunity on the same account has a matching normalized name, the
 create is rejected with 409 unless this flag is true.
  */
   allowDuplicate?: boolean;
+  /** Explicit override for duplicate-ACCOUNT detection (Task #38). Only
+relevant on the create-with-new-account branch: when a non-archived
+account in the org has a matching normalized name, the create is
+rejected with 409 `duplicate-account` unless this flag is true (or
+`accountId` is passed to reuse the existing account).
+ */
+  allowDuplicateAccount?: boolean;
 }

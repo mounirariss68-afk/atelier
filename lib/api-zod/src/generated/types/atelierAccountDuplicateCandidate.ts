@@ -22,4 +22,8 @@ export interface AtelierAccountDuplicateCandidate {
    * @maximum 1
    */
   score: number;
+  /** True when the normalized names are identical (Task #38 — exact
+matches block account creation without an explicit override).
+ */
+  exact?: boolean;
 }

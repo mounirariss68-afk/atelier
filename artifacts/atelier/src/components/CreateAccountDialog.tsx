@@ -479,8 +479,11 @@ export function CreateAccountDialog({
     }));
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // Task #38 — `allowDuplicate` is the explicit override: after the server
+  // blocks an exact normalized-name match with 409, the partner can consciously
+  // re-submit via the "Create anyway" button in the duplicate banner.
+  async function submit(e?: React.FormEvent, opts?: { allowDuplicate?: boolean }) {
+    e?.preventDefault();
     if (!isValid) return;
     setDuplicate(null);
     // Task #587 — when the dialog was opened from a chat research card, forward
@@ -573,6 +576,7 @@ export function CreateAccountDialog({
           holdingStructure,
           countryPresence: cleanCountryPresence,
           entityRole: form.entityRole || null,
+          ...(opts?.allowDuplicate ? { allowDuplicate: true } : {}),
           // researchPayload is built from loosely-typed chat prefill (its
           // sourceSignals widen to unknown[]); cast to the generated research
           // shape. The firmographic fields above are now fully typed.
@@ -1172,20 +1176,41 @@ export function CreateAccountDialog({
 
           {duplicate && (
             <div
-              className="border border-danger/40 bg-danger/10 rounded p-3 text-sm flex items-start justify-between gap-3"
+              className="border border-danger/40 bg-danger/10 rounded p-3 text-sm grid gap-2"
               data-testid="error-duplicate-account"
             >
-              <span>An account with this legal name already exists.</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  setLocation(`/accounts/${duplicate.existingAccountId}`);
-                }}
-                className="text-gold hover:underline whitespace-nowrap"
-              >
-                Open existing →
-              </button>
+              <div className="flex items-start justify-between gap-3">
+                <span>
+                  An account with this legal name already exists
+                  {duplicate.existingAccountName ? ` ("${duplicate.existingAccountName}")` : ""}.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setLocation(`/accounts/${duplicate.existingAccountId}`);
+                  }}
+                  className="text-gold hover:underline whitespace-nowrap"
+                >
+                  Open existing →
+                </button>
+              </div>
+              {/* Task #38 — explicit override. Creating a second account with a
+                  matching name is a conscious decision, never the default. */}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-text-faint">
+                  If this is genuinely a different company, you can still create it.
+                </span>
+                <button
+                  type="button"
+                  disabled={create.isPending}
+                  onClick={() => void submit(undefined, { allowDuplicate: true })}
+                  className="text-warn hover:underline whitespace-nowrap"
+                  data-testid="button-create-account-anyway"
+                >
+                  Create anyway
+                </button>
+              </div>
             </div>
           )}
 

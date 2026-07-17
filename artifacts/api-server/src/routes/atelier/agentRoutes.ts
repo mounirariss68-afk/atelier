@@ -84,7 +84,7 @@ import {
 } from "../../lib/atelier-agents/brief-quality.js";
 import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
-import { findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
+import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -231,6 +231,41 @@ router.post("/opportunities", async (req, res) => {
       .from(atelierAccounts)
       .where(and(ilike(atelierAccounts.name, newName), isNull(atelierAccounts.deletedAt)));
     if (!acct) {
+      // Task #38 — duplicate-account guard, mirroring the duplicate-opportunity
+      // one below. A non-archived account in this org whose NORMALIZED name
+      // matches ("Aldrees Ltd" vs "Aldrees Limited", diacritics, punctuation)
+      // blocks the silent account creation with a structured 409 unless the
+      // caller explicitly overrides with allowDuplicateAccount — otherwise the
+      // partner should pass accountId to attach the deal to the existing one.
+      const orgAccounts = await db
+        .select({
+          id: atelierAccounts.id,
+          name: atelierAccounts.name,
+          brandName: atelierAccounts.brandName,
+          country: atelierAccounts.country,
+          tier: atelierAccounts.tier,
+        })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.orgId, me.orgId ?? "aico"),
+            isNull(atelierAccounts.deletedAt),
+          ),
+        );
+      const acctDups = findAccountDuplicates(
+        { name: newName, country: newCountry },
+        orgAccounts,
+      );
+      const exactAcctDup = acctDups.find((m) => m.exact);
+      if (exactAcctDup && input.allowDuplicateAccount !== true) {
+        res.status(409).json({
+          error: "duplicate-account",
+          existing: exactAcctDup,
+          similar: acctDups,
+          message: `An account named "${exactAcctDup.name}" already exists. Pass accountId to attach this opportunity to it, or allowDuplicateAccount to create a new account anyway.`,
+        });
+        return;
+      }
       const acctId = `acct_${slugify(newName)}_${Math.random().toString(36).slice(2, 6)}`;
       [acct] = await db
         .insert(atelierAccounts)

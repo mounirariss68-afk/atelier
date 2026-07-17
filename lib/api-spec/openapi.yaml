@@ -3036,6 +3036,13 @@ components:
           enum: [en, ar]
         partnerOwnerId: { type: ["string", "null"] }
         parentAccountId: { type: ["string", "null"] }
+        allowDuplicate:
+          type: boolean
+          default: false
+          description: |
+            Explicit override for duplicate detection (Task #38). When a
+            non-archived account in the org has a matching normalized name,
+            the create is rejected with 409 unless this flag is true.
         strategicPriorities:
           type: array
           maxItems: 5
@@ -3421,6 +3428,11 @@ components:
       properties:
         error: { type: string, enum: [duplicate-name] }
         existingAccountId: { type: string }
+        existingAccountName: { type: ["string", "null"] }
+        # Task #38 — fuzzy near-matches that rode along with the exact block.
+        similar:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierAccountDuplicateCandidate" }
         message: { type: ["string", "null"] }
 
     # Task #632 — fuzzy duplicate detection (warn-and-link, never merges).
@@ -3449,6 +3461,11 @@ components:
         tier: { type: ["string", "null"] }
         confidence: { $ref: "#/components/schemas/AtelierDuplicateConfidence" }
         score: { type: number, minimum: 0, maximum: 1 }
+        exact:
+          type: boolean
+          description: |
+            True when the normalized names are identical (Task #38 — exact
+            matches block account creation without an explicit override).
 
     AtelierAccountDuplicateCandidates:
       type: object
@@ -4954,6 +4971,15 @@ components:
             Explicit override for duplicate detection. When an open (non-archived)
             opportunity on the same account has a matching normalized name, the
             create is rejected with 409 unless this flag is true.
+        allowDuplicateAccount:
+          type: boolean
+          default: false
+          description: |
+            Explicit override for duplicate-ACCOUNT detection (Task #38). Only
+            relevant on the create-with-new-account branch: when a non-archived
+            account in the org has a matching normalized name, the create is
+            rejected with 409 `duplicate-account` unless this flag is true (or
+            `accountId` is passed to reuse the existing account).
 
     # Task #30 — structured duplicate-opportunity conflict (mirrors the
     # account duplicate-name 409 contract, enriched with fuzzy near-matches).

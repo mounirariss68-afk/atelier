@@ -163,6 +163,13 @@ export interface AccountDuplicateCandidateRow {
 export interface ScoredAccountCandidate extends AccountDuplicateCandidateRow {
   score: number;
   confidence: DuplicateConfidence;
+  /**
+   * True when a normalized input name (name or brand) is IDENTICAL to a
+   * normalized candidate name (name or brand). Exact matches block account
+   * creation without an explicit override (Task #38), mirroring the
+   * duplicate-opportunity guard; fuzzy matches only warn.
+   */
+  exact: boolean;
 }
 
 const ACCOUNT_MATCH_THRESHOLD = 0.6;
@@ -176,7 +183,7 @@ const ACCOUNT_MATCH_THRESHOLD = 0.6;
 function scoreAccountCandidate(
   input: AccountDuplicateInput,
   cand: AccountDuplicateCandidateRow,
-): number {
+): { score: number; exact: boolean } {
   const inputNames = [input.name, input.brandName]
     .map((x) => normalizeCompanyName(x ?? ""))
     .filter((x) => x.length > 0);
@@ -184,8 +191,10 @@ function scoreAccountCandidate(
     .map((x) => normalizeCompanyName(x ?? ""))
     .filter((x) => x.length > 0);
   let best = 0;
+  let exact = false;
   for (const a of inputNames) {
     for (const b of candNames) {
+      if (a === b) exact = true;
       best = Math.max(best, nameSimilarity(a, b));
     }
   }
@@ -194,7 +203,7 @@ function scoreAccountCandidate(
   if (inCountry && candCountry && inCountry !== candCountry) {
     best *= 0.7;
   }
-  return best;
+  return { score: best, exact };
 }
 
 /**
@@ -211,12 +220,16 @@ export function findAccountDuplicates(
   const out: ScoredAccountCandidate[] = [];
   for (const cand of candidates) {
     if (opts?.excludeId && cand.id === opts.excludeId) continue;
-    const score = scoreAccountCandidate(input, cand);
-    if (score >= ACCOUNT_MATCH_THRESHOLD) {
-      out.push({ ...cand, score, confidence: confidenceFor(score) });
+    const { score, exact } = scoreAccountCandidate(input, cand);
+    // Exact-normalized name matches are always surfaced even when a country
+    // mismatch dampened the blended score below the fuzzy threshold — an
+    // identical legal name in another market is exactly the case a partner
+    // must consciously override (Task #38).
+    if (exact || score >= ACCOUNT_MATCH_THRESHOLD) {
+      out.push({ ...cand, score, confidence: confidenceFor(score), exact });
     }
   }
-  out.sort((a, b) => b.score - a.score);
+  out.sort((a, b) => (a.exact === b.exact ? b.score - a.score : a.exact ? -1 : 1));
   return out.slice(0, limit);
 }
 

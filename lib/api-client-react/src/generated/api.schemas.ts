@@ -619,6 +619,11 @@ export interface AtelierCreateAccountInput {
   partnerOwnerId?: string | null;
   /** @nullable */
   parentAccountId?: string | null;
+  /** Explicit override for duplicate detection (Task #38). When a
+non-archived account in the org has a matching normalized name,
+the create is rejected with 409 unless this flag is true.
+ */
+  allowDuplicate?: boolean;
   /** @maxItems 5 */
   strategicPriorities?: string[];
   /**
@@ -758,13 +763,6 @@ export const AtelierAccountDuplicateErrorError = {
   "duplicate-name": "duplicate-name",
 } as const;
 
-export interface AtelierAccountDuplicateError {
-  error: AtelierAccountDuplicateErrorError;
-  existingAccountId: string;
-  /** @nullable */
-  message?: string | null;
-}
-
 export type AtelierDuplicateConfidence =
   (typeof AtelierDuplicateConfidence)[keyof typeof AtelierDuplicateConfidence];
 
@@ -773,6 +771,37 @@ export const AtelierDuplicateConfidence = {
   medium: "medium",
   low: "low",
 } as const;
+
+export interface AtelierAccountDuplicateCandidate {
+  id: string;
+  name: string;
+  /** @nullable */
+  brandName?: string | null;
+  /** @nullable */
+  country?: string | null;
+  /** @nullable */
+  tier?: string | null;
+  confidence: AtelierDuplicateConfidence;
+  /**
+   * @minimum 0
+   * @maximum 1
+   */
+  score: number;
+  /** True when the normalized names are identical (Task #38 — exact
+matches block account creation without an explicit override).
+ */
+  exact?: boolean;
+}
+
+export interface AtelierAccountDuplicateError {
+  error: AtelierAccountDuplicateErrorError;
+  existingAccountId: string;
+  /** @nullable */
+  existingAccountName?: string | null;
+  similar?: AtelierAccountDuplicateCandidate[];
+  /** @nullable */
+  message?: string | null;
+}
 
 export interface AtelierCheckAccountDuplicatesInput {
   /**
@@ -792,23 +821,6 @@ export interface AtelierCheckAccountDuplicatesInput {
   country?: string | null;
   /** @nullable */
   excludeAccountId?: string | null;
-}
-
-export interface AtelierAccountDuplicateCandidate {
-  id: string;
-  name: string;
-  /** @nullable */
-  brandName?: string | null;
-  /** @nullable */
-  country?: string | null;
-  /** @nullable */
-  tier?: string | null;
-  confidence: AtelierDuplicateConfidence;
-  /**
-   * @minimum 0
-   * @maximum 1
-   */
-  score: number;
 }
 
 export interface AtelierAccountDuplicateCandidates {
@@ -2667,6 +2679,13 @@ opportunity on the same account has a matching normalized name, the
 create is rejected with 409 unless this flag is true.
  */
   allowDuplicate?: boolean;
+  /** Explicit override for duplicate-ACCOUNT detection (Task #38). Only
+relevant on the create-with-new-account branch: when a non-archived
+account in the org has a matching normalized name, the create is
+rejected with 409 `duplicate-account` unless this flag is true (or
+`accountId` is passed to reuse the existing account).
+ */
+  allowDuplicateAccount?: boolean;
 }
 
 export interface AtelierOpportunityDuplicateMatch {

@@ -5,11 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAccountDuplicateCandidate } from "./atelierAccountDuplicateCandidate";
 import type { AtelierAccountDuplicateErrorError } from "./atelierAccountDuplicateErrorError";
 
 export interface AtelierAccountDuplicateError {
   error: AtelierAccountDuplicateErrorError;
   existingAccountId: string;
+  /** @nullable */
+  existingAccountName?: string | null;
+  similar?: AtelierAccountDuplicateCandidate[];
   /** @nullable */
   message?: string | null;
 }
