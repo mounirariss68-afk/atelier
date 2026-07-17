@@ -153,7 +153,13 @@ router.post("/login", async (req: Request, res: Response) => {
   });
   setSessionCookie(res, token, expiresAt);
   await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
-  res.json({ user: personaToWire(persona), mustChangePassword: cred.mustChangePassword });
+  res.json({
+    user: personaToWire(persona),
+    mustChangePassword: cred.mustChangePassword,
+    // Task #59 — "joiner" (first-ever login) vs "reset" (partner reset);
+    // drives the copy on the forced-change interstitial.
+    mustChangeReason: cred.mustChangePassword ? (cred.mustChangeReason ?? "reset") : null,
+  });
 });
 
 router.post("/logout", async (req: Request, res: Response) => {
@@ -241,6 +247,7 @@ router.post("/change-password", async (req: Request, res: Response) => {
       userManaged: true,
       // Task #5 — a successful change satisfies any pending forced reset.
       mustChangePassword: false,
+      mustChangeReason: null,
       updatedAt: new Date(),
     })
     .where(eq(atelierAuthCredentials.email, session.email));
@@ -273,10 +280,21 @@ router.get("/session", async (req: Request, res: Response) => {
     res.status(401).json({ error: "unauthenticated" });
     return;
   }
+  // Task #59 — when a change is pending, resolve why ("joiner" first-ever
+  // login vs "reset" partner reset) so the interstitial shows the right copy.
+  let mustChangeReason: string | null = null;
+  if (session.mustChangePassword) {
+    const [cred] = await db
+      .select()
+      .from(atelierAuthCredentials)
+      .where(eq(atelierAuthCredentials.email, session.email));
+    mustChangeReason = cred?.mustChangeReason ?? "reset";
+  }
   res.json({
     user: personaToWire(persona),
     expiresAt: session.expiresAt.toISOString(),
     mustChangePassword: session.mustChangePassword,
+    mustChangeReason,
   });
 });
 
@@ -400,6 +418,9 @@ router.post("/reset-colleague-password", async (req: Request, res: Response) => 
       // user_managed=true: the boot seed must never overwrite this hash.
       userManaged: true,
       mustChangePassword: true,
+      // Task #59 — even if the target never logged in yet, a partner reset
+      // shows the reset copy (the temp password now comes from a partner).
+      mustChangeReason: "reset",
       updatedAt: new Date(),
     })
     .where(eq(atelierAuthCredentials.email, targetEmail));

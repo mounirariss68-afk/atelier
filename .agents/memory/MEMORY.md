@@ -45,3 +45,4 @@
 - [Long LLM jobs need a workflow](long-llm-jobs-need-workflow.md) — multi-minute web-search LLM probes stall/die under nohup in the shell; run one-offs as a temp console workflow.
 - [Opportunity-child FK integrity](atelier-opp-child-fks.md) — opp children FK-cascade (or SET NULL); meetings/transcripts are polymorphic → hard-delete opps ONLY via shared hardDeleteOpportunities helper; broad meeting reads filter on live parent.
 - [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions (no revoked_at); orval may skip response zod consts.
+- [db push blocked by orphaned FK rows](db-push-orphan-fk.md) — schema push re-validates FKs; delete orphaned child rows (old test data) before re-push; stale api-zod dist mimics missing exports.

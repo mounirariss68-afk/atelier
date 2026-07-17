@@ -4,12 +4,17 @@ import Logo from "@/components/ui/Logo";
 import { useAuth } from "@/lib/auth";
 
 /**
- * Task #5 — shown instead of the app when the signed-in user's password was
- * reset by a partner. The API's global gate blocks every data route until
- * the temporary password is changed, so this screen is not skippable.
+ * Task #5 — shown instead of the app when the signed-in user holds a
+ * temporary password. The API's global gate blocks every data route until
+ * it is changed, so this screen is not skippable.
+ *
+ * Task #59 — copy varies by why the change is forced: a brand-new joiner on
+ * their first-ever login gets a welcome framing; a partner-reset colleague
+ * gets the reset framing.
  */
 export default function ForcePasswordChange() {
-  const { user, clearMustChangePassword, logout } = useAuth();
+  const { user, mustChangeReason, clearMustChangePassword, logout } = useAuth();
+  const isFirstLogin = mustChangeReason === "joiner";
   const [current, setCurrent] = React.useState("");
   const [next, setNext] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
@@ -64,8 +69,18 @@ export default function ForcePasswordChange() {
             <Logo variant="mark" size="lg" />
           </div>
           <SectionHead
-            headline={<>Set a <em className="accent">new password</em></>}
-            lede={`${user?.name ?? "Your account"} — your password was reset by a partner. Enter the temporary password you were given, then choose a new one.`}
+            headline={
+              isFirstLogin ? (
+                <>Welcome — set <em className="accent">your password</em></>
+              ) : (
+                <>Set a <em className="accent">new password</em></>
+              )
+            }
+            lede={
+              isFirstLogin
+                ? `${user?.name ?? "Welcome"} — before you start, choose a password only you know. Enter the temporary password from your welcome note, then pick your own.`
+                : `${user?.name ?? "Your account"} — your password was reset by a partner. Enter the temporary password you were given, then choose a new one.`
+            }
             className="flex flex-col items-center text-center"
           />
         </div>
@@ -132,7 +147,7 @@ export default function ForcePasswordChange() {
             disabled={busy}
             className="w-full rounded-md bg-gold text-bg font-semibold text-sm py-2.5 transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            {busy ? "Saving…" : "Set new password"}
+            {busy ? "Saving…" : isFirstLogin ? "Set my password" : "Set new password"}
           </button>
         </form>
 

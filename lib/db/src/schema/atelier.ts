@@ -3790,6 +3790,10 @@ export const atelierAuthCredentials = pgTable(
     // Task #5 — set to true when a partner resets a colleague's password;
     // the next login must change the temporary password before using the app.
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    // Task #59 — why the change is forced: "joiner" (first-ever login on a
+    // temp password) or "reset" (partner reset). Cleared on successful
+    // change. Drives the copy on the forced-change interstitial.
+    mustChangeReason: text("must_change_reason"),
     // Task #50 — leaver deactivation. Disabled credentials cannot sign in
     // (login returns the generic invalid-credentials error) and all sessions
     // are revoked at deactivation time. Reversible by HR / founding partner.

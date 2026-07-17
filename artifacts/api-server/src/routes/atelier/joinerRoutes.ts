@@ -278,6 +278,9 @@ router.post("/roster/joiners", async (req, res, next) => {
         userManaged: true,
         // First login forces an immediate password rotation.
         mustChangePassword: true,
+        // Task #59 — the forced-change screen shows first-time-welcome
+        // copy (vs. partner-reset copy) based on this reason.
+        mustChangeReason: "joiner",
       });
 
       await tx.insert(atelierAuditEvents).values({

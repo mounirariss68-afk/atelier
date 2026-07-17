@@ -26,6 +26,9 @@ interface AuthContextValue {
   // Task #5 — true when a partner reset this user's password; the app is
   // blocked behind a forced password change until it's cleared.
   mustChangePassword: boolean;
+  // Task #59 — "joiner" (first-ever login on a temp password) vs "reset"
+  // (partner reset); picks the copy on the forced-change screen.
+  mustChangeReason: "joiner" | "reset" | null;
   clearMustChangePassword: () => void;
   setAuthenticated: (user: AuthUser) => void;
   logout: () => Promise<void>;
@@ -35,6 +38,7 @@ const AuthContext = React.createContext<AuthContextValue>({
   status: "loading",
   user: null,
   mustChangePassword: false,
+  mustChangeReason: null,
   clearMustChangePassword: () => {},
   setAuthenticated: () => {},
   logout: async () => {},
@@ -54,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = React.useState<AuthStatus>("loading");
   const [user, setUser] = React.useState<AuthUser | null>(null);
   const [mustChangePassword, setMustChangePassword] = React.useState(false);
+  const [mustChangeReason, setMustChangeReason] = React.useState<"joiner" | "reset" | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -61,9 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async (r) => {
         if (!alive) return;
         if (r.ok) {
-          const j = (await r.json()) as { user: AuthUser; mustChangePassword?: boolean };
+          const j = (await r.json()) as {
+            user: AuthUser;
+            mustChangePassword?: boolean;
+            mustChangeReason?: "joiner" | "reset" | null;
+          };
           setUser(j.user);
           setMustChangePassword(Boolean(j.mustChangePassword));
+          setMustChangeReason(j.mustChangeReason ?? null);
           setStatus("authenticated");
         } else {
           setStatus("unauthenticated");
@@ -93,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearMustChangePassword = React.useCallback(() => {
     setMustChangePassword(false);
+    setMustChangeReason(null);
   }, []);
 
   const logout = React.useCallback(async () => {
@@ -111,7 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ status, user, mustChangePassword, clearMustChangePassword, setAuthenticated, logout }}
+      value={{ status, user, mustChangePassword, mustChangeReason, clearMustChangePassword, setAuthenticated, logout }}
     >
       {children}
     </AuthContext.Provider>

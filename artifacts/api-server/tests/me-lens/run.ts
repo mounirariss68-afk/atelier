@@ -287,6 +287,11 @@ async function main(): Promise<void> {
       !!cred && cred.userManaged === true && cred.mustChangePassword === true && cred.disabled === false,
       JSON.stringify({ um: cred?.userManaged, mcp: cred?.mustChangePassword, dis: cred?.disabled }),
     );
+    check(
+      "credential carries must_change_reason=joiner (first-login copy)",
+      cred?.mustChangeReason === "joiner",
+      `reason=${cred?.mustChangeReason}`,
+    );
     const [joinerEmp] = joinerUserId
       ? await db
           .select()
@@ -330,6 +335,76 @@ async function main(): Promise<void> {
       loginBody?.mustChangePassword === true,
       JSON.stringify(loginBody)?.slice(0, 200),
     );
+    check(
+      "login response carries mustChangeReason=joiner",
+      loginBody?.mustChangeReason === "joiner",
+      `reason=${loginBody?.mustChangeReason}`,
+    );
+
+    // =====================================================================
+    group("joiners \u00b7 forced first-login password change (Task #59)");
+    // =====================================================================
+    // The joiner's REAL session cookie (not the persona bypass).
+    const setCookie = loginRes.headers.get("set-cookie") ?? "";
+    const m = /atelier_auth_session=([^;]+)/.exec(setCookie);
+    const joinerCookie = m ? `atelier_auth_session=${m[1]}` : "";
+    check("temp-password login sets a session cookie", !!joinerCookie);
+
+    // isTestAuthBypass() reads NODE_ENV per-request; flip it off so the
+    // global auth gate actually runs for these real-session requests.
+    const NEW_JOINER_PW = `Chosen-By-Joiner-${STAMP}!`;
+    process.env.NODE_ENV = "development";
+    try {
+      const sess = await fetch(`${AUTH}/session`, { headers: { cookie: joinerCookie } });
+      const sessBody: any = await sess.json().catch(() => null);
+      check(
+        "/auth/session flags mustChangePassword + reason=joiner",
+        sess.status === 200 &&
+          sessBody?.mustChangePassword === true &&
+          sessBody?.mustChangeReason === "joiner",
+        `status=${sess.status} body=${JSON.stringify(sessBody)?.slice(0, 200)}`,
+      );
+
+      const blocked = await fetch(`${API}/me`, { headers: { cookie: joinerCookie } });
+      const blockedBody: any = await blocked.json().catch(() => null);
+      check(
+        "data route blocked until change \u2192 403 password-change-required",
+        blocked.status === 403 && blockedBody?.error === "password-change-required",
+        `status=${blocked.status} error=${blockedBody?.error}`,
+      );
+
+      const change = await fetch(`${AUTH}/change-password`, {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie: joinerCookie },
+        body: JSON.stringify({ currentPassword: tempPw, newPassword: NEW_JOINER_PW }),
+      });
+      check("forced change with temp password \u2192 200", change.status === 200, `status=${change.status}`);
+
+      const [credAfter] = await db
+        .select()
+        .from(atelierAuthCredentials)
+        .where(eq(atelierAuthCredentials.email, JOINER_EMAIL));
+      check(
+        "credential cleared: must_change_password=false, reason=null",
+        credAfter?.mustChangePassword === false && credAfter?.mustChangeReason === null,
+        JSON.stringify({ mcp: credAfter?.mustChangePassword, reason: credAfter?.mustChangeReason }),
+      );
+
+      const unblocked = await fetch(`${API}/me`, { headers: { cookie: joinerCookie } });
+      check("data route unblocked after change \u2192 200", unblocked.status === 200, `status=${unblocked.status}`);
+
+      // The landing surface: /me/notifications via the REAL session still
+      // shows the welcome card the joiner sees on /me.
+      const notifs = await fetch(`${API}/me/notifications`, { headers: { cookie: joinerCookie } });
+      const notifsBody: any = await notifs.json().catch(() => null);
+      check(
+        "welcome notification visible via real session after change",
+        notifs.status === 200 && notifsBody?.some?.((n: any) => n.kind === "welcome"),
+        `status=${notifs.status}`,
+      );
+    } finally {
+      process.env.NODE_ENV = "test";
+    }
 
     // =====================================================================
     group("joiners \u00b7 deactivate / reactivate");
@@ -382,10 +457,12 @@ async function main(): Promise<void> {
 
     const react = await call("POST", `/roster/joiners/${joinerUserId}/reactivate`, HR_ID, {});
     check("reactivate \u2192 200 status=active", react.status === 200 && react.body?.status === "active");
+    // Task #59 — the joiner already rotated their password above, so the
+    // reactivated login must use the chosen password, not the temp one.
     const aliveLogin = await fetch(`${AUTH}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: JOINER_EMAIL, password: tempPw }),
+      body: JSON.stringify({ email: JOINER_EMAIL, password: NEW_JOINER_PW }),
     });
     check("reactivated login \u2192 200", aliveLogin.status === 200, `status=${aliveLogin.status}`);
 
@@ -393,8 +470,8 @@ async function main(): Promise<void> {
     const list = await call("GET", "/roster/joiners", HR_ID);
     const row = list.body?.find?.((j: any) => j.userId === joinerUserId);
     check(
-      "GET /roster/joiners shows the joiner as active",
-      list.status === 200 && row?.status === "active" && row?.mustChangePassword === true,
+      "GET /roster/joiners shows the joiner as active (temp password already rotated)",
+      list.status === 200 && row?.status === "active" && row?.mustChangePassword === false,
       JSON.stringify(row),
     );
   } finally {
