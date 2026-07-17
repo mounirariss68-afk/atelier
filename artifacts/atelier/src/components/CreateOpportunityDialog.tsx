@@ -21,6 +21,8 @@ import {
   getAtelierListOpportunitiesQueryKey,
   getAtelierListAccountsQueryKey,
   getAtelierListUsersQueryKey,
+  useAtelierCheckOpportunityDuplicates,
+  getAtelierCheckOpportunityDuplicatesQueryKey,
   ApiError,
   type AtelierOpportunityDuplicateError,
 } from "@workspace/api-client-react";
@@ -181,6 +183,30 @@ export function CreateOpportunityDialog({ trigger }: Props) {
   // account changes; "Create anyway" re-submits with allowDuplicate:true.
   const [duplicateConflict, setDuplicateConflict] =
     React.useState<AtelierOpportunityDuplicateError | null>(null);
+
+  // Task #37 — live as-you-type duplicate hint. Debounce the name so we only
+  // query once the user pauses; the lookup needs an existing account selected
+  // (a brand-new account can't have prior deals). Purely advisory — the
+  // server-side 409 on submit stays the hard gate.
+  const [debouncedName, setDebouncedName] = React.useState("");
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebouncedName(form.name.trim()), 350);
+    return () => clearTimeout(t);
+  }, [form.name]);
+  const hintEnabled =
+    open &&
+    form.accountMode === "existing" &&
+    !!form.accountId &&
+    debouncedName.length >= 3;
+  const dupHintParams = { accountId: form.accountId, name: debouncedName };
+  const { data: dupHint } = useAtelierCheckOpportunityDuplicates(dupHintParams, {
+    query: {
+      enabled: hintEnabled,
+      queryKey: getAtelierCheckOpportunityDuplicatesQueryKey(dupHintParams),
+      staleTime: 30_000,
+    },
+  });
+  const dupHintMatches = hintEnabled ? (dupHint?.candidates ?? []) : [];
 
   // Re-seed owner defaults once persona data loads.
   React.useEffect(() => {
@@ -370,6 +396,42 @@ export function CreateOpportunityDialog({ trigger }: Props) {
                 data-testid="input-opp-name"
               />
               <FieldError msg={errors.name} />
+              {/* Task #37 — live as-you-type duplicate hint (advisory only). */}
+              {dupHintMatches.length > 0 && !duplicateConflict && (
+                <div
+                  className="rounded border border-gold/30 bg-gold/5 px-3 py-2"
+                  data-testid="hint-similar-opportunities"
+                >
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-gold flex items-center gap-1.5">
+                    <AlertTriangle className="h-3 w-3" />
+                    Similar open deals on this account
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {dupHintMatches.map((m) => (
+                      <li
+                        key={m.id}
+                        className="text-xs text-text-mute flex items-baseline gap-2"
+                        data-testid={`hint-similar-opp-${m.id}`}
+                      >
+                        <span className="text-text">{m.name}</span>
+                        {m.salesStage ? (
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-text-faint">
+                            {m.salesStage}
+                          </span>
+                        ) : null}
+                        {m.exact ? (
+                          <span className="font-mono text-[10px] uppercase tracking-wider text-danger">
+                            exact match
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-[11px] text-text-faint">
+                    You can still create it — this is just a heads-up.
+                  </p>
+                </div>
+              )}
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="o-desc" className={labelCls}>

@@ -195,6 +195,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierOpportunityDuplicateError"
+  /atelier/opportunities/check-duplicates:
+    get:
+      operationId: atelierCheckOpportunityDuplicates
+      tags: [atelier]
+      summary: Fuzzy duplicate-opportunity check (live hint while typing)
+      description: |
+        Returns open (non-archived) opportunities on the given account whose
+        names are similar to the supplied name, so the create dialog can show
+        a live as-you-type hint before submit. Purely advisory — the exact-
+        match 409 on create remains the hard gate. Never mutates anything.
+      parameters:
+        - in: query
+          name: accountId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: name
+          required: true
+          schema: { type: string }
+        - in: query
+          name: excludeId
+          required: false
+          schema: { type: string }
+          description: Skip this opportunity (when renaming an existing one).
+      responses:
+        "200":
+          description: Candidate duplicates (possibly empty)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOpportunityDuplicateCandidates"
+        "400":
+          description: Missing accountId or name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/opportunities/{oppId}:
     get:
       operationId: atelierGetOpportunity
@@ -4995,6 +5038,15 @@ components:
         exact:
           type: boolean
           description: True when the normalized names are identical (this is what blocked the create).
+
+    AtelierOpportunityDuplicateCandidates:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          description: Likely duplicates, exact matches first then by score.
+          items: { $ref: "#/components/schemas/AtelierOpportunityDuplicateMatch" }
 
     AtelierOpportunityDuplicateError:
       type: object

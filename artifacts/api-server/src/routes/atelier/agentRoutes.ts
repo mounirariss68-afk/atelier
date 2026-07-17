@@ -181,6 +181,52 @@ async function buildOppWire(o: typeof atelierOpportunities.$inferSelect) {
 const router: IRouter = Router();
 
 // =============================================================
+// Live duplicate-opportunity hint (Task #37)
+// =============================================================
+// Fuzzy duplicate check used by the create dialog to warn WHILE TYPING,
+// before the user submits. Purely advisory — the exact-match 409 on create
+// below stays the hard gate. Scoped to open (non-archived) opportunities on
+// a single account; never mutates anything.
+// @cli-skip: advisory UI hint backing the create dialog; no CLI surface
+router.get("/opportunities/check-duplicates", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const accountId = typeof req.query.accountId === "string" ? req.query.accountId.trim() : "";
+  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+  const excludeId =
+    typeof req.query.excludeId === "string" && req.query.excludeId.trim()
+      ? req.query.excludeId.trim()
+      : undefined;
+  if (!accountId || !name) {
+    res.status(400).json({ error: "invalid-query", reason: "accountId and name are required." });
+    return;
+  }
+  const [acct] = await db
+    .select({ id: atelierAccounts.id })
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.id, accountId), isNull(atelierAccounts.deletedAt)));
+  if (!acct) {
+    res.status(404).json({ error: "account-not-found" });
+    return;
+  }
+  const rows = await db
+    .select({
+      id: atelierOpportunities.id,
+      name: atelierOpportunities.name,
+      salesStage: atelierOpportunities.salesStage,
+    })
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.accountId, accountId),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  const candidates = findOpportunityDuplicates(name, rows, { excludeId });
+  res.json({ candidates });
+});
+
+// =============================================================
 // Create opportunity (auto-runs Pursuit Scout)
 // =============================================================
 // @cli-skip: pending Task #340 read-parity migration

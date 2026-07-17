@@ -57,6 +57,11 @@ export {
   getAtelierCheckAccountDuplicatesUrl,
   getAtelierCheckAccountDuplicatesMutationOptions,
   useAtelierCheckAccountDuplicates,
+  // ---- Task #37: live duplicate-opportunity hint while typing ----
+  getAtelierCheckOpportunityDuplicatesUrl,
+  getAtelierCheckOpportunityDuplicatesQueryKey,
+  getAtelierCheckOpportunityDuplicatesQueryOptions,
+  useAtelierCheckOpportunityDuplicates,
   getAtelierMergeAccountsUrl,
   getAtelierMergeAccountsMutationOptions,
   useAtelierMergeAccounts,

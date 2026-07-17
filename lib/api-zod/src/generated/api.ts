@@ -447,6 +447,42 @@ export const AtelierCreateOpportunityBody = zod.object({
     ),
 });
 
+/**
+ * Returns open (non-archived) opportunities on the given account whose
+names are similar to the supplied name, so the create dialog can show
+a live as-you-type hint before submit. Purely advisory — the exact-
+match 409 on create remains the hard gate. Never mutates anything.
+
+ * @summary Fuzzy duplicate-opportunity check (live hint while typing)
+ */
+export const AtelierCheckOpportunityDuplicatesQueryParams = zod.object({
+  accountId: zod.coerce.string(),
+  name: zod.coerce.string(),
+  excludeId: zod.coerce
+    .string()
+    .optional()
+    .describe("Skip this opportunity (when renaming an existing one)."),
+});
+
+export const AtelierCheckOpportunityDuplicatesResponse = zod.object({
+  candidates: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        salesStage: zod.string().nullable(),
+        score: zod.number(),
+        confidence: zod.enum(["high", "medium", "low"]),
+        exact: zod
+          .boolean()
+          .describe(
+            "True when the normalized names are identical (this is what blocked the create).",
+          ),
+      }),
+    )
+    .describe("Likely duplicates, exact matches first then by score."),
+});
+
 export const AtelierGetOpportunityParams = zod.object({
   oppId: zod.coerce.string(),
 });

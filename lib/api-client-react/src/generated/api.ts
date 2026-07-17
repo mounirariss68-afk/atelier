@@ -48,6 +48,7 @@ import type {
   AtelierCharterVersion,
   AtelierCheckAccountDuplicatesInput,
   AtelierCheckContactDuplicatesInput,
+  AtelierCheckOpportunityDuplicatesParams,
   AtelierComposeProposalInput,
   AtelierConciergeSearchInput,
   AtelierConciergeSearchResult,
@@ -97,6 +98,7 @@ import type {
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
   AtelierMyOpenTasks,
+  AtelierOpportunityDuplicateCandidates,
   AtelierOpportunityDuplicateError,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
@@ -980,6 +982,122 @@ export const useAtelierCreateOpportunity = <
 > => {
   return useMutation(getAtelierCreateOpportunityMutationOptions(options));
 };
+
+/**
+ * Returns open (non-archived) opportunities on the given account whose
+names are similar to the supplied name, so the create dialog can show
+a live as-you-type hint before submit. Purely advisory — the exact-
+match 409 on create remains the hard gate. Never mutates anything.
+
+ * @summary Fuzzy duplicate-opportunity check (live hint while typing)
+ */
+export const getAtelierCheckOpportunityDuplicatesUrl = (
+  params: AtelierCheckOpportunityDuplicatesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/opportunities/check-duplicates?${stringifiedParams}`
+    : `/api/atelier/opportunities/check-duplicates`;
+};
+
+export const atelierCheckOpportunityDuplicates = async (
+  params: AtelierCheckOpportunityDuplicatesParams,
+  options?: RequestInit,
+): Promise<AtelierOpportunityDuplicateCandidates> => {
+  return customFetch<AtelierOpportunityDuplicateCandidates>(
+    getAtelierCheckOpportunityDuplicatesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierCheckOpportunityDuplicatesQueryKey = (
+  params?: AtelierCheckOpportunityDuplicatesParams,
+) => {
+  return [
+    `/api/atelier/opportunities/check-duplicates`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierCheckOpportunityDuplicatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>,
+  TError = ErrorType<AtelierError>,
+>(
+  params: AtelierCheckOpportunityDuplicatesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierCheckOpportunityDuplicatesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>
+  > = ({ signal }) =>
+    atelierCheckOpportunityDuplicates(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierCheckOpportunityDuplicatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>
+>;
+export type AtelierCheckOpportunityDuplicatesQueryError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Fuzzy duplicate-opportunity check (live hint while typing)
+ */
+
+export function useAtelierCheckOpportunityDuplicates<
+  TData = Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>,
+  TError = ErrorType<AtelierError>,
+>(
+  params: AtelierCheckOpportunityDuplicatesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierCheckOpportunityDuplicates>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierCheckOpportunityDuplicatesQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 export const getAtelierGetOpportunityUrl = (oppId: string) => {
   return `/api/atelier/opportunities/${oppId}`;

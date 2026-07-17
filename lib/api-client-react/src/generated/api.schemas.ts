@@ -2699,6 +2699,11 @@ export interface AtelierOpportunityDuplicateMatch {
   exact: boolean;
 }
 
+export interface AtelierOpportunityDuplicateCandidates {
+  /** Likely duplicates, exact matches first then by score. */
+  candidates: AtelierOpportunityDuplicateMatch[];
+}
+
 export type AtelierOpportunityDuplicateErrorError =
   (typeof AtelierOpportunityDuplicateErrorError)[keyof typeof AtelierOpportunityDuplicateErrorError];
 
@@ -4183,6 +4188,15 @@ export interface AtelierAgentRunSummary {
 
 export type AtelierGetActivityParams = {
   limit?: number;
+};
+
+export type AtelierCheckOpportunityDuplicatesParams = {
+  accountId: string;
+  name: string;
+  /**
+   * Skip this opportunity (when renaming an existing one).
+   */
+  excludeId?: string;
 };
 
 export type AtelierCreateStageTransition200 = {

@@ -3611,6 +3611,7 @@ async function runExecutiveMapperAndQueueInner(
   };
 }
 
+// @cli-skip: long-running agent trigger behind the account AI tab; CLI parity needs run-lifecycle design before exposure
 router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
