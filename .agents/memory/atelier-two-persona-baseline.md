@@ -3,7 +3,7 @@ name: Atelier two-persona baseline
 description: Only founders exist as users; all RBAC test personas are ephemeral, provisioned by the harnesses themselves.
 ---
 
-The only seeded atelier_users are the two founding partners (p_mounir_ariss, p_gokhan_guney). All other demo personas were deliberately purged — from seed-atelier, the api-server boot seeds, and the DB.
+The only seeded atelier_users are the two founding partners (see the auth credential seed for their ids). All other demo personas were deliberately purged — from seed-atelier, the api-server boot seeds, and the DB.
 
 **Why:** User requested removal of all dummy personas and everything they touched; RBAC test coverage had to survive without seeded non-founder users.
 

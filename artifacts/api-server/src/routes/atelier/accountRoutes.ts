@@ -635,6 +635,15 @@ router.post("/accounts", async (req, res) => {
       });
       return;
     }
+    // Cartographer already ran during the chat flow — chain the Executive
+    // Mapper now (fire-and-forget; progress shows in the AI activity rail,
+    // proposals land in the governed review queue).
+    void runExecutiveMapperAndQueue(inserted.id, me.id).catch((err) => {
+      console.warn(
+        `[atelier] auto-on-create executive mapper failed for ${inserted.brandName ?? inserted.name}`,
+        err instanceof Error ? err.message : err,
+      );
+    });
     const fresh = (await loadAccount(inserted.id)) ?? inserted;
     const access = await accessibleEngagementIds(me);
     const summary = await summariseAccount(fresh, access, me);
@@ -749,6 +758,17 @@ router.post("/accounts", async (req, res) => {
           payloadSummary: `Cartographer auto-ran on creation: persisted research and seeded ${seedContacts.length} contact(s) for ${inserted.brandName ?? inserted.name}.`,
         });
       });
+      // Cartographer finished — chain the Executive Mapper (people-only
+      // roster sweep). Its progress shows in the AI activity rail and its
+      // findings land as governed proposals, never direct writes.
+      try {
+        await runExecutiveMapperAndQueue(inserted.id, me.id);
+      } catch (mapErr) {
+        console.warn(
+          `[atelier] auto-on-create executive mapper failed for ${inserted.brandName ?? inserted.name}`,
+          mapErr instanceof Error ? mapErr.message : mapErr,
+        );
+      }
     } catch (err) {
       // A "no parseable JSON" / aborted response means the model found nothing
       // worth enriching (accounts with no public footprint — test fixtures,
@@ -3453,20 +3473,59 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
 // the Mapper PROPOSES contacts (with LinkedIn profile links); a partner then
 // approves / edits / rejects each person on the Profile tab.
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  const access = await accessibleEngagementIds(me);
-  if (!(await canSeeAccount(access, me, req.params.accountId))) {
-    res.status(403).json({ error: "account-forbidden" });
-    return;
-  }
-  const a = await loadAccount(req.params.accountId);
-  if (!a) {
-    res.status(404).json({ error: "not-found" });
-    return;
-  }
 
+/**
+ * Shared Executive Mapper pipeline: sweep the public leadership roster, build
+ * governed contact proposals, and append them to the account's
+ * pendingProfileUpdates queue (audited). Used by the manual "Map executives"
+ * route AND the auto-run chained after account creation. The account row is
+ * re-loaded just before the queue write so a Cartographer run that finished
+ * moments earlier (auto-on-create chain) is never clobbered.
+ */
+// In-process claim set: makes the check-then-start window race-safe within
+// this server process (the API runs as a single process; auto-run + manual
+// double-click both land here). The DB status check below still covers runs
+// visible across restarts / other entry points.
+const executiveMapperInFlight = new Set<string>();
+
+async function runExecutiveMapperAndQueue(
+  accountId: string,
+  triggeredByUserId: string | null,
+): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
+  const a = await loadAccount(accountId);
+  if (!a) throw new Error("account-not-found");
+
+  // Concurrency guard: never stack a second sweep on an account that already
+  // has one running (double-click, auto-run + manual overlap). Claim the
+  // in-process slot atomically FIRST, then double-check the DB.
+  if (executiveMapperInFlight.has(a.id)) {
+    throw new Error("executive-mapper-already-running");
+  }
+  executiveMapperInFlight.add(a.id);
+  try {
+    const [inFlight] = await db
+      .select({ id: atelierAgentRuns.id })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.agentId, "executive_mapper"),
+          eq(atelierAgentRuns.targetId, a.id),
+          eq(atelierAgentRuns.status, "running"),
+          isNull(atelierAgentRuns.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (inFlight) throw new Error("executive-mapper-already-running");
+    return await runExecutiveMapperAndQueueInner(a, triggeredByUserId);
+  } finally {
+    executiveMapperInFlight.delete(a.id);
+  }
+}
+
+async function runExecutiveMapperAndQueueInner(
+  a: NonNullable<Awaited<ReturnType<typeof loadAccount>>>,
+  triggeredByUserId: string | null,
+): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
   const existingContacts = await db
     .select({
       fullName: atelierContacts.fullName,
@@ -3478,24 +3537,27 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
 
   const { runId, output } = await runExecutiveMapper({
     accountId: a.id,
-    accountName: a.name,
+    accountName: a.brandName ?? a.name,
     accountSector: a.sector,
     accountCountry: a.country,
     accountHqCity: a.hqCity ?? null,
     knownContacts: existingContacts,
-    triggeredByUserId: me.id,
+    triggeredByUserId,
     actorLabel: "Executive Mapper",
   });
 
+  // Re-load for the freshest queue — the LLM run takes minutes and other
+  // writers (Cartographer persist, partner edits) may have touched the row.
+  const fresh = (await loadAccount(a.id)) ?? a;
   const proposals = buildExecutiveMapperProposals({
     output,
-    account: a,
+    account: fresh,
     existingContacts,
   });
 
-  const queue = ((a.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []).concat(
-    proposals,
-  );
+  const queue = (
+    (fresh.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []
+  ).concat(proposals);
 
   await db.transaction(async (tx) => {
     await tx
@@ -3517,18 +3579,48 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
       },
       payloadSummary:
         proposals.length > 0
-          ? `Executive Mapper proposed ${proposals.length} contact update(s) for ${a.name} (awaiting partner review).`
-          : `Executive Mapper sweep found no new executives to propose for ${a.name}.`,
+          ? `Executive Mapper proposed ${proposals.length} contact update(s) for ${fresh.brandName ?? fresh.name} (awaiting partner review).`
+          : `Executive Mapper sweep found no new executives to propose for ${fresh.brandName ?? fresh.name}.`,
     });
   });
 
-  const ws = await buildWorkspace(a.id, access, me);
-  res.json({
+  return {
     runId,
     proposedCount: proposals.length,
     openQuestions: output.openQuestions,
-    workspace: ws,
-  });
+  };
+}
+
+router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const a = await loadAccount(req.params.accountId);
+  if (!a) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+
+  let result: { runId: string; proposedCount: number; openQuestions: string[] };
+  try {
+    result = await runExecutiveMapperAndQueue(a.id, me.id);
+  } catch (err) {
+    if (err instanceof Error && err.message === "executive-mapper-already-running") {
+      res.status(409).json({
+        error: "executive-mapper-already-running",
+        message: "An executive mapping sweep is already running for this account.",
+      });
+      return;
+    }
+    throw err;
+  }
+
+  const ws = await buildWorkspace(a.id, access, me);
+  res.json({ ...result, workspace: ws });
 });
 
 // ---------- contacts (graph) ----------

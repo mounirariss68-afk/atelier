@@ -26,7 +26,7 @@ Gotchas observed:
 `artifacts/api-server/tests/crm/` that imports `../../src/app.js`, does
 `const server = app.listen(0)`, derives the port from `server.address()`, and
 hits endpoints with `fetch` using `cookie: atelier_persona=<id>`. Reuse the
-PERSONA ids (fp=p_mounir_ariss, sm=p_layla_haddad, etc.), ACC=acc_tasama. This
+PERSONA ids (fp/sm/etc — see the harness fixture file for the ids), ACC=acc_tasama. This
 skips the slow scout group and finishes in <60s. Delete the probe afterward.
 
 **Why:** the new code mirrors the probe's logic, so a green probe == green group
