@@ -26,6 +26,7 @@ import {
   atelierPerformanceGoals,
   atelierTrainingMaterials,
   atelierTrainingCompletions,
+  atelierTimesheetWeeks,
 } from "@workspace/db";
 import {
   AtelierGetMyProfileResponse,
@@ -33,8 +34,9 @@ import {
   AtelierDismissMyNotificationResponse,
   AtelierListMyReviewsResponse,
   AtelierListMyGoalsResponse,
-  AtelierListMyLearningResponse,
   AtelierCompleteMyTrainingResponse,
+  AtelierGetMyPerformanceResponse,
+  AtelierListMyLearningResponse,
 } from "@workspace/api-zod";
 import { loadTrainingFileBytes } from "./performanceRoutes";
 import { personaToWire } from "./personaCookie";
@@ -316,9 +318,7 @@ router.post("/me/notifications/:id/dismiss", async (req, res, next) => {
   }
 });
 
-// =============================================================
 // Task #55 — My Performance (employees only) + My Learning
-// =============================================================
 
 /**
  * Resolve the caller for the performance section. Contractors are 403'd
@@ -424,6 +424,14 @@ router.get("/me/goals", async (req, res, next) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Task #58 — /me/performance below answers ONLY for the caller's own rows via
+// resolveSelfPerson; no ids from the URL/query/body are accepted.
+// (The read-only /me/time, /me/expenses and compensation /me/pay endpoints
+// from Task #58 were superseded by the richer self-service surfaces in
+// meSelfServiceRoutes.ts and payRoutes.ts.)
+// ---------------------------------------------------------------------------
+
 /** Audience filter — which worker types a material is visible to. */
 async function callerAudience(
   me: typeof atelierUsers.$inferSelect,
@@ -476,6 +484,71 @@ async function loadMyMaterial(
     );
   return m ?? null;
 }
+
+// @cli-skip: self-scope learning read; no CLI shape (Task #55)
+// @cli-skip: self-scope performance read; no CLI shape (Task #58)
+router.get("/me/performance", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const person = await resolveSelfPerson(me);
+    let seniority: string | null = null;
+    let utilizationTargetPct: number | null = null;
+    if (person?.workerType === "employee") {
+      const [emp] = await db
+        .select()
+        .from(atelierEmployees)
+        .where(
+          and(
+            eq(atelierEmployees.orgId, me.orgId),
+            eq(atelierEmployees.id, person.id),
+            isNull(atelierEmployees.deletedAt),
+          ),
+        );
+      seniority = emp?.seniority ?? null;
+      utilizationTargetPct = emp?.utilizationTargetPct ?? null;
+    }
+    // Utilization actuals over the caller's 12 most recent tracked weeks.
+    let totalHours12w = 0;
+    let billableHours12w = 0;
+    let weeksTracked = 0;
+    if (person) {
+      const weeks = await db
+        .select()
+        .from(atelierTimesheetWeeks)
+        .where(
+          and(
+            eq(atelierTimesheetWeeks.orgId, me.orgId),
+            eq(atelierTimesheetWeeks.personId, person.id),
+            isNull(atelierTimesheetWeeks.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierTimesheetWeeks.weekIso))
+        .limit(12);
+      weeksTracked = weeks.length;
+      for (const w of weeks) {
+        totalHours12w += w.totalHours;
+        billableHours12w += w.billableHours;
+      }
+    }
+    const utilizationPct =
+      totalHours12w > 0
+        ? Math.round((billableHours12w / totalHours12w) * 100)
+        : null;
+    res.json(
+      AtelierGetMyPerformanceResponse.parse({
+        seniority,
+        utilizationTargetPct,
+        totalHours12w,
+        billableHours12w,
+        utilizationPct,
+        weeksTracked,
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
 
 // @cli-skip: self-scope learning read; no CLI shape (Task #55)
 router.get("/me/learning", async (req, res, next) => {

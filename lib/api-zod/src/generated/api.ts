@@ -914,6 +914,18 @@ export const AtelierGetMyPayResponse = zod.object({
 });
 
 /**
+ * @summary Me lens — the caller's own utilization + review posture (self-scope)
+ */
+export const AtelierGetMyPerformanceResponse = zod.object({
+  seniority: zod.string().nullish(),
+  utilizationTargetPct: zod.number().nullish(),
+  totalHours12w: zod.number(),
+  billableHours12w: zod.number(),
+  utilizationPct: zod.number().nullish(),
+  weeksTracked: zod.number(),
+});
+
+/**
  * @summary Me lens — request a change to own payment details (HR must approve)
  */
 export const atelierCreateBankChangeRequestBodyNewIbanMin = 8;

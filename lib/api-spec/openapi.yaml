@@ -488,6 +488,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierMyPay"
+  /atelier/me/performance:
+    get:
+      operationId: atelierGetMyPerformance
+      tags: [atelier]
+      summary: Me lens — the caller's own utilization + review posture (self-scope)
+      responses:
+        "200":
+          description: Own performance snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMyPerformance"
   /atelier/me/pay/bank-change-request:
     post:
       operationId: atelierCreateBankChangeRequest
@@ -5977,6 +5989,18 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AtelierMyApprovalItem"
+
+    # ---- Me lens self-scope data tabs (Task #58) ----
+    AtelierMyPerformance:
+      type: object
+      required: [totalHours12w, billableHours12w, weeksTracked]
+      properties:
+        seniority: { type: ["string", "null"] }
+        utilizationTargetPct: { type: ["number", "null"] }
+        totalHours12w: { type: number }
+        billableHours12w: { type: number }
+        utilizationPct: { type: ["number", "null"] }
+        weeksTracked: { type: number }
 
     # ---- HR joiner lifecycle (Task #50) ----
     AtelierJoiner:

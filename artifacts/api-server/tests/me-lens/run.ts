@@ -67,6 +67,8 @@ async function main(): Promise<void> {
     atelierAuthSessions,
     atelierSelfNotifications,
     atelierAuditEvents,
+    atelierTimesheetWeeks,
+    atelierExpenses,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -210,6 +212,73 @@ async function main(): Promise<void> {
       "dismissed card leaves the list",
       afterDismiss.status === 200 &&
         !afterDismiss.body?.some((n: any) => n.id === `selfnotif_test_${STAMP}`),
+    );
+
+    // =====================================================================
+    group("me \u00b7 data tabs self-scope (Task #58)");
+    // =====================================================================
+    // Seed one row per surface for the EMPLOYEE; the contractor must never
+    // see any of it.
+    await db.insert(atelierTimesheetWeeks).values({
+      id: `tsw_test_${STAMP}`,
+      orgId: ORG,
+      personId: `emp_test_${STAMP}`,
+      personType: "employee",
+      weekIso: "2026-W28",
+      weekStartDate: "2026-07-06",
+      status: "submitted",
+      totalHours: 40,
+      billableHours: 32,
+    });
+    await db.insert(atelierExpenses).values({
+      id: `exp_test_${STAMP}`,
+      orgId: ORG,
+      personId: EMP_ID,
+      personType: "employee",
+      expenseDate: "2026-07-08",
+      captureSource: "manual",
+      merchant: "Probe Cafe",
+      category: "meals",
+      amount: 42,
+      currency: "USD",
+      usdAmount: 42,
+      status: "submitted",
+    });
+
+    const empExp = await call("GET", "/me/expenses", EMP_ID);
+    check(
+      "employee /me/expenses returns own claim",
+      empExp.status === 200 && empExp.body?.expenses?.some((x: any) => x.id === `exp_test_${STAMP}`),
+      `status=${empExp.status} n=${empExp.body?.expenses?.length}`,
+    );
+    const ctExp = await call("GET", "/me/expenses", CT_ID);
+    check(
+      "contractor /me/expenses never contains the employee's claim",
+      ctExp.status === 200 && !ctExp.body?.expenses?.some((x: any) => x.id === `exp_test_${STAMP}`),
+      `status=${ctExp.status}`,
+    );
+
+    const empPay = await call("GET", "/me/pay", EMP_ID);
+    check(
+      "employee /me/pay bundle is self-scope 200",
+      empPay.status === 200 && Array.isArray(empPay.body?.documents),
+      `status=${empPay.status} body=${JSON.stringify(empPay.body)?.slice(0, 200)}`,
+    );
+
+    const empPerf = await call("GET", "/me/performance", EMP_ID);
+    check(
+      "employee /me/performance aggregates own tracked weeks",
+      empPerf.status === 200 &&
+        empPerf.body?.weeksTracked >= 1 &&
+        empPerf.body?.totalHours12w >= 40 &&
+        empPerf.body?.utilizationPct != null,
+      `status=${empPerf.status} body=${JSON.stringify(empPerf.body)?.slice(0, 200)}`,
+    );
+    const ctPerf = await call("GET", "/me/performance", CT_ID);
+    check(
+      "contractor /me/performance has no borrowed hours",
+      ctPerf.status === 200 && ctPerf.body?.weeksTracked === 0 && ctPerf.body?.totalHours12w === 0,
+      `status=${ctPerf.status}`,
     );
 
     // =====================================================================
@@ -486,6 +555,8 @@ async function main(): Promise<void> {
         await db.delete(atelierUsers).where(eq(atelierUsers.id, joinerUserId));
       }
       await db.delete(atelierSelfNotifications).where(eq(atelierSelfNotifications.id, `selfnotif_test_${STAMP}`));
+      await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.id, `tsw_test_${STAMP}`));
+      await db.delete(atelierExpenses).where(eq(atelierExpenses.id, `exp_test_${STAMP}`));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, `emp_test_${STAMP}`));
       await db.delete(atelierContractors).where(eq(atelierContractors.id, `ct_test_${STAMP}`));
       for (const id of [HR_ID, EMP_ID, CT_ID, CONSULTANT_ID]) {

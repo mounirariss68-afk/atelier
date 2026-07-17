@@ -2570,6 +2570,18 @@ export interface AtelierMyApprovals {
   items: AtelierMyApprovalItem[];
 }
 
+export interface AtelierMyPerformance {
+  /** @nullable */
+  seniority?: string | null;
+  /** @nullable */
+  utilizationTargetPct?: number | null;
+  totalHours12w: number;
+  billableHours12w: number;
+  /** @nullable */
+  utilizationPct?: number | null;
+  weeksTracked: number;
+}
+
 export type AtelierJoinerStatus =
   (typeof AtelierJoinerStatus)[keyof typeof AtelierJoinerStatus];
 

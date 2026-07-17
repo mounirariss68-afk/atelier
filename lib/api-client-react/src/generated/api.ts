@@ -120,6 +120,7 @@ import type {
   AtelierMyApprovals,
   AtelierMyOpenTasks,
   AtelierMyPay,
+  AtelierMyPerformance,
   AtelierOkResponse,
   AtelierOpportunityDuplicateCandidates,
   AtelierOpportunityDuplicateError,
@@ -2373,6 +2374,82 @@ export function useAtelierGetMyPay<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetMyPayQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — the caller's own utilization + review posture (self-scope)
+ */
+export const getAtelierGetMyPerformanceUrl = () => {
+  return `/api/atelier/me/performance`;
+};
+
+export const atelierGetMyPerformance = async (
+  options?: RequestInit,
+): Promise<AtelierMyPerformance> => {
+  return customFetch<AtelierMyPerformance>(getAtelierGetMyPerformanceUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyPerformanceQueryKey = () => {
+  return [`/api/atelier/me/performance`] as const;
+};
+
+export const getAtelierGetMyPerformanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyPerformance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPerformance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetMyPerformanceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyPerformance>>
+  > = ({ signal }) => atelierGetMyPerformance({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPerformance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyPerformanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyPerformance>>
+>;
+export type AtelierGetMyPerformanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own utilization + review posture (self-scope)
+ */
+
+export function useAtelierGetMyPerformance<
+  TData = Awaited<ReturnType<typeof atelierGetMyPerformance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyPerformance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyPerformanceQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

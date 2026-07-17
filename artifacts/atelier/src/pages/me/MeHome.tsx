@@ -18,6 +18,7 @@ import {
   getAtelierListMyNotificationsQueryKey,
   useAtelierListMyReviews,
   useAtelierListMyGoals,
+  useAtelierGetMyPerformance,
   useAtelierListMyLearning,
   useAtelierCompleteMyTraining,
   getAtelierListMyLearningQueryKey,
@@ -304,8 +305,45 @@ function RosterCard({ loading, profile }: { loading: boolean; profile: Profile }
 function PerformanceSection() {
   const { data: reviews, isLoading: loadingReviews } = useAtelierListMyReviews();
   const { data: goals, isLoading: loadingGoals } = useAtelierListMyGoals();
+  const { data: perf, isLoading: loadingPerf } = useAtelierGetMyPerformance();
   return (
     <div className="space-y-6" data-testid="me-performance">
+      <div>
+        <h3 className="text-sm font-semibold text-text mb-2">Utilization</h3>
+        {loadingPerf ? (
+          <p className="text-sm text-text-faint">Loading…</p>
+        ) : !perf || perf.weeksTracked === 0 ? (
+          <Card className="p-4 text-sm text-text-mute" data-testid="me-performance-metrics-empty">
+            No tracked weeks yet — utilization appears once your timesheets are in.
+          </Card>
+        ) : (
+          <Card className="p-4" data-testid="me-performance-metrics">
+            <div className="grid gap-4 sm:grid-cols-4">
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Utilization (12w)</div>
+                <div className="text-text text-lg font-medium mt-0.5">
+                  {perf.utilizationPct != null ? `${perf.utilizationPct}%` : "—"}
+                  {perf.utilizationTargetPct != null ? (
+                    <span className="text-xs text-text-faint"> / target {perf.utilizationTargetPct}%</span>
+                  ) : null}
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Billable hours (12w)</div>
+                <div className="text-text text-lg font-medium mt-0.5">{perf.billableHours12w}</div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Total hours (12w)</div>
+                <div className="text-text text-lg font-medium mt-0.5">{perf.totalHours12w}</div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-text-faint">Seniority</div>
+                <div className="text-text text-lg font-medium mt-0.5">{perf.seniority ?? "—"}</div>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
       <div>
         <h3 className="text-sm font-semibold text-text mb-2">Released reviews</h3>
         {loadingReviews ? (
