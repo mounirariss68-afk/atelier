@@ -556,10 +556,33 @@ router.post("/opportunities/:oppId/archive", async (req, res) => {
   const parsed = AtelierArchiveOpportunityBody.safeParse(req.body ?? {});
   const rationale = parsed.success ? (parsed.data.rationale ?? "") : "";
 
+  const now = new Date();
   await db
     .update(atelierOpportunities)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .set({ deletedAt: now, updatedAt: now })
     .where(eq(atelierOpportunities.id, opp.id));
+
+  // Cascade to dependents so archived opps leave no dangling surfaces:
+  // soft-delete Win/Loss debriefs and resolve opportunity-linked Pane A items.
+  await db
+    .update(atelierWinLossDebriefs)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(atelierWinLossDebriefs.opportunityId, opp.id),
+        isNull(atelierWinLossDebriefs.deletedAt),
+      ),
+    );
+  await db
+    .update(atelierPaneAItems)
+    .set({ resolvedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(atelierPaneAItems.hrefKind, "opportunity"),
+        eq(atelierPaneAItems.hrefTargetId, opp.id),
+        isNull(atelierPaneAItems.resolvedAt),
+      ),
+    );
 
   await db.insert(atelierAuditEvents).values({
     id: rid("aud"),

@@ -1654,7 +1654,12 @@ export const atelierWinLossDebriefs = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityId: text("opportunity_id").notNull(),
+    // FK with ON DELETE CASCADE (Task: orphaned Win/Loss cleanup) — hard
+    // deletes of an opportunity (e.g. test-harness DB deletes) must take the
+    // dependent debrief rows with them so no orphans can linger.
+    opportunityId: text("opportunity_id")
+      .notNull()
+      .references(() => atelierOpportunities.id, { onDelete: "cascade" }),
     outcome: text("outcome").notNull(), // signed | lost_no_decision | lost_to_competitor | withdrawn
     status: text("status").notNull().default("pending"),
     // pending | buyer_scheduled | buyer_done | seller_done | synthesized | closed

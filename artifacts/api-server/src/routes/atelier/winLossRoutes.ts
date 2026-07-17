@@ -541,8 +541,14 @@ router.get("/win-loss/debriefs", async (req, res) => {
     return { rows, opps };
   });
   const oppMap = new Map(opps.map((o) => [o.id, o]));
-  const items = rows.map((r) => {
+  // Defensive orphan filter: a debrief whose opportunity no longer exists
+  // (or is soft-deleted) must never surface in the library.
+  const liveRows = rows.filter((r) => {
     const o = oppMap.get(r.opportunityId);
+    return !!o && !o.deletedAt;
+  });
+  const items = liveRows.map((r) => {
+    const o = oppMap.get(r.opportunityId)!;
     return {
       id: r.id,
       opportunityId: r.opportunityId,

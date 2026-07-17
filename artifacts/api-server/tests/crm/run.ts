@@ -2979,6 +2979,17 @@ async function main(): Promise<void> {
       for (const id of created.transcripts) await db.delete(atelierTranscripts).where(eq(atelierTranscripts.id, id));
       for (const id of created.debriefs) await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.id, id));
       for (const id of created.paneAItems) await db.delete(atelierPaneAItems).where(eq(atelierPaneAItems.id, id));
+      // Orphan-prevention sweep (Task: orphaned Win/Loss cleanup) — the
+      // stage-transition hook creates debrief + Pane A rows this run never
+      // tracked. Sweep them by opportunity id BEFORE deleting the opps so no
+      // orphaned dashboard/debrief rows leak from the harness.
+      for (const oppId of created.opps) {
+        await db.delete(atelierWinLossDebriefs).where(eq(atelierWinLossDebriefs.opportunityId, oppId)).catch(() => undefined);
+        await db
+          .delete(atelierPaneAItems)
+          .where(and(eq(atelierPaneAItems.hrefKind, "opportunity"), eq(atelierPaneAItems.hrefTargetId, oppId)))
+          .catch(() => undefined);
+      }
       for (const id of created.opps) await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, id));
       for (const id of created.contacts) await db.delete(atelierContacts).where(eq(atelierContacts.id, id));
       for (const id of created.accounts) {

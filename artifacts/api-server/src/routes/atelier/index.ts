@@ -396,12 +396,35 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
   if (!me) return;
 
   // Pane A — items addressed to this persona (or unassigned high-prio for Partners).
-  const paneARows = await db
+  const paneARowsRaw = await db
     .select()
     .from(atelierPaneAItems)
     .where(
       and(eq(atelierPaneAItems.userId, me.id), isNull(atelierPaneAItems.resolvedAt)),
     );
+  // Defensive orphan filter: never surface an opportunity-linked item whose
+  // opportunity has been deleted (soft or hard) — e.g. leftover Win/Loss
+  // debrief reminders for opportunities that no longer exist.
+  const paneOppIds = [
+    ...new Set(
+      paneARowsRaw.filter((r) => r.hrefKind === "opportunity").map((r) => r.hrefTargetId),
+    ),
+  ];
+  const livePaneOpps = paneOppIds.length
+    ? await db
+        .select({ id: atelierOpportunities.id })
+        .from(atelierOpportunities)
+        .where(
+          and(
+            inArray(atelierOpportunities.id, paneOppIds),
+            isNull(atelierOpportunities.deletedAt),
+          ),
+        )
+    : [];
+  const livePaneOppIds = new Set(livePaneOpps.map((o) => o.id));
+  const paneARows = paneARowsRaw.filter(
+    (r) => r.hrefKind !== "opportunity" || livePaneOppIds.has(r.hrefTargetId),
+  );
   const paneA = paneARows
     .sort((a, b) => a.sortKey - b.sortKey)
     .map((r) => ({
