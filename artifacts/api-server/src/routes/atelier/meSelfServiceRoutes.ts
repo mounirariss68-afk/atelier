@@ -66,7 +66,13 @@ import {
   type PersonRow,
 } from "./ledgerRoutes";
 import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
-import { canApproveAsLead, isHr, isLeadership, isFinance } from "./personaRoles.js";
+import {
+  canApproveAsLead,
+  canApproveAsPartner,
+  isHr,
+  isLeadership,
+  isFinance,
+} from "./personaRoles.js";
 import { runTimeSteward } from "../../lib/atelier-agents/runner.js";
 import { convertToUsd } from "../../lib/atelier-fx.js";
 import { evaluateExpense } from "../../lib/atelier-expense-policy.js";
@@ -1818,6 +1824,255 @@ router.get("/me/expense-contexts", async (req, res, next) => {
     // Intentionally minimal (id + name only) — this is the tag picker for
     // self personas who cannot reach /accounts or /engagements.
     res.json({ accounts: filt(accounts), engagements: filt(engagements) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =====================================================================
+// PENDING-APPROVALS DIGEST — Task #78.
+//
+// Submitted timesheets, leave requests, and expense claims sit silently in
+// approver queues; the requester gets decision notifications, but approvers
+// only see pending items if they visit the queue pages. This surface gives
+// every persona a self-scope answer to "what is waiting on ME to approve?"
+// so the Me home can show a badge + stale-item callout.
+//
+// Scoping mirrors the real decision gates exactly (never wider):
+//   - Timesheets: lead approvers see 'submitted' weeks; partner-tier also
+//     sees 'lead_approved'. senior_manager is narrowed to weeks with
+//     submitted entries on engagements they actually lead.
+//   - Leave: same org-chart routing as /roster/leave-requests
+//     (managers; HR/founders only as fallback when there is no manager).
+//   - Expenses: partner-tier sees all 'submitted'; senior_manager only
+//     claims bound to engagements they lead.
+// Own items are always excluded (no self-approval anywhere).
+// Non-approver personas simply get total=0 — the route leaks nothing.
+// =====================================================================
+
+const APPROVAL_STALE_AFTER_DAYS = 3;
+
+type PendingApprovalItem = {
+  kind: "timesheet" | "leave" | "expense";
+  id: string;
+  title: string;
+  personName: string;
+  pendingSince: string;
+  ageDays: number;
+  stale: boolean;
+  href: string;
+};
+
+async function personNamesById(
+  orgId: string,
+  personIds: string[],
+): Promise<Map<string, string>> {
+  const ids = Array.from(new Set(personIds));
+  if (ids.length === 0) return new Map();
+  const [emps, cons] = await Promise.all([
+    db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, ids)),
+    db.select().from(atelierContractors).where(inArray(atelierContractors.id, ids)),
+  ]);
+  return new Map<string, string>([
+    ...emps.filter((e) => e.orgId === orgId).map((e) => [e.id, e.fullName] as const),
+    ...cons.filter((c) => c.orgId === orgId).map((c) => [c.id, c.fullName] as const),
+  ]);
+}
+
+// @cli-skip: self-scope digest backing the Me-home approvals badge (Task #78)
+router.get("/me/approvals", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const now = Date.now();
+    const items: PendingApprovalItem[] = [];
+    const pushItem = (
+      kind: PendingApprovalItem["kind"],
+      id: string,
+      title: string,
+      personName: string,
+      pendingSince: Date | null,
+      href: string,
+    ) => {
+      const since = pendingSince ?? new Date(now);
+      const ageDays = Math.max(0, Math.floor((now - since.getTime()) / 86_400_000));
+      items.push({
+        kind,
+        id,
+        title,
+        personName,
+        pendingSince: since.toISOString(),
+        ageDays,
+        stale: ageDays >= APPROVAL_STALE_AFTER_DAYS,
+        href,
+      });
+    };
+
+    // Own roster row — used to exclude the caller's own timesheet weeks.
+    const ownPerson = await resolvePersonForCaller(me);
+
+    // Engagements the caller leads (scopes senior_manager visibility).
+    const ledEngagements =
+      me.role === "senior_manager"
+        ? await db
+            .select({ id: atelierEngagements.id })
+            .from(atelierEngagements)
+            .where(
+              and(
+                eq(atelierEngagements.orgId, me.orgId),
+                eq(atelierEngagements.engagementLeadId, me.id),
+                isNull(atelierEngagements.deletedAt),
+              ),
+            )
+        : [];
+    const ledEngIds = ledEngagements.map((e) => e.id);
+
+    // ---- Timesheets --------------------------------------------------
+    if (canApproveAsLead(me.role)) {
+      const statuses = canApproveAsPartner(me.role)
+        ? ["submitted", "lead_approved"]
+        : ["submitted"];
+      let weeks = await db
+        .select()
+        .from(atelierTimesheetWeeks)
+        .where(
+          and(
+            eq(atelierTimesheetWeeks.orgId, me.orgId),
+            inArray(atelierTimesheetWeeks.status, statuses),
+            isNull(atelierTimesheetWeeks.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierTimesheetWeeks.submittedAt));
+      if (ownPerson) weeks = weeks.filter((w) => w.personId !== ownPerson.id);
+      // senior_manager: only weeks with submitted entries on engagements
+      // they lead (mirrors the object-level check in /ledger/approvals).
+      if (me.role === "senior_manager") {
+        if (ledEngIds.length === 0) {
+          weeks = [];
+        } else {
+          const weekIds = weeks.map((w) => w.id);
+          const entryRows = weekIds.length
+            ? await db
+                .select({ weekId: atelierTimesheetEntries.weekId })
+                .from(atelierTimesheetEntries)
+                .where(
+                  and(
+                    inArray(atelierTimesheetEntries.weekId, weekIds),
+                    inArray(atelierTimesheetEntries.engagementId, ledEngIds),
+                    eq(atelierTimesheetEntries.status, "submitted"),
+                    isNull(atelierTimesheetEntries.deletedAt),
+                  ),
+                )
+            : [];
+          const visible = new Set(entryRows.map((r) => r.weekId));
+          weeks = weeks.filter((w) => visible.has(w.id));
+        }
+      }
+      const names = await personNamesById(me.orgId, weeks.map((w) => w.personId));
+      for (const w of weeks) {
+        const awaiting = w.status === "lead_approved" ? "partner sign-off" : "lead approval";
+        pushItem(
+          "timesheet",
+          w.id,
+          `Timesheet ${w.weekIso} — awaiting ${awaiting}`,
+          names.get(w.personId) ?? w.personId,
+          w.status === "lead_approved" ? (w.leadApprovedAt ?? w.submittedAt) : w.submittedAt,
+          "/ledger/approvals",
+        );
+      }
+    }
+
+    // ---- Leave -------------------------------------------------------
+    if (canReachApproverSurface(me)) {
+      const pending = await db
+        .select()
+        .from(atelierLeaveRequests)
+        .where(
+          and(
+            eq(atelierLeaveRequests.orgId, me.orgId),
+            eq(atelierLeaveRequests.status, "pending"),
+            isNull(atelierLeaveRequests.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierLeaveRequests.createdAt));
+      const mine = pending.filter((r) => r.userId !== me.id);
+      const routable = await Promise.all(
+        mine.map(async (r) => ((await canDecideLeaveFor(me, r.personId)) ? r : null)),
+      );
+      const rows = routable.filter((r): r is NonNullable<typeof r> => r !== null);
+      const names = await personNamesById(me.orgId, rows.map((r) => r.personId));
+      for (const r of rows) {
+        pushItem(
+          "leave",
+          r.id,
+          `${r.leaveType} leave ${r.startDate} → ${r.endDate} (${r.workingDays}d)`,
+          names.get(r.personId) ?? r.personId,
+          r.createdAt,
+          "/people/approvals",
+        );
+      }
+    }
+
+    // ---- Expenses ----------------------------------------------------
+    // Mirrors /wallet/expenses/:id/approve exactly: partner-tier AND
+    // finance approve firm-wide; senior_manager only on led engagements.
+    const isFirmWideExpenseApprover = isLeadership(me.role) || isFinance(me.role);
+    const isExpenseApprover = isFirmWideExpenseApprover || me.role === "senior_manager";
+    if (isExpenseApprover) {
+      let claims = await db
+        .select()
+        .from(atelierExpenses)
+        .where(
+          and(
+            eq(atelierExpenses.orgId, me.orgId),
+            eq(atelierExpenses.status, "submitted"),
+            isNull(atelierExpenses.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierExpenses.submittedAt));
+      // No self-approval; senior_manager only sees claims on engagements
+      // they lead (mirrors /wallet/expenses/:id/approve).
+      claims = claims.filter((c) => c.personId !== me.id);
+      if (!isFirmWideExpenseApprover) {
+        claims = claims.filter((c) => c.engagementId && ledEngIds.includes(c.engagementId));
+      }
+      const submitterIds = Array.from(new Set(claims.map((c) => c.personId)));
+      const submitters = submitterIds.length
+        ? await db
+            .select({ id: atelierUsers.id, name: atelierUsers.name })
+            .from(atelierUsers)
+            .where(inArray(atelierUsers.id, submitterIds))
+        : [];
+      const nameByUser = new Map(submitters.map((u) => [u.id, u.name]));
+      for (const c of claims) {
+        pushItem(
+          "expense",
+          c.id,
+          `Expense ${c.merchant ?? c.category} — ${c.currency} ${c.amount.toFixed(2)}`,
+          nameByUser.get(c.personId) ?? c.personId,
+          c.submittedAt,
+          "/wallet/expenses",
+        );
+      }
+    }
+
+    // Oldest first so stalled items lead; cap the list for the card.
+    items.sort((a, b) => a.pendingSince.localeCompare(b.pendingSince));
+    const count = (k: PendingApprovalItem["kind"]) => {
+      const of = items.filter((i) => i.kind === k);
+      return { count: of.length, stale: of.filter((i) => i.stale).length };
+    };
+    res.json({
+      staleAfterDays: APPROVAL_STALE_AFTER_DAYS,
+      total: items.length,
+      staleTotal: items.filter((i) => i.stale).length,
+      categories: {
+        timesheets: count("timesheet"),
+        leave: count("leave"),
+        expenses: count("expense"),
+      },
+      items: items.slice(0, 50),
+    });
   } catch (err) {
     next(err);
   }

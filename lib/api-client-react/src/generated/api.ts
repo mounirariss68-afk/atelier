@@ -117,6 +117,7 @@ import type {
   AtelierMergeAccountsInput,
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
+  AtelierMyApprovals,
   AtelierMyOpenTasks,
   AtelierMyPay,
   AtelierOkResponse,
@@ -2219,6 +2220,86 @@ export const useAtelierDismissMyNotification = <
 > => {
   return useMutation(getAtelierDismissMyNotificationMutationOptions(options));
 };
+
+/**
+ * Digest of submitted timesheets, pending leave requests and submitted
+expense claims that THIS caller may decide. Scoping mirrors the real
+decision gates (org-chart leave routing, engagement-scoped senior
+managers, no self-approval). Non-approver personas get total=0.
+
+ * @summary Me lens — pending items waiting on the caller's approval
+ */
+export const getAtelierGetMyApprovalsUrl = () => {
+  return `/api/atelier/me/approvals`;
+};
+
+export const atelierGetMyApprovals = async (
+  options?: RequestInit,
+): Promise<AtelierMyApprovals> => {
+  return customFetch<AtelierMyApprovals>(getAtelierGetMyApprovalsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetMyApprovalsQueryKey = () => {
+  return [`/api/atelier/me/approvals`] as const;
+};
+
+export const getAtelierGetMyApprovalsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyApprovals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyApprovals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetMyApprovalsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyApprovals>>
+  > = ({ signal }) => atelierGetMyApprovals({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyApprovals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyApprovalsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyApprovals>>
+>;
+export type AtelierGetMyApprovalsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — pending items waiting on the caller's approval
+ */
+
+export function useAtelierGetMyApprovals<
+  TData = Awaited<ReturnType<typeof atelierGetMyApprovals>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyApprovals>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyApprovalsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * Published pay/benefit documents, compensation summary, insurance

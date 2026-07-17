@@ -454,6 +454,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfNotification"
+  /atelier/me/approvals:
+    get:
+      operationId: atelierGetMyApprovals
+      tags: [atelier]
+      summary: Me lens — pending items waiting on the caller's approval
+      description: |
+        Digest of submitted timesheets, pending leave requests and submitted
+        expense claims that THIS caller may decide. Scoping mirrors the real
+        decision gates (org-chart leave routing, engagement-scoped senior
+        managers, no self-approval). Non-approver personas get total=0.
+      responses:
+        "200":
+          description: Pending-approvals digest for the caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMyApprovals"
   /atelier/me/pay:
     get:
       operationId: atelierGetMyPay
@@ -5920,6 +5937,46 @@ components:
         href: { type: ["string", "null"] }
         status: { type: string, enum: [unread, dismissed] }
         createdAt: { type: string }
+
+    # ---- Pending-approvals digest (Task #78) ----
+    AtelierMyApprovalItem:
+      type: object
+      required: [kind, id, title, personName, pendingSince, ageDays, stale, href]
+      properties:
+        kind: { type: string, enum: [timesheet, leave, expense] }
+        id: { type: string }
+        title: { type: string }
+        personName: { type: string }
+        pendingSince: { type: string }
+        ageDays: { type: integer }
+        stale: { type: boolean }
+        href: { type: string }
+
+    AtelierMyApprovalCategory:
+      type: object
+      required: [count, stale]
+      properties:
+        count: { type: integer }
+        stale: { type: integer }
+
+    AtelierMyApprovals:
+      type: object
+      required: [staleAfterDays, total, staleTotal, categories, items]
+      properties:
+        staleAfterDays: { type: integer }
+        total: { type: integer }
+        staleTotal: { type: integer }
+        categories:
+          type: object
+          required: [timesheets, leave, expenses]
+          properties:
+            timesheets: { $ref: "#/components/schemas/AtelierMyApprovalCategory" }
+            leave: { $ref: "#/components/schemas/AtelierMyApprovalCategory" }
+            expenses: { $ref: "#/components/schemas/AtelierMyApprovalCategory" }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AtelierMyApprovalItem"
 
     # ---- HR joiner lifecycle (Task #50) ----
     AtelierJoiner:

@@ -24,6 +24,12 @@ path fire-and-forgets the Executive Mapper, which ALSO writes an agent_runs row 
 account id. Whether the check sees 0 or 1 rows is pure timing (live LLM job vs the next
 DB read) — a failure there is this race, not a dedupe/create regression.
 
+**Charter hook check:** the "stage-transition surfaces engagementHookError (null on
+success)" check requires a REAL awaited `runCharterArchitect` Claude call to succeed;
+"Request was aborted." there is upstream LLM flakiness, not a stage-service regression.
+Repro deterministically with a standalone probe (create opp `runScout:false`, transition
+to `contract` with `partnerOverride`) before attributing a failure to code.
+
 **Agent JSON parsing:** `extractFirstJsonObject()` (brace-depth + string-aware) is the
 shared extractor used by both `callClaudeJson` and `callClaudeJsonWithWebSearch`; it
 recovers prose-WRAPPED JSON. Genuine refusals / pure prose (common for fictional test

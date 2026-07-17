@@ -12,6 +12,7 @@ import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMyProfile,
+  useAtelierGetMyApprovals,
   useAtelierListMyNotifications,
   useAtelierDismissMyNotification,
   getAtelierListMyNotificationsQueryKey,
@@ -101,6 +102,7 @@ type Profile = AtelierSelfProfile | undefined;
 function OverviewSection({ loading, profile }: { loading: boolean; profile: Profile }) {
   return (
     <div className="space-y-6">
+      <PendingApprovalsCard />
       <NotificationCards />
       <div className="grid gap-4 md:grid-cols-2">
         <IdentityCard loading={loading} profile={profile} compact />
@@ -114,6 +116,79 @@ function OverviewSection({ loading, profile }: { loading: boolean; profile: Prof
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * PendingApprovalsCard — Task #78. Surfaces items waiting on the SIGNED-IN
+ * user's approval (timesheets, leave, expenses) so requests don't stall
+ * while approvers wait for someone to visit the queue pages. The server
+ * answers strictly for the caller's approval scope; non-approvers get
+ * total=0 and see nothing.
+ */
+function PendingApprovalsCard() {
+  const { data, isLoading } = useAtelierGetMyApprovals();
+  if (isLoading || !data || data.total === 0) return null;
+  const stale = data.items.filter((i) => i.stale);
+  const fresh = data.items.filter((i) => !i.stale);
+  const catLine = [
+    data.categories.timesheets.count > 0 ? `${data.categories.timesheets.count} timesheet${data.categories.timesheets.count === 1 ? "" : "s"}` : null,
+    data.categories.leave.count > 0 ? `${data.categories.leave.count} leave request${data.categories.leave.count === 1 ? "" : "s"}` : null,
+    data.categories.expenses.count > 0 ? `${data.categories.expenses.count} expense claim${data.categories.expenses.count === 1 ? "" : "s"}` : null,
+  ].filter(Boolean).join(" · ");
+
+  const ItemRow = ({ item, staleRow }: { item: (typeof data.items)[number]; staleRow?: boolean }) => (
+    <li className="flex items-center justify-between gap-3 py-1.5 text-sm">
+      <div className="min-w-0 flex items-center gap-2">
+        <MonoChip tone={staleRow ? "red" : "gold"}>{item.kind}</MonoChip>
+        <span className="truncate text-text">{item.title}</span>
+        <span className="shrink-0 text-text-faint">— {item.personName}</span>
+      </div>
+      <div className="shrink-0 flex items-center gap-3">
+        <span className={`font-mono text-[10px] uppercase tracking-wider ${staleRow ? "text-red-400" : "text-text-faint"}`}>
+          {item.ageDays === 0 ? "today" : `${item.ageDays}d waiting`}
+        </span>
+        <a href={item.href} className="text-xs text-gold hover:underline">
+          Review →
+        </a>
+      </div>
+    </li>
+  );
+
+  return (
+    <Card className="p-4 border-gold/40" data-testid="me-pending-approvals">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text">Waiting on your approval</h3>
+          <span
+            className="inline-flex items-center justify-center rounded-full bg-gold/15 px-2 py-0.5 font-mono text-[11px] font-semibold text-gold"
+            data-testid="me-pending-approvals-count"
+          >
+            {data.total}
+          </span>
+        </div>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-text-faint">{catLine}</span>
+      </div>
+      {stale.length > 0 ? (
+        <div className="mt-3 rounded-md border border-red-500/30 bg-red-500/5 p-3" data-testid="me-pending-approvals-stale">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-red-400">
+            {stale.length} item{stale.length === 1 ? "" : "s"} waiting more than {data.staleAfterDays} days
+          </p>
+          <ul className="mt-1 divide-y divide-border-soft">
+            {stale.map((i) => (
+              <ItemRow key={`${i.kind}-${i.id}`} item={i} staleRow />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {fresh.length > 0 ? (
+        <ul className="mt-2 divide-y divide-border-soft">
+          {fresh.map((i) => (
+            <ItemRow key={`${i.kind}-${i.id}`} item={i} />
+          ))}
+        </ul>
+      ) : null}
+    </Card>
   );
 }
 

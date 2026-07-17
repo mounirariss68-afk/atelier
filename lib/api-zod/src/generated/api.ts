@@ -741,6 +741,46 @@ export const AtelierDismissMyNotificationResponse = zod.object({
 });
 
 /**
+ * Digest of submitted timesheets, pending leave requests and submitted
+expense claims that THIS caller may decide. Scoping mirrors the real
+decision gates (org-chart leave routing, engagement-scoped senior
+managers, no self-approval). Non-approver personas get total=0.
+
+ * @summary Me lens — pending items waiting on the caller's approval
+ */
+export const AtelierGetMyApprovalsResponse = zod.object({
+  staleAfterDays: zod.number(),
+  total: zod.number(),
+  staleTotal: zod.number(),
+  categories: zod.object({
+    timesheets: zod.object({
+      count: zod.number(),
+      stale: zod.number(),
+    }),
+    leave: zod.object({
+      count: zod.number(),
+      stale: zod.number(),
+    }),
+    expenses: zod.object({
+      count: zod.number(),
+      stale: zod.number(),
+    }),
+  }),
+  items: zod.array(
+    zod.object({
+      kind: zod.enum(["timesheet", "leave", "expense"]),
+      id: zod.string(),
+      title: zod.string(),
+      personName: zod.string(),
+      pendingSince: zod.string(),
+      ageDays: zod.number(),
+      stale: zod.boolean(),
+      href: zod.string(),
+    }),
+  ),
+});
+
+/**
  * Published pay/benefit documents, compensation summary, insurance
 scheme details, masked bank details and bank-change requests — all
 strictly for the signed-in person. File downloads go through

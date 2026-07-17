@@ -2531,6 +2531,45 @@ export interface AtelierSelfNotification {
   createdAt: string;
 }
 
+export type AtelierMyApprovalItemKind =
+  (typeof AtelierMyApprovalItemKind)[keyof typeof AtelierMyApprovalItemKind];
+
+export const AtelierMyApprovalItemKind = {
+  timesheet: "timesheet",
+  leave: "leave",
+  expense: "expense",
+} as const;
+
+export interface AtelierMyApprovalItem {
+  kind: AtelierMyApprovalItemKind;
+  id: string;
+  title: string;
+  personName: string;
+  pendingSince: string;
+  ageDays: number;
+  stale: boolean;
+  href: string;
+}
+
+export interface AtelierMyApprovalCategory {
+  count: number;
+  stale: number;
+}
+
+export type AtelierMyApprovalsCategories = {
+  timesheets: AtelierMyApprovalCategory;
+  leave: AtelierMyApprovalCategory;
+  expenses: AtelierMyApprovalCategory;
+};
+
+export interface AtelierMyApprovals {
+  staleAfterDays: number;
+  total: number;
+  staleTotal: number;
+  categories: AtelierMyApprovalsCategories;
+  items: AtelierMyApprovalItem[];
+}
+
 export type AtelierJoinerStatus =
   (typeof AtelierJoinerStatus)[keyof typeof AtelierJoinerStatus];
 
