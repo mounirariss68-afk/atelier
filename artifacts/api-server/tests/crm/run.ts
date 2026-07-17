@@ -646,14 +646,17 @@ async function main(): Promise<void> {
           edges.length === 1 && edges[0]?.from === vpId && edges[0]?.to === ceoId,
           `edges=${JSON.stringify(edges)}`,
         );
+        // The Executive Mapper intentionally auto-chains after account
+        // creation (fire-and-forget), so only assert the CARTOGRAPHER did not
+        // auto-run — reviewed research replaces it.
         const runs = rRow?.id
-          ? await db.execute(sql`select count(*)::int as n from atelier_agent_runs where target_id = ${rRow.id}`)
+          ? await db.execute(sql`select count(*)::int as n from atelier_agent_runs where target_id = ${rRow.id} and agent_id = 'account_cartographer'`)
           : { rows: [{ n: 0 }] };
         const runCount = Number((runs as any).rows?.[0]?.n ?? 0);
         check(
           "reviewed research create did NOT trigger a Cartographer agent run",
           runCount === 0,
-          `agentRuns=${runCount}`,
+          `cartographerRuns=${runCount}`,
         );
         // Clean up the relationship rows this block created (contacts/account
         // are handled by the shared cleanup; relationships have no set there).
