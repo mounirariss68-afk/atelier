@@ -11,6 +11,7 @@ import {
   atelierAssets,
   atelierAuditEvents,
   atelierPaneAItems,
+  atelierDeliverables,
 } from "@workspace/db";
 import {
   AtelierGetMeResponse,
@@ -422,9 +423,49 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
         )
     : [];
   const livePaneOppIds = new Set(livePaneOpps.map((o) => o.id));
-  const paneARows = paneARowsRaw.filter(
-    (r) => r.hrefKind !== "opportunity" || livePaneOppIds.has(r.hrefTargetId),
-  );
+  // Same defensive filter for engagement- and deliverable-linked items:
+  // Pane A hrefs are polymorphic, so a card whose target row is missing or
+  // soft-deleted must never surface as a dead link.
+  const paneEngIds = [
+    ...new Set(
+      paneARowsRaw.filter((r) => r.hrefKind === "engagement").map((r) => r.hrefTargetId),
+    ),
+  ];
+  const livePaneEngs = paneEngIds.length
+    ? await db
+        .select({ id: atelierEngagements.id })
+        .from(atelierEngagements)
+        .where(
+          and(
+            inArray(atelierEngagements.id, paneEngIds),
+            isNull(atelierEngagements.deletedAt),
+          ),
+        )
+    : [];
+  const livePaneEngIds = new Set(livePaneEngs.map((e) => e.id));
+  const paneDelIds = [
+    ...new Set(
+      paneARowsRaw.filter((r) => r.hrefKind === "deliverable").map((r) => r.hrefTargetId),
+    ),
+  ];
+  const livePaneDels = paneDelIds.length
+    ? await db
+        .select({ id: atelierDeliverables.id })
+        .from(atelierDeliverables)
+        .where(
+          and(
+            inArray(atelierDeliverables.id, paneDelIds),
+            isNull(atelierDeliverables.deletedAt),
+          ),
+        )
+    : [];
+  const livePaneDelIds = new Set(livePaneDels.map((d) => d.id));
+  const paneARows = paneARowsRaw.filter((r) => {
+    if (r.hrefKind === "opportunity") return livePaneOppIds.has(r.hrefTargetId);
+    if (r.hrefKind === "engagement") return livePaneEngIds.has(r.hrefTargetId);
+    if (r.hrefKind === "deliverable") return livePaneDelIds.has(r.hrefTargetId);
+    return true;
+  });
   const paneA = paneARows
     .sort((a, b) => a.sortKey - b.sortKey)
     .map((r) => ({

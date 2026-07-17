@@ -39,6 +39,7 @@ import {
   atelierInvoice,
   atelierTimesheetEntries,
   atelierAuditEvents,
+  atelierPaneAItems,
 } from "@workspace/db";
 import { purgeAttachmentsByScope } from "./atelier-cli/attachments/index.js";
 
@@ -216,6 +217,25 @@ export async function archiveAccount(
       .update(atelierEngagements)
       .set({ plmStage: ENGAGEMENT_CLOSED_STAGE, updatedAt: now })
       .where(and(eq(atelierEngagements.id, e.id), eq(atelierEngagements.orgId, actor.orgId)));
+  }
+  // Resolve dashboard (Pane A) cards pointing at the engagements we just
+  // closed so "What needs me today" never keeps a card for a dormant
+  // engagement (same pattern as the opportunity orphan defenses).
+  if (engRows.length > 0) {
+    await db
+      .update(atelierPaneAItems)
+      .set({ resolvedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(atelierPaneAItems.orgId, actor.orgId),
+          eq(atelierPaneAItems.hrefKind, "engagement"),
+          inArray(
+            atelierPaneAItems.hrefTargetId,
+            engRows.map((e) => e.id),
+          ),
+          isNull(atelierPaneAItems.resolvedAt),
+        ),
+      );
   }
 
   // Cascade: open opportunities → soft-deleted (reversible via deletedAt).

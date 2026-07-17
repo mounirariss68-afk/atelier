@@ -28,6 +28,7 @@ import {
   atelierHypothesisTrees,
   atelierCharterVersions,
   atelierArtifacts,
+  atelierPaneAItems,
 } from "@workspace/db";
 import {
   AtelierRedraftCharterBody as AtelierCharterRedraftInput,
@@ -776,6 +777,20 @@ router.delete("/deliverables/:delId", async (req, res) => {
     .update(atelierDeliverables)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(eq(atelierDeliverables.id, row.id));
+  // Resolve any dashboard (Pane A) cards pointing at this deliverable so
+  // "What needs me today" never surfaces a dead link (same pattern as the
+  // opportunity orphan defenses).
+  await db
+    .update(atelierPaneAItems)
+    .set({ resolvedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(atelierPaneAItems.orgId, me.orgId),
+        eq(atelierPaneAItems.hrefKind, "deliverable"),
+        eq(atelierPaneAItems.hrefTargetId, row.id),
+        isNull(atelierPaneAItems.resolvedAt),
+      ),
+    );
   await audit({
     entityType: "deliverable",
     entityId: row.id,
@@ -1283,6 +1298,19 @@ router.patch("/engagements/:engId", async (req, res) => {
   });
   // Sentinel side-effect: on transition INTO closed, auto-revoke non-employees.
   if (nextStage === "closed" && !wasClosed) {
+    // Resolve dashboard (Pane A) cards pointing at this engagement — a closed
+    // engagement no longer "needs me today".
+    await db
+      .update(atelierPaneAItems)
+      .set({ resolvedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierPaneAItems.orgId, me.orgId),
+          eq(atelierPaneAItems.hrefKind, "engagement"),
+          eq(atelierPaneAItems.hrefTargetId, eng.id),
+          isNull(atelierPaneAItems.resolvedAt),
+        ),
+      );
     await emitAccessSentinelEvent({
       kind: "engagement_closed",
       engagementId: eng.id,
