@@ -53,6 +53,7 @@ import { checkAndRecord } from "./outbound-rate-limit.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import { applyStageTransition } from "../atelier-agents/stage-service.js";
 import { deriveSalesStage, SALES_TO_PLM } from "../atelier-agents/pipeline.js";
+import { findOpportunityDuplicates } from "../atelier-dedupe.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 function rid(prefix: string): string {
@@ -476,6 +477,11 @@ defineCapability({
       probabilityPct: { type: "number" },
       nextMilestone: { type: "string" },
       runScout: { type: "boolean" },
+      allowDuplicate: {
+        type: "boolean",
+        description:
+          "Explicit override for duplicate detection. Required when an open opportunity with the same name already exists on the account.",
+      },
       confirm: { type: "boolean" },
     },
     required: ["name"],
@@ -503,20 +509,81 @@ defineCapability({
       if (r.kind === "match") accountId = r.id;
       if (r.kind === "choices") return { ok: true, data: { prompt: r.prompt, options: r.options }, disambiguation: { kind: "account", options: r.options } };
     }
+    // Task #30 — duplicate detection on the target account. Exact-normalized
+    // matches against open (non-archived) opportunities block the commit
+    // unless the user explicitly overrides; fuzzy near-matches warn only.
+    const findDups = async () => {
+      if (!accountId) return [];
+      const rows = await db
+        .select({
+          id: atelierOpportunities.id,
+          name: atelierOpportunities.name,
+          salesStage: atelierOpportunities.salesStage,
+        })
+        .from(atelierOpportunities)
+        .where(
+          and(
+            eq(atelierOpportunities.accountId, accountId),
+            eq(atelierOpportunities.orgId, ctx.persona.orgId),
+            isNull(atelierOpportunities.deletedAt),
+          ),
+        );
+      return findOpportunityDuplicates(name, rows);
+    };
     if (input.confirm !== true) {
       const missing: string[] = [];
       if (!accountId) missing.push("account");
+      const dups = await findDups();
+      const exactDup = dups.find((d) => d.exact);
+      // Confirming a card that visibly carries the duplicate warning IS the
+      // explicit override — the pending input gets allowDuplicate:true so the
+      // commit-phase guard lets it through. Without the warning shown, the
+      // guard below still blocks a bare confirm:true call.
+      const dupWarning = exactDup
+        ? ` ⚠ Duplicate: an open opportunity named "${exactDup.name}" (stage: ${exactDup.salesStage ?? "unknown"}, id: ${exactDup.id}) already exists on this account. Committing creates a second one anyway.`
+        : dups.length > 0
+          ? ` Note: similar existing opportunit${dups.length > 1 ? "ies" : "y"} on this account: ${dups.map((d) => `"${d.name}"`).join(", ")}.`
+          : "";
       return {
         ok: true,
-        data: { preview: { name, accountId }, missingFields: missing },
+        data: {
+          preview: { name, accountId },
+          missingFields: missing,
+          ...(dups.length > 0 ? { duplicateWarning: { exact: exactDup ?? null, similar: dups } } : {}),
+        },
         confirmation: {
-          summary: missing.length ? `Create opportunity "${name}". Missing: ${missing.join(", ")}.` : `Create opportunity "${name}" on account ${accountId}.`,
-          diff: { create: { table: "atelier_opportunities", values: { name, accountId } }, missingFields: missing },
-          pending: { tool: "opportunity_create", input: { ...input, accountId, confirm: true } },
+          summary:
+            (missing.length
+              ? `Create opportunity "${name}". Missing: ${missing.join(", ")}.`
+              : `Create opportunity "${name}" on account ${accountId}.`) + dupWarning,
+          diff: {
+            create: { table: "atelier_opportunities", values: { name, accountId } },
+            missingFields: missing,
+            ...(dups.length > 0 ? { duplicateWarning: { exact: exactDup ?? null, similar: dups } } : {}),
+          },
+          pending: {
+            tool: "opportunity_create",
+            input: { ...input, accountId, ...(exactDup ? { allowDuplicate: true } : {}), confirm: true },
+          },
         },
       };
     }
     if (!accountId) return denyInvalid("accountId required to commit");
+    if (input.allowDuplicate !== true) {
+      const dups = await findDups();
+      const exactDup = dups.find((d) => d.exact);
+      if (exactDup) {
+        return {
+          ok: false,
+          errorCode: "duplicate_opportunity",
+          errorMessage: `An open opportunity named "${exactDup.name}" already exists on this account (id: ${exactDup.id}, stage: ${exactDup.salesStage ?? "unknown"}). If you really want a second one, say so explicitly and retry with allowDuplicate:true — otherwise use the existing deal.`,
+          data: {
+            duplicate: { existing: exactDup, similar: dups },
+            navigateTo: { path: `/opportunities/${exactDup.id}`, when: "on_commit" as const },
+          },
+        };
+      }
+    }
     const id = rid("opp");
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
     const [row] = await db

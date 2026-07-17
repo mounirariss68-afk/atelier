@@ -97,6 +97,7 @@ import type {
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
   AtelierMyOpenTasks,
+  AtelierOpportunityDuplicateError,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
   AtelierPersona,
@@ -912,7 +913,7 @@ export const atelierCreateOpportunity = async (
 };
 
 export const getAtelierCreateOpportunityMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<AtelierOpportunityDuplicateError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -954,13 +955,14 @@ export type AtelierCreateOpportunityMutationResult = NonNullable<
 >;
 export type AtelierCreateOpportunityMutationBody =
   BodyType<AtelierCreateOpportunityInput>;
-export type AtelierCreateOpportunityMutationError = ErrorType<unknown>;
+export type AtelierCreateOpportunityMutationError =
+  ErrorType<AtelierOpportunityDuplicateError>;
 
 /**
  * @summary Create a new opportunity (Pursuit Scout auto-runs)
  */
 export const useAtelierCreateOpportunity = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<AtelierOpportunityDuplicateError>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<

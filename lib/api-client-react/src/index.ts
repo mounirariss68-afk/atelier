@@ -463,5 +463,5 @@ export type {
 // strongly discouraged — it almost always returns empty/garbled output.
 
 export * from "./generated/api.schemas";
-export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
+export { setBaseUrl, setAuthTokenGetter, ApiError } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";

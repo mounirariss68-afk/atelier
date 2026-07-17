@@ -187,6 +187,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierCreateOpportunityResponse"
+        "409":
+          description: >-
+            An open (non-archived) opportunity with a matching name already
+            exists on this account and `allowDuplicate` was not set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOpportunityDuplicateError"
   /atelier/opportunities/{oppId}:
     get:
       operationId: atelierGetOpportunity
@@ -4939,6 +4947,40 @@ components:
           type: ["string", "null"]
           description: Optional steering text passed to Pursuit Scout alongside the description.
         runScout: { type: boolean, default: true }
+        allowDuplicate:
+          type: boolean
+          default: false
+          description: |
+            Explicit override for duplicate detection. When an open (non-archived)
+            opportunity on the same account has a matching normalized name, the
+            create is rejected with 409 unless this flag is true.
+
+    # Task #30 — structured duplicate-opportunity conflict (mirrors the
+    # account duplicate-name 409 contract, enriched with fuzzy near-matches).
+    AtelierOpportunityDuplicateMatch:
+      type: object
+      required: [id, name, salesStage, score, confidence, exact]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        salesStage: { type: ["string", "null"] }
+        score: { type: number }
+        confidence: { $ref: "#/components/schemas/AtelierDuplicateConfidence" }
+        exact:
+          type: boolean
+          description: True when the normalized names are identical (this is what blocked the create).
+
+    AtelierOpportunityDuplicateError:
+      type: object
+      required: [error, existing, message]
+      properties:
+        error: { type: string, enum: [duplicate-opportunity] }
+        existing: { $ref: "#/components/schemas/AtelierOpportunityDuplicateMatch" }
+        similar:
+          type: array
+          description: Fuzzy near-matches on the same account (may include the exact match).
+          items: { $ref: "#/components/schemas/AtelierOpportunityDuplicateMatch" }
+        message: { type: string }
 
     AtelierCreateOpportunityResponse:
       type: object

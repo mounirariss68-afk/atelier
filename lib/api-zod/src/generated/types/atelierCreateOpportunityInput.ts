@@ -73,4 +73,9 @@ event, manual. Free-form fallback allowed.
    */
   scoutFocus?: string | null;
   runScout?: boolean;
+  /** Explicit override for duplicate detection. When an open (non-archived)
+opportunity on the same account has a matching normalized name, the
+create is rejected with 409 unless this flag is true.
+ */
+  allowDuplicate?: boolean;
 }

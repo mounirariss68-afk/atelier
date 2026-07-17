@@ -220,6 +220,69 @@ export function findAccountDuplicates(
   return out.slice(0, limit);
 }
 
+// ---------------------------------------------------------------------
+// Opportunities (Task #30) — duplicate detection on the same account.
+// Exact-normalized matches BLOCK creation without an explicit override;
+// fuzzy near-matches are surfaced as warnings only.
+// ---------------------------------------------------------------------
+
+/**
+ * Normalise an opportunity name for exact-duplicate comparison: lowercase,
+ * de-accent, drop punctuation, collapse whitespace. Deliberately does NOT
+ * strip legal suffixes — opportunity names are free-form deal titles, not
+ * legal entity names.
+ */
+export function normalizeOpportunityName(raw: string): string {
+  return stripDiacritics((raw ?? "").toLowerCase())
+    .replace(/&/g, " and ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export interface OpportunityDuplicateCandidateRow {
+  id: string;
+  name: string;
+  salesStage?: string | null;
+}
+
+export interface ScoredOpportunityCandidate extends OpportunityDuplicateCandidateRow {
+  score: number;
+  confidence: DuplicateConfidence;
+  /** True when the normalized names are identical (blocks without override). */
+  exact: boolean;
+}
+
+const OPPORTUNITY_MATCH_THRESHOLD = 0.72;
+
+/**
+ * Return likely-duplicate opportunities (matched on name) from `candidates`,
+ * which the caller must scope to a single account and exclude archived
+ * (soft-deleted) rows. Sorted with exact matches first, then by descending
+ * score.
+ */
+export function findOpportunityDuplicates(
+  name: string,
+  candidates: OpportunityDuplicateCandidateRow[],
+  opts?: { excludeId?: string; limit?: number },
+): ScoredOpportunityCandidate[] {
+  const limit = opts?.limit ?? 5;
+  const target = normalizeOpportunityName(name);
+  if (!target) return [];
+  const out: ScoredOpportunityCandidate[] = [];
+  for (const cand of candidates) {
+    if (opts?.excludeId && cand.id === opts.excludeId) continue;
+    const candNorm = normalizeOpportunityName(cand.name);
+    const exact = candNorm === target && target.length > 0;
+    const score = exact ? 1 : nameSimilarity(target, candNorm);
+    if (exact || score >= OPPORTUNITY_MATCH_THRESHOLD) {
+      out.push({ ...cand, score, confidence: confidenceFor(score), exact });
+    }
+  }
+  out.sort((a, b) => (a.exact === b.exact ? b.score - a.score : a.exact ? -1 : 1));
+  return out.slice(0, limit);
+}
+
 export interface ContactDuplicateCandidateRow {
   id: string;
   fullName: string;

@@ -84,6 +84,7 @@ import {
 } from "../../lib/atelier-agents/brief-quality.js";
 import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
+import { findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -282,6 +283,35 @@ router.post("/opportunities", async (req, res) => {
   const closeDate = (input.closeDate ?? "").trim() || null;
   const forecastCategory = input.forecastCategory ?? "pipeline";
   const sourceLead = (input.sourceLead ?? "").trim() || "manual";
+
+  // Task #30 — duplicate detection. An open (non-archived) opportunity on the
+  // same account whose normalized name matches blocks the create with a
+  // structured 409 unless the caller explicitly overrides with allowDuplicate.
+  // Fuzzy near-matches ride along as warnings but never block on their own.
+  const existingOpps = await db
+    .select({
+      id: atelierOpportunities.id,
+      name: atelierOpportunities.name,
+      salesStage: atelierOpportunities.salesStage,
+    })
+    .from(atelierOpportunities)
+    .where(
+      and(
+        eq(atelierOpportunities.accountId, acct.id),
+        isNull(atelierOpportunities.deletedAt),
+      ),
+    );
+  const dupMatches = findOpportunityDuplicates(input.name, existingOpps);
+  const exactDup = dupMatches.find((m) => m.exact);
+  if (exactDup && input.allowDuplicate !== true) {
+    res.status(409).json({
+      error: "duplicate-opportunity",
+      existing: exactDup,
+      similar: dupMatches,
+      message: `An open opportunity named "${exactDup.name}" already exists on ${acct.name}. Pass allowDuplicate to create anyway.`,
+    });
+    return;
+  }
 
   const oppId = `opp_${slugify(input.name)}_${Math.random().toString(36).slice(2, 6)}`;
   const [opp] = await db

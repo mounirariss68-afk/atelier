@@ -21,10 +21,12 @@ import {
   getAtelierListOpportunitiesQueryKey,
   getAtelierListAccountsQueryKey,
   getAtelierListUsersQueryKey,
+  ApiError,
+  type AtelierOpportunityDuplicateError,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Telescope, ChevronsUpDown, Check, Plus } from "lucide-react";
+import { Telescope, ChevronsUpDown, Check, Plus, AlertTriangle } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -174,6 +176,11 @@ export function CreateOpportunityDialog({ trigger }: Props) {
   const [form, setForm] = React.useState<FormState>(initial);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [accountPickerOpen, setAccountPickerOpen] = React.useState(false);
+  // Task #30 — populated when the server rejects the create with a 409
+  // duplicate-opportunity conflict. Cleared whenever the name or target
+  // account changes; "Create anyway" re-submits with allowDuplicate:true.
+  const [duplicateConflict, setDuplicateConflict] =
+    React.useState<AtelierOpportunityDuplicateError | null>(null);
 
   // Re-seed owner defaults once persona data loads.
   React.useEffect(() => {
@@ -190,6 +197,7 @@ export function CreateOpportunityDialog({ trigger }: Props) {
     if (!open) {
       setForm(initial);
       setErrors({});
+      setDuplicateConflict(null);
     }
   }, [open, initial]);
 
@@ -205,6 +213,16 @@ export function CreateOpportunityDialog({ trigger }: Props) {
 
   function set<K extends keyof FormState>(key: K, val: FormState[K]) {
     setForm((f) => ({ ...f, [key]: val }));
+    // Any change to the name or target account invalidates a shown
+    // duplicate conflict — the next submit re-checks server-side.
+    if (
+      key === "name" ||
+      key === "accountId" ||
+      key === "accountMode" ||
+      key === "newAccountName"
+    ) {
+      setDuplicateConflict(null);
+    }
     if (errors[key as string]) {
       setErrors((e) => {
         const { [key as string]: _drop, ...rest } = e;
@@ -244,6 +262,10 @@ export function CreateOpportunityDialog({ trigger }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    await doCreate(false);
+  }
+
+  async function doCreate(allowDuplicate: boolean) {
     if (!validate()) return;
 
     const payload =
@@ -280,8 +302,10 @@ export function CreateOpportunityDialog({ trigger }: Props) {
           forecastCategory: form.forecastCategory,
           runScout: form.runScout,
           scoutFocus: form.scoutFocus.trim() || undefined,
+          allowDuplicate: allowDuplicate || undefined,
         },
       });
+      setDuplicateConflict(null);
       qc.invalidateQueries({ queryKey: getAtelierListOpportunitiesQueryKey() });
       qc.invalidateQueries({ queryKey: getAtelierListAccountsQueryKey() });
       toast({
@@ -293,6 +317,18 @@ export function CreateOpportunityDialog({ trigger }: Props) {
       setOpen(false);
       setLocation(`/pipeline/${res.opportunity.id}`);
     } catch (err) {
+      // Task #30 — a 409 duplicate-opportunity conflict is not a failure
+      // toast; it renders an inline warning panel with an explicit
+      // "Create anyway" override.
+      if (
+        err instanceof ApiError &&
+        err.status === 409 &&
+        (err.data as AtelierOpportunityDuplicateError | null)?.error ===
+          "duplicate-opportunity"
+      ) {
+        setDuplicateConflict(err.data as AtelierOpportunityDuplicateError);
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Could not create opportunity.";
       toast({
         title: "Could not create opportunity",
@@ -794,6 +830,59 @@ export function CreateOpportunityDialog({ trigger }: Props) {
             )}
           </section>
 
+          {/* ───────────── Duplicate warning (Task #30) ───────────── */}
+          {duplicateConflict && (
+            <section
+              className="rounded border border-danger/50 bg-danger/[0.06] p-4 space-y-3"
+              data-testid="panel-duplicate-opportunity"
+            >
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-4 h-4 text-danger shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <h3 className="text-xs font-mono uppercase tracking-widest text-danger">
+                    Possible duplicate
+                  </h3>
+                  <p className="text-sm text-text-mute leading-relaxed">
+                    An open opportunity named{" "}
+                    <button
+                      type="button"
+                      className="text-gold underline underline-offset-2 hover:text-gold/80"
+                      onClick={() => {
+                        setOpen(false);
+                        setLocation(`/pipeline/${duplicateConflict.existing.id}`);
+                      }}
+                      data-testid="link-duplicate-existing-opp"
+                    >
+                      {duplicateConflict.existing.name}
+                    </button>{" "}
+                    already exists on this account
+                    {duplicateConflict.existing.salesStage ? (
+                      <>
+                        {" "}
+                        (stage:{" "}
+                        <span className="font-mono text-text">
+                          {duplicateConflict.existing.salesStage}
+                        </span>
+                        )
+                      </>
+                    ) : null}
+                    . You can open it instead, or create a second one anyway.
+                  </p>
+                  {duplicateConflict.similar &&
+                    duplicateConflict.similar.filter((s) => !s.exact).length > 0 && (
+                      <p className="text-xs text-text-faint">
+                        Similar deals on this account:{" "}
+                        {duplicateConflict.similar
+                          .filter((s) => !s.exact)
+                          .map((s) => s.name)
+                          .join(", ")}
+                      </p>
+                    )}
+                </div>
+              </div>
+            </section>
+          )}
+
           <div className="flex justify-end gap-3 pt-3 border-t border-border-soft">
             <PillButton
               variant="ghost"
@@ -802,14 +891,26 @@ export function CreateOpportunityDialog({ trigger }: Props) {
             >
               Cancel
             </PillButton>
-            <PillButton
-              variant="primary"
-              type="submit"
-              disabled={create.isPending}
-              data-testid="btn-create-opp-submit"
-            >
-              {create.isPending ? "Creating…" : "Create opportunity"}
-            </PillButton>
+            {duplicateConflict ? (
+              <PillButton
+                variant="primary"
+                type="button"
+                disabled={create.isPending}
+                onClick={() => void doCreate(true)}
+                data-testid="btn-create-opp-anyway"
+              >
+                {create.isPending ? "Creating…" : "Create anyway"}
+              </PillButton>
+            ) : (
+              <PillButton
+                variant="primary"
+                type="submit"
+                disabled={create.isPending}
+                data-testid="btn-create-opp-submit"
+              >
+                {create.isPending ? "Creating…" : "Create opportunity"}
+              </PillButton>
+            )}
           </div>
         </form>
       </DialogContent>

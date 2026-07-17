@@ -357,6 +357,7 @@ export const atelierCreateOpportunityBodyProbabilityPctMax = 100;
 
 export const atelierCreateOpportunityBodyContextBlurbDefault = ``;
 export const atelierCreateOpportunityBodyRunScoutDefault = true;
+export const atelierCreateOpportunityBodyAllowDuplicateDefault = false;
 
 export const AtelierCreateOpportunityBody = zod.object({
   name: zod.string().min(1),
@@ -431,6 +432,12 @@ export const AtelierCreateOpportunityBody = zod.object({
       "Optional steering text passed to Pursuit Scout alongside the description.",
     ),
   runScout: zod.boolean().default(atelierCreateOpportunityBodyRunScoutDefault),
+  allowDuplicate: zod
+    .boolean()
+    .default(atelierCreateOpportunityBodyAllowDuplicateDefault)
+    .describe(
+      "Explicit override for duplicate detection. When an open (non-archived)\nopportunity on the same account has a matching normalized name, the\ncreate is rejected with 409 unless this flag is true.\n",
+    ),
 });
 
 export const AtelierGetOpportunityParams = zod.object({

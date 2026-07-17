@@ -2662,6 +2662,37 @@ event, manual. Free-form fallback allowed.
    */
   scoutFocus?: string | null;
   runScout?: boolean;
+  /** Explicit override for duplicate detection. When an open (non-archived)
+opportunity on the same account has a matching normalized name, the
+create is rejected with 409 unless this flag is true.
+ */
+  allowDuplicate?: boolean;
+}
+
+export interface AtelierOpportunityDuplicateMatch {
+  id: string;
+  name: string;
+  /** @nullable */
+  salesStage: string | null;
+  score: number;
+  confidence: AtelierDuplicateConfidence;
+  /** True when the normalized names are identical (this is what blocked the create). */
+  exact: boolean;
+}
+
+export type AtelierOpportunityDuplicateErrorError =
+  (typeof AtelierOpportunityDuplicateErrorError)[keyof typeof AtelierOpportunityDuplicateErrorError];
+
+export const AtelierOpportunityDuplicateErrorError = {
+  "duplicate-opportunity": "duplicate-opportunity",
+} as const;
+
+export interface AtelierOpportunityDuplicateError {
+  error: AtelierOpportunityDuplicateErrorError;
+  existing: AtelierOpportunityDuplicateMatch;
+  /** Fuzzy near-matches on the same account (may include the exact match). */
+  similar?: AtelierOpportunityDuplicateMatch[];
+  message: string;
 }
 
 /**
