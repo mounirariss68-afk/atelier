@@ -10,6 +10,8 @@ export type AtelierContactSeniority =
   (typeof AtelierContactSeniority)[keyof typeof AtelierContactSeniority];
 
 export const AtelierContactSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",

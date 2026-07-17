@@ -1533,7 +1533,7 @@ function PendingProposalCard({
                 data-testid={`select-edit-seniority-${p.id}`}
               >
                 <option value="">Seniority —</option>
-                {["c_suite", "vp", "director", "manager", "ic"].map((s) => (
+                {["board_chair", "board_member", "c_suite", "vp", "director", "manager", "ic"].map((s) => (
                   <option key={s} value={s}>
                     {s}
                   </option>
@@ -2664,9 +2664,29 @@ function RelationshipsTab({
   const partnersWith = relationships.filter((r) => r.type === "partners_with");
   const blocks = relationships.filter((r) => r.type === "blocks");
   const hasManager = new Set(reportsTo.map((r) => r.fromContactId));
-  const roots = contacts.filter((c) => !hasManager.has(c.id));
+  // Board layer sits ABOVE the executive tree: chairman apex, then directors.
+  const isBoard = (c: AtelierContact) =>
+    c.seniority === "board_chair" || c.seniority === "board_member";
+  const boardIds = new Set(contacts.filter(isBoard).map((c) => c.id));
+  const board = [
+    ...contacts.filter((c) => c.seniority === "board_chair"),
+    ...contacts.filter((c) => c.seniority === "board_member"),
+  ];
+  // Executive roots: no manager, OR only board-level managers (e.g. a CEO
+  // reporting to the Chairman still heads the executive tree).
+  const managersOf = (id: string) =>
+    reportsTo.filter((r) => r.fromContactId === id).map((r) => r.toContactId);
+  const roots = contacts.filter(
+    (c) =>
+      !isBoard(c) &&
+      (!hasManager.has(c.id) || managersOf(c.id).every((m) => boardIds.has(m))),
+  );
   const childrenOf = (id: string) =>
-    reportsTo.filter((r) => r.toContactId === id).map((r) => contacts.find((c) => c.id === r.fromContactId)!).filter(Boolean);
+    reportsTo
+      .filter((r) => r.toContactId === id)
+      .map((r) => contacts.find((c) => c.id === r.fromContactId)!)
+      .filter(Boolean)
+      .filter((c) => !isBoard(c));
 
   const renderNode = (c: AtelierContact, depth = 0): React.ReactNode => (
     <div key={c.id} className="space-y-2" style={{ marginLeft: depth * 16 }}>
@@ -2684,6 +2704,32 @@ function RelationshipsTab({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <Card className="lg:col-span-2 p-6 space-y-4">
+        {board.length > 0 && (
+          <div className="space-y-3" data-testid="org-board-layer">
+            <SectionLabel>Board of directors</SectionLabel>
+            <div className="space-y-2">
+              {board.map((c) => (
+                <div
+                  key={c.id}
+                  className={`flex items-center gap-3 border rounded-md px-3 py-2 ${
+                    c.seniority === "board_chair"
+                      ? "border-accent bg-accent/5"
+                      : "border-border bg-bg-elevate"
+                  }`}
+                  data-testid={`org-board-${c.id}`}
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-text">{c.fullName}</div>
+                    <div className="text-xs font-mono text-text-mute">{c.title ?? "—"}</div>
+                  </div>
+                  <MonoChip tone={c.seniority === "board_chair" ? "green" : undefined}>
+                    {c.seniority === "board_chair" ? "chairman" : "board"}
+                  </MonoChip>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <SectionLabel>Reporting structure</SectionLabel>
         <div className="space-y-3">{roots.map((r) => renderNode(r))}</div>
       </Card>

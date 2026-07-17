@@ -4064,7 +4064,7 @@ components:
       enum: [champion, supporter, neutral, skeptic, blocker, unknown]
     AtelierContactSeniority:
       type: string
-      enum: [c_suite, vp, director, manager, ic, unknown]
+      enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown]
     AtelierBuyerPersona:
       type: string
       enum: [CEO, COO, CIO, CDO, CXO, business_head, procurement, technical_evaluator, other]
@@ -4288,7 +4288,7 @@ components:
           enum: [parent_group, subsidiary, division, standalone, null]
         seniority:
           type: ["string", "null"]
-          enum: [c_suite, vp, director, manager, ic, null]
+          enum: [board_chair, board_member, c_suite, vp, director, manager, ic, null]
         buyerPersona: { type: ["string", "null"], maxLength: 120 }
         sourceUrl: { type: ["string", "null"], maxLength: 2000 }
         confidence: { type: string, enum: [verified, inferred] }
@@ -4763,7 +4763,7 @@ components:
         accountId: { type: string }
         fullName: { type: string }
         title: { type: ["string", "null"] }
-        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         linkedinUrl: { type: ["string", "null"] }
@@ -4853,7 +4853,7 @@ components:
       properties:
         fullName: { type: string, minLength: 1, maxLength: 160 }
         title: { type: ["string", "null"] }
-        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         linkedinUrl: { type: ["string", "null"] }
@@ -4872,7 +4872,7 @@ components:
       properties:
         fullName: { type: string, minLength: 1, maxLength: 160 }
         title: { type: ["string", "null"] }
-        seniority: { type: ["string", "null"], enum: [c_suite, vp, director, manager, ic, unknown, null] }
+        seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
         phone: { type: ["string", "null"] }
         linkedinUrl: { type: ["string", "null"] }

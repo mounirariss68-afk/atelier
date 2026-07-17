@@ -124,6 +124,8 @@ export type AtelierContactSeniority =
   (typeof AtelierContactSeniority)[keyof typeof AtelierContactSeniority];
 
 export const AtelierContactSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",
@@ -456,6 +458,8 @@ export type AtelierResearchDecisionMakerSeniority =
   | null;
 
 export const AtelierResearchDecisionMakerSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",
@@ -1081,6 +1085,8 @@ export type AtelierContactSeniorityProperty =
   | null;
 
 export const AtelierContactSeniorityProperty = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",
@@ -1589,6 +1595,8 @@ export type AtelierCreateContactInputSeniority =
   | null;
 
 export const AtelierCreateContactInputSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",
@@ -1646,6 +1654,8 @@ export type AtelierUpdateContactInputSeniority =
   | null;
 
 export const AtelierUpdateContactInputSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",

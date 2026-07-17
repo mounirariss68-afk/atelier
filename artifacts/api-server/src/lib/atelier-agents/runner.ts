@@ -30,6 +30,7 @@ import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
+import { findPersonMatch, richerPersonName } from "./person-name.js";
 import {
   STALLED_THRESHOLD_DAYS,
   SALES_STAGE_DEFAULT_PROB,
@@ -2143,7 +2144,10 @@ export interface CartographerOutput {
     // subsidiary/brand exec is never flattened into group leadership.
     entityName?: string | null;
     entityScope?: "parent_group" | "subsidiary" | "division" | "standalone" | null;
-    seniority?: "c_suite" | "vp" | "director" | "manager" | "ic";
+    // board_chair / board_member (Executive Mapper board coverage): the
+    // chairman and board of directors, rendered as a distinct top layer in
+    // the account org chart.
+    seniority?: "board_chair" | "board_member" | "c_suite" | "vp" | "director" | "manager" | "ic";
     buyerPersona?: string;
     sourceUrl?: string | null;
     // Task #32 — LinkedIn profile URL captured from public search results.
@@ -2648,6 +2652,19 @@ export function guardCartographerEntityScope<
       if (!dm.entityScope) dm.entityScope = "subsidiary";
       downgraded += 1;
     }
+    // Board coverage: a chairman/board title scoped to a subsidiary/brand is
+    // NOT the group's board apex. Mirror the CEO rule: downgrade confidence
+    // and tag the scope, and demote a mis-scoped chair to plain board member
+    // so the org chart never crowns a subsidiary chairman. A GROUP chairman
+    // (scope matches) is left untouched — never demoted.
+    const titleImpliesBoardChair =
+      dm.seniority === "board_chair" ||
+      /\bchairman\b|\bchairwoman\b|\bchairperson\b/i.test(dm.title ?? "");
+    if (titleImpliesBoardChair && (isSubScope || entityMismatch)) {
+      dm.confidence = "inferred";
+      if (dm.seniority === "board_chair") dm.seniority = "board_member";
+      if (!dm.entityScope) dm.entityScope = "subsidiary";
+    }
   }
   if (downgraded > 0) {
     const oq = output.researchBrief?.openQuestions;
@@ -2820,7 +2837,16 @@ export async function runAccountCartographer(args: {
                 d.entityScope === "standalone"
                   ? d.entityScope
                   : null,
-              seniority: d.seniority,
+              seniority:
+                d.seniority === "board_chair" ||
+                d.seniority === "board_member" ||
+                d.seniority === "c_suite" ||
+                d.seniority === "vp" ||
+                d.seniority === "director" ||
+                d.seniority === "manager" ||
+                d.seniority === "ic"
+                  ? d.seniority
+                  : undefined,
               buyerPersona: d.buyerPersona ?? undefined,
               sourceUrl: d.sourceUrl ?? null,
               linkedinUrl: normaliseLinkedinProfileUrl(d.linkedinUrl),
@@ -2984,7 +3010,16 @@ export async function runExecutiveMapper(args: {
                 d.entityScope === "standalone"
                   ? d.entityScope
                   : null,
-              seniority: d.seniority,
+              seniority:
+                d.seniority === "board_chair" ||
+                d.seniority === "board_member" ||
+                d.seniority === "c_suite" ||
+                d.seniority === "vp" ||
+                d.seniority === "director" ||
+                d.seniority === "manager" ||
+                d.seniority === "ic"
+                  ? d.seniority
+                  : undefined,
               buyerPersona: d.buyerPersona ?? undefined,
               sourceUrl: d.sourceUrl ?? null,
               linkedinUrl: normaliseLinkedinProfileUrl(d.linkedinUrl),
@@ -3006,6 +3041,30 @@ export async function runExecutiveMapper(args: {
         : [],
     };
 
+    // Collapse duplicate spellings WITHIN the web sweep itself (the model can
+    // list "Eng. Khalid Al-Falih" and "Khalid AlFalih" as two people). Keeps
+    // the richer variant's name/fields, first entry wins ties.
+    {
+      const deduped: typeof normalised.decisionMakers = [];
+      for (const d of normalised.decisionMakers) {
+        const existing = findPersonMatch(d.fullName, deduped, (x) => x.fullName);
+        if (!existing) {
+          deduped.push(d);
+          continue;
+        }
+        existing.fullName = richerPersonName(existing.fullName, d.fullName);
+        if (!existing.title && d.title) existing.title = d.title;
+        if (!existing.linkedinUrl && d.linkedinUrl) existing.linkedinUrl = d.linkedinUrl;
+        if (!existing.seniority && d.seniority) existing.seniority = d.seniority;
+        if (!existing.sourceUrl && d.sourceUrl) existing.sourceUrl = d.sourceUrl;
+        if (!existing.reportsToName && d.reportsToName)
+          existing.reportsToName = d.reportsToName;
+        if (existing.confidence !== "verified" && d.confidence === "verified")
+          existing.confidence = "verified";
+      }
+      normalised.decisionMakers = deduped;
+    }
+
     // Second source: People Data Labs licensed records. Catches executives
     // whose LinkedIn profiles are confidential or unindexed and therefore
     // invisible to the public-web sweep above. Degrades loudly, never
@@ -3023,23 +3082,36 @@ export async function runExecutiveMapper(args: {
             `People Data Labs has no company record matching "${args.accountName}" — provider cross-check returned nothing.`,
           );
         } else {
-          const byName = new Map<string, (typeof normalised.decisionMakers)[number]>();
-          for (const d of normalised.decisionMakers) byName.set(d.fullName.toLowerCase(), d);
-          const knownByName = new Map(
-            args.knownContacts.map((c) => [c.fullName.toLowerCase(), c] as const),
-          );
           let added = 0;
           for (const p of pdl.people) {
-            const key = p.fullName.toLowerCase();
             const pdlLinkedin = normaliseLinkedinProfileUrl(p.linkedinUrl);
-            const existing = byName.get(key);
+            const boardSeniority = p.isBoard
+              ? /chair/i.test(p.title ?? "")
+                ? ("board_chair" as const)
+                : ("board_member" as const)
+              : undefined;
+            // Fuzzy (not exact) name match — sources spell the same human
+            // differently ("Mohammed bin Nasser Al-Jasser" vs "Mohammed Al
+            // Jasser"), so exact keys duplicate people.
+            const existing = findPersonMatch(
+              p.fullName,
+              normalised.decisionMakers,
+              (d) => d.fullName,
+            );
             if (existing) {
-              // Already in this run's roster — enrich in place instead of duplicating.
+              // Already in this run's roster — enrich in place instead of
+              // duplicating; keep the richer name spelling.
+              existing.fullName = richerPersonName(existing.fullName, p.fullName);
               if (!existing.linkedinUrl && pdlLinkedin) existing.linkedinUrl = pdlLinkedin;
               if (!existing.title && p.title) existing.title = p.title;
+              if (!existing.seniority && boardSeniority) existing.seniority = boardSeniority;
               continue;
             }
-            const known = knownByName.get(key);
+            const known = findPersonMatch(
+              p.fullName,
+              args.knownContacts,
+              (c) => c.fullName,
+            );
             if (known) {
               // Existing CRM contact: re-list only when PDL brings something new
               // (e.g. a LinkedIn URL the contact record lacks) so the downstream
@@ -3053,7 +3125,7 @@ export async function runExecutiveMapper(args: {
               title: p.title ?? undefined,
               entityName: null,
               entityScope: null,
-              seniority: undefined,
+              seniority: boardSeniority,
               buyerPersona: undefined,
               sourceUrl: null,
               linkedinUrl: pdlLinkedin,
@@ -3065,7 +3137,6 @@ export async function runExecutiveMapper(args: {
               education: [],
             } as (typeof normalised.decisionMakers)[number];
             normalised.decisionMakers.push(entry);
-            byName.set(key, entry);
             added += 1;
           }
           if (added > 0) {
@@ -3158,22 +3229,37 @@ export function buildExecutiveMapperProposals(args: {
       blockedKeys.add(proposalKey(u));
     }
   }
-  const existingByName = new Map(
-    args.existingContacts.map((c) => [c.fullName.toLowerCase(), c]),
-  );
   const candidates: PendingProfileUpdate[] = [];
+  const proposedPeople: Array<{ fullName: string }> = [];
   for (const dm of output.decisionMakers ?? []) {
     if (!dm.fullName || !dm.fullName.trim()) continue;
-    const existing = existingByName.get(dm.fullName.toLowerCase());
+    // One proposal per human per run, even when the roster somehow still
+    // carries two spellings of the same person.
+    if (findPersonMatch(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
+    // Fuzzy match against CRM contacts so a spelling variant enriches the
+    // existing record instead of proposing a duplicate person.
+    const existing = findPersonMatch(
+      dm.fullName,
+      args.existingContacts,
+      (c) => c.fullName,
+    );
     const addsLinkedin = Boolean(dm.linkedinUrl && !existing?.linkedinUrl);
     const changesTitle = Boolean(
       existing && dm.title && dm.title.trim() !== (existing.title ?? "").trim(),
     );
     // Known person with nothing new — skip (prompt asks the model not to
-    // re-list these, but enforce it here too).
-    if (existing && !addsLinkedin && !changesTitle) continue;
+    // re-list these, but enforce it here too). Counts as "seen" so a second
+    // spelling of the same person later in the roster can't sneak through.
+    if (existing && !addsLinkedin && !changesTitle) {
+      proposedPeople.push({ fullName: dm.fullName });
+      continue;
+    }
     const toValue = {
-      fullName: dm.fullName,
+      // For a fuzzy-matched existing contact, propose the richer spelling so
+      // the applier updates (not duplicates) and the fuller name is kept.
+      fullName: existing
+        ? richerPersonName(existing.fullName, dm.fullName)
+        : dm.fullName,
       title: dm.title ?? existing?.title ?? null,
       entityName: dm.entityName ?? null,
       entityScope: dm.entityScope ?? null,
@@ -3207,6 +3293,7 @@ export function buildExecutiveMapperProposals(args: {
       status: "pending",
       meta: { reportsToName: dm.reportsToName ?? null },
     });
+    proposedPeople.push({ fullName: dm.fullName });
   }
   return candidates;
 }

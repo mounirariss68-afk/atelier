@@ -43,7 +43,7 @@ function fromDateInput(v: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-const SENIORITIES = ["c_suite", "vp", "director", "manager", "ic"] as const;
+const SENIORITIES = ["board_chair", "board_member", "c_suite", "vp", "director", "manager", "ic"] as const;
 const DISPOSITIONS: AtelierContactDisposition[] = [
   "unknown",
   "champion",
@@ -128,6 +128,8 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
           fullName: fullName.trim(),
           title: title.trim() || null,
           seniority: (seniority || null) as
+            | "board_chair"
+            | "board_member"
             | "c_suite"
             | "vp"
             | "director"

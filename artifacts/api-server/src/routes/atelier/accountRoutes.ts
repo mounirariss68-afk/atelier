@@ -43,6 +43,7 @@ import {
   permanentlyDeleteAccount,
 } from "../../lib/atelier-account-lifecycle.js";
 import { mergeAccounts, mergeContacts } from "../../lib/atelier-merge.js";
+import { findPersonMatch, richerPersonName } from "../../lib/atelier-agents/person-name.js";
 import {
   computeAccountFinancials,
   computeAccountHealth,
@@ -403,6 +404,7 @@ async function persistReviewedResearch(args: {
     const nameToId = new Map<string, string>();
     for (const dm of decisionMakers) {
       const seniority = (dm.seniority ?? null) as
+        | "board_chair" | "board_member"
         | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
       const id = rid("con");
       await tx.insert(atelierContacts).values({
@@ -416,7 +418,11 @@ async function persistReviewedResearch(args: {
         entityScope: dm.entityScope ?? null,
         buyerPersona: dm.buyerPersona ?? null,
         influenceScore:
-          seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
+          seniority === "c_suite" || seniority === "board_chair"
+            ? 5
+            : seniority === "vp" || seniority === "board_member"
+              ? 4
+              : 3,
         disposition: "unknown",
         notes: dm.rationale ?? null,
         timeInRole: dm.timeInRole ?? null,
@@ -3771,17 +3777,21 @@ async function applyProfileUpdateDecisions(args: {
     (a.sourceSignals as Array<{ url?: string }> | null) ?? [];
 
   await db.transaction(async (tx) => {
-    // Lazy contact map — only loaded if a contact proposal is approved.
-    let nameToId: Map<string, string> | null = null;
+    // Lazy contact roster — only loaded if a contact proposal is approved.
+    // Lookups are FUZZY (shared person-name matcher): approving a proposal
+    // spelled "Mohammed Al Jasser" must enrich an existing "Mohammed bin
+    // Nasser Al-Jasser" contact, never create a duplicate person.
+    let contactRows: Array<{ id: string; fullName: string }> | null = null;
     const loadContacts = async () => {
-      if (nameToId) return nameToId;
-      const rows = await tx
+      if (contactRows) return contactRows;
+      contactRows = await tx
         .select({ id: atelierContacts.id, fullName: atelierContacts.fullName })
         .from(atelierContacts)
         .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
-      nameToId = new Map(rows.map((c) => [c.fullName.toLowerCase(), c.id]));
-      return nameToId;
+      return contactRows;
     };
+    const resolveContactId = (rows: Array<{ id: string; fullName: string }>, name: string) =>
+      findPersonMatch(name, rows, (r) => r.fullName)?.id;
 
     for (const { target, decision, hasEdit, editedValue } of decisions) {
       if (decision === "approve") {
@@ -3847,15 +3857,18 @@ async function applyProfileUpdateDecisions(args: {
             }>;
           };
           if (dm.fullName && dm.fullName.trim()) {
-            const map = await loadContacts();
-            const key = dm.fullName.toLowerCase();
-            const existingId = map.get(key);
+            const rows = await loadContacts();
+            const existingRow = findPersonMatch(dm.fullName, rows, (r) => r.fullName);
+            const existingId = existingRow?.id;
             const seniority = (dm.seniority ?? null) as
+              | "board_chair" | "board_member"
               | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
-            if (existingId) {
+            if (existingId && existingRow) {
               await tx
                 .update(atelierContacts)
                 .set({
+                  // Keep the richer name spelling on the surviving record.
+                  fullName: richerPersonName(existingRow.fullName, dm.fullName),
                   title: dm.title ?? null,
                   seniority,
                   entityName: dm.entityName ?? null,
@@ -3886,7 +3899,12 @@ async function applyProfileUpdateDecisions(args: {
                 timeInRole: dm.timeInRole ?? null,
                 careerHistory: dm.careerHistory ?? [],
                 education: dm.education ?? [],
-                influenceScore: seniority === "c_suite" ? 5 : seniority === "vp" ? 4 : 3,
+                influenceScore:
+                  seniority === "c_suite" || seniority === "board_chair"
+                    ? 5
+                    : seniority === "vp" || seniority === "board_member"
+                      ? 4
+                      : 3,
                 disposition: "unknown",
                 notes: dm.rationale ?? null,
                 sourceUrl: dm.sourceUrl ?? null,
@@ -3894,14 +3912,14 @@ async function applyProfileUpdateDecisions(args: {
                 confidence: (dm.confidence ?? "inferred") as "verified" | "inferred",
                 createdByUserId: me.id,
               });
-              map.set(key, newId);
+              rows.push({ id: newId, fullName: dm.fullName });
             }
             // reports_to edge — only when the manager already exists.
             const reportsToName = (dm.reportsToName ??
               (target.meta?.reportsToName as string | null | undefined)) ?? null;
             if (reportsToName) {
-              const fromId = map.get(dm.fullName.toLowerCase());
-              const toId = map.get(reportsToName.toLowerCase());
+              const fromId = resolveContactId(rows, dm.fullName);
+              const toId = resolveContactId(rows, reportsToName);
               if (fromId && toId && fromId !== toId) {
                 const [edge] = await tx
                   .select({ id: atelierContactRelationships.id })
@@ -4150,6 +4168,8 @@ function toContactWire(
     fullName: c.fullName,
     title: c.title ?? null,
     seniority: (c.seniority ?? null) as
+      | "board_chair"
+      | "board_member"
       | "c_suite"
       | "vp"
       | "director"

@@ -16,6 +16,9 @@
 
 const PDL_BASE = "https://api.peopledatalabs.com/v5";
 const MAX_PEOPLE = 25;
+// Board pass has its own small cap so directors never crowd out executives
+// (and to bound credit spend — each returned record costs a person credit).
+const MAX_BOARD_PEOPLE = 10;
 
 export class PdlLookupError extends Error {
   constructor(
@@ -37,6 +40,8 @@ export interface PdlExecutive {
   linkedinUrl: string | null;
   jobCompanyName: string | null;
   seniorityLevels: string[];
+  /** True when this record came from the dedicated board-title pass. */
+  isBoard: boolean;
 }
 
 interface PdlPersonRecord {
@@ -146,6 +151,17 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
   // C-suite exhaustively; pass 2 fills the remaining slots with the broader
   // senior sweep.
   const cid = companyId.replace(/'/g, "");
+  // Board pass: chairman / vice chairman / board member / non-executive
+  // director are NOT captured by the executive passes (they rarely carry
+  // 'chief' titles or cxo levels) yet are often the real decision-makers.
+  // Small, capped separately so directors can't crowd out the C-suite.
+  const boardSql =
+    `SELECT * FROM person WHERE job_company_id = '${cid}'` +
+    ` AND (job_title LIKE 'chairman%' OR job_title LIKE 'vice chairman%'` +
+    ` OR job_title LIKE 'chairperson%' OR job_title LIKE 'chair of%'` +
+    ` OR job_title LIKE '%board member%' OR job_title LIKE 'member of the board%'` +
+    ` OR job_title LIKE 'non-executive director%' OR job_title LIKE 'non executive director%'` +
+    ` OR job_title LIKE 'board director%' OR job_title LIKE 'independent director%')`;
   const csuiteSql =
     `SELECT * FROM person WHERE job_company_id = '${cid}'` +
     ` AND (job_title_levels = 'cxo' OR job_title LIKE 'chief%')`;
@@ -158,6 +174,11 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
     ` OR job_title LIKE 'vice president%' OR job_title LIKE 'vp%'` +
     ` OR job_title LIKE '%president%' OR job_title LIKE '%director%'` +
     ` OR job_title LIKE 'general manager%' OR job_title LIKE 'managing%')`;
+  const boardRaw = (await pdlFetch("/person/search", {
+    sql: boardSql,
+    size: String(MAX_BOARD_PEOPLE),
+  })) as { data?: PdlPersonRecord[] } | null;
+  const board = boardRaw?.data ?? [];
   const csuiteRaw = (await pdlFetch("/person/search", {
     sql: csuiteSql,
     size: String(MAX_PEOPLE),
@@ -172,7 +193,19 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
     })) as { data?: PdlPersonRecord[] } | null;
     broad = broadRaw?.data ?? [];
   }
-  const raw = { data: [...csuite, ...broad] };
+  const boardKeys = new Set(
+    board.map((p) => (p.full_name ?? "").trim().toLowerCase()).filter(Boolean),
+  );
+  const raw = {
+    data: [
+      ...board,
+      // A chairman can also appear in the exec passes (e.g. "chairman & CEO");
+      // drop the exec duplicate so the board flag wins.
+      ...[...csuite, ...broad].filter(
+        (p) => !boardKeys.has((p.full_name ?? "").trim().toLowerCase()),
+      ),
+    ],
+  };
   const rank = (levels: string[], title: string | null | undefined): number => {
     const t = (title ?? "").toLowerCase();
     if (levels.includes("cxo") || levels.includes("owner") || t.startsWith("chief")) return 0;
@@ -193,8 +226,13 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
       linkedinUrl: p.linkedin_url ? normaliseUrl(p.linkedin_url) : null,
       jobCompanyName: p.job_company_name ?? null,
       seniorityLevels: Array.isArray(p.job_title_levels) ? p.job_title_levels : [],
+      isBoard: boardKeys.has((p.full_name ?? "").trim().toLowerCase()),
     }));
-  people.sort((a, b) => rank(a.seniorityLevels, a.title) - rank(b.seniorityLevels, b.title));
+  people.sort((a, b) => {
+    // Board first (chairman apex), then execs by rank.
+    if (a.isBoard !== b.isBoard) return a.isBoard ? -1 : 1;
+    return rank(a.seniorityLevels, a.title) - rank(b.seniorityLevels, b.title);
+  });
   return people;
 }
 

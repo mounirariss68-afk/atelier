@@ -807,7 +807,7 @@ function AccountProposalCard({
       fullName: asStr(d.fullName).trim(),
       title: asStr(d.title) || null,
       seniority: (asStr(d.seniority) || null) as
-        | "c_suite" | "vp" | "director" | "manager" | "ic" | null,
+        | "board_chair" | "board_member" | "c_suite" | "vp" | "director" | "manager" | "ic" | null,
       buyerPersona: asStr(d.buyerPersona) || null,
       sourceUrl: asStr(d.sourceUrl) || null,
       confidence: asStr(d.confidence) === "verified" ? "verified" : "inferred",
@@ -816,7 +816,7 @@ function AccountProposalCard({
     })) as Array<{
       fullName: string;
       title: string | null;
-      seniority: "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+      seniority: "board_chair" | "board_member" | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
       buyerPersona: string | null;
       sourceUrl: string | null;
       confidence: "verified" | "inferred";

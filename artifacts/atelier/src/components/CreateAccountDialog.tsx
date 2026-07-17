@@ -43,7 +43,7 @@ import { useLocation } from "wouter";
 export interface Stakeholder {
   fullName: string;
   title?: string | null;
-  seniority?: "c_suite" | "vp" | "director" | "manager" | "ic" | null;
+  seniority?: "board_chair" | "board_member" | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
   buyerPersona?: string | null;
   sourceUrl?: string | null;
   confidence?: "verified" | "inferred";

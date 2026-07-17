@@ -4785,6 +4785,8 @@ export const AtelierCreateAccountBody = zod.object({
                   .nullish(),
                 seniority: zod
                   .union([
+                    zod.literal("board_chair"),
+                    zod.literal("board_member"),
                     zod.literal("c_suite"),
                     zod.literal("vp"),
                     zod.literal("director"),
@@ -5686,6 +5688,8 @@ export const AtelierMergeAccountsResponse = zod.object({
         title: zod.string().nullish(),
         seniority: zod
           .union([
+            zod.literal("board_chair"),
+            zod.literal("board_member"),
             zod.literal("c_suite"),
             zod.literal("vp"),
             zod.literal("director"),
@@ -6743,6 +6747,8 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -8026,6 +8032,8 @@ export const AtelierUpdateAccountResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -9080,6 +9088,8 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -9408,6 +9418,8 @@ export const AtelierListAccountContactsResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -9533,6 +9545,8 @@ export const AtelierCreateContactBody = zod.object({
   title: zod.string().nullish(),
   seniority: zod
     .union([
+      zod.literal("board_chair"),
+      zod.literal("board_member"),
       zod.literal("c_suite"),
       zod.literal("vp"),
       zod.literal("director"),
@@ -9652,6 +9666,8 @@ export const AtelierUpdateContactBody = zod.object({
   title: zod.string().nullish(),
   seniority: zod
     .union([
+      zod.literal("board_chair"),
+      zod.literal("board_member"),
       zod.literal("c_suite"),
       zod.literal("vp"),
       zod.literal("director"),
@@ -9699,6 +9715,8 @@ export const AtelierUpdateContactResponse = zod.object({
   title: zod.string().nullish(),
   seniority: zod
     .union([
+      zod.literal("board_chair"),
+      zod.literal("board_member"),
       zod.literal("c_suite"),
       zod.literal("vp"),
       zod.literal("director"),
@@ -10725,6 +10743,8 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -11784,6 +11804,8 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -12856,6 +12878,8 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -13927,6 +13951,8 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -14982,6 +15008,8 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -16046,6 +16074,8 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -17110,6 +17140,8 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -18167,6 +18199,8 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -19236,6 +19270,8 @@ export const AtelierCreateAccountActionResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -20302,6 +20338,8 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -21357,6 +21395,8 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -22421,6 +22461,8 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -23486,6 +23528,8 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -24541,6 +24585,8 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -25602,6 +25648,8 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       title: zod.string().nullish(),
       seniority: zod
         .union([
+          zod.literal("board_chair"),
+          zod.literal("board_member"),
           zod.literal("c_suite"),
           zod.literal("vp"),
           zod.literal("director"),
@@ -26313,6 +26361,8 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   title: zod.string().nullish(),
   seniority: zod
     .union([
+      zod.literal("board_chair"),
+      zod.literal("board_member"),
       zod.literal("c_suite"),
       zod.literal("vp"),
       zod.literal("director"),

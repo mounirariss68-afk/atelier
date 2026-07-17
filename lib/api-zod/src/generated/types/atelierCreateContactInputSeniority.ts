@@ -14,6 +14,8 @@ export type AtelierCreateContactInputSeniority =
   | null;
 
 export const AtelierCreateContactInputSeniority = {
+  board_chair: "board_chair",
+  board_member: "board_member",
   c_suite: "c_suite",
   vp: "vp",
   director: "director",
