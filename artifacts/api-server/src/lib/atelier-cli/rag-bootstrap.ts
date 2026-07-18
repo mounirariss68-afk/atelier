@@ -55,3 +55,58 @@ export async function applyAtelierCliRagSql(): Promise<void> {
   await db.execute(sql.raw(text));
   applied = true;
 }
+
+/**
+ * Task #130 — Ensure the pgvector `embedding` column (+ HNSW index) on
+ * atelier_document_chunk_embeddings exists. Boot can run the RAG SQL
+ * before `drizzle push` has created the table on a fresh database, in
+ * which case the column DDL is skipped; ingest calls this to self-heal
+ * instead of failing. Returns true when the column exists afterwards
+ * (pgvector installed), false when pgvector is unavailable (jsonb
+ * brute-force fallback stays in effect).
+ */
+export async function ensureDocEmbeddingColumn(): Promise<boolean> {
+  await db.execute(
+    sql.raw(`
+      DO $$
+      BEGIN
+        IF to_regclass('atelier_document_chunk_embeddings') IS NULL THEN
+          RETURN;
+        END IF;
+        PERFORM 1 FROM pg_available_extensions WHERE name = 'vector';
+        IF FOUND THEN
+          CREATE EXTENSION IF NOT EXISTS vector;
+        END IF;
+        PERFORM 1 FROM pg_extension WHERE extname = 'vector';
+        IF FOUND THEN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'atelier_document_chunk_embeddings'
+              AND column_name = 'embedding'
+          ) THEN
+            ALTER TABLE atelier_document_chunk_embeddings
+              ADD COLUMN embedding vector(384);
+          END IF;
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_class WHERE relname = 'idx_atelier_chunk_emb_hnsw'
+          ) THEN
+            CREATE INDEX idx_atelier_chunk_emb_hnsw
+              ON atelier_document_chunk_embeddings
+              USING hnsw (embedding vector_cosine_ops);
+          END IF;
+        END IF;
+        -- Lexical half of hybrid retrieval over chunk text.
+        CREATE INDEX IF NOT EXISTS idx_atelier_chunk_emb_text_trgm
+          ON atelier_document_chunk_embeddings USING gin (text gin_trgm_ops);
+      END $$;
+    `),
+  );
+  const res = await db.execute<{ present: boolean }>(sql`
+    SELECT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'atelier_document_chunk_embeddings'
+        AND column_name = 'embedding'
+    ) AS present
+  `);
+  return Boolean(res.rows[0]?.present);
+}

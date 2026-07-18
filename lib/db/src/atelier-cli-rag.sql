@@ -1,10 +1,18 @@
 -- ============================================================
 -- Task #411 — Atelier Chat RAG: extensions + trgm GIN indexes
 -- ============================================================
--- Idempotent. Run once on boot from the API server (mirrors the
--- existing atelier-rls.sql pattern). When the `vector` extension is
--- available the embedding tables get a real pgvector column for ANN
--- search; otherwise the jsonb shadow on the Drizzle table is used.
+-- Idempotent AND fresh-DB safe. Run once on boot from the API server
+-- (mirrors the existing atelier-rls.sql pattern). When the `vector`
+-- extension is available the embedding tables get a real pgvector
+-- column for ANN search; otherwise the jsonb shadow on the Drizzle
+-- table is used.
+--
+-- IMPORTANT: this file executes as a single batch (one implicit
+-- transaction). On a freshly created database the Drizzle tables may
+-- not exist yet (boot can race `drizzle push`), so every statement
+-- that touches a table is guarded with to_regclass — otherwise one
+-- missing table aborts the batch and rolls back CREATE EXTENSION too,
+-- leaving the whole RAG layer silently unprovisioned (Task #130).
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
@@ -19,23 +27,37 @@ BEGIN
 END $$;
 
 -- pg_trgm GIN indexes on the searchable name columns the hybrid
--- resolver hits. Each `IF NOT EXISTS` so the script is idempotent.
-CREATE INDEX IF NOT EXISTS idx_atelier_accounts_name_trgm
-  ON atelier_accounts USING gin (name gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_atelier_accounts_brand_trgm
-  ON atelier_accounts USING gin (brand_name gin_trgm_ops);
+-- resolver hits. Each guarded on table existence + IF NOT EXISTS so
+-- the script is idempotent and never aborts on a pre-push database.
+DO $$
+BEGIN
+  IF to_regclass('atelier_accounts') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_atelier_accounts_name_trgm
+      ON atelier_accounts USING gin (name gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS idx_atelier_accounts_brand_trgm
+      ON atelier_accounts USING gin (brand_name gin_trgm_ops);
+  END IF;
 
-CREATE INDEX IF NOT EXISTS idx_atelier_opps_name_trgm
-  ON atelier_opportunities USING gin (name gin_trgm_ops);
+  IF to_regclass('atelier_opportunities') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_atelier_opps_name_trgm
+      ON atelier_opportunities USING gin (name gin_trgm_ops);
+  END IF;
 
-CREATE INDEX IF NOT EXISTS idx_atelier_engagements_name_trgm
-  ON atelier_engagements USING gin (name gin_trgm_ops);
+  IF to_regclass('atelier_engagements') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_atelier_engagements_name_trgm
+      ON atelier_engagements USING gin (name gin_trgm_ops);
+  END IF;
 
-CREATE INDEX IF NOT EXISTS idx_atelier_contacts_name_trgm
-  ON atelier_contacts USING gin (full_name gin_trgm_ops);
+  IF to_regclass('atelier_contacts') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_atelier_contacts_name_trgm
+      ON atelier_contacts USING gin (full_name gin_trgm_ops);
+  END IF;
 
-CREATE INDEX IF NOT EXISTS idx_atelier_deliverables_name_trgm
-  ON atelier_deliverables USING gin (name gin_trgm_ops);
+  IF to_regclass('atelier_deliverables') IS NOT NULL THEN
+    CREATE INDEX IF NOT EXISTS idx_atelier_deliverables_name_trgm
+      ON atelier_deliverables USING gin (name gin_trgm_ops);
+  END IF;
+END $$;
 
 -- ============================================================
 -- Task #575 — Document-chunk embeddings: pgvector column + HNSW
@@ -47,6 +69,10 @@ CREATE INDEX IF NOT EXISTS idx_atelier_deliverables_name_trgm
 -- the lexical half of hybrid retrieval.
 DO $$
 BEGIN
+  IF to_regclass('atelier_document_chunk_embeddings') IS NULL THEN
+    RETURN; -- table not pushed yet; ingest self-heals later (Task #130)
+  END IF;
+
   PERFORM 1 FROM pg_extension WHERE extname = 'vector';
   IF FOUND THEN
     IF NOT EXISTS (
@@ -67,8 +93,8 @@ BEGIN
         USING hnsw (embedding vector_cosine_ops);
     END IF;
   END IF;
-END $$;
 
--- Lexical half of hybrid retrieval over chunk text.
-CREATE INDEX IF NOT EXISTS idx_atelier_chunk_emb_text_trgm
-  ON atelier_document_chunk_embeddings USING gin (text gin_trgm_ops);
+  -- Lexical half of hybrid retrieval over chunk text.
+  CREATE INDEX IF NOT EXISTS idx_atelier_chunk_emb_text_trgm
+    ON atelier_document_chunk_embeddings USING gin (text gin_trgm_ops);
+END $$;

@@ -58,4 +58,5 @@
 - [Atelier DocuSeal e-sign](atelier-esign.md) — webhook is trigger-only (authoritative re-fetch); terminal statuses never regress; completion archives signed+audit PDFs as "contract"; single shared API key.
 - [DocuSeal live API quirks](docuseal-live-quirks.md) — live Cloud rejects field-less templates & 0-based pages (stub doesn't); signature field per signer role stamped on last page; live probe script self-cleans.
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
+- [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
 - [CRM charter-hook env flake](crm-charter-hook-flake.md) — contract-entry charter LLM call is NOT mocked; test:crm fails only the engagementHookError-null check in isolated envs.

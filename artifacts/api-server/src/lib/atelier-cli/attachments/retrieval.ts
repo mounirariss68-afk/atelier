@@ -32,6 +32,7 @@ import {
   currentProvider,
   EMBED_DIM,
 } from "../embeddings.js";
+import { ensureDocEmbeddingColumn } from "../rag-bootstrap.js";
 import { redactText } from "../pii-redaction.js";
 import { attachmentMentionsDestructive } from "../prompt-guard.js";
 import type { DocChunk } from "./chunking.js";
@@ -105,22 +106,57 @@ export async function persistChunkEmbeddings(args: {
   return { embedded: rows.length };
 }
 
-/** Copy jsonb `vec` → pgvector `embedding` for an attachment's rows. */
+/** True when the error (or its cause chain) is a missing embedding
+ *  column / missing vector type. Drizzle wraps pg errors as
+ *  "Failed query: ..." with the real message on err.cause, so we must
+ *  walk the chain rather than regex only the top-level message. */
+function isMissingEmbeddingColumnError(err: unknown): boolean {
+  const RX = /column .*embedding.* does not exist|type "vector" does not exist/i;
+  let cursor: unknown = err;
+  for (let i = 0; i < 5 && cursor; i++) {
+    const msg =
+      cursor instanceof Error ? cursor.message : typeof cursor === "string" ? cursor : "";
+    if (RX.test(msg)) return true;
+    const code = (cursor as { code?: string }).code;
+    // 42703 undefined_column, 42704 undefined_object (type "vector")
+    if (code === "42703" || code === "42704") return true;
+    cursor = cursor instanceof Error ? cursor.cause : undefined;
+  }
+  return false;
+}
+
+/** Copy jsonb `vec` → pgvector `embedding` for an attachment's rows.
+ *
+ * Task #130: on a freshly pushed database the boot-time RAG SQL can run
+ * before the table exists, leaving the pgvector column unprovisioned.
+ * When the UPDATE fails because the column is missing, self-heal by
+ * running the column DDL and retrying once. If pgvector genuinely
+ * isn't available, retrieval falls back to brute-force cosine over the
+ * jsonb mirror — never fail ingest for the optional column. */
 async function populateEmbeddingColumn(attachmentId: string): Promise<void> {
-  try {
-    await db.execute(sql`
+  const runUpdate = () =>
+    db.execute(sql`
       UPDATE atelier_document_chunk_embeddings
       SET embedding = (vec::text)::vector
       WHERE attachment_id = ${attachmentId}
         AND embedding IS NULL
     `);
+  try {
+    await runUpdate();
   } catch (err) {
-    // The `embedding` column only exists when pgvector is installed. In
-    // that case ANN falls back to brute-force cosine over jsonb. Never
-    // fail ingest because the optional column is missing.
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/column .*embedding.* does not exist|type "vector" does not exist/i.test(msg)) {
-      throw err;
+    if (!isMissingEmbeddingColumnError(err)) throw err;
+    let healed = false;
+    try {
+      healed = await ensureDocEmbeddingColumn();
+    } catch {
+      // DDL failed (e.g. insufficient privileges) — fall through to the
+      // jsonb brute-force path rather than failing ingest.
+    }
+    if (!healed) return;
+    try {
+      await runUpdate();
+    } catch (retryErr) {
+      if (!isMissingEmbeddingColumnError(retryErr)) throw retryErr;
     }
   }
 }
