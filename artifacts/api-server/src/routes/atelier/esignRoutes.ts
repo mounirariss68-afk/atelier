@@ -202,6 +202,24 @@ const CreateBody = z.object({
     .min(1)
     .max(10)
     .optional(),
+  /**
+   * Optional extra date/initials boxes, each tied to one signer by
+   * 0-based `signerIndex`. Same coordinate space as `placements`.
+   */
+  extraFields: z
+    .array(
+      z.object({
+        signerIndex: z.number().int().min(0).max(9),
+        type: z.enum(["date", "initials"]),
+        page: z.number().int().min(1).max(2000),
+        x: z.number().min(0).max(0.98),
+        y: z.number().min(0).max(0.98),
+        w: z.number().min(0.02).max(1),
+        h: z.number().min(0.01).max(0.5),
+      }),
+    )
+    .max(40)
+    .optional(),
 });
 
 // @cli-skip: e-sign surfaces are UI-driven (Task #62)
@@ -237,6 +255,21 @@ router.post("/esign/requests", async (req, res) => {
     res.status(400).json({
       error: "placement-out-of-bounds",
       message: "Signature boxes must fit within the page.",
+    });
+    return;
+  }
+  // Extra fields must reference an existing signer and fit on the page.
+  if (body.extraFields?.some((f) => f.signerIndex >= body.signers.length)) {
+    res.status(400).json({
+      error: "extrafield-signer-mismatch",
+      message: `Extra fields must reference a signer index below ${body.signers.length}.`,
+    });
+    return;
+  }
+  if (body.extraFields?.some((f) => f.x + f.w > 1.0001 || f.y + f.h > 1.0001)) {
+    res.status(400).json({
+      error: "extrafield-out-of-bounds",
+      message: "Date and initials boxes must fit within the page.",
     });
     return;
   }
@@ -320,6 +353,7 @@ router.post("/esign/requests", async (req, res) => {
       personId: body.personId ?? null,
       expiresAt,
       placements: body.placements ?? null,
+      extraFields: body.extraFields ?? null,
     });
     res.status(201).json({ request: requestShape(out.request, out.signers) });
   } catch (err) {

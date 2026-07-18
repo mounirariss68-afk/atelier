@@ -34,7 +34,13 @@ import {
   type SignerContact,
   type SignerDraft,
 } from "./SendForSignatureDialog";
-import { clampPlacement, defaultPlacements } from "./placement";
+import {
+  clampExtraField,
+  clampPlacement,
+  defaultExtraField,
+  defaultPlacements,
+  type ExtraField,
+} from "./placement";
 
 let pass = 0;
 let fail = 0;
@@ -302,6 +308,60 @@ test("placements are sent only when they match the signer count", () => {
     placements: null,
   });
   assert(none.placements === undefined, "null placements -> omitted (server default)");
+});
+
+// ——— Task #149: extra date/initials boxes ———
+
+test("extraFields pass through only for existing signers; empty omitted", () => {
+  const signers: SignerDraft[] = [
+    { name: "A", email: "a@a.test" },
+    { name: "B", email: "b@b.test" },
+  ];
+  const xf: ExtraField[] = [
+    { signerIndex: 0, type: "date", page: 1, x: 0.1, y: 0.9, w: 0.18, h: 0.035 },
+    { signerIndex: 1, type: "initials", page: 1, x: 0.85, y: 0.9, w: 0.08, h: 0.035 },
+    { signerIndex: 5, type: "initials", page: 1, x: 0.5, y: 0.5, w: 0.08, h: 0.035 },
+  ];
+  const payload = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    extraFields: xf,
+  });
+  assert(payload.extraFields?.length === 2, "stale signerIndex entries are dropped");
+  assert(
+    payload.extraFields?.every((f) => f.signerIndex < signers.length) === true,
+    "remaining entries reference real signers",
+  );
+  const none = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    extraFields: [],
+  });
+  assert(none.extraFields === undefined, "no extra fields -> key omitted (flow unchanged)");
+});
+
+test("defaultExtraField anchors near the signature box and clamps", () => {
+  const anchor = { page: 2, x: 0.55, y: 0.66, w: 0.32, h: 0.05 };
+  const date = defaultExtraField(0, "date", anchor, 3);
+  assert(date.type === "date" && date.signerIndex === 0, "identity preserved");
+  assert(date.page === 2 && date.x === anchor.x, "date box aligns under the signature");
+  assert(date.y > anchor.y, "date box sits below the signature");
+  const init = defaultExtraField(1, "initials", { ...anchor, x: 0.9 }, 3);
+  assert(init.x + init.w <= 1.0001, "initials box clamped onto the page");
+  const moved = clampExtraField(
+    { signerIndex: 1, type: "initials", page: 9, x: 1.5, y: -1, w: 0.08, h: 0.035 },
+    4,
+  );
+  assert(moved.page === 4 && moved.x + moved.w <= 1.0001 && moved.y === 0, "clamp applies");
+  assert(moved.signerIndex === 1 && moved.type === "initials", "clamp keeps identity");
 });
 
 test("clampPlacement keeps boxes on the page; defaults mirror server layout", () => {

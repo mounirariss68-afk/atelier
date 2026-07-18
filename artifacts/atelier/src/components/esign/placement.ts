@@ -33,6 +33,53 @@ export function defaultPlacements(count: number, lastPage: number): Placement[] 
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** Extra (non-signature) field kinds a sender can add per signer. */
+export type ExtraFieldType = "date" | "initials";
+
+/**
+ * An optional extra box (date-signed or initials) tied to one signer by
+ * 0-based `signerIndex`. Same normalized coordinate space as Placement.
+ */
+export interface ExtraField extends Placement {
+  signerIndex: number;
+  type: ExtraFieldType;
+}
+
+/** Server-side cap on total extra fields per request. */
+export const MAX_EXTRA_FIELDS = 40;
+
+/**
+ * Default box for a newly added extra field: sits just below/right of
+ * the signer's signature box so it's visible and grabbable immediately.
+ */
+export function defaultExtraField(
+  signerIndex: number,
+  type: ExtraFieldType,
+  anchor: Placement,
+  pageCount: number,
+): ExtraField {
+  const size =
+    type === "date" ? { w: 0.18, h: 0.035 } : { w: 0.08, h: 0.035 };
+  return {
+    signerIndex,
+    type,
+    ...clampPlacement(
+      {
+        page: anchor.page,
+        x: type === "date" ? anchor.x : anchor.x + anchor.w + 0.02,
+        y: anchor.y + anchor.h + 0.015,
+        ...size,
+      },
+      pageCount,
+    ),
+  };
+}
+
+/** Clamp an extra field's box, preserving its identity fields. */
+export function clampExtraField(f: ExtraField, pageCount: number): ExtraField {
+  return { ...f, ...clampPlacement(f, pageCount) };
+}
+
 /** Keep a box fully on the page and within the server's accepted ranges. */
 export function clampPlacement(p: Placement, pageCount: number): Placement {
   const w = clamp(p.w, 0.02, 1);

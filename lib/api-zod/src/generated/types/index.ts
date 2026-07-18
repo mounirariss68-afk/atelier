@@ -474,6 +474,8 @@ export * from "./atelierSelfTrainingMaterial";
 export * from "./atelierSelfTrainingMaterialAudience";
 export * from "./atelierSelfTrainingMaterialKind";
 export * from "./atelierSendDeliverableInput";
+export * from "./atelierSignatureExtraField";
+export * from "./atelierSignatureExtraFieldType";
 export * from "./atelierSignaturePlacement";
 export * from "./atelierSignatureRequest";
 export * from "./atelierSignatureRequestCreate";

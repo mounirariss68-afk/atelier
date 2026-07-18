@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierSignatureExtraField } from "./atelierSignatureExtraField";
 import type { AtelierSignaturePlacement } from "./atelierSignaturePlacement";
 import type { AtelierSignatureRequestCreateSignersItem } from "./atelierSignatureRequestCreateSignersItem";
 
@@ -37,4 +38,9 @@ export interface AtelierSignatureRequestCreate {
    * @maxItems 10
    */
   placements?: AtelierSignaturePlacement[];
+  /**
+   * Optional extra date-signed / initials boxes, each tied to one signer by 0-based signerIndex. Same normalized coordinate space as placements.
+   * @maxItems 40
+   */
+  extraFields?: AtelierSignatureExtraField[];
 }

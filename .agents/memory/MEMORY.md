@@ -60,3 +60,4 @@
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
 - [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
 - [CRM charter-hook env flake](crm-charter-hook-flake.md) — contract-entry charter LLM call is NOT mocked; test:crm fails only the engagementHookError-null check in isolated envs.
+- [E-sign extra date/initials fields](atelier-esign-extra-fields.md) — optional extraFields (signerIndex/date|initials) ride beside placements; unique template names; audit-payload-only; roles stay "Signer N".

@@ -2505,6 +2505,48 @@ export interface AtelierSignaturePlacement {
   h: number;
 }
 
+export type AtelierSignatureExtraFieldType =
+  (typeof AtelierSignatureExtraFieldType)[keyof typeof AtelierSignatureExtraFieldType];
+
+export const AtelierSignatureExtraFieldType = {
+  date: "date",
+  initials: "initials",
+} as const;
+
+export interface AtelierSignatureExtraField {
+  /**
+   * @minimum 0
+   * @maximum 9
+   */
+  signerIndex: number;
+  type: AtelierSignatureExtraFieldType;
+  /**
+   * @minimum 1
+   * @maximum 2000
+   */
+  page: number;
+  /**
+   * @minimum 0
+   * @maximum 0.98
+   */
+  x: number;
+  /**
+   * @minimum 0
+   * @maximum 0.98
+   */
+  y: number;
+  /**
+   * @minimum 0.02
+   * @maximum 1
+   */
+  w: number;
+  /**
+   * @minimum 0.01
+   * @maximum 0.5
+   */
+  h: number;
+}
+
 export interface AtelierSignatureRequestCreate {
   /**
    * @minLength 1
@@ -2534,6 +2576,11 @@ export interface AtelierSignatureRequestCreate {
    * @maxItems 10
    */
   placements?: AtelierSignaturePlacement[];
+  /**
+   * Optional extra date-signed / initials boxes, each tied to one signer by 0-based signerIndex. Same normalized coordinate space as placements.
+   * @maxItems 40
+   */
+  extraFields?: AtelierSignatureExtraField[];
 }
 
 export interface AtelierEsignUpstreamError {

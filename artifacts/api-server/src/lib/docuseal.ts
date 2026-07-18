@@ -134,6 +134,16 @@ export interface SignaturePlacement {
 }
 
 /**
+ * Optional extra (non-signature) field the sender placed for one signer:
+ * a "date signed" box or an initials box. `signerIndex` is 0-based;
+ * coordinates use the same normalized page-fraction space.
+ */
+export interface ExtraSignerField extends SignaturePlacement {
+  signerIndex: number;
+  type: "date" | "initials";
+}
+
+/**
  * Default two-column layout on the given page (1-based) — used when the
  * sender hasn't customized placement. Index is 0-based signer index.
  */
@@ -167,6 +177,8 @@ export async function createTemplateFromPdf(args: {
   lastPageIndex: number;
   /** Optional sender-chosen boxes, one per signer (overrides layout). */
   placements?: SignaturePlacement[] | null;
+  /** Optional extra date/initials boxes tied to signers by 0-based index. */
+  extraFields?: ExtraSignerField[] | null;
 }): Promise<{ id: number }> {
   const count = Math.max(1, args.signerCount);
   if (args.placements && args.placements.length !== count) {
@@ -174,7 +186,12 @@ export async function createTemplateFromPdf(args: {
       `Signature placements (${args.placements.length}) must match signer count (${count}).`,
     );
   }
-  const fields = Array.from({ length: count }, (_, i) => {
+  if (args.extraFields?.some((f) => f.signerIndex < 0 || f.signerIndex >= count)) {
+    throw new DocusealError(
+      `Extra fields must reference a valid signer index (0..${count - 1}).`,
+    );
+  }
+  const fields: Array<Record<string, unknown>> = Array.from({ length: count }, (_, i) => {
     const area =
       args.placements?.[i] ?? defaultSignaturePlacement(i, args.lastPageIndex + 1);
     return {
@@ -194,6 +211,22 @@ export async function createTemplateFromPdf(args: {
       ],
     };
   });
+  // Append the optional date/initials boxes. Names must be unique per
+  // template, so number them per signer.
+  const perSignerCounts = new Map<string, number>();
+  for (const f of args.extraFields ?? []) {
+    const key = `${f.type}:${f.signerIndex}`;
+    const n = (perSignerCounts.get(key) ?? 0) + 1;
+    perSignerCounts.set(key, n);
+    const label = f.type === "date" ? "Date signed" : "Initials";
+    fields.push({
+      name: `${label} ${f.signerIndex + 1}${n > 1 ? `.${n}` : ""}`,
+      type: f.type,
+      role: signerRole(f.signerIndex + 1),
+      required: true,
+      areas: [{ x: f.x, y: f.y, w: f.w, h: f.h, page: f.page }],
+    });
+  }
   const out = await request<{ id: number }>("POST", "/templates/pdf", {
     name: args.name,
     documents: [

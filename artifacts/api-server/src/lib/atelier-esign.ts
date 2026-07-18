@@ -42,6 +42,7 @@ import {
   downloadDocusealFile,
   type DocusealSubmission,
   type SignaturePlacement,
+  type ExtraSignerField,
 } from "./docuseal.js";
 import { createDocument } from "./atelier-documents.js";
 
@@ -111,6 +112,11 @@ export async function sendSignatureRequest(args: {
    * the document's actual page count are clamped to the last page.
    */
   placements?: SignaturePlacement[] | null;
+  /**
+   * Optional extra date/initials boxes tied to signers by 0-based
+   * index. Pages beyond the document's page count are clamped.
+   */
+  extraFields?: ExtraSignerField[] | null;
 }): Promise<{ request: SigRequestRow; signers: SigSignerRow[] }> {
   // Default: signature blocks go on the last page of the document.
   let lastPageIndex = 0;
@@ -135,6 +141,16 @@ export async function sendSignatureRequest(args: {
               : Math.max(1, p.page),
         }))
       : null;
+  const extraFields =
+    args.extraFields && args.extraFields.length > 0
+      ? args.extraFields.map((f) => ({
+          ...f,
+          page:
+            pageCount != null
+              ? Math.min(Math.max(1, f.page), pageCount)
+              : Math.max(1, f.page),
+        }))
+      : null;
   const template = await createTemplateFromPdf({
     name: args.title,
     fileName: args.fileName,
@@ -142,6 +158,7 @@ export async function sendSignatureRequest(args: {
     signerCount: args.signers.length,
     lastPageIndex,
     placements,
+    extraFields,
   });
   const created = await createSubmission({
     templateId: template.id,
@@ -217,6 +234,7 @@ export async function sendSignatureRequest(args: {
       personId: args.personId ?? null,
       signers: args.signers.map((s, i) => ({ order: i + 1, name: s.name, email: s.email })),
       placements: placements ?? null,
+      extraFields: extraFields ?? null,
       docusealSubmissionId: String(created.submissionId),
       expiresAt: args.expiresAt?.toISOString() ?? null,
     },

@@ -13,10 +13,15 @@ import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, PenTool, RotateCcw, X } from "lucide-react";
 import {
+  clampExtraField,
   clampPlacement,
+  defaultExtraField,
   defaultPlacements,
+  MAX_EXTRA_FIELDS,
+  type ExtraField,
+  type ExtraFieldType,
   type Placement,
 } from "./placement";
 
@@ -35,6 +40,8 @@ export function SignaturePlacementEditor({
   signerNames,
   placements,
   onChange,
+  extraFields,
+  onExtraFieldsChange,
 }: {
   documentId: string;
   /** Signer display names in signing order (length = box count). */
@@ -46,6 +53,9 @@ export function SignaturePlacementEditor({
    * once after load to seed defaults when `placements` is null.
    */
   onChange: (next: Placement[]) => void;
+  /** Optional date/initials boxes tied to signers by index. */
+  extraFields: ExtraField[];
+  onExtraFieldsChange: (next: ExtraField[]) => void;
 }) {
   const [pdf, setPdf] = React.useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = React.useState(0);
@@ -53,7 +63,12 @@ export function SignaturePlacementEditor({
   const [error, setError] = React.useState<string | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
   const overlayRef = React.useRef<HTMLDivElement | null>(null);
-  const dragRef = React.useRef<{ index: number; dx: number; dy: number } | null>(null);
+  const dragRef = React.useRef<{
+    kind: "signature" | "extra";
+    index: number;
+    dx: number;
+    dy: number;
+  } | null>(null);
 
   const apiBase = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -99,6 +114,12 @@ export function SignaturePlacementEditor({
     if (!placements || placements.length !== signerNames.length) {
       onChange(defaultPlacements(signerNames.length, pageCount));
     }
+    // Drop extra fields whose signer no longer exists.
+    if (extraFields.some((f) => f.signerIndex >= signerNames.length)) {
+      onExtraFieldsChange(
+        extraFields.filter((f) => f.signerIndex < signerNames.length),
+      );
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageCount, signerNames.length]);
 
@@ -139,11 +160,38 @@ export function SignaturePlacementEditor({
     );
   };
 
-  const onPointerDown = (e: React.PointerEvent, index: number) => {
-    if (!overlayRef.current || !placements) return;
+  const updateExtra = (index: number, patch: Partial<ExtraField>) => {
+    onExtraFieldsChange(
+      extraFields.map((f, i) =>
+        i === index ? clampExtraField({ ...f, ...patch }, pageCount) : f,
+      ),
+    );
+  };
+
+  const addExtraField = (signerIndex: number, type: ExtraFieldType) => {
+    if (!placements || extraFields.length >= MAX_EXTRA_FIELDS) return;
+    const anchor = placements[signerIndex];
+    if (!anchor) return;
+    const field = defaultExtraField(signerIndex, type, anchor, pageCount);
+    onExtraFieldsChange([...extraFields, field]);
+    setPage(field.page);
+  };
+
+  const removeExtraField = (index: number) => {
+    onExtraFieldsChange(extraFields.filter((_, i) => i !== index));
+  };
+
+  const onPointerDown = (
+    e: React.PointerEvent,
+    kind: "signature" | "extra",
+    index: number,
+  ) => {
+    if (!overlayRef.current) return;
+    const p = kind === "signature" ? placements?.[index] : extraFields[index];
+    if (!p) return;
     const rect = overlayRef.current.getBoundingClientRect();
-    const p = placements[index];
     dragRef.current = {
+      kind,
       index,
       dx: (e.clientX - rect.left) / rect.width - p.x,
       dy: (e.clientY - rect.top) / rect.height - p.y,
@@ -154,10 +202,12 @@ export function SignaturePlacementEditor({
     const drag = dragRef.current;
     if (!drag || !overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
-    update(drag.index, {
+    const pos = {
       x: (e.clientX - rect.left) / rect.width - drag.dx,
       y: (e.clientY - rect.top) / rect.height - drag.dy,
-    });
+    };
+    if (drag.kind === "signature") update(drag.index, pos);
+    else updateExtra(drag.index, pos);
   };
   const onPointerUp = () => {
     dragRef.current = null;
@@ -216,6 +266,7 @@ export function SignaturePlacementEditor({
           className="h-7 text-xs"
           onClick={() => {
             onChange(defaultPlacements(signerNames.length, pageCount));
+            onExtraFieldsChange([]);
             setPage(pageCount);
           }}
           data-testid="button-placement-reset"
@@ -238,7 +289,7 @@ export function SignaturePlacementEditor({
                 key={i}
                 role="button"
                 tabIndex={0}
-                onPointerDown={(e) => onPointerDown(e, i)}
+                onPointerDown={(e) => onPointerDown(e, "signature", i)}
                 className={`absolute flex cursor-move touch-none select-none items-center justify-center rounded border-2 border-dashed text-[10px] font-medium ${BOX_COLORS[i % BOX_COLORS.length]}`}
                 style={{
                   left: `${p.x * 100}%`,
@@ -251,6 +302,31 @@ export function SignaturePlacementEditor({
               >
                 <span className="pointer-events-none truncate px-1 mix-blend-difference">
                   {i + 1}. {signerNames[i]?.trim() || `Signer ${i + 1}`}
+                </span>
+              </div>
+            ) : null,
+          )}
+          {extraFields.map((f, i) =>
+            f.page === page ? (
+              <div
+                key={`x${i}`}
+                role="button"
+                tabIndex={0}
+                onPointerDown={(e) => onPointerDown(e, "extra", i)}
+                className={`absolute flex cursor-move touch-none select-none items-center justify-center rounded border border-dotted text-[9px] font-medium ${BOX_COLORS[f.signerIndex % BOX_COLORS.length]}`}
+                style={{
+                  left: `${f.x * 100}%`,
+                  top: `${f.y * 100}%`,
+                  width: `${f.w * 100}%`,
+                  height: `${f.h * 100}%`,
+                }}
+                title={`Drag to move — ${f.type === "date" ? "Date" : "Initials"} for ${
+                  signerNames[f.signerIndex]?.trim() || `Signer ${f.signerIndex + 1}`
+                }`}
+                data-testid={`box-extrafield-${i}`}
+              >
+                <span className="pointer-events-none truncate px-0.5 mix-blend-difference">
+                  {f.type === "date" ? "Date" : "Init."} {f.signerIndex + 1}
                 </span>
               </div>
             ) : null,
@@ -271,30 +347,101 @@ export function SignaturePlacementEditor({
               />
               {i + 1}. {signerNames[i]?.trim() || `Signer ${i + 1}`}
             </span>
-            <label className="flex items-center gap-1 shrink-0">
-              Page
-              <select
-                className="h-6 rounded border border-border bg-bg-elevate px-1 text-xs text-text outline-none"
-                value={p.page}
-                onChange={(e) => {
-                  const target = Number(e.target.value);
-                  update(i, { page: target });
-                  setPage(target);
-                }}
-                data-testid={`select-placement-page-${i}`}
+            <span className="flex items-center gap-1 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-[11px]"
+                disabled={extraFields.length >= MAX_EXTRA_FIELDS}
+                onClick={() => addExtraField(i, "date")}
+                title="Add a date-signed box for this signer"
+                data-testid={`button-add-date-${i}`}
               >
-                {Array.from({ length: pageCount }, (_, n) => (
-                  <option key={n + 1} value={n + 1}>
-                    {n + 1}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <CalendarDays className="mr-0.5 h-3 w-3" /> Date
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 text-[11px]"
+                disabled={extraFields.length >= MAX_EXTRA_FIELDS}
+                onClick={() => addExtraField(i, "initials")}
+                title="Add an initials box for this signer"
+                data-testid={`button-add-initials-${i}`}
+              >
+                <PenTool className="mr-0.5 h-3 w-3" /> Initials
+              </Button>
+              <label className="flex items-center gap-1">
+                Page
+                <select
+                  className="h-6 rounded border border-border bg-bg-elevate px-1 text-xs text-text outline-none"
+                  value={p.page}
+                  onChange={(e) => {
+                    const target = Number(e.target.value);
+                    update(i, { page: target });
+                    setPage(target);
+                  }}
+                  data-testid={`select-placement-page-${i}`}
+                >
+                  {Array.from({ length: pageCount }, (_, n) => (
+                    <option key={n + 1} value={n + 1}>
+                      {n + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </span>
+          </div>
+        ))}
+        {extraFields.map((f, i) => (
+          <div
+            key={`xf${i}`}
+            className="flex items-center justify-between pl-4 text-xs text-text-faint"
+            data-testid={`row-extrafield-${i}`}
+          >
+            <span className="truncate">
+              <span
+                className={`mr-1.5 inline-block h-2 w-2 rounded-sm border ${BOX_COLORS[f.signerIndex % BOX_COLORS.length]}`}
+              />
+              {f.type === "date" ? "Date signed" : "Initials"} —{" "}
+              {signerNames[f.signerIndex]?.trim() || `Signer ${f.signerIndex + 1}`}
+            </span>
+            <span className="flex items-center gap-1 shrink-0">
+              <label className="flex items-center gap-1">
+                Page
+                <select
+                  className="h-6 rounded border border-border bg-bg-elevate px-1 text-xs text-text outline-none"
+                  value={f.page}
+                  onChange={(e) => {
+                    const target = Number(e.target.value);
+                    updateExtra(i, { page: target });
+                    setPage(target);
+                  }}
+                  data-testid={`select-extrafield-page-${i}`}
+                >
+                  {Array.from({ length: pageCount }, (_, n) => (
+                    <option key={n + 1} value={n + 1}>
+                      {n + 1}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => removeExtraField(i)}
+                title="Remove this box"
+                data-testid={`button-remove-extrafield-${i}`}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </span>
           </div>
         ))}
       </div>
       <p className="text-[11px] text-text-faint">
         Drag each box where that signer should sign. Boxes default to the last page.
+        Use Date / Initials to add optional extra boxes per signer.
       </p>
     </div>
   );

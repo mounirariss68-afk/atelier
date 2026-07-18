@@ -778,6 +778,25 @@ export const atelierCreateSignatureRequestBodyPlacementsItemHMax = 0.5;
 
 export const atelierCreateSignatureRequestBodyPlacementsMax = 10;
 
+export const atelierCreateSignatureRequestBodyExtraFieldsItemSignerIndexMin = 0;
+export const atelierCreateSignatureRequestBodyExtraFieldsItemSignerIndexMax = 9;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsItemPageMax = 2000;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsItemXMin = 0;
+export const atelierCreateSignatureRequestBodyExtraFieldsItemXMax = 0.98;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsItemYMin = 0;
+export const atelierCreateSignatureRequestBodyExtraFieldsItemYMax = 0.98;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsItemWMin = 0.02;
+export const atelierCreateSignatureRequestBodyExtraFieldsItemWMax = 1;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsItemHMin = 0.01;
+export const atelierCreateSignatureRequestBodyExtraFieldsItemHMax = 0.5;
+
+export const atelierCreateSignatureRequestBodyExtraFieldsMax = 40;
+
 export const AtelierCreateSignatureRequestBody = zod.object({
   title: zod.string().min(1).max(atelierCreateSignatureRequestBodyTitleMax),
   message: zod
@@ -839,6 +858,41 @@ export const AtelierCreateSignatureRequestBody = zod.object({
     .optional()
     .describe(
       "Sender-chosen signature boxes, one per signer in signing order. Normalized page-fraction coordinates (top-left origin), 1-based page. Omit to auto-place boxes on the last page.",
+    ),
+  extraFields: zod
+    .array(
+      zod.object({
+        signerIndex: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyExtraFieldsItemSignerIndexMin)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemSignerIndexMax),
+        type: zod.enum(["date", "initials"]),
+        page: zod
+          .number()
+          .min(1)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemPageMax),
+        x: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyExtraFieldsItemXMin)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemXMax),
+        y: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyExtraFieldsItemYMin)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemYMax),
+        w: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyExtraFieldsItemWMin)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemWMax),
+        h: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyExtraFieldsItemHMin)
+          .max(atelierCreateSignatureRequestBodyExtraFieldsItemHMax),
+      }),
+    )
+    .max(atelierCreateSignatureRequestBodyExtraFieldsMax)
+    .optional()
+    .describe(
+      "Optional extra date-signed \/ initials boxes, each tied to one signer by 0-based signerIndex. Same normalized coordinate space as placements.",
     ),
 });
 

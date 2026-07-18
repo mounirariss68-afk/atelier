@@ -68,7 +68,7 @@ const stub = {
   authFailures: 0,
   /** Fields payload of the most recent POST /templates/pdf. */
   lastTemplateFields: null as
-    | Array<{ name: string; role: string; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
+    | Array<{ name: string; type?: string; role: string; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
     | null,
 };
 
@@ -417,6 +417,103 @@ async function main(): Promise<void> {
         return ev.action === "signature_request.send" && Array.isArray(pl) && pl.length === 2;
       }),
       "no send audit row with placements",
+    );
+
+    console.log("— extra date/initials fields —");
+
+    // Extra field referencing a missing signer index is rejected.
+    const rXfBadIdx = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} xf bad index`,
+      documentId: pdf.document.id,
+      signers: [{ name: "A", email: "xa@example.com" }],
+      extraFields: [{ signerIndex: 1, type: "date", page: 1, x: 0.1, y: 0.9, w: 0.18, h: 0.035 }],
+    });
+    check(
+      "extra field with unknown signer index → 400",
+      rXfBadIdx.status === 400 && rXfBadIdx.body?.error === "extrafield-signer-mismatch",
+      `status=${rXfBadIdx.status} body=${JSON.stringify(rXfBadIdx.body)}`,
+    );
+
+    // Extra field boxes must fit on the page.
+    const rXfOob = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} xf oob`,
+      documentId: pdf.document.id,
+      signers: [{ name: "A", email: "xoob@example.com" }],
+      extraFields: [{ signerIndex: 0, type: "initials", page: 1, x: 0.95, y: 0.9, w: 0.1, h: 0.035 }],
+    });
+    check(
+      "extra field out of bounds → 400",
+      rXfOob.status === 400 && rXfOob.body?.error === "extrafield-out-of-bounds",
+      `status=${rXfOob.status} body=${JSON.stringify(rXfOob.body)}`,
+    );
+
+    // Happy path: date + initials boxes pass through to the template with
+    // the right roles/types, alongside the per-signer signature fields.
+    const rXf = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} xf happy`,
+      documentId: pdf.document.id,
+      signers: [
+        { name: "X One", email: "x1@example.com" },
+        { name: "X Two", email: "x2@example.com" },
+      ],
+      extraFields: [
+        { signerIndex: 0, type: "date", page: 1, x: 0.1, y: 0.9, w: 0.18, h: 0.035 },
+        { signerIndex: 1, type: "initials", page: 1, x: 0.85, y: 0.9, w: 0.08, h: 0.035 },
+        { signerIndex: 1, type: "initials", page: 1, x: 0.85, y: 0.5, w: 0.08, h: 0.035 },
+      ],
+    });
+    check("POST with extraFields → 201", rXf.status === 201, `status=${rXf.status} body=${JSON.stringify(rXf.body)?.slice(0, 200)}`);
+    const xfFields = stub.lastTemplateFields ?? [];
+    const sigFields = xfFields.filter((f) => f.type === "signature");
+    const dateFields = xfFields.filter((f) => f.type === "date");
+    const initFields = xfFields.filter((f) => f.type === "initials");
+    check(
+      "template fields: 2 signatures + 1 date + 2 initials with correct roles",
+      xfFields.length === 5 &&
+        sigFields.length === 2 &&
+        dateFields.length === 1 &&
+        dateFields[0].role === "Signer 1" &&
+        initFields.length === 2 &&
+        initFields.every((f) => f.role === "Signer 2"),
+      JSON.stringify(xfFields.map((f) => ({ n: f.name, t: f.type, r: f.role })))?.slice(0, 300),
+    );
+    check(
+      "extra field names are unique",
+      new Set(xfFields.map((f) => f.name)).size === xfFields.length,
+      xfFields.map((f) => f.name).join(","),
+    );
+    const dArea = dateFields[0]?.areas?.[0];
+    check(
+      "date box coords pass through verbatim",
+      dArea?.x === 0.1 && dArea?.y === 0.9 && dArea?.w === 0.18 && dArea?.h === 0.035 && dArea?.page === 1,
+      JSON.stringify(dArea),
+    );
+    check(
+      "extraFields recorded in send audit payload",
+      (
+        await db
+          .select()
+          .from(atelierAuditEvents)
+          .where(eq(atelierAuditEvents.entityId, rXf.body?.request?.id ?? ""))
+      ).some((ev) => {
+        const xf = (ev.payload as any)?.extraFields;
+        return ev.action === "signature_request.send" && Array.isArray(xf) && xf.length === 3;
+      }),
+      "no send audit row with extraFields",
+    );
+
+    // Baseline flow unchanged: a plain request (no extraFields) still
+    // produces exactly one signature field per signer.
+    const rPlain = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} xf baseline`,
+      documentId: pdf.document.id,
+      signers: [{ name: "Plain", email: "plain@example.com" }],
+    });
+    const plainFields = stub.lastTemplateFields ?? [];
+    check(
+      "no extraFields → single signature field per signer (unchanged)",
+      rPlain.status === 201 && plainFields.length === 1 && plainFields[0].type === "signature",
+      JSON.stringify(plainFields)?.slice(0, 160),
     );
 
     console.log("— webhook-triggered sync —");

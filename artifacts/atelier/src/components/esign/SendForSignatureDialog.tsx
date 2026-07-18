@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { PenLine, Plus, Trash2, UserPlus, LayoutTemplate } from "lucide-react";
-import { type Placement } from "@/components/esign/placement";
+import { type ExtraField, type Placement } from "@/components/esign/placement";
 
 // Lazy: the placement editor pulls in pdf.js (large, and its worker
 // asset import is Vite-only), so it must never load with the dialog
@@ -118,6 +118,7 @@ export interface CreateSignaturePayload {
   opportunityId?: string;
   expiresInDays?: number;
   placements?: Placement[];
+  extraFields?: ExtraField[];
 }
 
 /**
@@ -139,7 +140,15 @@ export function buildCreateSignaturePayload(args: {
    * default last-page layout applies.
    */
   placements?: Placement[] | null;
+  /**
+   * Optional date/initials boxes tied to signers by 0-based index. Only
+   * entries pointing at an existing signer are sent.
+   */
+  extraFields?: ExtraField[] | null;
 }): CreateSignaturePayload {
+  const extraFields = (args.extraFields ?? []).filter(
+    (f) => f.signerIndex >= 0 && f.signerIndex < args.signers.length,
+  );
   return {
     title: args.title.trim(),
     message: args.message.trim() || undefined,
@@ -155,6 +164,7 @@ export function buildCreateSignaturePayload(args: {
       args.placements && args.placements.length === args.signers.length
         ? args.placements
         : undefined,
+    extraFields: extraFields.length > 0 ? extraFields : undefined,
   };
 }
 
@@ -247,10 +257,12 @@ export function SendForSignatureDialog({
   const [signers, setSigners] = React.useState<SignerDraft[]>([{ name: "", email: "" }]);
   const [showPlacement, setShowPlacement] = React.useState(false);
   const [placements, setPlacements] = React.useState<Placement[] | null>(null);
+  const [extraFields, setExtraFields] = React.useState<ExtraField[]>([]);
 
   // A different document invalidates any custom box positions.
   React.useEffect(() => {
     setPlacements(null);
+    setExtraFields([]);
   }, [documentId]);
 
   // Re-seed the title suggestion each time the dialog opens fresh.
@@ -282,6 +294,7 @@ export function SendForSignatureDialog({
     setSigners([{ name: "", email: "" }]);
     setShowPlacement(false);
     setPlacements(null);
+    setExtraFields([]);
   };
 
   const pdfDocs = React.useMemo(
@@ -469,6 +482,8 @@ export function SendForSignatureDialog({
                     signerNames={signers.map((s) => s.name)}
                     placements={placements}
                     onChange={setPlacements}
+                    extraFields={extraFields}
+                    onExtraFieldsChange={setExtraFields}
                   />
                 </React.Suspense>
               </div>
@@ -543,6 +558,7 @@ export function SendForSignatureDialog({
                     opportunityId,
                     expiresInDays,
                     placements,
+                    extraFields,
                   }),
                 })
               }
