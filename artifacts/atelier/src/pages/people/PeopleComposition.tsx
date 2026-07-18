@@ -1,7 +1,9 @@
-// People Lens — Team Composition dashboard (Task #412).
-// Snapshot-style view: filters apply to every panel, charts use the
-// shared ChartContainer wrapper, slice clicks deep-link to the People
-// directory via roster cohort params.
+// People Lens — Team Composition dashboard.
+// Reads the live roster API (/api/atelier/roster/people) plus the bulk
+// person-skills endpoint so every panel charts real captured data. Panels
+// with no coverage yet show per-panel "not captured" notes; the coverage
+// strip at the bottom tracks per-field fill rates so HR can chase gaps.
+// Slice clicks deep-link to the People directory via roster cohort params.
 
 import * as React from "react";
 import { Link, useLocation } from "wouter";
@@ -14,43 +16,171 @@ import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
-import {
-  COMPOSITION_AS_OF, COMPOSITION_SOFT_SKILLS,
-  useCompositionPeople, useOrgUnits, useReviews, useGoals, useSuccession, useSkillGaps,
-} from "./peopleSeed";
-import type {
-  CompositionPerson, CompositionGender, LangProficiency, SeniorityLevel, WorkerKind,
-} from "./peopleSeed";
 
 // ------------------------------------------------------------------
-// Filter bar — shared state object every panel reads from.
+// Wire types + data hooks (live roster API)
+// ------------------------------------------------------------------
+
+type WorkerKind = "employee" | "contractor" | "partner_firm_resource";
+type Gender = "female" | "male" | "non_binary" | "unspecified";
+type LangProficiency = "basic" | "working" | "fluent" | "native";
+
+interface RosterPersonWire {
+  id: string;
+  workerType: WorkerKind;
+  fullName: string;
+  seniority: string | null;
+  country: string | null;
+  status: string;
+  startDate: string | null;
+  gender: string;
+  nationality: string | null;
+}
+
+interface PersonSkillWire {
+  personType: "employee" | "contractor";
+  personId: string;
+  slug: string;
+  name: string;
+  kind: string; // tech | industry | function | language | tool | soft
+  proficiency: number; // 1..5
+}
+
+interface CompositionRow {
+  id: string;
+  fullName: string;
+  workerType: WorkerKind;
+  seniority: string | null;
+  country: string | null;
+  nationality: string | null;
+  gender: Gender;
+  startDate: string | null;
+  languages: { slug: string; label: string; proficiency: LangProficiency }[];
+  hardSkills: { slug: string; label: string; proficiency: number }[];
+  softSkills: { slug: string; label: string }[];
+}
+
+interface LoadState {
+  rows: CompositionRow[] | null;
+  error: string | null;
+  /** Set when the roster loaded but the skill-graph fetch failed — skill-backed
+   *  panels show an unavailable note instead of failing the whole page. */
+  skillsError: string | null;
+}
+
+const GENDERS: readonly Gender[] = ["female", "male", "non_binary", "unspecified"];
+const HARD_SKILL_KINDS = new Set(["tech", "industry", "function", "tool"]);
+
+/** Map the skill graph's 1–5 proficiency onto the language band scale. */
+function langBand(proficiency: number): LangProficiency {
+  if (proficiency >= 5) return "native";
+  if (proficiency >= 4) return "fluent";
+  if (proficiency >= 3) return "working";
+  return "basic";
+}
+
+function toGender(g: string | null | undefined): Gender {
+  return (GENDERS as readonly string[]).includes(g ?? "")
+    ? (g as Gender)
+    : "unspecified";
+}
+
+/** Fetch the live roster + bulk person-skills and join them client-side. */
+function useCompositionData(): LoadState {
+  const [state, setState] = React.useState<LoadState>({ rows: null, error: null, skillsError: null });
+  React.useEffect(() => {
+    let cancelled = false;
+    // The two fetches fail independently: a roster failure blocks the page
+    // (nothing can render without it), but a skills failure only degrades
+    // the language/skill panels — demographics still chart.
+    Promise.allSettled([
+      fetch("/api/atelier/roster/people", { credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error(`roster fetch failed (${r.status})`);
+        return r.json() as Promise<{ people?: RosterPersonWire[] }>;
+      }),
+      fetch("/api/atelier/roster/skill-graph/person-skills", { credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error(`skills fetch failed (${r.status})`);
+        return r.json() as Promise<{ personSkills?: PersonSkillWire[] }>;
+      }),
+    ])
+      .then(([peopleSettled, skillsSettled]) => {
+        if (cancelled) return;
+        if (peopleSettled.status === "rejected") {
+          setState({ rows: null, error: String(peopleSettled.reason), skillsError: null });
+          return;
+        }
+        const peopleRes = peopleSettled.value;
+        const skillsError =
+          skillsSettled.status === "rejected" ? String(skillsSettled.reason) : null;
+        const skillsByPerson = new Map<string, PersonSkillWire[]>();
+        if (skillsSettled.status === "fulfilled") {
+          for (const s of skillsSettled.value.personSkills ?? []) {
+            const list = skillsByPerson.get(s.personId) ?? [];
+            list.push(s);
+            skillsByPerson.set(s.personId, list);
+          }
+        }
+        const rows: CompositionRow[] = (peopleRes.people ?? [])
+          .filter((p) => p.status === "active")
+          .map((p) => {
+            const skills = skillsByPerson.get(p.id) ?? [];
+            return {
+              id: p.id,
+              fullName: p.fullName,
+              workerType: p.workerType,
+              seniority: p.seniority,
+              country: p.country ? p.country.toUpperCase() : null,
+              nationality: p.nationality ? p.nationality.toUpperCase() : null,
+              gender: toGender(p.gender),
+              startDate: p.startDate,
+              languages: skills
+                .filter((s) => s.kind === "language")
+                .map((s) => ({ slug: s.slug, label: s.name, proficiency: langBand(s.proficiency) })),
+              hardSkills: skills
+                .filter((s) => HARD_SKILL_KINDS.has(s.kind))
+                .map((s) => ({ slug: s.slug, label: s.name, proficiency: s.proficiency })),
+              softSkills: skills
+                .filter((s) => s.kind === "soft")
+                .map((s) => ({ slug: s.slug, label: s.name })),
+            };
+          });
+        setState({ rows, error: null, skillsError });
+      })
+      .catch((e) => {
+        if (!cancelled) setState({ rows: null, error: String(e), skillsError: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return state;
+}
+
+// ------------------------------------------------------------------
+// Filters
 // ------------------------------------------------------------------
 
 interface CompositionFilters {
-  businessUnit: string | "all";
-  location: string | "all";
-  seniority: SeniorityLevel | "all";
+  country: string | "all";
+  seniority: string | "all";
   workerType: WorkerKind | "all";
 }
 
-const ALL_FILTERS: CompositionFilters = {
-  businessUnit: "all", location: "all", seniority: "all", workerType: "all",
-};
+const ALL_FILTERS: CompositionFilters = { country: "all", seniority: "all", workerType: "all" };
 
-function applyFilters(rows: CompositionPerson[], f: CompositionFilters): CompositionPerson[] {
+function applyFilters(rows: CompositionRow[], f: CompositionFilters): CompositionRow[] {
   return rows.filter((r) =>
-    (f.businessUnit === "all" || r.businessUnit === f.businessUnit) &&
-    (f.location === "all" || r.location === f.location) &&
+    (f.country === "all" || r.country === f.country) &&
     (f.seniority === "all" || r.seniority === f.seniority) &&
     (f.workerType === "all" || r.workerType === f.workerType)
   );
 }
 
 // ------------------------------------------------------------------
-// Atelier-token chart palette (navy/gold + amber/teal/violet for mix).
+// Palette + labels
 // ------------------------------------------------------------------
 
-const GENDER_COLOR: Record<CompositionGender, string> = {
+const GENDER_COLOR: Record<Gender, string> = {
   female: "#c9a86a",
   male: "#8aa7d6",
   non_binary: "#a78bbb",
@@ -65,15 +195,25 @@ const PROFICIENCY_COLOR: Record<LangProficiency, string> = {
   native:  "#7ab7a6",
 };
 
-const SENIORITY_ORDER: SeniorityLevel[] = [
-  "Analyst", "Consultant", "Senior Consultant", "Manager", "Senior Manager", "Principal", "Partner",
-];
+const WORKER_LABEL: Record<WorkerKind, string> = {
+  employee: "Employee",
+  contractor: "Contractor",
+  partner_firm_resource: "Partner-firm",
+};
 
-// Tenure bands (years).
+const COUNTRY_LABEL: Record<string, string> = {
+  AE: "United Arab Emirates", SA: "Saudi Arabia", EG: "Egypt", JO: "Jordan",
+  QA: "Qatar", LB: "Lebanon", IN: "India", PT: "Portugal", GB: "United Kingdom",
+  DE: "Germany", ES: "Spain", FR: "France", SG: "Singapore", JP: "Japan",
+  BR: "Brazil", NG: "Nigeria", PL: "Poland", TR: "Türkiye", US: "United States",
+  IT: "Italy", NL: "Netherlands", CH: "Switzerland", GR: "Greece", MA: "Morocco",
+  TN: "Tunisia", KW: "Kuwait", BH: "Bahrain", OM: "Oman", PK: "Pakistan",
+};
+const labelCountry = (iso: string) => COUNTRY_LABEL[iso] ?? iso;
+
 function tenureYears(startDate: string): number {
   const start = new Date(startDate).getTime();
-  const now = new Date(COMPOSITION_AS_OF).getTime();
-  return Math.max(0, (now - start) / (365.25 * 24 * 3600 * 1000));
+  return Math.max(0, (Date.now() - start) / (365.25 * 24 * 3600 * 1000));
 }
 function tenureBand(y: number): string {
   if (y < 1) return "< 1 yr";
@@ -84,16 +224,6 @@ function tenureBand(y: number): string {
 }
 const TENURE_BANDS = ["< 1 yr", "1–3 yrs", "3–6 yrs", "6–10 yrs", "10+ yrs"];
 
-const COUNTRY_LABEL: Record<string, string> = {
-  AE: "United Arab Emirates", SA: "Saudi Arabia", EG: "Egypt", JO: "Jordan",
-  QA: "Qatar", LB: "Lebanon", IN: "India", PT: "Portugal", GB: "United Kingdom",
-  DE: "Germany", ES: "Spain", FR: "France", SG: "Singapore", JP: "Japan",
-  BR: "Brazil", NG: "Nigeria", PL: "Poland", TR: "Türkiye",
-};
-const labelCountry = (iso: string) => COUNTRY_LABEL[iso] ?? iso;
-
-// Empty `ChartConfig` — we drive colours via `fill=` on each series so the
-// theme-token machinery in chart.tsx is opt-in per chart later if needed.
 const EMPTY_CHART_CONFIG = {} satisfies ChartConfig;
 
 // ------------------------------------------------------------------
@@ -101,29 +231,21 @@ const EMPTY_CHART_CONFIG = {} satisfies ChartConfig;
 // ------------------------------------------------------------------
 
 export default function PeopleComposition() {
-  const allPeople = useCompositionPeople();
-  const orgUnits = useOrgUnits();
-  const reviews = useReviews();
-  const goals = useGoals();
-  const succession = useSuccession();
-  const skillGaps = useSkillGaps();
-  const [, navigate] = useLocation();
-
+  const { rows: allPeople, error, skillsError } = useCompositionData();
   const [filters, setFilters] = React.useState<CompositionFilters>(ALL_FILTERS);
-  const filtered = React.useMemo(() => applyFilters(allPeople, filters), [allPeople, filters]);
-  const inScopeNames = React.useMemo(
-    () => new Set(filtered.map((p) => p.fullName)),
-    [filtered],
+  const filtered = React.useMemo(
+    () => applyFilters(allPeople ?? [], filters),
+    [allPeople, filters],
   );
 
-  /** Build a directory deep-link URL that combines panel-clicked cohort
-   *  filters with whatever the dashboard filter bar already has set, so
-   *  the directory reflects exactly the same slice the user is looking at. */
+  /** Build a directory deep-link URL combining panel-clicked cohort params
+   *  with the dashboard filter bar, so the directory shows the same slice. */
   const cohortHref = React.useCallback(
-    (extra: Partial<Record<"nationality" | "gender" | "country" | "seniority" | "workerType", string>>) => {
+    (extra: Partial<Record<"nationality" | "gender" | "country" | "seniority" | "language", string>>) => {
       const sp = new URLSearchParams();
       if (filters.workerType !== "all") sp.set("workerType", filters.workerType);
       if (filters.seniority !== "all") sp.set("seniority", filters.seniority);
+      if (filters.country !== "all") sp.set("country", filters.country);
       for (const [k, v] of Object.entries(extra)) {
         if (v) sp.set(k, v);
       }
@@ -137,29 +259,28 @@ export default function PeopleComposition() {
       <LensPageHeader
         eyebrow="People · Composition"
         headline="Team composition — who do we have?"
-        lede="A snapshot of the firm's makeup: demographics, languages, hard- and soft-skills, performance distribution, seniority pyramid and tenure. Filters apply to every panel; numbers reflect data we have on file today."
+        lede="A live view of the active roster's makeup: demographics, languages, skills, seniority and tenure — read straight from the roster records HR maintains. Filters apply to every panel; panels note when a field hasn't been captured yet."
       />
 
       <div className="container-atelier py-6 space-y-6" data-testid="page-composition">
-        {allPeople.length === 0 ? (
-          <PeopleEmptyState message="No composition snapshot yet. Demographic, language and skill breakdowns will appear here once HR captures those fields for the roster." />
+        {error ? (
+          <Card className="p-6 text-sm text-warn" data-testid="composition-error">
+            Couldn't load the roster: {error}
+          </Card>
+        ) : allPeople === null ? (
+          <Card className="p-6 text-sm text-text-mute" data-testid="composition-loading">
+            Loading roster…
+          </Card>
+        ) : allPeople.length === 0 ? (
+          <PeopleEmptyState message="No active people on the roster yet. Demographic, language and skill breakdowns will appear here as HR adds people and captures those fields." />
         ) : (
           <>
-            <SnapshotBanner />
             <FilterBar people={allPeople} filters={filters} onChange={setFilters} />
-            <KpiStrip people={filtered} succession={succession} />
+            <KpiStrip people={filtered} />
             <DemographicsPanel people={filtered} cohortHref={cohortHref} />
-            <SeniorityStructurePanel people={filtered} orgUnits={orgUnits} cohortHref={cohortHref} />
-            <LanguagesPanel people={filtered} cohortHref={cohortHref} />
-            <HardSkillsPanel people={filtered} skillGaps={skillGaps} />
-            <SoftSkillsPanel people={filtered} />
-            <PerformancePanel
-              people={filtered}
-              inScopeNames={inScopeNames}
-              reviews={reviews}
-              goals={goals}
-              succession={succession}
-            />
+            <SeniorityStructurePanel people={filtered} cohortHref={cohortHref} />
+            <LanguagesPanel people={filtered} cohortHref={cohortHref} skillsError={skillsError} />
+            <SkillsPanel people={filtered} skillsError={skillsError} />
             <CrossCutPanel people={filtered} />
             <DataCoverageStrip people={filtered} />
             <CrossLinks cohortHref={cohortHref} />
@@ -171,41 +292,18 @@ export default function PeopleComposition() {
 }
 
 // ------------------------------------------------------------------
-// Honest data-source banner (addresses snapshot vs live-data drift).
-// ------------------------------------------------------------------
-
-function SnapshotBanner() {
-  return (
-    <Card className="p-3 border-l-4 border-l-gold/70" data-testid="composition-snapshot-banner">
-      <div className="text-[11px] text-text-mute leading-relaxed">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-gold mr-2">
-          Snapshot
-        </span>
-        Demographic, language and skill fields are populated from the
-        seeded People Lens snapshot while HR fills in the new
-        <span className="font-mono text-text"> gender</span> and
-        <span className="font-mono text-text"> nationality</span> columns
-        added to the roster tables in this task. As real data lands the
-        page will read straight from the roster API; the data-coverage
-        strip below tracks what's been captured today.
-      </div>
-    </Card>
-  );
-}
-
-// ------------------------------------------------------------------
 // Filter bar
 // ------------------------------------------------------------------
 
 function FilterBar({
   people, filters, onChange,
 }: {
-  people: CompositionPerson[];
+  people: CompositionRow[];
   filters: CompositionFilters;
   onChange: (f: CompositionFilters) => void;
 }) {
-  const businessUnits = uniqueSorted(people.map((p) => p.businessUnit));
-  const locations = uniqueSorted(people.map((p) => p.location));
+  const countries = uniqueSorted(people.map((p) => p.country).filter(Boolean) as string[]);
+  const seniorities = uniqueSorted(people.map((p) => p.seniority).filter(Boolean) as string[]);
   const set = (k: keyof CompositionFilters, v: string) =>
     onChange({ ...filters, [k]: v as never });
 
@@ -213,14 +311,11 @@ function FilterBar({
     <Card className="p-4" data-testid="composition-filters">
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="font-mono uppercase tracking-widest text-text-mute">Filters</span>
-        <Select label="Business unit" value={filters.businessUnit} onChange={(v) => set("businessUnit", v)}
-          options={[{ value: "all", label: "All" }, ...businessUnits.map((b) => ({ value: b, label: b }))]}
-          testId="filter-bu" />
-        <Select label="Location" value={filters.location} onChange={(v) => set("location", v)}
-          options={[{ value: "all", label: "All" }, ...locations.map((b) => ({ value: b, label: b }))]}
+        <Select label="Location" value={filters.country} onChange={(v) => set("country", v)}
+          options={[{ value: "all", label: "All" }, ...countries.map((c) => ({ value: c, label: labelCountry(c) }))]}
           testId="filter-location" />
         <Select label="Seniority" value={filters.seniority} onChange={(v) => set("seniority", v)}
-          options={[{ value: "all", label: "All" }, ...SENIORITY_ORDER.map((b) => ({ value: b, label: b }))]}
+          options={[{ value: "all", label: "All" }, ...seniorities.map((s) => ({ value: s, label: s }))]}
           testId="filter-seniority" />
         <Select label="Worker type" value={filters.workerType} onChange={(v) => set("workerType", v)}
           options={[
@@ -271,45 +366,29 @@ function Select({
 }
 
 // ------------------------------------------------------------------
-// KPI strip — top of page
+// KPI strip
 // ------------------------------------------------------------------
 
-function KpiStrip({ people, succession }: {
-  people: CompositionPerson[];
-  succession: ReturnType<typeof useSuccession>;
-}) {
+function KpiStrip({ people }: { people: CompositionRow[] }) {
   const headcount = people.length;
   const nationalities = new Set(people.map((p) => p.nationality).filter(Boolean) as string[]).size;
   const languages = new Set(people.flatMap((p) => p.languages.map((l) => l.slug))).size;
   const skills = new Set(people.flatMap((p) => p.hardSkills.map((s) => s.slug))).size;
-  // Filter-aware: count succession slots whose ready-now bench includes
-  // at least one person currently in scope. When the slice has no people
-  // the metric is meaningless, so report it as 0 / hide the denominator.
-  const inScope = new Set(people.map((p) => p.fullName));
-  const slotsInScope = succession.filter((s) =>
-    s.readyNow.some((n) => inScope.has(n)) ||
-    s.readyOneYear.some((n) => inScope.has(n)) ||
-    s.readyTwoToThreeYears.some((n) => inScope.has(n)) ||
-    inScope.has(s.incumbent),
-  );
-  const readyNowPct = slotsInScope.length === 0
+  const withStart = people.filter((p) => p.startDate);
+  const avgTenure = withStart.length === 0
+    ? null
+    : withStart.reduce((acc, p) => acc + tenureYears(p.startDate!), 0) / withStart.length;
+  const genderCaptured = headcount === 0
     ? 0
-    : Math.round(
-        (slotsInScope.filter((s) => s.readyNow.some((n) => inScope.has(n))).length /
-          slotsInScope.length) *
-          100,
-      );
-  const avgTenure = headcount === 0
-    ? 0
-    : people.reduce((acc, p) => acc + tenureYears(p.startDate), 0) / headcount;
+    : Math.round((people.filter((p) => p.gender !== "unspecified").length / headcount) * 100);
 
   const kpis = [
-    { id: "headcount",   label: "Headcount",            value: String(headcount) },
-    { id: "nationalities", label: "Nationalities",      value: String(nationalities) },
-    { id: "languages",   label: "Languages spoken",     value: String(languages) },
-    { id: "skills",      label: "Hard skills tracked",  value: String(skills) },
-    { id: "successor",   label: "Roles w/ ready-now",   value: `${readyNowPct}%` },
-    { id: "tenure",      label: "Avg tenure (yrs)",     value: avgTenure.toFixed(1) },
+    { id: "headcount",     label: "Headcount (active)",   value: String(headcount) },
+    { id: "nationalities", label: "Nationalities",        value: String(nationalities) },
+    { id: "languages",     label: "Languages spoken",     value: String(languages) },
+    { id: "skills",        label: "Hard skills tracked",  value: String(skills) },
+    { id: "gender",        label: "Gender captured",      value: `${genderCaptured}%` },
+    { id: "tenure",        label: "Avg tenure (yrs)",     value: avgTenure === null ? "—" : avgTenure.toFixed(1) },
   ];
 
   return (
@@ -331,29 +410,41 @@ function KpiStrip({ people, succession }: {
 function DemographicsPanel({
   people, cohortHref,
 }: {
-  people: CompositionPerson[];
+  people: CompositionRow[];
   cohortHref: (extra: Record<string, string>) => string;
 }) {
   const [, navigate] = useLocation();
-  const genderData = countBy(people, (p) => p.gender);
+  const genderData = countBy(
+    people.filter((p) => p.gender !== "unspecified"),
+    (p) => p.gender,
+  );
+  const unspecifiedCount = people.filter((p) => p.gender === "unspecified").length;
   const nationalityData = topN(
     countBy(people.filter((p) => p.nationality), (p) => p.nationality!),
     8,
   );
-  const locationData = countBy(people, (p) => p.location);
+  const locationData = countBy(
+    people.filter((p) => p.country),
+    (p) => labelCountry(p.country!),
+  );
+  const withStart = people.filter((p) => p.startDate);
   const tenureData = TENURE_BANDS.map((band) => ({
     name: band,
-    value: people.filter((p) => tenureBand(tenureYears(p.startDate)) === band).length,
+    value: withStart.filter((p) => tenureBand(tenureYears(p.startDate!)) === band).length,
   }));
 
   return (
     <PanelCard
       title="Demographics"
-      sub="Self-identified gender, nationality, location and tenure bands. Click any slice to open the directory pre-filtered to that cohort."
+      sub="Self-identified gender, nationality, location and tenure bands from the roster. Click any slice to open the directory pre-filtered to that cohort."
       testId="composition-panel-demographics"
     >
       <div className="grid gap-6 md:grid-cols-2">
-        <ChartFrame label="Gender distribution" empty={genderData.length === 0}>
+        <ChartFrame
+          label="Gender distribution"
+          empty={genderData.length === 0}
+          emptyNote="Gender not captured for anyone in this slice yet — HR can record it on each person's profile."
+        >
           <PieChart>
             <Pie
               data={genderData}
@@ -364,13 +455,11 @@ function DemographicsPanel({
               stroke="none"
               cursor="pointer"
               onClick={(d: { name?: string }) => {
-                if (d?.name && d.name !== "unspecified") {
-                  navigate(cohortHref({ gender: d.name }));
-                }
+                if (d?.name) navigate(cohortHref({ gender: d.name }));
               }}
             >
               {genderData.map((d) => (
-                <Cell key={d.name} fill={GENDER_COLOR[d.name as CompositionGender] ?? "#5b5d63"} />
+                <Cell key={d.name} fill={GENDER_COLOR[d.name as Gender] ?? "#5b5d63"} />
               ))}
             </Pie>
             <Legend wrapperStyle={{ fontSize: 11 }} formatter={(v) => String(v).replace("_", "-")} />
@@ -378,7 +467,11 @@ function DemographicsPanel({
           </PieChart>
         </ChartFrame>
 
-        <ChartFrame label="Nationality (top 8)" empty={nationalityData.length === 0}>
+        <ChartFrame
+          label={nationalityData.some((d) => d.name === "Other") ? "Nationality (top 8 + other)" : "Nationality"}
+          empty={nationalityData.length === 0}
+          emptyNote="Nationality not captured for anyone in this slice yet — HR can record it on each person's profile."
+        >
           <BarChart
             data={nationalityData}
             layout="vertical"
@@ -397,7 +490,11 @@ function DemographicsPanel({
           </BarChart>
         </ChartFrame>
 
-        <ChartFrame label="Location" empty={locationData.length === 0}>
+        <ChartFrame
+          label="Location"
+          empty={locationData.length === 0}
+          emptyNote="No location (country) captured for anyone in this slice yet."
+        >
           <BarChart
             data={locationData}
             layout="vertical"
@@ -405,9 +502,8 @@ function DemographicsPanel({
             onClick={(state: { activeLabel?: string }) => {
               const label = state?.activeLabel;
               if (label) {
-                // Location strings look like "Dubai · AE" — extract ISO suffix.
-                const iso = label.split("·").pop()?.trim();
-                if (iso) navigate(cohortHref({ country: iso }));
+                const iso = Object.entries(COUNTRY_LABEL).find(([, v]) => v === label)?.[0] ?? label;
+                navigate(cohortHref({ country: iso }));
               }
             }}
           >
@@ -419,7 +515,11 @@ function DemographicsPanel({
           </BarChart>
         </ChartFrame>
 
-        <ChartFrame label="Tenure bands" empty={tenureData.every((d) => d.value === 0)}>
+        <ChartFrame
+          label="Tenure bands"
+          empty={tenureData.every((d) => d.value === 0)}
+          emptyNote="No start dates captured for anyone in this slice yet, so tenure can't be derived."
+        >
           <BarChart data={tenureData}>
             <CartesianGrid vertical={false} stroke="#2a2c33" />
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} />
@@ -429,6 +529,12 @@ function DemographicsPanel({
           </BarChart>
         </ChartFrame>
       </div>
+      {unspecifiedCount > 0 && genderData.length > 0 && (
+        <p className="mt-3 text-[11px] text-text-mute" data-testid="gender-unspecified-note">
+          {unspecifiedCount} {unspecifiedCount === 1 ? "person hasn't" : "people haven't"}{" "}
+          had gender captured yet; they're excluded from the gender chart.
+        </p>
+      )}
     </PanelCard>
   );
 }
@@ -438,39 +544,34 @@ function DemographicsPanel({
 // ------------------------------------------------------------------
 
 function SeniorityStructurePanel({
-  people, orgUnits, cohortHref,
+  people, cohortHref,
 }: {
-  people: CompositionPerson[];
-  orgUnits: ReturnType<typeof useOrgUnits>;
+  people: CompositionRow[];
   cohortHref: (extra: Record<string, string>) => string;
 }) {
   const [, navigate] = useLocation();
-  const pyramid = SENIORITY_ORDER.map((level) => ({
+  const seniorities = uniqueSorted(people.map((p) => p.seniority).filter(Boolean) as string[]);
+  const pyramid = seniorities.map((level) => ({
     name: level,
     value: people.filter((p) => p.seniority === level).length,
-  }));
-
-  // Span of control — count of direct reports per manager.
-  const reportsByMgr = new Map<string, number>();
-  for (const p of people) {
-    if (p.managerId) reportsByMgr.set(p.managerId, (reportsByMgr.get(p.managerId) ?? 0) + 1);
-  }
-  const managers = Array.from(reportsByMgr.entries())
-    .map(([mgrId, n]) => ({ mgrId, n, name: people.find((x) => x.id === mgrId)?.fullName ?? mgrId }))
-    .sort((a, b) => b.n - a.n);
-
-  const buCounts = countBy(people, (p) => p.businessUnit);
+  })).sort((a, b) => b.value - a.value);
+  const noSeniority = people.filter((p) => !p.seniority).length;
+  const workerTypeCounts = countBy(people, (p) => WORKER_LABEL[p.workerType]);
 
   return (
     <PanelCard
       title="Seniority & structure"
-      sub="Pyramid by level (clickable), span-of-control per manager, and headcount by business unit."
+      sub="Headcount by seniority level (clickable) and by worker type. Contractors don't carry a seniority level."
       testId="composition-panel-seniority"
     >
-      <div className="grid gap-6 md:grid-cols-3">
-        <ChartFrame label="Seniority pyramid" empty={pyramid.every((d) => d.value === 0)}>
+      <div className="grid gap-6 md:grid-cols-2">
+        <ChartFrame
+          label="By seniority"
+          empty={pyramid.length === 0}
+          emptyNote="No seniority levels captured for anyone in this slice yet."
+        >
           <BarChart
-            data={[...pyramid].reverse()}
+            data={pyramid}
             layout="vertical"
             margin={{ left: 20 }}
             onClick={(state: { activeLabel?: string }) => {
@@ -479,47 +580,30 @@ function SeniorityStructurePanel({
           >
             <CartesianGrid horizontal={false} stroke="#2a2c33" />
             <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-            <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
+            <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
             <Tooltip cursor={{ fill: "#2a2c33" }} />
             <Bar dataKey="value" fill="#c9a86a" radius={[0, 2, 2, 0]} cursor="pointer" />
           </BarChart>
         </ChartFrame>
 
-        <Card className="p-3 col-span-1">
-          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">Span of control</div>
-          {managers.length === 0 ? (
-            <EmptyNote>No reporting relationships in this slice.</EmptyNote>
+        <Card className="p-3">
+          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">By worker type</div>
+          {workerTypeCounts.length === 0 ? (
+            <EmptyNote>No people in this slice.</EmptyNote>
           ) : (
             <ul className="space-y-1.5 text-xs">
-              {managers.map((m) => (
-                <li key={m.mgrId} className="flex items-center justify-between">
-                  <span className="text-text">{m.name}</span>
-                  <MonoChip tone={m.n > 6 ? "amber" : "default"}>{m.n} reports</MonoChip>
+              {workerTypeCounts.map((b) => (
+                <li key={b.name} className="flex items-center justify-between">
+                  <span className="text-text">{b.name}</span>
+                  <MonoChip>{b.value}</MonoChip>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
-
-        <Card className="p-3">
-          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">By business unit</div>
-          {buCounts.length === 0 ? (
-            <EmptyNote>No data in this slice.</EmptyNote>
-          ) : (
-            <ul className="space-y-1.5 text-xs">
-              {buCounts.map((b) => {
-                const ou = orgUnits.find((o) => o.name === b.name);
-                return (
-                  <li key={b.name} className="flex items-center justify-between">
-                    <div>
-                      <div className="text-text">{b.name}</div>
-                      {ou && <div className="text-[10px] text-text-faint">head · {ou.headName}</div>}
-                    </div>
-                    <MonoChip>{b.value}</MonoChip>
-                  </li>
-                );
-              })}
-            </ul>
+          {noSeniority > 0 && (
+            <p className="mt-3 text-[10px] text-text-faint">
+              {noSeniority} {noSeniority === 1 ? "person has" : "people have"} no seniority level on file.
+            </p>
           )}
         </Card>
       </div>
@@ -528,12 +612,13 @@ function SeniorityStructurePanel({
 }
 
 // ------------------------------------------------------------------
-// Languages
+// Languages — read from the skill graph (skills with kind = "language").
 // ------------------------------------------------------------------
 
-function LanguagesPanel({ people, cohortHref }: {
+function LanguagesPanel({ people, cohortHref, skillsError }: {
   cohortHref: (extra: Record<string, string>) => string;
-  people: CompositionPerson[];
+  people: CompositionRow[];
+  skillsError: string | null;
 }) {
   const [, navigate] = useLocation();
   type Row = { slug: string; label: string; basic: number; working: number; fluent: number; native: number; total: number };
@@ -552,11 +637,20 @@ function LanguagesPanel({ people, cohortHref }: {
   return (
     <PanelCard
       title="Languages"
-      sub="Coverage matrix by proficiency band. Click a language row to open the directory pre-filtered to speakers of that language; rows where only one person speaks the language are flagged as a single point of failure."
+      sub="Language coverage from the skill graph (skills recorded with kind “language” on each person's profile). Rows where only one person speaks the language are flagged as a single point of failure."
       testId="composition-panel-languages"
     >
-      {rows.length === 0 ? (
-        <EmptyNote>No language coverage captured for this slice.</EmptyNote>
+      {skillsError ? (
+        <EmptyNote>
+          Couldn't load language data from the skill graph right now ({skillsError}).
+          Reload the page to retry — the roster panels above are unaffected.
+        </EmptyNote>
+      ) : rows.length === 0 ? (
+        <EmptyNote>
+          No languages captured yet for this slice. Languages live in the skill
+          graph — add a “language” skill on a person's roster profile (Skills
+          tab) and it will chart here.
+        </EmptyNote>
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -617,15 +711,10 @@ function LanguagesPanel({ people, cohortHref }: {
 }
 
 // ------------------------------------------------------------------
-// Hard skills
+// Skills (hard + soft, both from the skill graph)
 // ------------------------------------------------------------------
 
-function HardSkillsPanel({
-  people, skillGaps,
-}: {
-  people: CompositionPerson[];
-  skillGaps: ReturnType<typeof useSkillGaps>;
-}) {
+function SkillsPanel({ people, skillsError }: { people: CompositionRow[]; skillsError: string | null }) {
   type Row = { slug: string; label: string; count: number; avgProficiency: number };
   const agg = new Map<string, { label: string; count: number; profSum: number }>();
   for (const p of people) {
@@ -636,28 +725,26 @@ function HardSkillsPanel({
       agg.set(s.slug, cur);
     }
   }
-  const rows: Row[] = Array.from(agg.entries())
+  const hardRows: Row[] = Array.from(agg.entries())
     .map(([slug, v]) => ({ slug, label: v.label, count: v.count, avgProficiency: v.profSum / Math.max(1, v.count) }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 20);
 
-  const inScopeSupplyBySlug = new Map<string, number>();
+  const softAgg = new Map<string, { label: string; count: number }>();
   for (const p of people) {
-    for (const s of p.hardSkills) {
-      inScopeSupplyBySlug.set(s.slug, (inScopeSupplyBySlug.get(s.slug) ?? 0) + 1);
-      const k = s.label.toLowerCase();
-      inScopeSupplyBySlug.set(k, (inScopeSupplyBySlug.get(k) ?? 0) + 1);
+    for (const s of p.softSkills) {
+      const cur = softAgg.get(s.slug) ?? { label: s.label, count: 0 };
+      cur.count += 1;
+      softAgg.set(s.slug, cur);
     }
   }
-  const supplyVsDemand = skillGaps.map((g) => {
-    const supply = inScopeSupplyBySlug.get(g.skill.toLowerCase()) ?? 0;
-    return { name: g.skill, supply, demand: g.demandRoles, gap: g.demandRoles - supply };
-  });
+  const softRows = Array.from(softAgg.values()).sort((a, b) => b.count - a.count);
+  const softSingle = softRows.filter((r) => r.count === 1);
 
   return (
     <PanelCard
-      title="Hard skills"
-      sub="Top hard skills by people-count with average proficiency, plus in-scope supply vs role-demand. Both columns honour the active filters above; demand comes from the open-roles skill-gap report."
+      title="Skills"
+      sub="Hard skills (tech / function / industry / tool) with people-count and average proficiency, plus soft-skill tag distribution — both from the verified skill graph, honouring the filters above."
       testId="composition-panel-hard-skills"
     >
       <div className="grid gap-6 md:grid-cols-2">
@@ -665,11 +752,19 @@ function HardSkillsPanel({
           <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">
             Top hard skills (people · avg proficiency)
           </div>
-          {rows.length === 0 ? (
-            <EmptyNote>No hard-skill data captured for this slice.</EmptyNote>
+          {skillsError ? (
+            <EmptyNote>
+              Couldn't load skill data right now ({skillsError}). Reload the
+              page to retry.
+            </EmptyNote>
+          ) : hardRows.length === 0 ? (
+            <EmptyNote>
+              No hard skills captured yet for this slice. Add tech / function /
+              industry / tool skills on a person's roster profile.
+            </EmptyNote>
           ) : (
             <ul className="space-y-1.5 text-xs">
-              {rows.map((r) => (
+              {hardRows.map((r) => (
                 <li key={r.slug} className="flex items-center justify-between gap-3">
                   <span className="text-text truncate">{r.label}</span>
                   <span className="flex items-center gap-2 shrink-0">
@@ -682,181 +777,40 @@ function HardSkillsPanel({
           )}
         </div>
 
-        <div>
+        <div data-testid="composition-panel-soft-skills">
           <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">
-            In-scope supply vs open-role demand
+            Soft-skill tags
           </div>
-          <ChartFrame label="" empty={supplyVsDemand.length === 0}>
-            <BarChart data={supplyVsDemand} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid horizontal={false} stroke="#2a2c33" />
-              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-              <Tooltip cursor={{ fill: "#2a2c33" }} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="supply" name="In-scope supply" fill="#8aa7d6" radius={[0, 2, 2, 0]} />
-              <Bar dataKey="demand" name="Role demand" fill="#c9a86a" radius={[0, 2, 2, 0]} />
-            </BarChart>
-          </ChartFrame>
+          {skillsError ? (
+            <EmptyNote>
+              Couldn't load skill data right now ({skillsError}). Reload the
+              page to retry.
+            </EmptyNote>
+          ) : softRows.length === 0 ? (
+            <EmptyNote>
+              No soft-skill tags captured yet for this slice. Add “soft” skills
+              on a person's roster profile and they'll aggregate here.
+            </EmptyNote>
+          ) : (
+            <>
+              <ul className="space-y-1.5 text-xs">
+                {softRows.slice(0, 20).map((r) => (
+                  <li key={r.label} className="flex items-center justify-between gap-3">
+                    <span className="text-text truncate">{r.label}</span>
+                    <MonoChip>{r.count} ppl</MonoChip>
+                  </li>
+                ))}
+              </ul>
+              {softSingle.length > 0 && (
+                <p className="mt-3 text-[11px] text-text-mute">
+                  <span className="text-warn">⚠</span> {softSingle.length} soft-skill tag
+                  {softSingle.length === 1 ? "" : "s"} held by only one person:{" "}
+                  {softSingle.map((s) => s.label).join(", ")}.
+                </p>
+              )}
+            </>
+          )}
         </div>
-      </div>
-    </PanelCard>
-  );
-}
-
-// ------------------------------------------------------------------
-// Soft skills
-// ------------------------------------------------------------------
-
-function SoftSkillsPanel({ people }: { people: CompositionPerson[] }) {
-  const data = COMPOSITION_SOFT_SKILLS.map((tag) => ({
-    name: tag, value: people.filter((p) => p.softSkills.includes(tag)).length,
-  })).sort((a, b) => b.value - a.value);
-  const single = data.filter((d) => d.value === 1);
-
-  return (
-    <PanelCard
-      title="Soft skills"
-      sub="Distribution of soft-skill tags across the team. Tags carried by only one person are flagged as a single point of failure."
-      testId="composition-panel-soft-skills"
-    >
-      <ChartFrame label="" empty={data.every((d) => d.value === 0)}>
-        <BarChart data={data}>
-          <CartesianGrid vertical={false} stroke="#2a2c33" />
-          <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} interval={0} angle={-12} textAnchor="end" height={60} />
-          <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-          <Tooltip cursor={{ fill: "#2a2c33" }} />
-          <Bar dataKey="value" fill="#a78bbb" radius={[2, 2, 0, 0]} />
-        </BarChart>
-      </ChartFrame>
-      {single.length > 0 && (
-        <p className="mt-3 text-[11px] text-text-mute">
-          <span className="text-warn">⚠</span> {single.length} soft-skill tag
-          {single.length === 1 ? "" : "s"} held by only one person:{" "}
-          {single.map((s) => s.name).join(", ")}.
-        </p>
-      )}
-    </PanelCard>
-  );
-}
-
-// ------------------------------------------------------------------
-// Performance — review ratings, goal status, and 9-box (rating × potential).
-//
-// Review ratings come from `useReviews` filtered to the in-scope people
-// (matched by name — names are unique in the snapshot). Goal status is
-// the same intersection on `useGoals`. 9-box potential is derived from
-// `useSuccession` per the task spec: a person is `ready_now` if they
-// appear in any slot's `readyNow`, otherwise `ready_1y` / `ready_2_3y`,
-// otherwise `not_yet`.
-// ------------------------------------------------------------------
-
-type Potential = "ready_now" | "ready_1y" | "ready_2_3y" | "not_yet";
-
-function potentialFromSuccession(
-  name: string,
-  succession: ReturnType<typeof useSuccession>,
-): Potential {
-  for (const slot of succession) if (slot.readyNow.includes(name)) return "ready_now";
-  for (const slot of succession) if (slot.readyOneYear.includes(name)) return "ready_1y";
-  for (const slot of succession) if (slot.readyTwoToThreeYears.includes(name)) return "ready_2_3y";
-  return "not_yet";
-}
-
-function PerformancePanel({
-  people, inScopeNames, reviews, goals, succession,
-}: {
-  people: CompositionPerson[];
-  inScopeNames: Set<string>;
-  reviews: ReturnType<typeof useReviews>;
-  goals: ReturnType<typeof useGoals>;
-  succession: ReturnType<typeof useSuccession>;
-}) {
-  // Reviews intersected with in-scope people.
-  const scopedReviews = reviews.filter((r) => inScopeNames.has(r.personName));
-  const ratingBuckets = ["exceeds", "meets", "developing", "not-yet-rated"] as const;
-  const ratingDist = ratingBuckets.map((b) => ({
-    name: b,
-    value: b === "not-yet-rated"
-      ? scopedReviews.filter((r) => !r.managerRating).length
-      : scopedReviews.filter((r) => r.managerRating === b).length,
-  }));
-
-  // Goals intersected with in-scope people.
-  const scopedGoals = goals.filter((g) => inScopeNames.has(g.personName));
-  const goalStatusOrder = ["on-track", "at-risk", "off-track", "complete"] as const;
-  const goalDist = goalStatusOrder.map((s) => ({
-    name: s,
-    value: scopedGoals.filter((g) => g.status === s).length,
-  }));
-
-  // 9-box: rating × potential, both derived for scoped people.
-  const perfRows: ("exceeds" | "meets" | "developing")[] = ["exceeds", "meets", "developing"];
-  const potCols: Potential[] = ["ready_now", "ready_1y", "ready_2_3y", "not_yet"];
-  const ratedReviews = scopedReviews.filter((r) => r.managerRating);
-  const cell = (rating: string, pot: Potential) =>
-    ratedReviews.filter(
-      (r) => r.managerRating === rating && potentialFromSuccession(r.personName, succession) === pot,
-    ).length;
-
-  return (
-    <PanelCard
-      title="Performance"
-      sub="Manager-rating distribution from reviews in the open cycle, goal-status mix and a rating × potential 9-box. Potential is derived live from succession readiness; everything is restricted to people in this slice."
-      testId="composition-panel-performance"
-    >
-      <div className="grid gap-6 md:grid-cols-3">
-        <ChartFrame label="Manager rating" empty={ratingDist.every((d) => d.value === 0)}>
-          <BarChart data={ratingDist}>
-            <CartesianGrid vertical={false} stroke="#2a2c33" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-            <Tooltip cursor={{ fill: "#2a2c33" }} />
-            <Bar dataKey="value" fill="#c9a86a" radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ChartFrame>
-
-        <ChartFrame label="Goal status (cycle)" empty={goalDist.every((d) => d.value === 0)}>
-          <BarChart data={goalDist}>
-            <CartesianGrid vertical={false} stroke="#2a2c33" />
-            <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-            <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9aa0a6" }} />
-            <Tooltip cursor={{ fill: "#2a2c33" }} />
-            <Bar dataKey="value" fill="#7ab7a6" radius={[2, 2, 0, 0]} />
-          </BarChart>
-        </ChartFrame>
-
-        <Card className="p-3" data-testid="composition-9box">
-          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-2">9-box · rating × potential</div>
-          <div className="grid grid-cols-5 gap-1 text-[10px]">
-            <div></div>
-            {potCols.map((c) => (
-              <div key={c} className="text-center font-mono uppercase text-text-faint">{c.replace("_", " ")}</div>
-            ))}
-            {perfRows.map((row) => (
-              <React.Fragment key={row}>
-                <div className="font-mono uppercase text-text-faint text-right pr-1">{row}</div>
-                {potCols.map((col) => {
-                  const n = cell(row, col);
-                  const intensity = n === 0 ? 0 : Math.min(0.85, 0.2 + n * 0.15);
-                  return (
-                    <div
-                      key={col}
-                      className="aspect-square flex items-center justify-center rounded text-text font-mono text-xs"
-                      style={{ backgroundColor: n === 0 ? "#1a1c20" : `rgba(201,168,106,${intensity})` }}
-                    >
-                      {n || ""}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-          <p className="mt-2 text-[10px] text-text-faint">
-            Reviews in scope: <span className="text-text-mute">{scopedReviews.length}</span> ·
-            people in scope: <span className="text-text-mute">{people.length}</span>.
-            Not-yet-rated rows excluded from the grid.
-          </p>
-        </Card>
       </div>
     </PanelCard>
   );
@@ -868,23 +822,17 @@ function PerformancePanel({
 
 const CROSS_CUTS = [
   { id: "gender_x_seniority", label: "Gender × seniority",
-    rowKey: (p: CompositionPerson) => p.gender,
-    colKey: (p: CompositionPerson) => p.seniority,
-    rows: ["female", "male", "non_binary", "unspecified"] as string[],
-    cols: SENIORITY_ORDER as readonly string[] },
-  { id: "nationality_x_bu", label: "Nationality × business unit",
-    rowKey: (p: CompositionPerson) => p.nationality ?? "—",
-    colKey: (p: CompositionPerson) => p.businessUnit,
-    rows: null as readonly string[] | null,
-    cols: null as readonly string[] | null },
+    rowKey: (p: CompositionRow) => p.gender,
+    colKey: (p: CompositionRow) => p.seniority ?? "—" },
+  { id: "nationality_x_worker_type", label: "Nationality × worker type",
+    rowKey: (p: CompositionRow) => p.nationality ?? "—",
+    colKey: (p: CompositionRow) => WORKER_LABEL[p.workerType] },
   { id: "language_x_location", label: "Language × location",
-    rowKey: (p: CompositionPerson) => p.languages.map((l) => l.label),
-    colKey: (p: CompositionPerson) => p.location,
-    rows: null as readonly string[] | null,
-    cols: null as readonly string[] | null },
+    rowKey: (p: CompositionRow) => p.languages.map((l) => l.label),
+    colKey: (p: CompositionRow) => (p.country ? labelCountry(p.country) : "—") },
 ] as const;
 
-function CrossCutPanel({ people }: { people: CompositionPerson[] }) {
+function CrossCutPanel({ people }: { people: CompositionRow[] }) {
   const [active, setActive] = React.useState<typeof CROSS_CUTS[number]["id"]>("gender_x_seniority");
   const cut = CROSS_CUTS.find((c) => c.id === active)!;
 
@@ -905,14 +853,14 @@ function CrossCutPanel({ people }: { people: CompositionPerson[] }) {
       }
     }
   }
-  const rows = (cut.rows ?? Array.from(rowSet).sort()) as string[];
-  const cols = (cut.cols ?? Array.from(colSet).sort()) as string[];
+  const rows = Array.from(rowSet).sort();
+  const cols = Array.from(colSet).sort();
   const max = Math.max(1, ...Array.from(cell.values()));
 
   return (
     <PanelCard
       title="Cross-cuts"
-      sub="Pivot two dimensions to spot uneven coverage. Three preset axes — full pivot UI is out of scope."
+      sub="Pivot two dimensions to spot uneven coverage. Three preset axes — full pivot UI is out of scope. “—” marks people missing that field."
       testId="composition-panel-cross-cuts"
     >
       <div className="flex flex-wrap gap-2 mb-3">
@@ -930,7 +878,7 @@ function CrossCutPanel({ people }: { people: CompositionPerson[] }) {
         ))}
       </div>
       {rows.length === 0 || cols.length === 0 ? (
-        <EmptyNote>No data to cross-cut in this slice.</EmptyNote>
+        <EmptyNote>Nothing captured yet for these two dimensions in this slice.</EmptyNote>
       ) : (
         <div className="overflow-x-auto">
           <table className="text-xs">
@@ -973,10 +921,10 @@ function CrossCutPanel({ people }: { people: CompositionPerson[] }) {
 }
 
 // ------------------------------------------------------------------
-// Data coverage strip
+// Data coverage strip — real per-field fill rates from the roster.
 // ------------------------------------------------------------------
 
-function DataCoverageStrip({ people }: { people: CompositionPerson[] }) {
+function DataCoverageStrip({ people }: { people: CompositionRow[] }) {
   if (people.length === 0) {
     return null;
   }
@@ -984,10 +932,10 @@ function DataCoverageStrip({ people }: { people: CompositionPerson[] }) {
   const fields = [
     { id: "gender",      label: "Gender (self-identified)", filled: people.filter((p) => p.gender !== "unspecified").length },
     { id: "nationality", label: "Nationality",              filled: people.filter((p) => p.nationality).length },
+    { id: "startDate",   label: "Start date",               filled: people.filter((p) => p.startDate).length },
     { id: "language",    label: "≥ 1 language captured",    filled: people.filter((p) => p.languages.length > 0).length },
     { id: "hardSkill",   label: "≥ 1 hard skill",            filled: people.filter((p) => p.hardSkills.length > 0).length },
     { id: "softSkill",   label: "≥ 1 soft-skill tag",        filled: people.filter((p) => p.softSkills.length > 0).length },
-    { id: "rating",      label: "Manager rating set",        filled: people.filter((p) => p.performanceRating).length },
   ];
 
   return (
@@ -1024,7 +972,7 @@ function DataCoverageStrip({ people }: { people: CompositionPerson[] }) {
 }
 
 // ------------------------------------------------------------------
-// Cross-links into the People directory and the CHRO overview.
+// Cross-links into the People directory.
 // ------------------------------------------------------------------
 
 function CrossLinks({ cohortHref }: { cohortHref: (extra: Record<string, string>) => string }) {
@@ -1033,14 +981,8 @@ function CrossLinks({ cohortHref }: { cohortHref: (extra: Record<string, string>
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <span className="font-mono text-[10px] uppercase tracking-widest text-text-faint">Drill into</span>
         <Link href="/people/people" className="text-gold hover:underline">People directory →</Link>
-        <Link href={cohortHref({ nationality: "EG" })} className="text-gold hover:underline" data-testid="link-egyptian-cohort">
-          Egyptian nationals →
-        </Link>
         <Link href={cohortHref({ gender: "female" })} className="text-gold hover:underline" data-testid="link-female-cohort">
           Female cohort →
-        </Link>
-        <Link href={cohortHref({ seniority: "Partner" })} className="text-gold hover:underline" data-testid="link-partner-cohort">
-          Partners →
         </Link>
         <Link href="/people/perform" className="text-gold hover:underline">CHRO overview →</Link>
       </div>
@@ -1067,20 +1009,17 @@ function PanelCard({
 }
 
 function ChartFrame({
-  label, children, empty, inline,
-}: { label: string; children: React.ReactElement; empty?: boolean; inline?: boolean }) {
+  label, children, empty, emptyNote,
+}: { label: string; children: React.ReactElement; empty?: boolean; emptyNote?: string }) {
   return (
-    <div className={inline ? "" : "space-y-2"}>
+    <div className="space-y-2">
       {label && <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">{label}</div>}
       <div style={{ width: "100%", height: 220 }}>
         {empty ? (
-          <div className="h-full flex items-center justify-center text-xs text-text-faint border border-dashed border-border-soft rounded">
-            No data in this slice.
+          <div className="h-full flex items-center justify-center text-center text-xs text-text-faint border border-dashed border-border-soft rounded px-6">
+            {emptyNote ?? "No data in this slice."}
           </div>
         ) : (
-          // ChartContainer wraps its child in a Recharts ResponsiveContainer
-          // and applies the firm-wide chart CSS resets / theme hooks. We pass
-          // an empty config because we set series colours inline via `fill=`.
           <ChartContainer config={EMPTY_CHART_CONFIG} className="aspect-auto h-full w-full">
             {children}
           </ChartContainer>
@@ -1091,30 +1030,31 @@ function ChartFrame({
 }
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
-  return <div className="text-xs text-text-faint italic">{children}</div>;
+  return (
+    <div className="py-6 px-4 text-center text-xs text-text-faint border border-dashed border-border-soft rounded">
+      {children}
+    </div>
+  );
 }
 
-// ------------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------------
-
-function uniqueSorted<T extends string>(xs: T[]): T[] {
-  return Array.from(new Set(xs)).sort();
+function uniqueSorted(values: string[]): string[] {
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
 }
 
-function countBy<T>(xs: T[], key: (x: T) => string): { name: string; value: number }[] {
+function countBy<T>(rows: T[], key: (r: T) => string): { name: string; value: number }[] {
   const m = new Map<string, number>();
-  for (const x of xs) {
-    const k = key(x);
+  for (const r of rows) {
+    const k = key(r);
     m.set(k, (m.get(k) ?? 0) + 1);
   }
-  return Array.from(m.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  return Array.from(m.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
 }
 
-function topN(rows: { name: string; value: number }[], n: number): { name: string; value: number }[] {
-  if (rows.length <= n) return rows;
-  const head = rows.slice(0, n - 1);
-  const tail = rows.slice(n - 1);
-  const other = tail.reduce((acc, r) => acc + r.value, 0);
-  return [...head, { name: "Other", value: other }];
+function topN(data: { name: string; value: number }[], n: number): { name: string; value: number }[] {
+  if (data.length <= n) return data;
+  const head = data.slice(0, n);
+  const rest = data.slice(n).reduce((acc, d) => acc + d.value, 0);
+  return [...head, { name: "Other", value: rest }];
 }

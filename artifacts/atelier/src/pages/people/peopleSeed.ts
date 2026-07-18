@@ -352,64 +352,6 @@ export interface EnpsSnapshot {
 }
 export const useEnpsHistory = staticList<EnpsSnapshot>([]);
 
-// ============================================================
-// Team Composition
-//
-// The composition dashboard reads demographic / language / skill fields
-// that are captured operationally in the roster. No seeded people —
-// panels render from real records only.
-// ============================================================
-
-export type CompositionGender = "female" | "male" | "non_binary" | "unspecified";
-export type LangProficiency = "basic" | "working" | "fluent" | "native";
-export type WorkerKind = "employee" | "contractor" | "partner_firm_resource";
-export type SeniorityLevel =
-  | "Analyst"
-  | "Consultant"
-  | "Senior Consultant"
-  | "Manager"
-  | "Senior Manager"
-  | "Principal"
-  | "Partner";
-
-export interface CompositionPerson {
-  id: string;
-  fullName: string;
-  workerType: WorkerKind;
-  seniority: SeniorityLevel;
-  businessUnit: string;
-  location: string;            // City — country shorthand
-  country: string;             // ISO-3166 alpha-2
-  /** ISO-3166 alpha-2 nationality code, or `null` if not yet captured. */
-  nationality: string | null;
-  gender: CompositionGender;
-  startDate: string;           // ISO date — used for tenure bands.
-  managerId: string | null;    // For span-of-control.
-  /** Atelier skill-graph language slugs with proficiency. */
-  languages: { slug: string; label: string; proficiency: LangProficiency }[];
-  /** Hard skills (tech / function / industry / tool) with proficiency 1–5. */
-  hardSkills: { slug: string; label: string; proficiency: number }[];
-  /** Soft skills (atelier_skills.kind = 'soft') the person is tagged with. */
-  softSkills: string[];
-  /** Manager rating from useReviews (null when not yet rated). */
-  performanceRating: "exceeds" | "meets" | "developing" | null;
-  /** Succession-readiness band, used as 9-box potential proxy. */
-  potential: "ready_now" | "ready_1y" | "ready_2_3y" | "not_yet";
-}
-
-export const COMPOSITION_SOFT_SKILLS = [
-  "Collaboration",
-  "Leadership",
-  "Communication",
-  "Ownership",
-  "Mentorship",
-  "Conflict resolution",
-  "Client presence",
-  "Critical thinking",
-] as const;
-
-export const useCompositionPeople = staticList<CompositionPerson>([]);
-
-/** Snapshot timestamp for the dashboard "as of" stamp. Module-scope so the
- *  whole page sees the same value within a session. */
-export const COMPOSITION_AS_OF = new Date().toISOString().slice(0, 10);
+// Team Composition types/hooks used to live here; the Composition page now
+// reads live data from /api/atelier/roster/people and the skill graph, so
+// the local snapshot machinery was removed (Task #116).

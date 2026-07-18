@@ -289,6 +289,37 @@ router.post("/roster/skill-graph/skills", async (req, res) => {
   res.json({ skill: skillToWire(inserted!) });
 });
 
+// Task #116 — bulk read of every active person-skill row so the People
+// Lens Composition dashboard can chart language / hard-skill / soft-skill
+// coverage across the whole roster without N per-person requests. Only
+// non-sensitive fields are exposed (no evidence, no verifier identity).
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/roster/skill-graph/person-skills", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rows = await db
+    .select({ ps: atelierPersonSkills, sk: atelierSkills })
+    .from(atelierPersonSkills)
+    .innerJoin(atelierSkills, eq(atelierPersonSkills.skillId, atelierSkills.id))
+    .where(
+      and(
+        eq(atelierPersonSkills.status, "active"),
+        isNull(atelierPersonSkills.deletedAt),
+        isNull(atelierSkills.deletedAt),
+      ),
+    );
+  res.json({
+    personSkills: rows.map(({ ps, sk }) => ({
+      personType: ps.personType,
+      personId: ps.personId,
+      slug: sk.slug,
+      name: sk.name,
+      kind: sk.kind,
+      proficiency: ps.proficiency,
+    })),
+  });
+});
+
 // -----------------------------------------------------------------
 // Per-person skills
 // -----------------------------------------------------------------
