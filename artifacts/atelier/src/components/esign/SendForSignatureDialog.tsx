@@ -29,7 +29,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PenLine, Plus, Trash2, UserPlus } from "lucide-react";
+import { PenLine, Plus, Trash2, UserPlus, LayoutTemplate } from "lucide-react";
+import { type Placement } from "@/components/esign/placement";
+
+// Lazy: the placement editor pulls in pdf.js (large, and its worker
+// asset import is Vite-only), so it must never load with the dialog
+// itself — only when the sender opens the preview.
+const SignaturePlacementEditor = React.lazy(() =>
+  import("@/components/esign/SignaturePlacementEditor").then((m) => ({
+    default: m.SignaturePlacementEditor,
+  })),
+);
 
 const selectCls =
   "h-9 rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
@@ -107,6 +117,7 @@ export interface CreateSignaturePayload {
   accountId?: string;
   opportunityId?: string;
   expiresInDays?: number;
+  placements?: Placement[];
 }
 
 /**
@@ -122,6 +133,12 @@ export function buildCreateSignaturePayload(args: {
   selectedAccountId: string;
   opportunityId?: string;
   expiresInDays: string;
+  /**
+   * Sender-adjusted signature boxes (one per signer). Only sent when
+   * present AND matching the signer count — otherwise the server's
+   * default last-page layout applies.
+   */
+  placements?: Placement[] | null;
 }): CreateSignaturePayload {
   return {
     title: args.title.trim(),
@@ -134,6 +151,10 @@ export function buildCreateSignaturePayload(args: {
     accountId: args.lockedAccountId ?? (args.selectedAccountId || undefined),
     opportunityId: args.opportunityId || undefined,
     expiresInDays: args.expiresInDays ? Number(args.expiresInDays) : undefined,
+    placements:
+      args.placements && args.placements.length === args.signers.length
+        ? args.placements
+        : undefined,
   };
 }
 
@@ -224,6 +245,13 @@ export function SendForSignatureDialog({
   const [accountId, setAccountId] = React.useState("");
   const [expiresInDays, setExpiresInDays] = React.useState("");
   const [signers, setSigners] = React.useState<SignerDraft[]>([{ name: "", email: "" }]);
+  const [showPlacement, setShowPlacement] = React.useState(false);
+  const [placements, setPlacements] = React.useState<Placement[] | null>(null);
+
+  // A different document invalidates any custom box positions.
+  React.useEffect(() => {
+    setPlacements(null);
+  }, [documentId]);
 
   // Re-seed the title suggestion each time the dialog opens fresh.
   React.useEffect(() => {
@@ -252,6 +280,8 @@ export function SendForSignatureDialog({
     setAccountId("");
     setExpiresInDays("");
     setSigners([{ name: "", email: "" }]);
+    setShowPlacement(false);
+    setPlacements(null);
   };
 
   const pdfDocs = React.useMemo(
@@ -404,6 +434,46 @@ export function SendForSignatureDialog({
               ) : null}
             </div>
           </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-text-mute">Signature placement</label>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={!documentId}
+                onClick={() => setShowPlacement((v) => !v)}
+                data-testid="button-esign-placement-toggle"
+              >
+                <LayoutTemplate className="w-3.5 h-3.5 mr-1" />
+                {showPlacement ? "Hide preview" : "Preview & adjust"}
+              </Button>
+            </div>
+            {!showPlacement ? (
+              <p className="mt-1 text-xs text-text-faint" data-testid="text-esign-placement-default">
+                {placements
+                  ? "Custom positions set — boxes will land where you placed them."
+                  : "One signature box per signer will be placed automatically on the last page."}
+              </p>
+            ) : documentId ? (
+              <div className="mt-2">
+                <React.Suspense
+                  fallback={
+                    <div className="rounded-md border border-border/60 bg-bg-elevate/40 px-3 py-6 text-center text-xs text-text-faint">
+                      Loading placement editor…
+                    </div>
+                  }
+                >
+                  <SignaturePlacementEditor
+                    documentId={documentId}
+                    signerNames={signers.map((s) => s.name)}
+                    placements={placements}
+                    onChange={setPlacements}
+                  />
+                </React.Suspense>
+              </div>
+            ) : null}
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-text-mute">
@@ -472,6 +542,7 @@ export function SendForSignatureDialog({
                     selectedAccountId: accountId,
                     opportunityId,
                     expiresInDays,
+                    placements,
                   }),
                 })
               }

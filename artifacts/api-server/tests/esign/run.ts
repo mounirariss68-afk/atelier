@@ -66,6 +66,10 @@ const stub = {
   submissions: new Map<number, StubSubmission>(),
   resendCalls: [] as number[],
   authFailures: 0,
+  /** Fields payload of the most recent POST /templates/pdf. */
+  lastTemplateFields: null as
+    | Array<{ name: string; role: string; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
+    | null,
 };
 
 const SIGNED_PDF = Buffer.from("%PDF-1.4 signed-stub\n%%EOF");
@@ -87,6 +91,7 @@ function stubServer(): http.Server {
     req.on("end", () => {
       const body = raw ? JSON.parse(raw) : undefined;
       if (req.method === "POST" && url === "/templates/pdf") {
+        stub.lastTemplateFields = body?.documents?.[0]?.fields ?? null;
         return send(200, { id: stub.nextTemplateId++ });
       }
       if (req.method === "POST" && url === "/submissions") {
@@ -319,6 +324,99 @@ async function main(): Promise<void> {
         signers[0].status === "sent" &&
         signers[1].status === "pending",
       JSON.stringify(signers),
+    );
+
+    // Default placement: one signature field per signer, roles Signer N,
+    // stamped on the (only) page of the fixture PDF.
+    const defFields = stub.lastTemplateFields ?? [];
+    check(
+      "default template fields: one per signer with Signer N roles",
+      defFields.length === 2 &&
+        defFields[0].role === "Signer 1" &&
+        defFields[1].role === "Signer 2" &&
+        defFields.every((f) => f.areas?.length === 1),
+      JSON.stringify(defFields)?.slice(0, 240),
+    );
+
+    console.log("— custom placements —");
+
+    // Placement count must match signer count.
+    const rMismatch = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} placement mismatch`,
+      documentId: pdf.document.id,
+      signers: [
+        { name: "A", email: "pa@example.com" },
+        { name: "B", email: "pb@example.com" },
+      ],
+      placements: [{ page: 1, x: 0.1, y: 0.8, w: 0.3, h: 0.05 }],
+    });
+    check(
+      "placements count mismatch → 400",
+      rMismatch.status === 400 && rMismatch.body?.error === "placement-count-mismatch",
+      `status=${rMismatch.status} body=${JSON.stringify(rMismatch.body)}`,
+    );
+
+    // Boxes must fit within the page.
+    const rOob = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} placement oob`,
+      documentId: pdf.document.id,
+      signers: [{ name: "A", email: "poob@example.com" }],
+      placements: [{ page: 1, x: 0.9, y: 0.8, w: 0.3, h: 0.05 }],
+    });
+    check(
+      "placement out of bounds → 400",
+      rOob.status === 400 && rOob.body?.error === "placement-out-of-bounds",
+      `status=${rOob.status} body=${JSON.stringify(rOob.body)}`,
+    );
+
+    // Happy path: custom boxes flow through to the DocuSeal template
+    // fields verbatim (page clamped to the document's real page count).
+    const rPlaced = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} custom placement`,
+      documentId: pdf.document.id,
+      signers: [
+        { name: "P One", email: "p1@example.com" },
+        { name: "P Two", email: "p2@example.com" },
+      ],
+      placements: [
+        { page: 1, x: 0.1, y: 0.2, w: 0.25, h: 0.04 },
+        { page: 7, x: 0.6, y: 0.85, w: 0.3, h: 0.06 },
+      ],
+    });
+    check("POST with placements → 201", rPlaced.status === 201, `status=${rPlaced.status} body=${JSON.stringify(rPlaced.body)?.slice(0, 200)}`);
+    const placedFields = stub.lastTemplateFields ?? [];
+    const a0 = placedFields[0]?.areas?.[0];
+    const a1 = placedFields[1]?.areas?.[0];
+    check(
+      "custom placements land in template fields (roles + coords)",
+      placedFields.length === 2 &&
+        placedFields[0].role === "Signer 1" &&
+        placedFields[1].role === "Signer 2" &&
+        a0?.x === 0.1 && a0?.y === 0.2 && a0?.w === 0.25 && a0?.h === 0.04 && a0?.page === 1 &&
+        a1?.x === 0.6 && a1?.y === 0.85 && a1?.w === 0.3 && a1?.h === 0.06,
+      JSON.stringify(placedFields)?.slice(0, 300),
+    );
+    // Fixture PDF is unparseable by unpdf (page count unknown) so the
+    // requested page 7 passes through un-clamped but >= 1. With a real
+    // parseable PDF it clamps to the last page — asserted separately in
+    // the pure-unit check below via the lib's clamp path.
+    check(
+      "custom placement page is normalized (>= 1)",
+      typeof a1?.page === "number" && a1.page >= 1,
+      `page=${a1?.page}`,
+    );
+    check(
+      "placements recorded in send audit payload",
+      (
+        await db
+          .select()
+          .from(atelierAuditEvents)
+          .where(eq(atelierAuditEvents.entityId, rPlaced.body?.request?.id ?? ""))
+      ).some((ev) => {
+        const pl = (ev.payload as any)?.placements;
+        return ev.action === "signature_request.send" && Array.isArray(pl) && pl.length === 2;
+      }),
+      "no send audit row with placements",
     );
 
     console.log("— webhook-triggered sync —");

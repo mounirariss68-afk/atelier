@@ -184,6 +184,24 @@ const CreateBody = z.object({
   personId: z.string().optional(),
   /** Days until the request lapses (DocuSeal expire_at + local lapse). */
   expiresInDays: z.number().int().min(1).max(365).optional(),
+  /**
+   * Sender-chosen signature boxes, one per signer IN SIGNING ORDER.
+   * Normalized page-fraction coordinates (top-left origin), 1-based
+   * page. Omit to use the default layout on the last page.
+   */
+  placements: z
+    .array(
+      z.object({
+        page: z.number().int().min(1).max(2000),
+        x: z.number().min(0).max(0.98),
+        y: z.number().min(0).max(0.98),
+        w: z.number().min(0.02).max(1),
+        h: z.number().min(0.01).max(0.5),
+      }),
+    )
+    .min(1)
+    .max(10)
+    .optional(),
 });
 
 // @cli-skip: e-sign surfaces are UI-driven (Task #62)
@@ -203,6 +221,23 @@ router.post("/esign/requests", async (req, res) => {
   const emails = body.signers.map((s) => s.email.toLowerCase());
   if (new Set(emails).size !== emails.length) {
     res.status(400).json({ error: "duplicate-signer-email" });
+    return;
+  }
+
+  // Custom placements must cover every signer exactly once, in order.
+  if (body.placements && body.placements.length !== body.signers.length) {
+    res.status(400).json({
+      error: "placement-count-mismatch",
+      message: `Provide one signature placement per signer (${body.signers.length}), got ${body.placements.length}.`,
+    });
+    return;
+  }
+  // Boxes must fit on the page.
+  if (body.placements?.some((p) => p.x + p.w > 1.0001 || p.y + p.h > 1.0001)) {
+    res.status(400).json({
+      error: "placement-out-of-bounds",
+      message: "Signature boxes must fit within the page.",
+    });
     return;
   }
 
@@ -284,6 +319,7 @@ router.post("/esign/requests", async (req, res) => {
       contactId: body.contactId ?? null,
       personId: body.personId ?? null,
       expiresAt,
+      placements: body.placements ?? null,
     });
     res.status(201).json({ request: requestShape(out.request, out.signers) });
   } catch (err) {

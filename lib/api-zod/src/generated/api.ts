@@ -762,6 +762,22 @@ export const atelierCreateSignatureRequestBodySignersMax = 10;
 
 export const atelierCreateSignatureRequestBodyExpiresInDaysMax = 365;
 
+export const atelierCreateSignatureRequestBodyPlacementsItemPageMax = 2000;
+
+export const atelierCreateSignatureRequestBodyPlacementsItemXMin = 0;
+export const atelierCreateSignatureRequestBodyPlacementsItemXMax = 0.98;
+
+export const atelierCreateSignatureRequestBodyPlacementsItemYMin = 0;
+export const atelierCreateSignatureRequestBodyPlacementsItemYMax = 0.98;
+
+export const atelierCreateSignatureRequestBodyPlacementsItemWMin = 0.02;
+export const atelierCreateSignatureRequestBodyPlacementsItemWMax = 1;
+
+export const atelierCreateSignatureRequestBodyPlacementsItemHMin = 0.01;
+export const atelierCreateSignatureRequestBodyPlacementsItemHMax = 0.5;
+
+export const atelierCreateSignatureRequestBodyPlacementsMax = 10;
+
 export const AtelierCreateSignatureRequestBody = zod.object({
   title: zod.string().min(1).max(atelierCreateSignatureRequestBodyTitleMax),
   message: zod
@@ -793,6 +809,37 @@ export const AtelierCreateSignatureRequestBody = zod.object({
     .min(1)
     .max(atelierCreateSignatureRequestBodyExpiresInDaysMax)
     .optional(),
+  placements: zod
+    .array(
+      zod.object({
+        page: zod
+          .number()
+          .min(1)
+          .max(atelierCreateSignatureRequestBodyPlacementsItemPageMax),
+        x: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyPlacementsItemXMin)
+          .max(atelierCreateSignatureRequestBodyPlacementsItemXMax),
+        y: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyPlacementsItemYMin)
+          .max(atelierCreateSignatureRequestBodyPlacementsItemYMax),
+        w: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyPlacementsItemWMin)
+          .max(atelierCreateSignatureRequestBodyPlacementsItemWMax),
+        h: zod
+          .number()
+          .min(atelierCreateSignatureRequestBodyPlacementsItemHMin)
+          .max(atelierCreateSignatureRequestBodyPlacementsItemHMax),
+      }),
+    )
+    .min(1)
+    .max(atelierCreateSignatureRequestBodyPlacementsMax)
+    .optional()
+    .describe(
+      "Sender-chosen signature boxes, one per signer in signing order. Normalized page-fraction coordinates (top-left origin), 1-based page. Omit to auto-place boxes on the last page.",
+    ),
 });
 
 /**

@@ -34,6 +34,7 @@ import {
   type SignerContact,
   type SignerDraft,
 } from "./SendForSignatureDialog";
+import { clampPlacement, defaultPlacements } from "./placement";
 
 let pass = 0;
 let fail = 0;
@@ -255,6 +256,66 @@ test("without a locked account the selected accountId (or undefined) is used", (
     expiresInDays: "",
   });
   assert(none.accountId === undefined, "no account selected -> accountId omitted");
+});
+
+// ——— Task #128: signature placement wiring ———
+
+test("placements are sent only when they match the signer count", () => {
+  const signers: SignerDraft[] = [
+    { name: "A", email: "a@a.test" },
+    { name: "B", email: "b@b.test" },
+  ];
+  const boxes = [
+    { page: 1, x: 0.1, y: 0.2, w: 0.3, h: 0.05 },
+    { page: 2, x: 0.5, y: 0.8, w: 0.3, h: 0.05 },
+  ];
+  const withBoxes = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: boxes,
+  });
+  assert(
+    JSON.stringify(withBoxes.placements) === JSON.stringify(boxes),
+    "matching placements pass through",
+  );
+  const mismatched = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: [boxes[0]],
+  });
+  assert(mismatched.placements === undefined, "count mismatch -> placements omitted");
+  const none = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: null,
+  });
+  assert(none.placements === undefined, "null placements -> omitted (server default)");
+});
+
+test("clampPlacement keeps boxes on the page; defaults mirror server layout", () => {
+  const clamped = clampPlacement({ page: 9, x: 0.95, y: 0.99, w: 0.3, h: 0.9 }, 3);
+  assert(clamped.page === 3, "page clamped to page count");
+  assert(clamped.h === 0.5, "height capped at 0.5");
+  assert(clamped.x + clamped.w <= 1.0001, "x+w stays within the page");
+  assert(clamped.y + clamped.h <= 1.0001, "y+h stays within the page");
+  const lowPage = clampPlacement({ page: 0, x: -1, y: -1, w: 0.001, h: 0.001 }, 5);
+  assert(lowPage.page === 1 && lowPage.x === 0 && lowPage.y === 0, "floors applied");
+  assert(lowPage.w === 0.02 && lowPage.h === 0.01, "min box size enforced");
+  const defs = defaultPlacements(3, 4);
+  assert(defs.length === 3 && defs.every((p) => p.page === 4), "defaults land on last page");
+  assert(defs[0].x !== defs[1].x, "two-column layout alternates x");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);

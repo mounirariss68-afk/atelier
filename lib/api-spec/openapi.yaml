@@ -6741,6 +6741,26 @@ components:
         contactId: { type: string }
         personId: { type: string }
         expiresInDays: { type: integer, minimum: 1, maximum: 365 }
+        placements:
+          type: array
+          minItems: 1
+          maxItems: 10
+          description: >-
+            Sender-chosen signature boxes, one per signer in signing order.
+            Normalized page-fraction coordinates (top-left origin), 1-based
+            page. Omit to auto-place boxes on the last page.
+          items:
+            $ref: "#/components/schemas/AtelierSignaturePlacement"
+
+    AtelierSignaturePlacement:
+      type: object
+      required: [page, x, y, w, h]
+      properties:
+        page: { type: integer, minimum: 1, maximum: 2000 }
+        x: { type: number, minimum: 0, maximum: 0.98 }
+        y: { type: number, minimum: 0, maximum: 0.98 }
+        w: { type: number, minimum: 0.02, maximum: 1 }
+        h: { type: number, minimum: 0.01, maximum: 0.5 }
 
     AtelierEsignUpstreamError:
       type: object

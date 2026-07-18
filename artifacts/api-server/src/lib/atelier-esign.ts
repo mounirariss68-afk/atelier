@@ -41,6 +41,7 @@ import {
   resendSubmitterEmail,
   downloadDocusealFile,
   type DocusealSubmission,
+  type SignaturePlacement,
 } from "./docuseal.js";
 import { createDocument } from "./atelier-documents.js";
 
@@ -103,23 +104,44 @@ export async function sendSignatureRequest(args: {
   contactId?: string | null;
   personId?: string | null;
   expiresAt?: Date | null;
+  /**
+   * Sender-chosen signature boxes, one per signer in signing order
+   * (normalized page-fraction coords, 1-based page). When omitted the
+   * default two-column layout on the last page is used. Pages beyond
+   * the document's actual page count are clamped to the last page.
+   */
+  placements?: SignaturePlacement[] | null;
 }): Promise<{ request: SigRequestRow; signers: SigSignerRow[] }> {
-  // Signature blocks go on the last page of the document.
+  // Default: signature blocks go on the last page of the document.
   let lastPageIndex = 0;
+  let pageCount: number | null = null;
   try {
     const { getDocumentProxy } = await import("unpdf");
     const proxy = await getDocumentProxy(new Uint8Array(args.pdfBytes));
+    pageCount = proxy.numPages;
     lastPageIndex = Math.max(0, proxy.numPages - 1);
   } catch {
     // Unparseable PDFs fall back to page 0; DocuSeal will still reject
     // truly broken files at template creation.
   }
+  // Clamp custom placements to real pages (when the page count is known).
+  const placements =
+    args.placements && args.placements.length > 0
+      ? args.placements.map((p) => ({
+          ...p,
+          page:
+            pageCount != null
+              ? Math.min(Math.max(1, p.page), pageCount)
+              : Math.max(1, p.page),
+        }))
+      : null;
   const template = await createTemplateFromPdf({
     name: args.title,
     fileName: args.fileName,
     pdfBytes: args.pdfBytes,
     signerCount: args.signers.length,
     lastPageIndex,
+    placements,
   });
   const created = await createSubmission({
     templateId: template.id,
@@ -194,6 +216,7 @@ export async function sendSignatureRequest(args: {
       contactId: args.contactId ?? null,
       personId: args.personId ?? null,
       signers: args.signers.map((s, i) => ({ order: i + 1, name: s.name, email: s.email })),
+      placements: placements ?? null,
       docusealSubmissionId: String(created.submissionId),
       expiresAt: args.expiresAt?.toISOString() ?? null,
     },

@@ -121,12 +121,42 @@ export function signerRole(order: number): string {
 }
 
 /**
+ * Sender-chosen placement for one signer's signature box. All
+ * coordinates are normalized fractions of the page (0..1, origin at
+ * the top-left corner); `page` is 1-based.
+ */
+export interface SignaturePlacement {
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Default two-column layout on the given page (1-based) — used when the
+ * sender hasn't customized placement. Index is 0-based signer index.
+ */
+export function defaultSignaturePlacement(index: number, page: number): SignaturePlacement {
+  const col = index % 2;
+  const row = Math.floor(index / 2);
+  return {
+    page,
+    x: col === 0 ? 0.08 : 0.55,
+    y: 0.66 + row * 0.065,
+    w: 0.32,
+    h: 0.05,
+  };
+}
+
+/**
  * Create a DocuSeal template from raw PDF bytes.
  *
  * DocuSeal Cloud rejects submissions on templates without fields
  * ("Template does not contain fields", 422), so a signature field is
- * stamped for every signer on the last page of the document. Fields are
- * laid out in two columns from ~2/3 down the page.
+ * stamped for every signer. By default fields are laid out in two
+ * columns from ~2/3 down the LAST page; callers may override each
+ * signer's box via `placements` (one entry per signer, in order).
  */
 export async function createTemplateFromPdf(args: {
   name: string;
@@ -135,10 +165,18 @@ export async function createTemplateFromPdf(args: {
   signerCount: number;
   /** 0-based index of the page that carries the signature blocks. */
   lastPageIndex: number;
+  /** Optional sender-chosen boxes, one per signer (overrides layout). */
+  placements?: SignaturePlacement[] | null;
 }): Promise<{ id: number }> {
-  const fields = Array.from({ length: Math.max(1, args.signerCount) }, (_, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
+  const count = Math.max(1, args.signerCount);
+  if (args.placements && args.placements.length !== count) {
+    throw new DocusealError(
+      `Signature placements (${args.placements.length}) must match signer count (${count}).`,
+    );
+  }
+  const fields = Array.from({ length: count }, (_, i) => {
+    const area =
+      args.placements?.[i] ?? defaultSignaturePlacement(i, args.lastPageIndex + 1);
     return {
       name: `Signature ${i + 1}`,
       type: "signature",
@@ -146,12 +184,12 @@ export async function createTemplateFromPdf(args: {
       required: true,
       areas: [
         {
-          x: col === 0 ? 0.08 : 0.55,
-          y: 0.66 + row * 0.065,
-          w: 0.32,
-          h: 0.05,
+          x: area.x,
+          y: area.y,
+          w: area.w,
+          h: area.h,
           // DocuSeal pages are 1-based.
-          page: args.lastPageIndex + 1,
+          page: area.page,
         },
       ],
     };

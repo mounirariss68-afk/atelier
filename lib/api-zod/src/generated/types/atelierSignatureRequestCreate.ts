@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierSignaturePlacement } from "./atelierSignaturePlacement";
 import type { AtelierSignatureRequestCreateSignersItem } from "./atelierSignatureRequestCreateSignersItem";
 
 export interface AtelierSignatureRequestCreate {
@@ -30,4 +31,10 @@ export interface AtelierSignatureRequestCreate {
    * @maximum 365
    */
   expiresInDays?: number;
+  /**
+   * Sender-chosen signature boxes, one per signer in signing order. Normalized page-fraction coordinates (top-left origin), 1-based page. Omit to auto-place boxes on the last page.
+   * @minItems 1
+   * @maxItems 10
+   */
+  placements?: AtelierSignaturePlacement[];
 }

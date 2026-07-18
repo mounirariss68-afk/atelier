@@ -2477,6 +2477,34 @@ export type AtelierSignatureRequestCreateSignersItem = {
   email: string;
 };
 
+export interface AtelierSignaturePlacement {
+  /**
+   * @minimum 1
+   * @maximum 2000
+   */
+  page: number;
+  /**
+   * @minimum 0
+   * @maximum 0.98
+   */
+  x: number;
+  /**
+   * @minimum 0
+   * @maximum 0.98
+   */
+  y: number;
+  /**
+   * @minimum 0.02
+   * @maximum 1
+   */
+  w: number;
+  /**
+   * @minimum 0.01
+   * @maximum 0.5
+   */
+  h: number;
+}
+
 export interface AtelierSignatureRequestCreate {
   /**
    * @minLength 1
@@ -2500,6 +2528,12 @@ export interface AtelierSignatureRequestCreate {
    * @maximum 365
    */
   expiresInDays?: number;
+  /**
+   * Sender-chosen signature boxes, one per signer in signing order. Normalized page-fraction coordinates (top-left origin), 1-based page. Omit to auto-place boxes on the last page.
+   * @minItems 1
+   * @maxItems 10
+   */
+  placements?: AtelierSignaturePlacement[];
 }
 
 export interface AtelierEsignUpstreamError {
