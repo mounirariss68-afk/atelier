@@ -34,9 +34,146 @@ import { PenLine, Plus, Trash2, UserPlus } from "lucide-react";
 const selectCls =
   "h-9 rounded-md border border-border bg-bg-elevate px-2 text-sm text-text outline-none focus-visible:border-gold";
 
-interface SignerDraft {
+export interface SignerDraft {
   name: string;
   email: string;
+}
+
+const EMAIL_RE = /.+@.+\..+/;
+const MAX_SIGNERS = 10;
+
+/** Contact fields the signer prefill consumes (subset of AtelierContact). */
+export interface SignerContact {
+  id: string;
+  fullName: string;
+  email?: string | null;
+  title?: string | null;
+}
+
+/** Contacts eligible for signer prefill: must have a plausible email. */
+export function contactsWithValidEmail<T extends SignerContact>(
+  contacts: readonly T[] | undefined,
+): T[] {
+  return (contacts ?? []).filter(
+    (c) => typeof c.email === "string" && EMAIL_RE.test(c.email),
+  );
+}
+
+/**
+ * Seed signer rows from an account's contacts: only contacts with an
+ * email, deduped case-insensitively (server rejects duplicate signer
+ * emails), capped at MAX_SIGNERS. Returns [] when nothing qualifies.
+ */
+export function seedSignersFromContacts(
+  contacts: readonly SignerContact[] | undefined,
+): SignerDraft[] {
+  const seen = new Set<string>();
+  const seeded: SignerDraft[] = [];
+  for (const c of contacts ?? []) {
+    if (typeof c.email !== "string" || !EMAIL_RE.test(c.email)) continue;
+    const key = c.email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    seeded.push({ name: c.fullName, email: c.email });
+    if (seeded.length >= MAX_SIGNERS) break;
+  }
+  return seeded;
+}
+
+/**
+ * Add a contact to the signer rows: no-op on duplicate email
+ * (case-insensitive), fills the first fully-empty row before appending,
+ * and never exceeds MAX_SIGNERS.
+ */
+export function addContactToSigners(
+  prev: readonly SignerDraft[],
+  name: string,
+  email: string,
+): SignerDraft[] {
+  if (prev.some((s) => s.email.trim().toLowerCase() === email.toLowerCase()))
+    return [...prev];
+  const emptyIdx = prev.findIndex((s) => !s.name.trim() && !s.email.trim());
+  if (emptyIdx >= 0)
+    return prev.map((s, i) => (i === emptyIdx ? { name, email } : s));
+  if (prev.length >= MAX_SIGNERS) return [...prev];
+  return [...prev, { name, email }];
+}
+
+export interface CreateSignaturePayload {
+  title: string;
+  message?: string;
+  documentId: string;
+  signers: Array<{ name: string; email: string }>;
+  accountId?: string;
+  expiresInDays?: number;
+}
+
+/**
+ * Build the POST /esign/requests body. When the dialog is locked to an
+ * account, that accountId ALWAYS wins over any free-selection value.
+ */
+export function buildCreateSignaturePayload(args: {
+  title: string;
+  message: string;
+  documentId: string;
+  signers: readonly SignerDraft[];
+  lockedAccountId?: string;
+  selectedAccountId: string;
+  expiresInDays: string;
+}): CreateSignaturePayload {
+  return {
+    title: args.title.trim(),
+    message: args.message.trim() || undefined,
+    documentId: args.documentId,
+    signers: args.signers.map((s) => ({
+      name: s.name.trim(),
+      email: s.email.trim(),
+    })),
+    accountId: args.lockedAccountId ?? (args.selectedAccountId || undefined),
+    expiresInDays: args.expiresInDays ? Number(args.expiresInDays) : undefined,
+  };
+}
+
+/**
+ * One-click chips for adding an account contact as a signer. Pure
+ * component so the locked-account prefill surface can be tested without
+ * the Dialog portal / react-query providers.
+ */
+export function ContactSignerChips({
+  contacts,
+  signerEmails,
+  onAdd,
+}: {
+  contacts: readonly SignerContact[];
+  signerEmails: ReadonlySet<string>;
+  onAdd: (name: string, email: string) => void;
+}) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-1.5" data-testid="chips-esign-contacts">
+      {contacts.map((c) => {
+        const added = signerEmails.has((c.email ?? "").toLowerCase());
+        return (
+          <button
+            key={c.id}
+            type="button"
+            disabled={added}
+            onClick={() => onAdd(c.fullName, c.email ?? "")}
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+              added
+                ? "border-border/50 text-text-faint cursor-default"
+                : "border-border text-text-mute hover:border-gold hover:text-text"
+            }`}
+            title={c.email ?? undefined}
+            data-testid={`chip-esign-contact-${c.id}`}
+          >
+            <UserPlus className="w-3 h-3" />
+            {c.fullName}
+            {c.title ? <span className="text-text-faint">· {c.title}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export interface SendForSignatureDialogProps {
@@ -96,16 +233,7 @@ export function SendForSignatureDialog({
     setSigners((prev) => {
       const untouched = prev.length === 1 && !prev[0].name.trim() && !prev[0].email.trim();
       if (!untouched) return prev;
-      const seen = new Set<string>();
-      const seeded: SignerDraft[] = [];
-      for (const c of contactGraph.contacts ?? []) {
-        if (typeof c.email !== "string" || !/.+@.+\..+/.test(c.email)) continue;
-        const key = c.email.toLowerCase();
-        if (seen.has(key)) continue; // server rejects duplicate signer emails
-        seen.add(key);
-        seeded.push({ name: c.fullName, email: c.email });
-        if (seeded.length >= 10) break;
-      }
+      const seeded = seedSignersFromContacts(contactGraph.contacts);
       return seeded.length > 0 ? seeded : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,10 +257,7 @@ export function SendForSignatureDialog({
   );
 
   const contactsWithEmail = React.useMemo(
-    () =>
-      (contactGraph?.contacts ?? []).filter(
-        (c) => typeof c.email === "string" && /.+@.+\..+/.test(c.email),
-      ),
+    () => contactsWithValidEmail(contactGraph?.contacts),
     [contactGraph],
   );
 
@@ -141,16 +266,7 @@ export function SendForSignatureDialog({
   );
 
   const addContactAsSigner = (name: string, email: string) => {
-    setSigners((prev) => {
-      if (prev.some((s) => s.email.trim().toLowerCase() === email.toLowerCase()))
-        return prev;
-      // Fill the first fully-empty row before appending a new one.
-      const emptyIdx = prev.findIndex((s) => !s.name.trim() && !s.email.trim());
-      if (emptyIdx >= 0)
-        return prev.map((s, i) => (i === emptyIdx ? { name, email } : s));
-      if (prev.length >= 10) return prev;
-      return [...prev, { name, email }];
-    });
+    setSigners((prev) => addContactToSigners(prev, name, email));
   };
 
   const create = useAtelierCreateSignatureRequest({
@@ -220,33 +336,11 @@ export function SendForSignatureDialog({
           <div>
             <label className="text-xs text-text-mute">Signers (in signing order)</label>
             {lockedAccount && contactsWithEmail.length > 0 ? (
-              <div
-                className="mb-2 flex flex-wrap gap-1.5"
-                data-testid="chips-esign-contacts"
-              >
-                {contactsWithEmail.map((c) => {
-                  const added = signerEmails.has((c.email ?? "").toLowerCase());
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      disabled={added}
-                      onClick={() => addContactAsSigner(c.fullName, c.email ?? "")}
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
-                        added
-                          ? "border-border/50 text-text-faint cursor-default"
-                          : "border-border text-text-mute hover:border-gold hover:text-text"
-                      }`}
-                      title={c.email ?? undefined}
-                      data-testid={`chip-esign-contact-${c.id}`}
-                    >
-                      <UserPlus className="w-3 h-3" />
-                      {c.fullName}
-                      {c.title ? <span className="text-text-faint">· {c.title}</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
+              <ContactSignerChips
+                contacts={contactsWithEmail}
+                signerEmails={signerEmails}
+                onAdd={addContactAsSigner}
+              />
             ) : null}
             {lockedAccount && contactGraph && contactsWithEmail.length === 0 ? (
               <p className="mb-2 text-xs text-text-faint" data-testid="text-esign-no-contacts">
@@ -363,17 +457,15 @@ export function SendForSignatureDialog({
               disabled={!valid || create.isPending}
               onClick={() =>
                 create.mutate({
-                  data: {
-                    title: title.trim(),
-                    message: message.trim() || undefined,
+                  data: buildCreateSignaturePayload({
+                    title,
+                    message,
                     documentId,
-                    signers: signers.map((s) => ({
-                      name: s.name.trim(),
-                      email: s.email.trim(),
-                    })),
-                    accountId: lockedAccount?.id ?? (accountId || undefined),
-                    expiresInDays: expiresInDays ? Number(expiresInDays) : undefined,
-                  },
+                    signers,
+                    lockedAccountId: lockedAccount?.id,
+                    selectedAccountId: accountId,
+                    expiresInDays,
+                  }),
                 })
               }
               data-testid="button-esign-send"

@@ -25,6 +25,7 @@
     "test:esign": "tsx ./tests/esign/run.ts",
     "test:me-profile": "tsx ./tests/me-profile/run.ts",
     "test:brief-envelope": "tsx ./tests/crm/brief-envelope-contract-probe.ts",
+    "test:esign-link": "tsx ./tests/crm/esign-account-link-probe.ts",
     "test:proposal-enrich": "tsx ./tests/crm/proposal-contact-enrich-probe.ts",
     "test:change-password": "tsx ./tests/change-password/run.ts",
     "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
