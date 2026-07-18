@@ -30,7 +30,9 @@ import {
   atelierSignatureSigners,
   atelierSelfNotifications,
   atelierAuditEvents,
+  atelierUsers,
 } from "@workspace/db";
+import { sendEmail } from "./email.js";
 import {
   createTemplateFromPdf,
   createSubmission,
@@ -358,6 +360,47 @@ async function notifyRequesterOfTerminalStatus(
   } catch (err) {
     console.error(
       `[esign-sync] failed to notify requester for ${row.id} (${status}):`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  // Email the requester too — partners who aren't logged in shouldn't
+  // have to wait for their next visit to hear about a terminal state.
+  // Fully non-blocking: any failure is logged and never breaks the sync.
+  try {
+    const [creator] = await db
+      .select({ email: atelierUsers.email, name: atelierUsers.name })
+      .from(atelierUsers)
+      .where(
+        and(eq(atelierUsers.orgId, row.orgId), eq(atelierUsers.id, row.createdBy)),
+      );
+    if (!creator?.email) {
+      console.error(
+        `[esign-sync] no email on file for requester ${row.createdBy} (request ${row.id}, ${status}); email not sent`,
+      );
+      return;
+    }
+    const esc = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const extra =
+      status === "completed"
+        ? "Sign in to the portal to view it in the Document Library."
+        : status === "declined"
+          ? "Open Agreements in the portal to review and follow up."
+          : "Open Agreements in the portal to resend if needed.";
+    const result = await sendEmail({
+      to: creator.email,
+      subject: wording.title,
+      html: `<p>Hi ${esc(creator.name || "there")},</p><p>${esc(wording.body)}</p><p>${esc(extra)}</p><p>— The Atelier</p>`,
+    });
+    if (!result.ok) {
+      console.error(
+        `[esign-sync] email notification failed for ${row.id} (${status}); delivered via ${result.via}`,
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[esign-sync] failed to email requester for ${row.id} (${status}):`,
       err instanceof Error ? err.message : err,
     );
   }
