@@ -8,3 +8,5 @@ Rule: atelier UI tests run via `tsx` (no vitest). When a test imports a big page
 
 **Why:** Node's import.meta has no `env`; esbuild/tsx doesn't inject Vite's define.
 **How to apply:** new tests importing page modules → reuse the `test:board-layer` script pattern; if a new page adds a top-level BASE_URL const, guard it.
+
+- SSR render probes of pages using wouter hooks: wrap in `<Router ssrPath="/x">` — `memoryLocation().hook` lacks getServerSnapshot and browser location is undefined under Node.
