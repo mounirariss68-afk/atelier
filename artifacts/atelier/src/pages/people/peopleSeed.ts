@@ -280,12 +280,12 @@ export function useStageStats(): Record<string, StageStat> {
       hire: {
         id: "hire", count: 0, countLabel: "live candidates",
         nextAction: "No candidates in pipeline yet",
-        nextActionHref: "/people/hire/references",
+        nextActionHref: "/people/hire/candidates",
       },
       onboard: {
         id: "onboard", count: 0, countLabel: "starting in 30 days",
         nextAction: "No upcoming starts recorded",
-        nextActionHref: "/people/onboard/day-one",
+        nextActionHref: "/people/onboard/joiners",
       },
       develop: {
         id: "develop", count: 0, countLabel: "learning items in flight",

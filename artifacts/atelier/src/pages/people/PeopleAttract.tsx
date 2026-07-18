@@ -1,8 +1,9 @@
 import { useRoute, Link } from "wouter";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { UserPlus } from "lucide-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
-import { ReferralsView } from "@/pages/studio/StudioIndex";
+import { useReferrals } from "@/lib/v5-hooks";
 
 const SUBS = [
   { id: "plan",      label: "Workforce plan" },
@@ -92,5 +93,32 @@ function SourcingView() {
       <p className="mt-2">Sourced candidates land in the Hire workspace under Candidate CRM. Scout runs nightly across configured channels (LinkedIn, alumni, referrals, partner-firm bench).</p>
       <Link href="/people/hire/candidates" className="mt-3 inline-block text-gold hover:underline">Open Candidate CRM →</Link>
     </Card>
+  );
+}
+
+function ReferralsView() {
+  const REFERRALS = useReferrals();
+  if (REFERRALS.length === 0) {
+    return (
+      <Card className="p-6 text-sm text-text-mute" data-testid="referrals-empty">
+        No referrals recorded yet.
+      </Card>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-text-mute flex items-center gap-2"><UserPlus className="w-4 h-4" />Internal referrals.</p>
+      {REFERRALS.map((r) => (
+        <Card key={r.id} className="p-3">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="text-sm text-text">{r.referrer} → {r.candidate}</div>
+              <div className="text-xs text-text-faint">{r.via} · for {r.roleTitle}</div>
+            </div>
+            <MonoChip tone={r.status === "hired" ? "gold" : r.status === "interviewing" ? "green" : "default"}>{r.status}</MonoChip>
+          </div>
+        </Card>
+      ))}
+    </div>
   );
 }

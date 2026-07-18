@@ -71,6 +71,7 @@ import meSelfServiceRoutes from "./meSelfServiceRoutes";
 import performanceRoutes from "./performanceRoutes";
 import meProfileRoutes from "./meProfileRoutes";
 import joinerRoutes from "./joinerRoutes";
+import hireRoutes from "./hireRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
@@ -253,6 +254,7 @@ router.use(meSelfServiceRoutes);
 router.use(performanceRoutes);
 router.use(meProfileRoutes);
 router.use(joinerRoutes);
+router.use(hireRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);
 router.use(accountRoutes);

@@ -251,6 +251,8 @@ export const atelierStudioOpenRoles = pgTable(
     targetStart: text("target_start").notNull(),
     urgency: text("urgency").notNull(),
     summary: text("summary").notNull().default(""),
+    // Task #125 — open | closed | filled
+    status: text("status").notNull().default("open"),
     activeCandidates: integer("active_candidates").notNull().default(0),
     panelTemplate: text("panel_template").notNull().default(""),
     scorecardId: text("scorecard_id").notNull().default(""),
@@ -266,6 +268,11 @@ export const atelierStudioCandidates = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     name: text("name").notNull(),
+    // Task #125 — contact + linkage fields for a working hiring flow.
+    email: text("email").notNull().default(""),
+    phone: text("phone").notNull().default(""),
+    notes: text("notes").notNull().default(""),
+    roleId: text("role_id"),
     currentRole: text("current_role").notNull().default(""),
     currentEmployer: text("current_employer").notNull().default(""),
     source: text("source").notNull().default(""),
@@ -288,6 +295,8 @@ export const atelierStudioInterviewPanels = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     candidateName: text("candidate_name").notNull(),
+    // Task #125 — link to atelier_studio_candidates.
+    candidateId: text("candidate_id"),
     roleTitle: text("role_title").notNull(),
     scheduledFor: text("scheduled_for").notNull(),
     status: text("status").notNull(),
@@ -298,6 +307,7 @@ export const atelierStudioInterviewPanels = pgTable(
         durationMin: number;
         focus: string;
         score: number | null;
+        notes?: string | null;
       }>>()
       .notNull()
       .default([]),
@@ -335,6 +345,9 @@ export const atelierStudioOffers = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     candidateName: text("candidate_name").notNull(),
+    // Task #125 — candidate linkage + joiner handoff traceability.
+    candidateId: text("candidate_id"),
+    joinerUserId: text("joiner_user_id"),
     roleTitle: text("role_title").notNull(),
     jurisdiction: text("jurisdiction").notNull(),
     startDate: text("start_date").notNull(),

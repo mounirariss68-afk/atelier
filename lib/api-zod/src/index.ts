@@ -11,6 +11,7 @@ export type {
   AtelierUpdateDocumentBody,
   AtelierUploadDocumentVersionBody,
   AtelierGrantDocumentAccessBody,
+  AtelierUploadCandidateDocumentBody,
   AtelierListDocumentsParams,
   AtelierDownloadDocumentParams,
 } from "./generated/types";

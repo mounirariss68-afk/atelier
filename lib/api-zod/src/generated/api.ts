@@ -2457,6 +2457,659 @@ export const AtelierReactivateJoinerResponse = zod.object({
 });
 
 /**
+ * @summary Hiring — list open positions
+ */
+export const AtelierListHireRolesResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      level: zod.string(),
+      location: zod.string(),
+      targetStart: zod.string(),
+      urgency: zod.enum(["low", "medium", "high"]),
+      summary: zod.string(),
+      status: zod.enum(["open", "closed", "filled"]),
+      activeCandidates: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — create an open position
+ */
+export const atelierCreateHireRoleBodyTitleMax = 200;
+
+export const atelierCreateHireRoleBodyLevelMax = 100;
+
+export const atelierCreateHireRoleBodyLocationMax = 200;
+
+export const atelierCreateHireRoleBodyTargetStartMax = 40;
+
+export const atelierCreateHireRoleBodySummaryMax = 2000;
+
+export const AtelierCreateHireRoleBody = zod.object({
+  title: zod.string().min(1).max(atelierCreateHireRoleBodyTitleMax),
+  level: zod.string().min(1).max(atelierCreateHireRoleBodyLevelMax),
+  location: zod.string().min(1).max(atelierCreateHireRoleBodyLocationMax),
+  targetStart: zod
+    .string()
+    .max(atelierCreateHireRoleBodyTargetStartMax)
+    .optional(),
+  urgency: zod.enum(["low", "medium", "high"]).optional(),
+  summary: zod.string().max(atelierCreateHireRoleBodySummaryMax).optional(),
+});
+
+/**
+ * @summary Hiring — edit / close / fill a position
+ */
+export const AtelierUpdateHireRoleParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateHireRoleBodyTitleMax = 200;
+
+export const atelierUpdateHireRoleBodyLevelMax = 100;
+
+export const atelierUpdateHireRoleBodyLocationMax = 200;
+
+export const atelierUpdateHireRoleBodyTargetStartMax = 40;
+
+export const atelierUpdateHireRoleBodySummaryMax = 2000;
+
+export const AtelierUpdateHireRoleBody = zod.object({
+  title: zod.string().min(1).max(atelierUpdateHireRoleBodyTitleMax).optional(),
+  level: zod.string().min(1).max(atelierUpdateHireRoleBodyLevelMax).optional(),
+  location: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateHireRoleBodyLocationMax)
+    .optional(),
+  targetStart: zod
+    .string()
+    .max(atelierUpdateHireRoleBodyTargetStartMax)
+    .optional(),
+  urgency: zod.enum(["low", "medium", "high"]).optional(),
+  summary: zod.string().max(atelierUpdateHireRoleBodySummaryMax).optional(),
+  status: zod.enum(["open", "closed", "filled"]).optional(),
+});
+
+export const AtelierUpdateHireRoleResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  level: zod.string(),
+  location: zod.string(),
+  targetStart: zod.string(),
+  urgency: zod.enum(["low", "medium", "high"]),
+  summary: zod.string(),
+  status: zod.enum(["open", "closed", "filled"]),
+  activeCandidates: zod.number(),
+});
+
+/**
+ * @summary Hiring — list candidates
+ */
+export const AtelierListHireCandidatesResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      email: zod.string(),
+      phone: zod.string(),
+      notes: zod.string(),
+      roleId: zod.string().nullable(),
+      roleTitle: zod.string(),
+      stage: zod.enum([
+        "sourced",
+        "screening",
+        "interview",
+        "reference",
+        "offer",
+        "hired",
+        "rejected",
+      ]),
+      source: zod.string(),
+      currentRole: zod.string(),
+      currentEmployer: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — add a candidate
+ */
+export const atelierCreateHireCandidateBodyNameMax = 200;
+
+export const atelierCreateHireCandidateBodyEmailMax = 320;
+
+export const atelierCreateHireCandidateBodyPhoneMax = 60;
+
+export const atelierCreateHireCandidateBodyNotesMax = 4000;
+
+export const atelierCreateHireCandidateBodyRoleIdMax = 100;
+
+export const atelierCreateHireCandidateBodySourceMax = 200;
+
+export const atelierCreateHireCandidateBodyCurrentRoleMax = 200;
+
+export const atelierCreateHireCandidateBodyCurrentEmployerMax = 200;
+
+export const AtelierCreateHireCandidateBody = zod.object({
+  name: zod.string().min(1).max(atelierCreateHireCandidateBodyNameMax),
+  email: zod.string().max(atelierCreateHireCandidateBodyEmailMax).optional(),
+  phone: zod.string().max(atelierCreateHireCandidateBodyPhoneMax).optional(),
+  notes: zod.string().max(atelierCreateHireCandidateBodyNotesMax).optional(),
+  roleId: zod.string().max(atelierCreateHireCandidateBodyRoleIdMax).optional(),
+  stage: zod
+    .enum(["sourced", "screening", "interview", "reference", "offer"])
+    .optional(),
+  source: zod.string().max(atelierCreateHireCandidateBodySourceMax).optional(),
+  currentRole: zod
+    .string()
+    .max(atelierCreateHireCandidateBodyCurrentRoleMax)
+    .optional(),
+  currentEmployer: zod
+    .string()
+    .max(atelierCreateHireCandidateBodyCurrentEmployerMax)
+    .optional(),
+});
+
+/**
+ * @summary Hiring — edit a candidate / move stage / reject
+ */
+export const AtelierUpdateHireCandidateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateHireCandidateBodyNameMax = 200;
+
+export const atelierUpdateHireCandidateBodyEmailMax = 320;
+
+export const atelierUpdateHireCandidateBodyPhoneMax = 60;
+
+export const atelierUpdateHireCandidateBodyNotesMax = 4000;
+
+export const atelierUpdateHireCandidateBodyRoleIdMax = 100;
+
+export const atelierUpdateHireCandidateBodySourceMax = 200;
+
+export const atelierUpdateHireCandidateBodyCurrentRoleMax = 200;
+
+export const atelierUpdateHireCandidateBodyCurrentEmployerMax = 200;
+
+export const AtelierUpdateHireCandidateBody = zod.object({
+  name: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateHireCandidateBodyNameMax)
+    .optional(),
+  email: zod.string().max(atelierUpdateHireCandidateBodyEmailMax).optional(),
+  phone: zod.string().max(atelierUpdateHireCandidateBodyPhoneMax).optional(),
+  notes: zod.string().max(atelierUpdateHireCandidateBodyNotesMax).optional(),
+  roleId: zod.string().max(atelierUpdateHireCandidateBodyRoleIdMax).nullish(),
+  stage: zod
+    .enum([
+      "sourced",
+      "screening",
+      "interview",
+      "reference",
+      "offer",
+      "hired",
+      "rejected",
+    ])
+    .optional(),
+  source: zod.string().max(atelierUpdateHireCandidateBodySourceMax).optional(),
+  currentRole: zod
+    .string()
+    .max(atelierUpdateHireCandidateBodyCurrentRoleMax)
+    .optional(),
+  currentEmployer: zod
+    .string()
+    .max(atelierUpdateHireCandidateBodyCurrentEmployerMax)
+    .optional(),
+});
+
+export const AtelierUpdateHireCandidateResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  email: zod.string(),
+  phone: zod.string(),
+  notes: zod.string(),
+  roleId: zod.string().nullable(),
+  roleTitle: zod.string(),
+  stage: zod.enum([
+    "sourced",
+    "screening",
+    "interview",
+    "reference",
+    "offer",
+    "hired",
+    "rejected",
+  ]),
+  source: zod.string(),
+  currentRole: zod.string(),
+  currentEmployer: zod.string(),
+});
+
+/**
+ * @summary Hiring — list a candidate's uploaded files (CV etc.)
+ */
+export const AtelierListCandidateDocumentsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierListCandidateDocumentsResponse = zod.object({
+  documents: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.string(),
+      title: zod.string(),
+      fileName: zod.string().nullable(),
+      mime: zod.string().nullable(),
+      sizeBytes: zod.number().nullable(),
+      uploadedAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — upload a CV or other file to a candidate
+ */
+export const AtelierUploadCandidateDocumentParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUploadCandidateDocumentBodyTitleMax = 200;
+
+export const AtelierUploadCandidateDocumentBody = zod.object({
+  file: zod.instanceof(File),
+  title: zod
+    .string()
+    .max(atelierUploadCandidateDocumentBodyTitleMax)
+    .optional(),
+  kind: zod.enum(["cv", "cover_letter", "portfolio", "other"]).optional(),
+});
+
+/**
+ * @summary Hiring — list interview panels
+ */
+export const atelierListHireInterviewsResponseItemsItemStagesItemStageMax = 100;
+
+export const atelierListHireInterviewsResponseItemsItemStagesItemInterviewerMax = 200;
+
+export const atelierListHireInterviewsResponseItemsItemStagesItemDurationMinMin = 5;
+export const atelierListHireInterviewsResponseItemsItemStagesItemDurationMinMax = 480;
+
+export const atelierListHireInterviewsResponseItemsItemStagesItemFocusMax = 500;
+
+export const atelierListHireInterviewsResponseItemsItemStagesItemScoreMax = 5;
+
+export const atelierListHireInterviewsResponseItemsItemStagesItemNotesMax = 4000;
+
+export const AtelierListHireInterviewsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      candidateId: zod.string().nullable(),
+      candidateName: zod.string(),
+      roleTitle: zod.string(),
+      scheduledFor: zod.string(),
+      status: zod.enum(["draft", "scheduled", "completed", "cancelled"]),
+      stages: zod.array(
+        zod.object({
+          stage: zod
+            .string()
+            .max(atelierListHireInterviewsResponseItemsItemStagesItemStageMax),
+          interviewer: zod
+            .string()
+            .max(
+              atelierListHireInterviewsResponseItemsItemStagesItemInterviewerMax,
+            ),
+          durationMin: zod
+            .number()
+            .min(
+              atelierListHireInterviewsResponseItemsItemStagesItemDurationMinMin,
+            )
+            .max(
+              atelierListHireInterviewsResponseItemsItemStagesItemDurationMinMax,
+            ),
+          focus: zod
+            .string()
+            .max(atelierListHireInterviewsResponseItemsItemStagesItemFocusMax),
+          score: zod
+            .number()
+            .min(1)
+            .max(atelierListHireInterviewsResponseItemsItemStagesItemScoreMax)
+            .nullish(),
+          notes: zod
+            .string()
+            .max(atelierListHireInterviewsResponseItemsItemStagesItemNotesMax)
+            .nullish(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — schedule an interview panel for a candidate
+ */
+
+export const atelierCreateHireInterviewBodyScheduledForMax = 40;
+
+export const atelierCreateHireInterviewBodyStagesItemStageMax = 100;
+
+export const atelierCreateHireInterviewBodyStagesItemInterviewerMax = 200;
+
+export const atelierCreateHireInterviewBodyStagesItemDurationMinMin = 5;
+export const atelierCreateHireInterviewBodyStagesItemDurationMinMax = 480;
+
+export const atelierCreateHireInterviewBodyStagesItemFocusMax = 500;
+
+export const atelierCreateHireInterviewBodyStagesItemScoreMax = 5;
+
+export const atelierCreateHireInterviewBodyStagesItemNotesMax = 4000;
+
+export const atelierCreateHireInterviewBodyStagesMax = 12;
+
+export const AtelierCreateHireInterviewBody = zod.object({
+  candidateId: zod.string().min(1),
+  scheduledFor: zod
+    .string()
+    .min(1)
+    .max(atelierCreateHireInterviewBodyScheduledForMax),
+  stages: zod
+    .array(
+      zod.object({
+        stage: zod
+          .string()
+          .max(atelierCreateHireInterviewBodyStagesItemStageMax),
+        interviewer: zod
+          .string()
+          .max(atelierCreateHireInterviewBodyStagesItemInterviewerMax),
+        durationMin: zod
+          .number()
+          .min(atelierCreateHireInterviewBodyStagesItemDurationMinMin)
+          .max(atelierCreateHireInterviewBodyStagesItemDurationMinMax),
+        focus: zod
+          .string()
+          .max(atelierCreateHireInterviewBodyStagesItemFocusMax),
+        score: zod
+          .number()
+          .min(1)
+          .max(atelierCreateHireInterviewBodyStagesItemScoreMax)
+          .nullish(),
+        notes: zod
+          .string()
+          .max(atelierCreateHireInterviewBodyStagesItemNotesMax)
+          .nullish(),
+      }),
+    )
+    .min(1)
+    .max(atelierCreateHireInterviewBodyStagesMax),
+});
+
+/**
+ * @summary Hiring — update panel status / record structured feedback
+ */
+export const AtelierUpdateHireInterviewParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateHireInterviewBodyScheduledForMax = 40;
+
+export const atelierUpdateHireInterviewBodyStagesItemStageMax = 100;
+
+export const atelierUpdateHireInterviewBodyStagesItemInterviewerMax = 200;
+
+export const atelierUpdateHireInterviewBodyStagesItemDurationMinMin = 5;
+export const atelierUpdateHireInterviewBodyStagesItemDurationMinMax = 480;
+
+export const atelierUpdateHireInterviewBodyStagesItemFocusMax = 500;
+
+export const atelierUpdateHireInterviewBodyStagesItemScoreMax = 5;
+
+export const atelierUpdateHireInterviewBodyStagesItemNotesMax = 4000;
+
+export const atelierUpdateHireInterviewBodyStagesMax = 12;
+
+export const AtelierUpdateHireInterviewBody = zod.object({
+  scheduledFor: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateHireInterviewBodyScheduledForMax)
+    .optional(),
+  status: zod.enum(["draft", "scheduled", "completed", "cancelled"]).optional(),
+  stages: zod
+    .array(
+      zod.object({
+        stage: zod
+          .string()
+          .max(atelierUpdateHireInterviewBodyStagesItemStageMax),
+        interviewer: zod
+          .string()
+          .max(atelierUpdateHireInterviewBodyStagesItemInterviewerMax),
+        durationMin: zod
+          .number()
+          .min(atelierUpdateHireInterviewBodyStagesItemDurationMinMin)
+          .max(atelierUpdateHireInterviewBodyStagesItemDurationMinMax),
+        focus: zod
+          .string()
+          .max(atelierUpdateHireInterviewBodyStagesItemFocusMax),
+        score: zod
+          .number()
+          .min(1)
+          .max(atelierUpdateHireInterviewBodyStagesItemScoreMax)
+          .nullish(),
+        notes: zod
+          .string()
+          .max(atelierUpdateHireInterviewBodyStagesItemNotesMax)
+          .nullish(),
+      }),
+    )
+    .max(atelierUpdateHireInterviewBodyStagesMax)
+    .optional(),
+});
+
+export const atelierUpdateHireInterviewResponseStagesItemStageMax = 100;
+
+export const atelierUpdateHireInterviewResponseStagesItemInterviewerMax = 200;
+
+export const atelierUpdateHireInterviewResponseStagesItemDurationMinMin = 5;
+export const atelierUpdateHireInterviewResponseStagesItemDurationMinMax = 480;
+
+export const atelierUpdateHireInterviewResponseStagesItemFocusMax = 500;
+
+export const atelierUpdateHireInterviewResponseStagesItemScoreMax = 5;
+
+export const atelierUpdateHireInterviewResponseStagesItemNotesMax = 4000;
+
+export const AtelierUpdateHireInterviewResponse = zod.object({
+  id: zod.string(),
+  candidateId: zod.string().nullable(),
+  candidateName: zod.string(),
+  roleTitle: zod.string(),
+  scheduledFor: zod.string(),
+  status: zod.enum(["draft", "scheduled", "completed", "cancelled"]),
+  stages: zod.array(
+    zod.object({
+      stage: zod
+        .string()
+        .max(atelierUpdateHireInterviewResponseStagesItemStageMax),
+      interviewer: zod
+        .string()
+        .max(atelierUpdateHireInterviewResponseStagesItemInterviewerMax),
+      durationMin: zod
+        .number()
+        .min(atelierUpdateHireInterviewResponseStagesItemDurationMinMin)
+        .max(atelierUpdateHireInterviewResponseStagesItemDurationMinMax),
+      focus: zod
+        .string()
+        .max(atelierUpdateHireInterviewResponseStagesItemFocusMax),
+      score: zod
+        .number()
+        .min(1)
+        .max(atelierUpdateHireInterviewResponseStagesItemScoreMax)
+        .nullish(),
+      notes: zod
+        .string()
+        .max(atelierUpdateHireInterviewResponseStagesItemNotesMax)
+        .nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — list offers
+ */
+export const AtelierListHireOffersResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      candidateId: zod.string().nullable(),
+      candidateName: zod.string(),
+      roleTitle: zod.string(),
+      jurisdiction: zod.string(),
+      startDate: zod.string(),
+      totalAtTargetUsdK: zod.number(),
+      marketP25: zod.number(),
+      marketP75: zod.number(),
+      status: zod.enum(["draft", "sent", "accepted", "declined", "withdrawn"]),
+      bandFlag: zod.string().nullish(),
+      joinerUserId: zod.string().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary Hiring — record an offer for a candidate
+ */
+
+export const atelierCreateHireOfferBodyRoleTitleMax = 200;
+
+export const atelierCreateHireOfferBodyJurisdictionMax = 100;
+
+export const atelierCreateHireOfferBodyStartDateMax = 40;
+
+export const atelierCreateHireOfferBodyTotalAtTargetUsdKMin = 0;
+export const atelierCreateHireOfferBodyTotalAtTargetUsdKMax = 100000;
+
+export const atelierCreateHireOfferBodyMarketP25Min = 0;
+export const atelierCreateHireOfferBodyMarketP25Max = 100000;
+
+export const atelierCreateHireOfferBodyMarketP75Min = 0;
+export const atelierCreateHireOfferBodyMarketP75Max = 100000;
+
+export const atelierCreateHireOfferBodyBandFlagMax = 300;
+
+export const AtelierCreateHireOfferBody = zod.object({
+  candidateId: zod.string().min(1),
+  roleTitle: zod.string().min(1).max(atelierCreateHireOfferBodyRoleTitleMax),
+  jurisdiction: zod
+    .string()
+    .max(atelierCreateHireOfferBodyJurisdictionMax)
+    .optional(),
+  startDate: zod.string().min(1).max(atelierCreateHireOfferBodyStartDateMax),
+  totalAtTargetUsdK: zod
+    .number()
+    .min(atelierCreateHireOfferBodyTotalAtTargetUsdKMin)
+    .max(atelierCreateHireOfferBodyTotalAtTargetUsdKMax)
+    .optional(),
+  marketP25: zod
+    .number()
+    .min(atelierCreateHireOfferBodyMarketP25Min)
+    .max(atelierCreateHireOfferBodyMarketP25Max)
+    .optional(),
+  marketP75: zod
+    .number()
+    .min(atelierCreateHireOfferBodyMarketP75Min)
+    .max(atelierCreateHireOfferBodyMarketP75Max)
+    .optional(),
+  bandFlag: zod.string().max(atelierCreateHireOfferBodyBandFlagMax).optional(),
+});
+
+/**
+ * @summary Hiring — mark an offer sent/accepted/declined or link its joiner
+ */
+export const AtelierUpdateHireOfferParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateHireOfferBodyRoleTitleMax = 200;
+
+export const atelierUpdateHireOfferBodyJurisdictionMax = 100;
+
+export const atelierUpdateHireOfferBodyStartDateMax = 40;
+
+export const atelierUpdateHireOfferBodyTotalAtTargetUsdKMin = 0;
+export const atelierUpdateHireOfferBodyTotalAtTargetUsdKMax = 100000;
+
+export const atelierUpdateHireOfferBodyMarketP25Min = 0;
+export const atelierUpdateHireOfferBodyMarketP25Max = 100000;
+
+export const atelierUpdateHireOfferBodyMarketP75Min = 0;
+export const atelierUpdateHireOfferBodyMarketP75Max = 100000;
+
+export const atelierUpdateHireOfferBodyBandFlagMax = 300;
+
+export const atelierUpdateHireOfferBodyJoinerUserIdMax = 100;
+
+export const AtelierUpdateHireOfferBody = zod.object({
+  roleTitle: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateHireOfferBodyRoleTitleMax)
+    .optional(),
+  jurisdiction: zod
+    .string()
+    .max(atelierUpdateHireOfferBodyJurisdictionMax)
+    .optional(),
+  startDate: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateHireOfferBodyStartDateMax)
+    .optional(),
+  totalAtTargetUsdK: zod
+    .number()
+    .min(atelierUpdateHireOfferBodyTotalAtTargetUsdKMin)
+    .max(atelierUpdateHireOfferBodyTotalAtTargetUsdKMax)
+    .optional(),
+  marketP25: zod
+    .number()
+    .min(atelierUpdateHireOfferBodyMarketP25Min)
+    .max(atelierUpdateHireOfferBodyMarketP25Max)
+    .optional(),
+  marketP75: zod
+    .number()
+    .min(atelierUpdateHireOfferBodyMarketP75Min)
+    .max(atelierUpdateHireOfferBodyMarketP75Max)
+    .optional(),
+  bandFlag: zod.string().max(atelierUpdateHireOfferBodyBandFlagMax).nullish(),
+  status: zod
+    .enum(["draft", "sent", "accepted", "declined", "withdrawn"])
+    .optional(),
+  joinerUserId: zod
+    .string()
+    .max(atelierUpdateHireOfferBodyJoinerUserIdMax)
+    .optional(),
+});
+
+export const AtelierUpdateHireOfferResponse = zod.object({
+  id: zod.string(),
+  candidateId: zod.string().nullable(),
+  candidateName: zod.string(),
+  roleTitle: zod.string(),
+  jurisdiction: zod.string(),
+  startDate: zod.string(),
+  totalAtTargetUsdK: zod.number(),
+  marketP25: zod.number(),
+  marketP75: zod.number(),
+  status: zod.enum(["draft", "sent", "accepted", "declined", "withdrawn"]),
+  bandFlag: zod.string().nullish(),
+  joinerUserId: zod.string().nullable(),
+});
+
+/**
  * @summary List the seeded personas (Partner, Lead, SME, Engineer, BD)
  */
 export const AtelierListPersonasResponseItem = zod.object({

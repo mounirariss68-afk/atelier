@@ -9,8 +9,10 @@ import {
   useAtelierListUsers,
   useAtelierGetLeaverHandover,
   useAtelierReassignLeaverItems,
+  useAtelierUpdateHireOffer,
   getAtelierListJoinersQueryKey,
   getAtelierGetLeaverHandoverQueryKey,
+  getAtelierListHireOffersQueryKey,
 } from "@workspace/api-client-react";
 import { TabNav, TabNavLink, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
@@ -23,9 +25,6 @@ const SUBS = [
   { id: "preboard",     label: "Pre-boarding" },
   { id: "invitations",  label: "Invitations" },
   { id: "joiners",      label: "Joiners & access" },
-  { id: "day-one",      label: "Day-1 plan" },
-  { id: "equipment",    label: "Equipment" },
-  { id: "attestations", label: "Attestations" },
 ];
 
 export default function PeopleOnboard() {
@@ -35,8 +34,8 @@ export default function PeopleOnboard() {
   return (
     <PeopleShell stage="onboard">
       <LensPageHeader
-        headline="Pre-boarding through day-one + first-week"
-        lede="From accepted offer through equipment, day-1 plan, attestations and the first 90-day milestones."
+        headline="Pre-boarding, invitations, joiners & access"
+        lede="From accepted offer to a working login: pre-boarding checklist, invitations, and joiner accounts."
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
@@ -50,9 +49,6 @@ export default function PeopleOnboard() {
           {section === "preboard" && <RosterOnboarding />}
           {section === "invitations" && <RosterInvitations />}
           {section === "joiners" && <JoinersView />}
-          {section === "day-one" && <DayOneView />}
-          {section === "equipment" && <EquipmentView />}
-          {section === "attestations" && <AttestationsView />}
         </div>
       </div>
     </PeopleShell>
@@ -71,12 +67,38 @@ function JoinersView() {
   const invalidate = () =>
     void qc.invalidateQueries({ queryKey: getAtelierListJoinersQueryKey() });
 
-  const [fullName, setFullName] = React.useState("");
-  const [email, setEmail] = React.useState("");
-  const [title, setTitle] = React.useState("");
+  // Task #125 — offer→joiner continuation: /people/onboard/joiners can be
+  // opened from an accepted offer with ?fromOffer=<id>&name=&email=&title=&start=
+  // to prefill the form; after the joiner is created we link the offer to the
+  // new login (joinerUserId) so the Offers tab shows "login created".
+  const prefill = React.useMemo(() => {
+    const q = new URLSearchParams(window.location.search);
+    return {
+      fromOffer: q.get("fromOffer") ?? "",
+      name: q.get("name") ?? "",
+      email: q.get("email") ?? "",
+      title: q.get("title") ?? "",
+      start: q.get("start") ?? "",
+    };
+  }, []);
+
+  const [fullName, setFullName] = React.useState(prefill.name);
+  const [email, setEmail] = React.useState(prefill.email);
+  const [title, setTitle] = React.useState(prefill.title);
   const [workerType, setWorkerType] = React.useState<"employee" | "contractor">("employee");
-  const [startDate, setStartDate] = React.useState("");
+  const [startDate, setStartDate] = React.useState(prefill.start);
   const [tempPassword, setTempPassword] = React.useState<{ email: string; password: string } | null>(null);
+
+  const linkOffer = useAtelierUpdateHireOffer({
+    mutation: {
+      onSuccess: () => {
+        void qc.invalidateQueries({ queryKey: getAtelierListHireOffersQueryKey() });
+        toast({ title: "Offer linked", description: "The offer now shows the login was created." });
+      },
+      onError: () =>
+        toast({ title: "Could not link the offer", description: "The login was created, but the offer wasn't updated. You can leave it — the offer stays accepted.", variant: "destructive" }),
+    },
+  });
 
   const addJoiner = useAtelierAddJoiner({
     mutation: {
@@ -85,6 +107,10 @@ function JoinersView() {
         setFullName(""); setEmail(""); setTitle(""); setStartDate("");
         invalidate();
         toast({ title: "Joiner added", description: `${res.user.name} can now sign in with the one-time password below.` });
+        if (prefill.fromOffer) {
+          linkOffer.mutate({ id: prefill.fromOffer, data: { joinerUserId: res.user.id } });
+          window.history.replaceState(null, "", window.location.pathname);
+        }
       },
       onError: (err: unknown) => {
         const msg = (err as { data?: { message?: string } })?.data?.message ?? "Could not add the joiner.";
@@ -425,57 +451,5 @@ function HandoverPanel({ userId, selfExcludeName }: { userId: string; selfExclud
         </>
       )}
     </div>
-  );
-}
-
-function DayOneView() {
-  const items = [
-    { id: 1, label: "Welcome message + manager intro", owner: "Manager",   eta: "Day 0" },
-    { id: 2, label: "Identity & SSO provisioned",      owner: "IT",        eta: "Day 0" },
-    { id: 3, label: "Calendar holds: 1:1, all-hands",  owner: "Ops",       eta: "Day 1" },
-    { id: 4, label: "Buddy assignment",                owner: "Manager",   eta: "Day 1" },
-    { id: 5, label: "First read-out: practice playbook", owner: "Manager", eta: "Day 5" },
-  ];
-  return (
-    <Card className="p-4">
-      <ul className="divide-y divide-border-soft">
-        {items.map((i) => (
-          <li key={i.id} className="flex items-center justify-between py-2 text-sm">
-            <span className="text-text">{i.label}</span>
-            <span className="font-mono text-xs text-text-faint">{i.owner} · {i.eta}</span>
-          </li>
-        ))}
-      </ul>
-    </Card>
-  );
-}
-
-function EquipmentView() {
-  return (
-    <Card className="p-4 text-sm text-text-mute">
-      Laptop, YubiKey, and standard SaaS access kits are issued from the Operations bench.{" "}
-      <Link href="/people/access" className="text-gold hover:underline">Open the Access matrix →</Link>
-    </Card>
-  );
-}
-
-function AttestationsView() {
-  const list = [
-    { id: "att-1", title: "Code of conduct",           required: true },
-    { id: "att-2", title: "Confidentiality & IP",      required: true },
-    { id: "att-3", title: "Data handling (UAE PDPL)", required: true },
-    { id: "att-4", title: "AI usage guidelines",       required: false },
-  ];
-  return (
-    <Card className="p-4">
-      <ul className="space-y-2 text-sm">
-        {list.map((a) => (
-          <li key={a.id} className="flex items-center justify-between">
-            <span className="text-text">{a.title}</span>
-            <MonoChip tone={a.required ? "amber" : "default"}>{a.required ? "required" : "optional"}</MonoChip>
-          </li>
-        ))}
-      </ul>
-    </Card>
   );
 }

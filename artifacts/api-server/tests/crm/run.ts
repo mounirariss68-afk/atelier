@@ -293,6 +293,11 @@ async function main(): Promise<void> {
     atelierWinLossDebriefs,
     atelierPaneAItems,
     atelierEngagementAccess,
+    atelierStudioOpenRoles,
+    atelierStudioCandidates,
+    atelierStudioInterviewPanels,
+    atelierStudioOffers,
+    atelierPersonDocuments,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -314,6 +319,11 @@ async function main(): Promise<void> {
     atelierTranscripts: any;
     atelierWinLossDebriefs: any;
     atelierPaneAItems: any;
+    atelierStudioOpenRoles: any;
+    atelierStudioCandidates: any;
+    atelierStudioInterviewPanels: any;
+    atelierStudioOffers: any;
+    atelierPersonDocuments: any;
   };
 
   const START = new Date();
@@ -3005,6 +3015,149 @@ async function main(): Promise<void> {
         `status=${restrictedPdf.status} body=${JSON.stringify(restrictedPdf.body ?? null)?.slice(0, 120)}`,
       );
     }
+
+    // =====================================================================
+    // Task #125 — HR hiring module: roles / candidates / CV upload /
+    // interviews / offers, gated to hr|partner|founding_partner.
+    // =====================================================================
+    group("REST \u00b7 Hiring (Task #125)");
+    {
+      // ---- gate: a consultant must not reach any /hire surface ----
+      const gate = await api("GET", "/hire/roles", PERSONA.consultant);
+      check("GET /hire/roles (consultant) \u2192 403", gate.status === 403, `status=${gate.status}`);
+      const gatePost = await api("POST", "/hire/candidates", PERSONA.consultant, { name: uniq("Nope") });
+      check("POST /hire/candidates (consultant) \u2192 403", gatePost.status === 403, `status=${gatePost.status}`);
+
+      // ---- open roles CRUD ----
+      const badRole = await api("POST", "/hire/roles", PERSONA.fp, { title: "" });
+      check("POST /hire/roles invalid body \u2192 400", badRole.status === 400, `status=${badRole.status}`);
+      const roleCr = await api("POST", "/hire/roles", PERSONA.fp, {
+        title: uniq("Hire Role"),
+        level: "Senior",
+        location: "Dubai",
+        urgency: "high",
+        summary: "Test role",
+      });
+      check("POST /hire/roles \u2192 201 open role", roleCr.status === 201 && roleCr.body?.status === "open", `status=${roleCr.status}`);
+      const roleId = roleCr.body?.id as string;
+      const roleList = await api("GET", "/hire/roles", PERSONA.fp);
+      check(
+        "GET /hire/roles lists the new role",
+        roleList.status === 200 && (roleList.body?.items ?? []).some((r: any) => r.id === roleId),
+        `status=${roleList.status}`,
+      );
+
+      // ---- candidates CRUD + activeCandidates recount ----
+      const candCr = await api("POST", "/hire/candidates", PERSONA.fp, {
+        name: uniq("Hire Cand"),
+        email: `hire.cand.${STAMP}@example.com`,
+        roleId,
+        source: "referral",
+      });
+      check(
+        "POST /hire/candidates \u2192 201 with roleTitle resolved",
+        candCr.status === 201 && candCr.body?.roleId === roleId && typeof candCr.body?.roleTitle === "string" && candCr.body.roleTitle.length > 0,
+        `status=${candCr.status} body=${JSON.stringify(candCr.body)?.slice(0, 160)}`,
+      );
+      const candId = candCr.body?.id as string;
+      const roleAfterCand = await api("GET", "/hire/roles", PERSONA.fp);
+      const roleRow = (roleAfterCand.body?.items ?? []).find((r: any) => r.id === roleId);
+      check("open role activeCandidates recounted \u2192 1", roleRow?.activeCandidates === 1, `activeCandidates=${roleRow?.activeCandidates}`);
+      const badRoleRef = await api("POST", "/hire/candidates", PERSONA.fp, { name: uniq("Bad RoleRef"), roleId: `role_missing_${STAMP}` });
+      check("POST /hire/candidates unknown roleId \u2192 400/404", badRoleRef.status === 400 || badRoleRef.status === 404, `status=${badRoleRef.status}`);
+      const candPatch = await api("PATCH", `/hire/candidates/${candId}`, PERSONA.fp, { stage: "interview", notes: "moved along" });
+      check("PATCH /hire/candidates/:id stage \u2192 200", candPatch.status === 200 && candPatch.body?.stage === "interview", `status=${candPatch.status}`);
+
+      // ---- CV upload: magic-byte sniffing + list + download ----
+      const uploadDoc = async (bytes: Buffer, mime: string, fileName: string) => {
+        const fd = new FormData();
+        fd.append("file", new Blob([bytes], { type: mime }), fileName);
+        fd.append("kind", "cv");
+        const res = await fetch(`${BASE}/hire/candidates/${candId}/documents`, {
+          method: "POST",
+          headers: { cookie: `atelier_persona=${PERSONA.fp}` },
+          body: fd,
+        });
+        let parsed: any = null;
+        try { parsed = await res.json(); } catch { /* non-json */ }
+        return { status: res.status, body: parsed };
+      };
+      const garbage = await uploadDoc(Buffer.from("this is not a pdf at all"), "application/pdf", "cv.pdf");
+      check("CV upload garbage-as-pdf \u2192 415", garbage.status === 415, `status=${garbage.status}`);
+      const pdfBytes = Buffer.from(`%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n${TAG}`);
+      const goodUp = await uploadDoc(pdfBytes, "application/pdf", `${TAG}-cv.pdf`);
+      check("CV upload real PDF \u2192 201", goodUp.status === 201 && !!goodUp.body?.id, `status=${goodUp.status}`);
+      const docList = await api("GET", `/hire/candidates/${candId}/documents`, PERSONA.fp);
+      check(
+        "GET candidate documents lists the CV",
+        docList.status === 200 && (docList.body?.documents ?? []).some((d: any) => d.id === goodUp.body?.id),
+        `status=${docList.status}`,
+      );
+      const dl = await fetch(`${BASE}/hire/candidates/${candId}/documents/${goodUp.body?.id}/download`, {
+        headers: { cookie: `atelier_persona=${PERSONA.fp}` },
+      });
+      const dlBytes = Buffer.from(await dl.arrayBuffer());
+      check(
+        "CV download returns the stored bytes",
+        dl.status === 200 && dlBytes.length === pdfBytes.length && dlBytes.equals(pdfBytes),
+        `status=${dl.status} len=${dlBytes.length}`,
+      );
+      const dlDenied = await fetch(`${BASE}/hire/candidates/${candId}/documents/${goodUp.body?.id}/download`, {
+        headers: { cookie: `atelier_persona=${PERSONA.consultant}` },
+      });
+      check("CV download (consultant) \u2192 403", dlDenied.status === 403, `status=${dlDenied.status}`);
+
+      // ---- interviews: create + feedback patch ----
+      const intCr = await api("POST", "/hire/interviews", PERSONA.fp, {
+        candidateId: candId,
+        scheduledFor: "2026-08-01",
+        stages: [{ stage: "Case", interviewer: "Mounir", durationMin: 60, focus: "problem solving" }],
+      });
+      check(
+        "POST /hire/interviews \u2192 201 scheduled with candidateName",
+        intCr.status === 201 && intCr.body?.candidateName?.includes("Hire Cand") && intCr.body?.status === "scheduled",
+        `status=${intCr.status} body=${JSON.stringify(intCr.body)?.slice(0, 160)}`,
+      );
+      const intId = intCr.body?.id as string;
+      const intBadCand = await api("POST", "/hire/interviews", PERSONA.fp, {
+        candidateId: `cand_missing_${STAMP}`,
+        scheduledFor: "2026-08-01",
+        stages: [{ stage: "Case", interviewer: "X", durationMin: 30 }],
+      });
+      check("POST /hire/interviews unknown candidate \u2192 400/404", intBadCand.status === 400 || intBadCand.status === 404, `status=${intBadCand.status}`);
+      const intPatch = await api("PATCH", `/hire/interviews/${intId}`, PERSONA.fp, {
+        status: "completed",
+        stages: [{ stage: "Case", interviewer: "Mounir", durationMin: 60, focus: "problem solving", score: 4, notes: "strong" }],
+      });
+      check(
+        "PATCH /hire/interviews/:id feedback \u2192 200 with score persisted",
+        intPatch.status === 200 && intPatch.body?.status === "completed" && intPatch.body?.stages?.[0]?.score === 4,
+        `status=${intPatch.status} body=${JSON.stringify(intPatch.body)?.slice(0, 160)}`,
+      );
+
+      // ---- offers: create, accept \u2192 candidate hired, joiner linkage ----
+      const offCr = await api("POST", "/hire/offers", PERSONA.fp, {
+        candidateId: candId,
+        roleTitle: uniq("Offer Title"),
+        startDate: "2026-09-01",
+        totalAtTargetUsdK: 180,
+      });
+      check("POST /hire/offers \u2192 201 draft", offCr.status === 201 && offCr.body?.status === "draft", `status=${offCr.status}`);
+      const offId = offCr.body?.id as string;
+      const offAccept = await api("PATCH", `/hire/offers/${offId}`, PERSONA.fp, { status: "accepted" });
+      check("PATCH /hire/offers/:id accepted \u2192 200", offAccept.status === 200 && offAccept.body?.status === "accepted", `status=${offAccept.status}`);
+      const candAfterOffer = await api("GET", "/hire/candidates", PERSONA.fp);
+      const candRow = (candAfterOffer.body?.items ?? []).find((c: any) => c.id === candId);
+      check("accepted offer moves candidate to stage=hired", candRow?.stage === "hired", `stage=${candRow?.stage}`);
+      const badJoiner = await api("PATCH", `/hire/offers/${offId}`, PERSONA.fp, { joinerUserId: `u_missing_${STAMP}` });
+      check("PATCH offer with unknown joinerUserId \u2192 400/404", badJoiner.status === 400 || badJoiner.status === 404, `status=${badJoiner.status}`);
+      const goodJoiner = await api("PATCH", `/hire/offers/${offId}`, PERSONA.fp, { joinerUserId: PERSONA.fp });
+      check(
+        "PATCH offer with real joinerUserId \u2192 200 linked",
+        goodJoiner.status === 200 && goodJoiner.body?.joinerUserId === PERSONA.fp,
+        `status=${goodJoiner.status} body=${JSON.stringify(goodJoiner.body)?.slice(0, 120)}`,
+      );
+    }
   } finally {
     // -------------------- cleanup (best-effort, tagged rows) --------------
     try {
@@ -3093,6 +3246,23 @@ async function main(): Promise<void> {
         where account_id in (select id from atelier_accounts where name like ${tagLike})
       `).catch(sweep("contacts"));
       await db.execute(sql`delete from atelier_accounts where name like ${tagLike}`).catch(sweep("accounts"));
+      // Task #125 — hiring rows created by the hire group (all tagged names/titles).
+      await db.execute(sql`
+        delete from atelier_person_documents
+        where person_type = 'candidate'
+          and person_id in (select id from atelier_studio_candidates where name like ${tagLike})
+      `).catch(sweep("hire_candidate_docs"));
+      await db.execute(sql`
+        delete from atelier_studio_interview_panels
+        where candidate_id in (select id from atelier_studio_candidates where name like ${tagLike})
+      `).catch(sweep("hire_interviews"));
+      await db.execute(sql`
+        delete from atelier_studio_offers
+        where candidate_id in (select id from atelier_studio_candidates where name like ${tagLike})
+           or role_title like ${tagLike}
+      `).catch(sweep("hire_offers"));
+      await db.execute(sql`delete from atelier_studio_candidates where name like ${tagLike}`).catch(sweep("hire_candidates"));
+      await db.execute(sql`delete from atelier_studio_open_roles where title like ${tagLike}`).catch(sweep("hire_roles"));
       // Audit cleanup is scoped to BOTH the entities this run touched AND the
       // actor personas it acted as, so concurrent activity by any other actor
       // (possible on a shared, non-isolated DB) is never deleted.

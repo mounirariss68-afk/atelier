@@ -2887,6 +2887,420 @@ export interface AtelierAddJoinerResponse {
   tempPassword: string;
 }
 
+export type AtelierHireRoleUrgency =
+  (typeof AtelierHireRoleUrgency)[keyof typeof AtelierHireRoleUrgency];
+
+export const AtelierHireRoleUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
+export type AtelierHireRoleStatus =
+  (typeof AtelierHireRoleStatus)[keyof typeof AtelierHireRoleStatus];
+
+export const AtelierHireRoleStatus = {
+  open: "open",
+  closed: "closed",
+  filled: "filled",
+} as const;
+
+export interface AtelierHireRole {
+  id: string;
+  title: string;
+  level: string;
+  location: string;
+  targetStart: string;
+  urgency: AtelierHireRoleUrgency;
+  summary: string;
+  status: AtelierHireRoleStatus;
+  activeCandidates: number;
+}
+
+export interface AtelierHireRoleList {
+  items: AtelierHireRole[];
+}
+
+export type AtelierHireRoleInputUrgency =
+  (typeof AtelierHireRoleInputUrgency)[keyof typeof AtelierHireRoleInputUrgency];
+
+export const AtelierHireRoleInputUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
+export interface AtelierHireRoleInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  title: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  level: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  location: string;
+  /** @maxLength 40 */
+  targetStart?: string;
+  urgency?: AtelierHireRoleInputUrgency;
+  /** @maxLength 2000 */
+  summary?: string;
+}
+
+export type AtelierHireRolePatchUrgency =
+  (typeof AtelierHireRolePatchUrgency)[keyof typeof AtelierHireRolePatchUrgency];
+
+export const AtelierHireRolePatchUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+} as const;
+
+export type AtelierHireRolePatchStatus =
+  (typeof AtelierHireRolePatchStatus)[keyof typeof AtelierHireRolePatchStatus];
+
+export const AtelierHireRolePatchStatus = {
+  open: "open",
+  closed: "closed",
+  filled: "filled",
+} as const;
+
+export interface AtelierHireRolePatch {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  title?: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  level?: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  location?: string;
+  /** @maxLength 40 */
+  targetStart?: string;
+  urgency?: AtelierHireRolePatchUrgency;
+  /** @maxLength 2000 */
+  summary?: string;
+  status?: AtelierHireRolePatchStatus;
+}
+
+export type AtelierHireCandidateStage =
+  (typeof AtelierHireCandidateStage)[keyof typeof AtelierHireCandidateStage];
+
+export const AtelierHireCandidateStage = {
+  sourced: "sourced",
+  screening: "screening",
+  interview: "interview",
+  reference: "reference",
+  offer: "offer",
+  hired: "hired",
+  rejected: "rejected",
+} as const;
+
+export interface AtelierHireCandidate {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  notes: string;
+  roleId: string | null;
+  roleTitle: string;
+  stage: AtelierHireCandidateStage;
+  source: string;
+  currentRole: string;
+  currentEmployer: string;
+}
+
+export interface AtelierHireCandidateList {
+  items: AtelierHireCandidate[];
+}
+
+export type AtelierHireCandidateInputStage =
+  (typeof AtelierHireCandidateInputStage)[keyof typeof AtelierHireCandidateInputStage];
+
+export const AtelierHireCandidateInputStage = {
+  sourced: "sourced",
+  screening: "screening",
+  interview: "interview",
+  reference: "reference",
+  offer: "offer",
+} as const;
+
+export interface AtelierHireCandidateInput {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name: string;
+  /** @maxLength 320 */
+  email?: string;
+  /** @maxLength 60 */
+  phone?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+  /** @maxLength 100 */
+  roleId?: string;
+  stage?: AtelierHireCandidateInputStage;
+  /** @maxLength 200 */
+  source?: string;
+  /** @maxLength 200 */
+  currentRole?: string;
+  /** @maxLength 200 */
+  currentEmployer?: string;
+}
+
+export type AtelierHireCandidatePatchStage =
+  (typeof AtelierHireCandidatePatchStage)[keyof typeof AtelierHireCandidatePatchStage];
+
+export const AtelierHireCandidatePatchStage = {
+  sourced: "sourced",
+  screening: "screening",
+  interview: "interview",
+  reference: "reference",
+  offer: "offer",
+  hired: "hired",
+  rejected: "rejected",
+} as const;
+
+export interface AtelierHireCandidatePatch {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name?: string;
+  /** @maxLength 320 */
+  email?: string;
+  /** @maxLength 60 */
+  phone?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+  /** @maxLength 100 */
+  roleId?: string | null;
+  stage?: AtelierHireCandidatePatchStage;
+  /** @maxLength 200 */
+  source?: string;
+  /** @maxLength 200 */
+  currentRole?: string;
+  /** @maxLength 200 */
+  currentEmployer?: string;
+}
+
+export interface AtelierCandidateDocument {
+  id: string;
+  kind: string;
+  title: string;
+  fileName: string | null;
+  mime: string | null;
+  sizeBytes: number | null;
+  uploadedAt: string;
+}
+
+export interface AtelierCandidateDocumentList {
+  documents: AtelierCandidateDocument[];
+}
+
+export interface AtelierHireInterviewStage {
+  /** @maxLength 100 */
+  stage: string;
+  /** @maxLength 200 */
+  interviewer: string;
+  /**
+   * @minimum 5
+   * @maximum 480
+   */
+  durationMin: number;
+  /** @maxLength 500 */
+  focus: string;
+  /**
+   * @minimum 1
+   * @maximum 5
+   */
+  score?: number | null;
+  /** @maxLength 4000 */
+  notes?: string | null;
+}
+
+export type AtelierHireInterviewStatus =
+  (typeof AtelierHireInterviewStatus)[keyof typeof AtelierHireInterviewStatus];
+
+export const AtelierHireInterviewStatus = {
+  draft: "draft",
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface AtelierHireInterview {
+  id: string;
+  candidateId: string | null;
+  candidateName: string;
+  roleTitle: string;
+  scheduledFor: string;
+  status: AtelierHireInterviewStatus;
+  stages: AtelierHireInterviewStage[];
+}
+
+export interface AtelierHireInterviewList {
+  items: AtelierHireInterview[];
+}
+
+export interface AtelierHireInterviewInput {
+  /** @minLength 1 */
+  candidateId: string;
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  scheduledFor: string;
+  /**
+   * @minItems 1
+   * @maxItems 12
+   */
+  stages: AtelierHireInterviewStage[];
+}
+
+export type AtelierHireInterviewPatchStatus =
+  (typeof AtelierHireInterviewPatchStatus)[keyof typeof AtelierHireInterviewPatchStatus];
+
+export const AtelierHireInterviewPatchStatus = {
+  draft: "draft",
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface AtelierHireInterviewPatch {
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  scheduledFor?: string;
+  status?: AtelierHireInterviewPatchStatus;
+  /** @maxItems 12 */
+  stages?: AtelierHireInterviewStage[];
+}
+
+export type AtelierHireOfferStatus =
+  (typeof AtelierHireOfferStatus)[keyof typeof AtelierHireOfferStatus];
+
+export const AtelierHireOfferStatus = {
+  draft: "draft",
+  sent: "sent",
+  accepted: "accepted",
+  declined: "declined",
+  withdrawn: "withdrawn",
+} as const;
+
+export interface AtelierHireOffer {
+  id: string;
+  candidateId: string | null;
+  candidateName: string;
+  roleTitle: string;
+  jurisdiction: string;
+  startDate: string;
+  totalAtTargetUsdK: number;
+  marketP25: number;
+  marketP75: number;
+  status: AtelierHireOfferStatus;
+  bandFlag?: string | null;
+  joinerUserId: string | null;
+}
+
+export interface AtelierHireOfferList {
+  items: AtelierHireOffer[];
+}
+
+export interface AtelierHireOfferInput {
+  /** @minLength 1 */
+  candidateId: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  roleTitle: string;
+  /** @maxLength 100 */
+  jurisdiction?: string;
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  startDate: string;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  totalAtTargetUsdK?: number;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  marketP25?: number;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  marketP75?: number;
+  /** @maxLength 300 */
+  bandFlag?: string;
+}
+
+export type AtelierHireOfferPatchStatus =
+  (typeof AtelierHireOfferPatchStatus)[keyof typeof AtelierHireOfferPatchStatus];
+
+export const AtelierHireOfferPatchStatus = {
+  draft: "draft",
+  sent: "sent",
+  accepted: "accepted",
+  declined: "declined",
+  withdrawn: "withdrawn",
+} as const;
+
+export interface AtelierHireOfferPatch {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  roleTitle?: string;
+  /** @maxLength 100 */
+  jurisdiction?: string;
+  /**
+   * @minLength 1
+   * @maxLength 40
+   */
+  startDate?: string;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  totalAtTargetUsdK?: number;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  marketP25?: number;
+  /**
+   * @minimum 0
+   * @maximum 100000
+   */
+  marketP75?: number;
+  /** @maxLength 300 */
+  bandFlag?: string | null;
+  status?: AtelierHireOfferPatchStatus;
+  /** @maxLength 100 */
+  joinerUserId?: string;
+}
+
 export type AtelierPayDocumentCategory =
   (typeof AtelierPayDocumentCategory)[keyof typeof AtelierPayDocumentCategory];
 
@@ -5634,6 +6048,23 @@ export type AtelierListPerformanceReviewsParams = {
 
 export type AtelierListPerformanceGoalsParams = {
   employeeId?: string;
+};
+
+export type AtelierUploadCandidateDocumentBodyKind =
+  (typeof AtelierUploadCandidateDocumentBodyKind)[keyof typeof AtelierUploadCandidateDocumentBodyKind];
+
+export const AtelierUploadCandidateDocumentBodyKind = {
+  cv: "cv",
+  cover_letter: "cover_letter",
+  portfolio: "portfolio",
+  other: "other",
+} as const;
+
+export type AtelierUploadCandidateDocumentBody = {
+  file: Blob;
+  /** @maxLength 200 */
+  title?: string;
+  kind?: AtelierUploadCandidateDocumentBodyKind;
 };
 
 export type AtelierGetActivityParams = {

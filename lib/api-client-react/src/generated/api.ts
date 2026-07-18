@@ -48,6 +48,8 @@ import type {
   AtelierBankChangeRequestInput,
   AtelierBriefEnvelope,
   AtelierBulkDecideProfileUpdatesInput,
+  AtelierCandidateDocument,
+  AtelierCandidateDocumentList,
   AtelierCartographerRefreshInput,
   AtelierCharterApproveInput,
   AtelierCharterRedraftInput,
@@ -107,6 +109,22 @@ import type {
   AtelierGetActivityParams,
   AtelierGrantDocumentAccess201,
   AtelierGrantDocumentAccessBody,
+  AtelierHireCandidate,
+  AtelierHireCandidateInput,
+  AtelierHireCandidateList,
+  AtelierHireCandidatePatch,
+  AtelierHireInterview,
+  AtelierHireInterviewInput,
+  AtelierHireInterviewList,
+  AtelierHireInterviewPatch,
+  AtelierHireOffer,
+  AtelierHireOfferInput,
+  AtelierHireOfferList,
+  AtelierHireOfferPatch,
+  AtelierHireRole,
+  AtelierHireRoleInput,
+  AtelierHireRoleList,
+  AtelierHireRolePatch,
   AtelierHome,
   AtelierHypothesisTree,
   AtelierJoiner,
@@ -218,6 +236,7 @@ import type {
   AtelierUpdateMyDocument200,
   AtelierUpdateMyEmergencyContact200,
   AtelierUpdateOpportunityInput,
+  AtelierUploadCandidateDocumentBody,
   AtelierUploadDocumentVersion201,
   AtelierUploadDocumentVersionBody,
   AtelierUploadMyPhoto200,
@@ -6654,6 +6673,1212 @@ export const useAtelierReactivateJoiner = <
   TContext
 > => {
   return useMutation(getAtelierReactivateJoinerMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — list open positions
+ */
+export const getAtelierListHireRolesUrl = () => {
+  return `/api/atelier/hire/roles`;
+};
+
+export const atelierListHireRoles = async (
+  options?: RequestInit,
+): Promise<AtelierHireRoleList> => {
+  return customFetch<AtelierHireRoleList>(getAtelierListHireRolesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListHireRolesQueryKey = () => {
+  return [`/api/atelier/hire/roles`] as const;
+};
+
+export const getAtelierListHireRolesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListHireRoles>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireRoles>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListHireRolesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListHireRoles>>
+  > = ({ signal }) => atelierListHireRoles({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireRoles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListHireRolesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListHireRoles>>
+>;
+export type AtelierListHireRolesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — list open positions
+ */
+
+export function useAtelierListHireRoles<
+  TData = Awaited<ReturnType<typeof atelierListHireRoles>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireRoles>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListHireRolesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Hiring — create an open position
+ */
+export const getAtelierCreateHireRoleUrl = () => {
+  return `/api/atelier/hire/roles`;
+};
+
+export const atelierCreateHireRole = async (
+  atelierHireRoleInput: AtelierHireRoleInput,
+  options?: RequestInit,
+): Promise<AtelierHireRole> => {
+  return customFetch<AtelierHireRole>(getAtelierCreateHireRoleUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireRoleInput),
+  });
+};
+
+export const getAtelierCreateHireRoleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireRole>>,
+    TError,
+    { data: BodyType<AtelierHireRoleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateHireRole>>,
+  TError,
+  { data: BodyType<AtelierHireRoleInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateHireRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateHireRole>>,
+    { data: BodyType<AtelierHireRoleInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateHireRole(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateHireRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateHireRole>>
+>;
+export type AtelierCreateHireRoleMutationBody = BodyType<AtelierHireRoleInput>;
+export type AtelierCreateHireRoleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — create an open position
+ */
+export const useAtelierCreateHireRole = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireRole>>,
+    TError,
+    { data: BodyType<AtelierHireRoleInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateHireRole>>,
+  TError,
+  { data: BodyType<AtelierHireRoleInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateHireRoleMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — edit / close / fill a position
+ */
+export const getAtelierUpdateHireRoleUrl = (id: string) => {
+  return `/api/atelier/hire/roles/${id}`;
+};
+
+export const atelierUpdateHireRole = async (
+  id: string,
+  atelierHireRolePatch: AtelierHireRolePatch,
+  options?: RequestInit,
+): Promise<AtelierHireRole> => {
+  return customFetch<AtelierHireRole>(getAtelierUpdateHireRoleUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireRolePatch),
+  });
+};
+
+export const getAtelierUpdateHireRoleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireRole>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireRolePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateHireRole>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireRolePatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateHireRole"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateHireRole>>,
+    { id: string; data: BodyType<AtelierHireRolePatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateHireRole(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateHireRoleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateHireRole>>
+>;
+export type AtelierUpdateHireRoleMutationBody = BodyType<AtelierHireRolePatch>;
+export type AtelierUpdateHireRoleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — edit / close / fill a position
+ */
+export const useAtelierUpdateHireRole = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireRole>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireRolePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateHireRole>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireRolePatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateHireRoleMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — list candidates
+ */
+export const getAtelierListHireCandidatesUrl = () => {
+  return `/api/atelier/hire/candidates`;
+};
+
+export const atelierListHireCandidates = async (
+  options?: RequestInit,
+): Promise<AtelierHireCandidateList> => {
+  return customFetch<AtelierHireCandidateList>(
+    getAtelierListHireCandidatesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListHireCandidatesQueryKey = () => {
+  return [`/api/atelier/hire/candidates`] as const;
+};
+
+export const getAtelierListHireCandidatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListHireCandidates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireCandidates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListHireCandidatesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListHireCandidates>>
+  > = ({ signal }) => atelierListHireCandidates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireCandidates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListHireCandidatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListHireCandidates>>
+>;
+export type AtelierListHireCandidatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — list candidates
+ */
+
+export function useAtelierListHireCandidates<
+  TData = Awaited<ReturnType<typeof atelierListHireCandidates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireCandidates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListHireCandidatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Hiring — add a candidate
+ */
+export const getAtelierCreateHireCandidateUrl = () => {
+  return `/api/atelier/hire/candidates`;
+};
+
+export const atelierCreateHireCandidate = async (
+  atelierHireCandidateInput: AtelierHireCandidateInput,
+  options?: RequestInit,
+): Promise<AtelierHireCandidate> => {
+  return customFetch<AtelierHireCandidate>(getAtelierCreateHireCandidateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireCandidateInput),
+  });
+};
+
+export const getAtelierCreateHireCandidateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireCandidate>>,
+    TError,
+    { data: BodyType<AtelierHireCandidateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateHireCandidate>>,
+  TError,
+  { data: BodyType<AtelierHireCandidateInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateHireCandidate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateHireCandidate>>,
+    { data: BodyType<AtelierHireCandidateInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateHireCandidate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateHireCandidateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateHireCandidate>>
+>;
+export type AtelierCreateHireCandidateMutationBody =
+  BodyType<AtelierHireCandidateInput>;
+export type AtelierCreateHireCandidateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — add a candidate
+ */
+export const useAtelierCreateHireCandidate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireCandidate>>,
+    TError,
+    { data: BodyType<AtelierHireCandidateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateHireCandidate>>,
+  TError,
+  { data: BodyType<AtelierHireCandidateInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateHireCandidateMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — edit a candidate / move stage / reject
+ */
+export const getAtelierUpdateHireCandidateUrl = (id: string) => {
+  return `/api/atelier/hire/candidates/${id}`;
+};
+
+export const atelierUpdateHireCandidate = async (
+  id: string,
+  atelierHireCandidatePatch: AtelierHireCandidatePatch,
+  options?: RequestInit,
+): Promise<AtelierHireCandidate> => {
+  return customFetch<AtelierHireCandidate>(
+    getAtelierUpdateHireCandidateUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierHireCandidatePatch),
+    },
+  );
+};
+
+export const getAtelierUpdateHireCandidateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireCandidate>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireCandidatePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateHireCandidate>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireCandidatePatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateHireCandidate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateHireCandidate>>,
+    { id: string; data: BodyType<AtelierHireCandidatePatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateHireCandidate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateHireCandidateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateHireCandidate>>
+>;
+export type AtelierUpdateHireCandidateMutationBody =
+  BodyType<AtelierHireCandidatePatch>;
+export type AtelierUpdateHireCandidateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — edit a candidate / move stage / reject
+ */
+export const useAtelierUpdateHireCandidate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireCandidate>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireCandidatePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateHireCandidate>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireCandidatePatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateHireCandidateMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — list a candidate's uploaded files (CV etc.)
+ */
+export const getAtelierListCandidateDocumentsUrl = (id: string) => {
+  return `/api/atelier/hire/candidates/${id}/documents`;
+};
+
+export const atelierListCandidateDocuments = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierCandidateDocumentList> => {
+  return customFetch<AtelierCandidateDocumentList>(
+    getAtelierListCandidateDocumentsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListCandidateDocumentsQueryKey = (id: string) => {
+  return [`/api/atelier/hire/candidates/${id}/documents`] as const;
+};
+
+export const getAtelierListCandidateDocumentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListCandidateDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCandidateDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListCandidateDocumentsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListCandidateDocuments>>
+  > = ({ signal }) =>
+    atelierListCandidateDocuments(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCandidateDocuments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListCandidateDocumentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListCandidateDocuments>>
+>;
+export type AtelierListCandidateDocumentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — list a candidate's uploaded files (CV etc.)
+ */
+
+export function useAtelierListCandidateDocuments<
+  TData = Awaited<ReturnType<typeof atelierListCandidateDocuments>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCandidateDocuments>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListCandidateDocumentsQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Hiring — upload a CV or other file to a candidate
+ */
+export const getAtelierUploadCandidateDocumentUrl = (id: string) => {
+  return `/api/atelier/hire/candidates/${id}/documents`;
+};
+
+export const atelierUploadCandidateDocument = async (
+  id: string,
+  atelierUploadCandidateDocumentBody: AtelierUploadCandidateDocumentBody,
+  options?: RequestInit,
+): Promise<AtelierCandidateDocument> => {
+  const formData = new FormData();
+  formData.append(`file`, atelierUploadCandidateDocumentBody.file);
+  if (atelierUploadCandidateDocumentBody.title !== undefined) {
+    formData.append(`title`, atelierUploadCandidateDocumentBody.title);
+  }
+  if (atelierUploadCandidateDocumentBody.kind !== undefined) {
+    formData.append(`kind`, atelierUploadCandidateDocumentBody.kind);
+  }
+
+  return customFetch<AtelierCandidateDocument>(
+    getAtelierUploadCandidateDocumentUrl(id),
+    {
+      ...options,
+      method: "POST",
+      body: formData,
+    },
+  );
+};
+
+export const getAtelierUploadCandidateDocumentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadCandidateDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierUploadCandidateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUploadCandidateDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierUploadCandidateDocumentBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierUploadCandidateDocument"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUploadCandidateDocument>>,
+    { id: string; data: BodyType<AtelierUploadCandidateDocumentBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUploadCandidateDocument(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUploadCandidateDocumentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUploadCandidateDocument>>
+>;
+export type AtelierUploadCandidateDocumentMutationBody =
+  BodyType<AtelierUploadCandidateDocumentBody>;
+export type AtelierUploadCandidateDocumentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — upload a CV or other file to a candidate
+ */
+export const useAtelierUploadCandidateDocument = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUploadCandidateDocument>>,
+    TError,
+    { id: string; data: BodyType<AtelierUploadCandidateDocumentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUploadCandidateDocument>>,
+  TError,
+  { id: string; data: BodyType<AtelierUploadCandidateDocumentBody> },
+  TContext
+> => {
+  return useMutation(getAtelierUploadCandidateDocumentMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — list interview panels
+ */
+export const getAtelierListHireInterviewsUrl = () => {
+  return `/api/atelier/hire/interviews`;
+};
+
+export const atelierListHireInterviews = async (
+  options?: RequestInit,
+): Promise<AtelierHireInterviewList> => {
+  return customFetch<AtelierHireInterviewList>(
+    getAtelierListHireInterviewsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListHireInterviewsQueryKey = () => {
+  return [`/api/atelier/hire/interviews`] as const;
+};
+
+export const getAtelierListHireInterviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListHireInterviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireInterviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListHireInterviewsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListHireInterviews>>
+  > = ({ signal }) => atelierListHireInterviews({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireInterviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListHireInterviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListHireInterviews>>
+>;
+export type AtelierListHireInterviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — list interview panels
+ */
+
+export function useAtelierListHireInterviews<
+  TData = Awaited<ReturnType<typeof atelierListHireInterviews>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireInterviews>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListHireInterviewsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Hiring — schedule an interview panel for a candidate
+ */
+export const getAtelierCreateHireInterviewUrl = () => {
+  return `/api/atelier/hire/interviews`;
+};
+
+export const atelierCreateHireInterview = async (
+  atelierHireInterviewInput: AtelierHireInterviewInput,
+  options?: RequestInit,
+): Promise<AtelierHireInterview> => {
+  return customFetch<AtelierHireInterview>(getAtelierCreateHireInterviewUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireInterviewInput),
+  });
+};
+
+export const getAtelierCreateHireInterviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireInterview>>,
+    TError,
+    { data: BodyType<AtelierHireInterviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateHireInterview>>,
+  TError,
+  { data: BodyType<AtelierHireInterviewInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateHireInterview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateHireInterview>>,
+    { data: BodyType<AtelierHireInterviewInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateHireInterview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateHireInterviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateHireInterview>>
+>;
+export type AtelierCreateHireInterviewMutationBody =
+  BodyType<AtelierHireInterviewInput>;
+export type AtelierCreateHireInterviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — schedule an interview panel for a candidate
+ */
+export const useAtelierCreateHireInterview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireInterview>>,
+    TError,
+    { data: BodyType<AtelierHireInterviewInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateHireInterview>>,
+  TError,
+  { data: BodyType<AtelierHireInterviewInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateHireInterviewMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — update panel status / record structured feedback
+ */
+export const getAtelierUpdateHireInterviewUrl = (id: string) => {
+  return `/api/atelier/hire/interviews/${id}`;
+};
+
+export const atelierUpdateHireInterview = async (
+  id: string,
+  atelierHireInterviewPatch: AtelierHireInterviewPatch,
+  options?: RequestInit,
+): Promise<AtelierHireInterview> => {
+  return customFetch<AtelierHireInterview>(
+    getAtelierUpdateHireInterviewUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierHireInterviewPatch),
+    },
+  );
+};
+
+export const getAtelierUpdateHireInterviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireInterview>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireInterviewPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateHireInterview>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireInterviewPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateHireInterview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateHireInterview>>,
+    { id: string; data: BodyType<AtelierHireInterviewPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateHireInterview(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateHireInterviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateHireInterview>>
+>;
+export type AtelierUpdateHireInterviewMutationBody =
+  BodyType<AtelierHireInterviewPatch>;
+export type AtelierUpdateHireInterviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — update panel status / record structured feedback
+ */
+export const useAtelierUpdateHireInterview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireInterview>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireInterviewPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateHireInterview>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireInterviewPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateHireInterviewMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — list offers
+ */
+export const getAtelierListHireOffersUrl = () => {
+  return `/api/atelier/hire/offers`;
+};
+
+export const atelierListHireOffers = async (
+  options?: RequestInit,
+): Promise<AtelierHireOfferList> => {
+  return customFetch<AtelierHireOfferList>(getAtelierListHireOffersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListHireOffersQueryKey = () => {
+  return [`/api/atelier/hire/offers`] as const;
+};
+
+export const getAtelierListHireOffersQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListHireOffers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireOffers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListHireOffersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListHireOffers>>
+  > = ({ signal }) => atelierListHireOffers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireOffers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListHireOffersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListHireOffers>>
+>;
+export type AtelierListHireOffersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — list offers
+ */
+
+export function useAtelierListHireOffers<
+  TData = Awaited<ReturnType<typeof atelierListHireOffers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListHireOffers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListHireOffersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Hiring — record an offer for a candidate
+ */
+export const getAtelierCreateHireOfferUrl = () => {
+  return `/api/atelier/hire/offers`;
+};
+
+export const atelierCreateHireOffer = async (
+  atelierHireOfferInput: AtelierHireOfferInput,
+  options?: RequestInit,
+): Promise<AtelierHireOffer> => {
+  return customFetch<AtelierHireOffer>(getAtelierCreateHireOfferUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireOfferInput),
+  });
+};
+
+export const getAtelierCreateHireOfferMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireOffer>>,
+    TError,
+    { data: BodyType<AtelierHireOfferInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateHireOffer>>,
+  TError,
+  { data: BodyType<AtelierHireOfferInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateHireOffer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateHireOffer>>,
+    { data: BodyType<AtelierHireOfferInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateHireOffer(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateHireOfferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateHireOffer>>
+>;
+export type AtelierCreateHireOfferMutationBody =
+  BodyType<AtelierHireOfferInput>;
+export type AtelierCreateHireOfferMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — record an offer for a candidate
+ */
+export const useAtelierCreateHireOffer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateHireOffer>>,
+    TError,
+    { data: BodyType<AtelierHireOfferInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateHireOffer>>,
+  TError,
+  { data: BodyType<AtelierHireOfferInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateHireOfferMutationOptions(options));
+};
+
+/**
+ * @summary Hiring — mark an offer sent/accepted/declined or link its joiner
+ */
+export const getAtelierUpdateHireOfferUrl = (id: string) => {
+  return `/api/atelier/hire/offers/${id}`;
+};
+
+export const atelierUpdateHireOffer = async (
+  id: string,
+  atelierHireOfferPatch: AtelierHireOfferPatch,
+  options?: RequestInit,
+): Promise<AtelierHireOffer> => {
+  return customFetch<AtelierHireOffer>(getAtelierUpdateHireOfferUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierHireOfferPatch),
+  });
+};
+
+export const getAtelierUpdateHireOfferMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireOffer>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireOfferPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateHireOffer>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireOfferPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateHireOffer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateHireOffer>>,
+    { id: string; data: BodyType<AtelierHireOfferPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateHireOffer(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateHireOfferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateHireOffer>>
+>;
+export type AtelierUpdateHireOfferMutationBody =
+  BodyType<AtelierHireOfferPatch>;
+export type AtelierUpdateHireOfferMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Hiring — mark an offer sent/accepted/declined or link its joiner
+ */
+export const useAtelierUpdateHireOffer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateHireOffer>>,
+    TError,
+    { id: string; data: BodyType<AtelierHireOfferPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateHireOffer>>,
+  TError,
+  { id: string; data: BodyType<AtelierHireOfferPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateHireOfferMutationOptions(options));
 };
 
 /**

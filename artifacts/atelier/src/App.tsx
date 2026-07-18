@@ -70,8 +70,8 @@ import { SalonRoot } from "@/pages/salon/SalonRoutes";
 // v5 — Scale & Trust
 import PressIndex from "@/pages/press/PressIndex";
 import PartnersIndex from "@/pages/partners/PartnersIndex";
-// Task #364 — StudioIndex view functions are now consumed by /people/hire and
-// /people/attract; the /studio/* paths permanently redirect.
+// Task #125 — the old Studio views were replaced by real hiring CRUD under
+// /people/hire; the legacy /studio/* paths still permanently redirect.
 import GuardhouseIndex from "@/pages/guardhouse/GuardhouseIndex";
 import IpCatalog from "@/pages/atelier/IpCatalog";
 import Codex from "@/pages/Codex";
