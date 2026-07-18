@@ -56,5 +56,6 @@
 - [Atelier tsx UI tests of page modules](atelier-tsx-ui-tests.md) — need --tsconfig with jsx react-jsx + guard module-level import.meta.env?.BASE_URL, or import crashes under Node.
 - [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF is server-side pdf-lib from real 90×50mm template EMUs; rasterize checks via pdftoppm (no gs).
 - [Atelier DocuSeal e-sign](atelier-esign.md) — webhook is trigger-only (authoritative re-fetch); terminal statuses never regress; completion archives signed+audit PDFs as "contract"; single shared API key.
+- [DocuSeal live API quirks](docuseal-live-quirks.md) — live Cloud rejects field-less templates & 0-based pages (stub doesn't); signature field per signer role stamped on last page; live probe script self-cleans.
 - [Atelier Document Library](atelier-document-library.md) — chunks keyed on VERSION id; sha256 blob refcount; octet-stream rejected (test with garbage-as-pdf → 0 chunks, no embed call); AI toggle audits as document.update.
 - [CRM charter-hook env flake](crm-charter-hook-flake.md) — contract-entry charter LLM call is NOT mocked; test:crm fails only the engagementHookError-null check in isolated envs.

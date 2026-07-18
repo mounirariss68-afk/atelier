@@ -115,18 +115,54 @@ export interface DocusealSubmission {
 // Operations
 // ---------------------------------------------------------------------------
 
-/** Create a DocuSeal template from raw PDF bytes. */
+/** Role name for the Nth signer (1-based) — must match createSubmission. */
+export function signerRole(order: number): string {
+  return `Signer ${order}`;
+}
+
+/**
+ * Create a DocuSeal template from raw PDF bytes.
+ *
+ * DocuSeal Cloud rejects submissions on templates without fields
+ * ("Template does not contain fields", 422), so a signature field is
+ * stamped for every signer on the last page of the document. Fields are
+ * laid out in two columns from ~2/3 down the page.
+ */
 export async function createTemplateFromPdf(args: {
   name: string;
   fileName: string;
   pdfBytes: Buffer;
+  signerCount: number;
+  /** 0-based index of the page that carries the signature blocks. */
+  lastPageIndex: number;
 }): Promise<{ id: number }> {
+  const fields = Array.from({ length: Math.max(1, args.signerCount) }, (_, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    return {
+      name: `Signature ${i + 1}`,
+      type: "signature",
+      role: signerRole(i + 1),
+      required: true,
+      areas: [
+        {
+          x: col === 0 ? 0.08 : 0.55,
+          y: 0.66 + row * 0.065,
+          w: 0.32,
+          h: 0.05,
+          // DocuSeal pages are 1-based.
+          page: args.lastPageIndex + 1,
+        },
+      ],
+    };
+  });
   const out = await request<{ id: number }>("POST", "/templates/pdf", {
     name: args.name,
     documents: [
       {
         name: args.fileName,
         file: args.pdfBytes.toString("base64"),
+        fields,
       },
     ],
   });
@@ -152,7 +188,11 @@ export async function createSubmission(args: {
     template_id: args.templateId,
     send_email: true,
     order: "preserved",
-    submitters: args.signers.map((s) => ({ name: s.name, email: s.email })),
+    submitters: args.signers.map((s, i) => ({
+      name: s.name,
+      email: s.email,
+      role: signerRole(i + 1),
+    })),
   };
   if (args.expiresAt) payload.expire_at = args.expiresAt.toISOString();
   if (args.message) {

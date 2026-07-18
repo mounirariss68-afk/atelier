@@ -101,10 +101,22 @@ export async function sendSignatureRequest(args: {
   personId?: string | null;
   expiresAt?: Date | null;
 }): Promise<{ request: SigRequestRow; signers: SigSignerRow[] }> {
+  // Signature blocks go on the last page of the document.
+  let lastPageIndex = 0;
+  try {
+    const { getDocumentProxy } = await import("unpdf");
+    const proxy = await getDocumentProxy(new Uint8Array(args.pdfBytes));
+    lastPageIndex = Math.max(0, proxy.numPages - 1);
+  } catch {
+    // Unparseable PDFs fall back to page 0; DocuSeal will still reject
+    // truly broken files at template creation.
+  }
   const template = await createTemplateFromPdf({
     name: args.title,
     fileName: args.fileName,
     pdfBytes: args.pdfBytes,
+    signerCount: args.signers.length,
+    lastPageIndex,
   });
   const created = await createSubmission({
     templateId: template.id,
