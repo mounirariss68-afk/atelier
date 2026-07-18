@@ -1079,6 +1079,1034 @@ export const AtelierSyncAllSignatureRequestsResponse = zod.object({
 });
 
 /**
+ * @summary Contracts — list templates (partner-tier only)
+ */
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemKeyMax = 80;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemLabelMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemNoteMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemKeyMax = 80;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemLabelMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const AtelierListContractTemplatesResponse = zod.object({
+  templates: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      contractType: zod.string(),
+      status: zod.enum(["draft", "active", "archived"]),
+      currentVersionId: zod.string().nullish(),
+      createdBy: zod.string(),
+      createdByLabel: zod.string(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+      currentVersion: zod
+        .union([
+          zod.object({
+            id: zod.string(),
+            templateId: zod.string(),
+            versionNumber: zod.number(),
+            fileName: zod.string(),
+            sizeBytes: zod.number(),
+            fieldSchema: zod.array(
+              zod.object({
+                key: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemKeyMax,
+                  ),
+                label: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemLabelMax,
+                  ),
+                placeholder: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemPlaceholderMax,
+                  )
+                  .describe(
+                    "EXACT literal text in the Word document this field replaces.",
+                  ),
+                dataType: zod.enum(["text", "date", "money", "number"]),
+                autoFill: zod
+                  .string()
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemAutoFillMax,
+                  )
+                  .describe(
+                    "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                  ),
+                required: zod.boolean(),
+                note: zod
+                  .string()
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemNoteMax,
+                  )
+                  .optional(),
+              }),
+            ),
+            fieldStatus: zod.enum(["detected", "reviewed"]),
+            detectionWarnings: zod.array(zod.string()),
+            createdBy: zod.string(),
+            createdAt: zod.coerce.date(),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      versions: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            templateId: zod.string(),
+            versionNumber: zod.number(),
+            fileName: zod.string(),
+            sizeBytes: zod.number(),
+            fieldSchema: zod.array(
+              zod.object({
+                key: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemKeyMax,
+                  ),
+                label: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemLabelMax,
+                  ),
+                placeholder: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemPlaceholderMax,
+                  )
+                  .describe(
+                    "EXACT literal text in the Word document this field replaces.",
+                  ),
+                dataType: zod.enum(["text", "date", "money", "number"]),
+                autoFill: zod
+                  .string()
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemAutoFillMax,
+                  )
+                  .describe(
+                    "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                  ),
+                required: zod.boolean(),
+                note: zod
+                  .string()
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemNoteMax,
+                  )
+                  .optional(),
+              }),
+            ),
+            fieldStatus: zod.enum(["detected", "reviewed"]),
+            detectionWarnings: zod.array(zod.string()),
+            createdBy: zod.string(),
+            createdAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Contracts — one template incl. versions + field schema
+ */
+export const AtelierGetContractTemplateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax = 80;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const AtelierGetContractTemplateResponse = zod.object({
+  template: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    contractType: zod.string(),
+    status: zod.enum(["draft", "active", "archived"]),
+    currentVersionId: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    currentVersion: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    versions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+/**
+ * @summary Contracts — rename / retype / archive a template
+ */
+export const AtelierUpdateContractTemplateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateContractTemplateBodyNameMax = 200;
+
+export const AtelierUpdateContractTemplateBody = zod.object({
+  name: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateContractTemplateBodyNameMax)
+    .optional(),
+  contractType: zod
+    .enum([
+      "individual_nda",
+      "mutual_nda",
+      "partnership_mou",
+      "partnership_agreement",
+      "non_equity_partner_employment",
+      "employment",
+      "contractor_agreement",
+      "other",
+    ])
+    .optional(),
+  status: zod.enum(["active", "archived"]).optional(),
+});
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax = 80;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const AtelierUpdateContractTemplateResponse = zod.object({
+  template: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    contractType: zod.string(),
+    status: zod.enum(["draft", "active", "archived"]),
+    currentVersionId: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    currentVersion: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    versions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+/**
+ * @summary Contracts — review & save the detected field schema (activates a draft template)
+ */
+export const AtelierReviewContractTemplateFieldsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemKeyMax = 80;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemLabelMax = 200;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemPlaceholderMax = 500;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemNoteMax = 500;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsMax = 80;
+
+export const AtelierReviewContractTemplateFieldsBody = zod.object({
+  fields: zod
+    .array(
+      zod.object({
+        key: zod
+          .string()
+          .min(1)
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemKeyMax),
+        label: zod
+          .string()
+          .min(1)
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemLabelMax),
+        placeholder: zod
+          .string()
+          .min(1)
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemPlaceholderMax)
+          .describe(
+            "EXACT literal text in the Word document this field replaces.",
+          ),
+        dataType: zod.enum(["text", "date", "money", "number"]),
+        autoFill: zod
+          .string()
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemAutoFillMax)
+          .describe(
+            "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+          ),
+        required: zod.boolean(),
+        note: zod
+          .string()
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemNoteMax)
+          .optional(),
+      }),
+    )
+    .max(atelierReviewContractTemplateFieldsBodyFieldsMax),
+});
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax = 80;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const AtelierReviewContractTemplateFieldsResponse = zod.object({
+  template: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    contractType: zod.string(),
+    status: zod.enum(["draft", "active", "archived"]),
+    currentVersionId: zod.string().nullish(),
+    createdBy: zod.string(),
+    createdByLabel: zod.string(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    currentVersion: zod
+      .union([
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
+    versions: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          templateId: zod.string(),
+          versionNumber: zod.number(),
+          fileName: zod.string(),
+          sizeBytes: zod.number(),
+          fieldSchema: zod.array(
+            zod.object({
+              key: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemKeyMax,
+                ),
+              label: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemLabelMax,
+                ),
+              placeholder: zod
+                .string()
+                .min(1)
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemPlaceholderMax,
+                )
+                .describe(
+                  "EXACT literal text in the Word document this field replaces.",
+                ),
+              dataType: zod.enum(["text", "date", "money", "number"]),
+              autoFill: zod
+                .string()
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemAutoFillMax,
+                )
+                .describe(
+                  "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                ),
+              required: zod.boolean(),
+              note: zod
+                .string()
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemNoteMax,
+                )
+                .optional(),
+            }),
+          ),
+          fieldStatus: zod.enum(["detected", "reviewed"]),
+          detectionWarnings: zod.array(zod.string()),
+          createdBy: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+      )
+      .optional(),
+  }),
+});
+
+/**
+ * @summary Contracts — list records (ACL-filtered)
+ */
+export const AtelierListContractsQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+  contractType: zod.coerce.string().optional(),
+  personId: zod.coerce.string().optional(),
+  contactId: zod.coerce.string().optional(),
+  accountId: zod.coerce.string().optional(),
+  ownerUserId: zod.coerce.string().optional(),
+  counterparty: zod.coerce
+    .string()
+    .optional()
+    .describe("Case-insensitive substring match on the counterparty label"),
+});
+
+export const AtelierListContractsResponse = zod.object({
+  contracts: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      contractType: zod.string(),
+      templateId: zod.string().nullish(),
+      templateVersionId: zod.string().nullish(),
+      counterpartyKind: zod.enum(["person", "contact", "account"]),
+      personId: zod.string().nullish(),
+      contactId: zod.string().nullish(),
+      accountId: zod.string().nullish(),
+      counterpartyLabel: zod.string(),
+      status: zod.enum([
+        "draft",
+        "out_for_review",
+        "final_uploaded",
+        "out_for_signature",
+        "signed",
+        "declined",
+        "voided",
+        "expired",
+      ]),
+      fieldValues: zod.record(zod.string(), zod.string()),
+      ownerUserId: zod.string(),
+      ownerLabel: zod.string(),
+      effectiveDate: zod.coerce.date().nullish(),
+      expiryDate: zod.coerce.date().nullish(),
+      currentDocumentId: zod.string().nullish(),
+      signatureRequestId: zod.string().nullish(),
+      signedLibraryDocumentId: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      updatedAt: zod.coerce.date(),
+      documents: zod
+        .array(
+          zod.object({
+            id: zod.string(),
+            contractId: zod.string(),
+            versionNumber: zod.number(),
+            kind: zod.enum([
+              "generated_draft",
+              "final_docx",
+              "converted_pdf",
+              "signed_pdf",
+            ]),
+            fileName: zod.string(),
+            mime: zod.string(),
+            sizeBytes: zod.number(),
+            createdBy: zod.string(),
+            createdByLabel: zod.string(),
+            createdAt: zod.coerce.date(),
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Contracts — prepare a contract from a template (fills the Word document)
+ */
+
+export const atelierCreateContractBodyTitleMax = 300;
+
+export const atelierCreateContractBodyValuesMaxOne = 2000;
+
+export const atelierCreateContractBodyEffectiveDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const atelierCreateContractBodyExpiryDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const atelierCreateContractBodyNotesMax = 4000;
+
+export const AtelierCreateContractBody = zod.object({
+  templateId: zod.string().min(1),
+  title: zod.string().min(1).max(atelierCreateContractBodyTitleMax).optional(),
+  counterparty: zod.object({
+    kind: zod.enum(["person", "contact", "account"]),
+    id: zod.string().min(1),
+  }),
+  values: zod
+    .record(
+      zod.string(),
+      zod.string().max(atelierCreateContractBodyValuesMaxOne),
+    )
+    .optional(),
+  effectiveDate: zod
+    .string()
+    .regex(atelierCreateContractBodyEffectiveDateRegExp)
+    .optional(),
+  expiryDate: zod
+    .string()
+    .regex(atelierCreateContractBodyExpiryDateRegExp)
+    .optional(),
+  notes: zod.string().max(atelierCreateContractBodyNotesMax).optional(),
+});
+
+/**
+ * @summary Contracts — one record incl. its document chain
+ */
+export const AtelierGetContractParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierGetContractResponse = zod.object({
+  contract: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    contractType: zod.string(),
+    templateId: zod.string().nullish(),
+    templateVersionId: zod.string().nullish(),
+    counterpartyKind: zod.enum(["person", "contact", "account"]),
+    personId: zod.string().nullish(),
+    contactId: zod.string().nullish(),
+    accountId: zod.string().nullish(),
+    counterpartyLabel: zod.string(),
+    status: zod.enum([
+      "draft",
+      "out_for_review",
+      "final_uploaded",
+      "out_for_signature",
+      "signed",
+      "declined",
+      "voided",
+      "expired",
+    ]),
+    fieldValues: zod.record(zod.string(), zod.string()),
+    ownerUserId: zod.string(),
+    ownerLabel: zod.string(),
+    effectiveDate: zod.coerce.date().nullish(),
+    expiryDate: zod.coerce.date().nullish(),
+    currentDocumentId: zod.string().nullish(),
+    signatureRequestId: zod.string().nullish(),
+    signedLibraryDocumentId: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    documents: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          contractId: zod.string(),
+          versionNumber: zod.number(),
+          kind: zod.enum([
+            "generated_draft",
+            "final_docx",
+            "converted_pdf",
+            "signed_pdf",
+          ]),
+          fileName: zod.string(),
+          mime: zod.string(),
+          sizeBytes: zod.number(),
+          createdBy: zod.string(),
+          createdByLabel: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+      )
+      .optional(),
+  }),
+  signatureRequestId: zod.string().optional(),
+});
+
+/**
+ * @summary Contracts — status transitions / dates / notes
+ */
+export const AtelierUpdateContractParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateContractBodyTitleMax = 300;
+
+export const atelierUpdateContractBodyEffectiveDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const atelierUpdateContractBodyExpiryDateRegExp = new RegExp(
+  "^\\d{4}-\\d{2}-\\d{2}$",
+);
+export const atelierUpdateContractBodyNotesMax = 4000;
+
+export const AtelierUpdateContractBody = zod.object({
+  status: zod
+    .enum([
+      "draft",
+      "out_for_review",
+      "final_uploaded",
+      "out_for_signature",
+      "signed",
+      "declined",
+      "voided",
+      "expired",
+    ])
+    .optional(),
+  title: zod.string().min(1).max(atelierUpdateContractBodyTitleMax).optional(),
+  effectiveDate: zod
+    .string()
+    .regex(atelierUpdateContractBodyEffectiveDateRegExp)
+    .nullish(),
+  expiryDate: zod
+    .string()
+    .regex(atelierUpdateContractBodyExpiryDateRegExp)
+    .nullish(),
+  notes: zod.string().max(atelierUpdateContractBodyNotesMax).nullish(),
+});
+
+export const AtelierUpdateContractResponse = zod.object({
+  contract: zod.object({
+    id: zod.string(),
+    title: zod.string(),
+    contractType: zod.string(),
+    templateId: zod.string().nullish(),
+    templateVersionId: zod.string().nullish(),
+    counterpartyKind: zod.enum(["person", "contact", "account"]),
+    personId: zod.string().nullish(),
+    contactId: zod.string().nullish(),
+    accountId: zod.string().nullish(),
+    counterpartyLabel: zod.string(),
+    status: zod.enum([
+      "draft",
+      "out_for_review",
+      "final_uploaded",
+      "out_for_signature",
+      "signed",
+      "declined",
+      "voided",
+      "expired",
+    ]),
+    fieldValues: zod.record(zod.string(), zod.string()),
+    ownerUserId: zod.string(),
+    ownerLabel: zod.string(),
+    effectiveDate: zod.coerce.date().nullish(),
+    expiryDate: zod.coerce.date().nullish(),
+    currentDocumentId: zod.string().nullish(),
+    signatureRequestId: zod.string().nullish(),
+    signedLibraryDocumentId: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date(),
+    documents: zod
+      .array(
+        zod.object({
+          id: zod.string(),
+          contractId: zod.string(),
+          versionNumber: zod.number(),
+          kind: zod.enum([
+            "generated_draft",
+            "final_docx",
+            "converted_pdf",
+            "signed_pdf",
+          ]),
+          fileName: zod.string(),
+          mime: zod.string(),
+          sizeBytes: zod.number(),
+          createdBy: zod.string(),
+          createdByLabel: zod.string(),
+          createdAt: zod.coerce.date(),
+        }),
+      )
+      .optional(),
+  }),
+  signatureRequestId: zod.string().optional(),
+});
+
+/**
+ * @summary Contracts — re-fill the draft with updated values
+ */
+export const AtelierRegenerateContractParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierRegenerateContractBodyValuesMaxOne = 2000;
+
+export const AtelierRegenerateContractBody = zod.object({
+  values: zod
+    .record(
+      zod.string(),
+      zod.string().max(atelierRegenerateContractBodyValuesMaxOne),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Contracts — convert to PDF and send via the DocuSeal e-sign flow
+ */
+export const AtelierSendContractForSignatureParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierSendContractForSignatureBodySignersItemNameMax = 120;
+
+export const atelierSendContractForSignatureBodySignersItemEmailMax = 254;
+
+export const atelierSendContractForSignatureBodySignersMax = 10;
+
+export const atelierSendContractForSignatureBodyTitleMax = 300;
+
+export const atelierSendContractForSignatureBodyMessageMax = 4000;
+
+export const AtelierSendContractForSignatureBody = zod.object({
+  signers: zod
+    .array(
+      zod.object({
+        name: zod
+          .string()
+          .min(1)
+          .max(atelierSendContractForSignatureBodySignersItemNameMax),
+        email: zod
+          .string()
+          .email()
+          .max(atelierSendContractForSignatureBodySignersItemEmailMax),
+      }),
+    )
+    .min(1)
+    .max(atelierSendContractForSignatureBodySignersMax),
+  title: zod
+    .string()
+    .min(1)
+    .max(atelierSendContractForSignatureBodyTitleMax)
+    .optional(),
+  message: zod
+    .string()
+    .max(atelierSendContractForSignatureBodyMessageMax)
+    .optional(),
+  expiresAt: zod.coerce.date().optional(),
+});
+
+/**
  * @summary Me lens — upload/replace the caller's own profile photo
  */
 export const AtelierUploadMyPhotoBody = zod.object({

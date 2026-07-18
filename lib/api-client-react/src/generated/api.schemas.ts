@@ -6046,6 +6046,340 @@ export interface AtelierAgentRunSummary {
   durationMs?: number | null;
 }
 
+export type AtelierContractTemplateFieldDataType =
+  (typeof AtelierContractTemplateFieldDataType)[keyof typeof AtelierContractTemplateFieldDataType];
+
+export const AtelierContractTemplateFieldDataType = {
+  text: "text",
+  date: "date",
+  money: "money",
+  number: "number",
+} as const;
+
+export interface AtelierContractTemplateField {
+  /**
+   * @minLength 1
+   * @maxLength 80
+   */
+  key: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  label: string;
+  /**
+   * EXACT literal text in the Word document this field replaces.
+   * @minLength 1
+   * @maxLength 500
+   */
+  placeholder: string;
+  dataType: AtelierContractTemplateFieldDataType;
+  /**
+   * CRM auto-fill hint (counterparty_name, effective_date, ... or none).
+   * @maxLength 60
+   */
+  autoFill: string;
+  required: boolean;
+  /** @maxLength 500 */
+  note?: string;
+}
+
+export type AtelierContractTemplateVersionFieldStatus =
+  (typeof AtelierContractTemplateVersionFieldStatus)[keyof typeof AtelierContractTemplateVersionFieldStatus];
+
+export const AtelierContractTemplateVersionFieldStatus = {
+  detected: "detected",
+  reviewed: "reviewed",
+} as const;
+
+export interface AtelierContractTemplateVersion {
+  id: string;
+  templateId: string;
+  versionNumber: number;
+  fileName: string;
+  sizeBytes: number;
+  fieldSchema: AtelierContractTemplateField[];
+  fieldStatus: AtelierContractTemplateVersionFieldStatus;
+  detectionWarnings: string[];
+  createdBy: string;
+  createdAt: string;
+}
+
+export type AtelierContractTemplateStatus =
+  (typeof AtelierContractTemplateStatus)[keyof typeof AtelierContractTemplateStatus];
+
+export const AtelierContractTemplateStatus = {
+  draft: "draft",
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface AtelierContractTemplate {
+  id: string;
+  name: string;
+  contractType: string;
+  status: AtelierContractTemplateStatus;
+  /** @nullable */
+  currentVersionId?: string | null;
+  createdBy: string;
+  createdByLabel: string;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion?: AtelierContractTemplateVersion | null;
+  versions?: AtelierContractTemplateVersion[];
+}
+
+export interface AtelierContractTemplateList {
+  templates: AtelierContractTemplate[];
+}
+
+export interface AtelierContractTemplateEnvelope {
+  template: AtelierContractTemplate;
+}
+
+export type AtelierContractTemplateUpdateContractType =
+  (typeof AtelierContractTemplateUpdateContractType)[keyof typeof AtelierContractTemplateUpdateContractType];
+
+export const AtelierContractTemplateUpdateContractType = {
+  individual_nda: "individual_nda",
+  mutual_nda: "mutual_nda",
+  partnership_mou: "partnership_mou",
+  partnership_agreement: "partnership_agreement",
+  non_equity_partner_employment: "non_equity_partner_employment",
+  employment: "employment",
+  contractor_agreement: "contractor_agreement",
+  other: "other",
+} as const;
+
+export type AtelierContractTemplateUpdateStatus =
+  (typeof AtelierContractTemplateUpdateStatus)[keyof typeof AtelierContractTemplateUpdateStatus];
+
+export const AtelierContractTemplateUpdateStatus = {
+  active: "active",
+  archived: "archived",
+} as const;
+
+export interface AtelierContractTemplateUpdate {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  name?: string;
+  contractType?: AtelierContractTemplateUpdateContractType;
+  status?: AtelierContractTemplateUpdateStatus;
+}
+
+export interface AtelierContractTemplateFieldsReview {
+  /** @maxItems 80 */
+  fields: AtelierContractTemplateField[];
+}
+
+export type AtelierContractDocumentKind =
+  (typeof AtelierContractDocumentKind)[keyof typeof AtelierContractDocumentKind];
+
+export const AtelierContractDocumentKind = {
+  generated_draft: "generated_draft",
+  final_docx: "final_docx",
+  converted_pdf: "converted_pdf",
+  signed_pdf: "signed_pdf",
+} as const;
+
+export interface AtelierContractDocument {
+  id: string;
+  contractId: string;
+  versionNumber: number;
+  kind: AtelierContractDocumentKind;
+  fileName: string;
+  mime: string;
+  sizeBytes: number;
+  createdBy: string;
+  createdByLabel: string;
+  createdAt: string;
+}
+
+export type AtelierContractCounterpartyKind =
+  (typeof AtelierContractCounterpartyKind)[keyof typeof AtelierContractCounterpartyKind];
+
+export const AtelierContractCounterpartyKind = {
+  person: "person",
+  contact: "contact",
+  account: "account",
+} as const;
+
+export type AtelierContractStatus =
+  (typeof AtelierContractStatus)[keyof typeof AtelierContractStatus];
+
+export const AtelierContractStatus = {
+  draft: "draft",
+  out_for_review: "out_for_review",
+  final_uploaded: "final_uploaded",
+  out_for_signature: "out_for_signature",
+  signed: "signed",
+  declined: "declined",
+  voided: "voided",
+  expired: "expired",
+} as const;
+
+export type AtelierContractFieldValues = { [key: string]: string };
+
+export interface AtelierContract {
+  id: string;
+  title: string;
+  contractType: string;
+  /** @nullable */
+  templateId?: string | null;
+  /** @nullable */
+  templateVersionId?: string | null;
+  counterpartyKind: AtelierContractCounterpartyKind;
+  /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  contactId?: string | null;
+  /** @nullable */
+  accountId?: string | null;
+  counterpartyLabel: string;
+  status: AtelierContractStatus;
+  fieldValues: AtelierContractFieldValues;
+  ownerUserId: string;
+  ownerLabel: string;
+  /** @nullable */
+  effectiveDate?: string | null;
+  /** @nullable */
+  expiryDate?: string | null;
+  /** @nullable */
+  currentDocumentId?: string | null;
+  /** @nullable */
+  signatureRequestId?: string | null;
+  /** @nullable */
+  signedLibraryDocumentId?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  documents?: AtelierContractDocument[];
+}
+
+export interface AtelierContractList {
+  contracts: AtelierContract[];
+}
+
+export interface AtelierContractEnvelope {
+  contract: AtelierContract;
+  signatureRequestId?: string;
+}
+
+export type AtelierContractCreateCounterpartyKind =
+  (typeof AtelierContractCreateCounterpartyKind)[keyof typeof AtelierContractCreateCounterpartyKind];
+
+export const AtelierContractCreateCounterpartyKind = {
+  person: "person",
+  contact: "contact",
+  account: "account",
+} as const;
+
+export type AtelierContractCreateCounterparty = {
+  kind: AtelierContractCreateCounterpartyKind;
+  /** @minLength 1 */
+  id: string;
+};
+
+export type AtelierContractCreateValues = { [key: string]: string };
+
+export interface AtelierContractCreate {
+  /** @minLength 1 */
+  templateId: string;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  counterparty: AtelierContractCreateCounterparty;
+  values?: AtelierContractCreateValues;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  effectiveDate?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  expiryDate?: string;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export type AtelierContractUpdateStatus =
+  (typeof AtelierContractUpdateStatus)[keyof typeof AtelierContractUpdateStatus];
+
+export const AtelierContractUpdateStatus = {
+  draft: "draft",
+  out_for_review: "out_for_review",
+  final_uploaded: "final_uploaded",
+  out_for_signature: "out_for_signature",
+  signed: "signed",
+  declined: "declined",
+  voided: "voided",
+  expired: "expired",
+} as const;
+
+export interface AtelierContractUpdate {
+  status?: AtelierContractUpdateStatus;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  /**
+   * @nullable
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  effectiveDate?: string | null;
+  /**
+   * @nullable
+   * @pattern ^\d{4}-\d{2}-\d{2}$
+   */
+  expiryDate?: string | null;
+  /**
+   * @maxLength 4000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export type AtelierContractRegenerateValues = { [key: string]: string };
+
+export interface AtelierContractRegenerate {
+  values?: AtelierContractRegenerateValues;
+}
+
+export type AtelierContractSendSignersItem = {
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  name: string;
+  /** @maxLength 254 */
+  email: string;
+};
+
+export interface AtelierContractSend {
+  /**
+   * @minItems 1
+   * @maxItems 10
+   */
+  signers: AtelierContractSendSignersItem[];
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  title?: string;
+  /** @maxLength 4000 */
+  message?: string;
+  expiresAt?: string;
+}
+
+export interface AtelierContractPrepareError {
+  error: string;
+  message?: string;
+  missing?: string[];
+  fields?: AtelierContractTemplateField[];
+}
+
 export type AtelierCreateMyDocumentBodyKind =
   (typeof AtelierCreateMyDocumentBodyKind)[keyof typeof AtelierCreateMyDocumentBodyKind];
 
@@ -6215,6 +6549,19 @@ export type AtelierSyncAllSignatureRequests200 = {
   synced: number;
   changed: number;
   failures: AtelierSyncAllSignatureRequests200FailuresItem[];
+};
+
+export type AtelierListContractsParams = {
+  status?: string;
+  contractType?: string;
+  personId?: string;
+  contactId?: string;
+  accountId?: string;
+  ownerUserId?: string;
+  /**
+   * Case-insensitive substring match on the counterparty label
+   */
+  counterparty?: string;
 };
 
 export type AtelierUploadMyPhotoBody = {

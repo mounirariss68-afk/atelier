@@ -576,6 +576,9 @@ export async function syncSignatureRequest(requestId: string): Promise<SyncOutco
   }
 
   if (changed) {
+    // Task #159 — flip any linked contract record on terminal statuses.
+    const { syncContractFromSignatureRequest } = await import("./atelier-contracts.js");
+    await syncContractFromSignatureRequest(updated);
     await auditSignatureRequest({
       requestId: row.id,
       actorType: "system",
@@ -620,6 +623,9 @@ export async function voidSignatureRequest(args: {
     .set({ status: "voided", voidedAt: now, updatedAt: now, lastSyncError: null })
     .where(eq(atelierSignatureRequests.id, args.row.id))
     .returning();
+  // Task #159 — flip any linked contract record to voided.
+  const { syncContractFromSignatureRequest } = await import("./atelier-contracts.js");
+  await syncContractFromSignatureRequest(updated);
   await auditSignatureRequest({
     requestId: args.row.id,
     actorId: args.actor.id,

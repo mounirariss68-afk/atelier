@@ -2,6 +2,8 @@ import * as React from "react";
 import { useRoute, Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { BusinessCardQR } from "./BusinessCardQR";
+// Task #159 — contract records linked to this roster person.
+import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 
 interface Person {
   id: string;
@@ -140,7 +142,12 @@ export default function RosterPerson() {
         {activeTab === "compensation" && <PlaceholderTab title="Compensation · band position, history, total rewards (Partner-only)" />}
         {activeTab === "succession" && <PlaceholderTab title="Succession · roles this person is in the slate for" />}
         {activeTab === "timesheet" && <PlaceholderTab title="Time · summary, recent weeks, approvals" />}
-        {activeTab === "documents" && <DocumentsTab personId={personId} />}
+        {activeTab === "documents" && (
+          <>
+            <ContractsPanel personId={personId} title="Contracts" />
+            <DocumentsTab personId={personId} />
+          </>
+        )}
         {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
         {activeTab === "audit" && <AuditTab personId={personId} />}
       </div>

@@ -37,6 +37,8 @@ import MeTime from "./MeTime";
 import MeExpenses from "./MeExpenses";
 // Task #51 — self-service profile section (edit details, docs, dependents…)
 import MeProfileSection from "./MeProfileSection";
+// Task #159 — self-scope contract records panel.
+import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -105,6 +107,10 @@ function OverviewSection({ loading, profile }: { loading: boolean; profile: Prof
     <div className="space-y-6">
       <PendingApprovalsCard />
       <NotificationCards />
+      {/* Task #159 — the caller's own contract records (NDA, employment…).
+          Uses the /me/contracts route: employee/contractor personas are
+          server-gated to /me/*, so the generic list endpoint would 403. */}
+      <ContractsPanel mine title="My contracts" emptyText="No contracts on file for you." />
       <div className="grid gap-4 md:grid-cols-2">
         <IdentityCard loading={loading} profile={profile} compact />
         <Card className="p-4">

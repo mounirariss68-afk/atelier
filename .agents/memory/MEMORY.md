@@ -61,4 +61,5 @@
 - [RAG fresh-DB provisioning](rag-fresh-db-provisioning.md) — boot raw-SQL batches are one transaction; guard table-touching DDL with to_regclass or a fresh DB rolls back CREATE EXTENSION too; ingest self-heals the pgvector column.
 - [Resend email delivery](resend-email-delivery.md) — RESEND_API_KEY secret live but account in testing mode (delivers only to owner's yahoo); RESEND_FROM secret holds a pasted API key — keep the from-address guard.
 - [CRM charter-hook env flake](crm-charter-hook-flake.md) — contract-entry charter LLM call is NOT mocked; test:crm fails only the engagementHookError-null check in isolated envs.
+- [Atelier contract lifecycle](atelier-contract-lifecycle.md) — no "redline" doc kind; PDF converts at send-time; employees see contracts only via bespoke /me/contracts (self-scope gate).
 - [E-sign extra date/initials fields](atelier-esign-extra-fields.md) — optional extraFields (signerIndex/date|initials) ride beside placements; unique template names; audit-payload-only; roles stay "Signer N".

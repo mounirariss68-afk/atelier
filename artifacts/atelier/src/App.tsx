@@ -163,6 +163,9 @@ import PeopleHome from "@/pages/people/PeopleHome";
 // Task #50 — the self-service Me lens (visible to all; only lens for
 // self-only personas).
 import MeHome from "@/pages/me/MeHome";
+// Task #159 — contract lifecycle (templates + contracts + detail).
+import ContractsHome from "@/pages/contracts/ContractsHome";
+import ContractDetail from "@/pages/contracts/ContractDetail";
 import PeopleAttract from "@/pages/people/PeopleAttract";
 import PeopleHire from "@/pages/people/PeopleHire";
 import PeopleOnboard from "@/pages/people/PeopleOnboard";
@@ -282,6 +285,11 @@ function Router() {
         <Route path="/documents" component={Documents} />
         {/* Task #62 — e-signing (DocuSeal) surface, partner-tier. */}
         <Route path="/agreements" component={Agreements} />
+        {/* Task #159 — contract lifecycle: templates, prepare/fill, redline,
+            final upload, PDF + DocuSeal signing, tracking. */}
+        <Route path="/contracts/templates" component={ContractsHome} />
+        <Route path="/contracts/:id" component={ContractDetail} />
+        <Route path="/contracts" component={ContractsHome} />
         {/* Task #375 — engagement workspace re-mounted under the Clients
             lens. Listing + detail + deliverable detail (with the optional
             `:tab` deep-link segment) all live under

@@ -102,6 +102,8 @@ import {
 } from "lucide-react";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
+// Task #159 — contract records linked to this account.
+import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 
 type TabKey =
   | "profile"
@@ -472,6 +474,8 @@ export default function Account() {
         {tab === "documents" && (
           <>
             <AccountAgreementsPanel accountId={ws.account.id} />
+            {/* Task #159 — contract records linked to this account. */}
+            <ContractsPanel accountId={ws.account.id} />
             <DocumentLibraryPanel accountId={ws.account.id} />
           </>
         )}

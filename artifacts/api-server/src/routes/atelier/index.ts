@@ -85,6 +85,7 @@ import cliAttachmentRoutes from "./cliAttachmentRoutes";
 import documentRoutes from "./documentRoutes";
 // Task #62 — E-signing via DocuSeal (signature requests).
 import esignRoutes from "./esignRoutes";
+import contractLifecycleRoutes from "./contractLifecycleRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
@@ -298,6 +299,8 @@ router.use(cliAttachmentRoutes);
 router.use(documentRoutes);
 // Task #62 — E-signing (partner-tier gated inside the router).
 router.use(esignRoutes);
+// Task #159 — Contract lifecycle (templates → prepare → sign → track).
+router.use(contractLifecycleRoutes);
 router.use(cliAdminRoutes);
 // Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
 // Guardhouse / IP catalog) backed by Postgres.

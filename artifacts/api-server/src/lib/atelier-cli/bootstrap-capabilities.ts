@@ -51,6 +51,8 @@ import "./orchestrator-capabilities.js";
 //  renewal). Each entry is a thin wrapper consumed by the propose_write
 // dispatcher in `write-dispatch.ts`.
 import "./coverage-capabilities.js";
+// Task #159 — contract lifecycle (prepare / send-for-signature / status).
+import "./contract-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.libreoffice
     pkgs.chromium
     pkgs.xorg.libxkbfile
     pkgs.xorg.libXtst

@@ -70,6 +70,17 @@ import type {
   AtelierContactDuplicateCandidates,
   AtelierContactGraph,
   AtelierContactRelationship,
+  AtelierContractCreate,
+  AtelierContractEnvelope,
+  AtelierContractList,
+  AtelierContractPrepareError,
+  AtelierContractRegenerate,
+  AtelierContractSend,
+  AtelierContractTemplateEnvelope,
+  AtelierContractTemplateFieldsReview,
+  AtelierContractTemplateList,
+  AtelierContractTemplateUpdate,
+  AtelierContractUpdate,
   AtelierCountersignPricing200,
   AtelierCreateAccountActionInput,
   AtelierCreateAccountInput,
@@ -140,6 +151,7 @@ import type {
   AtelierListAuditParams,
   AtelierListCertificationsParams,
   AtelierListCheckInsParams,
+  AtelierListContractsParams,
   AtelierListDocuments200,
   AtelierListDocumentsParams,
   AtelierListPerformanceGoalsParams,
@@ -2728,6 +2740,909 @@ export const useAtelierSyncAllSignatureRequests = <
 > => {
   return useMutation(
     getAtelierSyncAllSignatureRequestsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Contracts — list templates (partner-tier only)
+ */
+export const getAtelierListContractTemplatesUrl = () => {
+  return `/api/atelier/contract-templates`;
+};
+
+export const atelierListContractTemplates = async (
+  options?: RequestInit,
+): Promise<AtelierContractTemplateList> => {
+  return customFetch<AtelierContractTemplateList>(
+    getAtelierListContractTemplatesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListContractTemplatesQueryKey = () => {
+  return [`/api/atelier/contract-templates`] as const;
+};
+
+export const getAtelierListContractTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListContractTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListContractTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListContractTemplatesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListContractTemplates>>
+  > = ({ signal }) =>
+    atelierListContractTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListContractTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListContractTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListContractTemplates>>
+>;
+export type AtelierListContractTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — list templates (partner-tier only)
+ */
+
+export function useAtelierListContractTemplates<
+  TData = Awaited<ReturnType<typeof atelierListContractTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListContractTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListContractTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Contracts — one template incl. versions + field schema
+ */
+export const getAtelierGetContractTemplateUrl = (id: string) => {
+  return `/api/atelier/contract-templates/${id}`;
+};
+
+export const atelierGetContractTemplate = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierContractTemplateEnvelope> => {
+  return customFetch<AtelierContractTemplateEnvelope>(
+    getAtelierGetContractTemplateUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetContractTemplateQueryKey = (id: string) => {
+  return [`/api/atelier/contract-templates/${id}`] as const;
+};
+
+export const getAtelierGetContractTemplateQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetContractTemplate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetContractTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetContractTemplateQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetContractTemplate>>
+  > = ({ signal }) =>
+    atelierGetContractTemplate(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetContractTemplate>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetContractTemplateQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetContractTemplate>>
+>;
+export type AtelierGetContractTemplateQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — one template incl. versions + field schema
+ */
+
+export function useAtelierGetContractTemplate<
+  TData = Awaited<ReturnType<typeof atelierGetContractTemplate>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetContractTemplate>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetContractTemplateQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Contracts — rename / retype / archive a template
+ */
+export const getAtelierUpdateContractTemplateUrl = (id: string) => {
+  return `/api/atelier/contract-templates/${id}`;
+};
+
+export const atelierUpdateContractTemplate = async (
+  id: string,
+  atelierContractTemplateUpdate: AtelierContractTemplateUpdate,
+  options?: RequestInit,
+): Promise<AtelierContractTemplateEnvelope> => {
+  return customFetch<AtelierContractTemplateEnvelope>(
+    getAtelierUpdateContractTemplateUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierContractTemplateUpdate),
+    },
+  );
+};
+
+export const getAtelierUpdateContractTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContractTemplate>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractTemplateUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateContractTemplate>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractTemplateUpdate> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateContractTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateContractTemplate>>,
+    { id: string; data: BodyType<AtelierContractTemplateUpdate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateContractTemplate(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateContractTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateContractTemplate>>
+>;
+export type AtelierUpdateContractTemplateMutationBody =
+  BodyType<AtelierContractTemplateUpdate>;
+export type AtelierUpdateContractTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — rename / retype / archive a template
+ */
+export const useAtelierUpdateContractTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContractTemplate>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractTemplateUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateContractTemplate>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractTemplateUpdate> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateContractTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Contracts — review & save the detected field schema (activates a draft template)
+ */
+export const getAtelierReviewContractTemplateFieldsUrl = (id: string) => {
+  return `/api/atelier/contract-templates/${id}/fields`;
+};
+
+export const atelierReviewContractTemplateFields = async (
+  id: string,
+  atelierContractTemplateFieldsReview: AtelierContractTemplateFieldsReview,
+  options?: RequestInit,
+): Promise<AtelierContractTemplateEnvelope> => {
+  return customFetch<AtelierContractTemplateEnvelope>(
+    getAtelierReviewContractTemplateFieldsUrl(id),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierContractTemplateFieldsReview),
+    },
+  );
+};
+
+export const getAtelierReviewContractTemplateFieldsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractTemplateFieldsReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractTemplateFieldsReview> },
+  TContext
+> => {
+  const mutationKey = ["atelierReviewContractTemplateFields"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>,
+    { id: string; data: BodyType<AtelierContractTemplateFieldsReview> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierReviewContractTemplateFields(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReviewContractTemplateFieldsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>
+>;
+export type AtelierReviewContractTemplateFieldsMutationBody =
+  BodyType<AtelierContractTemplateFieldsReview>;
+export type AtelierReviewContractTemplateFieldsMutationError =
+  ErrorType<unknown>;
+
+/**
+ * @summary Contracts — review & save the detected field schema (activates a draft template)
+ */
+export const useAtelierReviewContractTemplateFields = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractTemplateFieldsReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReviewContractTemplateFields>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractTemplateFieldsReview> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierReviewContractTemplateFieldsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Contracts — list records (ACL-filtered)
+ */
+export const getAtelierListContractsUrl = (
+  params?: AtelierListContractsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/contracts?${stringifiedParams}`
+    : `/api/atelier/contracts`;
+};
+
+export const atelierListContracts = async (
+  params?: AtelierListContractsParams,
+  options?: RequestInit,
+): Promise<AtelierContractList> => {
+  return customFetch<AtelierContractList>(getAtelierListContractsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListContractsQueryKey = (
+  params?: AtelierListContractsParams,
+) => {
+  return [`/api/atelier/contracts`, ...(params ? [params] : [])] as const;
+};
+
+export const getAtelierListContractsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListContracts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListContractsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListContracts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListContractsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListContracts>>
+  > = ({ signal }) =>
+    atelierListContracts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListContracts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListContractsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListContracts>>
+>;
+export type AtelierListContractsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — list records (ACL-filtered)
+ */
+
+export function useAtelierListContracts<
+  TData = Awaited<ReturnType<typeof atelierListContracts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListContractsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListContracts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListContractsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Contracts — prepare a contract from a template (fills the Word document)
+ */
+export const getAtelierCreateContractUrl = () => {
+  return `/api/atelier/contracts`;
+};
+
+export const atelierCreateContract = async (
+  atelierContractCreate: AtelierContractCreate,
+  options?: RequestInit,
+): Promise<AtelierContractEnvelope> => {
+  return customFetch<AtelierContractEnvelope>(getAtelierCreateContractUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierContractCreate),
+  });
+};
+
+export const getAtelierCreateContractMutationOptions = <
+  TError = ErrorType<AtelierContractPrepareError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContract>>,
+    TError,
+    { data: BodyType<AtelierContractCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateContract>>,
+  TError,
+  { data: BodyType<AtelierContractCreate> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateContract"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateContract>>,
+    { data: BodyType<AtelierContractCreate> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateContract(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateContractMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateContract>>
+>;
+export type AtelierCreateContractMutationBody = BodyType<AtelierContractCreate>;
+export type AtelierCreateContractMutationError =
+  ErrorType<AtelierContractPrepareError>;
+
+/**
+ * @summary Contracts — prepare a contract from a template (fills the Word document)
+ */
+export const useAtelierCreateContract = <
+  TError = ErrorType<AtelierContractPrepareError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateContract>>,
+    TError,
+    { data: BodyType<AtelierContractCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateContract>>,
+  TError,
+  { data: BodyType<AtelierContractCreate> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateContractMutationOptions(options));
+};
+
+/**
+ * @summary Contracts — one record incl. its document chain
+ */
+export const getAtelierGetContractUrl = (id: string) => {
+  return `/api/atelier/contracts/${id}`;
+};
+
+export const atelierGetContract = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierContractEnvelope> => {
+  return customFetch<AtelierContractEnvelope>(getAtelierGetContractUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetContractQueryKey = (id: string) => {
+  return [`/api/atelier/contracts/${id}`] as const;
+};
+
+export const getAtelierGetContractQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetContract>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetContract>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierGetContractQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetContract>>
+  > = ({ signal }) => atelierGetContract(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetContract>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetContractQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetContract>>
+>;
+export type AtelierGetContractQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — one record incl. its document chain
+ */
+
+export function useAtelierGetContract<
+  TData = Awaited<ReturnType<typeof atelierGetContract>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetContract>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetContractQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Contracts — status transitions / dates / notes
+ */
+export const getAtelierUpdateContractUrl = (id: string) => {
+  return `/api/atelier/contracts/${id}`;
+};
+
+export const atelierUpdateContract = async (
+  id: string,
+  atelierContractUpdate: AtelierContractUpdate,
+  options?: RequestInit,
+): Promise<AtelierContractEnvelope> => {
+  return customFetch<AtelierContractEnvelope>(getAtelierUpdateContractUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierContractUpdate),
+  });
+};
+
+export const getAtelierUpdateContractMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContract>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateContract>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractUpdate> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateContract"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateContract>>,
+    { id: string; data: BodyType<AtelierContractUpdate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateContract(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateContractMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateContract>>
+>;
+export type AtelierUpdateContractMutationBody = BodyType<AtelierContractUpdate>;
+export type AtelierUpdateContractMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — status transitions / dates / notes
+ */
+export const useAtelierUpdateContract = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateContract>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractUpdate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateContract>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractUpdate> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateContractMutationOptions(options));
+};
+
+/**
+ * @summary Contracts — re-fill the draft with updated values
+ */
+export const getAtelierRegenerateContractUrl = (id: string) => {
+  return `/api/atelier/contracts/${id}/regenerate`;
+};
+
+export const atelierRegenerateContract = async (
+  id: string,
+  atelierContractRegenerate: AtelierContractRegenerate,
+  options?: RequestInit,
+): Promise<AtelierContractEnvelope> => {
+  return customFetch<AtelierContractEnvelope>(
+    getAtelierRegenerateContractUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierContractRegenerate),
+    },
+  );
+};
+
+export const getAtelierRegenerateContractMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRegenerateContract>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractRegenerate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRegenerateContract>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractRegenerate> },
+  TContext
+> => {
+  const mutationKey = ["atelierRegenerateContract"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRegenerateContract>>,
+    { id: string; data: BodyType<AtelierContractRegenerate> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierRegenerateContract(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRegenerateContractMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRegenerateContract>>
+>;
+export type AtelierRegenerateContractMutationBody =
+  BodyType<AtelierContractRegenerate>;
+export type AtelierRegenerateContractMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — re-fill the draft with updated values
+ */
+export const useAtelierRegenerateContract = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRegenerateContract>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractRegenerate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRegenerateContract>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractRegenerate> },
+  TContext
+> => {
+  return useMutation(getAtelierRegenerateContractMutationOptions(options));
+};
+
+/**
+ * @summary Contracts — convert to PDF and send via the DocuSeal e-sign flow
+ */
+export const getAtelierSendContractForSignatureUrl = (id: string) => {
+  return `/api/atelier/contracts/${id}/send-for-signature`;
+};
+
+export const atelierSendContractForSignature = async (
+  id: string,
+  atelierContractSend: AtelierContractSend,
+  options?: RequestInit,
+): Promise<AtelierContractEnvelope> => {
+  return customFetch<AtelierContractEnvelope>(
+    getAtelierSendContractForSignatureUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierContractSend),
+    },
+  );
+};
+
+export const getAtelierSendContractForSignatureMutationOptions = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendContractForSignature>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractSend> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSendContractForSignature>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractSend> },
+  TContext
+> => {
+  const mutationKey = ["atelierSendContractForSignature"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSendContractForSignature>>,
+    { id: string; data: BodyType<AtelierContractSend> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierSendContractForSignature(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSendContractForSignatureMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSendContractForSignature>>
+>;
+export type AtelierSendContractForSignatureMutationBody =
+  BodyType<AtelierContractSend>;
+export type AtelierSendContractForSignatureMutationError =
+  ErrorType<AtelierEsignUpstreamError>;
+
+/**
+ * @summary Contracts — convert to PDF and send via the DocuSeal e-sign flow
+ */
+export const useAtelierSendContractForSignature = <
+  TError = ErrorType<AtelierEsignUpstreamError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSendContractForSignature>>,
+    TError,
+    { id: string; data: BodyType<AtelierContractSend> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSendContractForSignature>>,
+  TError,
+  { id: string; data: BodyType<AtelierContractSend> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierSendContractForSignatureMutationOptions(options),
   );
 };
 

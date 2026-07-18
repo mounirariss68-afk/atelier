@@ -627,6 +627,240 @@ paths:
                       properties:
                         requestId: { type: string }
                         error: { type: string }
+  # Task #159 — Contract lifecycle (templates → prepare → sign → track).
+  # Multipart uploads (template upload / new version / final docx) and
+  # binary downloads intentionally stay out of the spec — the UI calls
+  # them with raw fetch, consistent with the Document Library pattern.
+  /atelier/contract-templates:
+    get:
+      operationId: atelierListContractTemplates
+      tags: [atelier]
+      summary: Contracts — list templates (partner-tier only)
+      responses:
+        "200":
+          description: Templates, newest first, incl. current version summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractTemplateList"
+  /atelier/contract-templates/{id}:
+    get:
+      operationId: atelierGetContractTemplate
+      tags: [atelier]
+      summary: Contracts — one template incl. versions + field schema
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Template detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractTemplateEnvelope"
+    patch:
+      operationId: atelierUpdateContractTemplate
+      tags: [atelier]
+      summary: Contracts — rename / retype / archive a template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractTemplateUpdate"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractTemplateEnvelope"
+  /atelier/contract-templates/{id}/fields:
+    put:
+      operationId: atelierReviewContractTemplateFields
+      tags: [atelier]
+      summary: Contracts — review & save the detected field schema (activates a draft template)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractTemplateFieldsReview"
+      responses:
+        "200":
+          description: Updated template with reviewed fields
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractTemplateEnvelope"
+  /atelier/contracts:
+    get:
+      operationId: atelierListContracts
+      tags: [atelier]
+      summary: Contracts — list records (ACL-filtered)
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+        - name: contractType
+          in: query
+          required: false
+          schema: { type: string }
+        - name: personId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: contactId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: accountId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: ownerUserId
+          in: query
+          required: false
+          schema: { type: string }
+        - name: counterparty
+          in: query
+          required: false
+          description: Case-insensitive substring match on the counterparty label
+          schema: { type: string }
+      responses:
+        "200":
+          description: Contract records, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractList"
+    post:
+      operationId: atelierCreateContract
+      tags: [atelier]
+      summary: Contracts — prepare a contract from a template (fills the Word document)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractCreate"
+      responses:
+        "201":
+          description: Created contract with its generated draft document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractEnvelope"
+        "422":
+          description: Missing required field values or fill failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractPrepareError"
+  /atelier/contracts/{id}:
+    get:
+      operationId: atelierGetContract
+      tags: [atelier]
+      summary: Contracts — one record incl. its document chain
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Contract detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractEnvelope"
+    patch:
+      operationId: atelierUpdateContract
+      tags: [atelier]
+      summary: Contracts — status transitions / dates / notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractUpdate"
+      responses:
+        "200":
+          description: Updated contract
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractEnvelope"
+  /atelier/contracts/{id}/regenerate:
+    post:
+      operationId: atelierRegenerateContract
+      tags: [atelier]
+      summary: Contracts — re-fill the draft with updated values
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractRegenerate"
+      responses:
+        "201":
+          description: Contract with the regenerated draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractEnvelope"
+  /atelier/contracts/{id}/send-for-signature:
+    post:
+      operationId: atelierSendContractForSignature
+      tags: [atelier]
+      summary: Contracts — convert to PDF and send via the DocuSeal e-sign flow
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierContractSend"
+      responses:
+        "201":
+          description: Contract moved out_for_signature
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierContractEnvelope"
+        "502":
+          description: PDF conversion or DocuSeal failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierEsignUpstreamError"
   /atelier/me/photo:
     post:
       operationId: atelierUploadMyPhoto
@@ -9464,3 +9698,227 @@ components:
         sourcesCount: { type: ["integer", "null"] }
         costUsd: { type: ["number", "null"] }
         durationMs: { type: ["integer", "null"] }
+
+    # Task #159 — Contract lifecycle schemas.
+    AtelierContractTemplateField:
+      type: object
+      required: [key, label, placeholder, dataType, autoFill, required]
+      properties:
+        key: { type: string, minLength: 1, maxLength: 80 }
+        label: { type: string, minLength: 1, maxLength: 200 }
+        placeholder:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: EXACT literal text in the Word document this field replaces.
+        dataType: { type: string, enum: [text, date, money, number] }
+        autoFill:
+          type: string
+          maxLength: 60
+          description: CRM auto-fill hint (counterparty_name, effective_date, ... or none).
+        required: { type: boolean }
+        note: { type: string, maxLength: 500 }
+
+    AtelierContractTemplateVersion:
+      type: object
+      required: [id, templateId, versionNumber, fileName, sizeBytes, fieldSchema, fieldStatus, detectionWarnings, createdBy, createdAt]
+      properties:
+        id: { type: string }
+        templateId: { type: string }
+        versionNumber: { type: integer }
+        fileName: { type: string }
+        sizeBytes: { type: integer }
+        fieldSchema:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContractTemplateField" }
+        fieldStatus: { type: string, enum: [detected, reviewed] }
+        detectionWarnings:
+          type: array
+          items: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    AtelierContractTemplate:
+      type: object
+      required: [id, name, contractType, status, createdBy, createdByLabel, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        contractType: { type: string }
+        status: { type: string, enum: [draft, active, archived] }
+        currentVersionId: { type: ["string", "null"] }
+        createdBy: { type: string }
+        createdByLabel: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        currentVersion:
+          oneOf:
+            - { $ref: "#/components/schemas/AtelierContractTemplateVersion" }
+            - { type: "null" }
+        versions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContractTemplateVersion" }
+
+    AtelierContractTemplateList:
+      type: object
+      required: [templates]
+      properties:
+        templates:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContractTemplate" }
+
+    AtelierContractTemplateEnvelope:
+      type: object
+      required: [template]
+      properties:
+        template: { $ref: "#/components/schemas/AtelierContractTemplate" }
+
+    AtelierContractTemplateUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        contractType:
+          type: string
+          enum: [individual_nda, mutual_nda, partnership_mou, partnership_agreement, non_equity_partner_employment, employment, contractor_agreement, other]
+        status: { type: string, enum: [active, archived] }
+
+    AtelierContractTemplateFieldsReview:
+      type: object
+      required: [fields]
+      properties:
+        fields:
+          type: array
+          maxItems: 80
+          items: { $ref: "#/components/schemas/AtelierContractTemplateField" }
+
+    AtelierContractDocument:
+      type: object
+      required: [id, contractId, versionNumber, kind, fileName, mime, sizeBytes, createdBy, createdByLabel, createdAt]
+      properties:
+        id: { type: string }
+        contractId: { type: string }
+        versionNumber: { type: integer }
+        kind: { type: string, enum: [generated_draft, final_docx, converted_pdf, signed_pdf] }
+        fileName: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: integer }
+        createdBy: { type: string }
+        createdByLabel: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    AtelierContract:
+      type: object
+      required: [id, title, contractType, counterpartyKind, counterpartyLabel, status, fieldValues, ownerUserId, ownerLabel, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        contractType: { type: string }
+        templateId: { type: ["string", "null"] }
+        templateVersionId: { type: ["string", "null"] }
+        counterpartyKind: { type: string, enum: [person, contact, account] }
+        personId: { type: ["string", "null"] }
+        contactId: { type: ["string", "null"] }
+        accountId: { type: ["string", "null"] }
+        counterpartyLabel: { type: string }
+        status:
+          type: string
+          enum: [draft, out_for_review, final_uploaded, out_for_signature, signed, declined, voided, expired]
+        fieldValues:
+          type: object
+          additionalProperties: { type: string }
+        ownerUserId: { type: string }
+        ownerLabel: { type: string }
+        effectiveDate: { type: ["string", "null"], format: date-time }
+        expiryDate: { type: ["string", "null"], format: date-time }
+        currentDocumentId: { type: ["string", "null"] }
+        signatureRequestId: { type: ["string", "null"] }
+        signedLibraryDocumentId: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        documents:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContractDocument" }
+
+    AtelierContractList:
+      type: object
+      required: [contracts]
+      properties:
+        contracts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContract" }
+
+    AtelierContractEnvelope:
+      type: object
+      required: [contract]
+      properties:
+        contract: { $ref: "#/components/schemas/AtelierContract" }
+        signatureRequestId: { type: string }
+
+    AtelierContractCreate:
+      type: object
+      required: [templateId, counterparty]
+      properties:
+        templateId: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        counterparty:
+          type: object
+          required: [kind, id]
+          properties:
+            kind: { type: string, enum: [person, contact, account] }
+            id: { type: string, minLength: 1 }
+        values:
+          type: object
+          additionalProperties: { type: string, maxLength: 2000 }
+        effectiveDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        expiryDate: { type: string, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        notes: { type: string, maxLength: 4000 }
+
+    AtelierContractUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [draft, out_for_review, final_uploaded, out_for_signature, signed, declined, voided, expired]
+        title: { type: string, minLength: 1, maxLength: 300 }
+        effectiveDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        expiryDate: { type: ["string", "null"], pattern: "^\\d{4}-\\d{2}-\\d{2}$" }
+        notes: { type: ["string", "null"], maxLength: 4000 }
+
+    AtelierContractRegenerate:
+      type: object
+      properties:
+        values:
+          type: object
+          additionalProperties: { type: string, maxLength: 2000 }
+
+    AtelierContractSend:
+      type: object
+      required: [signers]
+      properties:
+        signers:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            required: [name, email]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              email: { type: string, format: email, maxLength: 254 }
+        title: { type: string, minLength: 1, maxLength: 300 }
+        message: { type: string, maxLength: 4000 }
+        expiresAt: { type: string, format: date-time }
+
+    AtelierContractPrepareError:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        message: { type: string }
+        missing:
+          type: array
+          items: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierContractTemplateField" }

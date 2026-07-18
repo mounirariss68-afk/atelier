@@ -23,6 +23,8 @@
     "test:cli-navigation": "tsx ./tests/cli-navigation/run.ts",
     "test:crm": "tsx ./tests/crm/run.ts",
     "test:esign": "tsx ./tests/esign/run.ts",
+    "test:contracts": "tsx ./tests/crm/contract-lifecycle-probe.ts",
+    "test:contract-capabilities": "tsx ./tests/crm/contract-capability-probe.ts",
     "test:me-profile": "tsx ./tests/me-profile/run.ts",
     "test:brief-envelope": "tsx ./tests/crm/brief-envelope-contract-probe.ts",
     "test:esign-link": "tsx ./tests/crm/esign-account-link-probe.ts",
