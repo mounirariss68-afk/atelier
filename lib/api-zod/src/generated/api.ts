@@ -2077,6 +2077,155 @@ export const AtelierUpdatePerformanceGoalResponse = zod.object({
 });
 
 /**
+ * @summary HR — list manager/HR check-ins
+ */
+export const AtelierListCheckInsQueryParams = zod.object({
+  employeeId: zod.coerce.string().optional(),
+});
+
+export const AtelierListCheckInsResponseItem = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  managerName: zod.string(),
+  scheduledFor: zod.string(),
+  status: zod.enum(["scheduled", "completed", "missed"]),
+  notes: zod.string(),
+});
+export const AtelierListCheckInsResponse = zod.array(
+  AtelierListCheckInsResponseItem,
+);
+
+/**
+ * @summary HR — log a check-in for an employee
+ */
+export const atelierCreateCheckInBodyManagerNameMax = 200;
+
+export const atelierCreateCheckInBodyScheduledForMin = 10;
+export const atelierCreateCheckInBodyScheduledForMax = 10;
+
+export const atelierCreateCheckInBodyNotesMax = 4000;
+
+export const AtelierCreateCheckInBody = zod.object({
+  employeeId: zod.string(),
+  managerName: zod
+    .string()
+    .max(atelierCreateCheckInBodyManagerNameMax)
+    .optional(),
+  scheduledFor: zod
+    .string()
+    .min(atelierCreateCheckInBodyScheduledForMin)
+    .max(atelierCreateCheckInBodyScheduledForMax),
+  status: zod.enum(["scheduled", "completed", "missed"]).optional(),
+  notes: zod.string().max(atelierCreateCheckInBodyNotesMax).optional(),
+});
+
+/**
+ * @summary HR — edit a check-in (reschedule, mark completed / missed)
+ */
+export const AtelierUpdateCheckInParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateCheckInBodyManagerNameMax = 200;
+
+export const atelierUpdateCheckInBodyScheduledForMin = 10;
+export const atelierUpdateCheckInBodyScheduledForMax = 10;
+
+export const atelierUpdateCheckInBodyNotesMax = 4000;
+
+export const AtelierUpdateCheckInBody = zod.object({
+  managerName: zod
+    .string()
+    .max(atelierUpdateCheckInBodyManagerNameMax)
+    .optional(),
+  scheduledFor: zod
+    .string()
+    .min(atelierUpdateCheckInBodyScheduledForMin)
+    .max(atelierUpdateCheckInBodyScheduledForMax)
+    .optional(),
+  status: zod.enum(["scheduled", "completed", "missed"]).optional(),
+  notes: zod.string().max(atelierUpdateCheckInBodyNotesMax).optional(),
+});
+
+export const AtelierUpdateCheckInResponse = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  managerName: zod.string(),
+  scheduledFor: zod.string(),
+  status: zod.enum(["scheduled", "completed", "missed"]),
+  notes: zod.string(),
+});
+
+/**
+ * @summary HR — list employee certifications (status derived from expiry)
+ */
+export const AtelierListCertificationsQueryParams = zod.object({
+  employeeId: zod.coerce.string().optional(),
+});
+
+export const AtelierListCertificationsResponseItem = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  certName: zod.string(),
+  issuer: zod.string(),
+  issuedOn: zod.string(),
+  expiresOn: zod.string().nullish(),
+  status: zod.enum(["active", "expiring", "expired"]),
+});
+export const AtelierListCertificationsResponse = zod.array(
+  AtelierListCertificationsResponseItem,
+);
+
+/**
+ * @summary HR — record a certification for an employee
+ */
+export const atelierCreateCertificationBodyCertNameMax = 300;
+
+export const atelierCreateCertificationBodyIssuerMax = 200;
+
+export const atelierCreateCertificationBodyIssuedOnMin = 10;
+export const atelierCreateCertificationBodyIssuedOnMax = 10;
+
+export const atelierCreateCertificationBodyExpiresOnMin = 10;
+export const atelierCreateCertificationBodyExpiresOnMax = 10;
+
+export const AtelierCreateCertificationBody = zod.object({
+  employeeId: zod.string(),
+  certName: zod.string().min(1).max(atelierCreateCertificationBodyCertNameMax),
+  issuer: zod.string().max(atelierCreateCertificationBodyIssuerMax).optional(),
+  issuedOn: zod
+    .string()
+    .min(atelierCreateCertificationBodyIssuedOnMin)
+    .max(atelierCreateCertificationBodyIssuedOnMax),
+  expiresOn: zod
+    .string()
+    .min(atelierCreateCertificationBodyExpiresOnMin)
+    .max(atelierCreateCertificationBodyExpiresOnMax)
+    .nullish(),
+});
+
+/**
+ * @summary HR — archive a certification record (soft delete)
+ */
+export const AtelierArchiveCertificationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchiveCertificationResponse = zod.object({
+  id: zod.string(),
+  employeeId: zod.string(),
+  employeeName: zod.string(),
+  certName: zod.string(),
+  issuer: zod.string(),
+  issuedOn: zod.string(),
+  expiresOn: zod.string().nullish(),
+  status: zod.enum(["active", "expiring", "expired"]),
+});
+
+/**
  * @summary HR — list training materials with completion counts
  */
 export const AtelierListTrainingMaterialsResponseItem = zod.object({

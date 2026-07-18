@@ -1337,6 +1337,142 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierError"
+  /atelier/people/check-ins:
+    get:
+      operationId: atelierListCheckIns
+      tags: [atelier]
+      summary: HR — list manager/HR check-ins
+      parameters:
+        - in: query
+          name: employeeId
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Check-ins with employee names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierCheckIn"
+    post:
+      operationId: atelierCreateCheckIn
+      tags: [atelier]
+      summary: HR — log a check-in for an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCheckInInput"
+      responses:
+        "201":
+          description: Created check-in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCheckIn"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/check-ins/{id}:
+    patch:
+      operationId: atelierUpdateCheckIn
+      tags: [atelier]
+      summary: HR — edit a check-in (reschedule, mark completed / missed)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCheckInPatch"
+      responses:
+        "200":
+          description: Updated check-in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCheckIn"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/certifications:
+    get:
+      operationId: atelierListCertifications
+      tags: [atelier]
+      summary: HR — list employee certifications (status derived from expiry)
+      parameters:
+        - in: query
+          name: employeeId
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Certifications with employee names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AtelierCertification"
+    post:
+      operationId: atelierCreateCertification
+      tags: [atelier]
+      summary: HR — record a certification for an employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierCertificationInput"
+      responses:
+        "201":
+          description: Created certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCertification"
+        "404":
+          description: Employee not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
+  /atelier/people/certifications/{id}:
+    delete:
+      operationId: atelierArchiveCertification
+      tags: [atelier]
+      summary: HR — archive a certification record (soft delete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Archived certification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCertification"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierError"
   /atelier/people/training-materials:
     get:
       operationId: atelierListTrainingMaterials
@@ -7442,6 +7578,59 @@ components:
         description: { type: string, maxLength: 4000 }
         weightPct: { type: integer, minimum: 0, maximum: 100 }
         status: { type: string, enum: [on_track, at_risk, complete] }
+
+    AtelierCheckIn:
+      type: object
+      required: [id, employeeId, employeeName, managerName, scheduledFor, status, notes]
+      properties:
+        id: { type: string }
+        employeeId: { type: string }
+        employeeName: { type: string }
+        managerName: { type: string }
+        scheduledFor: { type: string }
+        status: { type: string, enum: [scheduled, completed, missed] }
+        notes: { type: string }
+
+    AtelierCheckInInput:
+      type: object
+      required: [employeeId, scheduledFor]
+      properties:
+        employeeId: { type: string }
+        managerName: { type: string, maxLength: 200 }
+        scheduledFor: { type: string, minLength: 10, maxLength: 10 }
+        status: { type: string, enum: [scheduled, completed, missed] }
+        notes: { type: string, maxLength: 4000 }
+
+    AtelierCheckInPatch:
+      type: object
+      properties:
+        managerName: { type: string, maxLength: 200 }
+        scheduledFor: { type: string, minLength: 10, maxLength: 10 }
+        status: { type: string, enum: [scheduled, completed, missed] }
+        notes: { type: string, maxLength: 4000 }
+
+    AtelierCertification:
+      type: object
+      required: [id, employeeId, employeeName, certName, issuer, issuedOn, status]
+      properties:
+        id: { type: string }
+        employeeId: { type: string }
+        employeeName: { type: string }
+        certName: { type: string }
+        issuer: { type: string }
+        issuedOn: { type: string }
+        expiresOn: { type: ["string", "null"] }
+        status: { type: string, enum: [active, expiring, expired] }
+
+    AtelierCertificationInput:
+      type: object
+      required: [employeeId, certName, issuedOn]
+      properties:
+        employeeId: { type: string }
+        certName: { type: string, minLength: 1, maxLength: 300 }
+        issuer: { type: string, maxLength: 200 }
+        issuedOn: { type: string, minLength: 10, maxLength: 10 }
+        expiresOn: { type: ["string", "null"], minLength: 10, maxLength: 10 }
 
     AtelierTrainingMaterial:
       type: object

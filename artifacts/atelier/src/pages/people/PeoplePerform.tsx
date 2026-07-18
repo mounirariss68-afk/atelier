@@ -11,14 +11,16 @@ import {
   useAtelierCreatePerformanceGoal,
   useAtelierUpdatePerformanceGoal,
   getAtelierListPerformanceGoalsQueryKey,
+  useAtelierListCheckIns,
+  useAtelierCreateCheckIn,
+  useAtelierUpdateCheckIn,
+  getAtelierListCheckInsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
-import {
-  useGoals, useCheckIns, useReviews, useCalibrationCohorts, useSuccession,
-} from "./peopleSeed";
+import { useCalibrationCohorts, useSuccession } from "./peopleSeed";
 import { useCanSeeRewardAndSuccession } from "./peoplePerms";
 import { useEmployeeOptions } from "./useEmployeeOptions";
 
@@ -85,25 +87,38 @@ export default function PeoplePerform() {
   );
 }
 
+function RestrictedCard({ testid, message }: { testid: string; message: string }) {
+  return (
+    <Card className="p-6 text-sm text-text-mute" data-testid={testid}>
+      <MonoChip tone="amber">Restricted</MonoChip>
+      <div className="mt-2">{message}</div>
+    </Card>
+  );
+}
+
 function GoalsView() {
-  const rows = useGoals();
-  if (rows.length === 0) {
+  const { data: rows, isLoading, error } = useAtelierListPerformanceGoals();
+  if (error) {
+    return <RestrictedCard testid="goals-restricted" message="Goal records are managed by HR and partner-tier personas." />;
+  }
+  if (isLoading) return <p className="text-sm text-text-faint">Loading…</p>;
+  if (!rows || rows.length === 0) {
     return <PeopleEmptyState message="No goals recorded yet. Set goals under the Releases tab to see them here." />;
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="perform-goals-live">
       {rows.map((g) => (
         <Card key={g.id} className="p-3">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              <div className="text-text">{g.personName} <span className="text-text-faint text-xs">· {g.cycle}</span></div>
-              <div className="text-sm text-text-mute mt-0.5">{g.goal}</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-text">{g.employeeName} <span className="text-text-faint text-xs">· {g.cycle}</span></div>
+              <div className="text-sm text-text-mute mt-0.5">{g.title}</div>
+              {g.description ? <div className="text-xs text-text-faint mt-0.5 truncate">{g.description}</div> : null}
             </div>
-            <MonoChip>{Math.round(g.weight * 100)}%</MonoChip>
-            <MonoChip tone={g.status === "complete" ? "green" : g.status === "on-track" ? "gold" : g.status === "at-risk" ? "amber" : "red"}>
-              {g.status}
+            <MonoChip>{g.weightPct}%</MonoChip>
+            <MonoChip tone={g.status === "complete" ? "green" : g.status === "on_track" ? "gold" : "amber"}>
+              {g.status.replace("_", " ")}
             </MonoChip>
-            <MonoChip>{g.evidenceCount} evid.</MonoChip>
           </div>
         </Card>
       ))}
@@ -112,54 +127,140 @@ function GoalsView() {
 }
 
 function CheckInsView() {
-  const rows = useCheckIns();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No check-ins logged yet." />;
+  const qc = useQueryClient();
+  const { data: rows, isLoading, error } = useAtelierListCheckIns();
+  const { options: employees } = useEmployeeOptions();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: getAtelierListCheckInsQueryKey() });
+  };
+  const update = useAtelierUpdateCheckIn({ mutation: { onSuccess: invalidate } });
+  if (error) {
+    return <RestrictedCard testid="check-ins-restricted" message="Check-in records are managed by HR and partner-tier personas." />;
   }
   return (
-    <Card className="p-4">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-text-mute font-mono uppercase">
-          <tr><th className="text-left py-2">Person</th><th className="text-left">Manager</th><th>When</th><th>Topics</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id} className="border-t border-border-soft">
-              <td className="py-2 text-text">{c.personName}</td>
-              <td className="text-text-mute">{c.managerName}</td>
-              <td className="text-center text-text">{c.scheduledFor}</td>
-              <td className="text-center"><MonoChip>{c.topicCount}</MonoChip></td>
-              <td className="text-center">
-                <MonoChip tone={c.status === "completed" ? "green" : c.status === "scheduled" ? "gold" : "red"}>{c.status}</MonoChip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-6" data-testid="perform-check-ins">
+      <NewCheckInForm employees={employees} onSaved={invalidate} />
+      {isLoading ? (
+        <p className="text-sm text-text-faint">Loading…</p>
+      ) : !rows || rows.length === 0 ? (
+        <PeopleEmptyState message="No check-ins logged yet — schedule one above." />
+      ) : (
+        <Card className="p-4">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-text-mute font-mono uppercase">
+              <tr><th className="text-left py-2">Person</th><th className="text-left">Manager</th><th>When</th><th className="text-left">Notes</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id} className="border-t border-border-soft" data-testid={`check-in-${c.id}`}>
+                  <td className="py-2 text-text">{c.employeeName}</td>
+                  <td className="text-text-mute">{c.managerName || "—"}</td>
+                  <td className="text-center text-text whitespace-nowrap px-2">{c.scheduledFor}</td>
+                  <td className="text-text-mute text-xs max-w-[240px] truncate">{c.notes || "—"}</td>
+                  <td className="text-center">
+                    <select
+                      className="rounded border border-border bg-transparent px-2 py-1 text-xs text-text"
+                      value={c.status}
+                      onChange={(e) =>
+                        update.mutate({
+                          id: c.id,
+                          data: { status: e.target.value as "scheduled" | "completed" | "missed" },
+                        })
+                      }
+                      data-testid={`check-in-status-${c.id}`}
+                    >
+                      <option value="scheduled">scheduled</option>
+                      <option value="completed">completed</option>
+                      <option value="missed">missed</option>
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function NewCheckInForm({
+  employees,
+  onSaved,
+}: {
+  employees: { id: string; fullName: string }[];
+  onSaved: () => void;
+}) {
+  const [employeeId, setEmployeeId] = React.useState("");
+  const [managerName, setManagerName] = React.useState("");
+  const [scheduledFor, setScheduledFor] = React.useState("");
+  const [notes, setNotes] = React.useState("");
+  const create = useAtelierCreateCheckIn({
+    mutation: {
+      onSuccess: () => {
+        setManagerName(""); setScheduledFor(""); setNotes("");
+        onSaved();
+      },
+    },
+  });
+  return (
+    <Card className="p-4 space-y-2" data-testid="new-check-in-form">
+      <h3 className="text-sm font-semibold text-text">Log a check-in</h3>
+      <div className="grid grid-cols-2 gap-2">
+        <select className={inputCls} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} data-testid="check-in-employee">
+          <option value="">Select employee…</option>
+          {employees.map((e) => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+        </select>
+        <input className={inputCls} type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} data-testid="check-in-date" />
+      </div>
+      <input className={inputCls} placeholder="Run by (manager / partner name)" value={managerName} onChange={(e) => setManagerName(e.target.value)} />
+      <textarea className={inputCls} rows={2} placeholder="Topics / notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+      <button
+        className={btnCls}
+        disabled={!employeeId || !scheduledFor || create.isPending}
+        onClick={() =>
+          create.mutate({
+            data: {
+              employeeId,
+              scheduledFor,
+              managerName: managerName.trim() || undefined,
+              notes: notes.trim() || undefined,
+            },
+          })
+        }
+        data-testid="check-in-save"
+      >
+        Save check-in
+      </button>
+      {create.error ? <p className="text-xs text-red-400">Could not save the check-in.</p> : null}
     </Card>
   );
 }
 
 function ReviewsView() {
-  const rows = useReviews();
-  if (rows.length === 0) {
+  const { data: rows, isLoading, error } = useAtelierListPerformanceReviews();
+  if (error) {
+    return <RestrictedCard testid="reviews-restricted" message="Review records are managed by HR and partner-tier personas." />;
+  }
+  if (isLoading) return <p className="text-sm text-text-faint">Loading…</p>;
+  if (!rows || rows.length === 0) {
     return <PeopleEmptyState message="No review cycles yet. Draft and release reviews from the Releases tab." />;
   }
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="perform-reviews-live">
       {rows.map((r) => (
         <Card key={r.id} className="p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <div className="text-text">{r.personName} <span className="text-text-faint text-xs">· {r.cycle}</span></div>
-              <div className="text-xs text-text-faint">due {r.dueOn}</div>
+              <div className="text-text">{r.employeeName} <span className="text-text-faint text-xs">· {r.cycle}</span></div>
+              {r.reviewedOn ? <div className="text-xs text-text-faint">reviewed {r.reviewedOn}</div> : null}
             </div>
             <div className="flex items-center gap-1.5">
               <MonoChip>self · {r.selfRating ?? "—"}</MonoChip>
               <MonoChip tone={r.managerRating === "exceeds" ? "gold" : r.managerRating ? "green" : "default"}>
                 mgr · {r.managerRating ?? "—"}
               </MonoChip>
-              <MonoChip tone={r.status === "calibrated" ? "green" : r.status === "open" ? "amber" : "default"}>{r.status}</MonoChip>
+              <MonoChip tone={r.status === "released" ? "green" : "amber"}>{r.status}</MonoChip>
             </div>
           </div>
         </Card>

@@ -51,11 +51,16 @@ import type {
   AtelierCandidateDocument,
   AtelierCandidateDocumentList,
   AtelierCartographerRefreshInput,
+  AtelierCertification,
+  AtelierCertificationInput,
   AtelierCharterApproveInput,
   AtelierCharterRedraftInput,
   AtelierCharterVersion,
   AtelierCheckAccountDuplicatesInput,
   AtelierCheckContactDuplicatesInput,
+  AtelierCheckIn,
+  AtelierCheckInInput,
+  AtelierCheckInPatch,
   AtelierCheckOpportunityDuplicatesParams,
   AtelierComposeProposalInput,
   AtelierConciergeSearchInput,
@@ -133,6 +138,8 @@ import type {
   AtelierLibraryDocumentDetail,
   AtelierListAccountsParams,
   AtelierListAuditParams,
+  AtelierListCertificationsParams,
+  AtelierListCheckInsParams,
   AtelierListDocuments200,
   AtelierListDocumentsParams,
   AtelierListPerformanceGoalsParams,
@@ -5712,6 +5719,565 @@ export const useAtelierUpdatePerformanceGoal = <
   TContext
 > => {
   return useMutation(getAtelierUpdatePerformanceGoalMutationOptions(options));
+};
+
+/**
+ * @summary HR — list manager/HR check-ins
+ */
+export const getAtelierListCheckInsUrl = (
+  params?: AtelierListCheckInsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/people/check-ins?${stringifiedParams}`
+    : `/api/atelier/people/check-ins`;
+};
+
+export const atelierListCheckIns = async (
+  params?: AtelierListCheckInsParams,
+  options?: RequestInit,
+): Promise<AtelierCheckIn[]> => {
+  return customFetch<AtelierCheckIn[]>(getAtelierListCheckInsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListCheckInsQueryKey = (
+  params?: AtelierListCheckInsParams,
+) => {
+  return [
+    `/api/atelier/people/check-ins`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListCheckInsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListCheckIns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListCheckInsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCheckIns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListCheckInsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListCheckIns>>
+  > = ({ signal }) =>
+    atelierListCheckIns(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCheckIns>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListCheckInsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListCheckIns>>
+>;
+export type AtelierListCheckInsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list manager/HR check-ins
+ */
+
+export function useAtelierListCheckIns<
+  TData = Awaited<ReturnType<typeof atelierListCheckIns>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListCheckInsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCheckIns>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListCheckInsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — log a check-in for an employee
+ */
+export const getAtelierCreateCheckInUrl = () => {
+  return `/api/atelier/people/check-ins`;
+};
+
+export const atelierCreateCheckIn = async (
+  atelierCheckInInput: AtelierCheckInInput,
+  options?: RequestInit,
+): Promise<AtelierCheckIn> => {
+  return customFetch<AtelierCheckIn>(getAtelierCreateCheckInUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCheckInInput),
+  });
+};
+
+export const getAtelierCreateCheckInMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCheckIn>>,
+    TError,
+    { data: BodyType<AtelierCheckInInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateCheckIn>>,
+  TError,
+  { data: BodyType<AtelierCheckInInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateCheckIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateCheckIn>>,
+    { data: BodyType<AtelierCheckInInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateCheckIn(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateCheckInMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateCheckIn>>
+>;
+export type AtelierCreateCheckInMutationBody = BodyType<AtelierCheckInInput>;
+export type AtelierCreateCheckInMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — log a check-in for an employee
+ */
+export const useAtelierCreateCheckIn = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCheckIn>>,
+    TError,
+    { data: BodyType<AtelierCheckInInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateCheckIn>>,
+  TError,
+  { data: BodyType<AtelierCheckInInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateCheckInMutationOptions(options));
+};
+
+/**
+ * @summary HR — edit a check-in (reschedule, mark completed / missed)
+ */
+export const getAtelierUpdateCheckInUrl = (id: string) => {
+  return `/api/atelier/people/check-ins/${id}`;
+};
+
+export const atelierUpdateCheckIn = async (
+  id: string,
+  atelierCheckInPatch: AtelierCheckInPatch,
+  options?: RequestInit,
+): Promise<AtelierCheckIn> => {
+  return customFetch<AtelierCheckIn>(getAtelierUpdateCheckInUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCheckInPatch),
+  });
+};
+
+export const getAtelierUpdateCheckInMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateCheckIn>>,
+    TError,
+    { id: string; data: BodyType<AtelierCheckInPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateCheckIn>>,
+  TError,
+  { id: string; data: BodyType<AtelierCheckInPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateCheckIn"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateCheckIn>>,
+    { id: string; data: BodyType<AtelierCheckInPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateCheckIn(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateCheckInMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateCheckIn>>
+>;
+export type AtelierUpdateCheckInMutationBody = BodyType<AtelierCheckInPatch>;
+export type AtelierUpdateCheckInMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — edit a check-in (reschedule, mark completed / missed)
+ */
+export const useAtelierUpdateCheckIn = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateCheckIn>>,
+    TError,
+    { id: string; data: BodyType<AtelierCheckInPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateCheckIn>>,
+  TError,
+  { id: string; data: BodyType<AtelierCheckInPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateCheckInMutationOptions(options));
+};
+
+/**
+ * @summary HR — list employee certifications (status derived from expiry)
+ */
+export const getAtelierListCertificationsUrl = (
+  params?: AtelierListCertificationsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/people/certifications?${stringifiedParams}`
+    : `/api/atelier/people/certifications`;
+};
+
+export const atelierListCertifications = async (
+  params?: AtelierListCertificationsParams,
+  options?: RequestInit,
+): Promise<AtelierCertification[]> => {
+  return customFetch<AtelierCertification[]>(
+    getAtelierListCertificationsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListCertificationsQueryKey = (
+  params?: AtelierListCertificationsParams,
+) => {
+  return [
+    `/api/atelier/people/certifications`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListCertificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListCertificationsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListCertifications>>
+  > = ({ signal }) =>
+    atelierListCertifications(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListCertifications>>
+>;
+export type AtelierListCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary HR — list employee certifications (status derived from expiry)
+ */
+
+export function useAtelierListCertifications<
+  TData = Awaited<ReturnType<typeof atelierListCertifications>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListCertificationsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListCertifications>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListCertificationsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary HR — record a certification for an employee
+ */
+export const getAtelierCreateCertificationUrl = () => {
+  return `/api/atelier/people/certifications`;
+};
+
+export const atelierCreateCertification = async (
+  atelierCertificationInput: AtelierCertificationInput,
+  options?: RequestInit,
+): Promise<AtelierCertification> => {
+  return customFetch<AtelierCertification>(getAtelierCreateCertificationUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierCertificationInput),
+  });
+};
+
+export const getAtelierCreateCertificationMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCertification>>,
+    TError,
+    { data: BodyType<AtelierCertificationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateCertification>>,
+  TError,
+  { data: BodyType<AtelierCertificationInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateCertification>>,
+    { data: BodyType<AtelierCertificationInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateCertification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateCertification>>
+>;
+export type AtelierCreateCertificationMutationBody =
+  BodyType<AtelierCertificationInput>;
+export type AtelierCreateCertificationMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — record a certification for an employee
+ */
+export const useAtelierCreateCertification = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateCertification>>,
+    TError,
+    { data: BodyType<AtelierCertificationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateCertification>>,
+  TError,
+  { data: BodyType<AtelierCertificationInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateCertificationMutationOptions(options));
+};
+
+/**
+ * @summary HR — archive a certification record (soft delete)
+ */
+export const getAtelierArchiveCertificationUrl = (id: string) => {
+  return `/api/atelier/people/certifications/${id}`;
+};
+
+export const atelierArchiveCertification = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierCertification> => {
+  return customFetch<AtelierCertification>(
+    getAtelierArchiveCertificationUrl(id),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierArchiveCertificationMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveCertification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchiveCertification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchiveCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchiveCertification>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchiveCertification(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchiveCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchiveCertification>>
+>;
+
+export type AtelierArchiveCertificationMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary HR — archive a certification record (soft delete)
+ */
+export const useAtelierArchiveCertification = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveCertification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchiveCertification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchiveCertificationMutationOptions(options));
 };
 
 /**

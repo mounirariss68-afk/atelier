@@ -57,3 +57,7 @@ a real auth session exists) — `attachPersona` otherwise 401s. Run probes as
 `NODE_ENV=test pnpm exec tsx tests/crm/<probe>.ts`. Also: direct
 `db.insert(atelierAccounts)` needs notNull `sector` and text `tier` ('A'–'D');
 POST /opportunities zod body requires `description` (+ dealSizeUsd sensible).
+
+Gotcha (2026-07-17): fresh isolated envs can hit ERR_MODULE_NOT_FOUND for `pg`
+from tests/crm/scratch-db-admin.ts — api-server declares pg but the install can
+be stale/unlinked; fix with `pnpm install --filter @workspace/api-server`.

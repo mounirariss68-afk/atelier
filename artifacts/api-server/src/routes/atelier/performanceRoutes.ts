@@ -29,6 +29,8 @@ import {
   atelierAuditEvents,
   atelierPerformanceReviews,
   atelierPerformanceGoals,
+  atelierCheckIns,
+  atelierCertifications,
   atelierTrainingMaterials,
   atelierTrainingCompletions,
 } from "@workspace/db";
@@ -43,6 +45,13 @@ import {
   AtelierCreatePerformanceGoalBody,
   AtelierUpdatePerformanceGoalBody,
   AtelierUpdatePerformanceGoalResponse,
+  AtelierListCheckInsResponse,
+  AtelierCreateCheckInBody,
+  AtelierUpdateCheckInBody,
+  AtelierUpdateCheckInResponse,
+  AtelierListCertificationsResponse,
+  AtelierCreateCertificationBody,
+  AtelierArchiveCertificationResponse,
   AtelierListTrainingMaterialsResponse,
   AtelierCreateTrainingMaterialBody,
   AtelierUpdateTrainingMaterialBody,
@@ -541,6 +550,299 @@ router.patch("/people/performance/goals/:id", async (req, res, next) => {
     res.json(
       AtelierUpdatePerformanceGoalResponse.parse(
         goalToWire(row, names.get(row.employeeId) ?? "Unknown"),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// Check-ins (Task #115 — real 1:1 records for the Perform lens)
+// =============================================================
+
+function checkInToWire(
+  c: typeof atelierCheckIns.$inferSelect,
+  employeeName: string,
+) {
+  return {
+    id: c.id,
+    employeeId: c.employeeId,
+    employeeName,
+    managerName: c.managerName,
+    scheduledFor: c.scheduledFor,
+    status: c.status as "scheduled" | "completed" | "missed",
+    notes: c.notes,
+  };
+}
+
+// @cli-skip: HR admin read; no CLI shape (Task #115)
+router.get("/people/check-ins", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const employeeId =
+      typeof req.query.employeeId === "string" ? req.query.employeeId : null;
+    const where = [
+      eq(atelierCheckIns.orgId, me.orgId),
+      isNull(atelierCheckIns.deletedAt),
+    ];
+    if (employeeId) where.push(eq(atelierCheckIns.employeeId, employeeId));
+    const rows = await db
+      .select()
+      .from(atelierCheckIns)
+      .where(and(...where))
+      .orderBy(desc(atelierCheckIns.scheduledFor), desc(atelierCheckIns.createdAt));
+    const names = await employeeNameMap(me.orgId, rows.map((r) => r.employeeId));
+    res.json(
+      AtelierListCheckInsResponse.parse(
+        rows.map((c) => checkInToWire(c, names.get(c.employeeId) ?? "Unknown")),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; no CLI shape (Task #115)
+router.post("/people/check-ins", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const parsed = AtelierCreateCheckInBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+      return;
+    }
+    const b = parsed.data;
+    const [emp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(
+        and(
+          eq(atelierEmployees.id, b.employeeId),
+          eq(atelierEmployees.orgId, me.orgId),
+          isNull(atelierEmployees.deletedAt),
+        ),
+      );
+    if (!emp) {
+      res.status(404).json({ error: "employee-not-found" });
+      return;
+    }
+    const [row] = await db
+      .insert(atelierCheckIns)
+      .values({
+        id: rid("checkin"),
+        orgId: me.orgId,
+        employeeId: emp.id,
+        managerName: b.managerName ?? "",
+        scheduledFor: b.scheduledFor,
+        status: b.status ?? "scheduled",
+        notes: b.notes ?? "",
+        createdByUserId: me.id,
+      })
+      .returning();
+    await audit({
+      me,
+      entityType: "check_in",
+      entityId: row.id,
+      action: "check_in_logged",
+      summary: `${me.name} logged a check-in for ${emp.fullName} (${b.scheduledFor})`,
+    });
+    res
+      .status(201)
+      .json(AtelierUpdateCheckInResponse.parse(checkInToWire(row, emp.fullName)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; no CLI shape (Task #115)
+router.patch("/people/check-ins/:id", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const parsed = AtelierUpdateCheckInBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+      return;
+    }
+    const b = parsed.data;
+    const [row] = await db
+      .update(atelierCheckIns)
+      .set({
+        ...(b.managerName !== undefined ? { managerName: b.managerName } : {}),
+        ...(b.scheduledFor !== undefined ? { scheduledFor: b.scheduledFor } : {}),
+        ...(b.status !== undefined ? { status: b.status } : {}),
+        ...(b.notes !== undefined ? { notes: b.notes } : {}),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierCheckIns.id, req.params.id),
+          eq(atelierCheckIns.orgId, me.orgId),
+          isNull(atelierCheckIns.deletedAt),
+        ),
+      )
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const names = await employeeNameMap(me.orgId, [row.employeeId]);
+    res.json(
+      AtelierUpdateCheckInResponse.parse(
+        checkInToWire(row, names.get(row.employeeId) ?? "Unknown"),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// Certifications (Task #115 — real records for the Develop lens)
+// =============================================================
+
+/** Derived, never stored: active / expiring (≤90 days out) / expired. */
+function certStatus(expiresOn: string | null): "active" | "expiring" | "expired" {
+  if (!expiresOn) return "active";
+  const today = new Date().toISOString().slice(0, 10);
+  if (expiresOn < today) return "expired";
+  const soon = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  return expiresOn <= soon ? "expiring" : "active";
+}
+
+function certToWire(
+  c: typeof atelierCertifications.$inferSelect,
+  employeeName: string,
+) {
+  return {
+    id: c.id,
+    employeeId: c.employeeId,
+    employeeName,
+    certName: c.certName,
+    issuer: c.issuer,
+    issuedOn: c.issuedOn,
+    expiresOn: c.expiresOn,
+    status: certStatus(c.expiresOn),
+  };
+}
+
+// @cli-skip: HR admin read; no CLI shape (Task #115)
+router.get("/people/certifications", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const employeeId =
+      typeof req.query.employeeId === "string" ? req.query.employeeId : null;
+    const where = [
+      eq(atelierCertifications.orgId, me.orgId),
+      isNull(atelierCertifications.deletedAt),
+    ];
+    if (employeeId) where.push(eq(atelierCertifications.employeeId, employeeId));
+    const rows = await db
+      .select()
+      .from(atelierCertifications)
+      .where(and(...where))
+      .orderBy(desc(atelierCertifications.issuedOn), desc(atelierCertifications.createdAt));
+    const names = await employeeNameMap(me.orgId, rows.map((r) => r.employeeId));
+    res.json(
+      AtelierListCertificationsResponse.parse(
+        rows.map((c) => certToWire(c, names.get(c.employeeId) ?? "Unknown")),
+      ),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; no CLI shape (Task #115)
+router.post("/people/certifications", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const parsed = AtelierCreateCertificationBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+      return;
+    }
+    const b = parsed.data;
+    const [emp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(
+        and(
+          eq(atelierEmployees.id, b.employeeId),
+          eq(atelierEmployees.orgId, me.orgId),
+          isNull(atelierEmployees.deletedAt),
+        ),
+      );
+    if (!emp) {
+      res.status(404).json({ error: "employee-not-found" });
+      return;
+    }
+    const [row] = await db
+      .insert(atelierCertifications)
+      .values({
+        id: rid("cert"),
+        orgId: me.orgId,
+        employeeId: emp.id,
+        certName: b.certName,
+        issuer: b.issuer ?? "",
+        issuedOn: b.issuedOn,
+        expiresOn: b.expiresOn ?? null,
+        createdByUserId: me.id,
+      })
+      .returning();
+    await audit({
+      me,
+      entityType: "certification",
+      entityId: row.id,
+      action: "certification_recorded",
+      summary: `${me.name} recorded "${b.certName}" for ${emp.fullName}`,
+    });
+    res
+      .status(201)
+      .json(AtelierArchiveCertificationResponse.parse(certToWire(row, emp.fullName)));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; no CLI shape (Task #115)
+router.delete("/people/certifications/:id", async (req, res, next) => {
+  try {
+    const me = ensureHr(req, res);
+    if (!me) return;
+    const [row] = await db
+      .update(atelierCertifications)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierCertifications.id, req.params.id),
+          eq(atelierCertifications.orgId, me.orgId),
+          isNull(atelierCertifications.deletedAt),
+        ),
+      )
+      .returning();
+    if (!row) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    await audit({
+      me,
+      entityType: "certification",
+      entityId: row.id,
+      action: "certification_archived",
+      summary: `${me.name} archived certification "${row.certName}"`,
+    });
+    const names = await employeeNameMap(me.orgId, [row.employeeId]);
+    res.json(
+      AtelierArchiveCertificationResponse.parse(
+        certToWire(row, names.get(row.employeeId) ?? "Unknown"),
       ),
     );
   } catch (err) {

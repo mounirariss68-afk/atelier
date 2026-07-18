@@ -4209,6 +4209,58 @@ export const atelierTrainingMaterials = pgTable(
   (t) => [index("idx_atelier_training_mat_org").on(t.orgId)],
 );
 
+/**
+ * Manager/HR check-ins — lightweight 1:1 records for the People Perform
+ * lens. `managerName` is free text (check-ins may be run by partners who
+ * are not roster employees).
+ */
+export const atelierCheckIns = pgTable(
+  "atelier_check_ins",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    employeeId: text("employee_id").notNull(), // atelier_employees.id
+    managerName: text("manager_name").notNull().default(""),
+    scheduledFor: text("scheduled_for").notNull(), // ISO date (YYYY-MM-DD)
+    status: text("status").notNull().default("scheduled"), // scheduled | completed | missed
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_check_ins_org").on(t.orgId),
+    index("idx_atelier_check_ins_emp").on(t.employeeId),
+  ],
+);
+
+/**
+ * Professional certifications held by employees — People Develop lens.
+ * Status (active / expiring / expired) is derived from `expiresOn` at
+ * read time, never stored.
+ */
+export const atelierCertifications = pgTable(
+  "atelier_certifications",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    employeeId: text("employee_id").notNull(), // atelier_employees.id
+    certName: text("cert_name").notNull(),
+    issuer: text("issuer").notNull().default(""),
+    issuedOn: text("issued_on").notNull(), // ISO date (YYYY-MM-DD)
+    expiresOn: text("expires_on"), // ISO date or null = never expires
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_certifications_org").on(t.orgId),
+    index("idx_atelier_certifications_emp").on(t.employeeId),
+  ],
+);
+
 /** Per-person completion marks — one row per (material, user). */
 export const atelierTrainingCompletions = pgTable(
   "atelier_training_completions",

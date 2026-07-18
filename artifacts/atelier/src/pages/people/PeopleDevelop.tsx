@@ -8,14 +8,19 @@ import {
   useAtelierArchiveTrainingMaterial,
   useAtelierListTrainingCompletions,
   getAtelierListTrainingMaterialsQueryKey,
+  useAtelierListCertifications,
+  useAtelierCreateCertification,
+  useAtelierArchiveCertification,
+  getAtelierListCertificationsQueryKey,
 } from "@workspace/api-client-react";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
 import {
-  useLearningCatalogue, useMyLearning, useCertifications, useMentoringPairs, useSkillGaps,
+  useLearningCatalogue, useMyLearning, useMentoringPairs, useSkillGaps,
 } from "./peopleSeed";
+import { useEmployeeOptions } from "./useEmployeeOptions";
 
 const SUBS = [
   { id: "library",       label: "Training library" },
@@ -347,30 +352,124 @@ function MyLearningView() {
 }
 
 function CertificationsView() {
-  const rows = useCertifications();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No certification records yet." />;
+  const qc = useQueryClient();
+  const { data: rows, isLoading, error } = useAtelierListCertifications();
+  const { options: employees } = useEmployeeOptions();
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: getAtelierListCertificationsQueryKey() });
+  };
+  const archive = useAtelierArchiveCertification({ mutation: { onSuccess: invalidate } });
+  if (error) {
+    return (
+      <Card className="p-6 text-sm text-text-mute" data-testid="certifications-restricted">
+        <MonoChip tone="amber">Restricted</MonoChip>
+        <div className="mt-2">Certification records are managed by HR and partner-tier personas.</div>
+      </Card>
+    );
   }
   return (
-    <Card className="p-4">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-text-mute font-mono uppercase">
-          <tr><th className="text-left py-2">Person</th><th className="text-left">Certification</th><th>Issued</th><th>Expires</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id} className="border-t border-border-soft">
-              <td className="py-2 text-text">{c.personName}</td>
-              <td className="text-text">{c.certName} <span className="text-text-faint text-xs">· {c.issuer}</span></td>
-              <td className="text-center text-text-mute">{c.issuedOn}</td>
-              <td className="text-center text-text-mute">{c.expiresOn ?? "—"}</td>
-              <td className="text-center">
-                <MonoChip tone={c.status === "active" ? "green" : c.status === "expiring" ? "amber" : "red"}>{c.status}</MonoChip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-6" data-testid="develop-certifications">
+      <NewCertificationForm employees={employees} onSaved={invalidate} />
+      {isLoading ? (
+        <p className="text-sm text-text-faint">Loading…</p>
+      ) : !rows || rows.length === 0 ? (
+        <PeopleEmptyState message="No certification records yet — record one above." />
+      ) : (
+        <Card className="p-4">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-text-mute font-mono uppercase">
+              <tr><th className="text-left py-2">Person</th><th className="text-left">Certification</th><th>Issued</th><th>Expires</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id} className="border-t border-border-soft" data-testid={`certification-${c.id}`}>
+                  <td className="py-2 text-text">{c.employeeName}</td>
+                  <td className="text-text">{c.certName} {c.issuer ? <span className="text-text-faint text-xs">· {c.issuer}</span> : null}</td>
+                  <td className="text-center text-text-mute whitespace-nowrap px-2">{c.issuedOn}</td>
+                  <td className="text-center text-text-mute whitespace-nowrap px-2">{c.expiresOn ?? "—"}</td>
+                  <td className="text-center">
+                    <MonoChip tone={c.status === "active" ? "green" : c.status === "expiring" ? "amber" : "red"}>{c.status}</MonoChip>
+                  </td>
+                  <td className="text-right">
+                    <button
+                      className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-red-400"
+                      onClick={() => archive.mutate({ id: c.id })}
+                      disabled={archive.isPending}
+                      data-testid={`certification-archive-${c.id}`}
+                    >
+                      Archive
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function NewCertificationForm({
+  employees,
+  onSaved,
+}: {
+  employees: { id: string; fullName: string }[];
+  onSaved: () => void;
+}) {
+  const [employeeId, setEmployeeId] = React.useState("");
+  const [certName, setCertName] = React.useState("");
+  const [issuer, setIssuer] = React.useState("");
+  const [issuedOn, setIssuedOn] = React.useState("");
+  const [expiresOn, setExpiresOn] = React.useState("");
+  const create = useAtelierCreateCertification({
+    mutation: {
+      onSuccess: () => {
+        setCertName(""); setIssuer(""); setIssuedOn(""); setExpiresOn("");
+        onSaved();
+      },
+    },
+  });
+  return (
+    <Card className="p-4 space-y-2" data-testid="new-certification-form">
+      <h3 className="text-sm font-semibold text-text">Record a certification</h3>
+      <div className="grid grid-cols-2 gap-2">
+        <select className={inputCls} value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} data-testid="certification-employee">
+          <option value="">Select employee…</option>
+          {employees.map((e) => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+        </select>
+        <input className={inputCls} placeholder="Issuer (e.g. PMI, AWS)" value={issuer} onChange={(e) => setIssuer(e.target.value)} />
+      </div>
+      <input className={inputCls} placeholder="Certification name" value={certName} onChange={(e) => setCertName(e.target.value)} data-testid="certification-name" />
+      <div className="grid grid-cols-2 gap-2">
+        <label className="text-xs text-text-faint">
+          Issued on
+          <input className={inputCls} type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} data-testid="certification-issued" />
+        </label>
+        <label className="text-xs text-text-faint">
+          Expires on (optional)
+          <input className={inputCls} type="date" value={expiresOn} onChange={(e) => setExpiresOn(e.target.value)} />
+        </label>
+      </div>
+      <button
+        className={btnCls}
+        disabled={!employeeId || !certName.trim() || !issuedOn || create.isPending}
+        onClick={() =>
+          create.mutate({
+            data: {
+              employeeId,
+              certName: certName.trim(),
+              issuer: issuer.trim() || undefined,
+              issuedOn,
+              expiresOn: expiresOn || undefined,
+            },
+          })
+        }
+        data-testid="certification-save"
+      >
+        Save certification
+      </button>
+      {create.error ? <p className="text-xs text-red-400">Could not save the certification.</p> : null}
     </Card>
   );
 }

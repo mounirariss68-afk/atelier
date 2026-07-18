@@ -3758,6 +3758,113 @@ export interface AtelierPerformanceGoalPatch {
   status?: AtelierPerformanceGoalPatchStatus;
 }
 
+export type AtelierCheckInStatus =
+  (typeof AtelierCheckInStatus)[keyof typeof AtelierCheckInStatus];
+
+export const AtelierCheckInStatus = {
+  scheduled: "scheduled",
+  completed: "completed",
+  missed: "missed",
+} as const;
+
+export interface AtelierCheckIn {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  managerName: string;
+  scheduledFor: string;
+  status: AtelierCheckInStatus;
+  notes: string;
+}
+
+export type AtelierCheckInInputStatus =
+  (typeof AtelierCheckInInputStatus)[keyof typeof AtelierCheckInInputStatus];
+
+export const AtelierCheckInInputStatus = {
+  scheduled: "scheduled",
+  completed: "completed",
+  missed: "missed",
+} as const;
+
+export interface AtelierCheckInInput {
+  employeeId: string;
+  /** @maxLength 200 */
+  managerName?: string;
+  /**
+   * @minLength 10
+   * @maxLength 10
+   */
+  scheduledFor: string;
+  status?: AtelierCheckInInputStatus;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export type AtelierCheckInPatchStatus =
+  (typeof AtelierCheckInPatchStatus)[keyof typeof AtelierCheckInPatchStatus];
+
+export const AtelierCheckInPatchStatus = {
+  scheduled: "scheduled",
+  completed: "completed",
+  missed: "missed",
+} as const;
+
+export interface AtelierCheckInPatch {
+  /** @maxLength 200 */
+  managerName?: string;
+  /**
+   * @minLength 10
+   * @maxLength 10
+   */
+  scheduledFor?: string;
+  status?: AtelierCheckInPatchStatus;
+  /** @maxLength 4000 */
+  notes?: string;
+}
+
+export type AtelierCertificationStatus =
+  (typeof AtelierCertificationStatus)[keyof typeof AtelierCertificationStatus];
+
+export const AtelierCertificationStatus = {
+  active: "active",
+  expiring: "expiring",
+  expired: "expired",
+} as const;
+
+export interface AtelierCertification {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  certName: string;
+  issuer: string;
+  issuedOn: string;
+  /** @nullable */
+  expiresOn?: string | null;
+  status: AtelierCertificationStatus;
+}
+
+export interface AtelierCertificationInput {
+  employeeId: string;
+  /**
+   * @minLength 1
+   * @maxLength 300
+   */
+  certName: string;
+  /** @maxLength 200 */
+  issuer?: string;
+  /**
+   * @minLength 10
+   * @maxLength 10
+   */
+  issuedOn: string;
+  /**
+   * @minLength 10
+   * @maxLength 10
+   * @nullable
+   */
+  expiresOn?: string | null;
+}
+
 export type AtelierTrainingMaterialKind =
   (typeof AtelierTrainingMaterialKind)[keyof typeof AtelierTrainingMaterialKind];
 
@@ -6051,6 +6158,14 @@ export type AtelierListPerformanceReviewsParams = {
 };
 
 export type AtelierListPerformanceGoalsParams = {
+  employeeId?: string;
+};
+
+export type AtelierListCheckInsParams = {
+  employeeId?: string;
+};
+
+export type AtelierListCertificationsParams = {
   employeeId?: string;
 };
 
