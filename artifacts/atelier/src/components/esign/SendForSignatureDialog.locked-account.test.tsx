@@ -298,6 +298,10 @@ test("placements are sent only when they match the signer count", () => {
     placements: [boxes[0]],
   });
   assert(mismatched.placements === undefined, "count mismatch -> placements omitted");
+  assert(
+    mismatched.pageCount === undefined,
+    "no placements sent -> pageCount omitted too",
+  );
   const none = buildCreateSignaturePayload({
     title: "MSA",
     message: "",
@@ -362,6 +366,44 @@ test("defaultExtraField anchors near the signature box and clamps", () => {
   );
   assert(moved.page === 4 && moved.x + moved.w <= 1.0001 && moved.y === 0, "clamp applies");
   assert(moved.signerIndex === 1 && moved.type === "initials", "clamp keeps identity");
+});
+
+test("pageCount rides along only with valid placements", () => {
+  const signers: SignerDraft[] = [{ name: "A", email: "a@a.test" }];
+  const boxes = [{ page: 2, x: 0.1, y: 0.2, w: 0.3, h: 0.05 }];
+  const withCount = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: boxes,
+    pageCount: 3,
+  });
+  assert(withCount.pageCount === 3, "pageCount sent with matching placements");
+  const noCount = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: boxes,
+    pageCount: null,
+  });
+  assert(noCount.pageCount === undefined, "unknown pageCount omitted");
+  const noBoxes = buildCreateSignaturePayload({
+    title: "MSA",
+    message: "",
+    documentId: "doc_1",
+    signers,
+    selectedAccountId: "",
+    expiresInDays: "",
+    placements: null,
+    pageCount: 3,
+  });
+  assert(noBoxes.pageCount === undefined, "pageCount omitted without placements");
 });
 
 test("clampPlacement keeps boxes on the page; defaults mirror server layout", () => {

@@ -369,8 +369,43 @@ async function main(): Promise<void> {
       `status=${rOob.status} body=${JSON.stringify(rOob.body)}`,
     );
 
+    // Fixture PDF is unparseable by unpdf, so with no client pageCount the
+    // server has no way to verify a page-7 placement → clear 400 instead of
+    // passing an out-of-range page through to DocuSeal.
+    const rNoCount = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} unknown page count`,
+      documentId: pdf.document.id,
+      signers: [
+        { name: "P One", email: "pn1@example.com" },
+        { name: "P Two", email: "pn2@example.com" },
+      ],
+      placements: [
+        { page: 1, x: 0.1, y: 0.2, w: 0.25, h: 0.04 },
+        { page: 7, x: 0.6, y: 0.85, w: 0.3, h: 0.06 },
+      ],
+    });
+    check(
+      "unparseable PDF + page>1 placement, no pageCount → 400 page-count-unknown",
+      rNoCount.status === 400 && rNoCount.body?.error === "page-count-unknown",
+      `status=${rNoCount.status} body=${JSON.stringify(rNoCount.body)}`,
+    );
+
+    // Page-1-only placements are always safe even when the count is unknown.
+    const rPage1 = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} page-1 placement`,
+      documentId: pdf.document.id,
+      signers: [{ name: "P Solo", email: "psolo@example.com" }],
+      placements: [{ page: 1, x: 0.1, y: 0.2, w: 0.25, h: 0.04 }],
+    });
+    check(
+      "unparseable PDF + page-1 placement (no pageCount) → 201",
+      rPage1.status === 201,
+      `status=${rPage1.status} body=${JSON.stringify(rPage1.body)?.slice(0, 200)}`,
+    );
+
     // Happy path: custom boxes flow through to the DocuSeal template
-    // fields verbatim (page clamped to the document's real page count).
+    // fields verbatim; the client-reported pageCount (pdf.js) is the clamp
+    // bound because the fixture is unparseable server-side.
     const rPlaced = await call("POST", "/api/atelier/esign/requests", FP, {
       title: `${TAG} custom placement`,
       documentId: pdf.document.id,
@@ -382,6 +417,7 @@ async function main(): Promise<void> {
         { page: 1, x: 0.1, y: 0.2, w: 0.25, h: 0.04 },
         { page: 7, x: 0.6, y: 0.85, w: 0.3, h: 0.06 },
       ],
+      pageCount: 3,
     });
     check("POST with placements → 201", rPlaced.status === 201, `status=${rPlaced.status} body=${JSON.stringify(rPlaced.body)?.slice(0, 200)}`);
     const placedFields = stub.lastTemplateFields ?? [];
@@ -396,13 +432,11 @@ async function main(): Promise<void> {
         a1?.x === 0.6 && a1?.y === 0.85 && a1?.w === 0.3 && a1?.h === 0.06,
       JSON.stringify(placedFields)?.slice(0, 300),
     );
-    // Fixture PDF is unparseable by unpdf (page count unknown) so the
-    // requested page 7 passes through un-clamped but >= 1. With a real
-    // parseable PDF it clamps to the last page — asserted separately in
-    // the pure-unit check below via the lib's clamp path.
+    // The fixture is unparseable by unpdf, so the client-sent pageCount (3)
+    // is the clamp bound: requested page 7 lands on the last real page.
     check(
-      "custom placement page is normalized (>= 1)",
-      typeof a1?.page === "number" && a1.page >= 1,
+      "custom placement page clamped to client pageCount (7 → 3)",
+      a1?.page === 3,
       `page=${a1?.page}`,
     );
     check(

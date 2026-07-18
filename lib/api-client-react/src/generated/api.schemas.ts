@@ -2581,6 +2581,12 @@ export interface AtelierSignatureRequestCreate {
    * @maxItems 40
    */
   extraFields?: AtelierSignatureExtraField[];
+  /**
+   * Page count as seen by the sender's PDF preview (pdf.js). Used to clamp placement pages when the server cannot parse the PDF itself.
+   * @minimum 1
+   * @maximum 2000
+   */
+  pageCount?: number;
 }
 
 export interface AtelierEsignUpstreamError {

@@ -60,6 +60,20 @@ export const SIG_REQUEST_STATUSES = [
 
 const OPEN_STATUSES = ["sent", "partially_signed"] as const;
 
+/**
+ * Thrown when custom placements target pages beyond page 1 but the PDF's
+ * page count could not be determined from either the server-side parse or
+ * the client-reported count. Routes map this to a 400.
+ */
+export class PageCountUnknownError extends Error {
+  constructor() {
+    super(
+      "The PDF's page count could not be determined, so signature boxes beyond page 1 cannot be verified. Re-open the placement editor or place boxes on page 1.",
+    );
+    this.name = "PageCountUnknownError";
+  }
+}
+
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -117,6 +131,11 @@ export async function sendSignatureRequest(args: {
    * index. Pages beyond the document's page count are clamped.
    */
   extraFields?: ExtraSignerField[] | null;
+  /**
+   * Page count reported by the sender's client (pdf.js). Used as the
+   * clamp bound only when the server itself cannot parse the PDF.
+   */
+  clientPageCount?: number | null;
 }): Promise<{ request: SigRequestRow; signers: SigSignerRow[] }> {
   // Default: signature blocks go on the last page of the document.
   let lastPageIndex = 0;
@@ -127,10 +146,28 @@ export async function sendSignatureRequest(args: {
     pageCount = proxy.numPages;
     lastPageIndex = Math.max(0, proxy.numPages - 1);
   } catch {
-    // Unparseable PDFs fall back to page 0; DocuSeal will still reject
-    // truly broken files at template creation.
+    // Unparseable PDFs: fall back to the client-reported page count (if
+    // any) so custom placements can still be clamped to real pages.
+    // DocuSeal will still reject truly broken files at template creation.
+    if (
+      typeof args.clientPageCount === "number" &&
+      Number.isInteger(args.clientPageCount) &&
+      args.clientPageCount >= 1
+    ) {
+      pageCount = args.clientPageCount;
+      lastPageIndex = args.clientPageCount - 1;
+    }
   }
-  // Clamp custom placements to real pages (when the page count is known).
+  // Clamp custom placements to real pages. When the page count is unknown
+  // from BOTH sources, a placement beyond page 1 is rejected rather than
+  // passed through — DocuSeal behavior for out-of-range pages is undefined
+  // and the box could silently land nowhere.
+  if (
+    pageCount == null &&
+    args.placements?.some((p) => Math.max(1, Math.round(p.page)) > 1)
+  ) {
+    throw new PageCountUnknownError();
+  }
   const placements =
     args.placements && args.placements.length > 0
       ? args.placements.map((p) => ({

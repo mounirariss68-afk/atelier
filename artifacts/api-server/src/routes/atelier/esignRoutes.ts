@@ -39,6 +39,7 @@ import {
   syncAllOpenRequests,
   voidSignatureRequest,
   remindSignatureRequest,
+  PageCountUnknownError,
   type SigRequestRow,
   type SigSignerRow,
 } from "../../lib/atelier-esign.js";
@@ -220,6 +221,11 @@ const CreateBody = z.object({
     )
     .max(40)
     .optional(),
+  /**
+   * Page count as seen by the sender's PDF preview (pdf.js). Used to
+   * clamp placement pages when the server cannot parse the PDF itself.
+   */
+  pageCount: z.number().int().min(1).max(2000).optional(),
 });
 
 // @cli-skip: e-sign surfaces are UI-driven (Task #62)
@@ -354,9 +360,14 @@ router.post("/esign/requests", async (req, res) => {
       expiresAt,
       placements: body.placements ?? null,
       extraFields: body.extraFields ?? null,
+      clientPageCount: body.pageCount ?? null,
     });
     res.status(201).json({ request: requestShape(out.request, out.signers) });
   } catch (err) {
+    if (err instanceof PageCountUnknownError) {
+      res.status(400).json({ error: "page-count-unknown", message: err.message });
+      return;
+    }
     handleUpstreamError(res, err);
   }
 });

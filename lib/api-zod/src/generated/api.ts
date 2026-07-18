@@ -797,6 +797,8 @@ export const atelierCreateSignatureRequestBodyExtraFieldsItemHMax = 0.5;
 
 export const atelierCreateSignatureRequestBodyExtraFieldsMax = 40;
 
+export const atelierCreateSignatureRequestBodyPageCountMax = 2000;
+
 export const AtelierCreateSignatureRequestBody = zod.object({
   title: zod.string().min(1).max(atelierCreateSignatureRequestBodyTitleMax),
   message: zod
@@ -893,6 +895,14 @@ export const AtelierCreateSignatureRequestBody = zod.object({
     .optional()
     .describe(
       "Optional extra date-signed \/ initials boxes, each tied to one signer by 0-based signerIndex. Same normalized coordinate space as placements.",
+    ),
+  pageCount: zod
+    .number()
+    .min(1)
+    .max(atelierCreateSignatureRequestBodyPageCountMax)
+    .optional()
+    .describe(
+      "Page count as seen by the sender's PDF preview (pdf.js). Used to clamp placement pages when the server cannot parse the PDF itself.",
     ),
 });
 

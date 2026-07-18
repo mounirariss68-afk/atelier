@@ -42,6 +42,7 @@ export function SignaturePlacementEditor({
   onChange,
   extraFields,
   onExtraFieldsChange,
+  onPageCount,
 }: {
   documentId: string;
   /** Signer display names in signing order (length = box count). */
@@ -56,6 +57,8 @@ export function SignaturePlacementEditor({
   /** Optional date/initials boxes tied to signers by index. */
   extraFields: ExtraField[];
   onExtraFieldsChange: (next: ExtraField[]) => void;
+  /** Called with the document's page count once the PDF preview loads. */
+  onPageCount?: (count: number) => void;
 }) {
   const [pdf, setPdf] = React.useState<PDFDocumentProxy | null>(null);
   const [pageCount, setPageCount] = React.useState(0);
@@ -94,6 +97,7 @@ export function SignaturePlacementEditor({
         }
         setPdf(doc);
         setPageCount(doc.numPages);
+        onPageCount?.(doc.numPages);
         setPage(doc.numPages); // signature blocks usually live on the last page
       } catch (err) {
         if (!cancelled) {

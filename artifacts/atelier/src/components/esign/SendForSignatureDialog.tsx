@@ -119,6 +119,7 @@ export interface CreateSignaturePayload {
   expiresInDays?: number;
   placements?: Placement[];
   extraFields?: ExtraField[];
+  pageCount?: number;
 }
 
 /**
@@ -145,7 +146,18 @@ export function buildCreateSignaturePayload(args: {
    * entries pointing at an existing signer are sent.
    */
   extraFields?: ExtraField[] | null;
+  /**
+   * Page count reported by the placement editor's pdf.js preview. Sent
+   * alongside placements so the server can clamp pages even when it
+   * cannot parse the PDF itself.
+   */
+  pageCount?: number | null;
 }): CreateSignaturePayload {
+  const placements =
+    args.placements && args.placements.length === args.signers.length
+      ? args.placements
+      : undefined;
+
   const extraFields = (args.extraFields ?? []).filter(
     (f) => f.signerIndex >= 0 && f.signerIndex < args.signers.length,
   );
@@ -160,9 +172,10 @@ export function buildCreateSignaturePayload(args: {
     accountId: args.lockedAccountId ?? (args.selectedAccountId || undefined),
     opportunityId: args.opportunityId || undefined,
     expiresInDays: args.expiresInDays ? Number(args.expiresInDays) : undefined,
-    placements:
-      args.placements && args.placements.length === args.signers.length
-        ? args.placements
+    placements,
+    pageCount:
+      placements && args.pageCount && args.pageCount >= 1
+        ? args.pageCount
         : undefined,
     extraFields: extraFields.length > 0 ? extraFields : undefined,
   };
@@ -258,11 +271,13 @@ export function SendForSignatureDialog({
   const [showPlacement, setShowPlacement] = React.useState(false);
   const [placements, setPlacements] = React.useState<Placement[] | null>(null);
   const [extraFields, setExtraFields] = React.useState<ExtraField[]>([]);
+  const [docPageCount, setDocPageCount] = React.useState<number | null>(null);
 
   // A different document invalidates any custom box positions.
   React.useEffect(() => {
     setPlacements(null);
     setExtraFields([]);
+    setDocPageCount(null);
   }, [documentId]);
 
   // Re-seed the title suggestion each time the dialog opens fresh.
@@ -484,6 +499,7 @@ export function SendForSignatureDialog({
                     onChange={setPlacements}
                     extraFields={extraFields}
                     onExtraFieldsChange={setExtraFields}
+                    onPageCount={setDocPageCount}
                   />
                 </React.Suspense>
               </div>
@@ -559,6 +575,7 @@ export function SendForSignatureDialog({
                     expiresInDays,
                     placements,
                     extraFields,
+                    pageCount: docPageCount,
                   }),
                 })
               }
