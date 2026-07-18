@@ -221,6 +221,9 @@ export default function Agreements() {
     () => new URLSearchParams(window.location.search).get("request"),
     [],
   );
+  // Set once the deep-linked request is confirmed missing; dismissible.
+  const [missingNotice, setMissingNotice] = React.useState(false);
+  const missingChecked = React.useRef(false);
 
   const listParams = statusFilter ? { status: statusFilter } : undefined;
   const { data, isLoading, error } = useAtelierListSignatureRequests(listParams, {
@@ -246,6 +249,15 @@ export default function Agreements() {
       onError: () => toast({ title: "Refresh failed", variant: "destructive" }),
     },
   });
+
+  // Deep-link target check: once the unfiltered list has loaded, if the
+  // `?request=<id>` target isn't in it, the agreement was voided-and-purged
+  // (or never existed) — show a small dismissible notice instead of nothing.
+  React.useEffect(() => {
+    if (!highlightId || missingChecked.current || !data || statusFilter) return;
+    missingChecked.current = true;
+    if (!data.requests.some((r) => r.id === highlightId)) setMissingNotice(true);
+  }, [highlightId, data, statusFilter]);
 
   if (me && !isLeadership) {
     return (
@@ -282,6 +294,23 @@ export default function Agreements() {
           </div>
         }
       />
+
+      {missingNotice ? (
+        <Card
+          className="p-3 text-sm text-text-mute flex items-center justify-between gap-3"
+          data-testid="notice-agreement-missing"
+        >
+          <span>That agreement no longer exists — it may have been voided and removed.</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setMissingNotice(false)}
+            data-testid="button-dismiss-agreement-missing"
+          >
+            Dismiss
+          </Button>
+        </Card>
+      ) : null}
 
       {data && !data.configured ? (
         <Card className="p-4 text-sm text-amber-400 border-amber-500/30" data-testid="text-esign-unconfigured">

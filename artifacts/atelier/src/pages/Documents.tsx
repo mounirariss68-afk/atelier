@@ -22,6 +22,7 @@ import {
   useAtelierListAccounts,
   useAtelierListEngagements,
   useAtelierGetMe,
+  ApiError,
 } from "@workspace/api-client-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Card } from "@/components/ui/primitives";
@@ -291,16 +292,27 @@ function DetailDialog(props: {
   docId: string | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Called when the requested document no longer exists (404). */
+  onMissing?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: me } = useAtelierGetMe();
-  const { data: detail } = useAtelierGetDocument(props.docId ?? "", {
+  const { data: detail, error: detailError } = useAtelierGetDocument(props.docId ?? "", {
     query: {
       enabled: !!props.docId,
       queryKey: getAtelierGetDocumentQueryKey(props.docId ?? ""),
+      retry: (failureCount, err) =>
+        !(err instanceof ApiError && err.status === 404) && failureCount < 2,
     },
   });
+
+  const isMissing =
+    !!props.docId && detailError instanceof ApiError && detailError.status === 404;
+  const { onMissing } = props;
+  React.useEffect(() => {
+    if (isMissing) onMissing?.();
+  }, [isMissing, onMissing]);
   const updateDoc = useAtelierUpdateDocument();
   const deleteDoc = useAtelierDeleteDocument();
   const grantAccess = useAtelierGrantDocumentAccess();
@@ -583,6 +595,7 @@ export function DocumentLibraryPanel(props: {
   const [category, setCategory] = React.useState("");
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [openId, setOpenId] = React.useState<string | null>(props.initialOpenId ?? null);
+  const [missingNotice, setMissingNotice] = React.useState(false);
 
   const refresh = React.useCallback(() => {
     qc.invalidateQueries({ queryKey: getAtelierListDocumentsQueryKey() });
@@ -606,6 +619,22 @@ export function DocumentLibraryPanel(props: {
 
   return (
     <div className="space-y-4">
+      {missingNotice ? (
+        <Card
+          className="p-3 text-sm text-text-mute flex items-center justify-between gap-3"
+          data-testid="notice-document-missing"
+        >
+          <span>That document no longer exists — it may have been deleted.</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setMissingNotice(false)}
+            data-testid="button-dismiss-document-missing"
+          >
+            Dismiss
+          </Button>
+        </Card>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           value={q}
@@ -682,7 +711,15 @@ export function DocumentLibraryPanel(props: {
         fixedEngagementId={props.engagementId}
         onUploaded={refresh}
       />
-      <DetailDialog docId={openId} onClose={() => setOpenId(null)} onChanged={refresh} />
+      <DetailDialog
+        docId={openId}
+        onClose={() => setOpenId(null)}
+        onChanged={refresh}
+        onMissing={() => {
+          setOpenId(null);
+          setMissingNotice(true);
+        }}
+      />
     </div>
   );
 }
