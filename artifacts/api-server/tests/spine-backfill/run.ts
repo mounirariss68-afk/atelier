@@ -9,6 +9,9 @@
  *
  * Cleans up after itself so it can be run repeatedly against any DB.
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 import assert from "node:assert/strict";
 import { eq } from "drizzle-orm";
 import { db, atelierProposalSections } from "@workspace/db";

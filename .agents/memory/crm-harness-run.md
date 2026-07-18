@@ -10,7 +10,17 @@ import (`tests/crm/scratch-db.ts`) synchronously auto-provisions a `crm_test`
 database on the same server, drizzle-pushes the schema + applies
 atelier-rls.sql each run, and rewrites DATABASE_URL before @workspace/db loads.
 TEST_DATABASE_URL is only an explicit override; there is no live-DB fallback.
-The harness seeds the two founder user rows + auth/reference seeds itself.
+The bootstrap now also runs a boot seed child (`scratch-db-boot-seed.ts`):
+founder users + auth + reference seeds, so scripts anchored on
+`p_mounir_ariss` work on the scratch DB.
+**All standalone test scripts (me-*, pay-hub, esign, uat probes, cli-*,
+crm probes, funnel, spine-backfill…) now import this same bootstrap as their
+FIRST import (2026-07-17). Never reintroduce the old
+`if (TEST_DATABASE_URL) … else live` prologue.** Scripts share the one
+`crm_test` DB — do NOT run two suites concurrently (push-force clashes).
+Known env-only failures on scratch: funnel 0027 audit-row check (push skips
+numbered migrations) and 3 stale uat/probe-l1 checks (acc_dge / p_board_obs
+fixtures don't exist anywhere anymore — pre-existing, fail on live too).
 CRITICAL lesson: the bootstrap must stay **synchronous** (spawnSync child
 processes for pg/push work) — top-level await in an ESM module does NOT block
 sibling imports, so an async bootstrap lets @workspace/db bind the LIVE URL.

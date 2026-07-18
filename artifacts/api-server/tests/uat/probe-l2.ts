@@ -13,11 +13,9 @@
  *       (already evidenced in probe-l1; re-shown here vs account_lookup).
  */
 
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-}
-process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
-process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 
 import { and, eq, inArray, isNull } from "drizzle-orm";
 

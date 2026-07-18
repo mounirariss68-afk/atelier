@@ -115,6 +115,26 @@ if (push.status !== 0) {
 
 runAdmin("rls", scratchUrl);
 
+// Mirror the minimal live boot seed (founder users, auth credentials,
+// reference data) so scripts that anchor on the seeded personas work against
+// the scratch database. Runs as a child so this module stays synchronous.
+{
+  const seedScript = fileURLToPath(new URL("./scratch-db-boot-seed.ts", import.meta.url));
+  const res = spawnSync("pnpm", ["exec", "tsx", seedScript], {
+    cwd: fileURLToPath(new URL(".", import.meta.url)),
+    env: {
+      ...process.env,
+      CRM_LIVE_URL: LIVE_URL ?? "",
+      CRM_SCRATCH_URL: scratchUrl,
+    },
+    stdio: ["ignore", "inherit", "inherit"],
+    timeout: 120_000,
+  });
+  if (res.status !== 0) {
+    fatal(`scratch-db boot seed failed (exit ${res.status}).`);
+  }
+}
+
 // Finalize env BEFORE anything imports @workspace/db. This module is fully
 // synchronous, so no sibling import can have evaluated yet.
 process.env.DATABASE_URL = scratchUrl;

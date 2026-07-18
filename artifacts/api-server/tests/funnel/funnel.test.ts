@@ -12,6 +12,9 @@
  *   6. computeStickyStageTimestamps — Charter auto-fire idempotency
  *   7. Live-DB migration assertions — runs only when DATABASE_URL is set
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 import {
   SALES_STAGES,
   SALES_TO_PLM,

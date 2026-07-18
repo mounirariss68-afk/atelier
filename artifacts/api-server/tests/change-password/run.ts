@@ -26,12 +26,9 @@
  * limit awareness here or the suite will flake with 429s.
  */
 
-// --- env setup MUST run before any value-import of @workspace/db / app ---
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-}
-process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
-process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 
 import type { AddressInfo } from "node:net";
 import { eq } from "drizzle-orm";
@@ -84,6 +81,9 @@ async function main(): Promise<void> {
     };
   const { hashPassword, verifyPassword } = await import("../../src/lib/auth/passwords.js");
   const { ensureAtelierAuthSeed } = await import("../../src/lib/atelier-seed-auth.js");
+  // The isolated scratch database starts without the boot auth seed; run it
+  // here so the founder credential the seed checks depend on exists.
+  await ensureAtelierAuthSeed();
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
 

@@ -17,11 +17,9 @@
  *      from the partner's digest.
  */
 
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-}
-process.env.ATELIER_MOCK_AGENTS = process.env.ATELIER_MOCK_AGENTS ?? "1";
-process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 
 import type { AddressInfo } from "node:net";
 import { eq, inArray } from "drizzle-orm";

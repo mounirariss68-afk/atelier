@@ -23,6 +23,9 @@
  *
  * MOCK_MODE (default) — no Anthropic call required.
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 import assert from "node:assert/strict";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import {

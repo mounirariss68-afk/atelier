@@ -6,6 +6,9 @@
  * refreshRecommended. Also unit-checks the pure brief-quality helpers.
  * Cleans up all rows in finally. Run: pnpm exec tsx tests/crm/brief-quality-probe.ts
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "./scratch-db.js";
 import type { AddressInfo } from "node:net";
 
 let failures = 0;

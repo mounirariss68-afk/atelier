@@ -17,6 +17,9 @@
  *   7. Catalog tools registered: fetch_document_chunk +
  *      qualify_opportunity_rubric + 5 ingest_* tools
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 import assert from "node:assert/strict";
 import { eq, inArray } from "drizzle-orm";
 import {

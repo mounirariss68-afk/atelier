@@ -18,6 +18,9 @@
  * Runs in MOCK_MODE (default) so no Anthropic call is needed — the
  * mock router maps user text → tool call deterministically.
  */
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
 import assert from "node:assert/strict";
 import { eq, and } from "drizzle-orm";
 import {

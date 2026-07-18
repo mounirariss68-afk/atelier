@@ -23,11 +23,10 @@
  * Cleanup removes every row this suite creates.
  */
 
-// --- env setup MUST run before any value-import of @workspace/db / app ---
-if (process.env.TEST_DATABASE_URL) {
-  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
-}
-process.env.NODE_ENV = process.env.NODE_ENV ?? "test";
+// DB isolation bootstrap — MUST be the first import: rewrites DATABASE_URL to
+// an isolated scratch database (no fallback to the live DB) before @workspace/db binds.
+import "../crm/scratch-db.js";
+
 process.env.DOCUSEAL_API_KEY = "test-docuseal-key";
 
 import http from "node:http";
