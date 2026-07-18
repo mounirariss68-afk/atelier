@@ -52,6 +52,37 @@ export function fmtContractDate(s: string | null | undefined): string {
   return new Date(s).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** Statuses that can still lapse — expiry warnings only make sense for these. */
+const EXPIRY_RELEVANT_STATUSES = new Set([
+  "draft",
+  "out_for_review",
+  "final_uploaded",
+  "out_for_signature",
+  "signed",
+]);
+
+/**
+ * Whole days until the contract's expiry date, or null when the contract
+ * has no expiry date or is already declined/voided/expired.
+ */
+export function contractDaysToExpiry(c: Pick<AtelierContract, "status" | "expiryDate">): number | null {
+  if (!c.expiryDate || !EXPIRY_RELEVANT_STATUSES.has(c.status)) return null;
+  const ms = new Date(c.expiryDate).getTime() - Date.now();
+  return Math.ceil(ms / 86_400_000);
+}
+
+export function ContractExpiryBadge({ c }: { c: Pick<AtelierContract, "status" | "expiryDate"> }) {
+  const days = contractDaysToExpiry(c);
+  if (days === null || days > 60) return null;
+  const tone = days <= 30 ? "red" : "amber";
+  const label = days <= 0 ? "expires today" : days === 1 ? "expires in 1 day" : `expires in ${days} days`;
+  return (
+    <MonoChip tone={tone} data-testid="chip-contract-expiring">
+      {label}
+    </MonoChip>
+  );
+}
+
 export function ContractRow({ c, linked = true }: { c: AtelierContract; linked?: boolean }) {
   const inner = (
     <>
@@ -64,6 +95,7 @@ export function ContractRow({ c, linked = true }: { c: AtelierContract; linked?:
           {c.expiryDate ? `expires ${fmtContractDate(c.expiryDate)}` : fmtContractDate(c.updatedAt)}
         </div>
       </div>
+      <ContractExpiryBadge c={c} />
       <ContractStatusChip status={c.status} />
     </>
   );

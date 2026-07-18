@@ -42,6 +42,7 @@ import {
   ContractRow,
   CONTRACT_STATUS_META,
   CONTRACT_TYPE_LABELS,
+  contractDaysToExpiry,
 } from "@/components/contracts/ContractsPanel";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
@@ -638,6 +639,7 @@ function useDebounced(value: string, ms: number): string {
 
 function ContractsSection({ canManage }: { canManage: boolean }) {
   const [status, setStatus] = React.useState("");
+  const [expiring, setExpiring] = React.useState("");
   const [ctype, setCtype] = React.useState("");
   const [counterparty, setCounterparty] = React.useState("");
   const [owner, setOwner] = React.useState("");
@@ -649,7 +651,15 @@ function ContractsSection({ canManage }: { canManage: boolean }) {
     ...(debouncedCounterparty.trim() ? { counterparty: debouncedCounterparty.trim() } : {}),
     ...(owner ? { ownerUserId: owner } : {}),
   });
-  const contracts: AtelierContract[] = data?.contracts ?? [];
+  const allContracts: AtelierContract[] = data?.contracts ?? [];
+  const contracts = React.useMemo(() => {
+    if (!expiring) return allContracts;
+    const horizon = Number(expiring);
+    return allContracts.filter((c) => {
+      const days = contractDaysToExpiry(c);
+      return days !== null && days <= horizon;
+    });
+  }, [allContracts, expiring]);
   const owners = React.useMemo(() => {
     const m = new Map<string, string>();
     for (const c of contracts) if (!owner) m.set(c.ownerUserId, c.ownerLabel);
@@ -676,6 +686,16 @@ function ContractsSection({ canManage }: { canManage: boolean }) {
               {v.label}
             </option>
           ))}
+        </select>
+        <select
+          className={selectCls}
+          value={expiring}
+          onChange={(e) => setExpiring(e.target.value)}
+          data-testid="select-filter-expiring"
+        >
+          <option value="">Any expiry</option>
+          <option value="30">Expiring ≤ 30 days</option>
+          <option value="60">Expiring ≤ 60 days</option>
         </select>
         <select
           className={selectCls}

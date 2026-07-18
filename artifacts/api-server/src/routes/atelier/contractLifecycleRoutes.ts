@@ -68,6 +68,7 @@ import {
   storeContractBytes,
   addContractDocument,
   auditContractEntity,
+  sweepExpiredContracts,
 } from "../../lib/atelier-contracts.js";
 import {
   loadTemplate,
@@ -612,6 +613,7 @@ router.get("/contract-templates/:id/download", async (req, res) => {
 router.get("/me/contracts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  await sweepExpiredContracts(me.orgId);
   const emps = await db
     .select({ id: atelierEmployees.id })
     .from(atelierEmployees)
@@ -638,6 +640,7 @@ router.get("/me/contracts", async (req, res) => {
 router.get("/contracts", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  await sweepExpiredContracts(me.orgId);
   const q = req.query;
   const conds = [eq(atelierContractRecords.orgId, me.orgId)];
   if (typeof q.status === "string" && q.status) {
@@ -732,6 +735,7 @@ router.post("/contracts", async (req, res) => {
 router.get("/contracts/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  await sweepExpiredContracts(me.orgId);
   const contract = await loadContract(me.orgId, req.params.id);
   if (!contract || !(await canSeeContract(me, contract))) {
     res.status(contract ? 403 : 404).json({ error: contract ? "forbidden" : "not-found" });

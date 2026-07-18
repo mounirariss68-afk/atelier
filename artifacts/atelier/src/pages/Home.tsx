@@ -791,6 +791,7 @@ export default function Home() {
           {/* Workspace shelf — replaces the Ledger / Roster / Finance top-nav entries. */}
           {me?.role && <WorkspaceShelf role={me.role} />}
           {me?.role && <RenewalShelf role={me.role} />}
+          {me?.role && <ContractExpiryShelf role={me.role} />}
           {/* Task #414 — Wave 2 Engagement Health tile (live EAC variance,
               projects-at-risk count, open change orders). */}
           {me?.role && <EngagementHealthTile role={me.role} />}
@@ -901,6 +902,80 @@ interface HomeRenewalRow {
 const RENEWAL_SHELF_ROLES = new Set([
   "founding_partner", "partner", "senior_manager", "finance", "board_observer",
 ]);
+
+// Task #160 — contract expiry awareness. Partner-tier only: the
+// /contracts detail pages are partner-tier, and partners own renewals.
+const CONTRACT_EXPIRY_SHELF_ROLES = new Set(["founding_partner", "partner"]);
+
+interface HomeContractRow {
+  id: string;
+  title: string;
+  status: string;
+  counterpartyLabel: string;
+  expiryDate: string | null;
+}
+
+const CONTRACT_EXPIRY_ACTIVE = new Set([
+  "draft", "out_for_review", "final_uploaded", "out_for_signature", "signed",
+]);
+
+function ContractExpiryShelf({ role }: { role: string }) {
+  const [rows, setRows] = React.useState<HomeContractRow[]>([]);
+  const [loaded, setLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (!CONTRACT_EXPIRY_SHELF_ROLES.has(role)) { setLoaded(true); return; }
+    void fetch("/api/atelier/contracts", { credentials: "include" })
+      .then((r) => r.json())
+      .then((j) => setRows(j?.contracts ?? []))
+      .finally(() => setLoaded(true));
+  }, [role]);
+  if (!CONTRACT_EXPIRY_SHELF_ROLES.has(role)) return null;
+  if (!loaded) return null;
+  const expiring = rows
+    .map((c) => {
+      if (!c.expiryDate || !CONTRACT_EXPIRY_ACTIVE.has(c.status)) return null;
+      const days = Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / 86_400_000);
+      return days <= 60 ? { ...c, days } : null;
+    })
+    .filter((c): c is HomeContractRow & { days: number } => c !== null)
+    .sort((a, b) => a.days - b.days);
+  if (expiring.length === 0) return null;
+  const within30 = expiring.filter((c) => c.days <= 30).length;
+  const top = expiring.slice(0, 4);
+  return (
+    <div className="mt-6" data-testid="home-contract-expiry-shelf">
+      <div className="flex items-baseline justify-between mb-2">
+        <SectionLabel>Contracts · Expiring soon</SectionLabel>
+        <Link href="/contracts" className="text-[11px] font-mono text-text-faint hover:text-gold">All contracts →</Link>
+      </div>
+      <Card className="p-4 space-y-3">
+        <div className="flex items-baseline justify-between">
+          <div className="text-2xl font-light">
+            {expiring.length} <span className="text-xs font-mono text-text-faint">within 60 days</span>
+          </div>
+          {within30 > 0 && (
+            <div className="text-sm font-mono text-danger">{within30} within 30d</div>
+          )}
+        </div>
+        <ul className="divide-y divide-border-soft">
+          {top.map((c) => (
+            <li key={c.id} className="py-1.5 text-xs font-mono" data-testid={`home-expiring-contract-${c.id}`}>
+              <Link href={`/contracts/${c.id}`} className="flex items-center justify-between gap-3 hover:text-gold">
+                <span className="truncate">
+                  <MonoChip tone={c.days <= 30 ? "red" : "amber"}>
+                    {c.days <= 0 ? "today" : `${c.days}d`}
+                  </MonoChip>
+                  <span className="ml-2 text-text">{c.title}</span>
+                </span>
+                <span className="text-text-mute truncate">{c.counterpartyLabel}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </div>
+  );
+}
 
 interface EngagementHealthSummary {
   totalEngagements: number;

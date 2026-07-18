@@ -17,13 +17,14 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { eq } from "drizzle-orm";
+import { and, eq, lt, notInArray } from "drizzle-orm";
 import JSZip from "jszip";
 import mammoth from "mammoth";
 import {
   db,
   atelierAuditEvents,
   atelierContractDocuments,
+  atelierContractRecords,
   type ContractTemplateField,
 } from "@workspace/db";
 import { objectStorageClient } from "./objectStorage.js";
@@ -163,6 +164,60 @@ export async function auditContractEntity(args: {
     payload: args.payload,
     payloadSummary: args.summary,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Expiry sweep (Task #160)
+// ---------------------------------------------------------------------------
+
+/**
+ * Statuses the expiry sweep must never touch. `expired` is terminal and
+ * never regresses; `declined`/`voided` contracts never lapse into
+ * "expired" — they already ended for another reason. A `signed`
+ * contract, although terminal for manual edits, DOES lapse to expired
+ * when its expiry date passes: that is the whole point of tracking
+ * expiryDate, and it is a one-way move into another terminal status.
+ */
+const EXPIRY_SWEEP_EXCLUDED = ["declined", "voided", "expired"];
+
+/**
+ * Flip contracts whose expiryDate has passed to `expired`. Runs lazily
+ * on contract read surfaces so lists/details never show a stale status.
+ * Deliberately bypasses `canTransition` (which blocks all edits out of
+ * terminal statuses) — this is the single sanctioned signed→expired
+ * path, driven by the clock, not by a user.
+ */
+export async function sweepExpiredContracts(orgId: string): Promise<number> {
+  const now = new Date();
+  const updated = await db
+    .update(atelierContractRecords)
+    .set({ status: "expired", updatedAt: now })
+    .where(
+      and(
+        eq(atelierContractRecords.orgId, orgId),
+        lt(atelierContractRecords.expiryDate, now),
+        notInArray(atelierContractRecords.status, EXPIRY_SWEEP_EXCLUDED),
+      ),
+    )
+    .returning({
+      id: atelierContractRecords.id,
+      title: atelierContractRecords.title,
+      status: atelierContractRecords.status,
+      expiryDate: atelierContractRecords.expiryDate,
+    });
+  for (const row of updated) {
+    await auditContractEntity({
+      entityType: "atelier_contract_record",
+      entityId: row.id,
+      actorType: "system",
+      actorId: "system",
+      actorLabel: "System",
+      action: "contract.expired",
+      payload: { expiryDate: row.expiryDate?.toISOString?.() ?? row.expiryDate },
+      summary: `Contract "${row.title}" automatically marked expired (expiry date passed).`,
+    });
+  }
+  return updated.length;
 }
 
 // ---------------------------------------------------------------------------
