@@ -52,6 +52,7 @@ import { useLocation } from "wouter";
 import { SALES_STAGE_LABEL, STALLED_THRESHOLD_DAYS, stageTone } from "@/lib/sales-stages";
 import { FileText, FilePlus2, Mic, Telescope, Folder, ArrowRight, AlertTriangle, Pencil, Archive, PenLine } from "lucide-react";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
+import { OpportunityAgreements } from "@/components/esign/OpportunityAgreements";
 
 const TABS = [
   { id: "brief", label: "Brief" },
@@ -264,6 +265,10 @@ export default function Opportunity() {
           </div>
         </div>
 
+        {(me?.role === "founding_partner" || me?.role === "partner") && (
+          <OpportunityAgreements oppId={opp.id} />
+        )}
+
         <TabNav>
           {TABS.map((tab) => (
             <TabNavItem
@@ -348,6 +353,7 @@ export default function Opportunity() {
         open={esignOpen}
         onOpenChange={setEsignOpen}
         lockedAccount={{ id: opp.accountId, name: opp.accountName }}
+        opportunityId={opp.id}
         defaultTitle={`Agreement — ${opp.name}`}
       />
 

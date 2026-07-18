@@ -480,6 +480,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: opportunityId
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: Signature requests, newest first
@@ -6542,6 +6546,7 @@ components:
         documentId: { type: string }
         documentVersionId: { type: string }
         accountId: { type: ["string", "null"] }
+        opportunityId: { type: ["string", "null"] }
         contactId: { type: ["string", "null"] }
         personId: { type: ["string", "null"] }
         signedDocumentId: { type: ["string", "null"] }
@@ -6595,6 +6600,7 @@ components:
               name: { type: string, maxLength: 120, minLength: 1 }
               email: { type: string, format: email, maxLength: 254 }
         accountId: { type: string }
+        opportunityId: { type: string }
         contactId: { type: string }
         personId: { type: string }
         expiresInDays: { type: integer, minimum: 1, maximum: 365 }

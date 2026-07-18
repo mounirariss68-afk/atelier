@@ -32,7 +32,7 @@ import { canApproveAsPartner } from "./personaRoles";
 import { canSeeAccount } from "./accountRoutes";
 import { accessibleEngagementIds } from "./engagementRoutes";
 import { loadDocBytes } from "../../lib/atelier-documents.js";
-import { atelierDocuments, atelierDocumentVersions } from "@workspace/db";
+import { atelierDocuments, atelierDocumentVersions, atelierOpportunities } from "@workspace/db";
 import {
   sendSignatureRequest,
   syncSignatureRequest,
@@ -94,6 +94,7 @@ function requestShape(r: SigRequestRow, signers?: SigSignerRow[]) {
     documentId: r.documentId,
     documentVersionId: r.documentVersionId,
     accountId: r.accountId,
+    opportunityId: r.opportunityId,
     contactId: r.contactId,
     personId: r.personId,
     signedDocumentId: r.signedDocumentId,
@@ -138,6 +139,9 @@ router.get("/esign/requests", async (req, res) => {
   if (status) conds.push(eq(atelierSignatureRequests.status, status));
   const accountId = typeof req.query.accountId === "string" ? req.query.accountId : null;
   if (accountId) conds.push(eq(atelierSignatureRequests.accountId, accountId));
+  const opportunityId =
+    typeof req.query.opportunityId === "string" ? req.query.opportunityId : null;
+  if (opportunityId) conds.push(eq(atelierSignatureRequests.opportunityId, opportunityId));
 
   const rowsAll = await db
     .select()
@@ -174,6 +178,7 @@ const CreateBody = z.object({
     .min(1)
     .max(10),
   accountId: z.string().optional(),
+  opportunityId: z.string().optional(),
   contactId: z.string().optional(),
   personId: z.string().optional(),
   /** Days until the request lapses (DocuSeal expire_at + local lapse). */
@@ -235,6 +240,26 @@ router.post("/esign/requests", async (req, res) => {
     return;
   }
 
+  // When the request is sent from a deal, verify the opportunity exists in
+  // this org and default the account link from the deal itself.
+  let oppAccountId: string | null = null;
+  if (body.opportunityId) {
+    const [opp] = await db
+      .select({ id: atelierOpportunities.id, accountId: atelierOpportunities.accountId })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.id, body.opportunityId),
+          eq(atelierOpportunities.orgId, me.orgId),
+        ),
+      );
+    if (!opp) {
+      res.status(404).json({ error: "opportunity-not-found" });
+      return;
+    }
+    oppAccountId = opp.accountId;
+  }
+
   const expiresAt = body.expiresInDays
     ? new Date(Date.now() + body.expiresInDays * 24 * 60 * 60 * 1000)
     : null;
@@ -250,7 +275,11 @@ router.post("/esign/requests", async (req, res) => {
       fileName: version.fileName,
       pdfBytes: bytes,
       signers: body.signers,
-      accountId: body.accountId ?? doc.accountId ?? null,
+      // When a deal is linked, the account link always follows the deal —
+      // a mismatched body.accountId must not tie the request to another
+      // account than the opportunity's.
+      accountId: oppAccountId ?? body.accountId ?? doc.accountId ?? null,
+      opportunityId: body.opportunityId ?? null,
       contactId: body.contactId ?? null,
       personId: body.personId ?? null,
       expiresAt,

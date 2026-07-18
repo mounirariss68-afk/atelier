@@ -22,6 +22,7 @@ export interface AtelierSignatureRequestCreate {
    */
   signers: AtelierSignatureRequestCreateSignersItem[];
   accountId?: string;
+  opportunityId?: string;
   contactId?: string;
   personId?: string;
   /**

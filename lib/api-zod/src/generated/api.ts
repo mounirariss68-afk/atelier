@@ -698,6 +698,7 @@ export const AtelierRevokeDocumentAccessResponse = zod.object({
 export const AtelierListSignatureRequestsQueryParams = zod.object({
   status: zod.coerce.string().optional(),
   accountId: zod.coerce.string().optional(),
+  opportunityId: zod.coerce.string().optional(),
 });
 
 export const AtelierListSignatureRequestsResponse = zod.object({
@@ -713,6 +714,7 @@ export const AtelierListSignatureRequestsResponse = zod.object({
       documentId: zod.string(),
       documentVersionId: zod.string(),
       accountId: zod.string().nullish(),
+      opportunityId: zod.string().nullish(),
       contactId: zod.string().nullish(),
       personId: zod.string().nullish(),
       signedDocumentId: zod.string().nullish(),
@@ -782,6 +784,7 @@ export const AtelierCreateSignatureRequestBody = zod.object({
     .min(1)
     .max(atelierCreateSignatureRequestBodySignersMax),
   accountId: zod.string().optional(),
+  opportunityId: zod.string().optional(),
   contactId: zod.string().optional(),
   personId: zod.string().optional(),
   expiresInDays: zod
@@ -807,6 +810,7 @@ export const AtelierGetSignatureRequestResponse = zod.object({
     documentId: zod.string(),
     documentVersionId: zod.string(),
     accountId: zod.string().nullish(),
+    opportunityId: zod.string().nullish(),
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),
@@ -854,6 +858,7 @@ export const AtelierVoidSignatureRequestResponse = zod.object({
     documentId: zod.string(),
     documentVersionId: zod.string(),
     accountId: zod.string().nullish(),
+    opportunityId: zod.string().nullish(),
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),
@@ -912,6 +917,7 @@ export const AtelierSyncSignatureRequestResponse = zod.object({
     documentId: zod.string(),
     documentVersionId: zod.string(),
     accountId: zod.string().nullish(),
+    opportunityId: zod.string().nullish(),
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),

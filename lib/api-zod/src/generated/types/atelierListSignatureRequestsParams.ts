@@ -9,4 +9,5 @@
 export type AtelierListSignatureRequestsParams = {
   status?: string;
   accountId?: string;
+  opportunityId?: string;
 };

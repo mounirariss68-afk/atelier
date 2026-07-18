@@ -18,6 +18,8 @@ export interface AtelierSignatureRequest {
   /** @nullable */
   accountId?: string | null;
   /** @nullable */
+  opportunityId?: string | null;
+  /** @nullable */
   contactId?: string | null;
   /** @nullable */
   personId?: string | null;

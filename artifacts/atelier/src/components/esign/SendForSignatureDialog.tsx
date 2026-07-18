@@ -105,6 +105,7 @@ export interface CreateSignaturePayload {
   documentId: string;
   signers: Array<{ name: string; email: string }>;
   accountId?: string;
+  opportunityId?: string;
   expiresInDays?: number;
 }
 
@@ -119,6 +120,7 @@ export function buildCreateSignaturePayload(args: {
   signers: readonly SignerDraft[];
   lockedAccountId?: string;
   selectedAccountId: string;
+  opportunityId?: string;
   expiresInDays: string;
 }): CreateSignaturePayload {
   return {
@@ -130,6 +132,7 @@ export function buildCreateSignaturePayload(args: {
       email: s.email.trim(),
     })),
     accountId: args.lockedAccountId ?? (args.selectedAccountId || undefined),
+    opportunityId: args.opportunityId || undefined,
     expiresInDays: args.expiresInDays ? Number(args.expiresInDays) : undefined,
   };
 }
@@ -181,6 +184,8 @@ export interface SendForSignatureDialogProps {
   onOpenChange: (v: boolean) => void;
   /** Fix the request to this account and prefill signers from its contacts. */
   lockedAccount?: { id: string; name: string };
+  /** Link the request to the opportunity it was sent from (deal context). */
+  opportunityId?: string;
   /** Initial title suggestion (e.g. "Consulting agreement — <opp name>"). */
   defaultTitle?: string;
 }
@@ -189,6 +194,7 @@ export function SendForSignatureDialog({
   open,
   onOpenChange,
   lockedAccount,
+  opportunityId,
   defaultTitle,
 }: SendForSignatureDialogProps) {
   const { toast } = useToast();
@@ -464,6 +470,7 @@ export function SendForSignatureDialog({
                     signers,
                     lockedAccountId: lockedAccount?.id,
                     selectedAccountId: accountId,
+                    opportunityId,
                     expiresInDays,
                   }),
                 })

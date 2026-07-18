@@ -2428,6 +2428,8 @@ export interface AtelierSignatureRequest {
   /** @nullable */
   accountId?: string | null;
   /** @nullable */
+  opportunityId?: string | null;
+  /** @nullable */
   contactId?: string | null;
   /** @nullable */
   personId?: string | null;
@@ -2488,6 +2490,7 @@ export interface AtelierSignatureRequestCreate {
    */
   signers: AtelierSignatureRequestCreateSignersItem[];
   accountId?: string;
+  opportunityId?: string;
   contactId?: string;
   personId?: string;
   /**
@@ -6000,6 +6003,7 @@ export type AtelierRevokeDocumentAccess200 = {
 export type AtelierListSignatureRequestsParams = {
   status?: string;
   accountId?: string;
+  opportunityId?: string;
 };
 
 export type AtelierRemindSignatureRequest200 = {

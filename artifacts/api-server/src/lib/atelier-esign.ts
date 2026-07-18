@@ -97,6 +97,7 @@ export async function sendSignatureRequest(args: {
   pdfBytes: Buffer;
   signers: Array<{ name: string; email: string }>;
   accountId?: string | null;
+  opportunityId?: string | null;
   contactId?: string | null;
   personId?: string | null;
   expiresAt?: Date | null;
@@ -137,6 +138,7 @@ export async function sendSignatureRequest(args: {
       documentId: args.documentId,
       documentVersionId: args.documentVersionId,
       accountId: args.accountId ?? null,
+      opportunityId: args.opportunityId ?? null,
       contactId: args.contactId ?? null,
       personId: args.personId ?? null,
       status: "sent",
@@ -186,6 +188,7 @@ export async function sendSignatureRequest(args: {
       documentId: args.documentId,
       documentVersionId: args.documentVersionId,
       accountId: args.accountId ?? null,
+      opportunityId: args.opportunityId ?? null,
       contactId: args.contactId ?? null,
       personId: args.personId ?? null,
       signers: args.signers.map((s, i) => ({ order: i + 1, name: s.name, email: s.email })),

@@ -43,6 +43,8 @@ export const atelierSignatureRequests = pgTable(
     documentVersionId: text("document_version_id").notNull(),
     /** Optional business links. Org-level request when all are null. */
     accountId: text("account_id"),
+    /** Opportunity the agreement was sent from (deal-level agreements). */
+    opportunityId: text("opportunity_id"),
     contactId: text("contact_id"),
     /** Roster person (employee/contractor) for offers / employment docs. */
     personId: text("person_id"),
@@ -70,6 +72,7 @@ export const atelierSignatureRequests = pgTable(
     index("idx_atelier_sig_req_status").on(t.orgId, t.status),
     index("idx_atelier_sig_req_submission").on(t.docusealSubmissionId),
     index("idx_atelier_sig_req_account").on(t.orgId, t.accountId),
+    index("idx_atelier_sig_req_opp").on(t.orgId, t.opportunityId),
   ],
 );
 
