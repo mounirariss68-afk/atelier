@@ -6690,6 +6690,7 @@ components:
         createdBy: { type: string }
         createdByLabel: { type: string }
         lastSyncError: { type: ["string", "null"] }
+        lastRemindedAt: { type: ["string", "null"] }
         lastSyncedAt: { type: ["string", "null"] }
         voidedAt: { type: ["string", "null"] }
         completedAt: { type: ["string", "null"] }

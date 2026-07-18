@@ -60,6 +60,8 @@ export const atelierSignatureRequests = pgTable(
     signedDocumentId: text("signed_document_id"),
     /** Non-null while the last sync attempt against DocuSeal failed. */
     lastSyncError: text("last_sync_error"),
+    /** Last time signer emails were re-sent (manual OR automatic). */
+    lastRemindedAt: timestamp("last_reminded_at"),
     lastSyncedAt: timestamp("last_synced_at"),
     voidedAt: timestamp("voided_at"),
     completedAt: timestamp("completed_at"),

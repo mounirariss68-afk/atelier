@@ -139,6 +139,9 @@ function RequestCard({
             Sent {fmtDate(request.createdAt)} by {request.createdByLabel}
             {request.expiresAt ? ` · expires ${fmtDate(request.expiresAt)}` : ""}
             {request.completedAt ? ` · completed ${fmtDate(request.completedAt)}` : ""}
+            {open && request.lastRemindedAt
+              ? ` · last reminded ${fmtDate(request.lastRemindedAt)}`
+              : ""}
           </div>
           {request.lastSyncError ? (
             <div className="mt-1 text-xs text-red-400" data-testid={`text-esign-syncerror-${request.id}`}>
@@ -340,9 +343,34 @@ export default function Agreements() {
       ) : isLoading ? (
         <Card className="p-4 text-sm text-text-mute">Loading…</Card>
       ) : requests.length === 0 ? (
-        <Card className="p-6 text-sm text-text-mute text-center" data-testid="text-esign-empty">
-          No signature requests yet. Send a Document Library PDF out for signature to get
-          started.
+        <Card className="p-6 text-sm text-text-mute" data-testid="text-esign-empty">
+          <p className="text-text font-medium">No signature requests yet.</p>
+          <p className="mt-1">
+            Before sending real agreements, run this one-time smoke test with your own
+            inbox to confirm signature emails actually arrive:
+          </p>
+          <ol className="mt-3 space-y-1.5 list-decimal list-inside" data-testid="list-esign-smoketest">
+            <li>
+              Click <span className="text-text">Send for signature</span>, pick any PDF from
+              the Document Library, and add yourself as the signer using a real email
+              address you can check.
+            </li>
+            <li>Open your inbox and confirm the DocuSeal signature email arrived (check spam too).</li>
+            <li>Follow the emailed link and sign the document.</li>
+            <li>
+              Back here, click <span className="text-text">Refresh statuses</span> — the
+              request should show <span className="text-text">Completed</span>.
+            </li>
+            <li>
+              Click <span className="text-text">Signed PDF</span> to confirm the signed copy
+              (with audit trail) was archived to the Document Library.
+            </li>
+          </ol>
+          <p className="mt-3 text-xs text-text-faint">
+            Pending signers are automatically re-emailed after 3 days without a signature by
+            default (and again every 3 days until they sign, decline, or the request expires).
+            Server admins can tune or disable this via the ESIGN_AUTO_REMIND_DAYS setting.
+          </p>
         </Card>
       ) : (
         <div className="space-y-3">

@@ -32,6 +32,8 @@ export interface AtelierSignatureRequest {
   /** @nullable */
   lastSyncError?: string | null;
   /** @nullable */
+  lastRemindedAt?: string | null;
+  /** @nullable */
   lastSyncedAt?: string | null;
   /** @nullable */
   voidedAt?: string | null;

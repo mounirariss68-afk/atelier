@@ -102,6 +102,7 @@ function requestShape(r: SigRequestRow, signers?: SigSignerRow[]) {
     createdBy: r.createdBy,
     createdByLabel: r.createdByLabel,
     lastSyncError: r.lastSyncError,
+    lastRemindedAt: r.lastRemindedAt,
     lastSyncedAt: r.lastSyncedAt,
     voidedAt: r.voidedAt,
     completedAt: r.completedAt,

@@ -556,6 +556,7 @@ export async function voidSignatureRequest(args: {
 export async function remindSignatureRequest(args: {
   row: SigRequestRow;
   actor: { id: string; name: string };
+  actorType?: "human" | "system";
 }): Promise<{ reminded: number }> {
   const signers = await db
     .select()
@@ -568,15 +569,81 @@ export async function remindSignatureRequest(args: {
   for (const s of pending) {
     await resendSubmitterEmail(Number(s.docusealSubmitterId));
   }
+  await db
+    .update(atelierSignatureRequests)
+    .set({ lastRemindedAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierSignatureRequests.id, args.row.id));
   await auditSignatureRequest({
     requestId: args.row.id,
+    actorType: args.actorType ?? "human",
     actorId: args.actor.id,
     actorLabel: args.actor.name,
     action: "signature_request.remind",
-    payload: { reminded: pending.map((s) => s.email) },
-    summary: `Sent reminder to ${pending.length} signer(s) for "${args.row.title}"`,
+    payload: { reminded: pending.map((s) => s.email), automatic: args.actorType === "system" },
+    summary: `${args.actorType === "system" ? "Auto-sent" : "Sent"} reminder to ${pending.length} signer(s) for "${args.row.title}"`,
   });
   return { reminded: pending.length };
+}
+
+// ---------------------------------------------------------------------------
+// Automatic reminders
+// ---------------------------------------------------------------------------
+
+/**
+ * Days a request may sit pending before signers are automatically
+ * re-emailed (and between subsequent automatic reminders). Configurable
+ * via ESIGN_AUTO_REMIND_DAYS; `0` disables automatic reminders.
+ */
+export function autoRemindAfterDays(): number {
+  const raw = process.env.ESIGN_AUTO_REMIND_DAYS;
+  if (raw == null || raw.trim() === "") return 3;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 3;
+  return Math.floor(n);
+}
+
+/**
+ * Re-send signer emails on every open request that has been waiting
+ * longer than the configured threshold since it was sent (or since the
+ * last reminder, manual or automatic). Runs from the polling loop after
+ * the status sync pass, so freshly-completed requests are never nagged.
+ * Requests already past their expiry are skipped — the sync pass lapses
+ * them instead.
+ */
+export async function autoRemindOverdueRequests(now = new Date()): Promise<{
+  reminded: number;
+  failures: Array<{ requestId: string; error: string }>;
+}> {
+  const days = autoRemindAfterDays();
+  if (days === 0) return { reminded: 0, failures: [] };
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+  const rows = await db
+    .select()
+    .from(atelierSignatureRequests)
+    .where(inArray(atelierSignatureRequests.status, [...OPEN_STATUSES]));
+
+  let reminded = 0;
+  const failures: Array<{ requestId: string; error: string }> = [];
+  for (const row of rows) {
+    if (row.expiresAt && row.expiresAt.getTime() <= now.getTime()) continue;
+    const lastTouch = row.lastRemindedAt ?? row.createdAt;
+    if (lastTouch.getTime() > cutoff.getTime()) continue;
+    try {
+      const out = await remindSignatureRequest({
+        row,
+        actor: { id: "esign-auto-remind", name: "Automatic reminder" },
+        actorType: "system",
+      });
+      if (out.reminded > 0) reminded++;
+    } catch (err) {
+      failures.push({
+        requestId: row.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return { reminded, failures };
 }
 
 // ---------------------------------------------------------------------------
@@ -621,11 +688,29 @@ export function startEsignPolling(intervalMs = 5 * 60_000): void {
   if (process.env.NODE_ENV === "test") return;
   pollTimer = setInterval(() => {
     if (!process.env.DOCUSEAL_API_KEY) return;
-    void syncAllOpenRequests().then((out) => {
-      for (const f of out.failures) {
-        console.error(`[esign-poll] sync failed for ${f.requestId}: ${f.error}`);
-      }
-    });
+    void syncAllOpenRequests()
+      .then((out) => {
+        for (const f of out.failures) {
+          console.error(`[esign-poll] sync failed for ${f.requestId}: ${f.error}`);
+        }
+        // Auto-remind AFTER the sync pass so requests that just
+        // completed/declined/expired are never nagged.
+        return autoRemindOverdueRequests();
+      })
+      .then((out) => {
+        if (out.reminded > 0) {
+          console.log(`[esign-poll] auto-reminded ${out.reminded} pending request(s)`);
+        }
+        for (const f of out.failures) {
+          console.error(`[esign-poll] auto-remind failed for ${f.requestId}: ${f.error}`);
+        }
+      })
+      .catch((err) => {
+        console.error(
+          "[esign-poll] pass failed:",
+          err instanceof Error ? err.message : err,
+        );
+      });
   }, intervalMs);
   pollTimer.unref?.();
 }
