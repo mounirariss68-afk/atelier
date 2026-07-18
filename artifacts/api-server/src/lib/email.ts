@@ -7,21 +7,97 @@ export interface EmailArgs {
   attachments?: { filename: string; content: string }[];
 }
 
+interface ResendCredentials {
+  apiKey: string;
+  fromEmail?: string;
+}
+
+let cachedCreds: { creds: ResendCredentials | null; fetchedAt: number } | null = null;
+const CRED_CACHE_MS = 5 * 60 * 1000;
+
+async function fetchConnectorCredentials(): Promise<ResendCredentials | null> {
+  const hostname = process.env["REPLIT_CONNECTORS_HOSTNAME"];
+  const xReplitToken = process.env["REPL_IDENTITY"]
+    ? `repl ${process.env["REPL_IDENTITY"]}`
+    : process.env["WEB_REPL_RENEWAL"]
+      ? `depl ${process.env["WEB_REPL_RENEWAL"]}`
+      : null;
+  if (!hostname || !xReplitToken) return null;
+  try {
+    const resp = await fetch(
+      `https://${hostname}/api/v2/connection?include_secrets=true&connector_names=resend`,
+      {
+        headers: {
+          Accept: "application/json",
+          X_REPLIT_TOKEN: xReplitToken,
+        },
+      },
+    );
+    if (!resp.ok) {
+      logger.warn({ status: resp.status }, "Resend connector lookup failed");
+      return null;
+    }
+    const data = (await resp.json()) as {
+      items?: { settings?: { api_key?: string; from_email?: string } }[];
+    };
+    const settings = data.items?.[0]?.settings;
+    if (!settings?.api_key) return null;
+    return { apiKey: settings.api_key, fromEmail: settings.from_email };
+  } catch (err) {
+    logger.warn({ err }, "Resend connector lookup error");
+    return null;
+  }
+}
+
+async function getResendCredentials(): Promise<ResendCredentials | null> {
+  const now = Date.now();
+  if (cachedCreds && now - cachedCreds.fetchedAt < CRED_CACHE_MS) {
+    return cachedCreds.creds;
+  }
+  let creds = await fetchConnectorCredentials();
+  if (!creds) {
+    const envKey = process.env["RESEND_API_KEY"];
+    if (envKey) creds = { apiKey: envKey };
+  }
+  cachedCreds = { creds, fetchedAt: now };
+  return creds;
+}
+
+export async function getEmailDeliveryStatus(): Promise<{ configured: boolean; via: string }> {
+  const creds = await getResendCredentials();
+  return creds
+    ? { configured: true, via: "resend" }
+    : { configured: false, via: "log-only" };
+}
+
+const FROM_RE = /^(?:[^<>]*<\s*)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+(?:\s*>)?$/;
+
+function pickFromAddress(...candidates: (string | undefined)[]): string {
+  for (const c of candidates) {
+    if (c && FROM_RE.test(c.trim())) return c.trim();
+    if (c) logger.warn({ value: "<redacted>" }, "Ignoring malformed email from-address candidate");
+  }
+  return "Cognirise <onboarding@resend.dev>";
+}
+
 export async function sendEmail(args: EmailArgs): Promise<{ ok: boolean; via: string }> {
-  const apiKey = process.env["RESEND_API_KEY"];
-  if (!apiKey) {
-    logger.info({ to: args.to, subject: args.subject }, "Email skipped (no RESEND_API_KEY); logged only");
+  const creds = await getResendCredentials();
+  if (!creds) {
+    logger.warn(
+      { to: args.to, subject: args.subject },
+      "Email NOT delivered: no Resend connection or RESEND_API_KEY configured (log-only mode)",
+    );
     return { ok: true, via: "log-only" };
   }
   try {
     const resp = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${creds.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env["RESEND_FROM"] ?? "Cognirise <onboarding@resend.dev>",
+        from: pickFromAddress(process.env["RESEND_FROM"], creds.fromEmail),
         to: [args.to],
         subject: args.subject,
         html: args.html,
