@@ -22,6 +22,7 @@ import {
   type AtelierContractDocument,
 } from "@workspace/api-client-react";
 import { BackLink, Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
+import { isUaeCountry, countryDisplayName } from "@/lib/country-uae";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -528,10 +529,11 @@ export default function ContractDetail() {
           </div>
         )}
         {contract.signingEntityCountry &&
-          !/united arab emirates|\buae\b/i.test(contract.signingEntityCountry) && (
+          !isUaeCountry(contract.signingEntityCountry) && (
             <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
-              Caution: this entity is registered in {contract.signingEntityCountry}, not the
-              UAE. Check the governing-law and jurisdiction wording in the document.
+              Caution: this entity is registered in{" "}
+              {countryDisplayName(contract.signingEntityCountry)}, not the UAE. Check the
+              governing-law and jurisdiction wording in the document.
             </p>
           )}
       </Card>

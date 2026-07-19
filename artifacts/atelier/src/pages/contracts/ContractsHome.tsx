@@ -28,6 +28,7 @@ import {
   type AtelierContractTemplatePriorFieldReview,
 } from "@workspace/api-client-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
+import { isUaeCountry, countryDisplayName } from "@/lib/country-uae";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import {
@@ -605,9 +606,7 @@ export function NewContractDialog(props: {
   const entities = seData?.entities ?? [];
   const [signingEntityId, setSigningEntityId] = React.useState("");
   const selectedEntity = entities.find((e) => e.id === signingEntityId) ?? null;
-  const entityNonUae =
-    !!selectedEntity?.country &&
-    !/united arab emirates|\buae\b/i.test(selectedEntity.country);
+  const entityNonUae = !!selectedEntity?.country && !isUaeCountry(selectedEntity.country);
 
   React.useEffect(() => {
     if (props.open) {
@@ -697,7 +696,8 @@ export function NewContractDialog(props: {
               </p>
               {entityNonUae && (
                 <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
-                  Caution: this entity is registered in {selectedEntity?.country}, not the UAE.
+                  Caution: this entity is registered in{" "}
+                  {countryDisplayName(selectedEntity?.country ?? "")}, not the UAE.
                   Check the template’s governing-law and jurisdiction clauses before sending.
                 </p>
               )}
