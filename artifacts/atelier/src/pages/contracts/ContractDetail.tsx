@@ -21,8 +21,7 @@ import {
   type AtelierContract,
   type AtelierContractDocument,
 } from "@workspace/api-client-react";
-import { LensPageHeader } from "@/components/layout/LensPageHeader";
-import { BackLink, Card, MonoChip } from "@/components/ui/primitives";
+import { BackLink, Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -428,30 +427,34 @@ export default function ContractDetail() {
         : null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 space-y-5">
-      <BackLink href="/contracts">Contracts</BackLink>
-      <LensPageHeader
-        eyebrow="Firm · Contracts"
-        headline={contract.title}
-        lede={
-          <span className="inline-flex items-center gap-2 flex-wrap">
-            <ContractStatusChip status={contract.status} />
-            <span>
-              {CONTRACT_TYPE_LABELS[contract.contractType] ?? contract.contractType} ·{" "}
-              {counterpartyHref ? (
-                <Link href={counterpartyHref} className="hover:text-gold underline underline-offset-2">
-                  {contract.counterpartyLabel}
-                </Link>
-              ) : (
-                contract.counterpartyLabel
-              )}{" "}
-              · owner {contract.ownerLabel}
-            </span>
-          </span>
-        }
-        actions={
-          canManage && !terminal ? (
-            <div className="flex items-center gap-2">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
+      <PageHero>
+        <BackLink href="/contracts" className="mb-4">Contracts</BackLink>
+        <div className="flex items-start justify-between gap-6 flex-wrap">
+          <div className="flex-1 min-w-[280px]">
+            <SectionHead
+              eyebrow="Firm · Contracts"
+              headline={contract.title}
+              lede={
+                <span className="inline-flex items-center gap-2 flex-wrap">
+                  <ContractStatusChip status={contract.status} />
+                  <span>
+                    {CONTRACT_TYPE_LABELS[contract.contractType] ?? contract.contractType} ·{" "}
+                    {counterpartyHref ? (
+                      <Link href={counterpartyHref} className="hover:text-gold underline underline-offset-2">
+                        {contract.counterpartyLabel}
+                      </Link>
+                    ) : (
+                      contract.counterpartyLabel
+                    )}{" "}
+                    · owner {contract.ownerLabel}
+                  </span>
+                </span>
+              }
+            />
+          </div>
+          {canManage && !terminal && (
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               {contract.status !== "out_for_signature" && (
                 <Button variant="ghost" onClick={() => setUploadOpen(true)} data-testid="button-open-upload">
                   <Upload className="w-4 h-4 mr-1" />
@@ -465,10 +468,11 @@ export default function ContractDetail() {
                 </Button>
               )}
             </div>
-          ) : undefined
-        }
-      />
+          )}
+        </div>
+      </PageHero>
 
+      <div className="mx-auto w-full max-w-4xl px-4 md:px-6 py-6 space-y-5">
       {contract.status === "out_for_signature" && contract.signatureRequestId && (
         <Card className="p-4 text-sm text-text-mute">
           Out for signature — track progress on the{" "}
@@ -589,6 +593,7 @@ export default function ContractDetail() {
         contract={contract}
         onDone={invalidate}
       />
+      </div>
     </div>
   );
 }

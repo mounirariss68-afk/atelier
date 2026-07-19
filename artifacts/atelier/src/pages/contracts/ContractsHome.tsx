@@ -763,12 +763,13 @@ export default function ContractsHome() {
   const canManage = me?.role === "founding_partner" || me?.role === "partner";
 
   return (
-    <div className="mx-auto max-w-5xl px-4 md:px-6 py-6 space-y-6">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <LensPageHeader
         eyebrow="Firm · Contracts"
         headline="Contracts"
         lede="Prepare, redline, and sign the firm’s contracts — NDAs, MoUs, employment and partnership agreements."
       />
+      <div className="mx-auto w-full max-w-5xl px-4 md:px-6 py-6 space-y-6">
       <TabNav>
         <TabNavLink href="/contracts" active={!isTemplates} data-testid="tab-contracts">
           Contracts
@@ -784,6 +785,7 @@ export default function ContractsHome() {
       ) : (
         <ContractsSection canManage={canManage} />
       )}
+      </div>
     </div>
   );
 }
