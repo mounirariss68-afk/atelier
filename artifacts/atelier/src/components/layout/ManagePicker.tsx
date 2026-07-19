@@ -37,12 +37,19 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
   const [location] = useLocation();
   const [moreOpen, setMoreOpen] = React.useState(false);
   const lens = getLens(active);
+  // Task #50/#242 — contractors have no Performance section on the Me
+  // lens (reviews & goals are employee-only; the server 403s them too),
+  // so the top-bar menu must not offer it either.
+  const sections =
+    lens.id === "me" && role === "contractor"
+      ? lens.sections.filter((s) => s.id !== "performance")
+      : lens.sections;
   const more = lens.more ?? [];
   // A section is active on an exact match, or a prefix match when no
   // longer/more-specific sibling href also matches (otherwise the lens
   // Overview tab — whose href is the bare lens prefix — would light up on
   // every sub-page alongside the actual section tab).
-  const allHrefs = [...lens.sections, ...more].map((s) => s.href);
+  const allHrefs = [...sections, ...more].map((s) => s.href);
   const isSectionActive = (href: string): boolean => {
     if (location === href) return true;
     if (!location.startsWith(href + "/")) return false;
@@ -59,7 +66,7 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
       className="hidden lg:flex items-center gap-4 pl-2 ml-1 border-l border-border-soft text-xs font-mono uppercase tracking-widest"
       data-testid={`lens-sections-${active}`}
     >
-      {lens.sections.map((s) => {
+      {sections.map((s) => {
         const isActive = isSectionActive(s.href);
         return (
           <Link

@@ -72,30 +72,68 @@ export default function MeHome() {
   const [weekMeta, setWeekMeta] = React.useState<TimesheetWeekMeta | null>(null);
   const onWeekMeta = React.useCallback((m: TimesheetWeekMeta | null) => setWeekMeta(m), []);
 
-  const hero =
-    section === "time"
-      ? {
+  // ONE header per page: the headline names the current section (the
+  // top-bar lens tabs are the single menu), never a generic greeting on
+  // sub-pages. Time is special — the Timesheet grid reports its loaded
+  // week up so the hero reads "Timesheet — 2026-W29".
+  const hero = (() => {
+    switch (section) {
+      case "time":
+        return {
           headline: weekMeta ? `Timesheet — ${weekMeta.weekIso}` : "Timesheet",
           lede: weekMeta
             ? `${weekMeta.personName} · week of ${weekMeta.weekStartDate}`
             : "Your hours this week, plus leave requests.",
-        }
-      : {
+        };
+      case "profile":
+        return {
+          headline: "Profile",
+          lede: "Your personal details, documents and dependents — keep them current.",
+        };
+      case "expenses":
+        return {
+          headline: "Expenses",
+          lede: "Submit claims, attach receipts and track reimbursements.",
+        };
+      case "pay":
+        return {
+          headline: "Pay & Benefits",
+          lede: "Your compensation, payslips and benefits at the firm.",
+        };
+      case "performance":
+        return {
+          headline: "Performance",
+          lede: "Your reviews, goals and feedback across cycles.",
+        };
+      case "learning":
+        return {
+          headline: "Learning",
+          lede: "Assigned training and your completion record.",
+        };
+      default:
+        return {
           headline: firstName ? `Your workspace, ${firstName}` : "Your workspace",
           lede: "Your profile, time, expenses, pay, performance and learning — everything about you at the firm, in one place.",
         };
+    }
+  })();
 
   return (
     <div className="animate-in fade-in" data-testid="me-home">
       <LensPageHeader headline={hero.headline} lede={hero.lede} />
       <div className="container-atelier py-6 space-y-6">
-        <TabNav>
-          {sections.map((s) => (
-            <TabNavLink key={s.id} href={s.href} active={section === s.id}>
-              {s.label}
-            </TabNavLink>
-          ))}
-        </TabNav>
+        {/* The top navy bar's lens-section tabs are the ONE Me menu on
+            desktop. They're hidden below lg, so this in-page strip stays
+            as the small-screen fallback only. */}
+        <div className="lg:hidden">
+          <TabNav>
+            {sections.map((s) => (
+              <TabNavLink key={s.id} href={s.href} active={section === s.id}>
+                {s.label}
+              </TabNavLink>
+            ))}
+          </TabNav>
+        </div>
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
           {section === "profile" && <MeProfileSection loading={isLoading} profile={profile} />}
