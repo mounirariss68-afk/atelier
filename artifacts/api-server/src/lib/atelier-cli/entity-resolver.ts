@@ -85,6 +85,13 @@ export interface ResolverCandidate {
   score: number;
   /** Which path produced this candidate. */
   via: "id" | "trgm" | "vector";
+  /**
+   * Set on person candidates from the internal rosters (HR employees,
+   * partner-firm resources). Used so account-scoped person searches can
+   * rank scoped client contacts ahead of internal people at the FINAL
+   * merge stage regardless of similarity score.
+   */
+  roster?: "employee" | "partner_resource";
 }
 
 export interface ResolverScopes {
@@ -134,6 +141,18 @@ export async function hybridResolveEntity(
       const prev = out.get(c.id);
       if (!prev || c.score > prev.score) out.set(c.id, c);
     }
+  }
+
+  // Account-scoped person search: contacts on the scoped account always
+  // rank ahead of internal-roster people (employees / partner-firm),
+  // regardless of similarity score — the scope was set because the user
+  // most likely means a client contact. Enforced HERE (final merge) so
+  // no later score sort can reorder them.
+  if (kind === "contact" && scopes.accountId) {
+    const merged = Array.from(out.values());
+    const contacts = merged.filter((c) => !c.roster).sort((a, b) => b.score - a.score);
+    const internal = merged.filter((c) => c.roster).sort((a, b) => b.score - a.score);
+    return [...contacts, ...internal].slice(0, TOP_K);
   }
 
   return Array.from(out.values())
@@ -443,10 +462,21 @@ async function trigramPass(
           .filter((row) => row.sim >= TRGM_THRESHOLD)
           .map((row) => ({ id: row.id, label: row.label, score: Number(row.sim), via: "trgm" as const }));
       }, () => fallbackIlikeGeneric("contact", query, orgId, scopes)),
-      // Skip the internal rosters when the caller scoped to an account —
-      // an account-scoped person search means a client contact.
-      scopes.accountId ? Promise.resolve([] as ResolverCandidate[]) : internalPeoplePass(query, orgId),
+      // Internal rosters (employees + partner-firm people) are always
+      // searched too — people ask about colleagues from inside account
+      // workspaces ("add a mobile number for <employee>"). When the
+      // search is account-scoped, contacts on that account rank ahead
+      // of internal people regardless of similarity score, so the
+      // account-scope precision (a scoped person search usually means
+      // a client contact) is preserved.
+      internalPeoplePass(query, orgId),
     ]);
+    if (scopes.accountId) {
+      return [
+        ...contacts.sort((a, b) => b.score - a.score),
+        ...people.sort((a, b) => b.score - a.score),
+      ].slice(0, TOP_K);
+    }
     return [...contacts, ...people].sort((a, b) => b.score - a.score).slice(0, TOP_K);
   }
   return safeTrigram(async () => {
@@ -496,6 +526,7 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
         secondary: row.title ? `Employee — ${row.title}` : "Employee",
         score: Number(row.sim),
         via: "trgm" as const,
+        roster: "employee" as const,
       }));
   }, async () => {
     const like = `%${query.replace(/[%_]/g, "")}%`;
@@ -510,6 +541,7 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
       secondary: e.title ? `Employee — ${e.title}` : "Employee",
       score: 0.4,
       via: "trgm" as const,
+      roster: "employee" as const,
     }));
   });
   const partners = safeTrigram<ResolverCandidate>(async () => {
@@ -529,6 +561,7 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
         secondary: row.role ? `Partner resource — ${row.role}` : "Partner resource",
         score: Number(row.sim),
         via: "trgm" as const,
+        roster: "partner_resource" as const,
       }));
   }, async () => {
     const like = `%${query.replace(/[%_]/g, "")}%`;
@@ -543,6 +576,7 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
       secondary: p.role ? `Partner resource — ${p.role}` : "Partner resource",
       score: 0.4,
       via: "trgm" as const,
+      roster: "partner_resource" as const,
     }));
   });
   const [e, p] = await Promise.all([employees, partners]);
