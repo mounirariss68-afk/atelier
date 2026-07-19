@@ -32,6 +32,13 @@ import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import { findPersonMatch, richerPersonName } from "./person-name.js";
 import {
+  classifyCriticalRole,
+  guardExecutiveMapperCriticalRoles,
+  type CriticalRoleId,
+  type CriticalRoleCoverageEntry,
+  type SeniorityGuardDrop,
+} from "./critical-roles.js";
+import {
   STALLED_THRESHOLD_DAYS,
   SALES_STAGE_DEFAULT_PROB,
   type SalesStage,
@@ -2942,9 +2949,21 @@ export async function runAccountCartographer(args: {
  * brief — the Mapper's entire search budget goes to the leadership roster.
  */
 export interface ExecutiveMapperOutput {
-  decisionMakers: CartographerOutput["decisionMakers"];
+  decisionMakers: Array<
+    CartographerOutput["decisionMakers"][number] & {
+      // Critical-role targeting — machine-validated tag (or null). The
+      // model's claim is overwritten by the deterministic classifier in
+      // guardExecutiveMapperCriticalRoles; it can never self-declare a
+      // match its verbatim title text doesn't support.
+      criticalRole?: CriticalRoleId | null;
+    }
+  >;
   sourceSignals: CartographerOutput["sourceSignals"];
   openQuestions: string[];
+  // Code-computed per-role coverage of Cognirise's 15 critical buyer roles.
+  criticalRoleCoverage?: CriticalRoleCoverageEntry[];
+  // People removed by the deterministic seniority guard (auditability).
+  droppedBySeniorityGuard?: SeniorityGuardDrop[];
 }
 
 export async function runExecutiveMapper(args: {
@@ -2970,7 +2989,7 @@ export async function runExecutiveMapper(args: {
     actorLabel: args.actorLabel,
   });
   try {
-    const system = loadPrompt("executive_mapper");
+    const system = loadPrompt("executive_mapper", 2);
     await progressRun(runId, 20, "Sweeping the leadership roster");
     const { value, costUsd, citationUrls } =
       await callClaudeJsonWithWebSearch<ExecutiveMapperOutput>(
@@ -3026,6 +3045,10 @@ export async function runExecutiveMapper(args: {
               confidence: d.confidence === "verified" ? "verified" : "inferred",
               reportsToName: d.reportsToName ?? null,
               rationale: d.rationale ?? undefined,
+              // Raw model claim only — the deterministic guard below
+              // re-classifies the verbatim title and overwrites this.
+              criticalRole:
+                typeof d.criticalRole === "string" ? (d.criticalRole as CriticalRoleId) : null,
               timeInRole: null,
               careerHistory: [],
               education: [],
@@ -3165,6 +3188,12 @@ export async function runExecutiveMapper(args: {
     // never promoted to group apex, regardless of what the model wrote.
     guardCartographerEntityScope(normalised, args.accountName);
 
+    // Critical-role guard — re-classify every verbatim title, null any
+    // unsupported criticalRole claim, drop people below the seniority floor
+    // (logged in droppedBySeniorityGuard) and recompute the 15-role coverage
+    // summary in code so it can't be hallucinated.
+    guardExecutiveMapperCriticalRoles(normalised);
+
     // Backfill uncorroborated citations so the review queue still shows where
     // the sweep looked even when the model under-reported its sources.
     if (normalised.sourceSignals.length < 2 && citationUrls.length > 0) {
@@ -3281,10 +3310,18 @@ export function buildExecutiveMapperProposals(args: {
     const changesTitle = Boolean(
       existing && dm.title && dm.title.trim() !== (existing.title ?? "").trim(),
     );
+    // A newly-determined critical-role tag on a known contact counts as new
+    // information worth re-listing. Deterministic and loop-safe: when the
+    // stored title already classifies to the same role, nothing is new.
+    const addsCriticalRole = Boolean(
+      existing &&
+        dm.criticalRole &&
+        classifyCriticalRole(existing.title) !== dm.criticalRole,
+    );
     // Known person with nothing new — skip (prompt asks the model not to
     // re-list these, but enforce it here too). Counts as "seen" so a second
     // spelling of the same person later in the roster can't sneak through.
-    if (existing && !addsLinkedin && !changesTitle) {
+    if (existing && !addsLinkedin && !changesTitle && !addsCriticalRole) {
       proposedPeople.push({ fullName: dm.fullName });
       continue;
     }
@@ -3304,6 +3341,9 @@ export function buildExecutiveMapperProposals(args: {
       confidence: dm.confidence,
       reportsToName: dm.reportsToName ?? null,
       rationale: dm.rationale ?? null,
+      // Machine-validated critical-role tag rides into the review queue so a
+      // Partner sees which of the 15 buyer roles this person covers.
+      criticalRole: dm.criticalRole ?? null,
       timeInRole: null,
       careerHistory: [],
       education: [],
@@ -3314,7 +3354,9 @@ export function buildExecutiveMapperProposals(args: {
     const what = existing
       ? addsLinkedin
         ? `found the LinkedIn profile for existing contact ${dm.fullName}`
-        : `updated the title for existing contact ${dm.fullName}`
+        : changesTitle
+          ? `updated the title for existing contact ${dm.fullName}`
+          : `identified existing contact ${dm.fullName} as a critical buyer role`
       : `discovered executive ${dm.fullName}${dm.title ? ` (${dm.title})` : ""}`;
     candidates.push({
       id: `pp_${rid("x").slice(2)}`,

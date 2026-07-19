@@ -173,7 +173,24 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
     ` OR job_title LIKE 'head of%' OR job_title LIKE '%head'` +
     ` OR job_title LIKE 'vice president%' OR job_title LIKE 'vp%'` +
     ` OR job_title LIKE '%president%' OR job_title LIKE '%director%'` +
-    ` OR job_title LIKE 'general manager%' OR job_title LIKE 'managing%')`;
+    ` OR job_title LIKE 'general manager%' OR job_title LIKE 'managing%'` +
+    // Task #206 — critical-role function sweep. Function keywords ANDed with
+    // seniority markers (keyword+levels, never levels alone) so functional
+    // leaders whose titles skip "head of"/"vp" wording still surface, without
+    // pulling managers/ICs into the capped slots.
+    ` OR ((job_title LIKE '%marketing%' OR job_title LIKE '%product%'` +
+    ` OR job_title LIKE '%commercial%' OR job_title LIKE '%transformation%'` +
+    ` OR job_title LIKE '%procurement%' OR job_title LIKE '%supply chain%'` +
+    ` OR job_title LIKE '%pmo%' OR job_title LIKE '%program management%'` +
+    ` OR job_title LIKE '%programme management%'` +
+    ` OR job_title LIKE '%value realization%' OR job_title LIKE '%value realisation%'` +
+    ` OR job_title LIKE '%artificial intelligence%' OR job_title LIKE '% ai %'` +
+    ` OR job_title LIKE 'ai %' OR job_title LIKE '%data%' OR job_title LIKE '%digital%')` +
+    ` AND (job_title_levels IN ('owner', 'partner', 'vp', 'director')` +
+    ` OR job_title LIKE 'head%' OR job_title LIKE '%head of%'` +
+    ` OR job_title LIKE 'vp%' OR job_title LIKE 'evp%' OR job_title LIKE 'svp%'` +
+    ` OR job_title LIKE 'vice president%' OR job_title LIKE 'executive vice president%'` +
+    ` OR job_title LIKE 'senior vice president%')))`;
   const boardRaw = (await pdlFetch("/person/search", {
     sql: boardSql,
     size: String(MAX_BOARD_PEOPLE),

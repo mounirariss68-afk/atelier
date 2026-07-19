@@ -3526,7 +3526,7 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
     return;
   }
 
-  let result: { runId: string; proposedCount: number; openQuestions: string[] };
+  let result: Awaited<ReturnType<typeof runExecutiveMapperAndQueue>>;
   try {
     result = await runExecutiveMapperAndQueue(a.id, me.id);
   } catch (err) {
@@ -3542,6 +3542,56 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
 
   const ws = await buildWorkspace(a.id, access, me);
   res.json({ ...result, workspace: ws });
+});
+
+// Task #206 — latest critical-role coverage summary from the most recent
+// completed Executive Mapper run. Bespoke raw-fetch route (not in the OpenAPI
+// spec), same pattern as the other account-agent routes. Coverage is
+// code-computed at run time (guardExecutiveMapperCriticalRoles), so this is a
+// pure read of the stored run output.
+// @cli-skip: bespoke agent-read route, surfaced in the Account UI only
+router.get("/accounts/:accountId/executive-mapper/coverage", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const [run] = await db
+    .select({
+      id: atelierAgentRuns.id,
+      output: atelierAgentRuns.output,
+      createdAt: atelierAgentRuns.createdAt,
+    })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.targetType, "account"),
+        eq(atelierAgentRuns.targetId, req.params.accountId),
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.status, "complete"),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  if (!run) {
+    res.json({ runId: null, runAt: null, coverage: null, droppedBySeniorityGuard: [] });
+    return;
+  }
+  const out = (run.output ?? {}) as {
+    criticalRoleCoverage?: unknown;
+    droppedBySeniorityGuard?: unknown;
+  };
+  res.json({
+    runId: run.id,
+    runAt: run.createdAt,
+    coverage: Array.isArray(out.criticalRoleCoverage) ? out.criticalRoleCoverage : null,
+    droppedBySeniorityGuard: Array.isArray(out.droppedBySeniorityGuard)
+      ? out.droppedBySeniorityGuard
+      : [],
+  });
 });
 
 // ---------- contacts (graph) ----------

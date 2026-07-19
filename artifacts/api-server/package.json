@@ -35,7 +35,9 @@
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
     "test:person-dedupe": "tsx ./tests/person-dedupe/run.ts",
     "cartographer:backfill": "tsx ./src/scripts/cartographer-backfill.ts",
-    "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts"
+    "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts",
+    "test:critical-roles": "tsx ./tests/critical-roles/run.ts",
+    "test:exec-mapper-critical": "tsx ./tests/crm/exec-mapper-critical-roles-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

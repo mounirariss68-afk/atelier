@@ -21,6 +21,7 @@ import {
   buildExecutiveMapperProposals,
   type PendingProfileUpdate,
 } from "./runner.js";
+import type { CriticalRoleCoverageEntry } from "./critical-roles.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -45,7 +46,12 @@ const executiveMapperInFlight = new Set<string>();
 export async function runExecutiveMapperAndQueue(
   accountId: string,
   triggeredByUserId: string | null,
-): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
+): Promise<{
+  runId: string;
+  proposedCount: number;
+  openQuestions: string[];
+  criticalRoleCoverage: CriticalRoleCoverageEntry[] | null;
+}> {
   const a = await loadAccount(accountId);
   if (!a) throw new Error("account-not-found");
 
@@ -79,7 +85,12 @@ export async function runExecutiveMapperAndQueue(
 async function runExecutiveMapperAndQueueInner(
   a: NonNullable<Awaited<ReturnType<typeof loadAccount>>>,
   triggeredByUserId: string | null,
-): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
+): Promise<{
+  runId: string;
+  proposedCount: number;
+  openQuestions: string[];
+  criticalRoleCoverage: CriticalRoleCoverageEntry[] | null;
+}> {
   const existingContacts = await db
     .select({
       fullName: atelierContacts.fullName,
@@ -131,6 +142,10 @@ async function runExecutiveMapperAndQueueInner(
         count: proposals.length,
         fields: proposals.map((p) => p.field),
         openQuestions: output.openQuestions,
+        // Task #206 — code-computed critical-role coverage + guard drops,
+        // recorded for auditability of the anti-junior/anti-hallucination net.
+        criticalRoleCoverage: output.criticalRoleCoverage ?? null,
+        droppedBySeniorityGuard: output.droppedBySeniorityGuard ?? [],
       },
       payloadSummary:
         proposals.length > 0
@@ -143,6 +158,7 @@ async function runExecutiveMapperAndQueueInner(
     runId,
     proposedCount: proposals.length,
     openQuestions: output.openQuestions,
+    criticalRoleCoverage: output.criticalRoleCoverage ?? null,
   };
 }
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetAccountWorkspace,
   useAtelierRefreshAccountCartographer,
@@ -1377,6 +1377,7 @@ function ProfileTab({
               <span className="text-text">proposes</span> changes here rather than
               writing them live. Review, edit if needed, then approve to apply.
             </p>
+            <CriticalRoleCoverageBlock accountId={a.id} />
             {pending.length === 0 ? (
               <p className="text-text-mute italic text-sm">No pending proposals.</p>
             ) : (
@@ -1408,6 +1409,85 @@ function ProfileTab({
         </div>
       </div>
     </>
+  );
+}
+
+// Task #206 — client-side labels for the 15 Cognirise critical buyer roles.
+// The tag itself is machine-validated on the server (deterministic classifier
+// over the verbatim title); the UI only renders it.
+const CRITICAL_ROLE_LABELS: Record<string, string> = {
+  ceo: "CEO",
+  cfo: "CFO",
+  coo: "COO",
+  caio: "Chief AI Officer",
+  cto: "CTO",
+  cio: "CIO",
+  cdo: "CDO (Data / Digital)",
+  head_of_ai: "Head of AI",
+  cmo: "CMO",
+  cpo_product: "CPO (Product)",
+  cco_commercial: "CCO (Commercial)",
+  cpo_procurement: "CPO (Procurement)",
+  head_of_transformation: "Head of Transformation",
+  head_of_pmo: "Head of PMO",
+  head_of_vro: "Head of VRO (Value Realization)",
+};
+
+// Task #206 — critical-role coverage summary from the latest completed
+// Executive Mapper run. Bespoke route (not in the OpenAPI spec) → raw fetch,
+// same pattern as the other account-agent reads.
+interface CriticalRoleCoverageEntry {
+  role: string;
+  label: string;
+  found: boolean;
+  personName: string | null;
+  title: string | null;
+  confidence: "verified" | "inferred" | null;
+}
+
+function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
+  const { data } = useQuery({
+    queryKey: ["atelier-exec-mapper-coverage", accountId],
+    queryFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/executive-mapper/coverage`,
+        { credentials: "include" },
+      );
+      if (!res.ok) throw new Error(`coverage fetch failed (${res.status})`);
+      return (await res.json()) as {
+        runId: string | null;
+        runAt: string | null;
+        coverage: CriticalRoleCoverageEntry[] | null;
+      };
+    },
+  });
+  if (!data?.coverage || data.coverage.length === 0) return null;
+  const found = data.coverage.filter((c) => c.found);
+  return (
+    <div className="space-y-2" data-testid="block-critical-role-coverage">
+      <div className="flex items-center justify-between">
+        <Eyebrow>Critical buyer-role coverage</Eyebrow>
+        <span className="text-[10px] font-mono text-text-faint">
+          {found.length}/{data.coverage.length} mapped
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {data.coverage.map((c) => (
+          <MonoChip
+            key={c.role}
+            tone={c.found ? "gold" : "default"}
+            data-testid={`chip-coverage-${c.role}`}
+          >
+            {c.label}
+            {c.found && c.personName ? ` · ${c.personName}` : " · not found"}
+          </MonoChip>
+        ))}
+      </div>
+      <p className="text-text-faint text-[11px] leading-relaxed">
+        From the last executive mapping sweep. Unfound roles stay unfilled —
+        the Mapper never stretches a junior person into a critical role.
+      </p>
+    </div>
   );
 }
 
@@ -1455,6 +1535,7 @@ function PendingProposalCard({
     title?: string | null;
     seniority?: string | null;
     buyerPersona?: string | null;
+    criticalRole?: string | null;
   };
   const [contactName, setContactName] = useState(contactObj.fullName ?? "");
   const [contactTitle, setContactTitle] = useState(contactObj.title ?? "");
@@ -1513,6 +1594,11 @@ function PendingProposalCard({
             <div className="space-y-0.5">
               <div className="font-medium">{contactObj.fullName}</div>
               {contactObj.title && <div className="text-text-mute text-xs">{contactObj.title}</div>}
+              {contactObj.criticalRole && CRITICAL_ROLE_LABELS[contactObj.criticalRole] && (
+                <MonoChip tone="gold" data-testid={`chip-critical-role-${p.id}`}>
+                  Covers: {CRITICAL_ROLE_LABELS[contactObj.criticalRole]}
+                </MonoChip>
+              )}
             </div>
           ) : isScalar ? (
             <p className="leading-relaxed">{String(p.toValue ?? "")}</p>
