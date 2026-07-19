@@ -3,6 +3,7 @@
 - [Atelier account-scope auth split](atelier-account-auth-split.md) — account read endpoints gate on shared `canSeeAccount`; financial blocks gate separately on account-wide authority. Don't over-restrict the whole route.
 - [Atelier org chart invariants](atelier-org-chart-invariants.md) — reports_to has no DB uniqueness (multi-manager possible; cycle walks must BFS all edges); user lookups must be orgId-scoped (multi-tenant).
 - [Cognirise rebrand keeps](cognirise-rebrand-keeps.md) — after AICo→Cognirise, the tenant key "aico" + opaque record IDs are deliberately KEPT; quoted "aico" may be an enum literal to rename, not always the org key.
+- [Founder titles are data-only](founder-titles.md) — Mounir="CEO and Co-founder", Gökhan="Co-founder" live only in users/employees title columns; role_label stays "Founding Partner"; no route edits titles.
 - [Atelier RLS test scoping](atelier-rls-test-scoping.md) — DATABASE_URL is BYPASSRLS superuser so table policies aren't enforced; assert scoping via RLS helper fns + app ACL; restricted personas get 403, not filtered rows.
 - [Win/loss handlers on global db](atelier-winloss-global-db.md) — win/loss run/approve/override use global db (not withRls) on purpose: withRls pins a pg conn across long LLM runs; org isolation still holds via connection-default + RLS policies.
 - [lib/db schema rebuild](libdb-schema-rebuild.md) — after editing a Drizzle table, run `tsc -b lib/db/tsconfig.json --force` or consumers typecheck against stale dist .d.ts.
