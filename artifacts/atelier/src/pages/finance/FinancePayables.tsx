@@ -66,6 +66,14 @@ function fmtUsd(n: number): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+function EmptyCard({ children, testId }: { children: React.ReactNode; testId: string }) {
+  return (
+    <Card className="p-6 text-center" data-testid={testId}>
+      <p className="text-sm text-text-mute">{children}</p>
+    </Card>
+  );
+}
+
 function PayablesShell({
   eyebrow,
   headline,
@@ -123,6 +131,9 @@ export function FinancePayablesVendors() {
         </MonoChip>
       </div>
       <div className="grid gap-3" data-testid="vendors-list">
+        {vendors.length === 0 && (
+          <EmptyCard testId="vendors-empty">No vendors yet. Vendors will appear here once they are onboarded.</EmptyCard>
+        )}
         {vendors.map((v) => (
           <Card key={v.id} className="p-4" data-testid={`vendor-${v.id}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -255,6 +266,9 @@ export function FinancePayablesPo() {
         <MonoChip>{nonPo.length} non-PO invoice(s)</MonoChip>
       </div>
       <div className="grid gap-3" data-testid="po-list">
+        {pos.length === 0 && (
+          <EmptyCard testId="po-empty">No purchase orders yet. POs and 3-way match results will appear here.</EmptyCard>
+        )}
         {pos.map((po) => {
           const linkedInvs = invByPo.get(po.id) ?? [];
           return (
@@ -414,6 +428,9 @@ export function FinancePayablesPaymentRuns() {
       </div>
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
       <div className="grid gap-3" data-testid="runs-list">
+        {runs.length === 0 && (
+          <EmptyCard testId="runs-empty">No payment runs yet. Build a run once there are approved invoices to pay.</EmptyCard>
+        )}
         {runs.map((run) => (
           <Card key={run.id} className="p-4" data-testid={`run-${run.id}`}>
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -530,6 +547,11 @@ export function FinancePayablesWht() {
             <tr><th className="text-left py-1">Jurisdiction</th><th className="text-left">Period</th><th className="text-left">Due</th><th className="text-right">Certs</th><th className="text-right">Total USD</th></tr>
           </thead>
           <tbody>
+            {remittance.length === 0 && (
+              <tr className="border-t border-border-soft" data-testid="wht-remittance-empty">
+                <td colSpan={5} className="py-3 text-center text-text-mute">No remittance obligations yet.</td>
+              </tr>
+            )}
             {remittance.map((r) => (
               <tr key={`${r.jurisdiction}-${r.period}`} className="border-t border-border-soft">
                 <td className="py-1.5">{r.jurisdiction}</td>
@@ -549,6 +571,11 @@ export function FinancePayablesWht() {
             <tr><th className="text-left py-1">Vendor</th><th className="text-left">Invoice</th><th className="text-left">Jurisdiction</th><th className="text-right">Gross USD</th><th className="text-right">Rate</th><th className="text-right">WHT USD</th><th className="text-left">Status</th><th className="text-left">Cert #</th></tr>
           </thead>
           <tbody>
+            {items.length === 0 && (
+              <tr className="border-t border-border-soft" data-testid="wht-empty">
+                <td colSpan={8} className="py-3 text-center text-text-mute">No withholding-tax certificates yet.</td>
+              </tr>
+            )}
             {items.map((c) => (
               <tr key={c.id} className="border-t border-border-soft" data-testid={`wht-${c.id}`}>
                 <td className="py-1.5">{c.vendorName}</td>
@@ -594,6 +621,11 @@ export function FinancePayablesSubcontractors() {
             <tr><th className="text-left py-1">Subcontractor</th><th className="text-left">Engagement</th><th className="text-left">Milestone</th><th className="text-right">Day-rate USD</th><th className="text-left">Linked AR</th><th className="text-left">Receipt status</th><th className="text-right">Action</th></tr>
           </thead>
           <tbody>
+            {links.length === 0 && (
+              <tr className="border-t border-border-soft" data-testid="pwp-empty">
+                <td colSpan={7} className="py-3 text-center text-text-mute">No pay-when-paid links yet.</td>
+              </tr>
+            )}
             {links.map((l) => {
               const v = vendors.find((vv) => vv.id === l.vendorId);
               return (
@@ -606,6 +638,9 @@ export function FinancePayablesSubcontractors() {
       <Card className="p-4">
         <Eyebrow>Held subcontractor invoices</Eyebrow>
         <div className="mt-3 space-y-1.5 text-xs">
+          {invoices.filter((i) => i.subcontractorLinkId).length === 0 && (
+            <p className="py-2 text-center text-text-mute" data-testid="held-invoices-empty">No held subcontractor invoices.</p>
+          )}
           {invoices.filter((i) => i.subcontractorLinkId).map((inv) => (
             <div key={inv.id} className="flex items-center justify-between gap-2 border border-border-soft rounded px-2 py-1.5">
               <div className="flex items-center gap-2 flex-wrap">

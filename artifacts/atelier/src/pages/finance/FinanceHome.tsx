@@ -71,66 +71,9 @@ import {
   type InsurancePolicyRow,
   type InternalControlRow,
 } from "@/lib/v5-hooks";
-import { useSyncExternalStore } from "react";
-import { subscribeCloseStore, getCloseSnapshot, statusForEntity, type CloseStatusForEntity } from "@/data/finance-close-seed";
-import { ArrowRight, Lock, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 const FIRM_SCOPE_NOTE = "firm-wide · entity slice W2";
-
-function useCloseSnapshot() {
-  return useSyncExternalStore(subscribeCloseStore, getCloseSnapshot, getCloseSnapshot);
-}
-
-function CloseStatusMiniCard({ entity, status }: { entity: FinanceEntityRow; status: CloseStatusForEntity }) {
-  const period = status.period;
-  if (!period) {
-    return (
-      <Link href={`/finance/close?entity=${entity.id}`}>
-        <Card
-          className="p-3 cursor-pointer hover:border-gold/40 transition-colors border-border-soft opacity-70"
-          data-testid={`finance-close-mini-${entity.id}`}
-        >
-          <div className="flex items-baseline justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-text-faint">
-            <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Close · {entity.shortName}</span>
-            <span>—</span>
-          </div>
-          <div className="mt-1 text-sm text-text-mute leading-tight">No period open</div>
-          <div className="text-xs text-text-faint mt-1">Open a period to begin the close workflow</div>
-        </Card>
-      </Link>
-    );
-  }
-  const tone =
-    period.locked ? "border-emerald-500/40 bg-emerald-500/5" :
-    status.status === "in_review" ? "border-gold/40 bg-gold/5" :
-    status.status === "not_started" ? "border-border-soft" :
-    "border-amber-500/40 bg-amber-500/5";
-  const Icon = period.locked ? Lock : status.status === "not_started" ? Clock : status.openRecs > 0 ? AlertTriangle : CheckCircle2;
-  return (
-    <Link href={`/finance/close?entity=${entity.id}`}>
-      <Card
-        className={`p-3 cursor-pointer hover:border-gold/40 transition-colors ${tone}`}
-        data-testid={`finance-close-mini-${entity.id}`}
-      >
-        <div className="flex items-baseline justify-between gap-2 text-[10px] font-mono uppercase tracking-widest text-text-faint">
-          <span className="flex items-center gap-1"><Icon className="w-3 h-3" /> Close · {entity.shortName}</span>
-          <span>{period.periodLabel}</span>
-        </div>
-        <div className="mt-1 text-sm text-text leading-tight">
-          {period.locked
-            ? `Closed in ${status.daysToCloseActual ?? "—"}d / ${status.daysToCloseTarget}d target`
-            : status.status === "not_started"
-              ? `Not started — target ${period.targetCloseOn}`
-              : `${status.checklistPct}% checklist · ${status.openRecs} open rec${status.openRecs === 1 ? "" : "s"}`}
-        </div>
-        <div className="text-xs text-text-mute mt-1 flex items-center gap-1">
-          <span>Sign-off {status.signOffsCount}/{status.signOffsRequired}</span>
-          {period.locked && <MonoChip tone="green" className="ml-1">locked</MonoChip>}
-        </div>
-      </Card>
-    </Link>
-  );
-}
 
 /* ============================================================
    Hook composition: derived filter context
@@ -228,9 +171,6 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
   const netCashRag = netCash == null ? "neutral" : netCash >= 0 ? "green" : "red";
 
   const firmScope = ctx.isAllEntities ? undefined : FIRM_SCOPE_NOTE;
-
-  // Subscribe so close-status mini-cards re-render when the in-memory store mutates.
-  useCloseSnapshot();
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3" data-testid="cfo-hero-strip">
@@ -433,21 +373,6 @@ function CashAndRevenue({ ctx, cash, ar, wip, margin }: {
             </>
           )}
         </Card>
-
-        {/* Close Status Mini-cards (Wave 4) */}
-        {ctx.selectedEntities.length > 0 && (
-          <div className="space-y-3">
-            <Eyebrow>Close status</Eyebrow>
-            <div className="grid grid-cols-1 gap-2" data-testid="finance-close-mini-cards">
-              {ctx.selectedEntities
-                .map((e) => ({ entity: e, status: statusForEntity(e.id) }))
-                .filter((x) => x.status.period !== null)
-                .map(({ entity, status }) => (
-                  <CloseStatusMiniCard key={entity.id} entity={entity} status={status} />
-                ))}
-            </div>
-          </div>
-        )}
 
         <Card className="p-4 grid grid-cols-2 gap-4" data-testid="cfo-cash-mix">
           <div className="opacity-60 border border-dashed border-border-soft rounded p-3">

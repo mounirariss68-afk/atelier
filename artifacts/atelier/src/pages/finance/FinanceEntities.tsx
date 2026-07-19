@@ -266,7 +266,17 @@ export default function FinanceEntities() {
       <div className="container-atelier py-10 space-y-4">
         <SectionHead headline={`${visible.length} entit${visible.length === 1 ? "y" : "ies"}`} />
         {visible.length === 0 && (
-          <Card className="p-6 text-sm text-text-mute">No entities match this filter.</Card>
+          <Card className="p-8 text-center" data-testid="finance-entities-empty">
+            <div className="text-sm text-text">
+              {entities.length === 0 ? "No legal entities yet" : "No entities match this filter."}
+            </div>
+            {entities.length === 0 && (
+              <p className="text-xs text-text-mute mt-2 max-w-md mx-auto">
+                Legal-entity records — commercial registration, tax IDs, banks and
+                signatories — will appear here once real entity data is entered.
+              </p>
+            )}
+          </Card>
         )}
         {visible.map((e) => (
           <EntityCard key={e.id} entity={e} all={entities} />
