@@ -9,6 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:reference-data": "tsx src/lib/reference-data.test.ts",
+    "test:country-uae": "tsx src/lib/country-uae.test.ts",
     "test:cli-reducer": "tsx src/components/cli/useCli.test.ts",
     "test:rail-width": "tsx src/components/layout/Shell.rail-width.test.ts",
     "test:revenue-gate": "tsx src/components/EditAccountProfileDialog.revenue-gate.test.tsx",
