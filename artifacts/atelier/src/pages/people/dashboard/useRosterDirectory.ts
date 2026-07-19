@@ -30,12 +30,17 @@ export function useRosterDirectory(): State {
   React.useEffect(() => {
     let cancelled = false;
     fetch(`/api/atelier/roster/people`, { credentials: "include" })
-      .then((r) => r.json())
+      .then(async (r) => {
+        // Fail loud on non-OK responses (401/403/500) — a JSON error body
+        // parsed as `{}` used to silently render as headcount 0.
+        if (!r.ok) throw new Error(`roster directory HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d) => {
         if (!cancelled) setState({ rows: d.people ?? [], error: null });
       })
       .catch((e) => {
-        if (!cancelled) setState({ rows: [], error: String(e) });
+        if (!cancelled) setState({ rows: null, error: String(e) });
       });
     return () => {
       cancelled = true;

@@ -17,7 +17,7 @@ interface Kpi {
 }
 
 export function KpiStrip() {
-  const { rows: rosterPeople } = useRosterDirectory();
+  const { rows: rosterPeople, error: rosterError } = useRosterDirectory();
 
   const headcount =
     rosterPeople === null
@@ -28,14 +28,15 @@ export function KpiStrip() {
     {
       id: "headcount",
       eyebrow: "Headcount",
-      value: headcount === null ? "…" : String(headcount),
-      caption:
-        headcount === null
+      value: rosterError ? "—" : headcount === null ? "…" : String(headcount),
+      caption: rosterError
+        ? "roster directory unavailable — reload to retry"
+        : headcount === null
           ? "loading roster directory…"
           : "active people on the roster · live",
       href: "/people/people",
-      tone: "green",
-      chip: "live",
+      tone: rosterError ? "red" : "green",
+      chip: rosterError ? "error" : "live",
     },
     {
       id: "open-reqs",

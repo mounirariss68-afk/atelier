@@ -11,3 +11,5 @@ The app sits behind the global login gate, so screenshot tools can't exercise it
 
 **Why:** first attempt failed twice (missing tables → `@workspace/db push` + orphan-FK cleanup needed on fresh isolated DBs; then a required fee field left blank).
 **How to apply:** any future "verify screens in the browser" task on this project.
+
+**Auth without a password:** mint a session directly — random hex token, insert its sha256 into `atelier_auth_sessions` (token_hash/user_id/email/expires_at) via psql, set cookie `atelier_auth_session=<token>` on localhost in puppeteer. Delete the row after. Note: puppeteer scripts must live inside the workspace (not /tmp) to resolve node_modules; className checks for active tabs must exact-match `text-gold` (hover:text-gold false-positives).

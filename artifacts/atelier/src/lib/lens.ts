@@ -42,6 +42,13 @@ export interface LensDef {
    * lifecycle-shaped tabs (e.g. People → Hire · Run · Develop · Off-board).
    */
   sections: readonly LensSection[];
+  /**
+   * Optional overflow sections rendered behind a "More ▾" dropdown at the
+   * end of the tab strip. Used when a lens has cross-cutting pages that
+   * would overcrowd the primary strip (e.g. People → Org, Access, Skills,
+   * Time, Compliance, Approvals).
+   */
+  more?: readonly LensSection[];
 }
 
 export const LENSES: readonly LensDef[] = [
@@ -73,6 +80,7 @@ export const LENSES: readonly LensDef[] = [
     shortcutKey: "2",
     sections: [
       { id: "overview", label: "Overview", href: "/people" },
+      { id: "roster", label: "Roster", href: "/people/people" },
       { id: "attract", label: "Attract", href: "/people/attract" },
       { id: "hire", label: "Hire", href: "/people/hire" },
       { id: "onboard", label: "Onboard", href: "/people/onboard" },
@@ -81,6 +89,16 @@ export const LENSES: readonly LensDef[] = [
       { id: "reward", label: "Reward", href: "/people/reward" },
       { id: "retain", label: "Retain", href: "/people/retain" },
       { id: "offboard", label: "Offboard", href: "/people/offboard" },
+    ],
+    // Cross-cutting People modules — reachable but out of the primary
+    // lifecycle strip so it doesn't overcrowd.
+    more: [
+      { id: "org", label: "Org chart", href: "/people/org" },
+      { id: "access", label: "Access", href: "/people/access" },
+      { id: "skills", label: "Skills", href: "/people/skills" },
+      { id: "time", label: "Time", href: "/people/time" },
+      { id: "compliance", label: "Compliance", href: "/people/compliance" },
+      { id: "approvals", label: "Approvals", href: "/people/approvals" },
     ],
   },
   {
