@@ -6291,6 +6291,24 @@ export const AtelierContractTemplateVersionFieldStatus = {
   reviewed: "reviewed",
 } as const;
 
+export type AtelierContractTemplatePriorFieldReviewFieldsItemStatus =
+  (typeof AtelierContractTemplatePriorFieldReviewFieldsItemStatus)[keyof typeof AtelierContractTemplatePriorFieldReviewFieldsItemStatus];
+
+export const AtelierContractTemplatePriorFieldReviewFieldsItemStatus = {
+  carried_over: "carried_over",
+  missing: "missing",
+} as const;
+
+export type AtelierContractTemplatePriorFieldReviewFieldsItem =
+  AtelierContractTemplateField & {
+    status: AtelierContractTemplatePriorFieldReviewFieldsItemStatus;
+  };
+
+export interface AtelierContractTemplatePriorFieldReview {
+  fromVersionNumber: number;
+  fields: AtelierContractTemplatePriorFieldReviewFieldsItem[];
+}
+
 export interface AtelierContractTemplateVersion {
   id: string;
   templateId: string;
@@ -6300,6 +6318,8 @@ export interface AtelierContractTemplateVersion {
   fieldSchema: AtelierContractTemplateField[];
   fieldStatus: AtelierContractTemplateVersionFieldStatus;
   detectionWarnings: string[];
+  /** Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match. */
+  priorFieldReview?: AtelierContractTemplatePriorFieldReview | null;
   createdBy: string;
   createdAt: string;
 }

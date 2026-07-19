@@ -25,6 +25,7 @@ import {
   type AtelierContract,
   type AtelierContractTemplate,
   type AtelierContractTemplateField,
+  type AtelierContractTemplatePriorFieldReview,
 } from "@workspace/api-client-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
@@ -188,13 +189,49 @@ function ReviewFieldsDialog(props: {
   const [fields, setFields] = React.useState<AtelierContractTemplateField[]>([]);
   const [mismatchedKeys, setMismatchedKeys] = React.useState<Set<string>>(new Set());
   const [mismatchMessage, setMismatchMessage] = React.useState<string | null>(null);
+  const [reconciled, setReconciled] = React.useState(false);
   React.useEffect(() => {
     if (props.open) {
       setFields(version?.fieldSchema ?? []);
       setMismatchedKeys(new Set());
       setMismatchMessage(null);
+      setReconciled(false);
     }
   }, [props.open, version]);
+
+  // Reconciliation of the previous version's confirmed schema against this
+  // document — only relevant while the new detection is still unreviewed.
+  const priorReview: AtelierContractTemplatePriorFieldReview | null =
+    version?.fieldStatus === "detected" ? (version?.priorFieldReview ?? null) : null;
+  const carriedOver = priorReview?.fields.filter((f) => f.status === "carried_over") ?? [];
+  const priorMissing = priorReview?.fields.filter((f) => f.status === "missing") ?? [];
+  const carriedOverByPlaceholder = new Map(carriedOver.map((f) => [f.placeholder, f]));
+
+  /**
+   * Merge the previous confirmed settings into the current field list:
+   * detected fields whose placeholder survived take the prior field's
+   * label/type/required/auto-fill; carried-over prior fields the new
+   * detection missed are appended. Fields whose placeholder no longer
+   * exists in the document cannot be restored.
+   */
+  function reconcileWithPrevious() {
+    setFields((prev) => {
+      const usedPlaceholders = new Set<string>();
+      const merged = prev.map((f) => {
+        const prior = carriedOverByPlaceholder.get(f.placeholder);
+        if (!prior) return f;
+        usedPlaceholders.add(f.placeholder);
+        const { status: _status, ...priorField } = prior;
+        return priorField;
+      });
+      const usedKeys = new Set(merged.map((f) => f.key));
+      const extras = carriedOver
+        .filter((f) => !usedPlaceholders.has(f.placeholder) && !usedKeys.has(f.key))
+        .map(({ status: _status, ...f }) => f);
+      return [...merged, ...extras];
+    });
+    setReconciled(true);
+  }
 
   const review = useAtelierReviewContractTemplateFields({
     mutation: {
@@ -255,6 +292,43 @@ function ReviewFieldsDialog(props: {
             {mismatchMessage}
           </div>
         )}
+        {priorReview && (
+          <div
+            className="rounded-md border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300 space-y-1.5"
+            data-testid="banner-prior-field-review"
+          >
+            <div>
+              This is a new document version. Of the {priorReview.fields.length} field
+              {priorReview.fields.length === 1 ? "" : "s"} you confirmed on v
+              {priorReview.fromVersionNumber}, {carriedOver.length} still match{" "}
+              {carriedOver.length === 1 ? "its" : "their"} text in the new document
+              {priorMissing.length > 0
+                ? ` and ${priorMissing.length} no longer appear${priorMissing.length === 1 ? "s" : ""}`
+                : ""}
+              . You can keep the fresh detection below, or restore your previous settings for
+              the fields that carried over.
+            </div>
+            {priorMissing.length > 0 && (
+              <div className="text-amber-300" data-testid="text-prior-missing-fields">
+                No longer in the document:{" "}
+                {priorMissing.map((f) => f.label).join(", ")}
+              </div>
+            )}
+            {carriedOver.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={reconcileWithPrevious}
+                disabled={reconciled}
+                data-testid="button-reconcile-previous"
+              >
+                {reconciled
+                  ? "Previous settings restored"
+                  : `Restore previous settings (${carriedOver.length} field${carriedOver.length === 1 ? "" : "s"})`}
+              </Button>
+            )}
+          </div>
+        )}
         {(version?.detectionWarnings?.length ?? 0) > 0 && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
             {version!.detectionWarnings.map((w, i) => (
@@ -284,6 +358,11 @@ function ReviewFieldsDialog(props: {
                   Not found in the document — this text doesn&apos;t appear verbatim in the
                   uploaded file. Remove this field or upload a corrected version.
                 </div>
+              )}
+              {priorReview && carriedOverByPlaceholder.has(f.placeholder) && (
+                <MonoChip tone="green" data-testid={`chip-carried-over-${f.key}`}>
+                  confirmed on v{priorReview.fromVersionNumber}
+                </MonoChip>
               )}
               <div className="grid grid-cols-2 gap-2">
                 <div>

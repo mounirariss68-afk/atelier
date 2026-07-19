@@ -55,6 +55,23 @@ export interface ContractTemplateField {
   note?: string;
 }
 
+/**
+ * Reconciliation of the PREVIOUS version's reviewed field schema against a
+ * newly-uploaded version's document. Computed once at version-upload time so
+ * reviewers can see which confirmed fields survived and which no longer match.
+ */
+export interface PriorFieldReview {
+  /** Version number the reviewed schema came from. */
+  fromVersionNumber: number;
+  /** Prior reviewed fields, each tagged with its fate in the new document. */
+  fields: Array<
+    ContractTemplateField & {
+      /** carried_over — placeholder still matches the new document; missing — it does not. */
+      status: "carried_over" | "missing";
+    }
+  >;
+}
+
 export const atelierContractTemplates = pgTable(
   "atelier_contract_templates",
   {
@@ -97,6 +114,12 @@ export const atelierContractTemplateVersions = pgTable(
     /** detected (awaiting review) | reviewed */
     fieldStatus: text("field_status").notNull().default("detected"),
     detectionWarnings: jsonb("detection_warnings").$type<string[]>(),
+    /**
+     * Set only when the previous current version had a REVIEWED schema:
+     * that schema reconciled against this version's document (which prior
+     * fields carried over vs. no longer match). Null on v1 / unreviewed prior.
+     */
+    priorFieldReview: jsonb("prior_field_review").$type<PriorFieldReview>(),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

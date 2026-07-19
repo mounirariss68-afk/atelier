@@ -9851,8 +9851,32 @@ components:
         detectionWarnings:
           type: array
           items: { type: string }
+        priorFieldReview:
+          description: >-
+            Present only when the previous current version had a reviewed
+            field schema — that schema reconciled against this version's
+            document, so reviewers can see which confirmed fields carried
+            over and which no longer match.
+          oneOf:
+            - { $ref: "#/components/schemas/AtelierContractTemplatePriorFieldReview" }
+            - { type: "null" }
         createdBy: { type: string }
         createdAt: { type: string, format: date-time }
+
+    AtelierContractTemplatePriorFieldReview:
+      type: object
+      required: [fromVersionNumber, fields]
+      properties:
+        fromVersionNumber: { type: integer }
+        fields:
+          type: array
+          items:
+            allOf:
+              - { $ref: "#/components/schemas/AtelierContractTemplateField" }
+              - type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [carried_over, missing] }
 
     AtelierContractTemplate:
       type: object

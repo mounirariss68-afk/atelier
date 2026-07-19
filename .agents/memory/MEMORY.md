@@ -70,4 +70,5 @@
 - [Chat person-write routing ACL](atelier-person-write-routing.md) — contact_update routes to employees/partner rosters; field-level ACL must mirror REST (titles HR/founding only; self = phone only).
 - [Roster person edit surface](atelier-person-edit.md) — full-profile PATCH whitelists per worker type; users table column is `name` (not fullName) when syncing employee identity to the login row.
 - [Signing-entity registry](atelier-signing-entities.md) — lives in firm-profile payload.legalEntities (no table/seeder); PUT replaces whole registry, server enforces one default; contracts snapshot entity fields.
+- [Template prior-field reconciliation](atelier-template-prior-review.md) — new-version upload stores prior REVIEWED schema reconciled vs new doc (carried_over/missing); UI restore-merge never re-adds missing placeholders.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — sendEmail ok:true+via:"log-only" means NOT delivered; only ok+via:"resend" counts as sent when surfacing delivery status.

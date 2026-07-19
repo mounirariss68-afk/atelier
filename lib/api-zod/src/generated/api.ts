@@ -1110,6 +1110,16 @@ export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneF
 
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
+
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemKeyMax = 80;
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemLabelMax = 200;
@@ -1119,6 +1129,16 @@ export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldS
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemAutoFillMax = 60;
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
 export const AtelierListContractTemplatesResponse = zod.object({
   templates: zod.array(
@@ -1183,6 +1203,64 @@ export const AtelierListContractTemplatesResponse = zod.object({
             ),
             fieldStatus: zod.enum(["detected", "reviewed"]),
             detectionWarnings: zod.array(zod.string()),
+            priorFieldReview: zod
+              .union([
+                zod.object({
+                  fromVersionNumber: zod.number(),
+                  fields: zod.array(
+                    zod
+                      .object({
+                        key: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax,
+                          ),
+                        label: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax,
+                          ),
+                        placeholder: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                          )
+                          .describe(
+                            "EXACT literal text in the Word document this field replaces.",
+                          ),
+                        dataType: zod.enum(["text", "date", "money", "number"]),
+                        autoFill: zod
+                          .string()
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax,
+                          )
+                          .describe(
+                            "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                          ),
+                        required: zod.boolean(),
+                        note: zod
+                          .string()
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax,
+                          )
+                          .optional(),
+                      })
+                      .and(
+                        zod.object({
+                          status: zod.enum(["carried_over", "missing"]),
+                        }),
+                      ),
+                  ),
+                }),
+                zod.null(),
+              ])
+              .optional()
+              .describe(
+                "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+              ),
             createdBy: zod.string(),
             createdAt: zod.coerce.date(),
           }),
@@ -1240,6 +1318,64 @@ export const AtelierListContractTemplatesResponse = zod.object({
             ),
             fieldStatus: zod.enum(["detected", "reviewed"]),
             detectionWarnings: zod.array(zod.string()),
+            priorFieldReview: zod
+              .union([
+                zod.object({
+                  fromVersionNumber: zod.number(),
+                  fields: zod.array(
+                    zod
+                      .object({
+                        key: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax,
+                          ),
+                        label: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax,
+                          ),
+                        placeholder: zod
+                          .string()
+                          .min(1)
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                          )
+                          .describe(
+                            "EXACT literal text in the Word document this field replaces.",
+                          ),
+                        dataType: zod.enum(["text", "date", "money", "number"]),
+                        autoFill: zod
+                          .string()
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax,
+                          )
+                          .describe(
+                            "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                          ),
+                        required: zod.boolean(),
+                        note: zod
+                          .string()
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax,
+                          )
+                          .optional(),
+                      })
+                      .and(
+                        zod.object({
+                          status: zod.enum(["carried_over", "missing"]),
+                        }),
+                      ),
+                  ),
+                }),
+                zod.null(),
+              ])
+              .optional()
+              .describe(
+                "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+              ),
             createdBy: zod.string(),
             createdAt: zod.coerce.date(),
           }),
@@ -1266,6 +1402,16 @@ export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSch
 
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
+
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
@@ -1275,6 +1421,16 @@ export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaIt
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
 export const AtelierGetContractTemplateResponse = zod.object({
   template: zod.object({
@@ -1338,6 +1494,64 @@ export const AtelierGetContractTemplateResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),
@@ -1395,6 +1609,64 @@ export const AtelierGetContractTemplateResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),
@@ -1443,6 +1715,16 @@ export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneField
 
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
+
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
@@ -1452,6 +1734,16 @@ export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchem
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
 export const AtelierUpdateContractTemplateResponse = zod.object({
   template: zod.object({
@@ -1515,6 +1807,64 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),
@@ -1572,6 +1922,64 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),
@@ -1645,6 +2053,16 @@ export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOn
 
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
+
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemKeyMax = 80;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemLabelMax = 200;
@@ -1654,6 +2072,16 @@ export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFiel
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
 export const AtelierReviewContractTemplateFieldsResponse = zod.object({
   template: zod.object({
@@ -1717,6 +2145,64 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),
@@ -1774,6 +2260,64 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
           ),
           fieldStatus: zod.enum(["detected", "reviewed"]),
           detectionWarnings: zod.array(zod.string()),
+          priorFieldReview: zod
+            .union([
+              zod.object({
+                fromVersionNumber: zod.number(),
+                fields: zod.array(
+                  zod
+                    .object({
+                      key: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax,
+                        ),
+                      label: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneLabelMax,
+                        ),
+                      placeholder: zod
+                        .string()
+                        .min(1)
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax,
+                        )
+                        .describe(
+                          "EXACT literal text in the Word document this field replaces.",
+                        ),
+                      dataType: zod.enum(["text", "date", "money", "number"]),
+                      autoFill: zod
+                        .string()
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax,
+                        )
+                        .describe(
+                          "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
+                        ),
+                      required: zod.boolean(),
+                      note: zod
+                        .string()
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax,
+                        )
+                        .optional(),
+                    })
+                    .and(
+                      zod.object({
+                        status: zod.enum(["carried_over", "missing"]),
+                      }),
+                    ),
+                ),
+              }),
+              zod.null(),
+            ])
+            .optional()
+            .describe(
+              "Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match.",
+            ),
           createdBy: zod.string(),
           createdAt: zod.coerce.date(),
         }),

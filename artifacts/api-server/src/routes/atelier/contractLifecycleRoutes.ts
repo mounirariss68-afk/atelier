@@ -45,6 +45,7 @@ import {
   atelierSignatureRequests,
   atelierSignatureSigners,
   type ContractTemplateField,
+  type PriorFieldReview,
 } from "@workspace/db";
 import { canApproveAsPartner } from "./personaRoles";
 import { canSeeAccount } from "./accountRoutes";
@@ -155,6 +156,7 @@ function versionShape(v: TemplateVersionRow) {
     fieldSchema: v.fieldSchema,
     fieldStatus: v.fieldStatus,
     detectionWarnings: v.detectionWarnings ?? [],
+    priorFieldReview: v.priorFieldReview ?? null,
     createdBy: v.createdBy,
     createdAt: v.createdAt,
   };
@@ -562,10 +564,30 @@ router.post("/contract-templates/:id/versions", uploadSingle, async (req, res) =
     throw err;
   }
   const prior = await db
-    .select({ v: atelierContractTemplateVersions.versionNumber })
+    .select()
     .from(atelierContractTemplateVersions)
     .where(eq(atelierContractTemplateVersions.templateId, template.id));
-  const nextNumber = prior.reduce((mx, r) => Math.max(mx, r.v), 0) + 1;
+  const nextNumber = prior.reduce((mx, r) => Math.max(mx, r.versionNumber), 0) + 1;
+  // Reconcile the previous version's REVIEWED schema against the new
+  // document so reviewers can see which confirmed fields carried over and
+  // which no longer match — instead of silently discarding the old review.
+  let priorFieldReview: PriorFieldReview | null = null;
+  const previous = prior.find((v) => v.id === template.currentVersionId) ?? null;
+  if (previous && previous.fieldStatus === "reviewed" && previous.fieldSchema.length > 0) {
+    const missing = new Set(
+      await findMissingPlaceholders(
+        buf,
+        previous.fieldSchema.map((f) => f.placeholder),
+      ),
+    );
+    priorFieldReview = {
+      fromVersionNumber: previous.versionNumber,
+      fields: previous.fieldSchema.map((f) => ({
+        ...f,
+        status: missing.has(f.placeholder) ? ("missing" as const) : ("carried_over" as const),
+      })),
+    };
+  }
   const { blobRef, sha256 } = await storeContractBytes(buf);
   const [version] = await db
     .insert(atelierContractTemplateVersions)
@@ -581,6 +603,7 @@ router.post("/contract-templates/:id/versions", uploadSingle, async (req, res) =
       fieldSchema: detection.fields,
       fieldStatus: "detected",
       detectionWarnings: detection.warnings,
+      priorFieldReview,
       createdBy: me.id,
     })
     .returning();
@@ -599,6 +622,16 @@ router.post("/contract-templates/:id/versions", uploadSingle, async (req, res) =
       versionNumber: nextNumber,
       fileName: version.fileName,
       detectedFields: detection.fields.length,
+      ...(priorFieldReview
+        ? {
+            priorReviewReconciled: {
+              fromVersionNumber: priorFieldReview.fromVersionNumber,
+              carriedOver: priorFieldReview.fields.filter((f) => f.status === "carried_over")
+                .length,
+              missing: priorFieldReview.fields.filter((f) => f.status === "missing").length,
+            },
+          }
+        : {}),
     },
     summary: `Uploaded v${nextNumber} of contract template "${template.name}"`,
   });

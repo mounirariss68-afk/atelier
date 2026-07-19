@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierContractTemplateField } from "./atelierContractTemplateField";
+import type { AtelierContractTemplatePriorFieldReview } from "./atelierContractTemplatePriorFieldReview";
 import type { AtelierContractTemplateVersionFieldStatus } from "./atelierContractTemplateVersionFieldStatus";
 
 export interface AtelierContractTemplateVersion {
@@ -17,6 +18,8 @@ export interface AtelierContractTemplateVersion {
   fieldSchema: AtelierContractTemplateField[];
   fieldStatus: AtelierContractTemplateVersionFieldStatus;
   detectionWarnings: string[];
+  /** Present only when the previous current version had a reviewed field schema — that schema reconciled against this version's document, so reviewers can see which confirmed fields carried over and which no longer match. */
+  priorFieldReview?: AtelierContractTemplatePriorFieldReview | null;
   createdBy: string;
   createdAt: Date;
 }
