@@ -63,6 +63,7 @@ import {
   runAccountCartographer,
   runPursuitScout,
 } from "../atelier-agents/runner.js";
+import { chainExecutiveMapperAfterCartographer } from "../atelier-agents/executive-mapper-chain.js";
 import { resolveNavPath } from "./orchestrator-nav-path.js";
 
 const FUZZY_LIMIT = 5;
@@ -429,6 +430,15 @@ defineCapability({
             triggeredByUserId: ctx.persona.id,
             actorLabel: "Chat Orchestrator",
           });
+          // Cartographer ran against a persisted account — chain the
+          // Executive Mapper (fire-and-forget), same as account creation
+          // and the manual refresh route. Research-only runs (no targetId)
+          // never reach this branch, so they never trigger the Mapper.
+          chainExecutiveMapperAfterCartographer(
+            acct.id,
+            ctx.persona.id,
+            acct.brandName ?? acct.name,
+          );
           const out = result.output as unknown as Record<string, unknown> | null;
           // Normalise into { draft, missingRequiredFields, ... }
           // contract expected by the orchestrator policy.

@@ -130,9 +130,11 @@ import {
   AtelierMergeContactsBody as AtelierMergeContactsInput,
 } from "@workspace/api-zod";
 import {
+  runExecutiveMapperAndQueue,
+  chainExecutiveMapperAfterCartographer,
+} from "../../lib/atelier-agents/executive-mapper-chain.js";
+import {
   runAccountCartographer,
-  runExecutiveMapper,
-  buildExecutiveMapperProposals,
   runWhitespaceMapper,
   runQbrComposer,
   buildCartographerProposals,
@@ -3490,6 +3492,11 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
     });
   });
 
+  // Cartographer refresh finished and its proposals are queued — chain the
+  // Executive Mapper (fire-and-forget), same as the account-creation flow.
+  // A failed / empty / already-running sweep never breaks the refresh.
+  chainExecutiveMapperAfterCartographer(a.id, me.id, a.brandName ?? a.name);
+
   const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
 });
@@ -3500,123 +3507,9 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
 // approves / edits / rejects each person on the Profile tab.
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 
-/**
- * Shared Executive Mapper pipeline: sweep the public leadership roster, build
- * governed contact proposals, and append them to the account's
- * pendingProfileUpdates queue (audited). Used by the manual "Map executives"
- * route AND the auto-run chained after account creation. The account row is
- * re-loaded just before the queue write so a Cartographer run that finished
- * moments earlier (auto-on-create chain) is never clobbered.
- */
-// In-process claim set: makes the check-then-start window race-safe within
-// this server process (the API runs as a single process; auto-run + manual
-// double-click both land here). The DB status check below still covers runs
-// visible across restarts / other entry points.
-const executiveMapperInFlight = new Set<string>();
-
-async function runExecutiveMapperAndQueue(
-  accountId: string,
-  triggeredByUserId: string | null,
-): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
-  const a = await loadAccount(accountId);
-  if (!a) throw new Error("account-not-found");
-
-  // Concurrency guard: never stack a second sweep on an account that already
-  // has one running (double-click, auto-run + manual overlap). Claim the
-  // in-process slot atomically FIRST, then double-check the DB.
-  if (executiveMapperInFlight.has(a.id)) {
-    throw new Error("executive-mapper-already-running");
-  }
-  executiveMapperInFlight.add(a.id);
-  try {
-    const [inFlight] = await db
-      .select({ id: atelierAgentRuns.id })
-      .from(atelierAgentRuns)
-      .where(
-        and(
-          eq(atelierAgentRuns.agentId, "executive_mapper"),
-          eq(atelierAgentRuns.targetId, a.id),
-          eq(atelierAgentRuns.status, "running"),
-          isNull(atelierAgentRuns.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (inFlight) throw new Error("executive-mapper-already-running");
-    return await runExecutiveMapperAndQueueInner(a, triggeredByUserId);
-  } finally {
-    executiveMapperInFlight.delete(a.id);
-  }
-}
-
-async function runExecutiveMapperAndQueueInner(
-  a: NonNullable<Awaited<ReturnType<typeof loadAccount>>>,
-  triggeredByUserId: string | null,
-): Promise<{ runId: string; proposedCount: number; openQuestions: string[] }> {
-  const existingContacts = await db
-    .select({
-      fullName: atelierContacts.fullName,
-      title: atelierContacts.title,
-      linkedinUrl: atelierContacts.linkedinUrl,
-    })
-    .from(atelierContacts)
-    .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
-
-  const { runId, output } = await runExecutiveMapper({
-    accountId: a.id,
-    accountName: a.brandName ?? a.name,
-    accountBrandName: a.brandName ?? null,
-    accountSector: a.sector,
-    accountCountry: a.country,
-    accountHqCity: a.hqCity ?? null,
-    knownContacts: existingContacts,
-    triggeredByUserId,
-    actorLabel: "Executive Mapper",
-  });
-
-  // Re-load for the freshest queue — the LLM run takes minutes and other
-  // writers (Cartographer persist, partner edits) may have touched the row.
-  const fresh = (await loadAccount(a.id)) ?? a;
-  const proposals = buildExecutiveMapperProposals({
-    output,
-    account: fresh,
-    existingContacts,
-  });
-
-  const queue = (
-    (fresh.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []
-  ).concat(proposals);
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(atelierAccounts)
-      .set({ pendingProfileUpdates: queue, updatedAt: new Date() })
-      .where(eq(atelierAccounts.id, a.id));
-    await tx.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: a.id,
-      actorType: "agent",
-      actorId: "ag_executive_mapper",
-      actorLabel: "Executive Mapper",
-      action: "account.profile.proposeUpdate",
-      payload: {
-        count: proposals.length,
-        fields: proposals.map((p) => p.field),
-        openQuestions: output.openQuestions,
-      },
-      payloadSummary:
-        proposals.length > 0
-          ? `Executive Mapper proposed ${proposals.length} contact update(s) for ${fresh.brandName ?? fresh.name} (awaiting partner review).`
-          : `Executive Mapper sweep found no new executives to propose for ${fresh.brandName ?? fresh.name}.`,
-    });
-  });
-
-  return {
-    runId,
-    proposedCount: proposals.length,
-    openQuestions: output.openQuestions,
-  };
-}
+// Shared Executive Mapper pipeline lives in
+// ../../lib/atelier-agents/executive-mapper-chain.ts (extracted so the chat
+// orchestrator can chain it too). Imported at the top of this file.
 
 // @cli-skip: long-running agent trigger behind the account AI tab; CLI parity needs run-lifecycle design before exposure
 router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
