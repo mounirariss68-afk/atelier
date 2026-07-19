@@ -298,6 +298,8 @@ async function main(): Promise<void> {
     atelierStudioInterviewPanels,
     atelierStudioOffers,
     atelierPersonDocuments,
+    atelierContractTemplates,
+    atelierContractTemplateVersions,
   } = D as unknown as {
     db: any;
     pool: { end: () => Promise<void> };
@@ -324,6 +326,8 @@ async function main(): Promise<void> {
     atelierStudioInterviewPanels: any;
     atelierStudioOffers: any;
     atelierPersonDocuments: any;
+    atelierContractTemplates: any;
+    atelierContractTemplateVersions: any;
   };
 
   const START = new Date();
@@ -349,6 +353,12 @@ async function main(): Promise<void> {
     fixtureAccounts: new Set<string>(),
     fixtureEngagements: new Set<string>(),
   };
+
+  // Task #238 — signing-entity registry state captured before the group
+  // mutates it, so cleanup can restore the exact pre-run registry (or drop
+  // the cold-created carrier profile row when none existed).
+  let signingRegistryBefore: { entities: any[] } | null = null;
+  let signingProfileWasCold = false;
 
   // Boot an ephemeral server on a random port.
   const server = app.listen(0);
@@ -3017,6 +3027,255 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
+    // Task #238 — permanent coverage for the Task #232 signing-entity
+    // surfaces: PUT registry validation (exactly one default, stable ids),
+    // GET /signing-entities shape, and contract create persisting the
+    // entity snapshot + entity-driven autofill (firm_jurisdiction).
+    // =====================================================================
+    group("REST \u00b7 Signing-entity registry + contract snapshot (Task #238)");
+    {
+      const { storeContractBytes } = await import("../../src/lib/atelier-contracts.js");
+
+      // ---- capture pre-run state so cleanup can restore it exactly ----
+      const preProfile = await db.execute(
+        sql`select id from atelier_firm_profile where org_id = ${ORG} and status = 'published' and deleted_at is null limit 1`,
+      );
+      signingProfileWasCold = rows(preProfile).length === 0;
+      const before = await api("GET", "/signing-entities", PERSONA.fp);
+      check(
+        "GET /signing-entities \u2192 200 {entities[], defaultEntityId}",
+        before.status === 200 && Array.isArray(before.body?.entities) && "defaultEntityId" in (before.body ?? {}),
+        `status=${before.status} body=${JSON.stringify(before.body)?.slice(0, 160)}`,
+      );
+      signingRegistryBefore = { entities: before.body?.entities ?? [] };
+
+      // ---- RBAC: only publisher roles may replace the registry ----
+      const gate = await api("PUT", "/firm-profile/legal-entities", PERSONA.consultant, {
+        entities: [{ name: uniq("Gate Entity"), isDefault: true }],
+      });
+      check("PUT legal-entities (consultant) \u2192 403", gate.status === 403, `status=${gate.status}`);
+
+      const nameA = uniq("Cognirise FZ-LLC");
+      const nameB = uniq("Cognirise KSA");
+      const entA = {
+        name: nameA,
+        jurisdiction: "Dubai, UAE",
+        registeredAddress: "DIFC, Dubai",
+        country: "UAE",
+        governingLaw: "DIFC Law",
+        courts: "DIFC Courts",
+        isDefault: true,
+      };
+      // No `courts` on B — firm_jurisdiction autofill must fall back to
+      // `jurisdiction` for this entity.
+      const entB = {
+        name: nameB,
+        jurisdiction: "Riyadh, KSA",
+        registeredAddress: "Riyadh",
+        country: "KSA",
+        governingLaw: "KSA Law",
+        courts: "",
+        isDefault: false,
+      };
+
+      // ---- validation: exactly one default is enforced ----
+      const twoDefaults = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [entA, { ...entB, isDefault: true }],
+      });
+      check(
+        "PUT with two defaults \u2192 400 default-required",
+        twoDefaults.status === 400 && twoDefaults.body?.error === "default-required",
+        `status=${twoDefaults.status} err=${twoDefaults.body?.error}`,
+      );
+      const zeroDefaults = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [{ ...entA, isDefault: false }, entB],
+      });
+      check(
+        "PUT with zero defaults \u2192 400 default-required",
+        zeroDefaults.status === 400 && zeroDefaults.body?.error === "default-required",
+        `status=${zeroDefaults.status} err=${zeroDefaults.body?.error}`,
+      );
+      const dupNames = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [entA, { ...entB, name: nameA.toUpperCase(), isDefault: false }],
+      });
+      check(
+        "PUT with duplicate names (case-insensitive) \u2192 400 duplicate-names",
+        dupNames.status === 400 && dupNames.body?.error === "duplicate-names",
+        `status=${dupNames.status} err=${dupNames.body?.error}`,
+      );
+
+      // ---- valid replace: ids assigned, one default reported ----
+      const put1 = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [entA, entB],
+      });
+      const p1 = put1.body?.entities ?? [];
+      const idA = p1.find((e: any) => e.name === nameA)?.id as string | undefined;
+      const idB = p1.find((e: any) => e.name === nameB)?.id as string | undefined;
+      check(
+        "PUT valid registry \u2192 200, ids assigned, default = entity A",
+        put1.status === 200 && p1.length === 2 && !!idA && !!idB && idA !== idB && put1.body?.defaultEntityId === idA,
+        `status=${put1.status} body=${JSON.stringify(put1.body)?.slice(0, 240)}`,
+      );
+
+      // ---- read surface reflects the registry (any authed persona) ----
+      const read = await api("GET", "/signing-entities", PERSONA.consultant);
+      const readA = (read.body?.entities ?? []).find((e: any) => e.id === idA);
+      const readB = (read.body?.entities ?? []).find((e: any) => e.id === idB);
+      check(
+        "GET /signing-entities (consultant) \u2192 200 with both entities + defaultEntityId",
+        read.status === 200 &&
+          read.body?.defaultEntityId === idA &&
+          readA?.isDefault === true &&
+          readA?.country === "UAE" &&
+          readB?.isDefault === false &&
+          readB?.jurisdiction === "Riyadh, KSA",
+        `status=${read.status} body=${JSON.stringify(read.body)?.slice(0, 240)}`,
+      );
+
+      // ---- ids stay stable across saves (contracts reference them) ----
+      const put2 = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [
+          { ...entA, id: idA, registeredAddress: "DIFC, Gate Village, Dubai" },
+          { ...entB, id: idB },
+        ],
+      });
+      const p2 = put2.body?.entities ?? [];
+      check(
+        "re-PUT with existing ids \u2192 200, ids unchanged",
+        put2.status === 200 &&
+          p2.find((e: any) => e.name === nameA)?.id === idA &&
+          p2.find((e: any) => e.name === nameB)?.id === idB &&
+          put2.body?.defaultEntityId === idA,
+        `status=${put2.status} body=${JSON.stringify(put2.body)?.slice(0, 240)}`,
+      );
+
+      // ---- fixture template (reviewed + active) built directly in the DB
+      // with a real .docx so prepareContract can fill it ----
+      const { Document, Packer, Paragraph, TextRun } = await import("docx");
+      const docx = await Packer.toBuffer(
+        new Document({
+          sections: [
+            {
+              children: [
+                new Paragraph({ children: [new TextRun("Agreement with [COUNTERPARTY_NAME]")] }),
+                new Paragraph({ children: [new TextRun("Jurisdiction: [FIRM_JURISDICTION]")] }),
+              ],
+            },
+          ],
+        }),
+      );
+      const stored = await storeContractBytes(Buffer.from(docx));
+      const tplId = `ctpl_t542_${STAMP}`;
+      const tplVersionId = `ctv_t542_${STAMP}`;
+      await db.insert(atelierContractTemplates).values({
+        id: tplId,
+        orgId: ORG,
+        name: uniq("Entity Snapshot Template"),
+        contractType: "mutual_nda",
+        status: "active",
+        currentVersionId: tplVersionId,
+        createdBy: PERSONA.fp,
+        createdByLabel: "Mounir Ariss",
+      });
+      await db.insert(atelierContractTemplateVersions).values({
+        id: tplVersionId,
+        orgId: ORG,
+        templateId: tplId,
+        versionNumber: 1,
+        fileName: "entity-snapshot.docx",
+        sizeBytes: docx.byteLength,
+        sha256: stored.sha256,
+        blobRef: stored.blobRef,
+        fieldSchema: [
+          {
+            key: "counterparty_name",
+            label: "Counterparty name",
+            placeholder: "[COUNTERPARTY_NAME]",
+            dataType: "text",
+            autoFill: "counterparty_name",
+            required: true,
+          },
+          {
+            // required:true makes the check bite: if entity-driven autofill
+            // breaks, create fails with missing-required-fields, not a
+            // silently empty value.
+            key: "firm_jurisdiction",
+            label: "Jurisdiction",
+            placeholder: "[FIRM_JURISDICTION]",
+            dataType: "text",
+            autoFill: "firm_jurisdiction",
+            required: true,
+          },
+        ],
+        fieldStatus: "reviewed",
+        createdBy: PERSONA.fp,
+      });
+
+      // ---- unknown entity id → 404, no contract created ----
+      const badEntity = await api("POST", "/contracts", PERSONA.fp, {
+        templateId: tplId,
+        counterparty: { kind: "account", id: ACC },
+        signingEntityId: `le_missing_${STAMP}`,
+        title: uniq("Bad Entity Contract"),
+      });
+      check(
+        "POST /contracts with unknown signingEntityId \u2192 404 signing-entity-not-found",
+        badEntity.status === 404 && badEntity.body?.error === "signing-entity-not-found",
+        `status=${badEntity.status} err=${badEntity.body?.error}`,
+      );
+
+      // ---- explicit entity B: snapshot persisted, jurisdiction fallback ----
+      const crB = await api("POST", "/contracts", PERSONA.fp, {
+        templateId: tplId,
+        counterparty: { kind: "account", id: ACC },
+        signingEntityId: idB,
+        title: uniq("Entity B Contract"),
+      });
+      const cB = crB.body?.contract;
+      check(
+        "POST /contracts (entity B) \u2192 201 with entity snapshot persisted",
+        crB.status === 201 && cB?.signingEntityId === idB && cB?.signingEntityLabel === nameB && cB?.signingEntityCountry === "KSA",
+        `status=${crB.status} body=${JSON.stringify(cB)?.slice(0, 240)}`,
+      );
+      check(
+        "entity B autofill: firm_jurisdiction falls back to jurisdiction (no courts)",
+        cB?.fieldValues?.firm_jurisdiction === "Riyadh, KSA" && cB?.fieldValues?.counterparty_name === "Tasama",
+        `values=${JSON.stringify(cB?.fieldValues)}`,
+      );
+
+      // ---- omitted entity id: the default entity (A) drives the snapshot ----
+      const crDef = await api("POST", "/contracts", PERSONA.fp, {
+        templateId: tplId,
+        counterparty: { kind: "account", id: ACC },
+        title: uniq("Default Entity Contract"),
+      });
+      const cDef = crDef.body?.contract;
+      check(
+        "POST /contracts (no entity id) \u2192 201 snapshots the DEFAULT entity",
+        crDef.status === 201 && cDef?.signingEntityId === idA && cDef?.signingEntityLabel === nameA && cDef?.signingEntityCountry === "UAE",
+        `status=${crDef.status} body=${JSON.stringify(cDef)?.slice(0, 240)}`,
+      );
+      check(
+        "default entity autofill: firm_jurisdiction uses courts when present",
+        cDef?.fieldValues?.firm_jurisdiction === "DIFC Courts",
+        `values=${JSON.stringify(cDef?.fieldValues)}`,
+      );
+
+      // ---- snapshot is immutable history: renaming the entity in the
+      // registry must NOT rewrite the stored contract snapshot ----
+      const renamed = `${nameB} (Renamed)`;
+      const put3 = await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+        entities: [{ ...entA, id: idA }, { ...entB, id: idB, name: renamed }],
+      });
+      const cAfter = await api("GET", `/contracts/${cB?.id}`, PERSONA.fp);
+      check(
+        "registry rename leaves the contract's entity snapshot untouched",
+        put3.status === 200 && cAfter.status === 200 && cAfter.body?.contract?.signingEntityLabel === nameB,
+        `status=${put3.status}/${cAfter.status} label=${cAfter.body?.contract?.signingEntityLabel}`,
+      );
+    }
+
+    // =====================================================================
     // Task #125 — HR hiring module: roles / candidates / CV upload /
     // interviews / offers, gated to hr|partner|founding_partner.
     // =====================================================================
@@ -3263,6 +3522,43 @@ async function main(): Promise<void> {
       `).catch(sweep("hire_offers"));
       await db.execute(sql`delete from atelier_studio_candidates where name like ${tagLike}`).catch(sweep("hire_candidates"));
       await db.execute(sql`delete from atelier_studio_open_roles where title like ${tagLike}`).catch(sweep("hire_roles"));
+      // Task #238 — signing-entity/contract fixtures. Audit rows first (they
+      // reference the tagged contract/template ids), then the document chain,
+      // then the records/templates themselves.
+      await db.execute(sql`
+        delete from atelier_audit_events
+        where entity_id in (select id from atelier_contract_records where title like ${tagLike})
+           or entity_id in (select id from atelier_contract_templates where name like ${tagLike})
+      `).catch(sweep("contract_audit"));
+      await db.execute(sql`
+        delete from atelier_contract_documents
+        where contract_id in (select id from atelier_contract_records where title like ${tagLike})
+      `).catch(sweep("contract_documents"));
+      await db.execute(sql`delete from atelier_contract_records where title like ${tagLike}`).catch(sweep("contract_records"));
+      await db.execute(sql`
+        delete from atelier_contract_template_versions
+        where template_id in (select id from atelier_contract_templates where name like ${tagLike})
+      `).catch(sweep("contract_template_versions"));
+      await db.execute(sql`delete from atelier_contract_templates where name like ${tagLike}`).catch(sweep("contract_templates"));
+      // Restore the pre-run signing-entity registry. When the registry was
+      // cold (no published firm profile at all), drop the carrier row the
+      // PUT created instead of leaving a synthetic profile behind.
+      try {
+        if (signingRegistryBefore) {
+          if (signingProfileWasCold) {
+            await db.execute(sql`
+              delete from atelier_firm_profile
+              where org_id = ${ORG} and payload::text like ${tagLike}
+            `);
+          } else {
+            await api("PUT", "/firm-profile/legal-entities", PERSONA.fp, {
+              entities: signingRegistryBefore.entities,
+            });
+          }
+        }
+      } catch (err) {
+        sweep("signing_registry_restore")(err);
+      }
       // Audit cleanup is scoped to BOTH the entities this run touched AND the
       // actor personas it acted as, so concurrent activity by any other actor
       // (possible on a shared, non-isolated DB) is never deleted.
