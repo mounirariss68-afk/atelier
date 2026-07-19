@@ -24,6 +24,8 @@ import {
   atelierLegalEntities,
   type ContractTemplateField,
 } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import { atelierContractReferenceSequences } from "@workspace/db";
 import {
   DOCX_MIME,
   ContractFillError,
@@ -33,11 +35,12 @@ import {
   loadContractBytes,
   addContractDocument,
   auditContractEntity,
+  normalizeFieldSchema,
   rid,
 } from "./atelier-contracts.js";
 import { createDocument } from "./atelier-documents.js";
 import { sendSignatureRequest } from "./atelier-esign.js";
-import { DocusealError, docusealConfigured } from "./docuseal.js";
+import { DocusealError, docusealConfigured, defaultSignaturePlacement } from "./docuseal.js";
 
 export type TemplateRow = typeof atelierContractTemplates.$inferSelect;
 export type TemplateVersionRow = typeof atelierContractTemplateVersions.$inferSelect;
@@ -283,7 +286,18 @@ export async function firmAutoFill(
   };
 }
 
-/** Merge auto-fill + explicit values against the template's field schema. */
+/**
+ * Merge auto-fill + explicit values against the template's field schema.
+ *
+ * Task #291 — non-standard roles are never asked for at creation:
+ *   second_party — the counterparty's signature-block fields are left
+ *     blank in the draft and completed at e-sign time (DocuSeal date
+ *     boxes); they never count as missing and explicit values for
+ *     them are ignored.
+ *   reference    — auto-generated at prepare (commit) time; explicit
+ *     values are ignored so a preview label can't burn or fake a
+ *     series number.
+ */
 export function buildFieldValues(args: {
   fields: ContractTemplateField[];
   counterparty: Counterparty;
@@ -292,11 +306,13 @@ export function buildFieldValues(args: {
   effectiveDate?: string | null;
   expiryDate?: string | null;
 }): { values: Record<string, string>; missingRequired: string[] } {
+  const fields = normalizeFieldSchema(args.fields);
   const values: Record<string, string> = {};
   const dateFill: Record<string, string> = {};
   if (args.effectiveDate) dateFill.effective_date = args.effectiveDate;
   if (args.expiryDate) dateFill.expiry_date = args.expiryDate;
-  for (const f of args.fields) {
+  for (const f of fields) {
+    if (f.role === "second_party" || f.role === "reference") continue;
     const explicit = args.explicit[f.key];
     if (explicit != null && explicit !== "") {
       values[f.key] = explicit;
@@ -305,11 +321,67 @@ export function buildFieldValues(args: {
     const auto =
       args.counterparty.autoFill[f.autoFill] ?? args.firm[f.autoFill] ?? dateFill[f.autoFill];
     if (auto != null && auto !== "") values[f.key] = auto;
+    else if (f.dataType === "date" && f.defaultHint === "today") {
+      values[f.key] = new Date().toISOString().slice(0, 10);
+    }
   }
-  const missingRequired = args.fields
+  const missingRequired = fields
+    .filter((f) => (f.role ?? "standard") === "standard")
     .filter((f) => f.required && (values[f.key] == null || values[f.key] === ""))
     .map((f) => f.key);
   return { values, missingRequired };
+}
+
+// ---------------------------------------------------------------------------
+// Task #291 — reference-number allocation (per template, per year)
+// ---------------------------------------------------------------------------
+
+/**
+ * Allocate the next reference series number for a template + year.
+ * Race-safe: a single INSERT … ON CONFLICT DO UPDATE SET
+ * last_series = last_series + 1 RETURNING — concurrent callers each get
+ * a distinct number. Year rollover inserts a fresh row starting at 1.
+ */
+export async function allocateReferenceSeries(args: {
+  orgId: string;
+  templateId: string;
+  year: number;
+}): Promise<number> {
+  const rows = (await db
+    .insert(atelierContractReferenceSequences)
+    .values({
+      id: rid("crseq"),
+      orgId: args.orgId,
+      templateId: args.templateId,
+      year: args.year,
+      lastSeries: 1,
+    })
+    .onConflictDoUpdate({
+      target: [
+        atelierContractReferenceSequences.templateId,
+        atelierContractReferenceSequences.year,
+      ],
+      set: {
+        lastSeries: sql`${atelierContractReferenceSequences.lastSeries} + 1`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ lastSeries: atelierContractReferenceSequences.lastSeries })) as Array<{
+    lastSeries: number;
+  }>;
+  return rows[0].lastSeries;
+}
+
+/**
+ * Format a reference value in the template's own style: reuse the
+ * placeholder's prefix/separator when it looks like "AGR-2026-003",
+ * otherwise fall back to "YYYY-NNN".
+ */
+export function formatReferenceValue(placeholder: string, year: number, series: number): string {
+  const padded = String(series).padStart(3, "0");
+  const m = placeholder.match(/^(.*?)(19|20)\d{2}([-_/.])\d{3}(?!\d)/);
+  if (m) return `${m[1]}${year}${m[3]}${padded}`;
+  return `${year}-${padded}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -407,12 +479,25 @@ export async function prepareContract(args: {
       code: "missing-required-fields",
       message: `Values required for: ${missingRequired.join(", ")}`,
       missing: missingRequired,
-      fields: version.fieldSchema,
+      fields: normalizeFieldSchema(version.fieldSchema),
     };
   }
   const templateBytes = await loadContractBytes(version.blobRef);
   if (!templateBytes) {
     return { ok: false, code: "template-blob-missing", message: "Template file is missing." };
+  }
+  // Task #291 — auto-assign reference numbers at commit time (never on
+  // previews). One series per template per year, race-safe.
+  const normalizedFields = normalizeFieldSchema(version.fieldSchema);
+  const referenceFields = normalizedFields.filter((f) => f.role === "reference");
+  for (const f of referenceFields) {
+    const year = new Date().getFullYear();
+    const series = await allocateReferenceSeries({
+      orgId: args.orgId,
+      templateId: template.id,
+      year,
+    });
+    values[f.key] = formatReferenceValue(f.placeholder, year, series);
   }
   let draft: Buffer;
   try {
@@ -595,6 +680,45 @@ export async function sendContract(args: {
     return { ok: false, code: "library-store-failed", message: libDoc.reason };
   }
 
+  // Task #291 — when the template has counterparty ("second party")
+  // signature-block date fields, stamp a "Date signed" box beside every
+  // signer's default signature box so the date is captured at signing
+  // (DocuSeal fills date fields automatically when the signer signs).
+  let extraFields: Array<{
+    signerIndex: number;
+    type: "date";
+    page: number;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }> | null = null;
+  if (contract.templateVersionId) {
+    const [tv] = await db
+      .select()
+      .from(atelierContractTemplateVersions)
+      .where(eq(atelierContractTemplateVersions.id, contract.templateVersionId));
+    const hasSecondPartyDate = normalizeFieldSchema(tv?.fieldSchema ?? []).some(
+      (f) => f.role === "second_party" && f.dataType === "date",
+    );
+    if (hasSecondPartyDate) {
+      extraFields = args.signers.map((_, i) => {
+        const sig = defaultSignaturePlacement(i, 0); // page overwritten below
+        return {
+          signerIndex: i,
+          type: "date" as const,
+          // Same column as the signature box, directly beneath it. The
+          // e-sign layer clamps the page to the document's last page.
+          page: 9999,
+          x: sig.x,
+          y: Math.min(0.95, sig.y + 0.055),
+          w: 0.18,
+          h: 0.03,
+        };
+      });
+    }
+  }
+
   // 3. Hand off to the existing DocuSeal e-sign flow.
   try {
     const sent = await sendSignatureRequest({
@@ -611,6 +735,7 @@ export async function sendContract(args: {
       contactId: contract.contactId,
       personId: contract.personId,
       expiresAt: args.expiresAt ?? null,
+      extraFields,
     });
     const [updated] = await db
       .update(atelierContractRecords)

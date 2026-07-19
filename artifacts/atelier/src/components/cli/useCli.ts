@@ -394,7 +394,7 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         tool?: string;
         partial?: Record<string, unknown>;
         suggestions?: Array<{ id: string; label: string; hint?: string }>;
-        fields?: Array<{ field: string; label: string; hint?: string }>;
+        fields?: Array<{ field: string; label: string; hint?: string; options?: string[]; inputType?: "date"; defaultValue?: string }>;
       };
       return {
         ...turn,
@@ -604,7 +604,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
               tool: string;
               partial: Record<string, unknown>;
               suggestions: Array<{ id: string; label: string; hint?: string }>;
-              fields?: Array<{ field: string; label: string; hint?: string }>;
+              fields?: Array<{ field: string; label: string; hint?: string; options?: string[]; inputType?: "date"; defaultValue?: string }>;
             };
           } | null;
         } | null) => {

@@ -55,7 +55,22 @@ export interface CliClarification {
    * card renders one labeled input per field so all missing values can
    * be submitted in a single round-trip.
    */
-  fields?: Array<{ field: string; label: string; hint?: string }>;
+  fields?: CliClarificationField[];
+}
+
+/**
+ * Task #291 — clarification fields may carry richer input hints:
+ * `options` renders a dropdown, `inputType: "date"` a date picker, and
+ * `defaultValue` prefills the input (e.g. today's date for firm-side
+ * signature dates).
+ */
+export interface CliClarificationField {
+  field: string;
+  label: string;
+  hint?: string;
+  options?: string[];
+  inputType?: "date";
+  defaultValue?: string;
 }
 
 export interface CliRefusal {

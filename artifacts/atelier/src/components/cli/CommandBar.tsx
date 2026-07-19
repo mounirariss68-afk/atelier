@@ -1890,11 +1890,25 @@ function ClarificationCard({
   // missing field, single submit. Only kicks in when the server sent
   // 2+ fields; single-field (incl. suggestion chips) keeps the classic
   // one-input path below.
+  // Task #291 — also use the labeled-field renderer for a SINGLE field
+  // when it carries rich input hints (dropdown options, date picker,
+  // default value), so those render properly instead of the bare input.
   const multiFields =
-    clarification.fields && clarification.fields.length > 1
+    clarification.fields &&
+    (clarification.fields.length > 1 ||
+      (clarification.fields.length === 1 &&
+        (clarification.fields[0].options?.length ||
+          clarification.fields[0].inputType ||
+          clarification.fields[0].defaultValue)))
       ? clarification.fields
       : null;
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const f of clarification.fields ?? []) {
+      if (f.defaultValue) init[f.field] = f.defaultValue;
+    }
+    return init;
+  });
   if (multiFields) {
     const filled = multiFields
       .map((f) => ({ f, v: (fieldValues[f.field] ?? "").trim() }))
@@ -1935,21 +1949,41 @@ function ClarificationCard({
                   <span className="text-text-faint"> · {f.hint}</span>
                 )}
               </span>
-              <input
-                autoFocus={i === 0}
-                value={fieldValues[f.field] ?? ""}
-                onChange={(e) =>
-                  setFieldValues((prev) => ({ ...prev, [f.field]: e.target.value }))
-                }
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && canSubmit) {
-                    e.preventDefault();
-                    submitMulti();
+              {f.options && f.options.length > 0 ? (
+                <select
+                  autoFocus={i === 0}
+                  value={fieldValues[f.field] ?? ""}
+                  onChange={(e) =>
+                    setFieldValues((prev) => ({ ...prev, [f.field]: e.target.value }))
                   }
-                }}
-                className="w-full bg-bg-deep border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
-                data-testid={`cli-clarification-field-${f.field}`}
-              />
+                  className="w-full bg-bg-deep border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
+                  data-testid={`cli-clarification-field-${f.field}`}
+                >
+                  <option value="">—</option>
+                  {f.options.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  autoFocus={i === 0}
+                  type={f.inputType === "date" ? "date" : "text"}
+                  value={fieldValues[f.field] ?? ""}
+                  onChange={(e) =>
+                    setFieldValues((prev) => ({ ...prev, [f.field]: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && canSubmit) {
+                      e.preventDefault();
+                      submitMulti();
+                    }
+                  }}
+                  className="w-full bg-bg-deep border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
+                  data-testid={`cli-clarification-field-${f.field}`}
+                />
+              )}
             </label>
           ))}
         </div>

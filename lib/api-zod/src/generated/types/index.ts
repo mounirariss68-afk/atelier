@@ -200,6 +200,8 @@ export * from "./atelierContractTemplate";
 export * from "./atelierContractTemplateEnvelope";
 export * from "./atelierContractTemplateField";
 export * from "./atelierContractTemplateFieldDataType";
+export * from "./atelierContractTemplateFieldDefaultHint";
+export * from "./atelierContractTemplateFieldRole";
 export * from "./atelierContractTemplateFieldsReview";
 export * from "./atelierContractTemplateList";
 export * from "./atelierContractTemplatePriorFieldReview";

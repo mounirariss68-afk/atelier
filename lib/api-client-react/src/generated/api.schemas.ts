@@ -6255,6 +6255,28 @@ export const AtelierContractTemplateFieldDataType = {
   number: "number",
 } as const;
 
+/**
+ * Task
+ */
+export type AtelierContractTemplateFieldRole =
+  (typeof AtelierContractTemplateFieldRole)[keyof typeof AtelierContractTemplateFieldRole];
+
+export const AtelierContractTemplateFieldRole = {
+  standard: "standard",
+  second_party: "second_party",
+  reference: "reference",
+} as const;
+
+/**
+ * Task
+ */
+export type AtelierContractTemplateFieldDefaultHint =
+  (typeof AtelierContractTemplateFieldDefaultHint)[keyof typeof AtelierContractTemplateFieldDefaultHint];
+
+export const AtelierContractTemplateFieldDefaultHint = {
+  today: "today",
+} as const;
+
 export interface AtelierContractTemplateField {
   /**
    * @minLength 1
@@ -6278,6 +6300,15 @@ export interface AtelierContractTemplateField {
    * @maxLength 60
    */
   autoFill: string;
+  /**
+   * Task
+   * @maxItems 20
+   */
+  options?: string[];
+  /** Task */
+  role?: AtelierContractTemplateFieldRole;
+  /** Task */
+  defaultHint?: AtelierContractTemplateFieldDefaultHint;
   required: boolean;
   /** @maxLength 500 */
   note?: string;

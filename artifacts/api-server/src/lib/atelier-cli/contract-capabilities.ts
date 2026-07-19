@@ -48,7 +48,7 @@ import {
   resolveSigningEntity,
   type Counterparty,
 } from "../atelier-contract-service.js";
-import { CONTRACT_TYPES } from "../atelier-contracts.js";
+import { CONTRACT_TYPES, normalizeFieldSchema } from "../atelier-contracts.js";
 
 const CONTRACTS_PATH = "/contracts";
 
@@ -341,12 +341,21 @@ defineCapability({
       // single round-trip. `field`/`question` stay pointed at the first
       // missing field for backward compatibility with the single-input
       // protocol.
+      const schema = normalizeFieldSchema(version.fieldSchema);
       const missingFields = missingRequired.map((key) => {
-        const f = version.fieldSchema.find((x) => x.key === key);
+        const f = schema.find((x) => x.key === key);
+        // Task #291 — richer clarification inputs: dropdowns for
+        // option-list fields, date pickers for dates, today-default
+        // for the firm-side signature date.
         return {
           field: `values.${key}`,
           label: f?.label ?? key,
           ...(f?.note ? { hint: String(f.note) } : {}),
+          ...(f?.options && f.options.length > 0 ? { options: f.options } : {}),
+          ...(f?.dataType === "date" ? { inputType: "date" as const } : {}),
+          ...(f?.dataType === "date" && f?.defaultHint === "today"
+            ? { defaultValue: new Date().toISOString().slice(0, 10) }
+            : {}),
         };
       });
       const question =
@@ -383,7 +392,16 @@ defineCapability({
             template: { id: template.id, name: template.name, type: template.contractType },
             counterparty: { kind: counterparty.kind, id: counterparty.id, label: counterparty.label },
             signingEntity: { id: signingEntity.id, name: signingEntity.name },
-            values,
+            values: {
+              ...values,
+              // Task #291 — reference numbers are only assigned at commit
+              // time (race-safe series); show that on the preview.
+              ...Object.fromEntries(
+                normalizeFieldSchema(version.fieldSchema)
+                  .filter((f) => f.role === "reference")
+                  .map((f) => [f.key, "(auto-assigned on creation)"]),
+              ),
+            },
             effectiveDate: input.effectiveDate ?? null,
             expiryDate: input.expiryDate ?? null,
           },

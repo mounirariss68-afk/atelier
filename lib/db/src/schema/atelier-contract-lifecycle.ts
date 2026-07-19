@@ -53,6 +53,28 @@ export interface ContractTemplateField {
   required: boolean;
   /** Optional detection note (e.g. ambiguity) surfaced on review. */
   note?: string;
+  /**
+   * Task #291 — when the template says "choose one of N options"
+   * (e.g. Relationship Type), the exact option list. Renders as a
+   * dropdown in the chat clarification card and the create form.
+   */
+  options?: string[];
+  /**
+   * Task #291 — field role:
+   *   standard      — normal fill-in (default when absent).
+   *   second_party  — the receiving party's signature-block field
+   *                   (signature date etc.). Never asked at creation;
+   *                   left for signing time (DocuSeal date field).
+   *   reference     — auto-generated reference number (…-YYYY-NNN).
+   *                   Never asked; the next series number is assigned
+   *                   at prepare time.
+   */
+  role?: "standard" | "second_party" | "reference";
+  /**
+   * Task #291 — default hint for date fields; "today" prefills the
+   * input with today's date (e.g. the firm-side signature date).
+   */
+  defaultHint?: "today";
 }
 
 /**
@@ -182,6 +204,26 @@ export const atelierContractRecords = pgTable(
     index("idx_atelier_ctr_sigreq").on(t.signatureRequestId),
     index("idx_atelier_ctr_expiry").on(t.orgId, t.expiryDate),
   ],
+);
+
+/**
+ * Task #291 — issued reference-number series, per template per year.
+ * The next series number is allocated race-safely via
+ * INSERT … ON CONFLICT DO UPDATE SET last_series = last_series + 1
+ * RETURNING, so concurrent contract creations never share a number.
+ * Year rollover starts a fresh row (series resets to 001).
+ */
+export const atelierContractReferenceSequences = pgTable(
+  "atelier_contract_reference_sequences",
+  {
+    id: text("id").primaryKey(), // crseq_...
+    orgId: text("org_id").notNull().default("aico"),
+    templateId: text("template_id").notNull(),
+    year: integer("year").notNull(),
+    lastSeries: integer("last_series").notNull().default(0),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uniq_atelier_crseq_template_year").on(t.templateId, t.year)],
 );
 
 export const atelierContractDocuments = pgTable(

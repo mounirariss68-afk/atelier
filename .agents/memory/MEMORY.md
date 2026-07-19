@@ -78,3 +78,4 @@
 - [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — sendEmail ok:true+via:"log-only" means NOT delivered; only ok+via:"resend" counts as sent when surfacing delivery status.
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
+- [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod needs sequences table.

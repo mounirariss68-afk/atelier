@@ -1126,6 +1126,10 @@ export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneF
 
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
 
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemOptionsMax = 20;
+
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1135,6 +1139,10 @@ export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneP
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1146,6 +1154,10 @@ export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldS
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemAutoFillMax = 60;
 
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemOptionsMax = 20;
+
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemNoteMax = 500;
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1155,6 +1167,10 @@ export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorF
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1210,6 +1226,25 @@ export const AtelierListContractTemplatesResponse = zod.object({
                   .describe(
                     "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                   ),
+                options: zod
+                  .array(
+                    zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemOptionsItemMax,
+                      ),
+                  )
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemOptionsMax,
+                  )
+                  .optional()
+                  .describe("Task"),
+                role: zod
+                  .enum(["standard", "second_party", "reference"])
+                  .optional()
+                  .describe("Task"),
+                defaultHint: zod.enum(["today"]).optional().describe("Task"),
                 required: zod.boolean(),
                 note: zod
                   .string()
@@ -1258,6 +1293,28 @@ export const AtelierListContractTemplatesResponse = zod.object({
                           .describe(
                             "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                           ),
+                        options: zod
+                          .array(
+                            zod
+                              .string()
+                              .min(1)
+                              .max(
+                                atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                              ),
+                          )
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax,
+                          )
+                          .optional()
+                          .describe("Task"),
+                        role: zod
+                          .enum(["standard", "second_party", "reference"])
+                          .optional()
+                          .describe("Task"),
+                        defaultHint: zod
+                          .enum(["today"])
+                          .optional()
+                          .describe("Task"),
                         required: zod.boolean(),
                         note: zod
                           .string()
@@ -1325,6 +1382,25 @@ export const AtelierListContractTemplatesResponse = zod.object({
                   .describe(
                     "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                   ),
+                options: zod
+                  .array(
+                    zod
+                      .string()
+                      .min(1)
+                      .max(
+                        atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemOptionsItemMax,
+                      ),
+                  )
+                  .max(
+                    atelierListContractTemplatesResponseTemplatesItemVersionsItemFieldSchemaItemOptionsMax,
+                  )
+                  .optional()
+                  .describe("Task"),
+                role: zod
+                  .enum(["standard", "second_party", "reference"])
+                  .optional()
+                  .describe("Task"),
+                defaultHint: zod.enum(["today"]).optional().describe("Task"),
                 required: zod.boolean(),
                 note: zod
                   .string()
@@ -1373,6 +1449,28 @@ export const AtelierListContractTemplatesResponse = zod.object({
                           .describe(
                             "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                           ),
+                        options: zod
+                          .array(
+                            zod
+                              .string()
+                              .min(1)
+                              .max(
+                                atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                              ),
+                          )
+                          .max(
+                            atelierListContractTemplatesResponseTemplatesItemVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax,
+                          )
+                          .optional()
+                          .describe("Task"),
+                        role: zod
+                          .enum(["standard", "second_party", "reference"])
+                          .optional()
+                          .describe("Task"),
+                        defaultHint: zod
+                          .enum(["today"])
+                          .optional()
+                          .describe("Task"),
                         required: zod.boolean(),
                         note: zod
                           .string()
@@ -1418,6 +1516,10 @@ export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSch
 
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
 
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax = 20;
+
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1427,6 +1529,10 @@ export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFie
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1438,6 +1544,10 @@ export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaIt
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsMax = 20;
+
 export const atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1447,6 +1557,10 @@ export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldRev
 export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1501,6 +1615,25 @@ export const AtelierGetContractTemplateResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierGetContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -1549,6 +1682,28 @@ export const AtelierGetContractTemplateResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierGetContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()
@@ -1616,6 +1771,25 @@ export const AtelierGetContractTemplateResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierGetContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -1664,6 +1838,28 @@ export const AtelierGetContractTemplateResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierGetContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()
@@ -1731,6 +1927,10 @@ export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneField
 
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
 
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax = 20;
+
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1740,6 +1940,10 @@ export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePrior
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1751,6 +1955,10 @@ export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchem
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsMax = 20;
+
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -1760,6 +1968,10 @@ export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorField
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -1814,6 +2026,25 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -1862,6 +2093,28 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()
@@ -1929,6 +2182,25 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateContractTemplateResponseTemplateVersionsItemFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -1977,6 +2249,28 @@ export const AtelierUpdateContractTemplateResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierUpdateContractTemplateResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()
@@ -2021,6 +2315,10 @@ export const atelierReviewContractTemplateFieldsBodyFieldsItemPlaceholderMax = 5
 
 export const atelierReviewContractTemplateFieldsBodyFieldsItemAutoFillMax = 60;
 
+export const atelierReviewContractTemplateFieldsBodyFieldsItemOptionsItemMax = 200;
+
+export const atelierReviewContractTemplateFieldsBodyFieldsItemOptionsMax = 20;
+
 export const atelierReviewContractTemplateFieldsBodyFieldsItemNoteMax = 500;
 
 export const atelierReviewContractTemplateFieldsBodyFieldsMax = 80;
@@ -2051,6 +2349,23 @@ export const AtelierReviewContractTemplateFieldsBody = zod.object({
           .describe(
             "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
           ),
+        options: zod
+          .array(
+            zod
+              .string()
+              .min(1)
+              .max(
+                atelierReviewContractTemplateFieldsBodyFieldsItemOptionsItemMax,
+              ),
+          )
+          .max(atelierReviewContractTemplateFieldsBodyFieldsItemOptionsMax)
+          .optional()
+          .describe("Task"),
+        role: zod
+          .enum(["standard", "second_party", "reference"])
+          .optional()
+          .describe("Task"),
+        defaultHint: zod.enum(["today"]).optional().describe("Task"),
         required: zod.boolean(),
         note: zod
           .string()
@@ -2069,6 +2384,10 @@ export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOn
 
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemAutoFillMax = 60;
 
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax = 20;
+
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemNoteMax = 500;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -2078,6 +2397,10 @@ export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOn
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -2089,6 +2412,10 @@ export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFiel
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemAutoFillMax = 60;
 
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemOptionsMax = 20;
+
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemNoteMax = 500;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneKeyMax = 80;
@@ -2098,6 +2425,10 @@ export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPrio
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOnePlaceholderMax = 500;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneAutoFillMax = 60;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax = 200;
+
+export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax = 20;
 
 export const atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneNoteMax = 500;
 
@@ -2152,6 +2483,25 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOneFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -2200,6 +2550,28 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateCurrentVersionOnePriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()
@@ -2267,6 +2639,25 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
                 .describe(
                   "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                 ),
+              options: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemOptionsItemMax,
+                    ),
+                )
+                .max(
+                  atelierReviewContractTemplateFieldsResponseTemplateVersionsItemFieldSchemaItemOptionsMax,
+                )
+                .optional()
+                .describe("Task"),
+              role: zod
+                .enum(["standard", "second_party", "reference"])
+                .optional()
+                .describe("Task"),
+              defaultHint: zod.enum(["today"]).optional().describe("Task"),
               required: zod.boolean(),
               note: zod
                 .string()
@@ -2315,6 +2706,28 @@ export const AtelierReviewContractTemplateFieldsResponse = zod.object({
                         .describe(
                           "CRM auto-fill hint (counterparty_name, effective_date, ... or none).",
                         ),
+                      options: zod
+                        .array(
+                          zod
+                            .string()
+                            .min(1)
+                            .max(
+                              atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsItemMax,
+                            ),
+                        )
+                        .max(
+                          atelierReviewContractTemplateFieldsResponseTemplateVersionsItemPriorFieldReviewOneFieldsItemOneOptionsMax,
+                        )
+                        .optional()
+                        .describe("Task"),
+                      role: zod
+                        .enum(["standard", "second_party", "reference"])
+                        .optional()
+                        .describe("Task"),
+                      defaultHint: zod
+                        .enum(["today"])
+                        .optional()
+                        .describe("Task"),
                       required: zod.boolean(),
                       note: zod
                         .string()

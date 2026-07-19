@@ -9839,6 +9839,19 @@ components:
           type: string
           maxLength: 60
           description: CRM auto-fill hint (counterparty_name, effective_date, ... or none).
+        options:
+          type: array
+          maxItems: 20
+          items: { type: string, minLength: 1, maxLength: 200 }
+          description: Task #291 — fixed option list; renders as a dropdown.
+        role:
+          type: string
+          enum: [standard, second_party, reference]
+          description: Task #291 — second_party fields are filled at signing; reference numbers are auto-generated.
+        defaultHint:
+          type: string
+          enum: [today]
+          description: Task #291 — date fields defaulting to today (firm-side signature date).
         required: { type: boolean }
         note: { type: string, maxLength: 500 }
 

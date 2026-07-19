@@ -249,7 +249,10 @@ Return ONLY a JSON object of this exact shape:
       "dataType": "text" | "date" | "money" | "number",
       "autoFill": "counterparty_name" | "counterparty_address" | "counterparty_email" | "counterparty_country" | "firm_name" | "firm_address" | "firm_governing_law" | "firm_jurisdiction" | "effective_date" | "expiry_date" | "fee" | "term" | "none",
       "required": true | false,
-      "note": "optional detection note"
+      "note": "optional detection note",
+      "options": ["optional — exact option list when the document says choose/select/circle one of a fixed set"],
+      "role": "standard" | "second_party" | "reference",
+      "defaultHint": "today"
     }
   ],
   "warnings": ["optional strings describing ambiguities"]
@@ -259,7 +262,13 @@ Rules:
 - "placeholder" MUST be copied verbatim from the document text (it is used for literal substitution). Never invent or normalise it.
 - Each placeholder must be unique enough to find in the document; include surrounding brackets/underscores in the placeholder itself.
 - Do not include boilerplate that never changes.
-- Use autoFill "none" when no CRM field maps cleanly.`;
+- Use autoFill "none" when no CRM field maps cleanly.
+- "options": include ONLY when the document explicitly restricts the value to a fixed list (e.g. "Relationship Type: Client / Supplier / Partner", "choose one of ..."). Copy the option texts exactly. Omit otherwise.
+- "role":
+  - "second_party" for the counterparty's/receiving party's SIGNATURE-BLOCK fields (their signature date, "Signed by ... Date: ____" on their side). These are completed when the counterparty signs, never when the contract is prepared.
+  - "reference" for auto-generated document reference numbers (e.g. "AGR-2026-003", "Ref No: NDA-2025-014") — a code containing a 4-digit year plus a running series number. The CRM assigns the next number automatically.
+  - "standard" (or omit) for everything else, INCLUDING the firm's own signature-block fields.
+- "defaultHint": "today" for the FIRM-side signature date (the date our own signatory signs) — it defaults to today. Omit otherwise.`;
 
 export interface DetectedFields {
   fields: ContractTemplateField[];
@@ -327,10 +336,76 @@ export async function detectTemplateFields(templateText: string): Promise<Detect
       autoFill: String(raw.autoFill ?? "none"),
       required: raw.required !== false,
       ...(raw.note ? { note: String(raw.note) } : {}),
+      ...(Array.isArray(raw.options) && raw.options.length > 0
+        ? {
+            options: (raw.options as unknown[])
+              .map((o) => String(o).trim())
+              .filter(Boolean)
+              .slice(0, 20),
+          }
+        : {}),
+      ...(["standard", "second_party", "reference"].includes(String(raw.role))
+        ? { role: String(raw.role) as ContractTemplateField["role"] }
+        : {}),
+      ...(String(raw.defaultHint) === "today" ? { defaultHint: "today" as const } : {}),
     });
   }
   const warnings = Array.isArray(obj.warnings) ? obj.warnings.map(String) : [];
-  return { fields, warnings };
+  return { fields: normalizeFieldSchema(fields), warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Task #291 — field-role normalization (backfill for pre-#291 schemas)
+// ---------------------------------------------------------------------------
+
+/** Reference-number shape: something ending in a 4-digit year + 3-digit series. */
+const REFERENCE_PLACEHOLDER_RE = /(19|20)\d{2}[-_/.]\d{3}(?!\d)/;
+const REFERENCE_TEXT_RE = /\b(ref(erence)?\s*(no|number|#)?|document\s+number)\b/i;
+const SIGN_RE = /\bsign(ature|ed|s|ing)?\b|\bdate\s+signed\b/i;
+const SECOND_PARTY_RE =
+  /\b(counterpart(y|ies)|second\s+part(y|ies)|party\s*b|other\s+part(y|ies)|receiving\s+part(y|ies)|client|recipient|employee|contractor|consultant|partner\s+firm)\b/i;
+const FIRM_SIDE_RE = /\b(firm|company|cognirise|first\s+part(y|ies)|party\s*a|our)\b/i;
+
+/**
+ * Derive Task #291 metadata (role, defaultHint) for a field that predates
+ * it. Deterministic and conservative: only clearly-recognisable reference
+ * numbers and counterparty signature-date fields are reclassified; every
+ * other field stays "standard" and keeps rendering as before.
+ */
+export function classifyFieldRole(
+  f: ContractTemplateField,
+): Pick<ContractTemplateField, "role" | "defaultHint"> {
+  const text = `${f.key} ${f.label}`;
+  if (
+    REFERENCE_PLACEHOLDER_RE.test(f.placeholder) ||
+    (REFERENCE_TEXT_RE.test(text) && REFERENCE_PLACEHOLDER_RE.test(text))
+  ) {
+    return { role: "reference" };
+  }
+  if (SIGN_RE.test(text) && SECOND_PARTY_RE.test(text) && !FIRM_SIDE_RE.test(text)) {
+    return { role: "second_party" };
+  }
+  if (f.dataType === "date" && SIGN_RE.test(text)) {
+    // Firm-side (or unspecified) signature date — default to today.
+    return { role: "standard", defaultHint: "today" };
+  }
+  return { role: "standard" };
+}
+
+/**
+ * Fill in role/defaultHint on schemas that lack them (old reviewed
+ * templates from before Task #291). Explicit metadata always wins.
+ */
+export function normalizeFieldSchema(fields: ContractTemplateField[]): ContractTemplateField[] {
+  return fields.map((f) => {
+    if (f.role) return f;
+    const derived = classifyFieldRole(f);
+    return {
+      ...f,
+      role: derived.role,
+      ...(f.defaultHint || !derived.defaultHint ? {} : { defaultHint: derived.defaultHint }),
+    };
+  });
 }
 
 /**

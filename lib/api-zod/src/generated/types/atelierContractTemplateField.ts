@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierContractTemplateFieldDataType } from "./atelierContractTemplateFieldDataType";
+import type { AtelierContractTemplateFieldDefaultHint } from "./atelierContractTemplateFieldDefaultHint";
+import type { AtelierContractTemplateFieldRole } from "./atelierContractTemplateFieldRole";
 
 export interface AtelierContractTemplateField {
   /**
@@ -30,6 +32,15 @@ export interface AtelierContractTemplateField {
    * @maxLength 60
    */
   autoFill: string;
+  /**
+   * Task
+   * @maxItems 20
+   */
+  options?: string[];
+  /** Task */
+  role?: AtelierContractTemplateFieldRole;
+  /** Task */
+  defaultHint?: AtelierContractTemplateFieldDefaultHint;
   required: boolean;
   /** @maxLength 500 */
   note?: string;

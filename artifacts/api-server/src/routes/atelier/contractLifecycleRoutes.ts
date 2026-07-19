@@ -63,6 +63,7 @@ import {
   detectTemplateFields,
   verifyPlaceholders,
   findMissingPlaceholders,
+  normalizeFieldSchema,
   ContractFieldDetectionError,
   ContractFillError,
   PdfConversionError,
@@ -153,7 +154,9 @@ function versionShape(v: TemplateVersionRow) {
     versionNumber: v.versionNumber,
     fileName: v.fileName,
     sizeBytes: v.sizeBytes,
-    fieldSchema: v.fieldSchema,
+    // Task #291 — old reviewed schemas gain role/defaultHint via
+    // deterministic re-detection at read time; explicit metadata wins.
+    fieldSchema: normalizeFieldSchema(v.fieldSchema),
     fieldStatus: v.fieldStatus,
     detectionWarnings: v.detectionWarnings ?? [],
     priorFieldReview: v.priorFieldReview ?? null,
@@ -455,6 +458,10 @@ const fieldSchemaBody = z.object({
         autoFill: z.string().trim().max(60),
         required: z.boolean(),
         note: z.string().max(500).optional(),
+        // Task #291 — dropdown options, field role, date default.
+        options: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+        role: z.enum(["standard", "second_party", "reference"]).optional(),
+        defaultHint: z.literal("today").optional(),
       }),
     )
     .max(80),
@@ -1080,14 +1087,19 @@ router.post("/contracts/:id/regenerate", async (req, res) => {
     return;
   }
   const values = { ...(contract.fieldValues ?? {}), ...parsed.data.values };
-  const missingRequired = version.fieldSchema
+  // Task #291 — second-party/reference fields are never user-supplied:
+  // they don't count as missing (the reference value assigned at prepare
+  // time is already in contract.fieldValues and carries over).
+  const schemaForRegen = normalizeFieldSchema(version.fieldSchema);
+  const missingRequired = schemaForRegen
+    .filter((f) => (f.role ?? "standard") === "standard")
     .filter((f) => f.required && (values[f.key] == null || values[f.key] === ""))
     .map((f) => f.key);
   if (missingRequired.length > 0) {
     res.status(422).json({
       error: "missing-required-fields",
       missing: missingRequired,
-      fields: version.fieldSchema,
+      fields: schemaForRegen,
     });
     return;
   }

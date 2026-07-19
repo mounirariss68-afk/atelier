@@ -390,6 +390,52 @@ function ReviewFieldsDialog(props: {
               <div className="text-[11px] text-text-faint font-mono truncate" title={f.placeholder}>
                 Replaces: “{f.placeholder}”
               </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-text-faint">Filled by</label>
+                  <select
+                    className={`${selectCls} w-full`}
+                    value={f.role ?? "standard"}
+                    onChange={(e) =>
+                      setField(i, { role: e.target.value as AtelierContractTemplateField["role"] })
+                    }
+                    data-testid={`select-field-role-${f.key}`}
+                  >
+                    <option value="standard">Us, when preparing</option>
+                    <option value="second_party">Counterparty, at signing</option>
+                    <option value="reference">Auto reference number</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] text-text-faint">
+                    Options (comma-separated, blank = free text)
+                  </label>
+                  <Input
+                    value={(f.options ?? []).join(", ")}
+                    onChange={(e) => {
+                      const opts = e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      setField(i, opts.length > 0 ? { options: opts } : { options: undefined });
+                    }}
+                    placeholder="e.g. Client, Supplier, Partner"
+                    data-testid={`input-field-options-${f.key}`}
+                  />
+                </div>
+              </div>
+              {f.role === "second_party" && (
+                <p className="text-[11px] text-sky-300">
+                  Not asked when preparing — the counterparty completes this when they sign
+                  (a date box is added to the e-signature request).
+                </p>
+              )}
+              {f.role === "reference" && (
+                <p className="text-[11px] text-sky-300">
+                  Auto-generated per template per year (e.g. …-2026-003) when a contract is
+                  prepared. Never asked.
+                </p>
+              )}
               <div className="flex items-center gap-4 text-xs text-text-mute">
                 <label className="inline-flex items-center gap-1.5">
                   <input
@@ -399,6 +445,19 @@ function ReviewFieldsDialog(props: {
                   />
                   Required
                 </label>
+                {f.dataType === "date" && (f.role ?? "standard") === "standard" && (
+                  <label className="inline-flex items-center gap-1.5">
+                    <input
+                      type="checkbox"
+                      checked={f.defaultHint === "today"}
+                      onChange={(e) =>
+                        setField(i, { defaultHint: e.target.checked ? "today" : undefined })
+                      }
+                      data-testid={`checkbox-field-today-${f.key}`}
+                    />
+                    Defaults to today
+                  </label>
+                )}
                 <span className="text-text-faint">
                   Auto-fill: <span className="font-mono">{f.autoFill || "none"}</span>
                 </span>
@@ -751,23 +810,59 @@ export function NewContractDialog(props: {
               <div className="text-xs text-text-faint">
                 Field values (blank values are auto-filled from the CRM where possible)
               </div>
-              {fields.map((f) => (
-                <div key={f.key}>
-                  <label className="text-[11px] text-text-faint">
-                    {f.label}
-                    {f.required ? " *" : ""}
-                    {f.autoFill && f.autoFill !== "none" ? (
-                      <span className="ml-1 text-gold/70">(auto-fills)</span>
-                    ) : null}
-                  </label>
-                  <Input
-                    value={values[f.key] ?? ""}
-                    onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.dataType === "date" ? "YYYY-MM-DD" : ""}
-                    data-testid={`input-field-${f.key}`}
-                  />
-                </div>
-              ))}
+              {fields
+                .filter((f) => (f.role ?? "standard") === "standard")
+                .map((f) => (
+                  <div key={f.key}>
+                    <label className="text-[11px] text-text-faint">
+                      {f.label}
+                      {f.required ? " *" : ""}
+                      {f.autoFill && f.autoFill !== "none" ? (
+                        <span className="ml-1 text-gold/70">(auto-fills)</span>
+                      ) : null}
+                    </label>
+                    {f.options && f.options.length > 0 ? (
+                      <select
+                        className={`${selectCls} w-full`}
+                        value={values[f.key] ?? ""}
+                        onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                        data-testid={`input-field-${f.key}`}
+                      >
+                        <option value="">Choose…</option>
+                        {f.options.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <Input
+                        type={f.dataType === "date" ? "date" : "text"}
+                        value={
+                          values[f.key] ??
+                          (f.dataType === "date" && f.defaultHint === "today"
+                            ? new Date().toISOString().slice(0, 10)
+                            : "")
+                        }
+                        onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                        placeholder={f.dataType === "date" ? "YYYY-MM-DD" : ""}
+                        data-testid={`input-field-${f.key}`}
+                      />
+                    )}
+                  </div>
+                ))}
+              {fields.some((f) => f.role === "reference") && (
+                <p className="text-[11px] text-text-faint" data-testid="text-reference-auto">
+                  Reference number{fields.filter((f) => f.role === "reference").length > 1 ? "s are" : " is"}{" "}
+                  assigned automatically when the contract is prepared.
+                </p>
+              )}
+              {fields.some((f) => f.role === "second_party") && (
+                <p className="text-[11px] text-text-faint" data-testid="text-second-party-note">
+                  The counterparty’s signature fields are completed when they sign — not asked
+                  here.
+                </p>
+              )}
             </div>
           )}
         </div>
