@@ -42,29 +42,9 @@ export default function PeopleAttract() {
 }
 
 function PlanView() {
-  const rows = [
-    { practice: "Pricing",         openRoles: 3, planned: 5, gap: 2 },
-    { practice: "Research",        openRoles: 1, planned: 2, gap: 1 },
-    { practice: "Platform & AI",   openRoles: 2, planned: 4, gap: 2 },
-    { practice: "Operations",      openRoles: 0, planned: 1, gap: 1 },
-  ];
   return (
-    <Card className="p-4">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-text-mute font-mono uppercase">
-          <tr><th className="text-left py-2">Practice</th><th>Open</th><th>Plan</th><th>Gap</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.practice} className="border-t border-border-soft">
-              <td className="py-2 text-text">{r.practice}</td>
-              <td className="text-center text-text">{r.openRoles}</td>
-              <td className="text-center text-text">{r.planned}</td>
-              <td className="text-center"><MonoChip tone={r.gap > 1 ? "amber" : "default"}>{r.gap}</MonoChip></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <Card className="p-6 text-sm text-text-mute" data-testid="workforce-plan-empty">
+      No workforce plan published yet. When practice leads set headcount plans, the open-vs-plan gap per practice appears here.
     </Card>
   );
 }
@@ -74,8 +54,7 @@ function BrandView() {
     <div className="grid gap-3 md:grid-cols-2">
       <Card className="p-4">
         <div className="text-xs font-mono uppercase text-text-mute">Careers site</div>
-        <div className="mt-1 text-text">cognirise.work/careers — 1,284 visits / 30d</div>
-        <div className="mt-2 text-sm text-text-mute">Last edited 2026-04-29 by Yara H.</div>
+        <div className="mt-2 text-sm text-text-mute">No careers-site analytics connected yet.</div>
       </Card>
       <Card className="p-4">
         <div className="text-xs font-mono uppercase text-text-mute">Press & content</div>

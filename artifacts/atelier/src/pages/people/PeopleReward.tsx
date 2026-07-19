@@ -129,22 +129,7 @@ function ReviewView() {
 }
 
 function TotalRewardsView() {
-  const cards = [
-    { id: "tr-1", label: "Base + bonus + carry",     desc: "Cash + equity-style upside in one summary." },
-    { id: "tr-2", label: "Healthcare & wellbeing",   desc: "Family cover, mental-health budget." },
-    { id: "tr-3", label: "Learning budget",          desc: "$3,000/yr per person, plus conference travel." },
-    { id: "tr-4", label: "Sabbatical",               desc: "Unpaid 4-12 weeks after 4 years." },
-  ];
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {cards.map((c) => (
-        <Card key={c.id} className="p-4">
-          <div className="text-text font-medium">{c.label}</div>
-          <div className="mt-1 text-sm text-text-mute">{c.desc}</div>
-        </Card>
-      ))}
-    </div>
-  );
+  return <PeopleEmptyState message="No total-rewards policy published yet." />;
 }
 
 function RecognitionView() {

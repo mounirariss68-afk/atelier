@@ -142,7 +142,7 @@ const LEDGER: Suggestion[] = [
 
 const ROSTER: Suggestion[] = [
   { en: "Find people with Salesforce + Arabic in EMEA", ar: "ابحث عن أشخاص يجيدون Salesforce + العربيّة في الشرق الأوسط" },
-  { en: "Start onboarding for new hire 'Layla Mansour'", ar: "ابدأ تأهيل التعيين الجديد 'ليلى منصور'" },
+  { en: "Start onboarding for a new hire", ar: "ابدأ تأهيل تعيين جديد" },
   { en: "Show people whose certifications expire in 90 days", ar: "اعرض الأشخاص الذين تنتهي شهاداتهم خلال 90 يومًا" },
 ];
 
