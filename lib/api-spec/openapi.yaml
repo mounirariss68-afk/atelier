@@ -8219,7 +8219,7 @@ components:
       type: object
       required: [stage, count, weightedValueUsd, agedRedCount]
       properties:
-        stage: { $ref: "#/components/schemas/PlmStage" }
+        stage: { $ref: "#/components/schemas/SalesStage" }
         count: { type: integer }
         weightedValueUsd: { type: number }
         agedRedCount: { type: integer }

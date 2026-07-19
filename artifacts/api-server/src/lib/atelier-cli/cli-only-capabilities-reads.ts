@@ -38,7 +38,10 @@ import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
 } from "./capability-catalog.js";
-import { funnelBucket } from "../atelier-agents/pipeline.js";
+import {
+  SALES_STAGES,
+  resolveSalesStage,
+} from "../atelier-agents/pipeline.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import {
@@ -51,14 +54,8 @@ import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 // helpers
 // ---------------------------------------------------------------------
 
-const PIPELINE_STAGES = [
-  "identify",
-  "shape",
-  "pursue",
-  "won",
-  "lost",
-  "no_go",
-] as const;
+// Task #175 — canonical 5-stage funnel + 3 terminals (mirrors SALES_STAGES).
+const PIPELINE_STAGES = SALES_STAGES;
 
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -120,7 +117,9 @@ defineCapability({
         ),
       );
     const stages = PIPELINE_STAGES.map((stage) => {
-      const list = opps.filter((o) => funnelBucket(o.salesStage) === stage);
+      const list = opps.filter(
+        (o) => resolveSalesStage(o.salesStage) === stage,
+      );
       return {
         stage,
         count: list.length,
@@ -144,7 +143,7 @@ defineCapability({
   module: "opportunity",
   toolName: "opportunity_list_by_stage",
   description:
-    "List the top open opportunities in a given PLM stage (identify|shape|pursue|won|lost|no_go), sorted by weighted USD value.",
+    "List the top open opportunities in a given sales stage (suspect|prospect|convert|runner|contract|lost|no_decision|withdrawn), sorted by weighted USD value.",
   slashAliases: { en: ["/opps-in-stage", "/opps"] },
   inputSchema: {
     type: "object",
@@ -161,12 +160,12 @@ defineCapability({
   resultCard: "ranked_list",
   promoteAsSuggestion: true,
   examplePhrases: {
-    en: ["List opportunities in pursue", "Top 10 deals in shape"],
-    ar: ["اعرض الفرص في مرحلة pursue"],
-    fr: ["Liste les opportunités en pursue"],
+    en: ["List opportunities in convert", "Top 10 deals in prospect"],
+    ar: ["اعرض الفرص في مرحلة convert"],
+    fr: ["Liste les opportunités en convert"],
   },
   async run(input, ctx) {
-    const stage = String(input.stage ?? "pursue").toLowerCase();
+    const stage = String(input.stage ?? "convert").toLowerCase();
     const limit = Math.max(1, Math.min(50, Number(input.limit ?? 10)));
     const rows = await db
       .select({
@@ -186,7 +185,9 @@ defineCapability({
           isNull(atelierOpportunities.deletedAt),
         ),
       );
-    const inStage = rows.filter((r) => funnelBucket(r.salesStage) === stage);
+    const inStage = rows.filter(
+      (r) => resolveSalesStage(r.salesStage) === stage,
+    );
     const items = inStage
       .map((r) => ({
         id: r.id,

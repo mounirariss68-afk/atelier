@@ -4543,18 +4543,20 @@ export const AtelierGetHomeResponse = zod.object({
   ),
   pipeline: zod.array(
     zod.object({
-      stage: zod.enum([
-        "identify",
-        "shape",
-        "pursue",
-        "mobilize",
-        "deliver",
-        "compound",
-        "won",
-        "lost",
-        "no_go",
-        "closed",
-      ]),
+      stage: zod
+        .enum([
+          "suspect",
+          "prospect",
+          "convert",
+          "runner",
+          "contract",
+          "lost",
+          "no_decision",
+          "withdrawn",
+        ])
+        .describe(
+          "Canonical 5-stage funnel + 3 terminals (Task #295). plmStage is\nderived. Working: suspect → prospect → convert → runner → contract.\nTerminals: lost · no_decision · withdrawn.\n",
+        ),
       count: zod.number(),
       weightedValueUsd: zod.number(),
       agedRedCount: zod.number(),

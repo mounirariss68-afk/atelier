@@ -4417,7 +4417,7 @@ export interface PaneAItem {
 }
 
 export interface PipelineStageCount {
-  stage: PlmStage;
+  stage: SalesStage;
   count: number;
   weightedValueUsd: number;
   agedRedCount: number;

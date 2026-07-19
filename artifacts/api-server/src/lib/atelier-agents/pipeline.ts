@@ -135,30 +135,6 @@ export function resolveSalesStage(stored: string | null | undefined): SalesStage
   return migrateLegacyStage(v)?.stage ?? "suspect";
 }
 
-/**
- * Group a canonical SalesStage into the legacy 6-bucket funnel display used by
- * the Home pipeline pane and the CLI "pipeline by stage" view. Keeps those
- * UIs' bucket labels stable while sourcing membership from salesStage.
- */
-export const FUNNEL_BUCKET_BY_SALES_STAGE: Record<
-  SalesStage,
-  "identify" | "shape" | "pursue" | "won" | "lost" | "no_go"
-> = {
-  suspect: "identify",
-  prospect: "shape",
-  convert: "pursue",
-  runner: "pursue",
-  contract: "won",
-  lost: "lost",
-  no_decision: "no_go",
-  withdrawn: "no_go",
-};
-
-export function funnelBucket(
-  stored: string | null | undefined,
-): "identify" | "shape" | "pursue" | "won" | "lost" | "no_go" {
-  return FUNNEL_BUCKET_BY_SALES_STAGE[resolveSalesStage(stored)];
-}
 
 export function isValidSubStatus(stage: SalesStage, sub: string | null | undefined): boolean {
   if (!sub) return true;

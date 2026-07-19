@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PlmStage } from "./plmStage";
+import type { SalesStage } from "./salesStage";
 
 export interface PipelineStageCount {
-  stage: PlmStage;
+  stage: SalesStage;
   count: number;
   weightedValueUsd: number;
   agedRedCount: number;

@@ -2017,7 +2017,7 @@ function KpiStrip({ data, locale }: { data: Json; locale: CliLocale }) {
                 data-testid="kpi-stage"
               >
                 <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint truncate">
-                  {stage}
+                  {stage.replace(/_/g, " ")}
                 </div>
                 <div className="text-lg font-semibold leading-none">
                   {count}

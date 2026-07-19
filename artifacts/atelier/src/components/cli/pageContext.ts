@@ -111,11 +111,11 @@ const CRM: Suggestion[] = [
 const ACCOUNT: Suggestion[] = [
   { en: "Summarize this account's relationship history", ar: "لخّص تاريخ العلاقة مع هذا الحساب" },
   { en: "Re-run Pursuit Scout on this account with the attached doc", ar: "أعد تشغيل Pursuit Scout على هذا الحساب بالمستند المرفق" },
-  { en: "Move this account into Pursue stage", ar: "انقل هذا الحساب إلى مرحلة Pursue" },
+  { en: "Move this account into Convert stage", ar: "انقل هذا الحساب إلى مرحلة Convert" },
 ];
 
 const OPPORTUNITY: Suggestion[] = [
-  { en: "Move this opportunity from Shape to Pursue", ar: "انقل هذه الفرصة من Shape إلى Pursue" },
+  { en: "Move this opportunity from Prospect to Convert", ar: "انقل هذه الفرصة من Prospect إلى Convert" },
   { en: "Run Pricing Strategist with 35% target margin", ar: "شغّل Pricing Strategist بهامش هدف 35%" },
   { en: "Mark won — record signed value and start engagement", ar: "حدِّد فائزة — سجّل قيمة العقد وابدأ الارتباط" },
   { en: "Generate a competitive landscape brief", ar: "أعدّ تحليل المشهد التنافسي" },
@@ -147,7 +147,7 @@ const ROSTER: Suggestion[] = [
 ];
 
 const AGENTS: Suggestion[] = [
-  { en: "Run Pursuit Scout on the open opps in Pursue", ar: "شغّل Pursuit Scout على الفرص المفتوحة في Pursue" },
+  { en: "Run Pursuit Scout on the open opps in Convert", ar: "شغّل Pursuit Scout على الفرص المفتوحة في Convert" },
   { en: "Show all blocked agent runs across the firm", ar: "اعرض كل تنفيذات الوكلاء المتوقّفة" },
   { en: "Schedule the Monday digest for every Monday at 7am", ar: "جدول ملخّص الإثنين كل إثنين الساعة 7 صباحًا" },
 ];
@@ -269,7 +269,7 @@ export function homeSuggestionsFor(
     { en: "Approve this week's timesheets", ar: "وافق على جداول الزمن لهذا الأسبوع" },
     { en: "Show this week's utilization across the firm", ar: "اعرض استخدام الموارد لهذا الأسبوع" },
     { en: "Draft my Monday digest for the partners", ar: "أعدّ ملخّص الإثنين للشركاء" },
-    { en: "Show pipeline aged in Pursue over 30 days", ar: "اعرض الفرص المتقادمة في Pursue لأكثر من 30 يومًا" },
+    { en: "Show pipeline aged in Convert over 30 days", ar: "اعرض الفرص المتقادمة في Convert لأكثر من 30 يومًا" },
     { en: "Open the top RAID red items across engagements", ar: "افتح أهم بنود RAID الحمراء عبر الارتباطات" },
   ];
   const HR_LIST: Suggestion[] = [

@@ -43,11 +43,11 @@ import { accountPlanPdfHandler } from "./accountPlanPdf";
 import { accountPrepCardHandler } from "./accountPrepCard";
 import agentRoutes from "./agentRoutes";
 import {
+  SALES_STAGES,
   STALLED_THRESHOLD_DAYS,
   deriveSalesStage,
   isSalesStage,
   resolveSalesStage,
-  funnelBucket,
 } from "../../lib/atelier-agents/pipeline.js";
 import proposalRoutes from "./proposalRoutes";
 import knowledgeRoutes from "./knowledgeRoutes";
@@ -566,11 +566,10 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
     .select()
     .from(atelierOpportunities)
     .where(isNull(atelierOpportunities.deletedAt));
-  const PIPELINE_STAGES: Array<
-    "identify" | "shape" | "pursue" | "won" | "lost" | "no_go"
-  > = ["identify", "shape", "pursue", "won", "lost", "no_go"];
-  const pipeline = PIPELINE_STAGES.map((stage) => {
-    const list = opps.filter((o) => funnelBucket(o.salesStage) === stage);
+  // Task #175 — group directly by the canonical 5-stage funnel (+3 terminals)
+  // instead of the retired legacy Identify/Shape/Pursue buckets.
+  const pipeline = SALES_STAGES.map((stage) => {
+    const list = opps.filter((o) => resolveSalesStage(o.salesStage) === stage);
     return {
       stage,
       count: list.length,

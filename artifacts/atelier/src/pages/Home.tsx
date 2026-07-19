@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, PlmPill, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
+import { SectionHead, PageHero, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
@@ -11,6 +11,7 @@ import { homeSuggestionsFor } from "@/components/cli/pageContext";
 import type { CliCapability, CliLocale } from "@/components/cli/types";
 import { cn } from "@/lib/utils";
 import { isSelfOnlyRole } from "@/lib/lens";
+import { SALES_STAGE_LABEL } from "@/lib/sales-stages";
 
 interface ApprovalEntry {
   id: string;
@@ -838,7 +839,7 @@ export default function Home() {
               <div className="divide-y divide-border-soft">
                 {home.pipeline.map(stage => (
                   <div key={stage.stage} className="flex items-center justify-between p-3 hover:bg-bg-elevate-2 transition-colors">
-                    <PlmPill stage={stage.stage} />
+                    <span className="plm-pill">{SALES_STAGE_LABEL[stage.stage]}</span>
                     <div className="flex items-center gap-4 text-sm">
                       <span className="font-mono text-text-mute">{stage.count} opps</span>
                       {stage.agedRedCount > 0 && (
