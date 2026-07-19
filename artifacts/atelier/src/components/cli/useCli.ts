@@ -567,6 +567,67 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     };
   }, []);
 
+  // Clarification durability — a pending question used to live only in
+  // this hook's in-memory state, so a page reload (or server restart)
+  // made it vanish while the server kept waiting for an answer. On
+  // mount, ask the server whether the persona's most recent turn is
+  // still paused on a clarification and, if so, restore the turn (and
+  // its session) so the question card renders again.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/atelier/cli/turns/pending-clarification", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (j: {
+          pending?: {
+            turnId: string;
+            sessionId: string;
+            prompt: string;
+            createdAt: string;
+            clarification: {
+              field: string;
+              question: string;
+              tool: string;
+              partial: Record<string, unknown>;
+              suggestions: Array<{ id: string; label: string; hint?: string }>;
+            };
+          } | null;
+        } | null) => {
+          if (!alive || !j?.pending) return;
+          // Never clobber live activity started before the fetch landed.
+          // `activeTurnKeyRef` is set synchronously at the top of
+          // submit(), so it also covers the narrow window before the
+          // currentRef sync effect runs.
+          if (currentRef.current || activeTurnKeyRef.current) return;
+          const p = j.pending;
+          setSessionId((s) => s ?? p.sessionId);
+          const restored: CliTurn = {
+            clientTurnKey: uuid(),
+            serverTurnId: p.turnId,
+            prompt: p.prompt,
+            status: "needs_clarification",
+            startedAt: Date.parse(p.createdAt) || Date.now(),
+            trace: [],
+            clarification: {
+              field: p.clarification.field,
+              question: p.clarification.question,
+              tool: p.clarification.tool,
+              partial: p.clarification.partial ?? {},
+              suggestions: p.clarification.suggestions ?? [],
+            },
+          };
+          setCurrent(restored);
+          setTurns((t) => [restored, ...t]);
+        },
+      )
+      .catch(() => {
+        // Best-effort — absence of rehydration must never break the bar.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const consumeStream = useCallback(
     async (
       response: Response,

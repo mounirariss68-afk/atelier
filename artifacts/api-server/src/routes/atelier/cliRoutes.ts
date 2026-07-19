@@ -314,6 +314,79 @@ router.get("/cli/turns/recent", async (req, res) => {
   });
 });
 
+/**
+ * Clarification durability — returns the persona's pending clarification,
+ * if their single most recent turn (across sessions) is still paused
+ * `awaiting_clarification`. Used by the chat client on mount so a page
+ * reload / server restart doesn't leave the question invisible while the
+ * server waits forever for an answer. Any newer turn supersedes the
+ * question, so this returns null in that case.
+ */
+// @cli-skip: read-only rehydration helper, not a capability
+router.get("/cli/turns/pending-clarification", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [row] = await db
+    .select({
+      id: atelierCliTurns.id,
+      sessionId: atelierCliTurns.sessionId,
+      status: atelierCliTurns.status,
+      prompt: atelierCliTurns.prompt,
+      frames: atelierCliTurns.frames,
+      createdAt: atelierCliTurns.createdAt,
+    })
+    .from(atelierCliTurns)
+    .innerJoin(
+      atelierCliSessions,
+      eq(atelierCliTurns.sessionId, atelierCliSessions.id),
+    )
+    .where(
+      and(
+        eq(atelierCliSessions.userId, me.id),
+        eq(atelierCliSessions.orgId, me.orgId),
+        isNull(atelierCliSessions.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierCliTurns.createdAt))
+    .limit(1);
+  if (!row || row.status !== "awaiting_clarification") {
+    res.json({ pending: null });
+    return;
+  }
+  const frames = Array.isArray(row.frames)
+    ? (row.frames as Array<{ type?: string; data?: Record<string, unknown> }>)
+    : [];
+  const nc = [...frames].reverse().find((f) => f?.type === "needs_clarification");
+  const d = nc?.data as
+    | {
+        field?: string;
+        question?: string;
+        tool?: string;
+        partial?: Record<string, unknown>;
+        suggestions?: Array<{ id: string; label: string; hint?: string }>;
+      }
+    | undefined;
+  if (!d || typeof d.field !== "string" || typeof d.tool !== "string") {
+    res.json({ pending: null });
+    return;
+  }
+  res.json({
+    pending: {
+      turnId: row.id,
+      sessionId: row.sessionId,
+      prompt: row.prompt,
+      createdAt: row.createdAt.toISOString(),
+      clarification: {
+        field: d.field,
+        question: typeof d.question === "string" ? d.question : "",
+        tool: d.tool,
+        partial: d.partial && typeof d.partial === "object" ? d.partial : {},
+        suggestions: Array.isArray(d.suggestions) ? d.suggestions : [],
+      },
+    },
+  });
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/cli/sessions/:id", async (req, res) => {
   const me = ensurePersona(req, res);

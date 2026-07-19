@@ -36,7 +36,7 @@ import {
   atelierEngagements,
   atelierEngagementAccess,
 } from "@workspace/db";
-import { and, desc, eq, gte, ilike, isNull, or, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, isNull, ne, or, inArray } from "drizzle-orm";
 import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
 import type { Response } from "express";
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
@@ -2384,6 +2384,60 @@ export async function runTurn(
       frames: [],
       toolCalls: [],
     });
+
+    // Clarification durability — SESSION_DRAFTS is in-memory only, so a
+    // server restart between the question and the answer used to strand
+    // the turn (`awaiting_clarification` in the DB, but the continuation
+    // path below never fired). Rehydrate pendingClarification from the
+    // most recent prior turn in this session when (a) the draft has no
+    // pending question and (b) that prior turn is still paused on one.
+    {
+      const _drRehydrate = getSessionDraft(session.id);
+      if (!_drRehydrate.pendingClarification) {
+        const [prevTurn] = await db
+          .select({
+            id: atelierCliTurns.id,
+            status: atelierCliTurns.status,
+            prompt: atelierCliTurns.prompt,
+            frames: atelierCliTurns.frames,
+          })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.sessionId, session.id),
+              ne(atelierCliTurns.id, turnId),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(1);
+        if (prevTurn && prevTurn.status === "awaiting_clarification") {
+          const prevFrames = Array.isArray(prevTurn.frames)
+            ? (prevTurn.frames as Array<{ type?: string; data?: Record<string, unknown> }>)
+            : [];
+          const nc = [...prevFrames]
+            .reverse()
+            .find((f) => f?.type === "needs_clarification");
+          const d = nc?.data as
+            | {
+                field?: string;
+                question?: string;
+                tool?: string;
+                partial?: Record<string, unknown>;
+              }
+            | undefined;
+          if (d && typeof d.field === "string" && typeof d.tool === "string") {
+            _drRehydrate.pendingClarification = {
+              field: d.field,
+              question: typeof d.question === "string" ? d.question : "",
+              tool: d.tool,
+              partial:
+                d.partial && typeof d.partial === "object" ? d.partial : {},
+              originalPrompt: prevTurn.prompt,
+            };
+          }
+        }
+      }
+    }
 
     // Task #340 — proactive open-state recap. When a session is being
     // re-opened after >6h dormant or this is the first turn against an
