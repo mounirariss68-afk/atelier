@@ -167,6 +167,7 @@ async function hydratePlanFacts(orgId: string): Promise<void> {
   RECEIPTS.push(...facts.receipts);
   DISBURSEMENTS.length = 0;
   DISBURSEMENTS.push(...facts.disbursements);
+  DISBURSEMENTS.push(...buildTaxLines(registry));
   BACKLOG.length = 0;
   BACKLOG.push(...facts.backlog);
   PIPELINE.length = 0;
@@ -197,10 +198,76 @@ async function hydratePlanFacts(orgId: string): Promise<void> {
   hydrateFpaFromFacts(facts);
 }
 
-// NOTE: seed-derived VAT / corporate-tax disbursement projections were
-// removed with the ENTITIES_SEED compat export — the legal-entity registry
-// has no fiscal calendar, and no fabricated tax amounts exist under the
-// no-demo-data policy. Real tax lines will come from real filings data.
+// Task #271 — VAT / corporate-tax disbursement lines from the persisted
+// fiscal calendar on each legal-entity registry row (entered by finance
+// leadership; nothing is fabricated). VAT recurs by the entity's filing
+// period (monthly/quarterly) from the recorded next filing date; CT is a
+// single dated payment. Occurrences outside the 13-week window are
+// dropped by the engine's week bucketing.
+function addMonths(iso: string, months: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return iso;
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, lastDay));
+  return d.toISOString().slice(0, 10);
+}
+
+function buildTaxLines(registry: Awaited<ReturnType<typeof listFinanceEntities>>): DisbursementLine[] {
+  const lines: DisbursementLine[] = [];
+  const windowEnd = dateAdd(AS_OF_MONDAY, 13 * 7);
+  for (const e of registry) {
+    const f = e.fiscal;
+    if (!f) continue;
+    const currency = e.baseCurrency || "USD";
+    if (f.nextVatFilingDate && f.vatExpectedAmount != null && f.vatExpectedAmount > 0) {
+      const stepMonths = f.vatPeriod === "monthly" ? 1 : 3;
+      let date = f.nextVatFilingDate;
+      let n = 0;
+      while (date <= windowEnd && n < 6) {
+        if (date >= AS_OF_MONDAY) {
+          lines.push({
+            id: `tax-vat-${e.id}-${date}`,
+            entityId: e.id,
+            currency,
+            amount: f.vatExpectedAmount,
+            expectedDate: date,
+            confidence: "high",
+            category: "tax_vat",
+            vendor: "Tax authority",
+            label: `VAT filing — ${e.shortName}`,
+            detail: `${f.vatPeriod === "monthly" ? "Monthly" : "Quarterly"} VAT payment (${currency})`,
+          });
+        }
+        date = addMonths(date, stepMonths);
+        n += 1;
+      }
+    }
+    if (
+      f.nextCtFilingDate &&
+      f.ctExpectedAmount != null &&
+      f.ctExpectedAmount > 0 &&
+      f.nextCtFilingDate >= AS_OF_MONDAY &&
+      f.nextCtFilingDate <= windowEnd
+    ) {
+      lines.push({
+        id: `tax-ct-${e.id}-${f.nextCtFilingDate}`,
+        entityId: e.id,
+        currency,
+        amount: f.ctExpectedAmount,
+        expectedDate: f.nextCtFilingDate,
+        confidence: "high",
+        category: "tax_ct",
+        vendor: "Tax authority",
+        label: `Corporate tax — ${e.shortName}`,
+        detail: `Corporate-tax payment (${currency})`,
+      });
+    }
+  }
+  return lines;
+}
 
 // ──────────────────────────────────────────────────────────────
 // Override / lock layer (in-memory). lineId → override.
@@ -419,7 +486,7 @@ function resolveLine(line: ReceiptLine | DisbursementLine, direction: Direction,
   const amount = ovr?.lockedAmount ?? line.amount;
   const expectedDate = ovr?.lockedDate ?? line.expectedDate;
   const wi = weekIndexFor(expectedDate);
-  if (wi < 0 || wi > 12) return null;
+  if (!Number.isFinite(wi) || wi < 0 || wi > 12) return null;
   const usd = toUsd(amount, line.currency);
   const isReceipt = "counterparty" in line;
   return {

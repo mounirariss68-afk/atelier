@@ -72,6 +72,21 @@ export interface EntityLease {
   notes: string | null;
 }
 
+/**
+ * Task #271 — fiscal calendar per entity. Entered by finance leadership
+ * (never fabricated); drives the tax_vat / tax_ct disbursement lines in
+ * the 13-week cash forecast. Dates are YYYY-MM-DD; amounts are in the
+ * entity's base currency.
+ */
+export interface EntityFiscal {
+  /** monthly | quarterly */
+  vatPeriod: string | null;
+  nextVatFilingDate: string | null;
+  vatExpectedAmount: number | null;
+  nextCtFilingDate: string | null;
+  ctExpectedAmount: number | null;
+}
+
 export const atelierLegalEntities = pgTable(
   "atelier_legal_entities",
   {
@@ -98,6 +113,7 @@ export const atelierLegalEntities = pgTable(
     owners: jsonb("owners").$type<EntityOwner[]>().notNull().default([]),
     premises: jsonb("premises").$type<EntityPremises | null>(),
     lease: jsonb("lease").$type<EntityLease | null>(),
+    fiscal: jsonb("fiscal").$type<EntityFiscal | null>(),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

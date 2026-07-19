@@ -97,6 +97,13 @@ export interface LegalEntityLease {
   registrationFeesAed: number | null;
   notes: string | null;
 }
+export interface LegalEntityFiscal {
+  vatPeriod: "monthly" | "quarterly" | null;
+  nextVatFilingDate: string | null;
+  vatExpectedAmount: number | null;
+  nextCtFilingDate: string | null;
+  ctExpectedAmount: number | null;
+}
 export interface LegalEntityRow {
   id: string;
   legalNameEn: string;
@@ -117,6 +124,7 @@ export interface LegalEntityRow {
   owners: LegalEntityOwner[];
   premises: LegalEntityPremises | null;
   lease: LegalEntityLease | null;
+  fiscal: LegalEntityFiscal | null;
   notes: string | null;
   archivedAt: string | null;
   createdAt: string;
@@ -312,11 +320,11 @@ function adaptLegalEntity(e: LegalEntityRow): FinanceEntityRow {
     })),
     fiscal: {
       yearEnd: "—",
-      vatPeriod: "quarterly",
+      vatPeriod: e.fiscal?.vatPeriod ?? "quarterly",
       ctPeriod: "annual",
       nextClose: "—",
-      nextVatFiling: "—",
-      nextCtFiling: "—",
+      nextVatFiling: e.fiscal?.nextVatFilingDate ?? "—",
+      nextCtFiling: e.fiscal?.nextCtFilingDate ?? "—",
     },
     interCompany: [],
     staffCount: 0,

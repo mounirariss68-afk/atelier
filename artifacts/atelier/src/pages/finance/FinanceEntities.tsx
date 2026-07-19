@@ -155,6 +155,10 @@ interface EntityDraft {
     ownerName: string; startDate: string; endDate: string; annualRentAed: string;
     securityDepositAed: string; areaSqm: string; registrationFeesAed: string;
   };
+  fiscal: {
+    vatPeriod: string; nextVatFilingDate: string; vatExpectedAmount: string;
+    nextCtFilingDate: string; ctExpectedAmount: string;
+  };
   notes: string;
 }
 
@@ -166,6 +170,7 @@ function emptyDraft(): EntityDraft {
     registrations: [], activities: [], owners: [],
     premises: { addressLine: "", building: "", unit: "", area: "", city: "", plotNumber: "", makaniNo: "", sizeSqm: "", usage: "" },
     lease: { contractNo: "", ejariTenantNo: "", lessorName: "", lessorLicenseNo: "", ownerName: "", startDate: "", endDate: "", annualRentAed: "", securityDepositAed: "", areaSqm: "", registrationFeesAed: "" },
+    fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "" },
     notes: "",
   };
 }
@@ -202,6 +207,13 @@ function draftFromEntity(e: LegalEntityRow): EntityDraft {
       securityDepositAed: e.lease?.securityDepositAed?.toString() ?? "",
       areaSqm: e.lease?.areaSqm?.toString() ?? "",
       registrationFeesAed: e.lease?.registrationFeesAed?.toString() ?? "",
+    },
+    fiscal: {
+      vatPeriod: e.fiscal?.vatPeriod ?? "",
+      nextVatFilingDate: e.fiscal?.nextVatFilingDate ?? "",
+      vatExpectedAmount: e.fiscal?.vatExpectedAmount?.toString() ?? "",
+      nextCtFilingDate: e.fiscal?.nextCtFilingDate ?? "",
+      ctExpectedAmount: e.fiscal?.ctExpectedAmount?.toString() ?? "",
     },
     notes: e.notes ?? "",
   };
@@ -260,6 +272,13 @@ function draftToBody(d: EntityDraft): Record<string, unknown> {
       endDate: nn(d.lease.endDate), annualRentAed: num(d.lease.annualRentAed),
       securityDepositAed: num(d.lease.securityDepositAed), areaSqm: num(d.lease.areaSqm),
       registrationFeesAed: num(d.lease.registrationFeesAed), notes: null,
+    },
+    fiscal: {
+      vatPeriod: d.fiscal.vatPeriod === "monthly" || d.fiscal.vatPeriod === "quarterly" ? d.fiscal.vatPeriod : null,
+      nextVatFilingDate: nn(d.fiscal.nextVatFilingDate),
+      vatExpectedAmount: num(d.fiscal.vatExpectedAmount),
+      nextCtFilingDate: nn(d.fiscal.nextCtFilingDate),
+      ctExpectedAmount: num(d.fiscal.ctExpectedAmount),
     },
     notes: nn(d.notes),
   };
@@ -571,6 +590,27 @@ function EntityFormDialog(props: {
               <Input className="h-9" placeholder="Deposit (AED)" value={draft.lease.securityDepositAed} onChange={(e) => up({ lease: { ...draft.lease, securityDepositAed: e.target.value } })} />
               <Input className="h-9" placeholder="Area (sqm)" value={draft.lease.areaSqm} onChange={(e) => up({ lease: { ...draft.lease, areaSqm: e.target.value } })} />
               <Input className="h-9" placeholder="Reg. fees (AED)" value={draft.lease.registrationFeesAed} onChange={(e) => up({ lease: { ...draft.lease, registrationFeesAed: e.target.value } })} />
+            </div>
+          </div>
+
+          {/* Fiscal calendar — VAT / corporate-tax filings (Task #271) */}
+          <div>
+            <span className={labelCls}>Fiscal calendar · VAT & corporate tax</span>
+            <p className="text-[11px] text-text-faint mt-0.5 mb-1.5">
+              Drives the tax outflow lines in the 13-week cash forecast. Amounts in the entity's base currency.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Field label="VAT period">
+                <select className={fieldCls} value={draft.fiscal.vatPeriod} onChange={(e) => up({ fiscal: { ...draft.fiscal, vatPeriod: e.target.value } })} data-testid="select-fiscal-vat-period">
+                  <option value="">Not set</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              </Field>
+              <TextField label="Next VAT filing (YYYY-MM-DD)" value={draft.fiscal.nextVatFilingDate} onChange={(v) => up({ fiscal: { ...draft.fiscal, nextVatFilingDate: v } })} testid="input-fiscal-vat-date" />
+              <TextField label="Expected VAT amount" value={draft.fiscal.vatExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, vatExpectedAmount: v } })} testid="input-fiscal-vat-amount" />
+              <TextField label="Next CT filing (YYYY-MM-DD)" value={draft.fiscal.nextCtFilingDate} onChange={(v) => up({ fiscal: { ...draft.fiscal, nextCtFilingDate: v } })} testid="input-fiscal-ct-date" />
+              <TextField label="Expected CT amount" value={draft.fiscal.ctExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctExpectedAmount: v } })} testid="input-fiscal-ct-amount" />
             </div>
           </div>
 

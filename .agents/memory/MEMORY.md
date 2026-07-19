@@ -75,4 +75,5 @@
 - [Template prior-field reconciliation](atelier-template-prior-review.md) — new-version upload stores prior REVIEWED schema reconciled vs new doc (carried_over/missing); UI restore-merge never re-adds missing placeholders.
 - [Atelier async agent launches](atelier-agent-async-launch.md) — long agent routes must return instantly + poll (proxy 502s held requests); in-memory launch map bridges route→run-row→queue-write gaps.
 - [Atelier legal-entity registry](atelier-legal-entity-registry.md) — ENTITIES_SEED removed; plan/reports read registry via listFinanceEntities + setFpaEntities, firm pseudo-entity fallback; extract data under proposal.fields.
+- [Entity fiscal → forecast tax lines](atelier-entity-fiscal-taxlines.md) — VAT/CT outflows in cash-13w come only from registry `fiscal` jsonb; past next-dates silently drop out until rolled forward.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — sendEmail ok:true+via:"log-only" means NOT delivered; only ok+via:"resend" counts as sent when surfacing delivery status.

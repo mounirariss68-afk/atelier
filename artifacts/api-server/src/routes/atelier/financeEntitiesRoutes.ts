@@ -148,6 +148,25 @@ const leaseSchema = z.object({
   notes: optStr(600),
 });
 
+// Task #271 — fiscal calendar (VAT / corporate-tax filings), entered by
+// finance leadership. Dates YYYY-MM-DD; amounts in entity base currency.
+const isoDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD required")
+  .refine((s) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }, "not a valid calendar date");
+
+const fiscalSchema = z.object({
+  vatPeriod: z.enum(["monthly", "quarterly"]).nullish(),
+  nextVatFilingDate: isoDate.nullish(),
+  vatExpectedAmount: z.number().min(0).nullish(),
+  nextCtFilingDate: isoDate.nullish(),
+  ctExpectedAmount: z.number().min(0).nullish(),
+});
+
 const entityBody = z.object({
   legalNameEn: str(400).min(1),
   legalNameAr: optStr(400),
@@ -171,6 +190,7 @@ const entityBody = z.object({
   owners: z.array(ownerSchema).max(50).default([]),
   premises: premisesSchema.nullish(),
   lease: leaseSchema.nullish(),
+  fiscal: fiscalSchema.nullish(),
   notes: optStr(4000),
 });
 
@@ -211,6 +231,19 @@ function normalizeActivities(acts: EntityBody["activities"]) {
   }));
 }
 
+function normalizeFiscal(f: z.infer<typeof fiscalSchema> | null | undefined) {
+  if (!f) return null;
+  const out = {
+    vatPeriod: f.vatPeriod ?? null,
+    nextVatFilingDate: f.nextVatFilingDate ?? null,
+    vatExpectedAmount: f.vatExpectedAmount ?? null,
+    nextCtFilingDate: f.nextCtFilingDate ?? null,
+    ctExpectedAmount: f.ctExpectedAmount ?? null,
+  };
+  const hasValue = Object.values(out).some((v) => v !== null && v !== "");
+  return hasValue ? out : null;
+}
+
 function nullishObj<T extends Record<string, unknown>>(o: T | null | undefined): T | null {
   if (!o) return null;
   const hasValue = Object.values(o).some((v) => v !== null && v !== undefined && v !== "");
@@ -238,6 +271,7 @@ function entityShape(e: EntityRow) {
     owners: e.owners ?? [],
     premises: e.premises ?? null,
     lease: e.lease ?? null,
+    fiscal: e.fiscal ?? null,
     notes: e.notes,
     archivedAt: e.archivedAt,
     createdAt: e.createdAt,
@@ -258,11 +292,20 @@ async function loadEntity(orgId: string, id: string): Promise<EntityRow | null> 
 // ENTITIES_SEED compat export: entity lists now come from the persisted
 // atelier_legal_entities registry (org-scoped, archived rows excluded).
 // ---------------------------------------------------------------------------
+export interface FinanceEntityFiscal {
+  vatPeriod: string | null;
+  nextVatFilingDate: string | null;
+  vatExpectedAmount: number | null;
+  nextCtFilingDate: string | null;
+  ctExpectedAmount: number | null;
+}
+
 export interface FinanceEntityInfo {
   id: string;
   shortName: string;
   baseCurrency: string;
   country: string;
+  fiscal: FinanceEntityFiscal | null;
 }
 
 export async function listFinanceEntities(orgId: string): Promise<FinanceEntityInfo[]> {
@@ -278,6 +321,7 @@ export async function listFinanceEntities(orgId: string): Promise<FinanceEntityI
       shortName: r.shortName || r.legalNameEn,
       baseCurrency: r.baseCurrency || "USD",
       country: r.country,
+      fiscal: r.fiscal ?? null,
     }));
 }
 
@@ -466,6 +510,7 @@ router.post("/finance/entities", async (req, res) => {
       owners: normalizeOwners(b.owners),
       premises: nullishObj(b.premises ?? null) as EntityRow["premises"],
       lease: nullishObj(b.lease ?? null) as EntityRow["lease"],
+      fiscal: normalizeFiscal(b.fiscal),
       notes: b.notes ?? null,
     })
     .returning();
@@ -522,6 +567,7 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.owners !== undefined) assign("owners", normalizeOwners(b.owners));
   if (b.premises !== undefined) assign("premises", nullishObj(b.premises ?? null));
   if (b.lease !== undefined) assign("lease", nullishObj(b.lease ?? null));
+  if (b.fiscal !== undefined) assign("fiscal", normalizeFiscal(b.fiscal));
   if (b.notes !== undefined) assign("notes", b.notes ?? null);
   if (Object.keys(changes).length === 0) {
     res.json({ entity: entityShape(existing) });
