@@ -3223,12 +3223,33 @@ export function buildExecutiveMapperProposals(args: {
 }): PendingProfileUpdate[] {
   const { output, account } = args;
   const now = new Date().toISOString();
+  // Fuzzy-human blocking across reruns: a queued (pending) contact proposal
+  // blocks ANY spelling variant of the same person — one proposal per human,
+  // ever, until it's resolved. A rejected proposal blocks re-proposing the
+  // same person unless the new sighting genuinely changes the title (the
+  // user said no to that person-as-proposed, not to all future facts).
+  const priorContactProposals: Array<{
+    fullName: string;
+    title: string | null;
+    status: "pending" | "rejected";
+  }> = [];
   const blockedKeys = new Set<string>();
   for (const u of (account.pendingProfileUpdates ?? []) as PendingProfileUpdate[]) {
-    if (u.status === "pending" || u.status === "rejected") {
-      blockedKeys.add(proposalKey(u));
+    if (u.status !== "pending" && u.status !== "rejected") continue;
+    blockedKeys.add(proposalKey(u));
+    if (u.field === "contact") {
+      const tv = u.toValue as { fullName?: unknown; title?: unknown } | null;
+      if (tv && typeof tv.fullName === "string" && tv.fullName.trim()) {
+        priorContactProposals.push({
+          fullName: tv.fullName,
+          title: typeof tv.title === "string" ? tv.title : null,
+          status: u.status,
+        });
+      }
     }
   }
+  const normTitle = (t: string | null | undefined) =>
+    (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   const candidates: PendingProfileUpdate[] = [];
   const proposedPeople: Array<{ fullName: string }> = [];
   for (const dm of output.decisionMakers ?? []) {
@@ -3236,6 +3257,19 @@ export function buildExecutiveMapperProposals(args: {
     // One proposal per human per run, even when the roster somehow still
     // carries two spellings of the same person.
     if (findPersonMatch(dm.fullName, proposedPeople, (p) => p.fullName)) continue;
+    // Fuzzy-human blocking against the existing queue: a pending proposal
+    // for this person (under any spelling) blocks a second one outright; a
+    // rejected one blocks re-proposal unless the title genuinely differs.
+    const prior = findPersonMatch(dm.fullName, priorContactProposals, (p) => p.fullName);
+    if (
+      prior &&
+      (prior.status === "pending" ||
+        !dm.title ||
+        normTitle(dm.title) === normTitle(prior.title))
+    ) {
+      proposedPeople.push({ fullName: dm.fullName });
+      continue;
+    }
     // Fuzzy match against CRM contacts so a spelling variant enriches the
     // existing record instead of proposing a duplicate person.
     const existing = findPersonMatch(

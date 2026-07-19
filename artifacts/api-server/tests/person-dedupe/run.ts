@@ -337,6 +337,72 @@ function build(
   check("rejected queue entry blocks identical proposal", out.length === 0, String(out.length));
 }
 
+// 7b) Rerun with a fuzzy spelling variant of a PENDING proposal -> blocked
+//     outright (one proposal per human until the queue entry is resolved).
+{
+  const pending: PendingProfileUpdate[] = [
+    {
+      id: "pp_x2",
+      proposedBy: "ag_executive_mapper",
+      proposedAt: new Date().toISOString(),
+      field: "contact",
+      fromValue: null,
+      toValue: { fullName: "Mohammed bin Nasser Al-Jasser", title: "CEO" },
+      rationale: "prior run",
+      status: "pending",
+    } as unknown as PendingProfileUpdate,
+  ];
+  const out = build(
+    [dm({ fullName: "Mohammed Al Jasser", title: "Group Chief Executive" })],
+    [],
+    pending,
+  );
+  check(
+    "pending proposal blocks fuzzy spelling variant on rerun",
+    out.length === 0,
+    String(out.length),
+  );
+}
+
+// 7c) REJECTED proposal blocks a fuzzy variant with the same title, but a
+//     genuinely different title may be re-proposed.
+{
+  const rejected: PendingProfileUpdate[] = [
+    {
+      id: "pp_x3",
+      proposedBy: "ag_executive_mapper",
+      proposedAt: new Date().toISOString(),
+      field: "contact",
+      fromValue: null,
+      toValue: { fullName: "Mohammed bin Nasser Al-Jasser", title: "CEO" },
+      rationale: "prior run",
+      status: "rejected",
+    } as unknown as PendingProfileUpdate,
+  ];
+  const sameTitle = build([dm({ fullName: "Mohammed Al Jasser", title: "ceo" })], [], rejected);
+  check(
+    "rejected proposal blocks fuzzy variant with same title",
+    sameTitle.length === 0,
+    String(sameTitle.length),
+  );
+  const noTitle = build([dm({ fullName: "Mohammed Al Jasser", title: null as unknown as string })], [], rejected);
+  check(
+    "rejected proposal blocks fuzzy variant with no title info",
+    noTitle.length === 0,
+    String(noTitle.length),
+  );
+  const newTitle = build(
+    [dm({ fullName: "Mohammed Al Jasser", title: "Chairman of the Board" })],
+    [],
+    rejected,
+  );
+  check(
+    "rejected proposal does NOT block a genuinely new title",
+    newTitle.length === 1,
+    String(newTitle.length),
+  );
+}
+
 // 8) Blank names skipped.
 {
   const out = build([dm({ fullName: "   " }), dm({ fullName: "Jane Doe", title: "CFO" })]);
