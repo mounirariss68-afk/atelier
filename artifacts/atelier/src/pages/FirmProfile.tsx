@@ -356,6 +356,19 @@ export default function FirmProfile() {
                       data-testid={`signing-entity-courts-${i}`} />
                   </label>
                 </div>
+                {(() => {
+                  const blank: string[] = [];
+                  if (!e.registeredAddress.trim()) blank.push("registered address");
+                  if (!e.governingLaw.trim()) blank.push("governing law");
+                  if (!e.jurisdiction.trim()) blank.push("jurisdiction");
+                  if (!e.courts.trim()) blank.push("courts / dispute forum");
+                  return blank.length > 0 ? (
+                    <div className="text-xs text-amber-400" data-testid={`signing-entity-warning-${i}`}>
+                      Missing {blank.join(", ")} — contracts prepared under this entity will ask for
+                      {blank.length > 1 ? " these details" : " this detail"} manually. You can still save.
+                    </div>
+                  ) : null;
+                })()}
                 <div className="flex items-center gap-3 text-sm">
                   <label className="flex items-center gap-1.5 text-text">
                     <input type="radio" name="signing-entity-default" checked={e.isDefault}
