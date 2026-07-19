@@ -279,6 +279,11 @@ function ReviewFieldsDialog(props: {
     setFields((prev) => prev.map((f, j) => (j === i ? { ...f, ...patch } : f)));
   }
 
+  // Task #297 — raw text drafts for the comma-separated options inputs.
+  // Deriving the input value straight from parsed `options` eats commas
+  // and trailing spaces as you type; keep what the user typed per field.
+  const [optionsDraft, setOptionsDraft] = React.useState<Record<string, string>>({});
+
   return (
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
@@ -411,9 +416,11 @@ function ReviewFieldsDialog(props: {
                     Options (comma-separated, blank = free text)
                   </label>
                   <Input
-                    value={(f.options ?? []).join(", ")}
+                    value={optionsDraft[f.key] ?? (f.options ?? []).join(", ")}
                     onChange={(e) => {
-                      const opts = e.target.value
+                      const raw = e.target.value;
+                      setOptionsDraft((prev) => ({ ...prev, [f.key]: raw }));
+                      const opts = raw
                         .split(",")
                         .map((s) => s.trim())
                         .filter(Boolean);

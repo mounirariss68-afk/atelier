@@ -454,7 +454,12 @@ export function CommandBar(props: CommandBarProps) {
   }, [input, slashToken, cli.capabilities]);
 
   React.useEffect(() => {
-    const willOpen = input.startsWith("/") && slashCandidates.length > 0;
+    // Task #297 — once the user has typed arguments after the command
+    // token ("/contract-prepare using …"), close the menu so Enter
+    // submits the turn instead of re-picking the candidate (which
+    // silently reset the composer to the bare alias).
+    const hasArgs = /^\/\S+\s+\S/.test(input);
+    const willOpen = input.startsWith("/") && !hasArgs && slashCandidates.length > 0;
     setSlashOpen((wasOpen) => {
       // Task #342 — record cli.opened with source=slash_command the
       // first time the slash menu opens after being closed. Treats
@@ -475,7 +480,9 @@ export function CommandBar(props: CommandBarProps) {
 
   function pickSlash(c: CliCapability) {
     const alias = c.slashAliases[locale]?.[0] ?? c.slashAliases.en?.[0] ?? c.toolName;
-    setInput(`/${alias} `);
+    // Aliases in the catalog carry a leading "/" already — strip it so
+    // picking a candidate never yields "//contract-prepare".
+    setInput(`/${alias.replace(/^\/+/, "")} `);
     setSlashOpen(false);
     composerRef.current?.focus();
   }
