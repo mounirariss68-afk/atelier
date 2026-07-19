@@ -41,6 +41,43 @@ const COUNTRY_LABEL_TO_ISO: Record<string, CountryCode> = {
   "united states": "US",
 };
 
+/** Dial code → friendly country label, for cells stored with a dial code
+ *  ("+971") in the country field. Mirrors the countries covered above. */
+const DIAL_CODE_TO_LABEL: Record<string, string> = {
+  "+971": "UAE",
+  "+966": "KSA",
+  "+974": "Qatar",
+  "+965": "Kuwait",
+  "+973": "Bahrain",
+  "+968": "Oman",
+  "+20": "Egypt",
+  "+961": "Lebanon",
+  "+962": "Jordan",
+  "+90": "Türkiye",
+  "+44": "UK",
+  "+33": "France",
+  "+49": "Germany",
+  "+91": "India",
+  "+92": "Pakistan",
+  "+1": "USA",
+};
+
+/**
+ * Display-friendly label for a stored cell `country` field. Returns a
+ * country name when the field holds a known dial code, the field as-is
+ * when it already holds a name label, and null when it's empty or an
+ * unrecognised dial code (caller should omit the label entirely).
+ */
+export function phoneCountryLabel(country: string): string | null {
+  const trimmed = country.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("+")) {
+    const normalized = trimmed.replace(/[\s()-]/g, "");
+    return DIAL_CODE_TO_LABEL[normalized] ?? null;
+  }
+  return trimmed;
+}
+
 /**
  * Format one stored cell for display. Cells are stored as
  * `{ country, number }` where `country` is usually a dial code ("+971")
