@@ -179,7 +179,10 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state])
+    // Subscribe exactly once per mount. Depending on `state` here made every
+    // toast dispatch tear down and re-register every subscriber, which under
+    // a render burst cascades into "Maximum update depth exceeded".
+  }, [])
 
   return {
     ...state,

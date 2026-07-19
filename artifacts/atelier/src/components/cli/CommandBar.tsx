@@ -414,20 +414,24 @@ export function CommandBar(props: CommandBarProps) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [open, cli.turns, cli.current]);
 
-  // ⌘↩ / Ctrl+↩ confirms a pending plan.
+  // ⌘↩ / Ctrl+↩ confirms a pending plan. `handleConfirm` is a plain
+  // function whose identity changes each render, so we pin the latest via a
+  // ref and give the effect a real dependency array instead of re-running
+  // (and re-registering the window listener) on every render.
+  const handleConfirmRef = React.useRef<() => void>(() => {});
+  handleConfirmRef.current = () => handleConfirm();
+  const pendingConfirm = cli.current?.status === "needs_confirmation";
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || !pendingConfirm) return;
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        if (cli.current?.status === "needs_confirmation") {
-          e.preventDefault();
-          handleConfirm();
-        }
+        e.preventDefault();
+        handleConfirmRef.current();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, [open, pendingConfirm]);
 
   // Filtered slash candidates: filter the catalog by the token after `/`.
   const slashToken = input.startsWith("/") ? input.slice(1).split(/\s/)[0].toLowerCase() : "";
