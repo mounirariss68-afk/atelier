@@ -636,6 +636,89 @@ router.get("/me/contracts", async (req, res) => {
   res.json({ contracts: rows.map((c) => contractShape(c)) });
 });
 
+/**
+ * Task #161 — resolve the caller's roster row ids (org-scoped). Powers the
+ * self-scope /me/contracts/* routes below.
+ */
+async function myRosterIds(me: Me): Promise<string[]> {
+  const emps = await db
+    .select({ id: atelierEmployees.id })
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.orgId, me.orgId), eq(atelierEmployees.userId, me.id)));
+  return emps.map((e) => e.id);
+}
+
+/**
+ * Task #161 — load a contract for the /me/contracts/:id surfaces. Only
+ * contracts linked (personId) to the caller's own roster row are visible;
+ * anything else is 403 (exists in org) / 404 (doesn't exist).
+ */
+async function loadMyContract(
+  me: Me,
+  contractId: string,
+  res: Response,
+): Promise<ContractRow | null> {
+  const contract = await loadContract(me.orgId, contractId);
+  if (!contract) {
+    res.status(404).json({ error: "not-found" });
+    return null;
+  }
+  const ids = await myRosterIds(me);
+  if (!contract.personId || !ids.includes(contract.personId)) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return contract;
+}
+
+// Task #161 — Me-lens read-only contract detail (documents chain + status).
+// @cli-skip: contract lifecycle is UI/chat-capability-driven (Task #159)
+router.get("/me/contracts/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const contract = await loadMyContract(me, req.params.id, res);
+  if (!contract) return;
+  const documents = await db
+    .select()
+    .from(atelierContractDocuments)
+    .where(eq(atelierContractDocuments.contractId, contract.id))
+    .orderBy(desc(atelierContractDocuments.versionNumber));
+  res.json({ contract: contractShape(contract, documents) });
+});
+
+// Task #161 — Me-lens document download (own signed PDF etc.).
+// @cli-skip: binary download surface (Task #159)
+router.get("/me/contracts/:id/documents/:docId/download", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const contract = await loadMyContract(me, req.params.id, res);
+  if (!contract) return;
+  const [doc] = await db
+    .select()
+    .from(atelierContractDocuments)
+    .where(
+      and(
+        eq(atelierContractDocuments.id, req.params.docId),
+        eq(atelierContractDocuments.contractId, contract.id),
+      ),
+    );
+  if (!doc) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const bytes = await loadContractBytes(doc.blobRef);
+  if (!bytes) {
+    res.status(410).json({ error: "blob-missing" });
+    return;
+  }
+  res.setHeader("Content-Type", doc.mime);
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="${doc.fileName.replace(/[^\w.\- ]+/g, "_")}"`,
+  );
+  res.send(bytes);
+});
+
 // @cli-skip: contract lifecycle is UI/chat-capability-driven (Task #159)
 router.get("/contracts", async (req, res) => {
   const me = ensurePersona(req, res);

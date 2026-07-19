@@ -83,7 +83,16 @@ export function ContractExpiryBadge({ c }: { c: Pick<AtelierContract, "status" |
   );
 }
 
-export function ContractRow({ c, linked = true }: { c: AtelierContract; linked?: boolean }) {
+export function ContractRow({
+  c,
+  linked = true,
+  href,
+}: {
+  c: AtelierContract;
+  linked?: boolean;
+  /** Override the row's link target (e.g. the Me-lens detail page). */
+  href?: string;
+}) {
   const inner = (
     <>
       <FileText className="w-4 h-4 text-text-faint shrink-0" />
@@ -110,7 +119,7 @@ export function ContractRow({ c, linked = true }: { c: AtelierContract; linked?:
   }
   return (
     <Link
-      href={`/contracts/${c.id}`}
+      href={href ?? `/contracts/${c.id}`}
       className={`${cls} hover:border-gold/50 transition-colors`}
       data-testid={`row-contract-${c.id}`}
     >
@@ -126,8 +135,9 @@ export function ContractsPanel(props: {
   /**
    * Me-lens mode: employee/contractor personas are server-gated to
    * /me/*, so this fetches GET /me/contracts (bespoke route, not in the
-   * OpenAPI spec) instead of the codegen list hook, and renders rows
-   * unlinked (the /contracts/:id detail page is partner-tier).
+   * OpenAPI spec) instead of the codegen list hook, and links rows to
+   * the read-only /me/contracts/:id detail view (Task #161) — the
+   * partner-tier /contracts/:id page would 403 for them.
    */
   mine?: boolean;
   title?: string;
@@ -189,7 +199,8 @@ function MineContractsPanel(props: { title?: string; emptyText?: string }) {
       emptyText={props.emptyText}
       isLoading={isLoading}
       contracts={data?.contracts ?? []}
-      linked={false}
+      linked
+      hrefFor={(c) => `/me/contracts/${c.id}`}
       showAllLink={false}
     />
   );
@@ -201,6 +212,7 @@ function PanelBody(props: {
   isLoading: boolean;
   contracts: AtelierContract[];
   linked: boolean;
+  hrefFor?: (c: AtelierContract) => string;
   showAllLink: boolean;
 }) {
   return (
@@ -222,7 +234,7 @@ function PanelBody(props: {
       ) : (
         <div className="space-y-2">
           {props.contracts.map((c) => (
-            <ContractRow key={c.id} c={c} linked={props.linked} />
+            <ContractRow key={c.id} c={c} linked={props.linked} href={props.hrefFor?.(c)} />
           ))}
         </div>
       )}

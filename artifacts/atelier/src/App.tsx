@@ -163,6 +163,8 @@ import PeopleHome from "@/pages/people/PeopleHome";
 // Task #50 — the self-service Me lens (visible to all; only lens for
 // self-only personas).
 import MeHome from "@/pages/me/MeHome";
+// Task #161 — read-only Me-lens contract detail (self-scope routes).
+import MeContractDetail from "@/pages/me/MeContractDetail";
 // Task #159 — contract lifecycle (templates + contracts + detail).
 import ContractsHome from "@/pages/contracts/ContractsHome";
 import ContractDetail from "@/pages/contracts/ContractDetail";
@@ -610,6 +612,9 @@ function Router() {
         <Route path="/people" component={PeopleHome} />
         {/* Task #50 — Me lens: one page, section tabs. */}
         <Route path="/me" component={MeHome} />
+        {/* Task #161 — read-only self-scope contract detail; must be
+            registered before /me/:section so it wins the match. */}
+        <Route path="/me/contracts/:id" component={MeContractDetail} />
         <Route path="/me/:section" component={MeHome} />
         {/* Task #371 — Partners lens (alliance lifecycle). The index +
             stage views all live in PartnersIndex, which keys off the

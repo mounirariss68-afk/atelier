@@ -424,6 +424,39 @@ async function main() {
       mine.status === 200 && (mine.body?.contracts ?? []).some((c: any) => c.id === contractId),
       mine,
     );
+    // Task #161 — employee opens own contract detail + downloads signed PDF
+    // via the self-scope /me/contracts/* routes.
+    const mineDetail = await api("GET", `/me/contracts/${contractId}`, undefined, empUserId);
+    check("employee /me/contracts/:id -> 200", mineDetail.status === 200, mineDetail);
+    const mineDocs = mineDetail.body?.contract?.documents ?? [];
+    const mineSigned = mineDocs.find((d: any) => d.kind === "signed_pdf");
+    check("me detail includes documents chain + signed_pdf", !!mineSigned, mineDocs);
+    if (mineSigned) {
+      const mineDl = await fetch(
+        `${BASE}/me/contracts/${contractId}/documents/${mineSigned.id}/download`,
+        { headers: { cookie: `atelier_persona=${empUserId}` } },
+      );
+      const mineBytes = Buffer.from(await mineDl.arrayBuffer());
+      check(
+        "employee downloads own signed PDF via /me route",
+        mineDl.status === 200 && mineBytes.subarray(0, 4).toString() === "%PDF",
+        { status: mineDl.status, head: mineBytes.subarray(0, 8).toString() },
+      );
+    }
+    // Not the caller's contract (fp has no roster row linked) -> 403.
+    const notMine = await api("GET", `/me/contracts/${contractId}`, undefined, fpId);
+    check("/me/contracts/:id on someone else's contract -> 403", notMine.status === 403, notMine);
+    const notMineDl = await api(
+      "GET",
+      `/me/contracts/${contractId}/documents/${mineSigned?.id ?? "doc_x"}/download`,
+      undefined,
+      fpId,
+    );
+    check("/me download on someone else's contract -> 403", notMineDl.status === 403, notMineDl);
+    // Unknown contract id -> 404.
+    const mineMissing = await api("GET", "/me/contracts/ctr_does_not_exist", undefined, empUserId);
+    check("/me/contracts/:id unknown -> 404", mineMissing.status === 404, mineMissing);
+
     const empPatch = await api("PATCH", `/contracts/${contractId}`, { notes: "hax" }, empUserId);
     check("employee cannot patch contract -> 403", empPatch.status === 403, empPatch);
     const empCreate = await api(
