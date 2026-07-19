@@ -342,6 +342,14 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+  .pill-btn:focus {
+    outline: none;
+  }
+  .pill-btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 999px;
+  }
 
   /* Mono telemetry chip — used in agent activity, audit, plm stage */
   .mono-chip {
