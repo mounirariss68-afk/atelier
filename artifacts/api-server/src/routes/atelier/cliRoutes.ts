@@ -20,7 +20,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, gt, gte, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, lte, ne, sql } from "drizzle-orm";
 import { db, atelierCliSessions, atelierCliTurns, atelierUsers } from "@workspace/db";
 import {
   runTurn,
@@ -339,6 +339,51 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  // Task #197 — on-read sweep: rows the endpoint would hide anyway
+  // (expired past the 7-day TTL, or superseded by any newer turn from
+  // the same user) are flipped to `cancelled` so status-based queries
+  // and metrics don't see an ever-growing set of "open" questions.
+  // This changes stored status only for rows that could never be
+  // returned here, so rehydration semantics are unchanged.
+  const now = new Date();
+  await db
+    .update(atelierCliTurns)
+    .set({
+      status: "cancelled",
+      statusMessage: "clarification expired (older than 7 days)",
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(atelierCliTurns.userId, me.id),
+        eq(atelierCliTurns.orgId, me.orgId),
+        eq(atelierCliTurns.status, "awaiting_clarification"),
+        lte(atelierCliTurns.createdAt, new Date(now.getTime() - PENDING_TTL_MS)),
+      ),
+    );
+  await db
+    .update(atelierCliTurns)
+    .set({
+      status: "cancelled",
+      statusMessage: "superseded by newer activity",
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(atelierCliTurns.userId, me.id),
+        eq(atelierCliTurns.orgId, me.orgId),
+        eq(atelierCliTurns.status, "awaiting_clarification"),
+        sql`EXISTS (
+          SELECT 1 FROM ${atelierCliTurns} AS newer
+          WHERE newer.user_id = ${me.id}
+            AND newer.org_id = ${me.orgId}
+            AND newer.created_at >= ${atelierCliTurns.createdAt}
+            AND newer.id <> ${atelierCliTurns.id}
+        )`,
+      ),
+    );
   const [row] = await db
     .select({
       id: atelierCliTurns.id,
