@@ -444,17 +444,22 @@ function TitleEditor({
 
   if (!editing) {
     return (
-      <>
+      <div
+        className="space-y-2 border border-border-soft rounded p-2"
+        data-testid="title-group"
+      >
         <Field label="Title" value={person.title} />
-        <button
-          onClick={() => { setError(null); setEditing(true); }}
-          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
-          data-testid="title-edit"
-        >
-          Edit title
-        </button>
-        {error && <span className="text-warn text-[10px]">{error}</span>}
-      </>
+        <div className="flex items-center justify-end gap-2">
+          {error && <span className="text-warn text-[10px] mr-auto">{error}</span>}
+          <button
+            onClick={() => { setError(null); setEditing(true); }}
+            className="text-[10px] font-mono uppercase tracking-widest border border-border-soft rounded px-2 py-0.5 text-text-mute hover:text-gold hover:border-gold/50"
+            data-testid="title-edit"
+          >
+            Edit title
+          </button>
+        </div>
+      </div>
     );
   }
 
