@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -396,7 +396,11 @@ export default function Account() {
             className="mt-4 border border-danger/40 bg-danger/10 rounded p-3 text-xs font-mono text-danger flex items-center justify-between"
             data-testid="banner-cartographer-failed"
           >
-            <span>Account Cartographer auto-run failed. Click Cartographer ★ to retry.</span>
+            <span data-testid="text-cartographer-failure-reason">
+              {a.cartographerPhase
+                ? `Account Cartographer run failed: ${a.cartographerPhase} — click Refresh from web to retry.`
+                : "Account Cartographer run failed. Click Refresh from web to retry."}
+            </span>
           </div>
         )}
 
@@ -2169,19 +2173,108 @@ function EntityScopeChip({ contact }: { contact: AtelierContact }) {
 }
 
 /**
- * Task #32 — Executive Mapper trigger. Bespoke route (not in the OpenAPI
- * spec), so this uses a raw fetch like the other account-agent runs. The
+ * Task #32/#201 — Executive Mapper trigger. Bespoke routes (not in the
+ * OpenAPI spec), so this uses raw fetches like the other account-agent runs.
+ * The run is ASYNC on the server (Task #201): POST starts it and returns
+ * immediately (the old synchronous route held the connection for minutes and
+ * 502'd at the proxy); we then poll the status route until it settles. The
  * Mapper proposes contacts into the governed review queue on the Profile tab
  * — nothing is written to the contact list until a partner approves.
  */
-export async function runExecutiveMapperSweep({
+type ExecMapperStatus = {
+  status: "idle" | "running" | "succeeded" | "failed";
+  phase: string | null;
+  error: string | null;
+  proposedCount: number | null;
+  openQuestions: string[];
+};
+
+export async function fetchExecutiveMapperStatus(
+  accountId: string,
+): Promise<ExecMapperStatus> {
+  const res = await fetch(
+    `${import.meta.env?.BASE_URL ?? "/"}api/atelier/accounts/${accountId}/executive-mapper/status`,
+    { credentials: "include" },
+  );
+  if (!res.ok) throw new Error(`Status check failed (${res.status})`);
+  return (await res.json()) as ExecMapperStatus;
+}
+
+/** Poll until the in-flight sweep settles, then toast + invalidate. */
+export async function pollExecutiveMapperUntilDone({
   accountId,
   qc,
   toast,
+  pollIntervalMs = 3000,
+  isCancelled,
 }: {
   accountId: string;
   qc: ReturnType<typeof useQueryClient>;
   toast: ReturnType<typeof useToast>["toast"];
+  pollIntervalMs?: number;
+  isCancelled?: () => boolean;
+}): Promise<void> {
+  for (;;) {
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    if (isCancelled?.()) return;
+    let s: ExecMapperStatus;
+    try {
+      s = await fetchExecutiveMapperStatus(accountId);
+    } catch {
+      // Transient poll failure (network blip) — keep polling.
+      continue;
+    }
+    if (isCancelled?.()) return;
+    if (s.status === "running") continue;
+    if (s.status === "failed") {
+      toast({
+        title: "Executive mapping failed",
+        description: s.error ?? "The run failed. Try again in a moment.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // succeeded (or idle — treat as done defensively)
+    void qc.invalidateQueries({
+      queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+    });
+    // Task #209 — the coverage block (incl. staleness chip) reads from the
+    // latest completed run, so refresh it after a new sweep.
+    void qc.invalidateQueries({
+      queryKey: ["atelier-exec-mapper-coverage", accountId],
+    });
+    const count = s.proposedCount;
+    toast({
+      title:
+        count == null
+          ? "Executive mapping finished"
+          : count > 0
+            ? `${count} executive update${count === 1 ? "" : "s"} proposed`
+            : "No new executives found",
+      description:
+        count == null
+          ? "Review any new proposals in the update queue on the Profile tab."
+          : count > 0
+            ? "Review and approve them in the update queue on the Profile tab."
+            : s.openQuestions[0] ??
+              "The public record didn't surface anyone new this run.",
+    });
+    return;
+  }
+}
+
+export async function runExecutiveMapperSweep({
+  accountId,
+  qc,
+  toast,
+  pollIntervalMs = 3000,
+  isCancelled,
+}: {
+  accountId: string;
+  qc: ReturnType<typeof useQueryClient>;
+  toast: ReturnType<typeof useToast>["toast"];
+  pollIntervalMs?: number;
+  isCancelled?: () => boolean;
 }): Promise<void> {
   try {
     const res = await fetch(
@@ -2193,34 +2286,20 @@ export async function runExecutiveMapperSweep({
         body: JSON.stringify({}),
       },
     );
-    if (!res.ok) {
+    if (!res.ok && res.status !== 409) {
       const detail = await res.json().catch(() => ({}));
       throw new Error(
         (detail as { error?: string }).error ?? `Run failed (${res.status})`,
       );
     }
-    const data = (await res.json()) as {
-      proposedCount: number;
-      openQuestions: string[];
-    };
-    void qc.invalidateQueries({
-      queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
-    });
-    // Task #209 — the coverage block (incl. staleness chip) reads from the
-    // latest completed run, so refresh it after a new sweep.
-    void qc.invalidateQueries({
-      queryKey: ["atelier-exec-mapper-coverage", accountId],
-    });
-    toast({
-      title:
-        data.proposedCount > 0
-          ? `${data.proposedCount} executive update${data.proposedCount === 1 ? "" : "s"} proposed`
-          : "No new executives found",
-      description:
-        data.proposedCount > 0
-          ? "Review and approve them in the update queue on the Profile tab."
-          : data.openQuestions[0] ??
-            "The public record didn't surface anyone new this run.",
+    // 409 = a sweep is already running — fall through and poll it to
+    // completion instead of erroring.
+    await pollExecutiveMapperUntilDone({
+      accountId,
+      qc,
+      toast,
+      pollIntervalMs,
+      isCancelled,
     });
   } catch (err: unknown) {
     toast({
@@ -2235,12 +2314,46 @@ function MapExecutivesButton({ accountId }: { accountId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [running, setRunning] = useState(false);
+  const cancelledRef = useRef(false);
+
+  // Task #201 — reload recovery: if a sweep is already in flight for this
+  // account (page refresh mid-run, or started from another tab), show the
+  // running state and resume polling so the result still lands.
+  useEffect(() => {
+    cancelledRef.current = false;
+    void (async () => {
+      try {
+        const s = await fetchExecutiveMapperStatus(accountId);
+        if (cancelledRef.current || s.status !== "running") return;
+        setRunning(true);
+        await pollExecutiveMapperUntilDone({
+          accountId,
+          qc,
+          toast,
+          isCancelled: () => cancelledRef.current,
+        });
+        if (!cancelledRef.current) setRunning(false);
+      } catch {
+        // Status probe failed — leave the button in its idle state.
+      }
+    })();
+    return () => {
+      cancelledRef.current = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
   async function run() {
     setRunning(true);
     try {
-      await runExecutiveMapperSweep({ accountId, qc, toast });
+      await runExecutiveMapperSweep({
+        accountId,
+        qc,
+        toast,
+        isCancelled: () => cancelledRef.current,
+      });
     } finally {
-      setRunning(false);
+      if (!cancelledRef.current) setRunning(false);
     }
   }
   return (

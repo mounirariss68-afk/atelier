@@ -162,14 +162,29 @@ async function main(): Promise<void> {
       "precondition: coverage query starts un-invalidated",
     );
 
+    // Task #201 — the sweep is async: POST /run returns 202 immediately and
+    // the client polls /status until the run settles.
     const calls: string[] = [];
     const origFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
-      calls.push(String(input));
-      return new Response(
-        JSON.stringify({ proposedCount: 2, openQuestions: [] }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
+      const url = String(input);
+      calls.push(url);
+      if (url.includes("/executive-mapper/status")) {
+        return new Response(
+          JSON.stringify({
+            status: "succeeded",
+            phase: null,
+            error: null,
+            proposedCount: 2,
+            openQuestions: [],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ started: true, status: "running" }), {
+        status: 202,
+        headers: { "Content-Type": "application/json" },
+      });
     }) as typeof fetch;
 
     const toasts: unknown[] = [];
@@ -177,6 +192,7 @@ async function main(): Promise<void> {
       await runExecutiveMapperSweep({
         accountId: ACCOUNT_ID,
         qc,
+        pollIntervalMs: 5,
         toast: ((t: unknown) => {
           toasts.push(t);
           return { id: "t1", dismiss: () => {}, update: () => {} };

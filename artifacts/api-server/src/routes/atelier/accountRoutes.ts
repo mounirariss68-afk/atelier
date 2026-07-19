@@ -174,9 +174,53 @@ async function loadAccount(id: string) {
   return row ?? null;
 }
 
+// ---------- async agent-run launches (Task #201) ----------
+// Long LLM runs (Cartographer refresh, Executive Mapper) must NOT hold the
+// HTTP request open — the proxy times held connections out at ~60s and the
+// client sees a 502. The routes below record an in-process launch entry,
+// kick the work off in the background, and return immediately; the client
+// polls a status route. The DB run row (atelier_agent_runs) is the durable
+// record that survives reloads/restarts; the in-memory entry closes the
+// pre-row race (the run row is only inserted once the background task gets
+// going) and captures errors thrown before a run row exists (e.g. budget).
+type AgentLaunchState = {
+  status: "running" | "succeeded" | "failed";
+  error: string | null;
+  runId: string | null;
+  proposedCount: number | null;
+  openQuestions: string[];
+  startedAt: number;
+};
+const agentLaunches = new Map<string, AgentLaunchState>();
+const launchKey = (agentId: string, accountId: string) => `${agentId}:${accountId}`;
+
 async function loadCartographerStatus(
   accountId: string,
 ): Promise<{ status: "running" | "failed" | null; phase: string | null }> {
+  const launch = agentLaunches.get(launchKey("account_cartographer", accountId));
+  if (launch?.status === "running") {
+    // Background task may not have inserted its run row yet — fall through
+    // to the DB only for a fresher phase message if one exists.
+    const [row] = await db
+      .select({ status: atelierAgentRuns.status, statusMessage: atelierAgentRuns.statusMessage })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.targetType, "account"),
+          eq(atelierAgentRuns.targetId, accountId),
+          eq(atelierAgentRuns.agentId, "account_cartographer"),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(1);
+    return {
+      status: "running",
+      phase: row?.status === "running" ? (row.statusMessage ?? null) : "Starting research…",
+    };
+  }
+  if (launch?.status === "failed") {
+    return { status: "failed", phase: launch.error };
+  }
   const [latest] = await db
     .select({
       status: atelierAgentRuns.status,
@@ -199,7 +243,12 @@ async function loadCartographerStatus(
     // bare indefinite spinner.
     return { status: "running", phase: latest.statusMessage ?? null };
   }
-  if (latest.status === "failed") return { status: "failed", phase: null };
+  if (latest.status === "failed" || latest.status === "error") {
+    // Surface the failure detail (failRun stores the error message in
+    // statusMessage) so the account page can show WHY instead of a bare
+    // "failed" banner.
+    return { status: "failed", phase: latest.statusMessage ?? null };
+  }
   return { status: null, phase: null };
 }
 
@@ -3436,71 +3485,123 @@ router.post("/accounts/:accountId/cartographer/refresh", async (req, res) => {
   const parsed = AtelierCartographerRefreshInput.safeParse(req.body ?? {});
   const focusOpportunityId = parsed.success ? (parsed.data.focusOpportunityId ?? null) : null;
 
-  const { runId, output } = await runAccountCartographer({
-    accountId: a.id,
-    accountName: a.name,
-    accountSector: a.sector,
-    accountCountry: a.country,
-    accountHqCity: a.hqCity ?? null,
-    triggeredByUserId: me.id,
-    actorLabel: "Account Cartographer",
-    focusOpportunityId,
-  });
-  void runId;
-
-  // Task #568 — GOVERNED AI POPULATION. A manual refresh no longer
-  // direct-writes the account. The Cartographer PROPOSES; a partner then
-  // edits / approves / rejects each delta (see the decision + bulk-decision
-  // endpoints). This keeps AI population uniformly governed and prevents the
-  // agent from clobbering partner-curated fields (notes, hypothesis, etc.).
-  // Auto-seeding still happens on CREATE for empty new accounts; only the
-  // manual Refresh-from-web is queue-gated.
-  const existingContacts = await db
-    .select({ fullName: atelierContacts.fullName })
-    .from(atelierContacts)
-    .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
-
-  const proposals = buildCartographerProposals({
-    proposedBy: "ag_account_cartographer",
-    output,
-    account: a,
-    existingContacts,
-  });
-
-  const queue = ((a.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []).concat(
-    proposals,
-  );
-
-  await db.transaction(async (tx) => {
-    // enrichedAt records that a refresh ran; the actual field writes wait for
-    // partner approval. We never touch notes/hypothesis/priorities here.
-    await tx
-      .update(atelierAccounts)
-      .set({ pendingProfileUpdates: queue, enrichedAt: new Date(), updatedAt: new Date() })
-      .where(eq(atelierAccounts.id, a.id));
-    await tx.insert(atelierAuditEvents).values({
-      id: rid("aud"),
-      entityType: "account",
-      entityId: a.id,
-      actorType: "agent",
-      actorId: "ag_account_cartographer",
-      actorLabel: "Account Cartographer",
-      action: "account.profile.proposeUpdate",
-      payload: {
-        count: proposals.length,
-        fields: proposals.map((p) => p.field),
-      },
-      payloadSummary:
-        proposals.length > 0
-          ? `Account Cartographer proposed ${proposals.length} profile update(s) for ${a.name} (awaiting partner review).`
-          : `Account Cartographer refresh found no new changes to propose for ${a.name}.`,
+  // Task #201 — never stack a second refresh on an account that already has
+  // one running (double-click, auto-run overlap).
+  const { status: cartStatus } = await loadCartographerStatus(a.id);
+  if (cartStatus === "running") {
+    res.status(409).json({
+      error: "cartographer-already-running",
+      message: "The Account Cartographer is already researching this account.",
     });
-  });
+    return;
+  }
 
-  // Cartographer refresh finished and its proposals are queued — chain the
-  // Executive Mapper (fire-and-forget), same as the account-creation flow.
-  // A failed / empty / already-running sweep never breaks the refresh.
-  chainExecutiveMapperAfterCartographer(a.id, me.id, a.brandName ?? a.name);
+  // Task #201 — ASYNC START-THEN-POLL. The Cartographer run takes minutes;
+  // holding the request open used to 502 at the proxy. Record the launch,
+  // do the whole run + governed-queue write in the background, and return
+  // the current workspace immediately. The account page already polls the
+  // workspace while cartographerStatus === "running".
+  const cartLaunchKey = launchKey("account_cartographer", a.id);
+  agentLaunches.set(cartLaunchKey, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
+  const triggeredByUserId = me.id;
+  void (async () => {
+    try {
+      const { runId, output } = await runAccountCartographer({
+        accountId: a.id,
+        accountName: a.name,
+        accountSector: a.sector,
+        accountCountry: a.country,
+        accountHqCity: a.hqCity ?? null,
+        triggeredByUserId,
+        actorLabel: "Account Cartographer",
+        focusOpportunityId,
+      });
+
+      // Task #568 — GOVERNED AI POPULATION. A manual refresh no longer
+      // direct-writes the account. The Cartographer PROPOSES; a partner then
+      // edits / approves / rejects each delta (see the decision + bulk-decision
+      // endpoints). This keeps AI population uniformly governed and prevents the
+      // agent from clobbering partner-curated fields (notes, hypothesis, etc.).
+      // Auto-seeding still happens on CREATE for empty new accounts; only the
+      // manual Refresh-from-web is queue-gated.
+      const existingContacts = await db
+        .select({ fullName: atelierContacts.fullName })
+        .from(atelierContacts)
+        .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
+
+      // Re-load for the freshest queue — the LLM run takes minutes and other
+      // writers (partner edits, approvals) may have touched the row meanwhile.
+      const fresh = (await loadAccount(a.id)) ?? a;
+      const proposals = buildCartographerProposals({
+        proposedBy: "ag_account_cartographer",
+        output,
+        account: fresh,
+        existingContacts,
+      });
+
+      const queue = (
+        (fresh.pendingProfileUpdates as PendingProfileUpdate[] | null) ?? []
+      ).concat(proposals);
+
+      await db.transaction(async (tx) => {
+        // enrichedAt records that a refresh ran; the actual field writes wait for
+        // partner approval. We never touch notes/hypothesis/priorities here.
+        await tx
+          .update(atelierAccounts)
+          .set({ pendingProfileUpdates: queue, enrichedAt: new Date(), updatedAt: new Date() })
+          .where(eq(atelierAccounts.id, a.id));
+        await tx.insert(atelierAuditEvents).values({
+          id: rid("aud"),
+          entityType: "account",
+          entityId: a.id,
+          actorType: "agent",
+          actorId: "ag_account_cartographer",
+          actorLabel: "Account Cartographer",
+          action: "account.profile.proposeUpdate",
+          payload: {
+            count: proposals.length,
+            fields: proposals.map((p) => p.field),
+          },
+          payloadSummary:
+            proposals.length > 0
+              ? `Account Cartographer proposed ${proposals.length} profile update(s) for ${a.name} (awaiting partner review).`
+              : `Account Cartographer refresh found no new changes to propose for ${a.name}.`,
+        });
+      });
+
+      agentLaunches.set(cartLaunchKey, {
+        status: "succeeded",
+        error: null,
+        runId,
+        proposedCount: proposals.length,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+
+      // Cartographer refresh finished and its proposals are queued — chain the
+      // Executive Mapper (fire-and-forget), same as the account-creation flow.
+      // A failed / empty / already-running sweep never breaks the refresh.
+      chainExecutiveMapperAfterCartographer(a.id, triggeredByUserId, a.brandName ?? a.name);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      agentLaunches.set(cartLaunchKey, {
+        status: "failed",
+        error: message,
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+      console.warn(`[atelier] cartographer refresh failed for ${a.name}`, message);
+    }
+  })();
 
   const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);
@@ -3531,22 +3632,158 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
     return;
   }
 
-  let result: Awaited<ReturnType<typeof runExecutiveMapperAndQueue>>;
-  try {
-    result = await runExecutiveMapperAndQueue(a.id, me.id);
-  } catch (err) {
-    if (err instanceof Error && err.message === "executive-mapper-already-running") {
-      res.status(409).json({
-        error: "executive-mapper-already-running",
-        message: "An executive mapping sweep is already running for this account.",
-      });
-      return;
-    }
-    throw err;
+  // Task #201 — ASYNC START-THEN-POLL. The sweep takes minutes; holding the
+  // request open used to 502 at the proxy. Record the launch, run in the
+  // background, and return immediately; the client polls the status route.
+  const execLaunchKey = launchKey("executive_mapper", a.id);
+  const existingLaunch = agentLaunches.get(execLaunchKey);
+  const alreadyRunning = () => {
+    res.status(409).json({
+      error: "executive-mapper-already-running",
+      message: "An executive mapping sweep is already running for this account.",
+    });
+  };
+  if (existingLaunch?.status === "running") {
+    alreadyRunning();
+    return;
+  }
+  const [inFlightRow] = await db
+    .select({ id: atelierAgentRuns.id })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.targetId, a.id),
+        eq(atelierAgentRuns.status, "running"),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (inFlightRow) {
+    alreadyRunning();
+    return;
   }
 
-  const ws = await buildWorkspace(a.id, access, me);
-  res.json({ ...result, workspace: ws });
+  agentLaunches.set(execLaunchKey, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
+  const triggeredByUserId = me.id;
+  void (async () => {
+    try {
+      const result = await runExecutiveMapperAndQueue(a.id, triggeredByUserId);
+      agentLaunches.set(execLaunchKey, {
+        status: "succeeded",
+        error: null,
+        runId: result.runId,
+        proposedCount: result.proposedCount,
+        openQuestions: result.openQuestions,
+        startedAt: Date.now(),
+      });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      const message =
+        raw === "executive-mapper-already-running"
+          ? "An executive mapping sweep is already running for this account."
+          : raw;
+      agentLaunches.set(execLaunchKey, {
+        status: "failed",
+        error: message,
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+      console.warn(`[atelier] executive mapper run failed for ${a.name}`, raw);
+    }
+  })();
+
+  res.status(202).json({ started: true, status: "running" });
+});
+
+// Task #201 — Executive Mapper run status. Bespoke raw-fetch route (not in
+// the OpenAPI spec) polled by the Map Executives button. Merges the
+// in-process launch entry (covers the pre-run-row window and errors thrown
+// before a run row exists) with the durable run row (covers page reloads and
+// server restarts mid-run).
+// @cli-skip: bespoke agent-read route, surfaced in the Account UI only
+router.get("/accounts/:accountId/executive-mapper/status", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, req.params.accountId))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const launch = agentLaunches.get(launchKey("executive_mapper", req.params.accountId));
+  const [latest] = await db
+    .select({
+      id: atelierAgentRuns.id,
+      status: atelierAgentRuns.status,
+      statusMessage: atelierAgentRuns.statusMessage,
+    })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.targetId, req.params.accountId),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  // In-process "running" wins even if the run row already reads complete —
+  // the governed-queue write happens after the row completes, and succeeded
+  // is only reported once the proposals are actually queued.
+  if (launch?.status === "running" || latest?.status === "running") {
+    res.json({
+      status: "running",
+      phase: latest?.status === "running" ? (latest.statusMessage ?? null) : null,
+      runId: latest?.status === "running" ? latest.id : null,
+      error: null,
+      proposedCount: null,
+      openQuestions: [],
+    });
+    return;
+  }
+  if (launch) {
+    res.json({
+      status: launch.status,
+      phase: null,
+      runId: launch.runId,
+      error: launch.error,
+      proposedCount: launch.proposedCount,
+      openQuestions: launch.openQuestions,
+    });
+    return;
+  }
+  if (!latest) {
+    res.json({ status: "idle", phase: null, runId: null, error: null, proposedCount: null, openQuestions: [] });
+    return;
+  }
+  if (latest.status === "error" || latest.status === "failed") {
+    res.json({
+      status: "failed",
+      phase: null,
+      runId: latest.id,
+      error: latest.statusMessage ?? "The executive mapping run failed.",
+      proposedCount: null,
+      openQuestions: [],
+    });
+    return;
+  }
+  res.json({
+    status: "succeeded",
+    phase: null,
+    runId: latest.id,
+    error: null,
+    proposedCount: null,
+    openQuestions: [],
+  });
 });
 
 // Task #206 — latest critical-role coverage summary from the most recent
