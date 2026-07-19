@@ -13,6 +13,18 @@ import { backfillChunkEmbeddings } from "./lib/atelier-cli/attachments/retrieval
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
+// Task #185 — last-resort process guards. A transient DB disconnect (or any
+// stray async failure) must not kill the deployment: log it loudly and keep
+// serving. We deliberately do NOT process.exit here — the express request
+// path has its own error handling, and the one truly unrecoverable boot
+// failure (embedding model load) exits explicitly below.
+process.on("unhandledRejection", (reason) => {
+  logger.error({ err: reason }, "UNHANDLED PROMISE REJECTION — continuing");
+});
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "UNCAUGHT EXCEPTION — continuing");
+});
+
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
@@ -38,17 +50,26 @@ app.listen(port, (err) => {
   // Task #1 — real auth: create credentials/sessions tables if missing and
   // seed the two allowed logins (idempotent; covers production on redeploy).
   // Fail loudly: without this the API is a wall of 401s.
-  void ensureAtelierAuthSeed().catch((err) => {
-    logger.error({ err }, "Auth credential seed failed — logins will not work");
-  });
-  // Task #50 — user↔person linkage repair so the Me lens resolves a roster
-  // record for every existing user (data-only identity repair, not seeding).
-  void ensureAtelierSelfLinkage().catch((err) => {
-    logger.error(
-      { err },
-      "Self-linkage repair failed — /me/profile may miss roster records",
-    );
-  });
+  // Task #185 — these boot chores each open DB connections; running them all
+  // in parallel exhausted the platform's connection-attempt permits in prod
+  // ("Too many database connection attempts are currently ongoing"). Run them
+  // strictly one after another; each still logs its own failure and never
+  // blocks the next.
+  void (async () => {
+    await ensureAtelierAuthSeed().catch((err) => {
+      logger.error(
+        { err },
+        "Auth credential seed failed — logins will not work",
+      );
+    });
+    // Task #50 — user↔person linkage repair so the Me lens resolves a roster
+    // record for every existing user (data-only identity repair, not seeding).
+    await ensureAtelierSelfLinkage().catch((err) => {
+      logger.error(
+        { err },
+        "Self-linkage repair failed — /me/profile may miss roster records",
+      );
+    });
   // All demo-data seeding was removed for production (2026-07-16). The only
   // boot-time seeds left are configuration, not demo data: the auth
   // credential seed above, the reference-data seed (countries / industries /
@@ -56,23 +77,23 @@ app.listen(port, (err) => {
   // baseline rate-card + margin-policy seed (Pricing is a wall of 409s
   // without an active rate card). All are gated on empty tables so user
   // edits are never overwritten. Real CRM data is entered through the app.
-  void ensureAtelierReferenceSeed().catch((err) => {
-    logger.error(
-      { err },
-      "Reference-data seed failed — country/industry dropdowns will be empty",
-    );
-  });
-  void ensureAtelierPricingSeed().catch((err) => {
-    logger.error(
-      { err },
-      "Pricing seed failed — Pricing module has no active rate card",
-    );
-  });
-  // Task #108 — regression tripwire: dummy/test data was permanently purged
-  // (2026-07-17). Count accounts and scream if any row matching the old test
-  // tag patterns ever reappears, so reintroduction is visible immediately.
-  void (async () => {
-    const res = await db.execute<{ accounts: string; tagged: string }>(sql`
+    await ensureAtelierReferenceSeed().catch((err) => {
+      logger.error(
+        { err },
+        "Reference-data seed failed — country/industry dropdowns will be empty",
+      );
+    });
+    await ensureAtelierPricingSeed().catch((err) => {
+      logger.error(
+        { err },
+        "Pricing seed failed — Pricing module has no active rate card",
+      );
+    });
+    // Task #108 — regression tripwire: dummy/test data was permanently purged
+    // (2026-07-17). Count accounts and scream if any row matching the old test
+    // tag patterns ever reappears, so reintroduction is visible immediately.
+    try {
+      const res = await db.execute<{ accounts: string; tagged: string }>(sql`
       SELECT
         (SELECT count(*) FROM atelier_accounts WHERE deleted_at IS NULL) AS accounts,
         (
@@ -82,31 +103,27 @@ app.listen(port, (err) => {
           + (SELECT count(*) FROM atelier_users WHERE id LIKE 'p_test_%')
         ) AS tagged
     `);
-    const row = res.rows[0];
-    const tagged = Number(row?.tagged ?? 0);
-    logger.info(
-      { accounts: Number(row?.accounts ?? 0), taggedTestRows: tagged },
-      "Data tripwire: account count at boot",
-    );
-    if (tagged > 0) {
-      logger.error(
-        { taggedTestRows: tagged },
-        "DATA TRIPWIRE: rows matching test tag patterns (t542/t627/p_test_*) exist — test data is leaking into the live database again",
+      const row = res.rows[0];
+      const tagged = Number(row?.tagged ?? 0);
+      logger.info(
+        { accounts: Number(row?.accounts ?? 0), taggedTestRows: tagged },
+        "Data tripwire: account count at boot",
       );
+      if (tagged > 0) {
+        logger.error(
+          { taggedTestRows: tagged },
+          "DATA TRIPWIRE: rows matching test tag patterns (t542/t627/p_test_*) exist — test data is leaking into the live database again",
+        );
+      }
+    } catch (err) {
+      logger.warn({ err }, "Data tripwire check failed");
     }
-  })().catch((err) => {
-    logger.warn({ err }, "Data tripwire check failed");
-  });
-  // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
-  // (writes audit_event rows; idempotent per (week, kind)).
-  startLedgerNudgeJob();
-  // Task #62 — polling fallback that reconciles open signature requests
-  // against DocuSeal (webhooks can't always reach the dev environment).
-  startEsignPolling();
-  // Task #411 — install pg_trgm + pgvector (when available) and the
-  // GIN trgm indexes the hybrid resolver hits. Idempotent.
-  void applyAtelierCliRagSql()
-    .then(async () => {
+    // Task #411 — install pg_trgm + pgvector (when available) and the
+    // GIN trgm indexes the hybrid resolver hits. Idempotent. Runs last in
+    // the serialized boot chain (Task #185) so it never competes with the
+    // seeds above for connection permits.
+    await applyAtelierCliRagSql()
+      .then(async () => {
       // Task #575 — warm the local embedding model and backfill any
       // documents that lack current-provider chunk vectors (re-embed
       // migration). Guarded by a pg advisory lock so only one instance
@@ -139,11 +156,20 @@ app.listen(port, (err) => {
       } finally {
         await db.execute(sql`SELECT pg_advisory_unlock(${LOCK_KEY})`);
       }
-    })
-    .catch((err) => {
-      logger.warn(
-        { err },
-        "Atelier Chat RAG SQL bootstrap failed — chat will degrade to brute-force resolution",
-      );
-    });
+      })
+      .catch((err) => {
+        logger.warn(
+          { err },
+          "Atelier Chat RAG SQL bootstrap failed — chat will degrade to brute-force resolution",
+        );
+      });
+  })().catch((err) => {
+    logger.error({ err }, "Serialized boot chores chain failed unexpectedly");
+  });
+  // v3 Ledger: Sun 21:00 GST submit-due / Tue 12:00 GST approve-due nudges
+  // (writes audit_event rows; idempotent per (week, kind)).
+  startLedgerNudgeJob();
+  // Task #62 — polling fallback that reconciles open signature requests
+  // against DocuSeal (webhooks can't always reach the dev environment).
+  startEsignPolling();
 });
