@@ -25,6 +25,7 @@
 - [Launch deck-graphics policy](launch-deck-graphics.md) — `launch` site: recreate investor-deck infographics as interactive components (not pasted images+redundant text); client-facing, no investor framing.
 - [Launch Home render isolation](launch-home-render-isolation.md) — monolithic Home.tsx: keep scroll/menu state in isolated SiteNav or every scroll tick re-renders whole page (mobile jank); hero imagery desktop-only.
 - [CLI clarification protocol](atelier-cli-clarification-protocol.md) — continuation merges answer at TOP-LEVEL args (not input.input); stash expensive draft in partial.input.__researchedDraft to skip re-running specialist.
+- [CLI multi-field clarification](cli-multifield-clarification.md) — clarification `fields` array + clarificationValues map; dotted names MUST expand via mergeClarificationAnswer or tools silently ignore them.
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors (dup resolveNavPath import, role enums, ToolResult shapes); not a clean signal — diff against HEAD to attribute.
 - [Atelier firmographic columns need push](atelier-firmographics-db.md) — Drizzle cols/FKs may be absent in a fresh isolated DB → 500s; run `@workspace/db push`; clean orphan FK rows if push aborts.
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.

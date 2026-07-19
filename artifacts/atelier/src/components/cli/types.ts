@@ -50,6 +50,12 @@ export interface CliClarification {
   tool: string;
   partial?: Record<string, unknown>;
   suggestions?: Array<{ id: string; label: string; hint?: string }>;
+  /**
+   * Multi-field clarification: when more than one entry is present the
+   * card renders one labeled input per field so all missing values can
+   * be submitted in a single round-trip.
+   */
+  fields?: Array<{ field: string; label: string; hint?: string }>;
 }
 
 export interface CliRefusal {

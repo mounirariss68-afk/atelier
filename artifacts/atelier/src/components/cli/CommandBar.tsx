@@ -775,11 +775,12 @@ export function CommandBar(props: CommandBarProps) {
                   pageContext: pageCtx,
                 })
               }
-              onSubmitClarification={(answer, continuesTurnId) =>
+              onSubmitClarification={(answer, continuesTurnId, values) =>
                 void cli.submit({
                   prompt: answer,
                   pageContext: pageCtx,
                   continuesTurnId: continuesTurnId ?? null,
+                  clarificationValues: values ?? null,
                 })
               }
               onCopyJson={(t) => copyText(JSON.stringify(t.proposedPlan ?? t.pending ?? {}, null, 2))}
@@ -1131,7 +1132,11 @@ function Transcript({
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onRequestCapability: (prompt: string) => void;
-  onSubmitClarification: (answer: string, continuesTurnId?: string | null) => void;
+  onSubmitClarification: (
+    answer: string,
+    continuesTurnId?: string | null,
+    values?: Record<string, string> | null,
+  ) => void;
   onCopyJson: (t: CliTurn) => void;
   onCopyMarkdown: (t: CliTurn) => void;
   onExport: () => void;
@@ -1337,7 +1342,11 @@ function TurnBody({
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onRequestCapability: (prompt: string) => void;
-  onSubmitClarification: (answer: string, continuesTurnId?: string | null) => void;
+  onSubmitClarification: (
+    answer: string,
+    continuesTurnId?: string | null,
+    values?: Record<string, string> | null,
+  ) => void;
   onCopyJson: () => void;
   onCopyMarkdown: () => void;
   onExport: () => void;
@@ -1472,7 +1481,9 @@ function TurnBody({
         <ClarificationCard
           clarification={turn.clarification}
           locale={locale}
-          onSubmit={(answer) => onSubmitClarification(answer, turn.serverTurnId ?? null)}
+          onSubmit={(answer, values) =>
+            onSubmitClarification(answer, turn.serverTurnId ?? null, values)
+          }
           onCancel={onCancelTurn}
         />
       )}
@@ -1871,10 +1882,98 @@ function ClarificationCard({
 }: {
   clarification: CliClarification;
   locale: CliLocale;
-  onSubmit: (answer: string) => void;
+  onSubmit: (answer: string, values?: Record<string, string> | null) => void;
   onCancel: () => void;
 }) {
   const [answer, setAnswer] = useState("");
+  // Task #267 — multi-field clarification: one labeled input per
+  // missing field, single submit. Only kicks in when the server sent
+  // 2+ fields; single-field (incl. suggestion chips) keeps the classic
+  // one-input path below.
+  const multiFields =
+    clarification.fields && clarification.fields.length > 1
+      ? clarification.fields
+      : null;
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+  if (multiFields) {
+    const filled = multiFields
+      .map((f) => ({ f, v: (fieldValues[f.field] ?? "").trim() }))
+      .filter((x) => x.v.length > 0);
+    const canSubmit = filled.length > 0;
+    const submitMulti = () => {
+      if (!canSubmit) return;
+      const values: Record<string, string> = {};
+      for (const { f, v } of filled) values[f.field] = v;
+      const answerText = filled.map(({ f, v }) => `${f.label}: ${v}`).join("\n");
+      onSubmit(answerText, values);
+    };
+    return (
+      <div
+        className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+        data-testid="cli-clarification"
+      >
+        <div className="text-xs font-mono uppercase tracking-wider text-gold">
+          {s("clarificationTitle", locale)}
+          {clarification.tool && (
+            <span className="ml-2 text-text-faint normal-case">
+              · {clarification.tool}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-text leading-relaxed">
+          {clarification.question}
+        </div>
+        <div className="text-[11px] text-text-faint leading-relaxed">
+          {s("clarificationMultiHint", locale)}
+        </div>
+        <div className="space-y-2">
+          {multiFields.map((f, i) => (
+            <label key={f.field} className="block">
+              <span className="block text-[11px] text-text-mute mb-0.5">
+                {f.label}
+                {f.hint && (
+                  <span className="text-text-faint"> · {f.hint}</span>
+                )}
+              </span>
+              <input
+                autoFocus={i === 0}
+                value={fieldValues[f.field] ?? ""}
+                onChange={(e) =>
+                  setFieldValues((prev) => ({ ...prev, [f.field]: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canSubmit) {
+                    e.preventDefault();
+                    submitMulti();
+                  }
+                }}
+                className="w-full bg-bg-deep border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-gold"
+                data-testid={`cli-clarification-field-${f.field}`}
+              />
+            </label>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={submitMulti}
+            disabled={!canSubmit}
+            className="text-xs bg-gold text-bg-deep font-semibold px-3 py-1.5 rounded disabled:opacity-50"
+            data-testid="cli-clarification-submit"
+          >
+            {s("clarificationSubmit", locale)}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs text-text-mute hover:text-danger px-2 py-1.5 rounded hover:bg-bg-elevate-2"
+          >
+            {s("cancel", locale)}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"

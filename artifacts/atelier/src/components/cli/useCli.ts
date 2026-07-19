@@ -63,6 +63,12 @@ interface SubmitArgs {
    * the session rolled over (e.g. the answer came hours later).
    */
   continuesTurnId?: string | null;
+  /**
+   * Multi-field clarification answers: map of clarification field name
+   * → user-entered value, submitted alongside a human-readable prompt
+   * so all missing fields resume in one round-trip.
+   */
+  clarificationValues?: Record<string, string> | null;
 }
 
 interface UseCliOptions {
@@ -388,6 +394,7 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
         tool?: string;
         partial?: Record<string, unknown>;
         suggestions?: Array<{ id: string; label: string; hint?: string }>;
+        fields?: Array<{ field: string; label: string; hint?: string }>;
       };
       return {
         ...turn,
@@ -398,6 +405,7 @@ export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
           tool: d.tool ?? "",
           partial: d.partial ?? {},
           suggestions: d.suggestions ?? [],
+          fields: Array.isArray(d.fields) ? d.fields : [],
         },
       };
     }
@@ -596,6 +604,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
               tool: string;
               partial: Record<string, unknown>;
               suggestions: Array<{ id: string; label: string; hint?: string }>;
+              fields?: Array<{ field: string; label: string; hint?: string }>;
             };
           } | null;
         } | null) => {
@@ -620,6 +629,9 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
               tool: p.clarification.tool,
               partial: p.clarification.partial ?? {},
               suggestions: p.clarification.suggestions ?? [],
+              fields: Array.isArray(p.clarification.fields)
+                ? p.clarification.fields
+                : [],
             },
           };
           setCurrent(restored);
@@ -770,6 +782,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             clientTurnKey,
             intent: args.intent ?? null,
             continuesTurnId: args.continuesTurnId ?? null,
+            clarificationValues: args.clarificationValues ?? null,
           }),
           signal: ctrl.signal,
         });

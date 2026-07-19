@@ -29,6 +29,7 @@ import {
   writeSseFrame,
   CliBudgetExceededError,
   CliConcurrencyError,
+  sanitizeClarificationFields,
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
 import { stripLocalePreamble } from "../../lib/atelier-cli/locale.js";
@@ -101,7 +102,22 @@ router.post("/cli/turn", async (req, res) => {
     async?: boolean;
     reset?: boolean;
     continuesTurnId?: string | null;
+    clarificationValues?: Record<string, unknown> | null;
   };
+  // Multi-field clarification answers — sanitize to a bounded map of
+  // string → string before it reaches the orchestrator.
+  let clarificationValues: Record<string, string> | null = null;
+  if (
+    body.clarificationValues &&
+    typeof body.clarificationValues === "object" &&
+    !Array.isArray(body.clarificationValues)
+  ) {
+    const entries = Object.entries(body.clarificationValues)
+      .filter(([k, v]) => typeof k === "string" && k.length > 0 && k.length <= 200 && typeof v === "string")
+      .slice(0, 40)
+      .map(([k, v]) => [k, (v as string).slice(0, 2000)] as const);
+    if (entries.length > 0) clarificationValues = Object.fromEntries(entries);
+  }
   const promptRawWithPreamble = (body.prompt ?? "").trim();
   if (!promptRawWithPreamble) {
     res.status(400).json({ error: "prompt-required" });
@@ -164,6 +180,7 @@ router.post("/cli/turn", async (req, res) => {
           typeof body.continuesTurnId === "string" && body.continuesTurnId.length > 0
             ? body.continuesTurnId
             : null,
+        clarificationValues,
       },
       { persona, emit: (f) => (closed ? undefined : emit(f)) },
     );
@@ -448,6 +465,7 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
         tool?: string;
         partial?: Record<string, unknown>;
         suggestions?: Array<{ id: string; label: string; hint?: string }>;
+        fields?: Array<{ field: string; label: string; hint?: string }>;
       }
     | undefined;
   if (!d || typeof d.field !== "string" || typeof d.tool !== "string") {
@@ -466,6 +484,7 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
         tool: d.tool,
         partial: d.partial && typeof d.partial === "object" ? d.partial : {},
         suggestions: Array.isArray(d.suggestions) ? d.suggestions : [],
+        fields: sanitizeClarificationFields(d.fields) ?? [],
       },
     },
   });

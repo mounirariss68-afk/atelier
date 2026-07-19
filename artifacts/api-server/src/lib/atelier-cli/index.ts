@@ -153,6 +153,15 @@ export interface RunTurnInput {
    * lands in a different (e.g. rolled-over) session.
    */
   continuesTurnId?: string | null;
+  /**
+   * Multi-field clarification answers: map of clarification field name
+   * (e.g. "values.fee") → user-entered value. When present alongside a
+   * pending clarification, all non-blank values are merged into the
+   * resumed tool arguments in one continuation instead of one field per
+   * round-trip. Keys are restricted to the fields the pending
+   * clarification actually asked for.
+   */
+  clarificationValues?: Record<string, string> | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
   /**
@@ -445,6 +454,16 @@ export interface ToolResult {
     tool: string;
     partial?: Record<string, unknown>;
     suggestions?: Array<{ id: string; label: string; hint?: string }>;
+    /**
+     * Multi-field clarification: the full list of missing fields, each
+     * with a machine name (merged into the resumed args), a
+     * human-readable label, and an optional hint. When more than one
+     * entry is present the client renders one labeled input per field
+     * so the user can answer everything in a single round-trip. The
+     * single-field `field`/`question` pair above remains authoritative
+     * for backward compatibility (and MUST name the first entry).
+     */
+    fields?: Array<{ field: string; label: string; hint?: string }>;
   };
   /**
    * Task #340 — graceful refusal envelope. The orchestrator emits a
@@ -2115,6 +2134,51 @@ export function looksLikeClarificationAnswer(raw: string): boolean {
   return true;
 }
 
+/**
+ * Merge a single clarification answer into the resumed tool args.
+ * Non-dotted field names merge at TOP-LEVEL (the long-standing
+ * continuation convention — siblings of `kind`/`input`/etc). Dotted
+ * names (e.g. "values.fee" from contract_prepare) expand into the
+ * nested object path so the tool actually sees the value where its
+ * schema expects it — a literal top-level "values.fee" key would be
+ * silently ignored by the tool and re-trigger the same question.
+ */
+export function mergeClarificationAnswer(
+  base: Record<string, unknown>,
+  field: string,
+  value: string,
+): Record<string, unknown> {
+  const dot = field.indexOf(".");
+  if (dot <= 0) return { ...base, [field]: value };
+  const head = field.slice(0, dot);
+  const rest = field.slice(dot + 1);
+  const child = base[head];
+  const childObj =
+    child && typeof child === "object" && !Array.isArray(child)
+      ? (child as Record<string, unknown>)
+      : {};
+  return { ...base, [head]: mergeClarificationAnswer(childObj, rest, value) };
+}
+
+/** Validate an untrusted `fields` array from a persisted frame/body. */
+export function sanitizeClarificationFields(
+  raw: unknown,
+): Array<{ field: string; label: string; hint?: string }> | null {
+  if (!Array.isArray(raw)) return null;
+  const out: Array<{ field: string; label: string; hint?: string }> = [];
+  for (const f of raw.slice(0, 40)) {
+    if (!f || typeof f !== "object") continue;
+    const o = f as { field?: unknown; label?: unknown; hint?: unknown };
+    if (typeof o.field !== "string" || o.field.length === 0) continue;
+    out.push({
+      field: o.field,
+      label: typeof o.label === "string" && o.label.length > 0 ? o.label : o.field,
+      ...(typeof o.hint === "string" && o.hint.length > 0 ? { hint: o.hint } : {}),
+    });
+  }
+  return out.length > 0 ? out : null;
+}
+
 export interface RunTurnDeps {
   persona: CliPersona;
   emit: (frame: CliFrame) => void;
@@ -2469,6 +2533,7 @@ export async function runTurn(
             question?: string;
             tool?: string;
             partial?: Record<string, unknown>;
+            fields?: Array<{ field?: string; label?: string; hint?: string }>;
           }
         | undefined;
       if (!d || typeof d.field !== "string" || typeof d.tool !== "string") {
@@ -2479,6 +2544,7 @@ export async function runTurn(
         question: typeof d.question === "string" ? d.question : "",
         tool: d.tool,
         partial: d.partial && typeof d.partial === "object" ? d.partial : {},
+        fields: sanitizeClarificationFields(d.fields),
         originalPrompt: row.prompt,
       };
       pendingSourceTurnId = row.id;
@@ -2556,9 +2622,14 @@ export async function runTurn(
     // supersession rule retire the stranded question.
     {
       const _drGate = getSessionDraft(session.id);
+      const hasMultiFieldAnswers =
+        !!input.clarificationValues &&
+        typeof input.clarificationValues === "object" &&
+        Object.keys(input.clarificationValues).length > 0;
       if (
         _drGate.pendingClarification &&
         !explicitContinuation &&
+        !hasMultiFieldAnswers &&
         !looksLikeClarificationAnswer(input.prompt ?? "")
       ) {
         _drGate.pendingClarification = null;
@@ -2832,10 +2903,31 @@ export async function runTurn(
         // bypass cliRoutes still get the same treatment before raw
         // text is merged into a tool field.
         const answer = stripLocalePreamble(input.prompt ?? "");
-        const mergedInput: Record<string, unknown> = {
-          ...(pc.partial ?? {}),
-          [pc.field]: answer,
-        };
+        // Multi-field answers: when the client submitted the labeled
+        // multi-input form, merge every non-blank provided value —
+        // restricted to the fields this clarification actually asked
+        // for — in one continuation. Fields the user left blank are
+        // simply not merged; the tool recomputes what's still missing
+        // and re-issues a narrowed clarification. Falls back to the
+        // classic single-field merge (prompt text = the answer).
+        const allowedFields = new Set<string>([
+          pc.field,
+          ...(pc.fields ?? []).map((f) => f.field),
+        ]);
+        let mergedInput: Record<string, unknown> = { ...(pc.partial ?? {}) };
+        let usedMultiValues = false;
+        if (input.clarificationValues && typeof input.clarificationValues === "object") {
+          for (const [k, v] of Object.entries(input.clarificationValues)) {
+            if (!allowedFields.has(k)) continue;
+            const val = typeof v === "string" ? stripLocalePreamble(v).trim() : "";
+            if (!val) continue;
+            mergedInput = mergeClarificationAnswer(mergedInput, k, val);
+            usedMultiValues = true;
+          }
+        }
+        if (!usedMultiValues) {
+          mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
+        }
         const ctx0: ToolContext = {
           persona,
           turnId,
@@ -2912,6 +3004,7 @@ export async function runTurn(
               originalPrompt: pc.originalPrompt,
               partial: cl.partial ?? mergedInput,
               tool: cl.tool,
+              fields: cl.fields ?? null,
             },
           });
           record({
@@ -2923,6 +3016,7 @@ export async function runTurn(
               tool: cl.tool,
               partial: cl.partial ?? mergedInput,
               suggestions: cl.suggestions ?? [],
+              fields: cl.fields ?? [],
               continuation: true,
             },
           });
@@ -3318,6 +3412,7 @@ export async function runTurn(
             originalPrompt: input.prompt,
             partial: cl.partial ?? {},
             tool: cl.tool,
+            fields: cl.fields ?? null,
           },
         });
         record({
@@ -3329,6 +3424,7 @@ export async function runTurn(
             tool: cl.tool,
             partial: cl.partial ?? {},
             suggestions: cl.suggestions ?? [],
+            fields: cl.fields ?? [],
           },
         });
         status = "awaiting_clarification";

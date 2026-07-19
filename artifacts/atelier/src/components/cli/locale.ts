@@ -124,6 +124,10 @@ export const STRINGS = {
     ar: "أحتاج إلى توضيح سريع",
   },
   clarificationSubmit: { en: "Send answer", ar: "إرسال الإجابة" },
+  clarificationMultiHint: {
+    en: "Fill in what you know — I'll ask again only for anything left blank.",
+    ar: "املأ ما تعرفه — سأسأل مجددًا فقط عمّا تُرك فارغًا.",
+  },
   refusalTitle: {
     en: "I can't do that from here yet",
     ar: "لا أستطيع تنفيذ ذلك من هنا بعد",

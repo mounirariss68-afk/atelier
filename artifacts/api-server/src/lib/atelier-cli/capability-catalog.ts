@@ -587,6 +587,8 @@ export interface SessionDraft {
     originalPrompt: string;
     partial: Record<string, unknown>;
     tool: string;
+    /** Multi-field clarification: every missing field being asked for. */
+    fields?: Array<{ field: string; label: string; hint?: string }> | null;
   } | null;
 }
 

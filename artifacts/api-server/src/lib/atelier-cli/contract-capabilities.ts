@@ -335,13 +335,32 @@ defineCapability({
     });
     if (missingRequired.length > 0) {
       const first = version.fieldSchema.find((f) => f.key === missingRequired[0]);
+      // Multi-field clarification — carry the FULL list of missing
+      // fields (machine name + human label + hint) so the chat can
+      // render one labeled input per field and collect everything in a
+      // single round-trip. `field`/`question` stay pointed at the first
+      // missing field for backward compatibility with the single-input
+      // protocol.
+      const missingFields = missingRequired.map((key) => {
+        const f = version.fieldSchema.find((x) => x.key === key);
+        return {
+          field: `values.${key}`,
+          label: f?.label ?? key,
+          ...(f?.note ? { hint: String(f.note) } : {}),
+        };
+      });
+      const question =
+        missingFields.length > 1
+          ? `I need a few more values: ${missingFields.map((f) => `"${f.label}"`).join(", ")}.`
+          : `What should "${first?.label ?? missingRequired[0]}" be${first?.note ? ` (${first.note})` : ""}?`;
       return {
         ok: false,
         errorCode: "missing_required_fields",
         errorMessage: `Values required for: ${missingRequired.join(", ")}`,
         clarification: {
           field: `values.${missingRequired[0]}`,
-          question: `What should "${first?.label ?? missingRequired[0]}" be${first?.note ? ` (${first.note})` : ""}?`,
+          question,
+          fields: missingFields,
           tool: "contract_prepare",
           partial: {
             ...input,
