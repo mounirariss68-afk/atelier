@@ -1448,7 +1448,7 @@ interface CriticalRoleCoverageEntry {
   source?: "crm" | "run" | null;
 }
 
-function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
+export function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
   const { data } = useQuery({
     queryKey: ["atelier-exec-mapper-coverage", accountId],
     queryFn: async () => {
@@ -2174,6 +2174,63 @@ function EntityScopeChip({ contact }: { contact: AtelierContact }) {
  * Mapper proposes contacts into the governed review queue on the Profile tab
  * — nothing is written to the contact list until a partner approves.
  */
+export async function runExecutiveMapperSweep({
+  accountId,
+  qc,
+  toast,
+}: {
+  accountId: string;
+  qc: ReturnType<typeof useQueryClient>;
+  toast: ReturnType<typeof useToast>["toast"];
+}): Promise<void> {
+  try {
+    const res = await fetch(
+      `${import.meta.env?.BASE_URL ?? "/"}api/atelier/accounts/${accountId}/executive-mapper/run`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      },
+    );
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(
+        (detail as { error?: string }).error ?? `Run failed (${res.status})`,
+      );
+    }
+    const data = (await res.json()) as {
+      proposedCount: number;
+      openQuestions: string[];
+    };
+    void qc.invalidateQueries({
+      queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+    });
+    // Task #209 — the coverage block (incl. staleness chip) reads from the
+    // latest completed run, so refresh it after a new sweep.
+    void qc.invalidateQueries({
+      queryKey: ["atelier-exec-mapper-coverage", accountId],
+    });
+    toast({
+      title:
+        data.proposedCount > 0
+          ? `${data.proposedCount} executive update${data.proposedCount === 1 ? "" : "s"} proposed`
+          : "No new executives found",
+      description:
+        data.proposedCount > 0
+          ? "Review and approve them in the update queue on the Profile tab."
+          : data.openQuestions[0] ??
+            "The public record didn't surface anyone new this run.",
+    });
+  } catch (err: unknown) {
+    toast({
+      title: "Executive mapping failed",
+      description: (err as Error)?.message ?? String(err),
+      variant: "destructive",
+    });
+  }
+}
+
 function MapExecutivesButton({ accountId }: { accountId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -2181,48 +2238,7 @@ function MapExecutivesButton({ accountId }: { accountId: string }) {
   async function run() {
     setRunning(true);
     try {
-      const res = await fetch(
-        `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/executive-mapper/run`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({}),
-        },
-      );
-      if (!res.ok) {
-        const detail = await res.json().catch(() => ({}));
-        throw new Error(
-          (detail as { error?: string }).error ?? `Run failed (${res.status})`,
-        );
-      }
-      const data = (await res.json()) as {
-        proposedCount: number;
-        openQuestions: string[];
-      };
-      qc.invalidateQueries({
-        queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
-      });
-      // Task #209 — the coverage block (incl. staleness chip) reads from the
-      // latest completed run, so refresh it after a new sweep.
-      qc.invalidateQueries({ queryKey: ["atelier-exec-mapper-coverage", accountId] });
-      toast({
-        title:
-          data.proposedCount > 0
-            ? `${data.proposedCount} executive update${data.proposedCount === 1 ? "" : "s"} proposed`
-            : "No new executives found",
-        description:
-          data.proposedCount > 0
-            ? "Review and approve them in the update queue on the Profile tab."
-            : data.openQuestions[0] ??
-              "The public record didn't surface anyone new this run.",
-      });
-    } catch (err: unknown) {
-      toast({
-        title: "Executive mapping failed",
-        description: (err as Error)?.message ?? String(err),
-        variant: "destructive",
-      });
+      await runExecutiveMapperSweep({ accountId, qc, toast });
     } finally {
       setRunning(false);
     }

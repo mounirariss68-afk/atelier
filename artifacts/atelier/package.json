@@ -14,6 +14,7 @@
     "test:revenue-gate": "tsx src/components/EditAccountProfileDialog.revenue-gate.test.tsx",
     "test:cli-duplicate-card": "tsx src/components/cli/ResultCardRenderers.duplicate.test.tsx",
     "test:board-layer": "tsx --tsconfig tsconfig.test.json src/pages/Account.relationships-board.test.tsx",
+    "test:coverage-staleness": "tsx --tsconfig tsconfig.test.json src/pages/Account.coverage-staleness.test.tsx",
     "test:esign-dialog": "tsx --tsconfig tsconfig.test.json src/components/esign/SendForSignatureDialog.locked-account.test.tsx",
     "test:agents-dashboard": "tsx --tsconfig tsconfig.test.json src/pages/agents/AgentsLensHome.render.test.tsx"
   },
