@@ -1,8 +1,8 @@
 /**
- * People Studio — lifecycle stages (Task #364).
+ * People lens — lifecycle stages (Task #364).
  *
  * Single source of truth for the eight lifecycle stages and the cross-cutting
- * modules. The People Studio shell renders the lifecycle ribbon from this file
+ * modules. The People lens shell renders the lifecycle ribbon from this file
  * and the Manage shell's contextual section-tabs slot reads the same labels.
  *
  *   Attract → Hire → Onboard → Develop → Perform → Reward → Retain → Offboard

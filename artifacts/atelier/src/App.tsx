@@ -84,7 +84,7 @@ import CodexRenewals from "@/pages/CodexRenewals";
 // Task #368 — Manage shell lens placeholders. The Clients lens content ships
 // in its own follow-up task; until then it renders a "Lens coming soon" page
 // so the picker, deep links and persistence still resolve. The People lens
-// is filled in by Task #364 with the People Studio. /finance keeps its
+// is filled in by Task #364. /finance keeps its
 // existing pages as its lens home.
 import {
   FinanceLensHome,
@@ -158,7 +158,7 @@ import {
 } from "@/pages/lens/ClientsStages";
 import { Redirect } from "@/components/Redirect";
 
-// Task #364 — People Studio (the People lens).
+// Task #364 — the People lens.
 import PeopleHome from "@/pages/people/PeopleHome";
 // Task #50 — the self-service Me lens (visible to all; only lens for
 // self-only personas).
@@ -189,7 +189,7 @@ import PeopleTime from "@/pages/people/PeopleTime";
 /**
  * Permanent client-side redirect — used for the legacy /studio, /roster
  * and /ledger/timesheet* paths which Task #364 folded into the People
- * Studio. Preserves dynamic path segments and the search string so deep
+ * lens. Preserves dynamic path segments and the search string so deep
  * links from emails / dossiers keep landing on the right page.
  */
 function redirectTo(target: string) {
@@ -362,7 +362,7 @@ function Router() {
             return null;
           }}
         </Route>
-        {/* Task #364 — /studio routes are folded into People Studio /people/hire.
+        {/* Task #364 — /studio routes are folded into the People lens /people/hire.
             The legacy components stay imported for code reuse but the URLs
             permanently redirect. */}
         <Route path="/studio">
@@ -579,7 +579,7 @@ function Router() {
         <Route path="/clients/bill">{() => <Redirect to="/clients/billing" />}</Route>
         <Route path="/clients/renew">{() => <Redirect to="/clients/opportunities" />}</Route>
         <Route path="/clients/reference">{() => <Redirect to="/clients/references" />}</Route>
-        {/* Task #364 — People Studio. Order matters: more specific routes
+        {/* Task #364 — People lens. Order matters: more specific routes
             first, then sub-section catch-alls, then the lens home. */}
         <Route path="/people/attract" component={PeopleAttract} />
         <Route path="/people/attract/:section" component={PeopleAttract} />

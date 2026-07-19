@@ -1,5 +1,5 @@
 /**
- * PeopleShell — wrapper that renders the People Studio lifecycle ribbon
+ * PeopleShell — wrapper that renders the People lens lifecycle ribbon
  * and cross-cutting module rail above whatever child page is mounted at
  * `/people/<...>` (Task #364).
  *

@@ -14,7 +14,7 @@ const ROSTER_ITEMS: NavItem[] = [
 ];
 
 // Task #364 — when these pages are mounted under /people/* we hide the
-// legacy roster nav (the People Studio shell renders the cross-module rail
+// legacy roster nav (the People lens shell renders the cross-module rail
 // instead) so the user doesn't see two competing navigations.
 export function RosterNav(): React.ReactElement | null {
   const [loc] = useLocation();

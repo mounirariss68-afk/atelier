@@ -1,5 +1,5 @@
 /**
- * Role gates for People Studio surfaces (Task #364, Wave-4 review).
+ * Role gates for People lens surfaces (Task #364, Wave-4 review).
  *
  * Reward and Succession contain compensation, comp-band positioning and
  * succession-slate data and must only render for Partner/Admin personas.

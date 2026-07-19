@@ -1,5 +1,5 @@
 /**
- * People Studio — list-shaped hooks for lifecycle modules that do not yet
+ * People lens — list-shaped hooks for lifecycle modules that do not yet
  * have backing API endpoints.
  *
  * These previously carried fictional demo data (fake employees, invented
