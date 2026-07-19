@@ -89,7 +89,7 @@ export function resolveNavPath(args: ResolveNavPathArgs): string | null {
       case "invoice":
         return "/wallet/invoices";
       case "contract":
-        return "/codex";
+        return "/contracts/codex";
       default:
         return null;
     }
@@ -123,8 +123,8 @@ export function resolveNavPath(args: ResolveNavPathArgs): string | null {
       if (verb === "create") return "/wallet/invoices";
       return null;
     case "contract":
-      if (id) return `/codex/contracts/${id}`;
-      return "/codex";
+      if (id) return `/contracts/codex/contracts/${id}`;
+      return "/contracts/codex";
     case "agent_design":
       if (id) return `/agents/design/${id}`;
       return null;

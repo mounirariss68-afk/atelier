@@ -117,7 +117,7 @@ function withNav(result: ToolResult, path: string | null): ToolResult {
 }
 
 function withContractNav(result: ToolResult, contractId: string): ToolResult {
-  return withNav(result, contractId ? `/codex/contracts/${contractId}` : "/codex");
+  return withNav(result, contractId ? `/contracts/codex/contracts/${contractId}` : "/contracts/codex");
 }
 
 function withEngagementNav(result: ToolResult, engagementId: string | null): ToolResult {
@@ -195,7 +195,7 @@ defineCapability({
       summary: `${ctx.persona.name} created counterparty "${input.displayName}" (${input.kind}, ${String(input.jurisdiction).toUpperCase()}).`,
     });
     // Task #512 — land on the new counterparty detail page.
-    return withNav({ ok: true, data: { counterparty: row } }, `/codex/counterparties/${id}`);
+    return withNav({ ok: true, data: { counterparty: row } }, `/contracts/codex/counterparties/${id}`);
   },
 });
 
@@ -254,7 +254,7 @@ defineCapability({
       summary: `${ctx.persona.name} published clause "${existing.title}" (v${existing.version}).`,
     });
     // Task #512 — land on the clause detail page.
-    return withNav({ ok: true, data: { clause: row } }, `/codex/clauses/${clauseId}`);
+    return withNav({ ok: true, data: { clause: row } }, `/contracts/codex/clauses/${clauseId}`);
   },
 });
 
@@ -444,7 +444,7 @@ defineCapability({
       summary: `${ctx.persona.name} requested DPA Sentinel review on dpa ${dpaId}.`,
     });
     // Task #512 — land on the DPA detail page.
-    return withNav(result, `/codex/dpas/${dpaId}`);
+    return withNav(result, `/contracts/codex/dpas/${dpaId}`);
   },
 });
 
@@ -479,7 +479,7 @@ defineCapability({
       summary: `${ctx.persona.name} ran Renewal Watchdog (window ${Number(input.windowDays ?? 90)}d).`,
     });
     // Task #512 — land on the renewals view.
-    return withNav(result, "/codex/renewals");
+    return withNav(result, "/contracts/codex/renewals");
   },
 });
 

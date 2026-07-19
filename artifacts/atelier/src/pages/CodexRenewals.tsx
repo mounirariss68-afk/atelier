@@ -125,7 +125,7 @@ export default function CodexRenewals() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex">Codex</BackLink>
+        <BackLink href="/contracts/codex">Codex</BackLink>
         <SectionHead
           eyebrow="Firm · Codex · Renewals"
           headline="Renewal watch"
@@ -165,7 +165,7 @@ export default function CodexRenewals() {
                 return (
                   <Link
                     key={c.id}
-                    href={`/codex/contracts/${c.id}`}
+                    href={`/contracts/codex/contracts/${c.id}`}
                     className="block"
                     data-testid={`renewal-contract-${c.id}`}
                   >
@@ -224,7 +224,7 @@ export default function CodexRenewals() {
                 return (
                   <Link
                     key={d.id}
-                    href={`/codex/dpas/${d.id}`}
+                    href={`/contracts/codex/dpas/${d.id}`}
                     className="block"
                     data-testid={`renewal-dpa-${d.id}`}
                   >

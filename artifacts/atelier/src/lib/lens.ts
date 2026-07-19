@@ -18,6 +18,7 @@ export type LensId =
   | "agents"
   | "partners"
   | "finance"
+  | "contracts"
   | "me";
 
 export interface LensSection {
@@ -35,7 +36,7 @@ export interface LensDef {
   prefix: string;
   description: string;
   shortcut: string;
-  shortcutKey: "1" | "2" | "3" | "4" | "5" | "6";
+  shortcutKey: "1" | "2" | "3" | "4" | "5" | "6" | "7";
   /**
    * Default section tabs the shell renders next to the picker before the
    * lens's own home page mounts. Each lens task replaces these with its
@@ -154,14 +155,41 @@ export const LENSES: readonly LensDef[] = [
     ],
   },
   {
+    // Task #274 — Contracts lens: the unified contract journey (draft
+    // from template → send for signature → signed & archived) promoted
+    // out of the avatar → Firm menu. Partner-tier only (see
+    // visibleLensesForRole). The e-sign surface (former Agreements page)
+    // is the "Out for Signature" section; the CLM register (former
+    // Codex) lives under the More ▾ overflow.
+    id: "contracts",
+    label: "Contracts",
+    prefix: "/contracts",
+    description: "Templates, drafts, e-signature, executed contracts.",
+    shortcut: "⌘6",
+    shortcutKey: "6",
+    sections: [
+      { id: "overview", label: "Overview", href: "/contracts" },
+      { id: "templates", label: "Templates", href: "/contracts/templates" },
+      { id: "drafts", label: "Drafts", href: "/contracts/drafts" },
+      { id: "signatures", label: "Out for Signature", href: "/contracts/signatures" },
+      { id: "active", label: "Active", href: "/contracts/active" },
+      { id: "archive", label: "Archive", href: "/contracts/archive" },
+    ],
+    more: [
+      { id: "codex", label: "CLM Register", href: "/contracts/codex" },
+      { id: "dpas", label: "DPAs", href: "/contracts/codex/dpas" },
+      { id: "renewals", label: "Renewals", href: "/contracts/codex/renewals" },
+    ],
+  },
+  {
     // Task #50 — the self-service lens. Visible to every persona; the ONLY
     // lens for the self-only personas (role employee / contractor).
     id: "me",
     label: "Me",
     prefix: "/me",
     description: "Your profile, time, expenses, pay, performance, learning.",
-    shortcut: "⌘6",
-    shortcutKey: "6",
+    shortcut: "⌘7",
+    shortcutKey: "7",
     sections: [
       { id: "overview", label: "Overview", href: "/me" },
       { id: "profile", label: "Profile", href: "/me/profile" },
@@ -183,11 +211,19 @@ export function isSelfOnlyRole(role: string | null | undefined): boolean {
   return role === "employee" || role === "contractor";
 }
 
+/** Task #274 — the Contracts lens is partner-tier only. */
+export function canSeeContractsLens(role: string | null | undefined): boolean {
+  return role === "founding_partner" || role === "partner";
+}
+
 /** Lenses the picker should offer this persona. */
 export function visibleLensesForRole(
   role: string | null | undefined,
 ): readonly LensDef[] {
   if (isSelfOnlyRole(role)) return LENSES.filter((l) => l.id === "me");
+  if (!canSeeContractsLens(role)) {
+    return LENSES.filter((l) => l.id !== "contracts");
+  }
   return LENSES;
 }
 

@@ -970,7 +970,7 @@ defineCapability({
         title,
         attachmentIds,
         summaries,
-        navigateTo: { path: "/codex/assets", when: "on_commit" as const },
+        navigateTo: { path: "/contracts/codex/assets", when: "on_commit" as const },
       },
     };
   },

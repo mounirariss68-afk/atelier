@@ -118,7 +118,7 @@ const NEXT_STATES: Record<string, string[]> = {
 };
 
 export default function CodexContract() {
-  const [, params] = useRoute("/codex/contracts/:id");
+  const [, params] = useRoute("/contracts/codex/contracts/:id");
   const id = params?.id ?? "";
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -243,7 +243,7 @@ export default function CodexContract() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex">Back to Codex</BackLink>
+        <BackLink href="/contracts/codex">Back to Codex</BackLink>
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <SectionHead
             eyebrow={c.instrumentType.toUpperCase()}

@@ -416,7 +416,7 @@ async function notifyRequesterOfTerminalStatus(
         kind: wording.kind,
         title: wording.title,
         body: wording.body,
-        href: `/agreements?request=${row.id}`,
+        href: `/contracts/signatures?request=${row.id}`,
       })
       .onConflictDoNothing({ target: atelierSelfNotifications.id });
     // On completion, a companion card links straight to the archived

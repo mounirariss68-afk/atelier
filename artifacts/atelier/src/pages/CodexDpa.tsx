@@ -62,7 +62,7 @@ const STATUS_TONE: Record<
 };
 
 export default function CodexDpa() {
-  const [, params] = useRoute("/codex/dpas/:id");
+  const [, params] = useRoute("/contracts/codex/dpas/:id");
   const id = params?.id ?? "";
   const dpa = useQuery({
     queryKey: ["codex", "dpa", id],
@@ -81,7 +81,7 @@ export default function CodexDpa() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex/dpas">All DPAs</BackLink>
+        <BackLink href="/contracts/codex/dpas">All DPAs</BackLink>
         <SectionHead
           eyebrow="Firm · Codex · DPA"
           headline={
@@ -128,7 +128,7 @@ export default function CodexDpa() {
                   value={
                     cp.data ? (
                       <Link
-                        href={`/codex/counterparties/${cp.data.id}`}
+                        href={`/contracts/codex/counterparties/${cp.data.id}`}
                         className="text-gold hover:underline"
                       >
                         {cp.data.displayName}
@@ -144,7 +144,7 @@ export default function CodexDpa() {
                   value={
                     dpa.data.contractId ? (
                       <Link
-                        href={`/codex/contracts/${dpa.data.contractId}`}
+                        href={`/contracts/codex/contracts/${dpa.data.contractId}`}
                         className="text-gold hover:underline"
                       >
                         {dpa.data.contractId}

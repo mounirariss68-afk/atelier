@@ -52,7 +52,7 @@ const STATUS_TONE: Record<
 };
 
 export default function CodexClause() {
-  const [, params] = useRoute("/codex/clauses/:id");
+  const [, params] = useRoute("/contracts/codex/clauses/:id");
   const id = params?.id ?? "";
   const cl = useQuery({
     queryKey: ["codex", "clause", id],
@@ -63,7 +63,7 @@ export default function CodexClause() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex/clauses">All clauses</BackLink>
+        <BackLink href="/contracts/codex/clauses">All clauses</BackLink>
         <SectionHead
           eyebrow="Firm · Codex · Clause"
           headline={

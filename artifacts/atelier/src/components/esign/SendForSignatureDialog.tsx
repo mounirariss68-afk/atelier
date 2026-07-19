@@ -532,6 +532,12 @@ export function SendForSignatureDialog({
                   ))}
                 </select>
               )}
+              {!lockedAccount ? (
+                <p className="mt-0.5 text-[10px] text-text-faint">
+                  Optional — links the request to a counterparty so it shows up on
+                  that account and in the Contracts overview.
+                </p>
+              ) : null}
             </div>
             <div>
               <label className="text-xs text-text-mute">Expires in (days, optional)</label>

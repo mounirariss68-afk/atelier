@@ -67,7 +67,7 @@ export function AccountAgreementsPanel({ accountId }: { accountId: string }) {
           Agreements · {requests.length}
         </div>
         <Link
-          href="/agreements"
+          href="/contracts/signatures"
           className="text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
           data-testid="link-account-agreements-all"
         >

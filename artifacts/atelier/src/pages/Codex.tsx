@@ -91,7 +91,7 @@ const STATUS_TONE: Record<
 };
 
 export default function Codex() {
-  const [, params] = useRoute("/codex/:section");
+  const [, params] = useRoute("/contracts/codex/:section");
   const section = (params?.section ?? "contracts") as
     | "contracts"
     | "clauses"
@@ -111,21 +111,21 @@ export default function Codex() {
         <TabNav>
           <TabNavItem
             active={section === "contracts"}
-            onClick={() => (window.location.href = "/codex")}
+            onClick={() => (window.location.href = "/contracts/codex")}
             data-testid="tab-codex-contracts"
           >
             <FileText className="w-3.5 h-3.5 mr-1.5 inline" /> Contracts
           </TabNavItem>
           <TabNavItem
             active={section === "clauses"}
-            onClick={() => (window.location.href = "/codex/clauses")}
+            onClick={() => (window.location.href = "/contracts/codex/clauses")}
             data-testid="tab-codex-clauses"
           >
             <Library className="w-3.5 h-3.5 mr-1.5 inline" /> Clauses
           </TabNavItem>
           <TabNavItem
             active={section === "counterparties"}
-            onClick={() => (window.location.href = "/codex/counterparties")}
+            onClick={() => (window.location.href = "/contracts/codex/counterparties")}
             data-testid="tab-codex-counterparties"
           >
             <Users className="w-3.5 h-3.5 mr-1.5 inline" /> Counterparties
@@ -183,7 +183,7 @@ function ContractsSection() {
           return (
             <Link
               key={c.id}
-              href={`/codex/contracts/${c.id}`}
+              href={`/contracts/codex/contracts/${c.id}`}
               className="block"
               data-testid={`contract-row-${c.id}`}
             >

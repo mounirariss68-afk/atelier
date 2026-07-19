@@ -31,7 +31,6 @@ export type FirmAreaId =
   | "ip"
   | "press"
   | "guardhouse"
-  | "codex"
   | "wallet"
   | "ledger"
   | "studio"
@@ -59,7 +58,7 @@ export const FIRM_AREAS: readonly FirmArea[] = [
   { id: "atelier", label: "Atelier", prefix: "/atelier" },
   { id: "press", label: "Press", prefix: "/press" },
   { id: "guardhouse", label: "Guardhouse", prefix: "/guardhouse" },
-  { id: "codex", label: "Codex", prefix: "/codex" },
+  // Task #274 — Codex moved into the Contracts lens (/contracts/codex).
   { id: "wallet", label: "Wallet", prefix: "/wallet" },
   { id: "ledger", label: "Ledger", prefix: "/ledger" },
   { id: "studio", label: "Studio", prefix: "/studio" },

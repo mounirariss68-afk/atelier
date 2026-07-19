@@ -493,7 +493,7 @@ export default function ContractDetail() {
         <Card className="p-4 text-sm text-text-mute">
           Out for signature — track progress on the{" "}
           <Link
-            href={`/agreements?focus=${contract.signatureRequestId}`}
+            href={`/contracts/signatures?focus=${contract.signatureRequestId}`}
             className="text-gold hover:underline"
             data-testid="link-signature-request"
           >

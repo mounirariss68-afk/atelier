@@ -73,7 +73,7 @@ export function OpportunityAgreements({ oppId }: { oppId: string }) {
         <h3 className="text-sm font-semibold text-text">Agreements on this deal</h3>
         <span className="text-xs text-text-faint font-mono">· {requests.length}</span>
         <Link
-          href="/agreements"
+          href="/contracts/signatures"
           className="ml-auto text-[11px] font-mono uppercase tracking-widest text-text-mute hover:text-gold transition-colors"
           data-testid="link-opp-agreements-all"
         >

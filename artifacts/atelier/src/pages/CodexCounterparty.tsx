@@ -83,7 +83,7 @@ const STATUS_TONE: Record<
 };
 
 export default function CodexCounterparty() {
-  const [, params] = useRoute("/codex/counterparties/:id");
+  const [, params] = useRoute("/contracts/codex/counterparties/:id");
   const id = params?.id ?? "";
   const cp = useQuery({
     queryKey: ["codex", "counterparty", id],
@@ -110,7 +110,7 @@ export default function CodexCounterparty() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex/counterparties">All counterparties</BackLink>
+        <BackLink href="/contracts/codex/counterparties">All counterparties</BackLink>
         <SectionHead
           eyebrow="Firm · Codex · Counterparty"
           headline={
@@ -198,7 +198,7 @@ export default function CodexCounterparty() {
               {cpContracts.map((c) => (
                 <Link
                   key={c.id}
-                  href={`/codex/contracts/${c.id}`}
+                  href={`/contracts/codex/contracts/${c.id}`}
                   className="block"
                   data-testid={`cp-contract-${c.id}`}
                 >
@@ -235,7 +235,7 @@ export default function CodexCounterparty() {
               {cpDpas.map((d) => (
                 <Link
                   key={d.id}
-                  href={`/codex/dpas/${d.id}`}
+                  href={`/contracts/codex/dpas/${d.id}`}
                   className="block"
                   data-testid={`cp-dpa-${d.id}`}
                 >

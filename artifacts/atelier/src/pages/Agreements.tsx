@@ -1,11 +1,15 @@
 /**
- * Task #62 — Agreements (e-signing via DocuSeal).
+ * Task #62 — e-signing via DocuSeal.
+ * Task #274 — folded into the Contracts lens as the "Out for
+ * Signature" section at `/contracts/signatures` (the old `/agreements`
+ * URL permanent-redirects here).
  *
- * Partner-tier surface at `/agreements`: send a Document Library PDF
- * out for signature, watch signer progress, remind pending signers,
- * void requests, and jump to the archived signed PDF once complete.
- * All state comes from the server; the "Refresh" action triggers an
- * authoritative reconcile against DocuSeal.
+ * Partner-tier surface: send a Document Library PDF out for signature,
+ * watch signer progress, remind pending signers, void requests, and
+ * jump to the archived signed PDF once complete. Also lists contract
+ * records currently out for signature so the whole "waiting on ink"
+ * picture lives on one page. All state comes from the server; the
+ * "Refresh" action triggers an authoritative reconcile against DocuSeal.
  */
 
 import * as React from "react";
@@ -18,9 +22,12 @@ import {
   useAtelierVoidSignatureRequest,
   useAtelierRemindSignatureRequest,
   useAtelierSyncAllSignatureRequests,
+  useAtelierListContracts,
+  getAtelierListContractsQueryKey,
   type AtelierSignatureRequest,
 } from "@workspace/api-client-react";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
+import { ContractRow } from "@/components/contracts/ContractsPanel";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Card } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -218,12 +225,13 @@ export default function Agreements() {
 
   const [statusFilter, setStatusFilter] = React.useState("");
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  // Deep-link support: `/agreements?request=<id>` (used by e-sign
-  // notifications) highlights and scrolls to that request's card.
-  const highlightId = React.useMemo(
-    () => new URLSearchParams(window.location.search).get("request"),
-    [],
-  );
+  // Deep-link support: `/contracts/signatures?request=<id>` (used by
+  // e-sign notifications; `?focus=` is accepted as an alias) highlights
+  // and scrolls to that request's card.
+  const highlightId = React.useMemo(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("request") ?? p.get("focus");
+  }, []);
   // Set once the deep-linked request is confirmed missing; dismissible.
   const [missingNotice, setMissingNotice] = React.useState(false);
   const missingChecked = React.useRef(false);
@@ -262,6 +270,20 @@ export default function Agreements() {
     if (!data.requests.some((r) => r.id === highlightId)) setMissingNotice(true);
   }, [highlightId, data, statusFilter]);
 
+  // Task #274 — contract records currently out for signature, so this
+  // section shows the full "waiting on ink" picture, not just raw
+  // e-sign requests.
+  const { data: contractsData } = useAtelierListContracts(
+    { status: "out_for_signature" },
+    {
+      query: {
+        enabled: !!me && isLeadership,
+        queryKey: getAtelierListContractsQueryKey({ status: "out_for_signature" }),
+      },
+    },
+  );
+  const contractsOut = contractsData?.contracts ?? [];
+
   if (me && !isLeadership) {
     return (
       <div className="p-6">
@@ -277,8 +299,8 @@ export default function Agreements() {
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <LensPageHeader
-        headline="Agreements"
-        lede="Send documents for e-signature via DocuSeal and track signing progress."
+        headline="Out for Signature"
+        lede="Send documents for e-signature via DocuSeal and track signing progress until the ink is dry."
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -313,6 +335,19 @@ export default function Agreements() {
           >
             Dismiss
           </Button>
+        </Card>
+      ) : null}
+
+      {contractsOut.length > 0 ? (
+        <Card className="p-4" data-testid="panel-contracts-out-for-signature">
+          <h3 className="text-sm font-semibold text-text mb-2">
+            Contracts out for signature
+          </h3>
+          <div className="space-y-2">
+            {contractsOut.map((c) => (
+              <ContractRow key={c.id} c={c} />
+            ))}
+          </div>
         </Card>
       ) : null}
 

@@ -151,11 +151,11 @@ async function main(): Promise<void> {
   });
 
   // contract ---------------------------------------------------------
-  await test("contract with id → /codex/contracts/:id", () => {
-    assert.equal(nav("update", "contract", "ct_1", {}), "/codex/contracts/ct_1");
+  await test("contract with id → /contracts/codex/contracts/:id", () => {
+    assert.equal(nav("update", "contract", "ct_1", {}), "/contracts/codex/contracts/ct_1");
   });
-  await test("contract without id → /codex (fallback)", () => {
-    assert.equal(nav("create", "contract", null, {}), "/codex");
+  await test("contract without id → /contracts/codex (fallback)", () => {
+    assert.equal(nav("create", "contract", null, {}), "/contracts/codex");
   });
 
   // agent_design -----------------------------------------------------

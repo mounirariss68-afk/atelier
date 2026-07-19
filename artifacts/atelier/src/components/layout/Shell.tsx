@@ -147,8 +147,8 @@ export function TopNav() {
     { href: "/guardhouse", label: "Guardhouse" },
     { href: "/reports", label: "Reports" },
     { href: "/documents", label: "Documents" },
-    { href: "/agreements", label: "Agreements" },
-    { href: "/contracts", label: "Contracts" },
+    // Task #274 — Agreements + Contracts moved into the top-level
+    // Contracts lens (Manage picker), out of the Firm menu.
     { href: "/wallet", label: "Wallet" },
     { href: "/settings", label: "Settings" },
     { href: "/admin", label: "Admin", gated: true },

@@ -80,7 +80,7 @@ export default function CodexDpas() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <BackLink href="/codex">Codex</BackLink>
+        <BackLink href="/contracts/codex">Codex</BackLink>
         <SectionHead
           eyebrow="Firm · Codex · DPAs"
           headline="Data Processing Addenda"
@@ -105,7 +105,7 @@ export default function CodexDpas() {
             <option value="expired">Expired</option>
           </select>
           <Link
-            href="/codex/renewals"
+            href="/contracts/codex/renewals"
             className="text-[11px] font-mono text-gold hover:underline"
           >
             View renewals →
@@ -134,7 +134,7 @@ export default function CodexDpas() {
             {items.map((d) => (
               <Link
                 key={d.id}
-                href={`/codex/dpas/${d.id}`}
+                href={`/contracts/codex/dpas/${d.id}`}
                 className="block"
                 data-testid={`dpa-row-${d.id}`}
               >

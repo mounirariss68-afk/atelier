@@ -10,7 +10,7 @@
  * Document Library pattern); JSON reads/writes use the codegen hooks.
  */
 import * as React from "react";
-import { Link, useLocation, useRoute } from "wouter";
+import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierGetMe,
@@ -28,7 +28,7 @@ import {
   type AtelierContractTemplatePriorFieldReview,
 } from "@workspace/api-client-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
-import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -809,7 +809,18 @@ function useDebounced(value: string, ms: number): string {
   return v;
 }
 
-function ContractsSection({ canManage }: { canManage: boolean }) {
+export function ContractsSection({
+  canManage,
+  statuses,
+}: {
+  canManage: boolean;
+  /**
+   * Task #274 — when set, this section is a fixed lifecycle bucket
+   * (Drafts / Active / Archive): the status dropdown is hidden and the
+   * list is filtered client-side to these statuses.
+   */
+  statuses?: readonly string[];
+}) {
   const [status, setStatus] = React.useState("");
   const [expiring, setExpiring] = React.useState("");
   const [ctype, setCtype] = React.useState("");
@@ -818,12 +829,17 @@ function ContractsSection({ canManage }: { canManage: boolean }) {
   const [newOpen, setNewOpen] = React.useState(false);
   const debouncedCounterparty = useDebounced(counterparty, 300);
   const { data, isLoading } = useAtelierListContracts({
-    ...(status ? { status } : {}),
+    ...(!statuses && status ? { status } : {}),
     ...(ctype ? { contractType: ctype } : {}),
     ...(debouncedCounterparty.trim() ? { counterparty: debouncedCounterparty.trim() } : {}),
     ...(owner ? { ownerUserId: owner } : {}),
   });
-  const allContracts: AtelierContract[] = data?.contracts ?? [];
+  const fetched: AtelierContract[] = data?.contracts ?? [];
+  const allContracts = React.useMemo(() => {
+    if (!statuses) return fetched;
+    const set = new Set(statuses);
+    return fetched.filter((c) => set.has(c.status));
+  }, [fetched, statuses]);
   const contracts = React.useMemo(() => {
     if (!expiring) return allContracts;
     const horizon = Number(expiring);
@@ -846,19 +862,21 @@ function ContractsSection({ canManage }: { canManage: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <select
-          className={selectCls}
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          data-testid="select-filter-status"
-        >
-          <option value="">All statuses</option>
-          {Object.entries(CONTRACT_STATUS_META).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v.label}
-            </option>
-          ))}
-        </select>
+        {!statuses && (
+          <select
+            className={selectCls}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            data-testid="select-filter-status"
+          >
+            <option value="">All statuses</option>
+            {Object.entries(CONTRACT_STATUS_META).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           className={selectCls}
           value={expiring}
@@ -927,37 +945,91 @@ function ContractsSection({ canManage }: { canManage: boolean }) {
   );
 }
 
-// ------------------------------------------------------------------- shell
+// ------------------------------------------------------------------- pages
+//
+// Task #274 — Contracts is a top-level Manage lens. The shell renders
+// the lens section tabs (Overview · Templates · Drafts · Out for
+// Signature · Active · Archive), so these pages no longer carry their
+// own TabNav; each one is a standalone section page. The combined
+// Overview lives in ContractsOverview.tsx.
 
-export default function ContractsHome() {
-  const [isTemplates] = useRoute("/contracts/templates");
-  const { data: me } = useAtelierGetMe();
-  const canManage = me?.role === "founding_partner" || me?.role === "partner";
-
+function ContractsShell(props: {
+  headline: string;
+  lede: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
-      <LensPageHeader
-        eyebrow="Firm · Contracts"
-        headline="Contracts"
-        lede="Prepare, redline, and sign the firm’s contracts — NDAs, MoUs, employment and partnership agreements."
-      />
+      <LensPageHeader headline={props.headline} lede={props.lede} />
       <div className="mx-auto w-full max-w-5xl px-4 md:px-6 py-6 space-y-6">
-      <TabNav>
-        <TabNavLink href="/contracts" active={!isTemplates} data-testid="tab-contracts">
-          Contracts
-        </TabNavLink>
-        {canManage && (
-          <TabNavLink href="/contracts/templates" active={!!isTemplates} data-testid="tab-templates">
-            Templates
-          </TabNavLink>
-        )}
-      </TabNav>
-      {isTemplates && canManage ? (
-        <TemplatesSection canManage={canManage} />
-      ) : (
-        <ContractsSection canManage={canManage} />
-      )}
+        {props.children}
       </div>
     </div>
+  );
+}
+
+function useCanManageContracts(): boolean {
+  const { data: me } = useAtelierGetMe();
+  return me?.role === "founding_partner" || me?.role === "partner";
+}
+
+/** Lifecycle buckets for the Drafts / Active / Archive sections. */
+export const CONTRACT_SECTION_STATUSES = {
+  drafts: ["draft", "out_for_review", "final_uploaded"],
+  active: ["signed"],
+  archive: ["declined", "voided", "expired"],
+} as const;
+
+export function ContractsTemplatesPage() {
+  const canManage = useCanManageContracts();
+  return (
+    <ContractsShell
+      headline="Templates"
+      lede="Word (.docx) contract templates with reviewed field schemas — the starting point for every draft."
+    >
+      {canManage ? (
+        <TemplatesSection canManage={canManage} />
+      ) : (
+        <Card className="p-6 text-sm text-text-mute" data-testid="text-templates-forbidden">
+          Contract templates are managed by partners and founding partners.
+        </Card>
+      )}
+    </ContractsShell>
+  );
+}
+
+export function ContractsDraftsPage() {
+  const canManage = useCanManageContracts();
+  return (
+    <ContractsShell
+      headline="Drafts"
+      lede="Contracts being prepared — drafted, out for review, or with a final version uploaded but not yet sent."
+    >
+      <ContractsSection canManage={canManage} statuses={CONTRACT_SECTION_STATUSES.drafts} />
+    </ContractsShell>
+  );
+}
+
+export function ContractsActivePage() {
+  const canManage = useCanManageContracts();
+  return (
+    <ContractsShell
+      headline="Active"
+      lede="Fully signed, in-force contracts."
+    >
+      <ContractsSection canManage={canManage} statuses={CONTRACT_SECTION_STATUSES.active} />
+    </ContractsShell>
+  );
+}
+
+export function ContractsArchivePage() {
+  const canManage = useCanManageContracts();
+  return (
+    <ContractsShell
+      headline="Archive"
+      lede="Declined, voided and expired contracts."
+    >
+      <ContractsSection canManage={canManage} statuses={CONTRACT_SECTION_STATUSES.archive} />
+    </ContractsShell>
   );
 }

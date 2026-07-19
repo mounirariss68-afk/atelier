@@ -166,7 +166,15 @@ import MeHome from "@/pages/me/MeHome";
 // Task #161 — read-only Me-lens contract detail (self-scope routes).
 import MeContractDetail from "@/pages/me/MeContractDetail";
 // Task #159 — contract lifecycle (templates + contracts + detail).
-import ContractsHome from "@/pages/contracts/ContractsHome";
+// Task #274 — promoted to a top-level Contracts lens: Overview page plus
+// per-section pages (Templates · Drafts · Active · Archive).
+import ContractsOverview from "@/pages/contracts/ContractsOverview";
+import {
+  ContractsTemplatesPage,
+  ContractsDraftsPage,
+  ContractsActivePage,
+  ContractsArchivePage,
+} from "@/pages/contracts/ContractsHome";
 import ContractDetail from "@/pages/contracts/ContractDetail";
 import PeopleAttract from "@/pages/people/PeopleAttract";
 import PeopleHire from "@/pages/people/PeopleHire";
@@ -285,13 +293,33 @@ function Router() {
         </Route>
         <Route path="/reports" component={Reports} />
         <Route path="/documents" component={Documents} />
-        {/* Task #62 — e-signing (DocuSeal) surface, partner-tier. */}
-        <Route path="/agreements" component={Agreements} />
-        {/* Task #159 — contract lifecycle: templates, prepare/fill, redline,
-            final upload, PDF + DocuSeal signing, tracking. */}
-        <Route path="/contracts/templates" component={ContractsHome} />
+        {/* Task #274 — Contracts is a top-level Manage lens (partner-tier):
+            Overview · Templates · Drafts · Out for Signature · Active ·
+            Archive, with the CLM register (former Codex) under
+            /contracts/codex. The e-sign surface (Task #62, formerly
+            /agreements) is the "Out for Signature" section; /agreements
+            permanent-redirects and preserves ?request=/?focus= deep-links. */}
+        <Route path="/agreements" component={redirectTo("/contracts/signatures")} />
+        <Route path="/contracts/signatures" component={Agreements} />
+        <Route path="/contracts/templates" component={ContractsTemplatesPage} />
+        <Route path="/contracts/drafts" component={ContractsDraftsPage} />
+        <Route path="/contracts/active" component={ContractsActivePage} />
+        <Route path="/contracts/archive" component={ContractsArchivePage} />
+        {/* CLM register (Codex) re-mounted inside the Contracts lens.
+            More specific routes must precede /contracts/codex/:section,
+            and all of these must precede /contracts/:id. */}
+        <Route path="/contracts/codex/contracts/:id" component={CodexContract} />
+        <Route path="/contracts/codex/counterparties/:id" component={CodexCounterparty} />
+        <Route path="/contracts/codex/clauses/:id" component={CodexClause} />
+        <Route path="/contracts/codex/dpas/:id" component={CodexDpa} />
+        <Route path="/contracts/codex/dpas" component={CodexDpas} />
+        <Route path="/contracts/codex/renewals" component={CodexRenewals} />
+        <Route path="/contracts/codex/:section" component={Codex} />
+        <Route path="/contracts/codex" component={Codex} />
+        {/* Task #159 — contract record detail. Registered after the section
+            and codex routes so those segments never parse as :id. */}
         <Route path="/contracts/:id" component={ContractDetail} />
-        <Route path="/contracts" component={ContractsHome} />
+        <Route path="/contracts" component={ContractsOverview} />
         {/* Task #375 — engagement workspace re-mounted under the Clients
             lens. Listing + detail + deliverable detail (with the optional
             `:tab` deep-link segment) all live under
@@ -315,19 +343,25 @@ function Router() {
         <Route path="/engagements/:engId">
           {(p) => <Redirect to={`/clients/deliver/engagements/${p.engId}`} />}
         </Route>
-        {/* L2C Wave 1 (Task #360) — Codex (CLM) workspace.
-            Task #512 — counterparty / clause / DPA detail pages and a
-            renewals view, so chat capabilities can land users on the
-            specific entity instead of the generic /codex hub. More
-            specific routes must precede /codex/:section. */}
-        <Route path="/codex/contracts/:id" component={CodexContract} />
-        <Route path="/codex/counterparties/:id" component={CodexCounterparty} />
-        <Route path="/codex/clauses/:id" component={CodexClause} />
-        <Route path="/codex/dpas/:id" component={CodexDpa} />
-        <Route path="/codex/dpas" component={CodexDpas} />
-        <Route path="/codex/renewals" component={CodexRenewals} />
-        <Route path="/codex/:section" component={Codex} />
-        <Route path="/codex" component={Codex} />
+        {/* Task #274 — legacy /codex* URLs permanent-redirect into the
+            Contracts lens (/contracts/codex*), preserving path segments
+            and query strings so dossier / chat deep-links keep landing. */}
+        <Route path="/codex/contracts/:id">
+          {(p) => <Redirect to={`/contracts/codex/contracts/${p.id}`} />}
+        </Route>
+        <Route path="/codex/counterparties/:id">
+          {(p) => <Redirect to={`/contracts/codex/counterparties/${p.id}`} />}
+        </Route>
+        <Route path="/codex/clauses/:id">
+          {(p) => <Redirect to={`/contracts/codex/clauses/${p.id}`} />}
+        </Route>
+        <Route path="/codex/dpas/:id">
+          {(p) => <Redirect to={`/contracts/codex/dpas/${p.id}`} />}
+        </Route>
+        <Route path="/codex/:section">
+          {(p) => <Redirect to={`/contracts/codex/${p.section}`} />}
+        </Route>
+        <Route path="/codex" component={redirectTo("/contracts/codex")} />
         <Route path="/atelier/firm-profile" component={FirmProfile} />
         {/* v5 — IP catalog extends /atelier/assets with code, OSS, demos, licensing. */}
         <Route path="/atelier/ip" component={IpCatalog} />
