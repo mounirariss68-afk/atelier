@@ -173,78 +173,10 @@ interface EntityProfile {
   };
 }
 
-const PROFILES: Record<string, EntityProfile> = {
-  fe_aico_uk: {
-    baseMonthlyRevenue: 920_000,
-    directCostRatio: 0.46,
-    opexBase: 95_000,
-    payrollBase: 240_000,
-    depreciation: 18_000,
-    interestExpense: 6_000,
-    taxRate: 0.25,
-    openingBalances: {
-      cash: 720_000, ar: 540_000, wip: 210_000, ppe: 380_000, intangible: 220_000,
-      ap: 165_000, accruals: 90_000, debt: 600_000, shareCapital: 250_000,
-      retainedEarningsOpening: 965_000,
-    },
-  },
-  fe_aico_ksa: {
-    baseMonthlyRevenue: 6_400_000,
-    directCostRatio: 0.52,
-    opexBase: 480_000,
-    payrollBase: 1_900_000,
-    depreciation: 70_000,
-    interestExpense: 0,
-    taxRate: 0.20,
-    openingBalances: {
-      cash: 5_600_000, ar: 4_200_000, wip: 1_650_000, ppe: 1_100_000, intangible: 0,
-      ap: 920_000, accruals: 540_000, debt: 0, shareCapital: 2_000_000,
-      retainedEarningsOpening: 9_090_000,
-    },
-  },
-  fe_aico_uae: {
-    baseMonthlyRevenue: 4_500_000,
-    directCostRatio: 0.50,
-    opexBase: 380_000,
-    payrollBase: 1_320_000,
-    depreciation: 42_000,
-    interestExpense: 12_000,
-    taxRate: 0.09,
-    openingBalances: {
-      cash: 3_900_000, ar: 2_900_000, wip: 1_180_000, ppe: 920_000, intangible: 0,
-      ap: 760_000, accruals: 410_000, debt: 800_000, shareCapital: 1_500_000,
-      retainedEarningsOpening: 6_429_000,
-    },
-  },
-  fe_aico_uae_branch: {
-    baseMonthlyRevenue: 1_100_000,
-    directCostRatio: 0.55,
-    opexBase: 110_000,
-    payrollBase: 360_000,
-    depreciation: 12_000,
-    interestExpense: 0,
-    taxRate: 0.09,
-    openingBalances: {
-      cash: 720_000, ar: 540_000, wip: 220_000, ppe: 180_000, intangible: 0,
-      ap: 195_000, accruals: 110_000, debt: 0, shareCapital: 0,
-      retainedEarningsOpening: 1_355_000,
-    },
-  },
-  fe_aico_jv_neom: {
-    baseMonthlyRevenue: 1_700_000,
-    directCostRatio: 0.58,
-    opexBase: 180_000,
-    payrollBase: 480_000,
-    depreciation: 26_000,
-    interestExpense: 4_000,
-    taxRate: 0.20,
-    openingBalances: {
-      cash: 1_750_000, ar: 1_120_000, wip: 480_000, ppe: 410_000, intangible: 80_000,
-      ap: 290_000, accruals: 160_000, debt: 350_000, shareCapital: 1_200_000,
-      retainedEarningsOpening: 1_840_000,
-    },
-  },
-};
+// Fabricated demo entity P&L/BS profiles removed per the no-demo-data policy;
+// the report generators return honest zeros for every entity until real GL
+// data exists.
+const PROFILES: Record<string, EntityProfile> = {};
 
 function seasonality(month: number, eid: string): number {
   // Per-entity month-of-year seasonality, ±15%.
@@ -254,22 +186,13 @@ function seasonality(month: number, eid: string): number {
 
 // IC service fees, in lender baseCurrency, monthly. counterpartyId pays providerId.
 interface ICFee { providerId: string; counterpartyId: string; monthlyAmountLocal: number; currency: string }
-const IC_FEES: ICFee[] = [
-  // UK charges KSA + UAE 7% management fee on revenue baseline (in GBP).
-  { providerId: "fe_aico_uk",  counterpartyId: "fe_aico_ksa", monthlyAmountLocal: 95_000, currency: "GBP" },
-  { providerId: "fe_aico_uk",  counterpartyId: "fe_aico_uae", monthlyAmountLocal: 70_000, currency: "GBP" },
-  // KSA charges UAE 8% sub-contracted delivery fee (in SAR).
-  { providerId: "fe_aico_ksa", counterpartyId: "fe_aico_uae", monthlyAmountLocal: 240_000, currency: "SAR" },
-  // UAE Parent funds Branch with cost-plus pass-through (in AED).
-  { providerId: "fe_aico_uae", counterpartyId: "fe_aico_uae_branch", monthlyAmountLocal: 220_000, currency: "AED" },
-];
+// Fabricated demo inter-company fees removed per the no-demo-data policy.
+const IC_FEES: ICFee[] = [];
 
 // IC loans (net loans receivable from counterparty, in providerId base ccy).
 interface ICLoan { providerId: string; counterpartyId: string; balanceLocal: number; currency: string }
-const IC_LOANS: ICLoan[] = [
-  { providerId: "fe_aico_uk",  counterpartyId: "fe_aico_jv_neom", balanceLocal: 350_000, currency: "GBP" },
-  { providerId: "fe_aico_uae", counterpartyId: "fe_aico_uae_branch", balanceLocal: 180_000, currency: "AED" },
-];
+// Fabricated demo inter-company loans removed per the no-demo-data policy.
+const IC_LOANS: ICLoan[] = [];
 
 // ──────────────────────────────────────────────────────────────
 // P&L generator (local currency).
@@ -700,55 +623,12 @@ interface CubeRow {
   grossMarginPct: number;
 }
 
-// Fabricated demo partner names removed per the no-demo-data policy;
-// cube rows carry no attributed partner until real engagement data exists.
-const PARTNERS: string[] = [];
-const SECTORS = ["Energy", "Public Sector", "Banking", "TMT", "Healthcare", "Logistics"];
-const CLIENTS_BY_SECTOR: Record<string, string[]> = {
-  "Energy": ["Aramco Digital", "ADNOC", "BP", "TotalEnergies"],
-  "Public Sector": ["NEOM Authority", "SDAIA", "Mubadala", "DEWA"],
-  "Banking": ["HSBC PLC", "Lloyds", "STC Pay", "Riyad Bank"],
-  "TMT": ["STC", "Etisalat", "du", "Mobily"],
-  "Healthcare": ["Cleveland Clinic AD", "MoH KSA", "NHS England"],
-  "Logistics": ["DP World", "Saudia Cargo", "Emirates Group"],
-};
-const TYPES: EngType[] = ["fixed_fee", "tm", "subscription", "managed_service"];
-const ENTITY_BY_HASH: string[] = ENTITIES_SEED.map((e) => e.id);
-
-function buildCube(scopePeriods: Period[]): CubeRow[] {
-  // Generate ~36 engagements deterministically.
-  const out: CubeRow[] = [];
-  const N = 36;
-  for (let i = 0; i < N; i++) {
-    const sector = SECTORS[i % SECTORS.length];
-    const clients = CLIENTS_BY_SECTOR[sector];
-    const client = clients[i % clients.length];
-    const partner = PARTNERS.length > 0 ? PARTNERS[(i * 3) % PARTNERS.length] : "";
-    const type: EngType = TYPES[i % TYPES.length];
-    const entityId = ENTITY_BY_HASH[i % ENTITY_BY_HASH.length];
-    const baseMonth = 80_000 + (hash(`eng_${i}`) % 220_000);
-    let revGbp = 0;
-    let costGbp = 0;
-    for (const p of scopePeriods) {
-      const monthRev = baseMonth * (1 + noise(`eng_${i}_${p.id}_r`, 0.10));
-      const ratio = 0.40 + (hash(`eng_${i}_ratio`) % 30) / 100; // 0.40-0.69
-      const monthCost = monthRev * ratio * (1 + noise(`eng_${i}_${p.id}_c`, 0.05));
-      // Convert from local currency of entity to GBP at average rate.
-      const ccy = ENTITIES_SEED.find((e) => e.id === entityId)?.baseCurrency ?? "GBP";
-      const r = ccy === "GBP" ? 1 : averageRateToGbp(ccy, p);
-      revGbp += monthRev * r;
-      costGbp += monthCost * r;
-    }
-    const gm = revGbp - costGbp;
-    out.push({
-      engagementId: `eng_${i + 1}`.padStart(6, "0"),
-      engagementName: `${client} — ${type === "fixed_fee" ? "Transformation" : type === "tm" ? "Advisory" : type === "subscription" ? "Platform Access" : "Managed Operations"} ${i + 1}`,
-      client, partner, sector, engagementType: type, entityId,
-      revenueGbp: round(revGbp), directCostGbp: round(costGbp), grossMarginGbp: round(gm),
-      grossMarginPct: pct(gm, revGbp),
-    });
-  }
-  return out;
+// Fabricated demo engagement generation (synthetic partner, sector and
+// client names + hash-noise economics) fully removed per the no-demo-data
+// policy. The profitability cube is empty until real engagement economics
+// exist.
+function buildCube(_scopePeriods: Period[]): CubeRow[] {
+  return [];
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1326,9 +1206,8 @@ function drawTable(doc: PDFKit.PDFDocument, headers: string[], rows: string[][])
 
 // ----- Schedules (in-memory)
 interface Schedule { id: string; name: string; cron: string; nextRunOn: string; recipients: string[]; enabled: boolean; createdBy: string; createdAt: string }
-const SCHEDULES: Schedule[] = [
-  { id: "sch_board_monthly", name: "Monthly Board Pack", cron: "0 8 5 * *", nextRunOn: "2026-06-05", recipients: ["board@cognirise.example", "yara.nasser@cognirise.example"], enabled: true, createdBy: "system", createdAt: "2026-01-05T08:00:00Z" },
-];
+// Fabricated demo schedule removed per the no-demo-data policy.
+const SCHEDULES: Schedule[] = [];
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/reports/schedules", (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;

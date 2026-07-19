@@ -81,53 +81,15 @@ export interface HeadcountPlanRow {
   changes: HeadcountChange[];
 }
 
-export const HEADCOUNT_PLAN: HeadcountPlanRow[] = [
-  // UK parent — partner/SM heavy, lean delivery
-  { entityId: "fe_aico_uk",  roleCode: "P",  startingHeadcount: 3,  changes: [{ monthIndex: 6,  delta: 1, reason: "EMEA growth — promote SM" }] },
-  { entityId: "fe_aico_uk",  roleCode: "SM", startingHeadcount: 4,  changes: [{ monthIndex: 6,  delta: -1, reason: "Promotion to Partner" }, { monthIndex: 8, delta: 1, reason: "Backfill hire" }] },
-  { entityId: "fe_aico_uk",  roleCode: "M",  startingHeadcount: 5,  changes: [{ monthIndex: 4,  delta: 1, reason: "AI practice growth" }] },
-  { entityId: "fe_aico_uk",  roleCode: "SC", startingHeadcount: 6,  changes: [{ monthIndex: 2,  delta: 1, reason: "BP Decarb staffing" }, { monthIndex: 9, delta: 1, reason: "Q4 ramp" }] },
-  { entityId: "fe_aico_uk",  roleCode: "C",  startingHeadcount: 7,  changes: [{ monthIndex: 1,  delta: 2, reason: "Grad cohort" }, { monthIndex: 7, delta: -1, reason: "Voluntary attrition" }] },
-  { entityId: "fe_aico_uk",  roleCode: "A",  startingHeadcount: 4,  changes: [{ monthIndex: 1,  delta: 3, reason: "Grad cohort" }] },
-
-  // KSA sub — flagship growth market
-  { entityId: "fe_aico_ksa", roleCode: "P",  startingHeadcount: 2,  changes: [{ monthIndex: 4,  delta: 1, reason: "PIF mega-deal anchor" }] },
-  { entityId: "fe_aico_ksa", roleCode: "SM", startingHeadcount: 5,  changes: [{ monthIndex: 3,  delta: 1, reason: "Aramco Phase-3 prep" }, { monthIndex: 9, delta: 1, reason: "STC ramp" }] },
-  { entityId: "fe_aico_ksa", roleCode: "M",  startingHeadcount: 8,  changes: [{ monthIndex: 2,  delta: 2, reason: "Riyadh delivery hub" }, { monthIndex: 7, delta: 1, reason: "Backfill attrition" }] },
-  { entityId: "fe_aico_ksa", roleCode: "SC", startingHeadcount: 12, changes: [{ monthIndex: 1,  delta: 3, reason: "NEOM Sector-Lab M3" }, { monthIndex: 5, delta: 2, reason: "PIF prep" }, { monthIndex: 8, delta: -1, reason: "Voluntary" }] },
-  { entityId: "fe_aico_ksa", roleCode: "C",  startingHeadcount: 18, changes: [{ monthIndex: 2,  delta: 4, reason: "Riyadh hub" }, { monthIndex: 6, delta: 3, reason: "Aramco" }, { monthIndex: 10, delta: -2, reason: "Annual attrition" }] },
-  { entityId: "fe_aico_ksa", roleCode: "A",  startingHeadcount: 9,  changes: [{ monthIndex: 1,  delta: 5, reason: "Saudisation cohort" }] },
-
-  // UAE DIFC sub
-  { entityId: "fe_aico_uae", roleCode: "P",  startingHeadcount: 2,  changes: [] },
-  { entityId: "fe_aico_uae", roleCode: "SM", startingHeadcount: 3,  changes: [{ monthIndex: 5,  delta: 1, reason: "ADQ shaping" }] },
-  { entityId: "fe_aico_uae", roleCode: "M",  startingHeadcount: 6,  changes: [{ monthIndex: 3,  delta: 1, reason: "Mubadala expansion" }] },
-  { entityId: "fe_aico_uae", roleCode: "SC", startingHeadcount: 9,  changes: [{ monthIndex: 2,  delta: 2, reason: "Emaar engagement" }, { monthIndex: 8, delta: -1, reason: "Voluntary" }] },
-  { entityId: "fe_aico_uae", roleCode: "C",  startingHeadcount: 14, changes: [{ monthIndex: 4,  delta: 3, reason: "Q3 ramp" }] },
-  { entityId: "fe_aico_uae", roleCode: "A",  startingHeadcount: 6,  changes: [{ monthIndex: 1,  delta: 3, reason: "Grad cohort" }] },
-
-  // ADGM branch (small)
-  { entityId: "fe_aico_uae_branch", roleCode: "M",  startingHeadcount: 2, changes: [] },
-  { entityId: "fe_aico_uae_branch", roleCode: "SC", startingHeadcount: 3, changes: [{ monthIndex: 6, delta: 1, reason: "Sov-wealth practice" }] },
-  { entityId: "fe_aico_uae_branch", roleCode: "C",  startingHeadcount: 4, changes: [] },
-
-  // NEOM JV (focused team)
-  { entityId: "fe_aico_jv_neom", roleCode: "SM", startingHeadcount: 1, changes: [{ monthIndex: 4, delta: 1, reason: "JV scope expand" }] },
-  { entityId: "fe_aico_jv_neom", roleCode: "M",  startingHeadcount: 3, changes: [] },
-  { entityId: "fe_aico_jv_neom", roleCode: "SC", startingHeadcount: 5, changes: [{ monthIndex: 2, delta: 2, reason: "Sector-Lab M3" }] },
-  { entityId: "fe_aico_jv_neom", roleCode: "C",  startingHeadcount: 7, changes: [{ monthIndex: 3, delta: 2, reason: "Phase-2 ramp" }] },
-];
+// Fabricated demo headcount plan removed per the no-demo-data policy; the
+// FP&A driver engine computes honest zeros until real headcount data exists.
+export const HEADCOUNT_PLAN: HeadcountPlanRow[] = [];
 
 // ──────────────────────────────────────────────────────────────
 // Overhead plan per entity (USD/month + % of revenue variable)
 // ──────────────────────────────────────────────────────────────
-export const OVERHEAD_PLAN: Record<string, { fixedMonthlyUsd: number; variablePctOfRevenue: number; baseCurrency: string }> = {
-  fe_aico_uk:         { fixedMonthlyUsd: 145_000, variablePctOfRevenue: 0.06, baseCurrency: "GBP" },
-  fe_aico_ksa:        { fixedMonthlyUsd: 280_000, variablePctOfRevenue: 0.07, baseCurrency: "SAR" },
-  fe_aico_uae:        { fixedMonthlyUsd: 210_000, variablePctOfRevenue: 0.06, baseCurrency: "AED" },
-  fe_aico_uae_branch: { fixedMonthlyUsd:  55_000, variablePctOfRevenue: 0.05, baseCurrency: "AED" },
-  fe_aico_jv_neom:    { fixedMonthlyUsd:  90_000, variablePctOfRevenue: 0.08, baseCurrency: "SAR" },
-};
+// Fabricated demo overhead plan removed per the no-demo-data policy.
+export const OVERHEAD_PLAN: Record<string, { fixedMonthlyUsd: number; variablePctOfRevenue: number; baseCurrency: string }> = {};
 
 export const ENTITY_BASE_CURRENCY: Record<string, string> = Object.fromEntries(
   ENTITIES_SEED.map((e) => [e.id, e.baseCurrency]),
@@ -182,11 +144,12 @@ export function setCommittedScenarioId(id: string | null): void {
   committedScenarioId = id;
 }
 
+// Fabricated scenario assumptions and demo narrative removed per the
+// no-demo-data policy. Only a neutral plan-of-record scenario remains
+// (all deltas zero) so the engine and committed-scenario plumbing keep
+// working; real upside/downside assumptions belong to finance leadership.
 export const SCENARIOS: Scenario[] = [
-  { id: "base",     label: "Base case",  utilisationDelta:  0.00, rateDelta:  0.00, fxDelta:  0.00, attritionDelta: 0.000, description: "Plan-of-record. Driver targets, FX as of plan, no incremental attrition." },
-  { id: "upside",   label: "Upside",     utilisationDelta:  0.05, rateDelta:  0.04, fxDelta:  0.02, attritionDelta: 0.000, description: "+5pt utilisation, +4% rate realisation, +2% FX tailwind." },
-  { id: "downside", label: "Downside",   utilisationDelta: -0.07, rateDelta: -0.03, fxDelta: -0.04, attritionDelta: 0.008, description: "-7pt utilisation, -3% rate, -4% FX, +0.8%/mo attrition (talent flight)." },
-  { id: "ksa_only", label: "KSA-led",    utilisationDelta:  0.03, rateDelta:  0.02, fxDelta:  0.00, attritionDelta: 0.000, description: "Aramco/PIF anchor cases land — moderate utilisation lift, KSA-skewed." },
+  { id: "base", label: "Base case", utilisationDelta: 0.0, rateDelta: 0.0, fxDelta: 0.0, attritionDelta: 0.0, description: "Plan-of-record. No scenario adjustments applied." },
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -298,13 +261,8 @@ export interface BudgetResp {
  * actuals (matches the realised-margin posture of the firm-economics
  * page: KSA outperforming, NEOM JV under-running, UK/UAE close to plan).
  */
-const ACTUAL_VARIANCE_BY_ENTITY: Record<string, { revenueVar: number; ebitdaShiftPct: number }> = {
-  fe_aico_uk:         { revenueVar: -0.038, ebitdaShiftPct: -0.012 },
-  fe_aico_ksa:        { revenueVar:  0.062, ebitdaShiftPct:  0.018 },
-  fe_aico_uae:        { revenueVar: -0.014, ebitdaShiftPct: -0.004 },
-  fe_aico_uae_branch: { revenueVar:  0.008, ebitdaShiftPct:  0.000 },
-  fe_aico_jv_neom:    { revenueVar: -0.082, ebitdaShiftPct: -0.022 },
-};
+// Fabricated demo variance ratios removed per the no-demo-data policy.
+const ACTUAL_VARIANCE_BY_ENTITY: Record<string, { revenueVar: number; ebitdaShiftPct: number }> = {};
 function daysInMonthFor(iso: string): number {
   const [yr, mo] = iso.split("-").map(Number);
   return new Date(Date.UTC(yr, mo, 0)).getUTCDate();
@@ -690,19 +648,8 @@ export interface RenewalRow {
   riskBand: "low" | "medium" | "high";
   recommendation: string;
 }
-export const RENEWALS: RenewalRow[] = [
-  { id: "rn_aramco_msa",   client: "Aramco Digital",   kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal: 12_500_000, expiresOn: "2026-09-30", ownerName: "",  stage: "in_negotiation", riskBand: "medium", recommendation: "Lock 18-month extension at +6% rate." },
-  { id: "rn_dewa_retainer",client: "DEWA",             kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  4_800_000, expiresOn: "2026-12-31", ownerName: "", stage: "discovery",       riskBand: "low",    recommendation: "Renew at flat with 4 added utilisation days." },
-  { id: "rn_hsbc_msa",     client: "HSBC PLC",         kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_900_000, expiresOn: "2026-11-30", ownerName: "",       stage: "proposal_sent",   riskBand: "medium", recommendation: "Extend 24mo, new statement-of-work for AI risk." },
-  { id: "rn_lloyds_msa",   client: "Lloyds",           kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_300_000, expiresOn: "2026-12-31", ownerName: "",       stage: "not_started",     riskBand: "high",   recommendation: "Schedule QBR before Aug; competitor incumbent risk." },
-  { id: "rn_emirates_sub", client: "Emirates Group",   kind: "subscription", entityId: "fe_aico_uae", currency: "USD", arrLocal:    920_000, expiresOn: "2026-10-31", ownerName: "", stage: "verbal_yes",      riskBand: "low",    recommendation: "Auto-renew clause triggers Sep 30 — confirm scope." },
-  { id: "rn_neom_jv",      client: "NEOM Authority",   kind: "framework",    entityId: "fe_aico_jv_neom", currency: "SAR", arrLocal: 8_400_000, expiresOn: "2027-03-31", ownerName: "",   stage: "not_started",     riskBand: "medium", recommendation: "JV governance review Q4; reset profit-share." },
-  { id: "rn_mubadala_msa", client: "Mubadala",         kind: "msa",          entityId: "fe_aico_uae", currency: "AED", arrLocal:  6_200_000, expiresOn: "2026-08-31", ownerName: "", stage: "in_negotiation", riskBand: "medium", recommendation: "Bundle TP advisory; +12% blended uplift target." },
-  { id: "rn_sdaia_msa",    client: "SDAIA",            kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  3_500_000, expiresOn: "2027-01-31", ownerName: "",  stage: "discovery",       riskBand: "low",    recommendation: "Anchor on AI-governance practice, 24-month extension." },
-  { id: "rn_bp_pilot",     client: "BP",               kind: "subscription", entityId: "fe_aico_uk",  currency: "GBP", arrLocal:    640_000, expiresOn: "2026-07-31", ownerName: "",       stage: "at_risk",         riskBand: "high",   recommendation: "Decarb pilot conversion at risk — escalate to Partner." },
-  { id: "rn_stc_lic",      client: "STC",              kind: "license",      entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  2_100_000, expiresOn: "2026-12-15", ownerName: "",  stage: "discovery",       riskBand: "medium", recommendation: "Move from license to outcome-based; expand seats." },
-  { id: "rn_etisalat_ret", client: "Etisalat",         kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  1_950_000, expiresOn: "2027-02-28", ownerName: "", stage: "not_started",     riskBand: "low",    recommendation: "Renew flat; consider AI-ops add-on." },
-];
+// Fabricated demo renewals removed per the no-demo-data policy.
+export const RENEWALS: RenewalRow[] = [];
 
 export interface RenewalsResp {
   asOf: string;

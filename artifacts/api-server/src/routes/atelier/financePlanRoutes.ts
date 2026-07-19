@@ -124,13 +124,9 @@ interface PlanEntity {
   minCashPolicyLocal: number;
   covenantFloorLocal: number | null;
 }
-const PLAN_OVERLAY: Record<string, { openingBalanceLocal: number; minCashPolicyLocal: number; covenantFloorLocal: number | null }> = {
-  fe_aico_uk:         { openingBalanceLocal:   840_000, minCashPolicyLocal:   500_000, covenantFloorLocal:   350_000 },
-  fe_aico_ksa:        { openingBalanceLocal: 6_120_000, minCashPolicyLocal: 3_500_000, covenantFloorLocal:        null },
-  fe_aico_uae:        { openingBalanceLocal: 4_300_000, minCashPolicyLocal: 2_400_000, covenantFloorLocal: 1_800_000 },
-  fe_aico_uae_branch: { openingBalanceLocal:   780_000, minCashPolicyLocal:   500_000, covenantFloorLocal:        null },
-  fe_aico_jv_neom:    { openingBalanceLocal: 1_900_000, minCashPolicyLocal: 1_500_000, covenantFloorLocal: 1_200_000 },
-};
+// Fabricated demo cash overlay removed per the no-demo-data policy; entities
+// fall back to zero opening balance and no policy lines.
+const PLAN_OVERLAY: Record<string, { openingBalanceLocal: number; minCashPolicyLocal: number; covenantFloorLocal: number | null }> = {};
 const ENTITIES: PlanEntity[] = ENTITIES_SEED.map((e) => {
   const o = PLAN_OVERLAY[e.id] ?? { openingBalanceLocal: 0, minCashPolicyLocal: 0, covenantFloorLocal: null };
   return {
@@ -163,70 +159,12 @@ interface ReceiptLine extends CashLine { source: ReceiptSource; counterparty: st
 interface DisbursementLine extends CashLine { category: DisbursementCategory; vendor: string }
 
 // Open AR (consistent with WalletAr-style buckets — synthetic but realistic)
-const RECEIPTS: ReceiptLine[] = [
-  // Open AR by due date
-  { id: "rcp_ar_001", entityId: "fe_aico_ksa", currency: "SAR", amount: 1_125_000, expectedDate: "2026-05-13", confidence: "high",   source: "open_ar",   label: "Aramco Digital — INV-KSA-1042", counterparty: "Aramco Digital", detail: "Phase-2 milestone, 32d overdue" },
-  { id: "rcp_ar_002", entityId: "fe_aico_uae", currency: "AED", amount:   860_000, expectedDate: "2026-05-18", confidence: "high",   source: "open_ar",   label: "Mubadala — INV-UAE-0388",     counterparty: "Mubadala",        detail: "Net-15 from acceptance" },
-  { id: "rcp_ar_003", entityId: "fe_aico_uk",  currency: "GBP", amount:   142_000, expectedDate: "2026-05-22", confidence: "medium", source: "open_ar",   label: "HSBC PLC — INV-UK-0214",       counterparty: "HSBC PLC",        detail: "Awaiting PO match" },
-  { id: "rcp_ar_004", entityId: "fe_aico_ksa", currency: "SAR", amount:   682_500, expectedDate: "2026-05-25", confidence: "medium", source: "open_ar",   label: "STC — INV-KSA-1051",           counterparty: "STC",             detail: "60-day terms" },
-  { id: "rcp_ar_005", entityId: "fe_aico_uae", currency: "USD", amount:   215_000, expectedDate: "2026-05-29", confidence: "high",   source: "open_ar",   label: "Emirates Group — INV-UAE-0395",counterparty: "Emirates Group",  detail: "USD denominated" },
-  { id: "rcp_ar_006", entityId: "fe_aico_ksa", currency: "SAR", amount:   948_000, expectedDate: "2026-06-08", confidence: "high",   source: "open_ar",   label: "SDAIA — INV-KSA-1058",         counterparty: "SDAIA",           detail: "" },
-  { id: "rcp_ar_007", entityId: "fe_aico_uae", currency: "AED", amount:   412_000, expectedDate: "2026-06-12", confidence: "medium", source: "open_ar",   label: "ADIA — INV-UAE-0401",          counterparty: "ADIA",            detail: "" },
-  { id: "rcp_ar_008", entityId: "fe_aico_uk",  currency: "GBP", amount:    98_000, expectedDate: "2026-06-19", confidence: "high",   source: "open_ar",   label: "Lloyds — INV-UK-0218",         counterparty: "Lloyds",          detail: "" },
-  // Expected milestone billings (will be invoiced + cleared in week)
-  { id: "rcp_ms_001", entityId: "fe_aico_ksa", currency: "SAR", amount: 1_400_000, expectedDate: "2026-05-29", confidence: "high",   source: "milestone", label: "NEOM Sector Lab — M3 acceptance",counterparty: "NEOM Authority",detail: "Milestone gate Mar+Apr" },
-  { id: "rcp_ms_002", entityId: "fe_aico_uae", currency: "AED", amount:   720_000, expectedDate: "2026-06-05", confidence: "medium", source: "milestone", label: "DEWA — Wave-2 hand-over",      counterparty: "DEWA",            detail: "Pending UAT sign-off" },
-  { id: "rcp_ms_003", entityId: "fe_aico_uk",  currency: "GBP", amount:   180_000, expectedDate: "2026-06-26", confidence: "medium", source: "milestone", label: "BP — Decarb pilot M2",         counterparty: "BP",              detail: "" },
-  { id: "rcp_ms_004", entityId: "fe_aico_ksa", currency: "SAR", amount: 1_050_000, expectedDate: "2026-07-10", confidence: "low",    source: "milestone", label: "ROSHN — Phase-1 close",        counterparty: "ROSHN",           detail: "Subject to design freeze" },
-  { id: "rcp_ms_005", entityId: "fe_aico_uae", currency: "AED", amount:   540_000, expectedDate: "2026-07-24", confidence: "medium", source: "milestone", label: "Etisalat — Q2 retainer",       counterparty: "Etisalat",        detail: "" },
-  { id: "rcp_ms_006", entityId: "fe_aico_jv_neom", currency: "SAR", amount: 600_000, expectedDate: "2026-07-31", confidence: "medium", source: "milestone", label: "JV — quarterly draw",        counterparty: "JV escrow",       detail: "" },
-  // Other (tax refunds, FX recoveries, interest)
-  { id: "rcp_ot_001", entityId: "fe_aico_uk",  currency: "GBP", amount:    32_000, expectedDate: "2026-06-05", confidence: "high",   source: "other",     label: "HMRC — input VAT refund Q1",   counterparty: "HMRC",            detail: "" },
-  { id: "rcp_ot_002", entityId: "fe_aico_ksa", currency: "SAR", amount:    18_500, expectedDate: "2026-07-03", confidence: "medium", source: "other",     label: "ZATCA — VAT refund Apr",       counterparty: "ZATCA",           detail: "" },
-];
+// Fabricated demo receipts removed per the no-demo-data policy; the 13-week
+// cash forecast renders an honest empty state until real AR data exists.
+const RECEIPTS: ReceiptLine[] = [];
 
-const DISBURSEMENTS: DisbursementLine[] = [
-  // Payroll — month-end per entity (May 28, Jun 26, Jul 30 paydays)
-  { id: "dis_pay_uk_05", entityId: "fe_aico_uk",  currency: "GBP", amount:  240_000, expectedDate: "2026-05-28", confidence: "high", category: "payroll", label: "Payroll May",  vendor: "Payroll" },
-  { id: "dis_pay_uk_06", entityId: "fe_aico_uk",  currency: "GBP", amount:  240_000, expectedDate: "2026-06-26", confidence: "high", category: "payroll", label: "Payroll Jun",  vendor: "Payroll" },
-  { id: "dis_pay_uk_07", entityId: "fe_aico_uk",  currency: "GBP", amount:  244_000, expectedDate: "2026-07-30", confidence: "high", category: "payroll", label: "Payroll Jul",  vendor: "Payroll" },
-  { id: "dis_pay_ksa_05",entityId: "fe_aico_ksa", currency: "SAR", amount: 1_900_000,expectedDate: "2026-05-28", confidence: "high", category: "payroll", label: "Payroll May",  vendor: "Payroll" },
-  { id: "dis_pay_ksa_06",entityId: "fe_aico_ksa", currency: "SAR", amount: 1_900_000,expectedDate: "2026-06-25", confidence: "high", category: "payroll", label: "Payroll Jun",  vendor: "Payroll" },
-  { id: "dis_pay_ksa_07",entityId: "fe_aico_ksa", currency: "SAR", amount: 1_945_000,expectedDate: "2026-07-30", confidence: "high", category: "payroll", label: "Payroll Jul",  vendor: "Payroll" },
-  { id: "dis_pay_uae_05",entityId: "fe_aico_uae", currency: "AED", amount: 1_320_000,expectedDate: "2026-05-28", confidence: "high", category: "payroll", label: "Payroll May",  vendor: "Payroll" },
-  { id: "dis_pay_uae_06",entityId: "fe_aico_uae", currency: "AED", amount: 1_320_000,expectedDate: "2026-06-26", confidence: "high", category: "payroll", label: "Payroll Jun",  vendor: "Payroll" },
-  { id: "dis_pay_uae_07",entityId: "fe_aico_uae", currency: "AED", amount: 1_355_000,expectedDate: "2026-07-30", confidence: "high", category: "payroll", label: "Payroll Jul",  vendor: "Payroll" },
-  { id: "dis_pay_auh_05",entityId: "fe_aico_uae_branch", currency: "AED", amount: 360_000, expectedDate: "2026-05-28", confidence: "high", category: "payroll", label: "Payroll May", vendor: "Payroll" },
-  { id: "dis_pay_auh_06",entityId: "fe_aico_uae_branch", currency: "AED", amount: 360_000, expectedDate: "2026-06-26", confidence: "high", category: "payroll", label: "Payroll Jun", vendor: "Payroll" },
-  { id: "dis_pay_auh_07",entityId: "fe_aico_uae_branch", currency: "AED", amount: 372_000, expectedDate: "2026-07-30", confidence: "high", category: "payroll", label: "Payroll Jul", vendor: "Payroll" },
-  { id: "dis_pay_jv_05", entityId: "fe_aico_jv_neom", currency: "SAR", amount: 480_000, expectedDate: "2026-05-28", confidence: "high", category: "payroll", label: "Payroll May", vendor: "Payroll" },
-  { id: "dis_pay_jv_06", entityId: "fe_aico_jv_neom", currency: "SAR", amount: 480_000, expectedDate: "2026-06-25", confidence: "high", category: "payroll", label: "Payroll Jun", vendor: "Payroll" },
-  { id: "dis_pay_jv_07", entityId: "fe_aico_jv_neom", currency: "SAR", amount: 495_000, expectedDate: "2026-07-30", confidence: "high", category: "payroll", label: "Payroll Jul", vendor: "Payroll" },
-
-  // Vendor runs — bi-weekly (weeks 1, 3, 5, 7, 9, 11)
-  { id: "dis_vnd_w1", entityId: "fe_aico_ksa", currency: "SAR", amount:  410_000, expectedDate: "2026-05-19", confidence: "high",   category: "vendor", label: "Vendor run — week 1", vendor: "AP run" },
-  { id: "dis_vnd_w3", entityId: "fe_aico_uae", currency: "AED", amount:  295_000, expectedDate: "2026-06-02", confidence: "high",   category: "vendor", label: "Vendor run — week 3", vendor: "AP run" },
-  { id: "dis_vnd_w5", entityId: "fe_aico_ksa", currency: "SAR", amount:  385_000, expectedDate: "2026-06-16", confidence: "high",   category: "vendor", label: "Vendor run — week 5", vendor: "AP run" },
-  { id: "dis_vnd_w7", entityId: "fe_aico_uae", currency: "AED", amount:  310_000, expectedDate: "2026-06-30", confidence: "medium", category: "vendor", label: "Vendor run — week 7", vendor: "AP run" },
-  { id: "dis_vnd_w9", entityId: "fe_aico_uk",  currency: "GBP", amount:   62_000, expectedDate: "2026-07-14", confidence: "medium", category: "vendor", label: "Vendor run — week 9", vendor: "AP run" },
-  { id: "dis_vnd_w11",entityId: "fe_aico_ksa", currency: "SAR", amount:  395_000, expectedDate: "2026-07-28", confidence: "low",    category: "vendor", label: "Vendor run — week 11",vendor: "AP run" },
-
-  // Taxes — VAT/CT lines are appended dynamically from the entity
-  // fiscal calendar in ENTITIES_SEED (see TAX_DISBURSEMENTS below).
-
-  // Leases — monthly
-  { id: "dis_lse_uk_05", entityId: "fe_aico_uk",  currency: "GBP", amount:  18_000, expectedDate: "2026-06-01", confidence: "high", category: "lease", label: "Office lease (London)", vendor: "Landlord UK" },
-  { id: "dis_lse_uk_06", entityId: "fe_aico_uk",  currency: "GBP", amount:  18_000, expectedDate: "2026-07-01", confidence: "high", category: "lease", label: "Office lease (London)", vendor: "Landlord UK" },
-  { id: "dis_lse_ksa_05",entityId: "fe_aico_ksa", currency: "SAR", amount: 110_000, expectedDate: "2026-06-01", confidence: "high", category: "lease", label: "Office lease (Riyadh)", vendor: "Landlord KSA" },
-  { id: "dis_lse_ksa_06",entityId: "fe_aico_ksa", currency: "SAR", amount: 110_000, expectedDate: "2026-07-01", confidence: "high", category: "lease", label: "Office lease (Riyadh)", vendor: "Landlord KSA" },
-  { id: "dis_lse_uae_05",entityId: "fe_aico_uae", currency: "AED", amount: 145_000, expectedDate: "2026-06-01", confidence: "high", category: "lease", label: "DIFC office lease",     vendor: "DIFC Properties" },
-  { id: "dis_lse_uae_06",entityId: "fe_aico_uae", currency: "AED", amount: 145_000, expectedDate: "2026-07-01", confidence: "high", category: "lease", label: "DIFC office lease",     vendor: "DIFC Properties" },
-
-  // Debt service (UK term loan) — monthly
-  { id: "dis_debt_uk_05",entityId: "fe_aico_uk", currency: "GBP", amount: 26_000, expectedDate: "2026-05-31", confidence: "high", category: "debt_service", label: "Term loan — May",  vendor: "Barclays" },
-  { id: "dis_debt_uk_06",entityId: "fe_aico_uk", currency: "GBP", amount: 26_000, expectedDate: "2026-06-30", confidence: "high", category: "debt_service", label: "Term loan — Jun",  vendor: "Barclays" },
-  { id: "dis_debt_uk_07",entityId: "fe_aico_uk", currency: "GBP", amount: 26_000, expectedDate: "2026-07-31", confidence: "high", category: "debt_service", label: "Term loan — Jul",  vendor: "Barclays" },
-];
+// Fabricated demo disbursements removed per the no-demo-data policy.
+const DISBURSEMENTS: DisbursementLine[] = [];
 
 // ──────────────────────────────────────────────────────────────
 // Tax disbursements — derived from each entity's fiscal calendar
@@ -235,13 +173,10 @@ const DISBURSEMENTS: DisbursementLine[] = [
 // lands inside the 13-week window.
 // ──────────────────────────────────────────────────────────────
 const VAT_AUTHORITY: Record<string, string> = { GB: "HMRC", SA: "ZATCA", AE: "FTA" };
-const VAT_AMOUNT_LOCAL: Record<string, number> = {
-  fe_aico_uk: 88_000, fe_aico_ksa: 220_000, fe_aico_uae: 195_000,
-  fe_aico_uae_branch: 60_000, fe_aico_jv_neom: 95_000,
-};
-const CT_AMOUNT_LOCAL: Record<string, number> = {
-  fe_aico_uk: 145_000, fe_aico_uae: 360_000,
-};
+// Fabricated demo VAT amounts removed per the no-demo-data policy.
+const VAT_AMOUNT_LOCAL: Record<string, number> = {};
+// Fabricated demo corporate-tax amounts removed per the no-demo-data policy.
+const CT_AMOUNT_LOCAL: Record<string, number> = {};
 function nextMonthSameDay(iso: string): string {
   const d = new Date(`${iso}T00:00:00Z`);
   const m = d.getUTCMonth();
@@ -648,31 +583,12 @@ interface RevenuePlan {
   planUsd: number;
 }
 
-const BACKLOG: BacklogContract[] = [
-  { id: "bk_aramco_p2", client: "Aramco Digital", sector: "Energy",       partnerOwner: "", entityId: "fe_aico_ksa", currency: "SAR", signedTotalLocal: 18_400_000, recognisedToDateLocal: 11_200_000, remainingLocal: 7_200_000, expectedBurnPerQuarterLocal: 2_400_000, endsOn: "2027-03-31" },
-  { id: "bk_neom_lab",  client: "NEOM Authority", sector: "Public",       partnerOwner: "",      entityId: "fe_aico_jv_neom", currency: "SAR", signedTotalLocal: 12_000_000, recognisedToDateLocal:  3_600_000, remainingLocal: 8_400_000, expectedBurnPerQuarterLocal: 1_800_000, endsOn: "2027-06-30" },
-  { id: "bk_mubadala",  client: "Mubadala",       sector: "Sov-Wealth",   partnerOwner: "",entityId: "fe_aico_uae", currency: "AED", signedTotalLocal:  9_600_000, recognisedToDateLocal:  4_400_000, remainingLocal: 5_200_000, expectedBurnPerQuarterLocal: 1_500_000, endsOn: "2027-01-31" },
-  { id: "bk_dewa",      client: "DEWA",           sector: "Utilities",    partnerOwner: "",entityId: "fe_aico_uae", currency: "AED", signedTotalLocal:  6_200_000, recognisedToDateLocal:  2_100_000, remainingLocal: 4_100_000, expectedBurnPerQuarterLocal: 1_200_000, endsOn: "2026-12-31" },
-  { id: "bk_sdaia",     client: "SDAIA",          sector: "Public",       partnerOwner: "", entityId: "fe_aico_ksa", currency: "SAR", signedTotalLocal:  4_500_000, recognisedToDateLocal:  1_800_000, remainingLocal: 2_700_000, expectedBurnPerQuarterLocal: 900_000,   endsOn: "2026-12-31" },
-  { id: "bk_hsbc",      client: "HSBC PLC",       sector: "Banking",      partnerOwner: "",      entityId: "fe_aico_uk",  currency: "GBP", signedTotalLocal:  1_400_000, recognisedToDateLocal:    420_000, remainingLocal:   980_000, expectedBurnPerQuarterLocal:  280_000, endsOn: "2026-11-30" },
-  { id: "bk_lloyds",    client: "Lloyds",         sector: "Banking",      partnerOwner: "",      entityId: "fe_aico_uk",  currency: "GBP", signedTotalLocal:    980_000, recognisedToDateLocal:    310_000, remainingLocal:   670_000, expectedBurnPerQuarterLocal:  200_000, endsOn: "2026-12-31" },
-  { id: "bk_emirates",  client: "Emirates Group", sector: "Aviation",     partnerOwner: "",entityId: "fe_aico_uae", currency: "USD", signedTotalLocal:    920_000, recognisedToDateLocal:    280_000, remainingLocal:   640_000, expectedBurnPerQuarterLocal:  200_000, endsOn: "2026-10-31" },
-];
-const PIPELINE: PipelineDeal[] = [
-  { id: "pp_pif_megacity",  name: "PIF — Mega-city analytics platform",     client: "PIF",            sector: "Sov-Wealth", partnerOwner: "",      entityId: "fe_aico_ksa", currency: "SAR", acvLocal: 14_000_000, stage: "negotiate", stageProbability: 0.70, expectedClose: "2026-07-15" },
-  { id: "pp_adq",           name: "ADQ — Treasury AI co-pilot",             client: "ADQ",            sector: "Sov-Wealth", partnerOwner: "",entityId: "fe_aico_uae", currency: "AED", acvLocal:  8_400_000, stage: "propose",  stageProbability: 0.55, expectedClose: "2026-08-10" },
-  { id: "pp_stc",           name: "STC — Network ops AI",                   client: "STC",            sector: "Telco",      partnerOwner: "", entityId: "fe_aico_ksa", currency: "SAR", acvLocal:  6_300_000, stage: "shape",    stageProbability: 0.40, expectedClose: "2026-09-01" },
-  { id: "pp_emaar",         name: "Emaar — Resident services platform",     client: "Emaar",          sector: "Real-Estate",partnerOwner: "",entityId: "fe_aico_uae", currency: "AED", acvLocal:  4_800_000, stage: "qualify",  stageProbability: 0.25, expectedClose: "2026-10-01" },
-  { id: "pp_nb",            name: "NatWest — Risk analytics",               client: "NatWest",        sector: "Banking",    partnerOwner: "",      entityId: "fe_aico_uk",  currency: "GBP", acvLocal:    1_400_000, stage: "verbal",   stageProbability: 0.85, expectedClose: "2026-06-30" },
-  { id: "pp_ma",            name: "Ma'aden — Mining analytics",             client: "Ma'aden",        sector: "Mining",     partnerOwner: "", entityId: "fe_aico_ksa", currency: "SAR", acvLocal:  3_900_000, stage: "qualify",  stageProbability: 0.20, expectedClose: "2026-11-15" },
-  { id: "pp_etihad",        name: "Etihad — Customer-experience analytics", client: "Etihad",         sector: "Aviation",   partnerOwner: "",entityId: "fe_aico_uae", currency: "AED", acvLocal:  3_100_000, stage: "discover", stageProbability: 0.10, expectedClose: "2026-12-15" },
-  { id: "pp_bp",            name: "BP — Decarb expansion",                  client: "BP",             sector: "Energy",     partnerOwner: "",      entityId: "fe_aico_uk",  currency: "GBP", acvLocal:    900_000, stage: "negotiate",stageProbability: 0.65, expectedClose: "2026-08-20" },
-];
-const REVENUE_PLAN: RevenuePlan[] = [
-  // Q3 2026 (Jul-Sep) and Q4 2026 (Oct-Dec) targets in USD
-  { quarterLabel: "Q3 2026", startsOn: "2026-07-01", endsOn: "2026-09-30", planUsd: 8_400_000 },
-  { quarterLabel: "Q4 2026", startsOn: "2026-10-01", endsOn: "2026-12-31", planUsd: 9_200_000 },
-];
+// Fabricated demo backlog removed per the no-demo-data policy.
+const BACKLOG: BacklogContract[] = [];
+// Fabricated demo pipeline removed per the no-demo-data policy.
+const PIPELINE: PipelineDeal[] = [];
+// Fabricated demo revenue plan removed per the no-demo-data policy.
+const REVENUE_PLAN: RevenuePlan[] = [];
 
 interface BacklogResp {
   asOf: string;
