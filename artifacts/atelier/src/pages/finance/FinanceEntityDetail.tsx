@@ -101,7 +101,7 @@ const TIER_META: Record<Tier, { title: string; blurb: string }> = {
   },
 };
 
-function DocCard(props: {
+export function DocCard(props: {
   doc: LegalEntityLinkedDoc;
   canWrite: boolean;
   onKindChange: (kind: string | null) => void;
@@ -128,11 +128,8 @@ function DocCard(props: {
                 data-testid={`link-open-doc-${d.id}`}
                 title="View document inline"
               >
-                {d.title}
+                {d.docKind ? (KIND_LABEL[d.docKind] ?? d.docKind) : d.title}
               </a>
-              {d.fileName && (
-                <div className="text-[11px] text-text-faint font-mono mt-0.5 truncate">{d.fileName}</div>
-              )}
             </div>
           </div>
         </div>
@@ -157,10 +154,17 @@ function DocCard(props: {
       </div>
       
       <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-        {props.expiresOn ? (
-          <MonoChip tone={expiryTone(props.expiresOn)}>{expiryText(props.expiresOn)}</MonoChip>
-        ) : <div />}
-        
+        <div className="flex items-center gap-2 min-w-0">
+          {props.expiresOn && (
+            <MonoChip tone={expiryTone(props.expiresOn)}>{expiryText(props.expiresOn)}</MonoChip>
+          )}
+          {d.fileName && (
+            <div className="text-[11px] text-text-faint font-mono truncate" data-testid={`text-doc-filename-${d.id}`}>
+              {d.fileName}
+            </div>
+          )}
+        </div>
+
         {props.canWrite ? (
           <div className="relative">
             <select
@@ -177,9 +181,7 @@ function DocCard(props: {
             </select>
             <MoreVertical className="w-3 h-3 text-text-faint absolute right-1.5 top-1.5 pointer-events-none" />
           </div>
-        ) : (
-          d.docKind && <MonoChip className="text-[10px]">{KIND_LABEL[d.docKind] ?? d.docKind}</MonoChip>
-        )}
+        ) : null}
       </div>
     </div>
   );
