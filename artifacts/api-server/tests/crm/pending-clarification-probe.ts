@@ -112,9 +112,112 @@ async function main() {
 
     const r3 = await get("/cli/turns/pending-clarification", "u_no_such_user");
     check("unknown persona rejected", r3.status === 401 || r3.json?.pending === null, r3);
+
+    // ------------------------------------------------------------------
+    // Task #184 — clarification survives session rollover.
+    // ------------------------------------------------------------------
+    const { runTurn: _rt, getOrCreateSession } = await import(
+      "../../src/lib/atelier-cli/index.js"
+    );
+    const persona = {
+      id: userId,
+      name: `Probe ${runTag}`,
+      role: "founding_partner",
+      orgId: "aico",
+    };
+
+    // (a) Idle session whose latest turn awaits clarification is NOT
+    // rolled over — the inactivity clock pauses on an open question.
+    const sessPaused = `clis_${runTag}_paused`;
+    const staleAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    await db.insert(atelierCliSessions).values({
+      id: sessPaused,
+      orgId: "aico",
+      userId,
+      title: `${runTag} paused`,
+      lastTurnAt: staleAt,
+      updatedAt: staleAt,
+      createdAt: staleAt,
+    });
+    await db.insert(atelierCliTurns).values({
+      id: `clit_${runTag}_paused`,
+      orgId: "aico",
+      sessionId: sessPaused,
+      userId,
+      status: "awaiting_clarification",
+      prompt: "paused question",
+      frames: [
+        {
+          type: "needs_clarification",
+          data: { step: 0, tool: "prefill_from_specialist", field: "entityRole", question: "HQ?", partial: {} },
+        },
+      ],
+      createdAt: staleAt,
+    });
+    const kept = await getOrCreateSession(persona as any, sessPaused);
+    check("idle session with open question is kept live", kept.id === sessPaused, kept.id);
+
+    // (b) Idle session with a terminal latest turn DOES roll over.
+    const sessRoll = `clis_${runTag}_roll`;
+    await db.insert(atelierCliSessions).values({
+      id: sessRoll,
+      orgId: "aico",
+      userId,
+      title: `${runTag} roll`,
+      lastTurnAt: staleAt,
+      updatedAt: staleAt,
+      createdAt: staleAt,
+    });
+    await db.insert(atelierCliTurns).values({
+      id: `clit_${runTag}_roll`,
+      orgId: "aico",
+      sessionId: sessRoll,
+      userId,
+      status: "success",
+      prompt: "done thing",
+      frames: [],
+      createdAt: staleAt,
+    });
+    const rolled = await getOrCreateSession(persona as any, sessRoll);
+    check("idle session without open question rolls over", rolled.id !== sessRoll, rolled.id);
+    // Clean the rolled-over replacement session immediately.
+    await db.delete(atelierCliSessions).where(like(atelierCliSessions.id, rolled.id));
+
+    // (c) A pending question stranded in a soft-deleted session (old-build
+    // rollover) is still restorable, and a newer turn in a DIFFERENT
+    // session does NOT supersede it. Retire the earlier awaiting turn _1
+    // first so the paused turn is the persona's newest open question.
+    await db
+      .update(atelierCliTurns)
+      .set({ status: "cancelled" })
+      .where(like(atelierCliTurns.id, `clit_${runTag}_1`));
+    await db
+      .update(atelierCliSessions)
+      .set({ deletedAt: new Date() })
+      .where(like(atelierCliSessions.id, sessPaused));
+    const r4 = await get("/cli/turns/pending-clarification");
+    check(
+      "question in soft-deleted session still restorable",
+      r4.status === 200 && r4.json?.pending?.turnId === `clit_${runTag}_paused`,
+      r4.json,
+    );
+    check(
+      "newer turn in different session does not supersede",
+      r4.json?.pending?.clarification?.field === "entityRole",
+      r4.json,
+    );
+
+    // (d) Questions older than 7 days expire.
+    const ancient = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await db
+      .update(atelierCliTurns)
+      .set({ createdAt: ancient })
+      .where(like(atelierCliTurns.id, `clit_${runTag}_paused`));
+    const r5 = await get("/cli/turns/pending-clarification");
+    check("stale question (>7d) expires", r5.status === 200 && r5.json?.pending === null, r5.json);
   } finally {
     await db.delete(atelierCliTurns).where(like(atelierCliTurns.id, `clit_${runTag}%`));
-    await db.delete(atelierCliSessions).where(like(atelierCliSessions.id, sessId));
+    await db.delete(atelierCliSessions).where(like(atelierCliSessions.id, `clis_${runTag}%`));
     await db.delete(atelierUsers).where(like(atelierUsers.id, userId));
     server.close();
     await pool.end();

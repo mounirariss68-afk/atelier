@@ -775,8 +775,12 @@ export function CommandBar(props: CommandBarProps) {
                   pageContext: pageCtx,
                 })
               }
-              onSubmitClarification={(answer) =>
-                void cli.submit({ prompt: answer, pageContext: pageCtx })
+              onSubmitClarification={(answer, continuesTurnId) =>
+                void cli.submit({
+                  prompt: answer,
+                  pageContext: pageCtx,
+                  continuesTurnId: continuesTurnId ?? null,
+                })
               }
               onCopyJson={(t) => copyText(JSON.stringify(t.proposedPlan ?? t.pending ?? {}, null, 2))}
               onCopyMarkdown={(t) =>
@@ -1127,7 +1131,7 @@ function Transcript({
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onRequestCapability: (prompt: string) => void;
-  onSubmitClarification: (answer: string) => void;
+  onSubmitClarification: (answer: string, continuesTurnId?: string | null) => void;
   onCopyJson: (t: CliTurn) => void;
   onCopyMarkdown: (t: CliTurn) => void;
   onExport: () => void;
@@ -1333,7 +1337,7 @@ function TurnBody({
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
   onRequestCapability: (prompt: string) => void;
-  onSubmitClarification: (answer: string) => void;
+  onSubmitClarification: (answer: string, continuesTurnId?: string | null) => void;
   onCopyJson: () => void;
   onCopyMarkdown: () => void;
   onExport: () => void;
@@ -1468,7 +1472,7 @@ function TurnBody({
         <ClarificationCard
           clarification={turn.clarification}
           locale={locale}
-          onSubmit={(answer) => onSubmitClarification(answer)}
+          onSubmit={(answer) => onSubmitClarification(answer, turn.serverTurnId ?? null)}
           onCancel={onCancelTurn}
         />
       )}

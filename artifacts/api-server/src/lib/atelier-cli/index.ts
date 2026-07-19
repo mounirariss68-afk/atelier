@@ -146,6 +146,13 @@ export interface RunTurnInput {
   cancelInflight?: boolean;
   intent?: string | null;
   clientTurnKey?: string | null;
+  /**
+   * Clarification continuation: when the client answers a restored
+   * clarification card, this carries the paused turn's id so the
+   * server can rehydrate the pending question even if the answer
+   * lands in a different (e.g. rolled-over) session.
+   */
+  continuesTurnId?: string | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
   /**
@@ -1098,6 +1105,19 @@ export async function getOrCreateSession(
       const lastTouch = (row.lastTurnAt ?? row.updatedAt ?? row.createdAt) as Date | null;
       const idleMs = lastTouch ? Date.now() - new Date(lastTouch).getTime() : 0;
       if (idleMs <= SESSION_INACTIVITY_MS) return row;
+      // Task #184 — pause the inactivity clock while a clarification
+      // question is outstanding. If this session's most recent turn is
+      // still awaiting_clarification, the user's next prompt is very
+      // likely the answer; rolling the session over here would strand
+      // the pending question in a soft-deleted session and the answer
+      // would be misread as a brand-new request.
+      const [latestTurn] = await db
+        .select({ status: atelierCliTurns.status })
+        .from(atelierCliTurns)
+        .where(eq(atelierCliTurns.sessionId, row.id))
+        .orderBy(desc(atelierCliTurns.createdAt))
+        .limit(1);
+      if (latestTurn?.status === "awaiting_clarification") return row;
       // Inactivity rollover: soft-delete the stale session and fall
       // through to mint a fresh one. Keeps audit history intact.
       await db
@@ -2391,9 +2411,73 @@ export async function runTurn(
     // path below never fired). Rehydrate pendingClarification from the
     // most recent prior turn in this session when (a) the draft has no
     // pending question and (b) that prior turn is still paused on one.
+    // Task #184 — additionally, when the client sends `continuesTurnId`
+    // (answer submitted through a restored clarification card), the
+    // paused turn is loaded by id regardless of which session this
+    // answer landed in — surviving inactivity rollover, page reloads
+    // and server restarts. The source turn is tracked so it can be
+    // marked resolved once the continuation consumes it; otherwise the
+    // restore endpoint would resurrect an already-answered question.
+    let pendingSourceTurnId: string | null = null;
+    const rehydrateFromTurnRow = (row: {
+      id: string;
+      prompt: string;
+      frames: unknown;
+    }): boolean => {
+      const prevFrames = Array.isArray(row.frames)
+        ? (row.frames as Array<{ type?: string; data?: Record<string, unknown> }>)
+        : [];
+      const nc = [...prevFrames]
+        .reverse()
+        .find((f) => f?.type === "needs_clarification");
+      const d = nc?.data as
+        | {
+            field?: string;
+            question?: string;
+            tool?: string;
+            partial?: Record<string, unknown>;
+          }
+        | undefined;
+      if (!d || typeof d.field !== "string" || typeof d.tool !== "string") {
+        return false;
+      }
+      getSessionDraft(session.id).pendingClarification = {
+        field: d.field,
+        question: typeof d.question === "string" ? d.question : "",
+        tool: d.tool,
+        partial: d.partial && typeof d.partial === "object" ? d.partial : {},
+        originalPrompt: row.prompt,
+      };
+      pendingSourceTurnId = row.id;
+      return true;
+    };
     {
       const _drRehydrate = getSessionDraft(session.id);
-      if (!_drRehydrate.pendingClarification) {
+      // Explicit continuation takes precedence: the card the user
+      // answered names its turn, so never guess from session recency.
+      if (input.continuesTurnId && input.continuesTurnId !== turnId) {
+        const [contTurn] = await db
+          .select({
+            id: atelierCliTurns.id,
+            status: atelierCliTurns.status,
+            prompt: atelierCliTurns.prompt,
+            frames: atelierCliTurns.frames,
+            userId: atelierCliTurns.userId,
+            orgId: atelierCliTurns.orgId,
+          })
+          .from(atelierCliTurns)
+          .where(eq(atelierCliTurns.id, input.continuesTurnId))
+          .limit(1);
+        if (
+          contTurn &&
+          contTurn.userId === persona.id &&
+          contTurn.orgId === persona.orgId &&
+          contTurn.status === "awaiting_clarification"
+        ) {
+          rehydrateFromTurnRow(contTurn);
+        }
+      }
+      if (!getSessionDraft(session.id).pendingClarification && !_drRehydrate.pendingClarification) {
         const [prevTurn] = await db
           .select({
             id: atelierCliTurns.id,
@@ -2411,31 +2495,24 @@ export async function runTurn(
           .orderBy(desc(atelierCliTurns.createdAt))
           .limit(1);
         if (prevTurn && prevTurn.status === "awaiting_clarification") {
-          const prevFrames = Array.isArray(prevTurn.frames)
-            ? (prevTurn.frames as Array<{ type?: string; data?: Record<string, unknown> }>)
-            : [];
-          const nc = [...prevFrames]
-            .reverse()
-            .find((f) => f?.type === "needs_clarification");
-          const d = nc?.data as
-            | {
-                field?: string;
-                question?: string;
-                tool?: string;
-                partial?: Record<string, unknown>;
-              }
-            | undefined;
-          if (d && typeof d.field === "string" && typeof d.tool === "string") {
-            _drRehydrate.pendingClarification = {
-              field: d.field,
-              question: typeof d.question === "string" ? d.question : "",
-              tool: d.tool,
-              partial:
-                d.partial && typeof d.partial === "object" ? d.partial : {},
-              originalPrompt: prevTurn.prompt,
-            };
-          }
+          rehydrateFromTurnRow(prevTurn);
         }
+      } else if (_drRehydrate.pendingClarification && !pendingSourceTurnId) {
+        // In-memory pending (no restart happened). Find its source turn
+        // so cross-session answers can still resolve it below.
+        const [prevTurn] = await db
+          .select({ id: atelierCliTurns.id, status: atelierCliTurns.status })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.sessionId, session.id),
+              ne(atelierCliTurns.id, turnId),
+              eq(atelierCliTurns.status, "awaiting_clarification"),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(1);
+        if (prevTurn) pendingSourceTurnId = prevTurn.id;
       }
     }
 
@@ -2848,6 +2925,35 @@ export async function runTurn(
           runtimeError = cont.errorMessage ?? cont.errorCode ?? "tool_error";
         }
         clarificationHandled = true;
+        // Task #184 — the continuation consumed the paused question, so
+        // mark its source turn resolved. Without this, the restore
+        // endpoint (and the cross-session rehydration above) would
+        // resurrect an already-answered question — the answer turn may
+        // live in a DIFFERENT session, so "newer turn in same session"
+        // supersession never fires for rollover continuations. Matches
+        // the in-memory semantics: the pending state is consumed on
+        // every outcome except a re-pause, where the NEW turn now holds
+        // the (updated) question.
+        if (
+          pendingSourceTurnId &&
+          pendingSourceTurnId !== turnId
+        ) {
+          await db
+            .update(atelierCliTurns)
+            .set({
+              status: "cancelled",
+              statusMessage:
+                status === "awaiting_clarification"
+                  ? `superseded by follow-up question in turn ${turnId}`
+                  : `resolved by continuation turn ${turnId}`,
+            })
+            .where(
+              and(
+                eq(atelierCliTurns.id, pendingSourceTurnId),
+                eq(atelierCliTurns.status, "awaiting_clarification"),
+              ),
+            );
+        }
       }
     }
     for (let step = 0; step < MAX_TOOL_STEPS && !clarificationHandled; step++) {

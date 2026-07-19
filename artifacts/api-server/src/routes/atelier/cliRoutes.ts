@@ -20,7 +20,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, ne } from "drizzle-orm";
 import { db, atelierCliSessions, atelierCliTurns, atelierUsers } from "@workspace/db";
 import {
   runTurn,
@@ -100,6 +100,7 @@ router.post("/cli/turn", async (req, res) => {
     clientTurnKey?: string | null;
     async?: boolean;
     reset?: boolean;
+    continuesTurnId?: string | null;
   };
   const promptRawWithPreamble = (body.prompt ?? "").trim();
   if (!promptRawWithPreamble) {
@@ -159,6 +160,10 @@ router.post("/cli/turn", async (req, res) => {
         intent: body.intent ?? null,
         clientTurnKey: body.clientTurnKey ?? null,
         async: body.async === true,
+        continuesTurnId:
+          typeof body.continuesTurnId === "string" && body.continuesTurnId.length > 0
+            ? body.continuesTurnId
+            : null,
       },
       { persona, emit: (f) => (closed ? undefined : emit(f)) },
     );
@@ -315,17 +320,24 @@ router.get("/cli/turns/recent", async (req, res) => {
 });
 
 /**
- * Clarification durability — returns the persona's pending clarification,
- * if their single most recent turn (across sessions) is still paused
- * `awaiting_clarification`. Used by the chat client on mount so a page
- * reload / server restart doesn't leave the question invisible while the
- * server waits forever for an answer. Any newer turn supersedes the
- * question, so this returns null in that case.
+ * Clarification durability — returns the persona's most recent turn
+ * still paused `awaiting_clarification`, so the chat client can restore
+ * the question card after a page reload / server restart. Task #184:
+ * the question survives session inactivity rollover (including sessions
+ * already soft-deleted by an older build), so the lookup no longer
+ * requires the turn to be the newest overall or its session to be live.
+ * Supersession rules:
+ *   - a newer turn in the SAME session supersedes the question (the
+ *     conversation moved on / the answer was handled in-session);
+ *   - answering via continuation marks the source turn resolved, which
+ *     also removes it here;
+ *   - questions older than 7 days expire.
  */
 // @cli-skip: read-only rehydration helper, not a capability
 router.get("/cli/turns/pending-clarification", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
+  const PENDING_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const [row] = await db
     .select({
       id: atelierCliTurns.id,
@@ -344,12 +356,32 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
       and(
         eq(atelierCliSessions.userId, me.id),
         eq(atelierCliSessions.orgId, me.orgId),
-        isNull(atelierCliSessions.deletedAt),
+        eq(atelierCliTurns.status, "awaiting_clarification"),
+        gt(atelierCliTurns.createdAt, new Date(Date.now() - PENDING_TTL_MS)),
       ),
     )
     .orderBy(desc(atelierCliTurns.createdAt))
     .limit(1);
-  if (!row || row.status !== "awaiting_clarification") {
+  if (!row) {
+    res.json({ pending: null });
+    return;
+  }
+  // A newer turn in the same session supersedes the question. Compare
+  // with >= plus an id exclusion: Postgres keeps microsecond timestamps
+  // while the JS Date round-trips at millisecond precision, so a strict
+  // `created_at > $roundedDown` would match the row itself.
+  const [newerInSession] = await db
+    .select({ id: atelierCliTurns.id })
+    .from(atelierCliTurns)
+    .where(
+      and(
+        eq(atelierCliTurns.sessionId, row.sessionId),
+        gte(atelierCliTurns.createdAt, row.createdAt),
+        ne(atelierCliTurns.id, row.id),
+      ),
+    )
+    .limit(1);
+  if (newerInSession) {
     res.json({ pending: null });
     return;
   }

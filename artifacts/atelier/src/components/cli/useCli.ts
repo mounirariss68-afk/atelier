@@ -57,6 +57,12 @@ interface SubmitArgs {
   pageContext?: DerivedPageContext | null;
   dryRun?: boolean;
   intent?: "read" | "write" | "reset" | null;
+  /**
+   * Task #184 — when answering a clarification card, the paused turn's
+   * server id. Lets the server continue the original request even if
+   * the session rolled over (e.g. the answer came hours later).
+   */
+  continuesTurnId?: string | null;
 }
 
 interface UseCliOptions {
@@ -763,6 +769,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             dryRun: args.dryRun ?? false,
             clientTurnKey,
             intent: args.intent ?? null,
+            continuesTurnId: args.continuesTurnId ?? null,
           }),
           signal: ctrl.signal,
         });
