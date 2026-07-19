@@ -24,7 +24,7 @@ import {
   type LegalEntityRow,
 } from "@/lib/v5-hooks";
 import { Plus, Pencil, Archive, Sparkles, Loader2 } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 
 const API_BASE = "/api/atelier";
 
@@ -635,7 +635,7 @@ export function EntityFormDialog(props: {
 // review the proposal, then apply into the entity form.
 // ---------------------------------------------------------------------------
 
-function ExtractDialog(props: {
+export function ExtractDialog(props: {
   open: boolean;
   onClose: () => void;
   entities: LegalEntityRow[];
@@ -771,6 +771,7 @@ function EntityCard(props: {
   onArchive: () => void;
 }) {
   const e = props.entity;
+  const [, navigate] = useLocation();
   const { documents } = useLegalEntityDetail(e.id);
   const expiring = e.registrations.filter((r) => r.expiresOn);
   const worst = expiring.reduce<{ iso: string | null; d: number }>(
@@ -783,7 +784,11 @@ function EntityCard(props: {
   const leaseEnd = e.lease?.endDate ?? null;
   const tradeLicense = e.registrations.find((r) => r.type === "trade_license") ?? null;
   return (
-    <Card className="p-5 flex flex-col gap-3" data-testid={`entity-card-${e.id}`}>
+    <Card
+      className="p-5 flex flex-col gap-3 cursor-pointer transition-colors hover:border-gold/50"
+      onClick={() => navigate(`/finance/entities/${e.id}`)}
+      data-testid={`entity-card-${e.id}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Eyebrow>
@@ -832,10 +837,10 @@ function EntityCard(props: {
         </Link>
         {props.canWrite && e.status !== "archived" && (
           <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="outline" onClick={props.onEdit} data-testid={`button-edit-${e.id}`}>
+            <Button size="sm" variant="outline" onClick={(ev) => { ev.stopPropagation(); props.onEdit(); }} data-testid={`button-edit-${e.id}`}>
               <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
             </Button>
-            <Button size="sm" variant="ghost" className="text-danger" onClick={props.onArchive} data-testid={`button-archive-${e.id}`}>
+            <Button size="sm" variant="ghost" className="text-danger" onClick={(ev) => { ev.stopPropagation(); props.onArchive(); }} data-testid={`button-archive-${e.id}`}>
               <Archive className="w-3.5 h-3.5 mr-1" /> Archive
             </Button>
           </div>

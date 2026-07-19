@@ -31,8 +31,10 @@ import {
   fmtAed,
   InfoRow,
   EntityFormDialog,
+  ExtractDialog,
+  type EntityDraft,
 } from "./FinanceEntities";
-import { Pencil, Archive, FileText, ExternalLink, Vault } from "lucide-react";
+import { Pencil, Archive, FileText, ExternalLink, Vault, Sparkles } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Document classification — three legal-function tiers + unclassified
@@ -183,6 +185,12 @@ export default function FinanceEntityDetail() {
   const archived = e?.status === "archived";
   const canWrite = (me?.role === "founding_partner" || me?.role === "partner") && !archived;
   const [formOpen, setFormOpen] = React.useState(false);
+  const [extractOpen, setExtractOpen] = React.useState(false);
+  const [applied, setApplied] = React.useState<{
+    draft: EntityDraft;
+    editing: LegalEntityRow | null;
+    note: string;
+  } | null>(null);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["atelier-v5", "legal-entities"] });
@@ -287,7 +295,10 @@ export default function FinanceEntityDetail() {
             </MonoChip>
             {canWrite && (
               <>
-                <Button size="sm" variant="outline" onClick={() => setFormOpen(true)} data-testid="button-edit-entity-detail">
+                <Button size="sm" variant="outline" onClick={() => setExtractOpen(true)} data-testid="button-extract-entity-detail">
+                  <Sparkles className="w-3.5 h-3.5 mr-1" /> Extract from document
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { setApplied(null); setFormOpen(true); }} data-testid="button-edit-entity-detail">
                   <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
                 </Button>
                 <Button size="sm" variant="ghost" className="text-danger" onClick={() => void archive()} data-testid="button-archive-entity-detail">
@@ -493,11 +504,20 @@ export default function FinanceEntityDetail() {
 
       <EntityFormDialog
         open={formOpen}
-        onClose={() => setFormOpen(false)}
-        editing={e}
-        initialDraft={null}
-        extractionNote={null}
+        onClose={() => { setFormOpen(false); setApplied(null); }}
+        editing={applied ? applied.editing : e}
+        initialDraft={applied?.draft ?? null}
+        extractionNote={applied?.note ?? null}
         onSaved={refresh}
+      />
+      <ExtractDialog
+        open={extractOpen}
+        onClose={() => setExtractOpen(false)}
+        entities={[e]}
+        onApply={(draft, editing, note) => {
+          setApplied({ draft, editing, note: note || "Cross-check against the source PDF." });
+          setFormOpen(true);
+        }}
       />
     </div>
   );

@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -479,22 +479,18 @@ router.get("/finance/entities/:id", async (req, res) => {
         .where(inArray(atelierDocumentVersions.id, versionIds))
     : [];
   const versionById = new Map(versions.map((v) => [v.id, v]));
-  // Task #287 — lazy backfill: already-linked documents uploaded before the
-  // classification model get a kind inferred from title/filename (persisted),
-  // so seeded entities tier correctly without manual work. Manual overrides
-  // and AI-extraction kinds always win because we only fill nulls.
+  // Task #287 — display-time classification fallback: documents linked before
+  // the classification model existed (docKind null) get a kind inferred from
+  // title/filename so they tier correctly without manual work. This read path
+  // is deliberately side-effect free (no DB write — GETs stay read-only for
+  // every persona); persisted kinds come from partner-gated uploads/overrides
+  // and the AI-extraction flow, which always win because we only fill nulls.
   const kindBackfill = new Map<string, string>();
   for (const d of docs) {
     if (d.docKind) continue;
     const v = d.currentVersionId ? versionById.get(d.currentVersionId) : null;
     const inferred = inferDocKindFromTitle(d.title, v?.fileName ?? null);
     if (inferred) kindBackfill.set(d.id, inferred);
-  }
-  for (const [docId, kind] of kindBackfill) {
-    await db
-      .update(atelierDocuments)
-      .set({ docKind: kind, updatedAt: new Date() })
-      .where(and(eq(atelierDocuments.id, docId), isNull(atelierDocuments.docKind)));
   }
   res.json({
     entity: entityShape(row),
