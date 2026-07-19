@@ -700,7 +700,9 @@ interface CubeRow {
   grossMarginPct: number;
 }
 
-const PARTNERS = ["Yara Nasser", "Layla Al-Mutairi", "Omar Habib", "Khalid Al-Saud", "Reem Al-Hashemi", "Sami Hammad"];
+// Fabricated demo partner names removed per the no-demo-data policy;
+// cube rows carry no attributed partner until real engagement data exists.
+const PARTNERS: string[] = [];
 const SECTORS = ["Energy", "Public Sector", "Banking", "TMT", "Healthcare", "Logistics"];
 const CLIENTS_BY_SECTOR: Record<string, string[]> = {
   "Energy": ["Aramco Digital", "ADNOC", "BP", "TotalEnergies"],
@@ -721,7 +723,7 @@ function buildCube(scopePeriods: Period[]): CubeRow[] {
     const sector = SECTORS[i % SECTORS.length];
     const clients = CLIENTS_BY_SECTOR[sector];
     const client = clients[i % clients.length];
-    const partner = PARTNERS[(i * 3) % PARTNERS.length];
+    const partner = PARTNERS.length > 0 ? PARTNERS[(i * 3) % PARTNERS.length] : "";
     const type: EngType = TYPES[i % TYPES.length];
     const entityId = ENTITY_BY_HASH[i % ENTITY_BY_HASH.length];
     const baseMonth = 80_000 + (hash(`eng_${i}`) % 220_000);

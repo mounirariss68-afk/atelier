@@ -691,17 +691,17 @@ export interface RenewalRow {
   recommendation: string;
 }
 export const RENEWALS: RenewalRow[] = [
-  { id: "rn_aramco_msa",   client: "Aramco Digital",   kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal: 12_500_000, expiresOn: "2026-09-30", ownerName: "Layla Al-Mutairi",  stage: "in_negotiation", riskBand: "medium", recommendation: "Lock 18-month extension at +6% rate." },
-  { id: "rn_dewa_retainer",client: "DEWA",             kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  4_800_000, expiresOn: "2026-12-31", ownerName: "Faisal Al-Suwaidi", stage: "discovery",       riskBand: "low",    recommendation: "Renew at flat with 4 added utilisation days." },
-  { id: "rn_hsbc_msa",     client: "HSBC PLC",         kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_900_000, expiresOn: "2026-11-30", ownerName: "Yara Nasser",       stage: "proposal_sent",   riskBand: "medium", recommendation: "Extend 24mo, new statement-of-work for AI risk." },
-  { id: "rn_lloyds_msa",   client: "Lloyds",           kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_300_000, expiresOn: "2026-12-31", ownerName: "Yara Nasser",       stage: "not_started",     riskBand: "high",   recommendation: "Schedule QBR before Aug; competitor incumbent risk." },
-  { id: "rn_emirates_sub", client: "Emirates Group",   kind: "subscription", entityId: "fe_aico_uae", currency: "USD", arrLocal:    920_000, expiresOn: "2026-10-31", ownerName: "Faisal Al-Suwaidi", stage: "verbal_yes",      riskBand: "low",    recommendation: "Auto-renew clause triggers Sep 30 — confirm scope." },
-  { id: "rn_neom_jv",      client: "NEOM Authority",   kind: "framework",    entityId: "fe_aico_jv_neom", currency: "SAR", arrLocal: 8_400_000, expiresOn: "2027-03-31", ownerName: "Yara Nasser",   stage: "not_started",     riskBand: "medium", recommendation: "JV governance review Q4; reset profit-share." },
-  { id: "rn_mubadala_msa", client: "Mubadala",         kind: "msa",          entityId: "fe_aico_uae", currency: "AED", arrLocal:  6_200_000, expiresOn: "2026-08-31", ownerName: "Faisal Al-Suwaidi", stage: "in_negotiation", riskBand: "medium", recommendation: "Bundle TP advisory; +12% blended uplift target." },
-  { id: "rn_sdaia_msa",    client: "SDAIA",            kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  3_500_000, expiresOn: "2027-01-31", ownerName: "Layla Al-Mutairi",  stage: "discovery",       riskBand: "low",    recommendation: "Anchor on AI-governance practice, 24-month extension." },
-  { id: "rn_bp_pilot",     client: "BP",               kind: "subscription", entityId: "fe_aico_uk",  currency: "GBP", arrLocal:    640_000, expiresOn: "2026-07-31", ownerName: "Yara Nasser",       stage: "at_risk",         riskBand: "high",   recommendation: "Decarb pilot conversion at risk — escalate to Partner." },
-  { id: "rn_stc_lic",      client: "STC",              kind: "license",      entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  2_100_000, expiresOn: "2026-12-15", ownerName: "Layla Al-Mutairi",  stage: "discovery",       riskBand: "medium", recommendation: "Move from license to outcome-based; expand seats." },
-  { id: "rn_etisalat_ret", client: "Etisalat",         kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  1_950_000, expiresOn: "2027-02-28", ownerName: "Faisal Al-Suwaidi", stage: "not_started",     riskBand: "low",    recommendation: "Renew flat; consider AI-ops add-on." },
+  { id: "rn_aramco_msa",   client: "Aramco Digital",   kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal: 12_500_000, expiresOn: "2026-09-30", ownerName: "",  stage: "in_negotiation", riskBand: "medium", recommendation: "Lock 18-month extension at +6% rate." },
+  { id: "rn_dewa_retainer",client: "DEWA",             kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  4_800_000, expiresOn: "2026-12-31", ownerName: "", stage: "discovery",       riskBand: "low",    recommendation: "Renew at flat with 4 added utilisation days." },
+  { id: "rn_hsbc_msa",     client: "HSBC PLC",         kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_900_000, expiresOn: "2026-11-30", ownerName: "",       stage: "proposal_sent",   riskBand: "medium", recommendation: "Extend 24mo, new statement-of-work for AI risk." },
+  { id: "rn_lloyds_msa",   client: "Lloyds",           kind: "msa",          entityId: "fe_aico_uk",  currency: "GBP", arrLocal:  1_300_000, expiresOn: "2026-12-31", ownerName: "",       stage: "not_started",     riskBand: "high",   recommendation: "Schedule QBR before Aug; competitor incumbent risk." },
+  { id: "rn_emirates_sub", client: "Emirates Group",   kind: "subscription", entityId: "fe_aico_uae", currency: "USD", arrLocal:    920_000, expiresOn: "2026-10-31", ownerName: "", stage: "verbal_yes",      riskBand: "low",    recommendation: "Auto-renew clause triggers Sep 30 — confirm scope." },
+  { id: "rn_neom_jv",      client: "NEOM Authority",   kind: "framework",    entityId: "fe_aico_jv_neom", currency: "SAR", arrLocal: 8_400_000, expiresOn: "2027-03-31", ownerName: "",   stage: "not_started",     riskBand: "medium", recommendation: "JV governance review Q4; reset profit-share." },
+  { id: "rn_mubadala_msa", client: "Mubadala",         kind: "msa",          entityId: "fe_aico_uae", currency: "AED", arrLocal:  6_200_000, expiresOn: "2026-08-31", ownerName: "", stage: "in_negotiation", riskBand: "medium", recommendation: "Bundle TP advisory; +12% blended uplift target." },
+  { id: "rn_sdaia_msa",    client: "SDAIA",            kind: "msa",          entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  3_500_000, expiresOn: "2027-01-31", ownerName: "",  stage: "discovery",       riskBand: "low",    recommendation: "Anchor on AI-governance practice, 24-month extension." },
+  { id: "rn_bp_pilot",     client: "BP",               kind: "subscription", entityId: "fe_aico_uk",  currency: "GBP", arrLocal:    640_000, expiresOn: "2026-07-31", ownerName: "",       stage: "at_risk",         riskBand: "high",   recommendation: "Decarb pilot conversion at risk — escalate to Partner." },
+  { id: "rn_stc_lic",      client: "STC",              kind: "license",      entityId: "fe_aico_ksa", currency: "SAR", arrLocal:  2_100_000, expiresOn: "2026-12-15", ownerName: "",  stage: "discovery",       riskBand: "medium", recommendation: "Move from license to outcome-based; expand seats." },
+  { id: "rn_etisalat_ret", client: "Etisalat",         kind: "retainer",     entityId: "fe_aico_uae", currency: "AED", arrLocal:  1_950_000, expiresOn: "2027-02-28", ownerName: "", stage: "not_started",     riskBand: "low",    recommendation: "Renew flat; consider AI-ops add-on." },
 ];
 
 export interface RenewalsResp {
@@ -782,21 +782,10 @@ export interface BonusPersonRow {
   newArrClosedUsd: number;            // YTD net new ARR attributable
   commissionRate: number;             // % of new ARR (sales roles)
 }
-export const BONUS_PEOPLE: BonusPersonRow[] = [
-  { id: "p_layla",  name: "Layla Al-Mutairi",  roleCode: "P",  entityId: "fe_aico_ksa", baseSalaryAnnualUsd: 305_000, bonusTargetPctOfBase: 0.40, individualPerfMultiplier: 1.20, newArrClosedUsd: 4_200_000, commissionRate: 0.015 },
-  { id: "p_yara",   name: "Yara Nasser",       roleCode: "P",  entityId: "fe_aico_uk",  baseSalaryAnnualUsd: 295_000, bonusTargetPctOfBase: 0.40, individualPerfMultiplier: 1.10, newArrClosedUsd: 2_800_000, commissionRate: 0.015 },
-  { id: "p_faisal", name: "Faisal Al-Suwaidi", roleCode: "P",  entityId: "fe_aico_uae", baseSalaryAnnualUsd: 290_000, bonusTargetPctOfBase: 0.40, individualPerfMultiplier: 1.05, newArrClosedUsd: 2_100_000, commissionRate: 0.015 },
-  { id: "sm_omar",  name: "Omar El-Said",      roleCode: "SM", entityId: "fe_aico_ksa", baseSalaryAnnualUsd: 178_000, bonusTargetPctOfBase: 0.30, individualPerfMultiplier: 1.15, newArrClosedUsd: 1_400_000, commissionRate: 0.010 },
-  { id: "sm_priya", name: "Priya Subramanian", roleCode: "SM", entityId: "fe_aico_uae", baseSalaryAnnualUsd: 172_000, bonusTargetPctOfBase: 0.30, individualPerfMultiplier: 1.00, newArrClosedUsd:   980_000, commissionRate: 0.010 },
-  { id: "sm_thom",  name: "Thomas Reed",       roleCode: "SM", entityId: "fe_aico_uk",  baseSalaryAnnualUsd: 168_000, bonusTargetPctOfBase: 0.30, individualPerfMultiplier: 0.90, newArrClosedUsd:   620_000, commissionRate: 0.010 },
-  { id: "m_hala",   name: "Hala Khoury",       roleCode: "M",  entityId: "fe_aico_ksa", baseSalaryAnnualUsd: 124_000, bonusTargetPctOfBase: 0.20, individualPerfMultiplier: 1.10, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "m_ahmed",  name: "Ahmed Sharif",      roleCode: "M",  entityId: "fe_aico_uae", baseSalaryAnnualUsd: 122_000, bonusTargetPctOfBase: 0.20, individualPerfMultiplier: 1.00, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "m_ella",   name: "Ella Whitfield",    roleCode: "M",  entityId: "fe_aico_uk",  baseSalaryAnnualUsd: 126_000, bonusTargetPctOfBase: 0.20, individualPerfMultiplier: 1.05, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "m_zayd",   name: "Zayd Al-Otaibi",    roleCode: "M",  entityId: "fe_aico_ksa", baseSalaryAnnualUsd: 120_000, bonusTargetPctOfBase: 0.20, individualPerfMultiplier: 0.95, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "sc_nora",  name: "Nora Bin Hamad",    roleCode: "SC", entityId: "fe_aico_ksa", baseSalaryAnnualUsd:  96_000, bonusTargetPctOfBase: 0.15, individualPerfMultiplier: 1.10, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "sc_jad",   name: "Jad Issa",          roleCode: "SC", entityId: "fe_aico_uae", baseSalaryAnnualUsd:  98_000, bonusTargetPctOfBase: 0.15, individualPerfMultiplier: 1.00, newArrClosedUsd:         0, commissionRate: 0 },
-  { id: "c_aya",    name: "Aya Othman",        roleCode: "C",  entityId: "fe_aico_uk",  baseSalaryAnnualUsd:  78_000, bonusTargetPctOfBase: 0.10, individualPerfMultiplier: 1.00, newArrClosedUsd:         0, commissionRate: 0 },
-];
+// Fabricated demo people removed per the no-demo-data policy; the
+// bonus model renders an honest empty state until real compensation
+// data exists.
+export const BONUS_PEOPLE: BonusPersonRow[] = [];
 
 export interface BonusResp {
   asOf: string;
