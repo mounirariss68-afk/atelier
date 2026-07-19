@@ -94,6 +94,10 @@ export interface DocusealSubmitter {
   name?: string | null;
   email: string;
   status: string; // pending | sent | opened | completed | declined
+  /** Unique signing-form slug — the signing URL is `https://docuseal.com/s/{slug}`. */
+  slug?: string | null;
+  /** Full embedded-signing URL when the API provides it directly. */
+  embed_src?: string | null;
   sent_at?: string | null;
   opened_at?: string | null;
   completed_at?: string | null;
@@ -311,6 +315,20 @@ export async function createSubmission(args: {
     throw new DocusealError("DocuSeal submission creation returned no id.");
   }
   return { submissionId: obj.id, submitters: obj.submitters ?? [] };
+}
+
+/**
+ * Embedded signing URL for one submitter — prefers the API-provided
+ * `embed_src` (authoritative for self-hosted instances), falls back to
+ * the Cloud signing host + slug. Returns null when neither is present
+ * (callers must surface that as an explicit error, never guess).
+ */
+export function submitterEmbedSrc(sub: DocusealSubmitter): string | null {
+  if (typeof sub.embed_src === "string" && sub.embed_src.trim()) return sub.embed_src.trim();
+  if (typeof sub.slug === "string" && sub.slug.trim()) {
+    return `https://docuseal.com/s/${sub.slug.trim()}`;
+  }
+  return null;
 }
 
 /** Authoritative submission state (statuses, documents, audit log). */

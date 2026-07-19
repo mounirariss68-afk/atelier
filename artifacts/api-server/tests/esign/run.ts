@@ -46,6 +46,8 @@ interface StubSubmitter {
   name: string;
   email: string;
   status: string;
+  /** Task #300 — embedded-signing slug (signing URL = /s/{slug}). */
+  slug?: string | null;
   opened_at?: string | null;
   completed_at?: string | null;
   declined_at?: string | null;
@@ -99,13 +101,17 @@ function stubServer(): http.Server {
       if (req.method === "POST" && url === "/submissions") {
         const sid = stub.nextSubmissionId++;
         const submitters: StubSubmitter[] = (body.submitters as Array<{ name: string; email: string }>).map(
-          (s, i) => ({
-            id: stub.nextSubmitterId++,
-            submission_id: sid,
-            name: s.name,
-            email: s.email,
-            status: i === 0 ? "sent" : "pending",
-          }),
+          (s, i) => {
+            const id = stub.nextSubmitterId++;
+            return {
+              id,
+              submission_id: sid,
+              name: s.name,
+              email: s.email,
+              status: i === 0 ? "sent" : "pending",
+              slug: `slug_${id}`,
+            };
+          },
         );
         stub.submissions.set(sid, {
           id: sid,
@@ -734,6 +740,117 @@ async function main(): Promise<void> {
       .where(eq(atelierSignatureRequests.id, req3Id));
     const synced = await syncSignatureRequest(req3Id);
     check("past expiresAt → expired on sync", synced.request.status === "expired", synced.request.status);
+
+    console.log("— embedded signing link (Task #300) —");
+
+    // Sign & send: the internal partner is the FIRST signer (preserved
+    // order → DocuSeal emails the counterparty only after the partner).
+    const rEmb = await call("POST", "/api/atelier/esign/requests", FP, {
+      title: `${TAG} sign-and-send`,
+      documentId: pdf.document.id,
+      signers: [
+        { name: founder.name, email: founder.email },
+        { name: "External CP", email: "extcp@example.com" },
+      ],
+    });
+    const embReqId: string = rEmb.body?.request?.id;
+    const embSigners = rEmb.body?.request?.signers ?? [];
+    check(
+      "internal-first create → partner is signer 1 with status sent",
+      rEmb.status === 201 &&
+        embSigners[0]?.email === founder.email &&
+        embSigners[0]?.signingOrder === 1 &&
+        embSigners[0]?.status === "sent" &&
+        embSigners[1]?.status === "pending",
+      `status=${rEmb.status} signers=${JSON.stringify(embSigners)}`,
+    );
+
+    // Role gate: employee persona cannot fetch signing links.
+    const rLinkEmp = await call(
+      "GET",
+      `/api/atelier/esign/requests/${embReqId}/signing-link`,
+      employeeId,
+    );
+    check("signing-link (employee) → 403", rLinkEmp.status === 403, `status=${rLinkEmp.status}`);
+
+    // Partner (matching signer email) gets the embedded link from the
+    // authoritative DocuSeal fetch — slug → https://docuseal.com/s/{slug}.
+    const rLink = await call("GET", `/api/atelier/esign/requests/${embReqId}/signing-link`, FP);
+    check(
+      "signing-link → 200 with embed URL for the partner's slug",
+      rLink.status === 200 &&
+        typeof rLink.body?.url === "string" &&
+        /https:\/\/docuseal\.com\/s\/slug_\d+$/.test(rLink.body.url) &&
+        rLink.body?.requestId === embReqId &&
+        rLink.body?.signingOrder === 1,
+      `status=${rLink.status} body=${JSON.stringify(rLink.body)}`,
+    );
+
+    // Caller not among the signers → explicit 409 (request stays intact).
+    const extOnlyReqId: string = rPage1.body?.request?.id;
+    const rLinkNoMatch = await call(
+      "GET",
+      `/api/atelier/esign/requests/${extOnlyReqId}/signing-link`,
+      FP,
+    );
+    check(
+      "signing-link with no matching signer → 409 no-matching-signer",
+      rLinkNoMatch.status === 409 && rLinkNoMatch.body?.error === "no-matching-signer",
+      `status=${rLinkNoMatch.status} body=${JSON.stringify(rLinkNoMatch.body)}`,
+    );
+
+    // Closed request → explicit 409 (the first request completed above).
+    const rLinkClosed = await call(
+      "GET",
+      `/api/atelier/esign/requests/${reqId}/signing-link`,
+      FP,
+    );
+    check(
+      "signing-link on completed request → 409 request-not-open",
+      rLinkClosed.status === 409 && rLinkClosed.body?.error === "request-not-open",
+      `status=${rLinkClosed.status} body=${JSON.stringify(rLinkClosed.body)}`,
+    );
+
+    // DocuSeal returning no slug/embed_src → explicit 502, never a guess.
+    const [embRow] = await db
+      .select()
+      .from(atelierSignatureRequests)
+      .where(eq(atelierSignatureRequests.id, embReqId));
+    const embSubId = Number(embRow?.docusealSubmissionId);
+    const embStubSub = stub.submissions.get(embSubId);
+    const savedSlug = embStubSub?.submitters[0]?.slug;
+    if (embStubSub) embStubSub.submitters[0].slug = null;
+    const rLinkNoSlug = await call(
+      "GET",
+      `/api/atelier/esign/requests/${embReqId}/signing-link`,
+      FP,
+    );
+    check(
+      "signing-link without slug from DocuSeal → 502 signing-link-unavailable",
+      rLinkNoSlug.status === 502 && rLinkNoSlug.body?.error === "signing-link-unavailable",
+      `status=${rLinkNoSlug.status} body=${JSON.stringify(rLinkNoSlug.body)}`,
+    );
+    if (embStubSub) embStubSub.submitters[0].slug = savedSlug;
+
+    // Partner signs (embedded) → webhook-style sync → partially_signed,
+    // and their link is now explicitly gone (already-signed).
+    markSigned(embSubId, 1, stubBase);
+    const embSynced = await syncSignatureRequest(embReqId);
+    check(
+      "partner completion via sync → partially_signed",
+      embSynced.request.status === "partially_signed",
+      embSynced.request.status,
+    );
+    const rLinkDone = await call(
+      "GET",
+      `/api/atelier/esign/requests/${embReqId}/signing-link`,
+      FP,
+    );
+    check(
+      "signing-link after partner signed → 409 already-signed",
+      rLinkDone.status === 409 && rLinkDone.body?.error === "already-signed",
+      `status=${rLinkDone.status} body=${JSON.stringify(rLinkDone.body)}`,
+    );
 
     console.log("— contract second-party values (Task #306/#310) —");
 

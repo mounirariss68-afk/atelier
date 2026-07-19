@@ -196,18 +196,39 @@ function SendSignatureDialog(props: {
   onClose: () => void;
   contract: AtelierContract;
   onDone: () => void;
+  /**
+   * Task #300 — "Sign & send": the partner (caller) is the FIRST signer
+   * and signs in-app via the embedded DocuSeal form right after sending;
+   * DocuSeal's preserved order then emails the counterparty.
+   */
+  signFirst?: boolean;
+  me?: { name?: string; email?: string } | null;
+  onSigned?: (signatureRequestId: string) => void;
 }) {
   const onErr = useApiError();
   const { toast } = useToast();
   const initialSigners = React.useCallback(
-    () => [
-      { name: props.contract.counterpartyLabel, email: "" },
-      // Task #232 — pre-label the Cognirise side with the signing entity.
-      ...(props.contract.signingEntityLabel
-        ? [{ name: props.contract.signingEntityLabel, email: "" }]
-        : []),
+    () =>
+      props.signFirst
+        ? [
+            // Partner (Cognirise signing entity signatory) signs first, in-app.
+            { name: props.me?.name ?? "", email: props.me?.email ?? "" },
+            { name: props.contract.counterpartyLabel, email: "" },
+          ]
+        : [
+            { name: props.contract.counterpartyLabel, email: "" },
+            // Task #232 — pre-label the Cognirise side with the signing entity.
+            ...(props.contract.signingEntityLabel
+              ? [{ name: props.contract.signingEntityLabel, email: "" }]
+              : []),
+          ],
+    [
+      props.signFirst,
+      props.me?.name,
+      props.me?.email,
+      props.contract.counterpartyLabel,
+      props.contract.signingEntityLabel,
     ],
-    [props.contract.counterpartyLabel, props.contract.signingEntityLabel],
   );
   const [signers, setSigners] = React.useState<Array<{ name: string; email: string }>>(
     initialSigners,
@@ -218,7 +239,18 @@ function SendSignatureDialog(props: {
 
   const send = useAtelierSendContractForSignature({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (resp: unknown) => {
+        const requestId =
+          (resp as { signatureRequestId?: string })?.signatureRequestId ??
+          (resp as { data?: { signatureRequestId?: string } })?.data?.signatureRequestId ??
+          null;
+        if (props.signFirst && props.onSigned && requestId) {
+          toast({ title: "Sent — your turn to sign", description: "Opening the signing form…" });
+          props.onDone();
+          props.onClose();
+          props.onSigned(requestId);
+          return;
+        }
         toast({ title: "Sent for signature", description: "Signers will receive an email from DocuSeal." });
         props.onDone();
         props.onClose();
@@ -232,7 +264,7 @@ function SendSignatureDialog(props: {
     <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Send for signature</DialogTitle>
+          <DialogTitle>{props.signFirst ? "Sign & send" : "Send for signature"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           {signers.map((s, i) => (
@@ -280,9 +312,16 @@ function SendSignatureDialog(props: {
               <span className="text-text">{props.contract.signingEntityLabel}</span>.
             </p>
           )}
-          <p className="text-[11px] text-text-faint">
-            This emails the final PDF for e-signing and cannot be edited afterwards.
-          </p>
+          {props.signFirst ? (
+            <p className="text-[11px] text-text-faint" data-testid="text-sign-first-hint">
+              You sign first, right here in the app. Once you finish, the next signer
+              receives their invitation by email. The document cannot be edited afterwards.
+            </p>
+          ) : (
+            <p className="text-[11px] text-text-faint">
+              This emails the final PDF for e-signing and cannot be edited afterwards.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={props.onClose} disabled={send.isPending}>
@@ -301,9 +340,94 @@ function SendSignatureDialog(props: {
             data-testid="button-send-signature"
           >
             <Send className="w-4 h-4 mr-1" />
-            {send.isPending ? "Sending…" : "Send"}
+            {send.isPending ? "Sending…" : props.signFirst ? "Send & sign now" : "Send"}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Task #300 — embedded DocuSeal signing form. Loads DocuSeal's official
+ * web-component script and renders `<docuseal-form>` for the given
+ * signing URL; the component fires a `completed` event when the signer
+ * finishes, which we forward so the parent can sync + refresh. Closing
+ * without signing leaves the request pending ("Continue signing" resumes).
+ */
+function useDocusealFormScript(active: boolean): boolean {
+  const [ready, setReady] = React.useState(false);
+  React.useEffect(() => {
+    if (!active) return;
+    const SRC = "https://cdn.docuseal.com/js/form.js";
+    if (window.customElements?.get("docuseal-form")) {
+      setReady(true);
+      return;
+    }
+    let script = document.querySelector<HTMLScriptElement>(`script[src="${SRC}"]`);
+    if (!script) {
+      script = document.createElement("script");
+      script.src = SRC;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+    let cancelled = false;
+    void window.customElements
+      ?.whenDefined("docuseal-form")
+      .then(() => !cancelled && setReady(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [active]);
+  return ready;
+}
+
+function EmbedSignDialog(props: {
+  open: boolean;
+  url: string | null;
+  onClose: () => void;
+  onCompleted: () => void;
+}) {
+  const scriptReady = useDocusealFormScript(props.open && !!props.url);
+  const hostRef = React.useRef<HTMLDivElement | null>(null);
+  const { onCompleted } = props;
+
+  React.useEffect(() => {
+    if (!props.open || !props.url || !scriptReady || !hostRef.current) return;
+    const host = hostRef.current;
+    const el = document.createElement("docuseal-form");
+    el.setAttribute("data-src", props.url);
+    el.setAttribute("data-with-title", "false");
+    el.setAttribute("data-with-download-button", "false");
+    el.setAttribute("data-with-send-copy-button", "false");
+    const handleCompleted = () => onCompleted();
+    el.addEventListener("completed", handleCompleted);
+    host.appendChild(el);
+    return () => {
+      el.removeEventListener("completed", handleCompleted);
+      el.remove();
+    };
+  }, [props.open, props.url, scriptReady, onCompleted]);
+
+  return (
+    <Dialog open={props.open} onOpenChange={(o) => !o && props.onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Sign the document</DialogTitle>
+        </DialogHeader>
+        <div
+          ref={hostRef}
+          className="min-h-[60vh] max-h-[75vh] overflow-y-auto rounded-md bg-white"
+          data-testid="container-docuseal-embed"
+        >
+          {!scriptReady && (
+            <div className="p-6 text-sm text-neutral-500">Loading the signing form…</div>
+          )}
+        </div>
+        <p className="text-[11px] text-text-faint">
+          If you close this window before finishing, nothing is lost — use “Continue
+          signing” on the contract page to pick up where you left off.
+        </p>
       </DialogContent>
     </Dialog>
   );
@@ -448,11 +572,65 @@ export default function ContractDetail() {
   const contract = data?.contract;
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [sendOpen, setSendOpen] = React.useState(false);
+  // Task #300 — "Sign & send" (partner signs in-app first).
+  const [signFirst, setSignFirst] = React.useState(false);
+  const [linkBusy, setLinkBusy] = React.useState(false);
+  const [signEmbed, setSignEmbed] = React.useState<{ requestId: string; url: string } | null>(
+    null,
+  );
   const [notesDraft, setNotesDraft] = React.useState<string | null>(null);
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: getAtelierGetContractQueryKey(id) });
     void qc.invalidateQueries({ queryKey: getAtelierListContractsQueryKey() });
+  };
+
+  // Task #300 — fetch the caller's embedded signing link and open the
+  // in-app signing form. Every failure surfaces as an explicit toast.
+  const openEmbeddedSigning = async (requestId: string) => {
+    setLinkBusy(true);
+    try {
+      const resp = await fetch(`${API_BASE}/esign/requests/${requestId}/signing-link`, {
+        credentials: "include",
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        toast({
+          title: "Signing link unavailable",
+          description: String(body?.message ?? body?.error ?? `Error ${resp.status}`),
+          variant: "destructive",
+        });
+        return;
+      }
+      setSignEmbed({ requestId, url: String(body.url) });
+    } catch {
+      toast({
+        title: "Signing link unavailable",
+        description: "Could not reach the server. Try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  // The partner finished signing in the embedded form: reconcile against
+  // DocuSeal now (the webhook also fires — sync is idempotent) + refresh.
+  const handleEmbeddedSigned = async (requestId: string) => {
+    setSignEmbed(null);
+    toast({
+      title: "Signature recorded",
+      description: "The next signer will receive their invitation by email.",
+    });
+    try {
+      await fetch(`${API_BASE}/esign/requests/${requestId}/sync`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // The webhook-driven sync reconciles shortly regardless.
+    }
+    invalidate();
   };
   const patch = useAtelierUpdateContract({
     mutation: {
@@ -520,9 +698,37 @@ export default function ContractDetail() {
                 </Button>
               )}
               {contract.status === "final_uploaded" && (
-                <Button onClick={() => setSendOpen(true)} data-testid="button-open-send">
-                  <Send className="w-4 h-4 mr-1" />
-                  Send for signature
+                <>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setSignFirst(false);
+                      setSendOpen(true);
+                    }}
+                    data-testid="button-open-send"
+                  >
+                    <Send className="w-4 h-4 mr-1" />
+                    Send for signature
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setSignFirst(true);
+                      setSendOpen(true);
+                    }}
+                    data-testid="button-open-sign-send"
+                  >
+                    <Send className="w-4 h-4 mr-1" />
+                    Sign & send
+                  </Button>
+                </>
+              )}
+              {contract.status === "out_for_signature" && contract.signatureRequestId && (
+                <Button
+                  onClick={() => void openEmbeddedSigning(contract.signatureRequestId!)}
+                  disabled={linkBusy}
+                  data-testid="button-continue-signing"
+                >
+                  {linkBusy ? "Fetching signing form…" : "Continue signing"}
                 </Button>
               )}
             </div>
@@ -680,6 +886,17 @@ export default function ContractDetail() {
         onClose={() => setSendOpen(false)}
         contract={contract}
         onDone={invalidate}
+        signFirst={signFirst}
+        me={me ? { name: me.name, email: me.email } : null}
+        onSigned={(requestId) => void openEmbeddedSigning(requestId)}
+      />
+      <EmbedSignDialog
+        open={!!signEmbed}
+        url={signEmbed?.url ?? null}
+        onClose={() => setSignEmbed(null)}
+        onCompleted={() => {
+          if (signEmbed) void handleEmbeddedSigned(signEmbed.requestId);
+        }}
       />
       </div>
     </div>

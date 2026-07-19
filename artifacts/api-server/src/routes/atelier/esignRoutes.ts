@@ -43,7 +43,12 @@ import {
   type SigRequestRow,
   type SigSignerRow,
 } from "../../lib/atelier-esign.js";
-import { DocusealError, docusealConfigured } from "../../lib/docuseal.js";
+import {
+  DocusealError,
+  docusealConfigured,
+  getSubmission,
+  submitterEmbedSrc,
+} from "../../lib/docuseal.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 
@@ -402,6 +407,92 @@ router.get("/esign/requests/:id", async (req, res) => {
   if (!row) return;
   const signerMap = await loadRequestSigners([row.id]);
   res.json({ request: requestShape(row, signerMap.get(row.id) ?? []) });
+});
+
+// Task #300 — embedded signing link for the CALLER's own pending signer
+// on an open request (the "Sign & send" in-app partner signature). The
+// link is fetched live from DocuSeal (authoritative — slugs are never
+// persisted locally), matched to the caller by signer email. Explicit
+// errors for every unavailable state; nothing is mutated here.
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.get("/esign/requests/:id/signing-link", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  if (row.status !== "sent" && row.status !== "partially_signed") {
+    res.status(409).json({
+      error: "request-not-open",
+      message: `This signature request is ${row.status} — there is nothing left to sign.`,
+    });
+    return;
+  }
+  const signerMap = await loadRequestSigners([row.id]);
+  const signers = signerMap.get(row.id) ?? [];
+  const myEmail = (me.email ?? "").trim().toLowerCase();
+  const mine = signers.find((s) => s.email.trim().toLowerCase() === myEmail);
+  if (!mine) {
+    res.status(409).json({
+      error: "no-matching-signer",
+      message: "You are not a signer on this request — it was sent to other recipients.",
+    });
+    return;
+  }
+  if (mine.status === "completed" || mine.status === "declined") {
+    res.status(409).json({
+      error: "already-signed",
+      message: `You have already ${mine.status === "completed" ? "signed" : "declined"} this document.`,
+    });
+    return;
+  }
+  if (!row.docusealSubmissionId) {
+    res.status(409).json({
+      error: "no-submission",
+      message: "This request has no DocuSeal submission attached.",
+    });
+    return;
+  }
+  try {
+    const submission = await getSubmission(Number(row.docusealSubmissionId));
+    const submitter = submission.submitters.find(
+      (s) =>
+        (mine.docusealSubmitterId && String(s.id) === mine.docusealSubmitterId) ||
+        s.email.trim().toLowerCase() === myEmail,
+    );
+    if (!submitter) {
+      res.status(502).json({
+        error: "submitter-not-found",
+        message: "DocuSeal no longer lists you as a signer on this submission.",
+      });
+      return;
+    }
+    if (submitter.status === "completed" || submitter.status === "declined") {
+      res.status(409).json({
+        error: "already-signed",
+        message: "DocuSeal reports your signature step is already finished.",
+      });
+      return;
+    }
+    const url = submitterEmbedSrc(submitter);
+    if (!url) {
+      res.status(502).json({
+        error: "signing-link-unavailable",
+        message:
+          "DocuSeal did not return an embedded signing link for your signer. Use the signature email instead.",
+      });
+      return;
+    }
+    res.json({
+      url,
+      signerId: mine.id,
+      signerStatus: submitter.status,
+      signingOrder: mine.signingOrder,
+      requestId: row.id,
+    });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
 });
 
 // @cli-skip: e-sign surfaces are UI-driven (Task #62)

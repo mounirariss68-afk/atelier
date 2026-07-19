@@ -15,3 +15,6 @@ Verified live (2026-07-17) with a full send → complete → archive cycle again
 - Completion archives signed PDF **and** a separate audit-trail PDF (audit_log_url is populated on Cloud) as category "contract".
 - **Why:** the stub test server accepts field-less templates, so only a live run catches these; keep the stub payload-shape agnostic.
 - **How to apply:** any change to template/submission payloads should be re-verified with the live probe when DOCUSEAL_API_KEY is present.
+
+## Embedded signing links (Task-era: Sign & send)
+Signing slugs/embed_src are NEVER persisted locally — always re-fetch the submission live and derive the URL via submitterEmbedSrc() (embed_src preferred, else https://docuseal.com/s/{slug}, else explicit 502). Partner-first sequential order is how DocuSeal defers the counterparty email.
