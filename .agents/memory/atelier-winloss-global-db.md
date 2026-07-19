@@ -19,7 +19,7 @@ pool's connection-level default binds `app.org_id = 'aico'` (see `rls.ts`
 only *narrows* per-request (user/role/engagement GUCs); it is not the only thing
 enforcing org isolation.
 
-**How to apply:** Task #540's spec scoped win/loss hardening to *read/edit* endpoints
+**How to apply:** The win/loss hardening spec scoped changes to *read/edit* endpoints
 only (defense-in-depth), explicitly leaving synthesis/approval on the connection-default
 path. If a future task makes this truly multi-org (more than the single `aico` tenant),
 add a cheap `opp.orgId !== me.orgId → 404` guard on the opp loads in run/approve/override

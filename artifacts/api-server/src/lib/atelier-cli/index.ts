@@ -2089,6 +2089,32 @@ export function noToolFallbackMessage(promptText: string): string {
   return "I can search accounts, list your open RAID items, draft a RAID, create accounts/opportunities, move stages, compose & send proposals, approve charters and timesheets, close RAID items, and log expenses. Tell me which one you mean — naming the entity (e.g. `opp_dewa`, `eng_acme`) helps a lot.";
 }
 
+// Continuation-gate heuristic: does a bare prompt (no `continuesTurnId`)
+// plausibly answer a pending clarification question? Answers are short,
+// single-line, and don't open with a fresh command verb. Anything else is
+// treated as a new request that supersedes the pending question.
+const COMMAND_OPENERS = new Set([
+  "add", "create", "make", "new", "show", "list", "get", "find", "search",
+  "open", "update", "edit", "change", "set", "rename", "move", "mark",
+  "delete", "remove", "archive", "merge", "assign", "log", "schedule",
+  "draft", "send", "email", "close", "approve", "reject", "override",
+  "run", "generate", "export", "pull", "give", "help", "what", "whats",
+  "who", "whos", "how", "why", "when", "where", "which", "can", "could",
+  "please", "tell",
+]);
+export function looksLikeClarificationAnswer(raw: string): boolean {
+  const p = (raw ?? "").trim();
+  if (!p) return false;
+  if (p.length > 80) return false;
+  if (/[\r\n]/.test(p)) return false;
+  const firstWord = (p.split(/\s+/)[0] ?? "")
+    .toLowerCase()
+    .replace(/[^a-z']/g, "")
+    .replace(/'/g, "");
+  if (COMMAND_OPENERS.has(firstWord)) return false;
+  return true;
+}
+
 export interface RunTurnDeps {
   persona: CliPersona;
   emit: (frame: CliFrame) => void;
@@ -2419,6 +2445,13 @@ export async function runTurn(
     // marked resolved once the continuation consumes it; otherwise the
     // restore endpoint would resurrect an already-answered question.
     let pendingSourceTurnId: string | null = null;
+    // Continuation gating — an answer submitted through the question card
+    // carries `continuesTurnId` and is ALWAYS consumed as the answer. A
+    // bare prompt while a question is pending is only consumed when it
+    // plausibly IS an answer (short, single-line, not a fresh command);
+    // otherwise the new prompt supersedes the question and runs normal
+    // orchestration, so unrelated requests are never hijacked.
+    let explicitContinuation = false;
     const rehydrateFromTurnRow = (row: {
       id: string;
       prompt: string;
@@ -2474,7 +2507,7 @@ export async function runTurn(
           contTurn.orgId === persona.orgId &&
           contTurn.status === "awaiting_clarification"
         ) {
-          rehydrateFromTurnRow(contTurn);
+          explicitContinuation = rehydrateFromTurnRow(contTurn);
         }
       }
       if (!getSessionDraft(session.id).pendingClarification && !_drRehydrate.pendingClarification) {
@@ -2513,6 +2546,23 @@ export async function runTurn(
           .orderBy(desc(atelierCliTurns.createdAt))
           .limit(1);
         if (prevTurn) pendingSourceTurnId = prevTurn.id;
+      }
+    }
+    // Apply the continuation gate: without an explicit `continuesTurnId`,
+    // only a prompt that plausibly IS an answer gets consumed. Anything
+    // else (a fresh command, a long/multi-line request) supersedes the
+    // pending question — clear it so neither the primer nor the
+    // deterministic continuation below fires, and let the newer-turn
+    // supersession rule retire the stranded question.
+    {
+      const _drGate = getSessionDraft(session.id);
+      if (
+        _drGate.pendingClarification &&
+        !explicitContinuation &&
+        !looksLikeClarificationAnswer(input.prompt ?? "")
+      ) {
+        _drGate.pendingClarification = null;
+        pendingSourceTurnId = null;
       }
     }
 
