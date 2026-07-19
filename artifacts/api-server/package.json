@@ -38,7 +38,8 @@
     "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts",
     "test:critical-roles": "tsx ./tests/critical-roles/run.ts",
     "test:exec-mapper-critical": "tsx ./tests/crm/exec-mapper-critical-roles-probe.ts",
-    "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts"
+    "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts",
+    "test:finance-entity-lifecycle": "tsx ./tests/crm/finance-entity-lifecycle-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
