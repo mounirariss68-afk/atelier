@@ -784,6 +784,110 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
   }
 });
 
+// Task #189 — founding_partner / HR edit of an employee's job title. Titles
+// are HR-controlled (deliberately excluded from /me/profile), so this is the
+// only write surface. Keeps atelier_employees.title and the linked
+// atelier_users.title in sync and writes an audit event with from/to values.
+// Employees only: contractors have no title column and partner-firm resources
+// surface their firm role instead.
+const MAX_TITLE_LEN = 120;
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.patch("/roster/people/:id/title", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isHr(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "title-edit-restricted" });
+      return;
+    }
+    const person = await getPerson(req.params.id, true);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (person.workerType !== "employee") {
+      res.status(422).json({ error: "title-edit-employees-only" });
+      return;
+    }
+    const body = req.body as { title?: unknown };
+    if (typeof body.title !== "string" || !body.title.trim()) {
+      res.status(422).json({ error: "title-required" });
+      return;
+    }
+    const title = body.title.trim();
+    if (title.length > MAX_TITLE_LEN) {
+      res.status(422).json({ error: "title-too-long", max: MAX_TITLE_LEN });
+      return;
+    }
+    const [emp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.id, person.id))
+      .limit(1);
+    if (!emp) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const fromTitle = emp.title ?? null;
+    if (fromTitle === title) {
+      res.json({ person: await getPerson(person.id, canSeeComp(me.role)) });
+      return;
+    }
+    await db
+      .update(atelierEmployees)
+      .set({ title, updatedAt: new Date() })
+      .where(eq(atelierEmployees.id, emp.id));
+    // Keep the linked login (atelier_users.title) in sync. Prefer the userId
+    // FK; fall back to an org-scoped email match for pre-link hires.
+    let syncedUserId: string | null = null;
+    if (emp.userId) {
+      const upd = await db
+        .update(atelierUsers)
+        .set({ title, updatedAt: new Date() })
+        .where(
+          and(eq(atelierUsers.id, emp.userId), eq(atelierUsers.orgId, emp.orgId)),
+        )
+        .returning({ id: atelierUsers.id });
+      syncedUserId = upd[0]?.id ?? null;
+    } else if (emp.email) {
+      const upd = await db
+        .update(atelierUsers)
+        .set({ title, updatedAt: new Date() })
+        .where(
+          and(
+            eq(atelierUsers.email, emp.email),
+            eq(atelierUsers.orgId, emp.orgId),
+            isNull(atelierUsers.deletedAt),
+          ),
+        )
+        .returning({ id: atelierUsers.id });
+      syncedUserId = upd[0]?.id ?? null;
+    }
+    assertAuditAction("roster.person.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person",
+      entityId: emp.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.fullName ?? me.id,
+      action: "roster.person.updated",
+      payload: {
+        workerType: "employee",
+        change: "title",
+        from: fromTitle,
+        to: title,
+        syncedUserId,
+      },
+      payloadSummary: `${me.fullName ?? me.id} changed ${emp.fullName}'s title from "${fromTitle ?? "—"}" to "${title}"`,
+    });
+    const updated = await getPerson(emp.id, canSeeComp(me.role));
+    res.json({ person: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Task #645 — HR / Partner edit of an employee's PUBLIC business-card contact
 // fields (cell phones + office address) that feed the offline vCard QR code.
 // Wire-format: { cellPhones: Array<{country,number}>, officeAddress?: string|null }.
@@ -890,7 +994,13 @@ router.get("/roster/people/:id", async (req, res, next) => {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
-    res.json({ person, viewerCanSeeComp: canSeeComp(me.role) });
+    res.json({
+      person,
+      viewerCanSeeComp: canSeeComp(me.role),
+      // Task #189 — drives the title-edit affordance in the roster UI;
+      // must mirror the gate on PATCH /roster/people/:id/title.
+      viewerCanEditTitle: isHr(me.role) || isFoundingPartner(me.role),
+    });
   } catch (err) {
     next(err);
   }

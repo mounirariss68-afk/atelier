@@ -69,6 +69,7 @@ export default function RosterPerson() {
 
   const [person, setPerson] = React.useState<Person | null>(null);
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
+  const [viewerCanEditTitle, setViewerCanEditTitle] = React.useState(false);
 
   React.useEffect(() => {
     if (!personId) return;
@@ -77,6 +78,7 @@ export default function RosterPerson() {
       .then((d) => {
         setPerson(d.person ?? null);
         setViewerCanSeeComp(!!d.viewerCanSeeComp);
+        setViewerCanEditTitle(!!d.viewerCanEditTitle);
       });
   }, [personId]);
 
@@ -124,7 +126,7 @@ export default function RosterPerson() {
 
       <div className="mt-6">
         {activeTab === "profile" && (
-          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} onUpdated={setPerson} />
+          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEditTitle={viewerCanEditTitle} onUpdated={setPerson} />
         )}
         {activeTab === "access" && <AccessTab personId={personId} />}
         {activeTab === "engagements" && <EngagementsTab personId={personId} />}
@@ -158,10 +160,12 @@ export default function RosterPerson() {
 function ProfileTab({
   person,
   viewerCanSeeComp,
+  viewerCanEditTitle,
   onUpdated,
 }: {
   person: Person;
   viewerCanSeeComp: boolean;
+  viewerCanEditTitle: boolean;
   onUpdated: (p: Person) => void;
 }) {
   return (
@@ -172,6 +176,11 @@ function ProfileTab({
         </h3>
         <Field label="Email" value={person.email} />
         <Field label="Role" value={person.role} />
+        {person.workerType === "employee" && viewerCanEditTitle ? (
+          <TitleEditor person={person} onUpdated={onUpdated} />
+        ) : (
+          <Field label="Title" value={person.title} />
+        )}
         <Field label="Country" value={person.country} />
         <DemographicsEditor person={person} onUpdated={onUpdated} />
         <Field label="Status" value={person.status} />
@@ -363,6 +372,101 @@ function DemographicsEditor({
           disabled={saving}
           className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-2 py-0.5 rounded disabled:opacity-50"
           data-testid="demographics-save"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Task #189 — founding_partner / HR-only inline editor for an employee's job
+ * title. Renders as a plain Field row for everyone else; a 403 from the
+ * PATCH endpoint flips the row back to read-only with a hint.
+ */
+function TitleEditor({
+  person,
+  onUpdated,
+}: {
+  person: Person;
+  onUpdated: (p: Person) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [title, setTitle] = React.useState(person.title ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setTitle(person.title ?? "");
+  }, [person.id, person.title]);
+
+  if (!editing) {
+    return (
+      <>
+        <Field label="Title" value={person.title} />
+        <button
+          onClick={() => { setError(null); setEditing(true); }}
+          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
+          data-testid="title-edit"
+        >
+          Edit title
+        </button>
+        {error && <span className="text-warn text-[10px]">{error}</span>}
+      </>
+    );
+  }
+
+  const save = async () => {
+    if (!title.trim()) { setError("Title is required."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/people/${person.id}/title`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: title.trim() }),
+      });
+      if (r.status === 403) { setError("Founding Partner / HR only."); setEditing(false); return; }
+      if (!r.ok) { setError(`Save failed (${r.status}).`); return; }
+      const d = await r.json();
+      if (d.person) onUpdated(d.person as Person);
+      setEditing(false);
+    } catch {
+      setError("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border border-border-soft rounded p-2" data-testid="title-editor">
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-text-mute">Title</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={120}
+          placeholder="e.g. Senior Consultant"
+          className="bg-bg-elevate border border-border-soft rounded px-2 py-0.5 text-text text-xs flex-1"
+          data-testid="title-input"
+        />
+      </label>
+      <div className="flex items-center justify-end gap-2">
+        {error && <span className="text-warn text-[10px] mr-auto">{error}</span>}
+        <button
+          onClick={() => { setEditing(false); setTitle(person.title ?? ""); }}
+          disabled={saving}
+          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-2 py-0.5"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-2 py-0.5 rounded disabled:opacity-50"
+          data-testid="title-save"
         >
           {saving ? "Saving…" : "Save"}
         </button>
