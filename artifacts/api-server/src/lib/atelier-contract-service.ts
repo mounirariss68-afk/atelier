@@ -474,12 +474,18 @@ export async function prepareContract(args: {
     expiryDate: args.expiryDate,
   });
   if (missingRequired.length > 0) {
+    // Task #314 — use human labels and explain that auto-fill came up empty
+    // (usually a signing entity with blank details) instead of a bare key list.
+    const schema = normalizeFieldSchema(version.fieldSchema);
+    const labels = missingRequired.map(
+      (k) => schema.find((f) => f.key === k)?.label ?? k,
+    );
     return {
       ok: false,
       code: "missing-required-fields",
-      message: `Values required for: ${missingRequired.join(", ")}`,
+      message: `Values are required for: ${labels.join(", ")}. These could not be auto-filled — check the selected signing entity's details or enter the values manually.`,
       missing: missingRequired,
-      fields: normalizeFieldSchema(version.fieldSchema),
+      fields: schema,
     };
   }
   const templateBytes = await loadContractBytes(version.blobRef);

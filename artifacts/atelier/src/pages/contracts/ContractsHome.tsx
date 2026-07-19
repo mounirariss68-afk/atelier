@@ -673,6 +673,19 @@ export function NewContractDialog(props: {
   const [signingEntityId, setSigningEntityId] = React.useState("");
   const selectedEntity = entities.find((e) => e.id === signingEntityId) ?? null;
   const entityNonUae = !!selectedEntity?.country && !isUaeCountry(selectedEntity.country);
+  // Task #314 — fields the server reported missing after a Prepare attempt.
+  const [serverMissing, setServerMissing] = React.useState<string[]>([]);
+
+  // Task #314 — mirror the server's firm auto-fill resolution so blank
+  // entity details surface as editable inputs instead of an opaque 422.
+  const firmAutoFillPreview: Record<string, string> = selectedEntity
+    ? {
+        firm_name: selectedEntity.name,
+        firm_address: selectedEntity.registeredAddress || "",
+        firm_governing_law: selectedEntity.governingLaw || "",
+        firm_jurisdiction: selectedEntity.courts || selectedEntity.jurisdiction || "",
+      }
+    : {};
 
   React.useEffect(() => {
     if (props.open) {
@@ -681,12 +694,28 @@ export function NewContractDialog(props: {
       setCpKind(props.fixedCounterparty?.kind ?? "contact");
       setCpId(props.fixedCounterparty?.id ?? "");
       setValues({});
+      setServerMissing([]);
       setSigningEntityId(seData?.defaultEntityId ?? "");
     }
   }, [props.open, props.fixedCounterparty, seData?.defaultEntityId]);
 
   const selected = templates.find((t) => t.id === templateId);
   const fields = selected?.currentVersion?.fieldSchema ?? [];
+
+  // Task #314 — required fields whose firm auto-fill source resolves to
+  // empty on the selected entity must be typed in before Prepare.
+  const emptyAutoFillRequired = fields.filter(
+    (f) =>
+      (f.role ?? "standard") === "standard" &&
+      f.required &&
+      !!f.autoFill &&
+      f.autoFill in firmAutoFillPreview &&
+      firmAutoFillPreview[f.autoFill] === "" &&
+      !(values[f.key] ?? "").trim(),
+  );
+  // firm_address has a server-side firm-profile fallback the client can't
+  // see, so it only warns; the rest mirror the server resolution exactly.
+  const blockingAutoFill = emptyAutoFillRequired.filter((f) => f.autoFill !== "firm_address");
 
   const create = useAtelierCreateContract({
     mutation: {
@@ -697,10 +726,27 @@ export function NewContractDialog(props: {
         navigate(`/contracts/${out.contract.id}`);
       },
       onError: (err: unknown) => {
-        const e = err as { response?: { data?: { message?: string; error?: string } } };
+        const e = err as {
+          response?: { data?: { message?: string; error?: string; missing?: string[] } };
+        };
+        const data = e.response?.data;
+        // Task #314 — surface missing-required-fields inline instead of an
+        // opaque toast: highlight the fields and explain what to fill in.
+        if (data?.error === "missing-required-fields" && Array.isArray(data.missing)) {
+          setServerMissing(data.missing);
+          const labels = data.missing.map(
+            (k) => fields.find((f) => f.key === k)?.label ?? k,
+          );
+          toast({
+            title: "Some required fields need a value",
+            description: `Please fill in: ${labels.join(", ")}. These couldn't be auto-filled from the CRM or the selected signing entity.`,
+            variant: "destructive",
+          });
+          return;
+        }
         toast({
           title: "Could not prepare contract",
-          description: e.response?.data?.message ?? e.response?.data?.error ?? "Unexpected error",
+          description: data?.message ?? data?.error ?? "Unexpected error",
           variant: "destructive",
         });
       },
@@ -819,45 +865,80 @@ export function NewContractDialog(props: {
               </div>
               {fields
                 .filter((f) => (f.role ?? "standard") === "standard")
-                .map((f) => (
-                  <div key={f.key}>
-                    <label className="text-[11px] text-text-faint">
-                      {f.label}
-                      {f.required ? " *" : ""}
-                      {f.autoFill && f.autoFill !== "none" ? (
-                        <span className="ml-1 text-gold/70">(auto-fills)</span>
+                .map((f) => {
+                  const isFirmAuto = !!f.autoFill && f.autoFill in firmAutoFillPreview;
+                  const firmPreview = isFirmAuto ? firmAutoFillPreview[f.autoFill!] : "";
+                  const firmAutoEmpty = isFirmAuto && firmPreview === "";
+                  const needsValue =
+                    (firmAutoEmpty && f.required && !(values[f.key] ?? "").trim()) ||
+                    (serverMissing.includes(f.key) && !(values[f.key] ?? "").trim());
+                  return (
+                    <div key={f.key}>
+                      <label className="text-[11px] text-text-faint">
+                        {f.label}
+                        {f.required ? " *" : ""}
+                        {f.autoFill && f.autoFill !== "none" && !firmAutoEmpty ? (
+                          <span className="ml-1 text-gold/70">(auto-fills)</span>
+                        ) : null}
+                      </label>
+                      {f.options && f.options.length > 0 ? (
+                        <select
+                          className={`${selectCls} w-full`}
+                          value={values[f.key] ?? ""}
+                          onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                          data-testid={`input-field-${f.key}`}
+                        >
+                          <option value="">Choose…</option>
+                          {f.options.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <Input
+                          type={f.dataType === "date" ? "date" : "text"}
+                          className={needsValue ? "border-amber-500/70" : undefined}
+                          value={
+                            values[f.key] ??
+                            (f.dataType === "date" && f.defaultHint === "today"
+                              ? new Date().toISOString().slice(0, 10)
+                              : "")
+                          }
+                          onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                          placeholder={
+                            f.dataType === "date"
+                              ? "YYYY-MM-DD"
+                              : isFirmAuto && firmPreview !== ""
+                                ? `Auto-fills: ${firmPreview}`
+                                : ""
+                          }
+                          data-testid={`input-field-${f.key}`}
+                        />
+                      )}
+                      {firmAutoEmpty && !(values[f.key] ?? "").trim() ? (
+                        <p
+                          className="text-[11px] text-amber-400 mt-0.5"
+                          data-testid={`text-autofill-missing-${f.key}`}
+                        >
+                          The selected signing entity has no value for this — enter one here
+                          {f.required ? " before preparing" : ""} or complete the entity under
+                          Settings → Firm profile.
+                        </p>
                       ) : null}
-                    </label>
-                    {f.options && f.options.length > 0 ? (
-                      <select
-                        className={`${selectCls} w-full`}
-                        value={values[f.key] ?? ""}
-                        onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
-                        data-testid={`input-field-${f.key}`}
-                      >
-                        <option value="">Choose…</option>
-                        {f.options.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Input
-                        type={f.dataType === "date" ? "date" : "text"}
-                        value={
-                          values[f.key] ??
-                          (f.dataType === "date" && f.defaultHint === "today"
-                            ? new Date().toISOString().slice(0, 10)
-                            : "")
-                        }
-                        onChange={(e) => setValues((p) => ({ ...p, [f.key]: e.target.value }))}
-                        placeholder={f.dataType === "date" ? "YYYY-MM-DD" : ""}
-                        data-testid={`input-field-${f.key}`}
-                      />
-                    )}
-                  </div>
-                ))}
+                      {!firmAutoEmpty &&
+                      serverMissing.includes(f.key) &&
+                      !(values[f.key] ?? "").trim() ? (
+                        <p
+                          className="text-[11px] text-amber-400 mt-0.5"
+                          data-testid={`text-server-missing-${f.key}`}
+                        >
+                          A value is required — it couldn’t be auto-filled.
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
               {fields.some((f) => f.role === "reference") && (
                 <p className="text-[11px] text-text-faint" data-testid="text-reference-auto">
                   Reference number{fields.filter((f) => f.role === "reference").length > 1 ? "s are" : " is"}{" "}
@@ -891,7 +972,13 @@ export function NewContractDialog(props: {
                 },
               })
             }
-            disabled={create.isPending || !templateId || !cpId.trim() || !signingEntityId}
+            disabled={
+              create.isPending ||
+              !templateId ||
+              !cpId.trim() ||
+              !signingEntityId ||
+              blockingAutoFill.length > 0
+            }
             data-testid="button-create-contract"
           >
             {create.isPending ? "Preparing…" : "Prepare contract"}
