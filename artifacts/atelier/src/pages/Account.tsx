@@ -1443,6 +1443,9 @@ interface CriticalRoleCoverageEntry {
   personName: string | null;
   title: string | null;
   confidence: "verified" | "inferred" | null;
+  // Task #208 — where the holder came from: the live CRM roster or the last
+  // Executive Mapper run (fallback when CRM titles can't support the role).
+  source?: "crm" | "run" | null;
 }
 
 function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
@@ -1509,8 +1512,9 @@ function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
         ))}
       </div>
       <p className="text-text-faint text-[11px] leading-relaxed">
-        From the last executive mapping sweep. Unfound roles stay unfilled —
-        the Mapper never stretches a junior person into a critical role.
+        From the live CRM contact roster, falling back to the last executive
+        mapping sweep. Unfound roles stay unfilled — a junior person is never
+        stretched into a critical role.
       </p>
       {sweepStale && (
         <div
@@ -2384,6 +2388,11 @@ function DecisionMakersTab({
           <div className="flex flex-wrap gap-2 mt-3">
             <MonoChip tone={DISPOSITION_TONE[selected.disposition]}>{selected.disposition}</MonoChip>
             <EntityScopeChip contact={selected} />
+            {selected.criticalRole && CRITICAL_ROLE_LABELS[selected.criticalRole] && (
+              <MonoChip tone="gold" data-testid={`chip-contact-critical-role-${selected.id}`}>
+                Covers: {CRITICAL_ROLE_LABELS[selected.criticalRole]}
+              </MonoChip>
+            )}
             {selected.buyerPersona && <MonoChip>{selected.buyerPersona}</MonoChip>}
             <MonoChip tone="gold">Influence {selected.influenceScore}/5</MonoChip>
             {selected.email && <MonoChip>{selected.email}</MonoChip>}

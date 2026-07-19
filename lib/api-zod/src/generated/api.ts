@@ -8345,6 +8345,26 @@ export const AtelierMergeAccountsResponse = zod.object({
         phone: zod.string().nullish(),
         linkedinUrl: zod.string().nullish(),
         buyerPersona: zod.string().nullish(),
+        criticalRole: zod
+          .union([
+            zod.literal("ceo"),
+            zod.literal("cfo"),
+            zod.literal("coo"),
+            zod.literal("caio"),
+            zod.literal("cto"),
+            zod.literal("cio"),
+            zod.literal("cdo"),
+            zod.literal("head_of_ai"),
+            zod.literal("cmo"),
+            zod.literal("cpo_product"),
+            zod.literal("cco_commercial"),
+            zod.literal("cpo_procurement"),
+            zod.literal("head_of_transformation"),
+            zod.literal("head_of_pmo"),
+            zod.literal("head_of_vro"),
+            zod.literal(null),
+          ])
+          .nullish(),
         entityName: zod.string().nullish(),
         entityScope: zod
           .union([
@@ -9404,6 +9424,26 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -10689,6 +10729,26 @@ export const AtelierUpdateAccountResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -11745,6 +11805,26 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -12075,6 +12155,26 @@ export const AtelierListAccountContactsResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -12372,6 +12472,26 @@ export const AtelierUpdateContactResponse = zod.object({
   phone: zod.string().nullish(),
   linkedinUrl: zod.string().nullish(),
   buyerPersona: zod.string().nullish(),
+  criticalRole: zod
+    .union([
+      zod.literal("ceo"),
+      zod.literal("cfo"),
+      zod.literal("coo"),
+      zod.literal("caio"),
+      zod.literal("cto"),
+      zod.literal("cio"),
+      zod.literal("cdo"),
+      zod.literal("head_of_ai"),
+      zod.literal("cmo"),
+      zod.literal("cpo_product"),
+      zod.literal("cco_commercial"),
+      zod.literal("cpo_procurement"),
+      zod.literal("head_of_transformation"),
+      zod.literal("head_of_pmo"),
+      zod.literal("head_of_vro"),
+      zod.literal(null),
+    ])
+    .nullish(),
   entityName: zod.string().nullish(),
   entityScope: zod
     .union([
@@ -13400,6 +13520,26 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -14461,6 +14601,26 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -15535,6 +15695,26 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -16608,6 +16788,26 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -17665,6 +17865,26 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -18731,6 +18951,26 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -19797,6 +20037,26 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -20856,6 +21116,26 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -21927,6 +22207,26 @@ export const AtelierCreateAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -22995,6 +23295,26 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -24052,6 +24372,26 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -25118,6 +25458,26 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -26185,6 +26545,26 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -27242,6 +27622,26 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -28305,6 +28705,26 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       phone: zod.string().nullish(),
       linkedinUrl: zod.string().nullish(),
       buyerPersona: zod.string().nullish(),
+      criticalRole: zod
+        .union([
+          zod.literal("ceo"),
+          zod.literal("cfo"),
+          zod.literal("coo"),
+          zod.literal("caio"),
+          zod.literal("cto"),
+          zod.literal("cio"),
+          zod.literal("cdo"),
+          zod.literal("head_of_ai"),
+          zod.literal("cmo"),
+          zod.literal("cpo_product"),
+          zod.literal("cco_commercial"),
+          zod.literal("cpo_procurement"),
+          zod.literal("head_of_transformation"),
+          zod.literal("head_of_pmo"),
+          zod.literal("head_of_vro"),
+          zod.literal(null),
+        ])
+        .nullish(),
       entityName: zod.string().nullish(),
       entityScope: zod
         .union([
@@ -29018,6 +29438,26 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   phone: zod.string().nullish(),
   linkedinUrl: zod.string().nullish(),
   buyerPersona: zod.string().nullish(),
+  criticalRole: zod
+    .union([
+      zod.literal("ceo"),
+      zod.literal("cfo"),
+      zod.literal("coo"),
+      zod.literal("caio"),
+      zod.literal("cto"),
+      zod.literal("cio"),
+      zod.literal("cdo"),
+      zod.literal("head_of_ai"),
+      zod.literal("cmo"),
+      zod.literal("cpo_product"),
+      zod.literal("cco_commercial"),
+      zod.literal("cpo_procurement"),
+      zod.literal("head_of_transformation"),
+      zod.literal("head_of_pmo"),
+      zod.literal("head_of_vro"),
+      zod.literal(null),
+    ])
+    .nullish(),
   entityName: zod.string().nullish(),
   entityScope: zod
     .union([

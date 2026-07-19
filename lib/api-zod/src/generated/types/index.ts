@@ -165,6 +165,7 @@ export * from "./atelierConciergeSearchResult";
 export * from "./atelierContact";
 export * from "./atelierContactCareerEntry";
 export * from "./atelierContactConfidence";
+export * from "./atelierContactCriticalRole";
 export * from "./atelierContactDisposition";
 export * from "./atelierContactDispositionInput";
 export * from "./atelierContactDuplicateCandidate";

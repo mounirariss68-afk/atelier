@@ -1098,6 +1098,31 @@ export const AtelierContactSeniorityProperty = {
 /**
  * @nullable
  */
+export type AtelierContactCriticalRole =
+  | (typeof AtelierContactCriticalRole)[keyof typeof AtelierContactCriticalRole]
+  | null;
+
+export const AtelierContactCriticalRole = {
+  ceo: "ceo",
+  cfo: "cfo",
+  coo: "coo",
+  caio: "caio",
+  cto: "cto",
+  cio: "cio",
+  cdo: "cdo",
+  head_of_ai: "head_of_ai",
+  cmo: "cmo",
+  cpo_product: "cpo_product",
+  cco_commercial: "cco_commercial",
+  cpo_procurement: "cpo_procurement",
+  head_of_transformation: "head_of_transformation",
+  head_of_pmo: "head_of_pmo",
+  head_of_vro: "head_of_vro",
+} as const;
+
+/**
+ * @nullable
+ */
 export type AtelierContactEntityScope =
   | (typeof AtelierContactEntityScope)[keyof typeof AtelierContactEntityScope]
   | null;
@@ -1153,6 +1178,8 @@ export interface AtelierContact {
   linkedinUrl?: string | null;
   /** @nullable */
   buyerPersona?: string | null;
+  /** @nullable */
+  criticalRole?: AtelierContactCriticalRole;
   /** @nullable */
   entityName?: string | null;
   /** @nullable */

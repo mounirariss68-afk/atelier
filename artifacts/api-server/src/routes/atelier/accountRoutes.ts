@@ -45,6 +45,10 @@ import {
 import { mergeAccounts, mergeContacts } from "../../lib/atelier-merge.js";
 import { findPersonMatch, richerPersonName } from "../../lib/atelier-agents/person-name.js";
 import {
+  classifyCriticalRole,
+  computeCriticalRoleCoverage,
+} from "../../lib/atelier-agents/critical-roles.js";
+import {
   computeAccountFinancials,
   computeAccountHealth,
   buildRelationshipTimeline,
@@ -3577,18 +3581,57 @@ router.get("/accounts/:accountId/executive-mapper/coverage", async (req, res) =>
     )
     .orderBy(desc(atelierAgentRuns.createdAt))
     .limit(1);
-  if (!run) {
-    res.json({ runId: null, runAt: null, coverage: null, droppedBySeniorityGuard: [] });
-    return;
-  }
-  const out = (run.output ?? {}) as {
+  // Task #208 — coverage no longer depends on the last run alone. The live
+  // CRM roster (which includes approved contact proposals) is re-classified
+  // with the same deterministic classifier, so coverage stays accurate as
+  // contacts are added, merged, or retitled. The stored run output remains a
+  // fallback for role holders the CRM titles alone can't support.
+  const liveContacts = await db
+    .select({
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      confidence: atelierContacts.confidence,
+    })
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.accountId, req.params.accountId),
+        isNull(atelierContacts.deletedAt),
+      ),
+    );
+  const crmCoverage = computeCriticalRoleCoverage(
+    liveContacts.map((c) => ({
+      fullName: c.fullName,
+      title: c.title ?? null,
+      confidence: (c.confidence === "verified" ? "verified" : "inferred") as
+        | "verified"
+        | "inferred",
+      criticalRole: classifyCriticalRole(c.title),
+    })),
+  );
+  const out = (run?.output ?? {}) as {
     criticalRoleCoverage?: unknown;
     droppedBySeniorityGuard?: unknown;
   };
+  const runCoverage = Array.isArray(out.criticalRoleCoverage)
+    ? (out.criticalRoleCoverage as typeof crmCoverage)
+    : null;
+  // CRM-derived entries win (fresher); unfound roles fall back to the run.
+  const coverage = crmCoverage.map((entry) => {
+    if (entry.found) return { ...entry, source: "crm" as const };
+    const fromRun = runCoverage?.find((r) => r?.role === entry.role && r.found);
+    return fromRun ? { ...fromRun, source: "run" as const } : { ...entry, source: null };
+  });
+  const anyFound = coverage.some((c) => c.found);
+  if (!run && !anyFound) {
+    // No mapper run and no classifiable CRM contacts — nothing to show yet.
+    res.json({ runId: null, runAt: null, coverage: null, droppedBySeniorityGuard: [] });
+    return;
+  }
   res.json({
-    runId: run.id,
-    runAt: run.createdAt,
-    coverage: Array.isArray(out.criticalRoleCoverage) ? out.criticalRoleCoverage : null,
+    runId: run?.id ?? null,
+    runAt: run?.createdAt ?? null,
+    coverage,
     droppedBySeniorityGuard: Array.isArray(out.droppedBySeniorityGuard)
       ? out.droppedBySeniorityGuard
       : [],
@@ -4236,6 +4279,10 @@ function toContactWire(
     phone: c.phone ?? null,
     linkedinUrl: c.linkedinUrl ?? null,
     buyerPersona: c.buyerPersona ?? null,
+    // Task #208 — derived on read from the verbatim title by the shared
+    // deterministic classifier so approved-proposal tags survive onto the
+    // contact and stay accurate whenever the title changes.
+    criticalRole: classifyCriticalRole(c.title),
     influenceScore: c.influenceScore ?? 3,
     disposition: c.disposition as
       | "champion"

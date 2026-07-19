@@ -319,10 +319,45 @@ async function main() {
         covRes.body.droppedBySeniorityGuard.length === 3,
       covRes.body?.droppedBySeniorityGuard?.length,
     );
+
+    // ---- Task #208: approving a proposal carries the tag onto the contact ----
+    const tariqProp = contactProps.find((p) => p?.toValue?.fullName === "Tariq Tech");
+    const dec = await api(
+      "POST",
+      `/accounts/${acctId}/profile-updates/${tariqProp?.id}/decision`,
+      { decision: "approve" },
+    );
+    check("approve Tariq proposal -> 200", dec.status === 200, dec.status);
+    const graph = await api("GET", `/accounts/${acctId}/contacts`);
+    const tariqContact = (graph.body?.contacts ?? []).find(
+      (c: any) => c.fullName === "Tariq Tech",
+    );
+    check(
+      "stored contact wire carries derived criticalRole=cto",
+      tariqContact?.criticalRole === "cto",
+      tariqContact,
+    );
+    const covRes2 = await api("GET", `/accounts/${acctId}/executive-mapper/coverage`);
+    const ctoEntry = (covRes2.body?.coverage ?? []).find((c: any) => c.role === "cto");
+    check(
+      "coverage cto now sourced from live CRM roster",
+      ctoEntry?.found === true &&
+        ctoEntry?.source === "crm" &&
+        ctoEntry?.personName === "Tariq Tech",
+      ctoEntry,
+    );
+    const cmoEntry = (covRes2.body?.coverage ?? []).find((c: any) => c.role === "cmo");
+    check(
+      "unapproved cmo still falls back to the run",
+      cmoEntry?.found === true && cmoEntry?.source === "run",
+      cmoEntry,
+    );
   } finally {
     try {
       await db.execute(sql`delete from atelier_agent_runs where target_id = ${acctId}`).catch(() => undefined);
       await db.execute(sql`delete from atelier_audit_events where entity_id = ${acctId}`).catch(() => undefined);
+      await db.execute(sql`delete from atelier_contact_relationships where account_id = ${acctId}`).catch(() => undefined);
+      await db.execute(sql`delete from atelier_contacts where account_id = ${acctId}`).catch(() => undefined);
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, userId));
       // Tag sweep — hook-created rows that slipped the tracked deletes.
