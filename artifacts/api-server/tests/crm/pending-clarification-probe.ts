@@ -183,26 +183,48 @@ async function main() {
     // Clean the rolled-over replacement session immediately.
     await db.delete(atelierCliSessions).where(like(atelierCliSessions.id, rolled.id));
 
-    // (c) A pending question stranded in a soft-deleted session (old-build
-    // rollover) is still restorable, and a newer turn in a DIFFERENT
-    // session does NOT supersede it. Retire the earlier awaiting turn _1
-    // first so the paused turn is the persona's newest open question.
+    // (c) Task #196 — cross-session supersession. Retire the earlier
+    // awaiting turn _1 so the stale paused turn is the persona's newest
+    // OPEN question, while the newer terminal turn _2 still exists in a
+    // DIFFERENT session. Any newer turn by the same user, in any
+    // session, supersedes an abandoned question — this is what stops
+    // old questions resurrecting after the user has moved on.
     await db
       .update(atelierCliTurns)
       .set({ status: "cancelled" })
       .where(like(atelierCliTurns.id, `clit_${runTag}_1`));
+    const r4a = await get("/cli/turns/pending-clarification");
+    check(
+      "newer turn in a DIFFERENT session supersedes → null",
+      r4a.status === 200 && r4a.json?.pending === null,
+      r4a.json,
+    );
+
+    // (c2) A pending question stranded in a soft-deleted session
+    // (old-build rollover) is still restorable when it IS the user's
+    // latest turn — genuine pause + reload must still rehydrate. Remove
+    // all newer turns first.
+    await db
+      .delete(atelierCliTurns)
+      .where(like(atelierCliTurns.id, `clit_${runTag}_1`));
+    await db
+      .delete(atelierCliTurns)
+      .where(like(atelierCliTurns.id, `clit_${runTag}_2`));
+    await db
+      .delete(atelierCliTurns)
+      .where(like(atelierCliTurns.id, `clit_${runTag}_roll`));
     await db
       .update(atelierCliSessions)
       .set({ deletedAt: new Date() })
       .where(like(atelierCliSessions.id, sessPaused));
     const r4 = await get("/cli/turns/pending-clarification");
     check(
-      "question in soft-deleted session still restorable",
+      "genuinely-paused latest question (soft-deleted session) still restorable",
       r4.status === 200 && r4.json?.pending?.turnId === `clit_${runTag}_paused`,
       r4.json,
     );
     check(
-      "newer turn in different session does not supersede",
+      "restored clarification payload intact",
       r4.json?.pending?.clarification?.field === "entityRole",
       r4.json,
     );
@@ -215,6 +237,107 @@ async function main() {
       .where(like(atelierCliTurns.id, `clit_${runTag}_paused`));
     const r5 = await get("/cli/turns/pending-clarification");
     check("stale question (>7d) expires", r5.status === 200 && r5.json?.pending === null, r5.json);
+
+    // (e) Task #196 — continuation resolution still cancels its source
+    // turn. Answer a restored card via runTurn(continuesTurnId=...) with
+    // a deterministic tool (resolve_account_by_name) — no LLM call is
+    // made because the deterministic continuation path short-circuits
+    // the model loop. Whatever the tool outcome (here: no match), the
+    // paused source turn must flip out of awaiting_clarification.
+    const { eq } = await import("drizzle-orm");
+    const { runTurn } = await import("../../src/lib/atelier-cli/index.js");
+    const sessCont = `clis_${runTag}_cont`;
+    await db.insert(atelierCliSessions).values({
+      id: sessCont,
+      orgId: "aico",
+      userId,
+      title: `${runTag} cont`,
+    });
+    const contSrcId = `clit_${runTag}_contsrc`;
+    await db.insert(atelierCliTurns).values({
+      id: contSrcId,
+      orgId: "aico",
+      sessionId: sessCont,
+      userId,
+      status: "awaiting_clarification",
+      prompt: "find that account (probe)",
+      frames: [
+        {
+          type: "needs_clarification",
+          data: {
+            step: 0,
+            tool: "resolve_account_by_name",
+            field: "query",
+            question: "Which account?",
+            partial: {},
+          },
+        },
+      ],
+    });
+    try {
+      await runTurn(
+        {
+          prompt: `no_such_account_${runTag}`,
+          continuesTurnId: contSrcId,
+          sessionId: sessCont,
+        },
+        { persona: persona as any, emit: () => {} },
+      );
+    } catch (e) {
+      check("continuation runTurn does not throw", false, e);
+    }
+    const [srcAfter] = await db
+      .select({ status: atelierCliTurns.status })
+      .from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, contSrcId));
+    check(
+      "continuation resolution cancels its source turn",
+      srcAfter?.status === "cancelled",
+      srcAfter,
+    );
+    // The answered question must not resurrect even though the
+    // continuation turn is newer activity.
+    const r6 = await get("/cli/turns/pending-clarification");
+    check("answered question does not resurrect", r6.status === 200 && r6.json?.pending === null, r6.json);
+    await db.delete(atelierCliTurns).where(eq(atelierCliTurns.sessionId, sessCont));
+
+    // (f) Task #196 — pressing Cancel on a clarification card must kill
+    // the paused question (DB + in-memory), so the next prompt is NOT
+    // hijacked as the answer and the question never re-asks.
+    const { cancelPendingWrite } = await import(
+      "../../src/lib/atelier-cli/index.js"
+    );
+    const cancelId = `clit_${runTag}_cancel`;
+    await db.insert(atelierCliTurns).values({
+      id: cancelId,
+      orgId: "aico",
+      sessionId: sessCont,
+      userId,
+      status: "awaiting_clarification",
+      prompt: "add new client masdar (probe cancel)",
+      frames: [
+        {
+          type: "needs_clarification",
+          data: {
+            step: 0,
+            tool: "prefill_from_specialist",
+            field: "entityRole",
+            question: "HQ or branch?",
+            partial: {},
+          },
+        },
+      ],
+    });
+    const cx = await cancelPendingWrite(cancelId, persona as any);
+    check("cancel resolves an awaiting_clarification turn", cx.status === "cancelled", cx);
+    const [cRow] = await db
+      .select({ status: atelierCliTurns.status })
+      .from(atelierCliTurns)
+      .where(eq(atelierCliTurns.id, cancelId));
+    check("cancelled clarification persisted", cRow?.status === "cancelled", cRow);
+    const r7 = await get("/cli/turns/pending-clarification");
+    check("cancelled question does not rehydrate", r7.status === 200 && r7.json?.pending === null, r7.json);
+    await db.delete(atelierCliTurns).where(eq(atelierCliTurns.sessionId, sessCont));
   } finally {
     await db.delete(atelierCliTurns).where(like(atelierCliTurns.id, `clit_${runTag}%`));
     await db.delete(atelierCliSessions).where(like(atelierCliSessions.id, `clis_${runTag}%`));

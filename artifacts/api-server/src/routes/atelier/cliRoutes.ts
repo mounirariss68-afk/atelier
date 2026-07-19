@@ -327,8 +327,9 @@ router.get("/cli/turns/recent", async (req, res) => {
  * already soft-deleted by an older build), so the lookup no longer
  * requires the turn to be the newest overall or its session to be live.
  * Supersession rules:
- *   - a newer turn in the SAME session supersedes the question (the
- *     conversation moved on / the answer was handled in-session);
+ *   - Task #196: any newer turn by the same user, in ANY session,
+ *     supersedes the question (the conversation moved on — abandoned
+ *     questions from older sessions must never resurrect);
  *   - answering via continuation marks the source turn resolved, which
  *     also removes it here;
  *   - questions older than 7 days expire.
@@ -366,22 +367,28 @@ router.get("/cli/turns/pending-clarification", async (req, res) => {
     res.json({ pending: null });
     return;
   }
-  // A newer turn in the same session supersedes the question. Compare
-  // with >= plus an id exclusion: Postgres keeps microsecond timestamps
-  // while the JS Date round-trips at millisecond precision, so a strict
-  // `created_at > $roundedDown` would match the row itself.
-  const [newerInSession] = await db
+  // Task #196 — any newer turn by the same user (org-scoped, ANY session)
+  // supersedes the question: once the conversation has moved on, an
+  // abandoned question must never resurrect. This is the single
+  // supersession mechanism — the continuation path additionally cancels
+  // its own source turn, but stale siblings in older sessions are
+  // handled here, so no data patch is needed for existing stuck rows.
+  // Compare with >= plus an id exclusion: Postgres keeps microsecond
+  // timestamps while the JS Date round-trips at millisecond precision,
+  // so a strict `created_at > $roundedDown` would match the row itself.
+  const [newerTurn] = await db
     .select({ id: atelierCliTurns.id })
     .from(atelierCliTurns)
     .where(
       and(
-        eq(atelierCliTurns.sessionId, row.sessionId),
+        eq(atelierCliTurns.userId, me.id),
+        eq(atelierCliTurns.orgId, me.orgId),
         gte(atelierCliTurns.createdAt, row.createdAt),
         ne(atelierCliTurns.id, row.id),
       ),
     )
     .limit(1);
-  if (newerInSession) {
+  if (newerTurn) {
     res.json({ pending: null });
     return;
   }

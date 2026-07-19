@@ -2934,6 +2934,14 @@ export async function runTurn(
         // the in-memory semantics: the pending state is consumed on
         // every outcome except a re-pause, where the NEW turn now holds
         // the (updated) question.
+        //
+        // Task #196 — we deliberately do NOT sweep sibling stale
+        // awaiting_clarification turns here. The rehydration endpoint
+        // (GET /cli/turns/pending-clarification) is the single
+        // supersession mechanism: any newer turn by the same user, in
+        // ANY session, supersedes older paused questions, so abandoned
+        // questions from earlier sessions can never resurface once the
+        // user has moved on.
         if (
           pendingSourceTurnId &&
           pendingSourceTurnId !== turnId
@@ -3963,16 +3971,37 @@ export async function cancelPendingWrite(
     .where(eq(atelierCliTurns.id, turnId))
     .limit(1);
   if (!turn || turn.userId !== persona.id) throw new Error("forbidden");
-  if (turn.status !== "awaiting_confirmation") return { status: turn.status as CliTurnStatus };
+  // Task #196 — Cancel must also kill a paused clarification question,
+  // not just a pending write. Before this, cancelling a turn stuck in
+  // `awaiting_clarification` was a no-op: the DB row stayed paused and
+  // the in-memory session draft kept pendingClarification, so the very
+  // next prompt in the same session was hijacked as the "answer" and
+  // the same question re-asked forever.
+  if (
+    turn.status !== "awaiting_confirmation" &&
+    turn.status !== "awaiting_clarification"
+  ) {
+    return { status: turn.status as CliTurnStatus };
+  }
+  const wasClarification = turn.status === "awaiting_clarification";
   await db
     .update(atelierCliTurns)
     .set({
       status: "cancelled",
+      statusMessage: wasClarification
+        ? "clarification cancelled by user"
+        : null,
       pendingWrite: null,
       finishedAt: new Date(),
       updatedAt: new Date(),
     })
     .where(eq(atelierCliTurns.id, turnId));
+  if (wasClarification) {
+    // Drop the in-memory pending question so subsequent prompts in this
+    // session go through the normal model loop instead of the
+    // deterministic continuation path.
+    getSessionDraft(turn.sessionId).pendingClarification = null;
+  }
   await db.insert(atelierAuditEvents).values([
     {
       id: rid("aud"),
