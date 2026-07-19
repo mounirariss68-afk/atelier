@@ -21,6 +21,18 @@ export {
   getAtelierGetMyProfileQueryKey,
   getAtelierGetMyProfileQueryOptions,
   useAtelierGetMyProfile,
+  // Task #327 — per-user Microsoft 365 connection + calendar
+  getAtelierGetMyMsConnectionUrl,
+  getAtelierGetMyMsConnectionQueryKey,
+  getAtelierGetMyMsConnectionQueryOptions,
+  useAtelierGetMyMsConnection,
+  getAtelierDisconnectMyMsConnectionUrl,
+  getAtelierDisconnectMyMsConnectionMutationOptions,
+  useAtelierDisconnectMyMsConnection,
+  getAtelierGetMyCalendarUrl,
+  getAtelierGetMyCalendarQueryKey,
+  getAtelierGetMyCalendarQueryOptions,
+  useAtelierGetMyCalendar,
   // Task #51 — Me lens self-service profile
   getAtelierUpdateMyProfileUrl,
   getAtelierUpdateMyProfileMutationOptions,

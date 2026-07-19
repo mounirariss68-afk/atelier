@@ -269,6 +269,73 @@ export const AtelierUpdateMyProfileResponse = zod.object({
 });
 
 /**
+ * @summary Me lens — the caller's Microsoft 365 connection status (self-scope)
+ */
+export const AtelierGetMyMsConnectionResponse = zod.object({
+  configured: zod
+    .boolean()
+    .describe("Whether the Entra app credentials are configured server-side"),
+  connected: zod.boolean(),
+  msEmail: zod.string().nullish(),
+  msDisplayName: zod.string().nullish(),
+  connectedAt: zod.string().nullish(),
+  lastSyncedAt: zod.string().nullish(),
+  lastError: zod.string().nullish(),
+});
+
+/**
+ * @summary Me lens — disconnect Microsoft 365 (deletes stored tokens)
+ */
+export const AtelierDisconnectMyMsConnectionResponse = zod.object({
+  ok: zod.boolean(),
+  disconnected: zod.boolean(),
+});
+
+/**
+ * @summary Me lens — the caller's own Microsoft 365 calendar window (self-scope)
+ */
+export const AtelierGetMyCalendarQueryParams = zod.object({
+  start: zod.date().optional(),
+  end: zod.date().optional(),
+  accountId: zod.coerce
+    .string()
+    .optional()
+    .describe("Only meetings matched to this CRM account"),
+});
+
+export const AtelierGetMyCalendarResponse = zod.object({
+  configured: zod.boolean(),
+  connected: zod.boolean(),
+  meetings: zod.array(
+    zod.object({
+      id: zod.string(),
+      subject: zod.string(),
+      start: zod.string(),
+      end: zod.string(),
+      isAllDay: zod.boolean(),
+      location: zod.string().nullish(),
+      joinUrl: zod.string().nullish(),
+      webLink: zod.string().nullish(),
+      organizerEmail: zod.string().nullish(),
+      attendees: zod.array(
+        zod.object({
+          email: zod.string(),
+          name: zod.string().nullish(),
+        }),
+      ),
+      matches: zod.array(
+        zod.object({
+          contactId: zod.string(),
+          contactName: zod.string(),
+          accountId: zod.string(),
+          accountName: zod.string(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
  * @summary Me lens — record a new ID/residency document (optional scan upload)
  */
 export const atelierCreateMyDocumentBodyTitleMax = 200;

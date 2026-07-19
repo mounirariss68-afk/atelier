@@ -2955,6 +2955,49 @@ export interface AtelierRosterPersonEditResponse {
   changes: AtelierRosterPersonFieldChange[];
 }
 
+export interface AtelierMsConnectionStatus {
+  /** Whether the Entra app credentials are configured server-side */
+  configured: boolean;
+  connected: boolean;
+  msEmail?: string | null;
+  msDisplayName?: string | null;
+  connectedAt?: string | null;
+  lastSyncedAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface AtelierCalendarMatch {
+  contactId: string;
+  contactName: string;
+  accountId: string;
+  accountName: string;
+}
+
+export type AtelierCalendarMeetingAttendeesItem = {
+  email: string;
+  name?: string | null;
+};
+
+export interface AtelierCalendarMeeting {
+  id: string;
+  subject: string;
+  start: string;
+  end: string;
+  isAllDay: boolean;
+  location?: string | null;
+  joinUrl?: string | null;
+  webLink?: string | null;
+  organizerEmail?: string | null;
+  attendees: AtelierCalendarMeetingAttendeesItem[];
+  matches: AtelierCalendarMatch[];
+}
+
+export interface AtelierCalendarResponse {
+  configured: boolean;
+  connected: boolean;
+  meetings: AtelierCalendarMeeting[];
+}
+
 export interface AtelierOkResponse {
   ok: boolean;
 }
@@ -6694,6 +6737,26 @@ export interface AtelierContractPrepareError {
   missing?: string[];
   fields?: AtelierContractTemplateField[];
 }
+
+export type AtelierDisconnectMyMsConnection200 = {
+  ok: boolean;
+  disconnected: boolean;
+};
+
+export type AtelierGetMyCalendarParams = {
+  start?: string;
+  end?: string;
+  /**
+   * Only meetings matched to this CRM account
+   */
+  accountId?: string;
+};
+
+export type AtelierGetMyCalendar502 = {
+  error: string;
+  reason: string;
+  detail?: string;
+};
 
 export type AtelierCreateMyDocumentBodyKind =
   (typeof AtelierCreateMyDocumentBodyKind)[keyof typeof AtelierCreateMyDocumentBodyKind];

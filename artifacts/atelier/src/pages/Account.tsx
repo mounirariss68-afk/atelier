@@ -104,6 +104,7 @@ import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialo
 import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
 // Task #159 — contract records linked to this account.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
+import { AccountUpcomingMeetings } from "@/components/ms/MsMeetings";
 
 type TabKey =
   | "profile"
@@ -835,6 +836,9 @@ function ProfileTab({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {/* Task #327 — the viewer's Microsoft 365 meetings matched to this
+              account's contacts (personal data — hidden unless connected). */}
+          <AccountUpcomingMeetings accountId={a.id} />
           {/* Cognirise Account Strategy */}
           <Card className="p-6 space-y-4">
             <div className="flex items-center justify-between">

@@ -1,0 +1,297 @@
+// Task #327 — per-user Microsoft 365 connection + calendar surfaces.
+//
+// Three pieces share this file because they share one data source
+// (GET /me/calendar) and one visual language:
+//   - ConnectedAccountsCard  → Me lens profile card (connect / disconnect)
+//   - MyMeetingsCard         → Home "My meetings" block (viewer's next 7 days)
+//   - AccountUpcomingMeetings→ Account page block (viewer's meetings matched
+//                              to that account's CRM contacts)
+//
+// The calendar is always the *viewer's own* — the server matches attendee
+// emails against CRM contacts the viewer is allowed to see, so no extra
+// client-side permission logic is needed here.
+import React from "react";
+import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useAtelierGetMyMsConnection,
+  useAtelierDisconnectMyMsConnection,
+  getAtelierGetMyMsConnectionQueryKey,
+  useAtelierGetMyCalendar,
+  getAtelierGetMyCalendarQueryKey,
+  type AtelierCalendarMeeting,
+} from "@workspace/api-client-react";
+import { Card, SectionLabel, PillButton, MonoChip } from "@/components/ui/primitives";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { CalendarClock, Video, MapPin, Unplug, ExternalLink } from "lucide-react";
+
+const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
+
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDay(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const same = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (same(d, today)) return "Today";
+  if (same(d, tomorrow)) return "Tomorrow";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; showMatches?: boolean }) {
+  return (
+    <div
+      className="flex items-start gap-3 py-3 border-b border-border-soft last:border-b-0"
+      data-testid={`meeting-row-${m.id}`}
+    >
+      <div className="shrink-0 w-24 text-xs font-mono text-text-faint pt-0.5">
+        <div>{fmtDay(m.start)}</div>
+        <div>{m.isAllDay ? "All day" : fmtTime(m.start)}</div>
+      </div>
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-text font-medium truncate">{m.subject || "(no subject)"}</span>
+          {m.joinUrl && (
+            <a
+              href={m.joinUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-gold hover:underline"
+              data-testid={`meeting-join-${m.id}`}
+            >
+              <Video className="w-3.5 h-3.5" /> Join
+            </a>
+          )}
+        </div>
+        {m.location && !m.joinUrl && (
+          <div className="flex items-center gap-1 text-xs text-text-mute">
+            <MapPin className="w-3 h-3" /> {m.location}
+          </div>
+        )}
+        {showMatches && m.matches.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {m.matches.map((match) => (
+              <Link
+                key={`${m.id}-${match.contactId}`}
+                href={`/clients/accounts/${match.accountId}`}
+                className="no-underline"
+              >
+                <MonoChip tone="gold" className="cursor-pointer">
+                  {match.contactName} · {match.accountName}
+                </MonoChip>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function windowIso(days: number) {
+  const start = new Date();
+  const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+/** Me lens — connect / disconnect Microsoft 365. */
+export function ConnectedAccountsCard() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: conn, isPending } = useAtelierGetMyMsConnection();
+  const disconnect = useAtelierDisconnectMyMsConnection({
+    mutation: {
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: getAtelierGetMyMsConnectionQueryKey() });
+        toast({ title: "Microsoft 365 disconnected" });
+      },
+      onError: () =>
+        toast({ title: "Could not disconnect", variant: "destructive" }),
+    },
+  });
+
+  // Surface the OAuth outcome after the callback redirects back here.
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("ms") === "connected") {
+      toast({ title: "Microsoft 365 connected" });
+      qc.invalidateQueries({ queryKey: getAtelierGetMyMsConnectionQueryKey() });
+    } else if (params.get("ms_error")) {
+      toast({
+        title: "Microsoft 365 connection failed",
+        description: params.get("ms_error") ?? undefined,
+        variant: "destructive",
+      });
+    }
+    if (params.has("ms") || params.has("ms_error")) {
+      params.delete("ms");
+      params.delete("ms_error");
+      const qs = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Card className="p-4" data-testid="me-connected-accounts-card">
+      <SectionLabel>Connected accounts</SectionLabel>
+      {isPending ? (
+        <Skeleton className="h-16 mt-3 bg-bg-elevate" />
+      ) : !conn?.configured ? (
+        <p className="text-sm text-text-mute mt-3">
+          Microsoft 365 sign-in isn't set up for this workspace yet. Ask an administrator to
+          configure the Microsoft connection.
+        </p>
+      ) : conn.connected ? (
+        <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div className="min-w-0">
+            <div className="text-sm text-text font-medium">Microsoft 365</div>
+            <div className="text-xs text-text-mute truncate" data-testid="ms-connected-email">
+              {conn.msDisplayName ? `${conn.msDisplayName} · ` : ""}
+              {conn.msEmail}
+            </div>
+            {conn.lastError && (
+              <div className="text-xs text-red-400 mt-1">
+                Connection needs attention: {conn.lastError}
+              </div>
+            )}
+          </div>
+          <PillButton
+            variant="ghost"
+            className="shrink-0"
+            onClick={() => disconnect.mutate()}
+            disabled={disconnect.isPending}
+            data-testid="button-ms-disconnect"
+          >
+            <Unplug className="w-4 h-4 mr-1" />
+            {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+          </PillButton>
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <p className="text-sm text-text-mute">
+            Connect your Microsoft 365 account to see your Outlook calendar inside the Atelier.
+          </p>
+          <PillButton
+            className="shrink-0"
+            onClick={() => {
+              window.location.href = `${API_BASE}/me/msauth/start`;
+            }}
+            data-testid="button-ms-connect"
+          >
+            <ExternalLink className="w-4 h-4 mr-1" /> Connect Microsoft 365
+          </PillButton>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/** Home — the viewer's next 7 days of meetings, CRM-matched. */
+export function MyMeetingsCard() {
+  const { data: conn } = useAtelierGetMyMsConnection();
+  const win = React.useMemo(() => windowIso(7), []);
+  const { data, isPending, error } = useAtelierGetMyCalendar(win, {
+    query: {
+      queryKey: getAtelierGetMyCalendarQueryKey(win),
+      enabled: Boolean(conn?.configured && conn?.connected),
+      retry: false,
+    },
+  });
+
+  // Nothing to show (and nothing to advertise) until MS is configured.
+  if (!conn?.configured) return null;
+
+  return (
+    <div className="space-y-4" data-testid="home-my-meetings">
+      <SectionLabel>
+        <span className="inline-flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-gold" /> My meetings
+        </span>
+      </SectionLabel>
+      <Card className="p-5">
+        {!conn.connected ? (
+          <div className="text-sm text-text-mute">
+            <Link href="/me/profile" className="text-gold hover:underline">
+              Connect Microsoft 365
+            </Link>{" "}
+            to see your upcoming meetings here.
+          </div>
+        ) : isPending ? (
+          <Skeleton className="h-24 bg-bg-elevate" />
+        ) : error ? (
+          <div className="text-sm text-text-mute">
+            Couldn't load your calendar right now.{" "}
+            <Link href="/me/profile" className="text-gold hover:underline">
+              Check your Microsoft connection
+            </Link>
+            .
+          </div>
+        ) : (data?.meetings ?? []).length === 0 ? (
+          <div className="text-sm text-text-mute font-mono">No meetings in the next 7 days.</div>
+        ) : (
+          <div>
+            {(data?.meetings ?? []).slice(0, 8).map((m) => (
+              <MeetingRow key={m.id} m={m} />
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/** Account page — the viewer's meetings matched to this account's contacts. */
+export function AccountUpcomingMeetings({ accountId }: { accountId: string }) {
+  const { data: conn } = useAtelierGetMyMsConnection();
+  const win = React.useMemo(() => windowIso(30), []);
+  const params = { ...win, accountId };
+  const { data, isPending, error } = useAtelierGetMyCalendar(params, {
+    query: {
+      queryKey: getAtelierGetMyCalendarQueryKey(params),
+      enabled: Boolean(conn?.configured && conn?.connected),
+      retry: false,
+    },
+  });
+
+  // Hidden entirely unless the viewer has a connection — this block is
+  // personal ("your meetings with this account"), not account data.
+  if (!conn?.configured || !conn.connected) return null;
+
+  return (
+    <Card className="p-6 space-y-4" data-testid="account-upcoming-meetings">
+      <SectionLabel>
+        <span className="inline-flex items-center gap-2">
+          <CalendarClock className="w-4 h-4 text-gold" /> Your upcoming meetings
+        </span>
+      </SectionLabel>
+      {error ? (
+        <p className="text-sm text-text-mute" data-testid="account-meetings-error">
+          Couldn't load your calendar right now.{" "}
+          <Link href="/me/profile" className="text-gold hover:underline">
+            Check your Microsoft connection
+          </Link>
+          .
+        </p>
+      ) : isPending ? (
+        <Skeleton className="h-16 bg-bg-elevate" />
+      ) : (data?.meetings ?? []).length === 0 ? (
+        <p className="text-sm text-text-mute font-mono">
+          No meetings with this account's contacts in the next 30 days.
+        </p>
+      ) : (
+        <div>
+          {(data?.meetings ?? []).slice(0, 6).map((m) => (
+            <MeetingRow key={m.id} m={m} showMatches={false} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}

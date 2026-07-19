@@ -11,6 +11,7 @@ import { homeSuggestionsFor } from "@/components/cli/pageContext";
 import type { CliCapability, CliLocale } from "@/components/cli/types";
 import { cn } from "@/lib/utils";
 import { isSelfOnlyRole } from "@/lib/lens";
+import { MyMeetingsCard } from "@/components/ms/MsMeetings";
 import { SALES_STAGE_LABEL } from "@/lib/sales-stages";
 
 interface ApprovalEntry {
@@ -800,7 +801,10 @@ export default function Home() {
 
         {/* PANE B & C Column */}
         <div className="space-y-12">
-          
+
+          {/* Task #327 — the viewer's Microsoft 365 meetings (next 7 days). */}
+          <MyMeetingsCard />
+
           {/* PANE B: Pipeline & Engagements */}
           <div className="space-y-6">
             <SectionLabel>At a glance</SectionLabel>

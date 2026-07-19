@@ -57,7 +57,9 @@ DECLARE
     -- risk register, goal progress). Org-scoped; per-account visibility +
     -- write gating are enforced in route logic.
     'atelier_account_actions','atelier_account_risks',
-    'atelier_account_goal_progress'
+    'atelier_account_goal_progress',
+    -- Task #327 — per-user Microsoft 365 connections (encrypted tokens).
+    'atelier_ms_connections'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their

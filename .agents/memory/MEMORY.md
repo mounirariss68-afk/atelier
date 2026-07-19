@@ -42,6 +42,7 @@
 - [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
 - [Executive Mapper agent](atelier-executive-mapper.md) — reuses Cartographer queue/guard/applier; PDL cross-check: title-keyword match (levels unreliable), C-suite-first two-pass, capped enrich attempts.
 - [Contract templates ingested](atelier-contract-templates-ingested.md) — task-agent DB data never merges; templates/signing entities re-ingested via live API on main (2026-07-19); repeat in prod before go-live.
+- [Atelier MS365 connection](atelier-ms365-connection.md) — /me/msauth callback path is the Entra redirect URI; MS_LOGIN/GRAPH_BASE_URL stub hooks; enc-secret rotation orphans tokens.
 - [Publish slot is Atelier](publish-slot-atelier.md) — only atelier+api-server get [services.production]; launch ships from a separate project (cognirise.ai) — never re-add its production block here.
 - [Stub-Anthropic agent-route tests](stub-anthropic-probe.md) — test LLM-triggering routes deterministically: local stub server + env set before app import; NODE_ENV=test needed for persona bypass.
 - [cli-catalog suite + lint ratchet](cli-catalog-suite-broken.md) — run.ts fixed (test:cli-catalog); route-coverage lint fails only NEW unannotated routes vs lint-baseline.json — annotate routes, never grow the baseline.

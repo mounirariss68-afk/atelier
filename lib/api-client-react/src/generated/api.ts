@@ -48,6 +48,7 @@ import type {
   AtelierBankChangeRequestInput,
   AtelierBriefEnvelope,
   AtelierBulkDecideProfileUpdatesInput,
+  AtelierCalendarResponse,
   AtelierCandidateDocument,
   AtelierCandidateDocumentList,
   AtelierCartographerRefreshInput,
@@ -115,6 +116,7 @@ import type {
   AtelierDeliverableVersion,
   AtelierDependentInput,
   AtelierDependentList,
+  AtelierDisconnectMyMsConnection200,
   AtelierDownloadDocumentParams,
   AtelierEditProposalSectionInput,
   AtelierEmergencyContactInput,
@@ -124,6 +126,8 @@ import type {
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
+  AtelierGetMyCalendar502,
+  AtelierGetMyCalendarParams,
   AtelierGrantDocumentAccess201,
   AtelierGrantDocumentAccessBody,
   AtelierHireCandidate,
@@ -166,6 +170,7 @@ import type {
   AtelierMergeAccountsInput,
   AtelierMergeContactResult,
   AtelierMergeContactsInput,
+  AtelierMsConnectionStatus,
   AtelierMyApprovals,
   AtelierMyOpenTasks,
   AtelierMyPay,
@@ -690,6 +695,274 @@ export const useAtelierUpdateMyProfile = <
 > => {
   return useMutation(getAtelierUpdateMyProfileMutationOptions(options));
 };
+
+/**
+ * @summary Me lens — the caller's Microsoft 365 connection status (self-scope)
+ */
+export const getAtelierGetMyMsConnectionUrl = () => {
+  return `/api/atelier/me/msconnection`;
+};
+
+export const atelierGetMyMsConnection = async (
+  options?: RequestInit,
+): Promise<AtelierMsConnectionStatus> => {
+  return customFetch<AtelierMsConnectionStatus>(
+    getAtelierGetMyMsConnectionUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetMyMsConnectionQueryKey = () => {
+  return [`/api/atelier/me/msconnection`] as const;
+};
+
+export const getAtelierGetMyMsConnectionQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyMsConnection>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyMsConnection>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetMyMsConnectionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyMsConnection>>
+  > = ({ signal }) => atelierGetMyMsConnection({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyMsConnection>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyMsConnectionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyMsConnection>>
+>;
+export type AtelierGetMyMsConnectionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's Microsoft 365 connection status (self-scope)
+ */
+
+export function useAtelierGetMyMsConnection<
+  TData = Awaited<ReturnType<typeof atelierGetMyMsConnection>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyMsConnection>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyMsConnectionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — disconnect Microsoft 365 (deletes stored tokens)
+ */
+export const getAtelierDisconnectMyMsConnectionUrl = () => {
+  return `/api/atelier/me/msconnection`;
+};
+
+export const atelierDisconnectMyMsConnection = async (
+  options?: RequestInit,
+): Promise<AtelierDisconnectMyMsConnection200> => {
+  return customFetch<AtelierDisconnectMyMsConnection200>(
+    getAtelierDisconnectMyMsConnectionUrl(),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getAtelierDisconnectMyMsConnectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["atelierDisconnectMyMsConnection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>,
+    void
+  > = () => {
+    return atelierDisconnectMyMsConnection(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDisconnectMyMsConnectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>
+>;
+
+export type AtelierDisconnectMyMsConnectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — disconnect Microsoft 365 (deletes stored tokens)
+ */
+export const useAtelierDisconnectMyMsConnection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDisconnectMyMsConnection>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(
+    getAtelierDisconnectMyMsConnectionMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Me lens — the caller's own Microsoft 365 calendar window (self-scope)
+ */
+export const getAtelierGetMyCalendarUrl = (
+  params?: AtelierGetMyCalendarParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/me/calendar?${stringifiedParams}`
+    : `/api/atelier/me/calendar`;
+};
+
+export const atelierGetMyCalendar = async (
+  params?: AtelierGetMyCalendarParams,
+  options?: RequestInit,
+): Promise<AtelierCalendarResponse> => {
+  return customFetch<AtelierCalendarResponse>(
+    getAtelierGetMyCalendarUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetMyCalendarQueryKey = (
+  params?: AtelierGetMyCalendarParams,
+) => {
+  return [`/api/atelier/me/calendar`, ...(params ? [params] : [])] as const;
+};
+
+export const getAtelierGetMyCalendarQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyCalendar>>,
+  TError = ErrorType<AtelierGetMyCalendar502>,
+>(
+  params?: AtelierGetMyCalendarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetMyCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetMyCalendarQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyCalendar>>
+  > = ({ signal }) =>
+    atelierGetMyCalendar(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyCalendar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyCalendarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyCalendar>>
+>;
+export type AtelierGetMyCalendarQueryError = ErrorType<AtelierGetMyCalendar502>;
+
+/**
+ * @summary Me lens — the caller's own Microsoft 365 calendar window (self-scope)
+ */
+
+export function useAtelierGetMyCalendar<
+  TData = Awaited<ReturnType<typeof atelierGetMyCalendar>>,
+  TError = ErrorType<AtelierGetMyCalendar502>,
+>(
+  params?: AtelierGetMyCalendarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetMyCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyCalendarQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Me lens — record a new ID/residency document (optional scan upload)

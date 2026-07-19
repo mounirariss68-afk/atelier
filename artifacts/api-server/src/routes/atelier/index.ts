@@ -70,6 +70,7 @@ import meSelfServiceRoutes from "./meSelfServiceRoutes";
 // Task #55 — performance reviews/goals + training library.
 import performanceRoutes from "./performanceRoutes";
 import meProfileRoutes from "./meProfileRoutes";
+import msAuthRoutes from "./msAuthRoutes";
 import joinerRoutes from "./joinerRoutes";
 import hireRoutes from "./hireRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
@@ -254,6 +255,9 @@ router.use(meSelfServiceRoutes);
 // Task #55 — performance reviews/goals + training library.
 router.use(performanceRoutes);
 router.use(meProfileRoutes);
+// Task #327 — per-user Microsoft 365 connection + calendar (self-scope
+// /me/msauth/*, /me/msconnection, /me/calendar — safe for every persona).
+router.use(msAuthRoutes);
 router.use(joinerRoutes);
 router.use(hireRoutes);
 // Mount agent / opportunity write routes (Task #221).

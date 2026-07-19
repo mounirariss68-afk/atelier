@@ -11,6 +11,9 @@
  * write `policy.read.restricted`.
  */
 export const V3_AUDIT_ACTIONS = {
+  // Microsoft 365 connection (Task #327) ----------------------------------
+  MS_CONNECTION_CONNECTED: "ms.connection.connected",
+  MS_CONNECTION_DISCONNECTED: "ms.connection.disconnected",
   // Roster ----------------------------------------------------------------
   ROSTER_PERSON_CREATED: "roster.person.created",
   ROSTER_PERSON_UPDATED: "roster.person.updated",

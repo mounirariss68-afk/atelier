@@ -104,6 +104,70 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfProfilePatchResponse"
+  /atelier/me/msconnection:
+    get:
+      operationId: atelierGetMyMsConnection
+      tags: [atelier]
+      summary: Me lens — the caller's Microsoft 365 connection status (self-scope)
+      responses:
+        "200":
+          description: Connection status (never contains tokens)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierMsConnectionStatus"
+    delete:
+      operationId: atelierDisconnectMyMsConnection
+      tags: [atelier]
+      summary: Me lens — disconnect Microsoft 365 (deletes stored tokens)
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, disconnected]
+                properties:
+                  ok: { type: boolean }
+                  disconnected: { type: boolean }
+  /atelier/me/calendar:
+    get:
+      operationId: atelierGetMyCalendar
+      tags: [atelier]
+      summary: Me lens — the caller's own Microsoft 365 calendar window (self-scope)
+      parameters:
+        - name: start
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: end
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: accountId
+          in: query
+          required: false
+          description: Only meetings matched to this CRM account
+          schema: { type: string }
+      responses:
+        "200":
+          description: Meetings in the window, CRM-matched where possible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierCalendarResponse"
+        "502":
+          description: Microsoft Graph unavailable or connection needs renewal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, reason]
+                properties:
+                  error: { type: string }
+                  reason: { type: string }
+                  detail: { type: string }
   /atelier/me/documents:
     post:
       operationId: atelierCreateMyDocument
@@ -7303,6 +7367,60 @@ components:
           type: array
           items: { $ref: "#/components/schemas/AtelierRosterPersonFieldChange" }
 
+    AtelierMsConnectionStatus:
+      type: object
+      required: [configured, connected]
+      properties:
+        configured:
+          type: boolean
+          description: Whether the Entra app credentials are configured server-side
+        connected: { type: boolean }
+        msEmail: { type: string, nullable: true }
+        msDisplayName: { type: string, nullable: true }
+        connectedAt: { type: string, nullable: true }
+        lastSyncedAt: { type: string, nullable: true }
+        lastError: { type: string, nullable: true }
+    AtelierCalendarMatch:
+      type: object
+      required: [contactId, contactName, accountId, accountName]
+      properties:
+        contactId: { type: string }
+        contactName: { type: string }
+        accountId: { type: string }
+        accountName: { type: string }
+    AtelierCalendarMeeting:
+      type: object
+      required: [id, subject, start, end, isAllDay, attendees, matches]
+      properties:
+        id: { type: string }
+        subject: { type: string }
+        start: { type: string }
+        end: { type: string }
+        isAllDay: { type: boolean }
+        location: { type: string, nullable: true }
+        joinUrl: { type: string, nullable: true }
+        webLink: { type: string, nullable: true }
+        organizerEmail: { type: string, nullable: true }
+        attendees:
+          type: array
+          items:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string }
+              name: { type: string, nullable: true }
+        matches:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierCalendarMatch" }
+    AtelierCalendarResponse:
+      type: object
+      required: [configured, connected, meetings]
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        meetings:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierCalendarMeeting" }
     AtelierOkResponse:
       type: object
       required: [ok]
