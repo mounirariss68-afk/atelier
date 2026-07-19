@@ -21,6 +21,8 @@ import {
   useAtelierReviewContractTemplateFields,
   useAtelierCreateContract,
   useAtelierListSigningEntities,
+  useAtelierSearchContractCounterparties,
+  getAtelierSearchContractCounterpartiesQueryKey,
   getAtelierListContractsQueryKey,
   type AtelierContract,
   type AtelierContractTemplate,
@@ -835,7 +837,10 @@ export function NewContractDialog(props: {
                 <select
                   className={`${selectCls} w-full`}
                   value={cpKind}
-                  onChange={(e) => setCpKind(e.target.value as typeof cpKind)}
+                  onChange={(e) => {
+                    setCpKind(e.target.value as typeof cpKind);
+                    setCpId("");
+                  }}
                   data-testid="select-counterparty-kind"
                 >
                   <option value="person">Team member</option>
@@ -844,17 +849,7 @@ export function NewContractDialog(props: {
                 </select>
               </div>
               <div className="col-span-2">
-                <label className="text-xs text-text-faint">Counterparty ID</label>
-                <Input
-                  value={cpId}
-                  onChange={(e) => setCpId(e.target.value)}
-                  placeholder="Paste the record id"
-                  data-testid="input-counterparty-id"
-                />
-                <p className="text-[10px] text-text-faint mt-0.5">
-                  Tip: it’s usually easier to start from the person/contact/account page,
-                  or ask the assistant to “prepare an NDA for …”.
-                </p>
+                <CounterpartyPicker key={cpKind} kind={cpKind} value={cpId} onChange={setCpId} />
               </div>
             </div>
           )}
@@ -986,6 +981,93 @@ export function NewContractDialog(props: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Task #313 — searchable counterparty picker for the "Prepare a contract"
+ * dialog. Typing searches team members / client contacts / accounts by name
+ * (or email); picking a result fills the record id. Pasting a raw record id
+ * still works: whatever is typed is used verbatim until a result is picked.
+ */
+function CounterpartyPicker(props: {
+  kind: "person" | "contact" | "account";
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [text, setText] = React.useState("");
+  const [picked, setPicked] = React.useState<{ id: string; label: string } | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const debounced = useDebounced(text, 250);
+  const searchParams = { kind: props.kind, q: debounced.trim() || undefined, limit: 20 };
+  const { data, isFetching } = useAtelierSearchContractCounterparties(searchParams, {
+    query: {
+      enabled: open && !picked,
+      queryKey: getAtelierSearchContractCounterpartiesQueryKey(searchParams),
+    },
+  });
+  const results = data?.results ?? [];
+  const kindNoun =
+    props.kind === "person" ? "team member" : props.kind === "contact" ? "client contact" : "account";
+  return (
+    <div className="relative">
+      <label className="text-xs text-text-faint">Search or paste an ID</label>
+      <Input
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setPicked(null);
+          props.onChange(e.target.value.trim());
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        placeholder={`Search for a ${kindNoun}…`}
+        data-testid="input-counterparty-search"
+      />
+      {open && !picked && (
+        <div
+          className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border bg-popover text-popover-foreground shadow-lg"
+          data-testid="list-counterparty-results"
+        >
+          {results.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-text-faint">
+              {isFetching ? "Searching…" : `No matching ${kindNoun} found.`}
+            </div>
+          ) : (
+            results.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                className="w-full text-left px-3 py-1.5 hover:bg-accent focus:bg-accent outline-none"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setPicked({ id: r.id, label: r.label });
+                  setText(r.label);
+                  props.onChange(r.id);
+                  setOpen(false);
+                }}
+                data-testid={`option-counterparty-${r.id}`}
+              >
+                <div className="text-sm text-text">{r.label}</div>
+                {r.sublabel ? (
+                  <div className="text-[11px] text-text-faint">{r.sublabel}</div>
+                ) : null}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {picked ? (
+        <p className="text-[10px] text-text-faint mt-0.5">
+          Record ID: <MonoChip data-testid="text-counterparty-id">{picked.id}</MonoChip>
+        </p>
+      ) : (
+        <p className="text-[10px] text-text-faint mt-0.5">
+          Start typing to search, or paste a record id directly.
+        </p>
+      )}
+    </div>
   );
 }
 

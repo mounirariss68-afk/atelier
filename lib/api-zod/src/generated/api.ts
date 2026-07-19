@@ -2882,6 +2882,36 @@ export const AtelierCreateContractBody = zod.object({
 });
 
 /**
+ * @summary Contracts — typeahead search for a counterparty (team member, contact or account)
+ */
+export const atelierSearchContractCounterpartiesQueryLimitDefault = 20;
+export const atelierSearchContractCounterpartiesQueryLimitMax = 50;
+
+export const AtelierSearchContractCounterpartiesQueryParams = zod.object({
+  kind: zod.enum(["person", "contact", "account"]),
+  q: zod.coerce
+    .string()
+    .optional()
+    .describe("Case-insensitive substring match on name\/email"),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(atelierSearchContractCounterpartiesQueryLimitMax)
+    .default(atelierSearchContractCounterpartiesQueryLimitDefault),
+});
+
+export const AtelierSearchContractCounterpartiesResponse = zod.object({
+  results: zod.array(
+    zod.object({
+      kind: zod.enum(["person", "contact", "account"]),
+      id: zod.string(),
+      label: zod.string(),
+      sublabel: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
  * @summary Contracts — one record incl. its document chain
  */
 export const AtelierGetContractParams = zod.object({

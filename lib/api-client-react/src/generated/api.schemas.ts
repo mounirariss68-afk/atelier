@@ -6580,6 +6580,27 @@ export interface AtelierContractCreate {
   notes?: string;
 }
 
+export type AtelierCounterpartyHitKind =
+  (typeof AtelierCounterpartyHitKind)[keyof typeof AtelierCounterpartyHitKind];
+
+export const AtelierCounterpartyHitKind = {
+  person: "person",
+  contact: "contact",
+  account: "account",
+} as const;
+
+export interface AtelierCounterpartyHit {
+  kind: AtelierCounterpartyHitKind;
+  id: string;
+  label: string;
+  /** @nullable */
+  sublabel?: string | null;
+}
+
+export interface AtelierCounterpartySearchResult {
+  results: AtelierCounterpartyHit[];
+}
+
 export type AtelierContractUpdateStatus =
   (typeof AtelierContractUpdateStatus)[keyof typeof AtelierContractUpdateStatus];
 
@@ -6862,6 +6883,28 @@ export type AtelierListContractsParams = {
    */
   counterparty?: string;
 };
+
+export type AtelierSearchContractCounterpartiesParams = {
+  kind: AtelierSearchContractCounterpartiesKind;
+  /**
+   * Case-insensitive substring match on name/email
+   */
+  q?: string;
+  /**
+   * @minimum 1
+   * @maximum 50
+   */
+  limit?: number;
+};
+
+export type AtelierSearchContractCounterpartiesKind =
+  (typeof AtelierSearchContractCounterpartiesKind)[keyof typeof AtelierSearchContractCounterpartiesKind];
+
+export const AtelierSearchContractCounterpartiesKind = {
+  person: "person",
+  contact: "contact",
+  account: "account",
+} as const;
 
 export type AtelierUploadMyPhotoBody = {
   /** JPEG/PNG/WebP, ≤8 MB */

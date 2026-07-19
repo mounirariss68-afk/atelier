@@ -81,6 +81,7 @@ import type {
   AtelierContractTemplateList,
   AtelierContractTemplateUpdate,
   AtelierContractUpdate,
+  AtelierCounterpartySearchResult,
   AtelierCountersignPricing200,
   AtelierCreateAccountActionInput,
   AtelierCreateAccountInput,
@@ -222,6 +223,7 @@ import type {
   AtelierRosterPersonEditResponse,
   AtelierRosterPersonalView,
   AtelierScoutInput,
+  AtelierSearchContractCounterpartiesParams,
   AtelierSelfDocumentList,
   AtelierSelfDocumentPatch,
   AtelierSelfGoal,
@@ -3371,6 +3373,116 @@ export const useAtelierCreateContract = <
 > => {
   return useMutation(getAtelierCreateContractMutationOptions(options));
 };
+
+/**
+ * @summary Contracts — typeahead search for a counterparty (team member, contact or account)
+ */
+export const getAtelierSearchContractCounterpartiesUrl = (
+  params: AtelierSearchContractCounterpartiesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/contracts/counterparty-search?${stringifiedParams}`
+    : `/api/atelier/contracts/counterparty-search`;
+};
+
+export const atelierSearchContractCounterparties = async (
+  params: AtelierSearchContractCounterpartiesParams,
+  options?: RequestInit,
+): Promise<AtelierCounterpartySearchResult> => {
+  return customFetch<AtelierCounterpartySearchResult>(
+    getAtelierSearchContractCounterpartiesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierSearchContractCounterpartiesQueryKey = (
+  params?: AtelierSearchContractCounterpartiesParams,
+) => {
+  return [
+    `/api/atelier/contracts/counterparty-search`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierSearchContractCounterpartiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierSearchContractCounterparties>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AtelierSearchContractCounterpartiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierSearchContractCounterparties>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierSearchContractCounterpartiesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierSearchContractCounterparties>>
+  > = ({ signal }) =>
+    atelierSearchContractCounterparties(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierSearchContractCounterparties>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierSearchContractCounterpartiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSearchContractCounterparties>>
+>;
+export type AtelierSearchContractCounterpartiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — typeahead search for a counterparty (team member, contact or account)
+ */
+
+export function useAtelierSearchContractCounterparties<
+  TData = Awaited<ReturnType<typeof atelierSearchContractCounterparties>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AtelierSearchContractCounterpartiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierSearchContractCounterparties>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierSearchContractCounterpartiesQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Contracts — one record incl. its document chain

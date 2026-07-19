@@ -30,7 +30,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import multer from "multer";
-import { and, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -920,6 +920,104 @@ router.get("/contracts", async (req, res) => {
     if (await canSeeContract(me, c)) visible.push(c);
   }
   res.json({ contracts: visible.map((c) => contractShape(c)) });
+});
+
+// Task #313 — typeahead search over team members, contacts and accounts so
+// the "Prepare a contract" dialog no longer requires pasting a raw record id.
+// NOTE: must be registered before GET /contracts/:id or Express would treat
+// "counterparty-search" as an :id. (It is — /contracts/:id is defined below.)
+// @cli-skip: contract lifecycle is UI/chat-capability-driven (Task #159)
+router.get("/contracts/counterparty-search", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureContractManager(me, res)) return;
+  const kind = typeof req.query.kind === "string" ? req.query.kind : "";
+  if (kind !== "person" && kind !== "contact" && kind !== "account") {
+    res.status(400).json({ error: "invalid-kind", message: "kind must be person, contact or account." });
+    return;
+  }
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50) : 20;
+  const pat = `%${q}%`;
+  let results: Array<{ kind: string; id: string; label: string; sublabel: string | null }> = [];
+  if (kind === "person") {
+    const conds = [eq(atelierEmployees.orgId, me.orgId)];
+    if (q) {
+      conds.push(or(ilike(atelierEmployees.fullName, pat), ilike(atelierEmployees.email, pat))!);
+    }
+    const rows = await db
+      .select({
+        id: atelierEmployees.id,
+        fullName: atelierEmployees.fullName,
+        title: atelierEmployees.title,
+        email: atelierEmployees.email,
+        employmentStatus: atelierEmployees.employmentStatus,
+      })
+      .from(atelierEmployees)
+      .where(and(...conds))
+      .orderBy(atelierEmployees.fullName)
+      .limit(limit);
+    results = rows.map((p) => ({
+      kind,
+      id: p.id,
+      label: p.fullName,
+      sublabel:
+        [p.title, p.email].filter(Boolean).join(" · ") +
+          (p.employmentStatus && p.employmentStatus !== "active" ? ` (${p.employmentStatus})` : "") ||
+        null,
+    }));
+  } else if (kind === "contact") {
+    const conds = [eq(atelierContacts.orgId, me.orgId)];
+    if (q) {
+      conds.push(or(ilike(atelierContacts.fullName, pat), ilike(atelierContacts.email, pat))!);
+    }
+    const rows = await db
+      .select({
+        id: atelierContacts.id,
+        fullName: atelierContacts.fullName,
+        title: atelierContacts.title,
+        accountName: atelierAccounts.name,
+      })
+      .from(atelierContacts)
+      .leftJoin(atelierAccounts, eq(atelierAccounts.id, atelierContacts.accountId))
+      .where(and(...conds))
+      .orderBy(atelierContacts.fullName)
+      .limit(limit);
+    results = rows.map((c) => ({
+      kind,
+      id: c.id,
+      label: c.fullName,
+      sublabel: [c.title, c.accountName].filter(Boolean).join(" · ") || null,
+    }));
+  } else {
+    const conds = [eq(atelierAccounts.orgId, me.orgId)];
+    if (q) {
+      conds.push(or(ilike(atelierAccounts.name, pat), ilike(atelierAccounts.brandName, pat))!);
+    }
+    const rows = await db
+      .select({
+        id: atelierAccounts.id,
+        name: atelierAccounts.name,
+        hqCity: atelierAccounts.hqCity,
+        country: atelierAccounts.country,
+        status: atelierAccounts.status,
+      })
+      .from(atelierAccounts)
+      .where(and(...conds))
+      .orderBy(atelierAccounts.name)
+      .limit(limit);
+    results = rows.map((a) => ({
+      kind,
+      id: a.id,
+      label: a.name,
+      sublabel:
+        [[a.hqCity, a.country].filter(Boolean).join(", "), a.status !== "active" ? `(${a.status})` : ""]
+          .filter(Boolean)
+          .join(" ") || null,
+    }));
+  }
+  res.json({ results });
 });
 
 const contractCreateBody = z.object({
