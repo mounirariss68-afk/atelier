@@ -781,11 +781,14 @@ function EntityCard(props: {
     { iso: null, d: Number.POSITIVE_INFINITY },
   );
   const leaseEnd = e.lease?.endDate ?? null;
+  const tradeLicense = e.registrations.find((r) => r.type === "trade_license") ?? null;
   return (
     <Card className="p-5 flex flex-col gap-3" data-testid={`entity-card-${e.id}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <Eyebrow>{countryLabel(e.country)} · {e.legalForm || "—"}</Eyebrow>
+          <Eyebrow>
+            {e.shortName ? `${e.shortName} · ` : ""}{countryLabel(e.country)} · {e.legalForm || "—"}
+          </Eyebrow>
           <Link href={`/finance/entities/${e.id}`} className="block group">
             <h3 className="text-base text-text mt-0.5 group-hover:text-gold transition-colors" data-testid={`text-entity-name-${e.id}`}>
               {e.legalNameEn}
@@ -803,11 +806,20 @@ function EntityCard(props: {
       </div>
 
       <div className="flex flex-wrap gap-1.5 text-xs">
+        {tradeLicense && (
+          <MonoChip tone={tradeLicense.expiresOn ? expiryTone(tradeLicense.expiresOn) : undefined}>
+            TL {tradeLicense.number}
+            {tradeLicense.expiresOn ? ` · ${expiryText(tradeLicense.expiresOn)}` : ""}
+          </MonoChip>
+        )}
         <MonoChip>{e.registrations.length} registration{e.registrations.length === 1 ? "" : "s"}</MonoChip>
-        {worst.iso && <MonoChip tone={expiryTone(worst.iso)}>license {expiryText(worst.iso)}</MonoChip>}
+        {!tradeLicense && worst.iso && <MonoChip tone={expiryTone(worst.iso)}>license {expiryText(worst.iso)}</MonoChip>}
         {leaseEnd && <MonoChip tone={expiryTone(leaseEnd)}>lease {expiryText(leaseEnd)}</MonoChip>}
         <MonoChip>{documents.length} document{documents.length === 1 ? "" : "s"}</MonoChip>
         {e.owners.length > 0 && <MonoChip>{e.owners.length} owner{e.owners.length === 1 ? "" : "s"}</MonoChip>}
+        {e.activities.length > 0 && (
+          <MonoChip>{e.activities.length} activit{e.activities.length === 1 ? "y" : "ies"}</MonoChip>
+        )}
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-2 pt-1">

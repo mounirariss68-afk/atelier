@@ -322,12 +322,14 @@ async function main() {
         detail.body.documents.some((d: any) => d.id === doc?.id),
       detail.body,
     );
-    // Task #287 — detail docs carry docKind (null until classified) + file info
+    // Task #287 — detail docs carry docKind + file info. The doc was uploaded
+    // without a kind, but the detail read lazily backfills it from the title
+    // ("Trade License …" → trade_license) so pre-existing docs tier correctly.
     const detailDoc = (detail.body?.documents ?? []).find((d: any) => d.id === doc?.id);
     check(
-      "entity detail doc carries docKind:null + fileName + mime",
+      "entity detail doc backfills docKind from title + carries fileName/mime",
       detailDoc &&
-        detailDoc.docKind === null &&
+        detailDoc.docKind === "trade_license" &&
         detailDoc.fileName === "license.txt" &&
         detailDoc.mime === "text/plain",
       detailDoc,

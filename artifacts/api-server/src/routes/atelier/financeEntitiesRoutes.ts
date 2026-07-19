@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -479,6 +479,23 @@ router.get("/finance/entities/:id", async (req, res) => {
         .where(inArray(atelierDocumentVersions.id, versionIds))
     : [];
   const versionById = new Map(versions.map((v) => [v.id, v]));
+  // Task #287 — lazy backfill: already-linked documents uploaded before the
+  // classification model get a kind inferred from title/filename (persisted),
+  // so seeded entities tier correctly without manual work. Manual overrides
+  // and AI-extraction kinds always win because we only fill nulls.
+  const kindBackfill = new Map<string, string>();
+  for (const d of docs) {
+    if (d.docKind) continue;
+    const v = d.currentVersionId ? versionById.get(d.currentVersionId) : null;
+    const inferred = inferDocKindFromTitle(d.title, v?.fileName ?? null);
+    if (inferred) kindBackfill.set(d.id, inferred);
+  }
+  for (const [docId, kind] of kindBackfill) {
+    await db
+      .update(atelierDocuments)
+      .set({ docKind: kind, updatedAt: new Date() })
+      .where(and(eq(atelierDocuments.id, docId), isNull(atelierDocuments.docKind)));
+  }
   res.json({
     entity: entityShape(row),
     documents: docs.map((d) => {
@@ -487,7 +504,7 @@ router.get("/finance/entities/:id", async (req, res) => {
         id: d.id,
         title: d.title,
         category: d.category,
-        docKind: d.docKind ?? null,
+        docKind: d.docKind ?? kindBackfill.get(d.id) ?? null,
         aiRetrieval: d.aiRetrieval,
         fileName: v?.fileName ?? null,
         mime: v?.mime ?? null,
@@ -496,6 +513,26 @@ router.get("/finance/entities/:id", async (req, res) => {
     }),
   });
 });
+
+/**
+ * Task #287 — conservative title/filename → legal-doc-kind inference used to
+ * backfill classification for documents linked before docKind existed. Only
+ * unambiguous phrases match; everything else stays unclassified (visible in
+ * the UI's Unclassified group with the manual override as the fix path).
+ */
+function inferDocKindFromTitle(title: string, fileName: string | null): string | null {
+  const t = `${title} ${fileName ?? ""}`.toLowerCase().replace(/[_-]+/g, " ");
+  if (/trade licen[cs]e/.test(t)) return "trade_license";
+  if (/establishment card/.test(t)) return "establishment_card";
+  if (/ejari/.test(t)) return "ejari_tenancy";
+  if (/memorandum of association|\bmoa\b/.test(t)) return "memorandum_of_association";
+  if (/initial approval/.test(t)) return "initial_approval";
+  if (/follow ?up|payment receipt|\breceipt\b/.test(t)) return "follow_up_receipt";
+  if (/commercial regist/.test(t)) return "commercial_register";
+  if (/chamber/.test(t)) return "chamber_membership";
+  if (/tax registration|\btrn\b|vat certificate|corporate tax/.test(t)) return "tax_registration";
+  return null;
+}
 
 // @cli-skip: partner-gated registry write; covered by REST tests
 router.post("/finance/entities", async (req, res) => {

@@ -103,11 +103,14 @@ function DocCard(props: {
   doc: LegalEntityLinkedDoc;
   canWrite: boolean;
   onKindChange: (kind: string | null) => void;
+  /** ISO expiry date for compliance docs (colored chip); null = no chip. */
+  expiresOn?: string | null;
+  muted?: boolean;
 }) {
   const d = props.doc;
   return (
     <div
-      className="rounded-md border border-border-soft p-3 flex flex-col gap-2"
+      className={`rounded-md border border-border-soft p-3 flex flex-col gap-2${props.muted ? " opacity-70" : ""}`}
       data-testid={`entity-doc-${d.id}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -128,6 +131,11 @@ function DocCard(props: {
           </div>
           {d.fileName && (
             <div className="text-[11px] text-text-faint font-mono mt-0.5 truncate">{d.fileName}</div>
+          )}
+          {props.expiresOn && (
+            <div className="mt-1">
+              <MonoChip tone={expiryTone(props.expiresOn)}>{expiryText(props.expiresOn)}</MonoChip>
+            </div>
           )}
         </div>
         <a
@@ -168,7 +176,7 @@ export default function FinanceEntityDetail() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { data: me } = useAtelierGetMe();
-  const { entity: e, documents } = useLegalEntityDetail(id);
+  const { entity: e, documents, isLoading, isError } = useLegalEntityDetail(id);
   // Used only to refresh the grid cache after edits from this page.
   useLegalEntities(true);
 
@@ -204,6 +212,7 @@ export default function FinanceEntityDetail() {
   }
 
   if (!e) {
+    const notFound = isError || (!isLoading && !e);
     return (
       <div>
         <PageHero>
@@ -211,9 +220,24 @@ export default function FinanceEntityDetail() {
           <h1 className="text-xl text-text mt-2">Legal entity</h1>
         </PageHero>
         <div className="container-atelier py-10">
-          <Card className="p-6 text-sm text-text-mute" data-testid="entity-detail-loading">
-            Loading entity…
-          </Card>
+          {notFound ? (
+            <Card className="p-6" data-testid="entity-detail-not-found">
+              <p className="text-sm text-text">Entity not found.</p>
+              <p className="text-xs text-text-mute mt-1">
+                This entity doesn't exist or you don't have access to it.
+              </p>
+              <Link
+                href="/finance/entities"
+                className="inline-block mt-3 text-xs font-mono uppercase tracking-widest text-gold hover:underline"
+              >
+                ← Back to the entity registry
+              </Link>
+            </Card>
+          ) : (
+            <Card className="p-6 text-sm text-text-mute" data-testid="entity-detail-loading">
+              Loading entity…
+            </Card>
+          )}
         </div>
       </div>
     );
@@ -224,6 +248,23 @@ export default function FinanceEntityDetail() {
     constitutional: [], compliance: [], history: [], unclassified: [],
   };
   for (const d of documents) tiers[docTier(d, hasTradeLicense)].push(d);
+
+  // Compliance docs sort by nearest expiry (docs without a matching dated
+  // registration go last). Expiry comes from the registration of the same
+  // type; Ejari tenancy uses the lease end date.
+  const docExpiry = (d: LegalEntityLinkedDoc): string | null => {
+    if (d.docKind === "ejari_tenancy") return e.lease?.endDate ?? null;
+    const reg = e.registrations.find((r) => r.type === d.docKind && r.expiresOn);
+    return reg?.expiresOn ?? null;
+  };
+  tiers.compliance.sort((a, b) => {
+    const ea = docExpiry(a);
+    const eb = docExpiry(b);
+    if (ea && eb) return ea.localeCompare(eb);
+    if (ea) return -1;
+    if (eb) return 1;
+    return a.title.localeCompare(b.title);
+  });
 
   return (
     <div>
@@ -264,6 +305,91 @@ export default function FinanceEntityDetail() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-8">
+        {/* Documents — tiered shelf: compliance first, then constitutional,
+            then a collapsed formation-history accordion. */}
+        <section data-testid="entity-documents-shelf">
+          <SectionHead headline="Documents" />
+          {documents.length === 0 ? (
+            <p className="text-sm text-text-mute mt-2">
+              No linked documents yet — link corporate/legal documents to this entity from the Document Library.
+            </p>
+          ) : (
+            <div className="space-y-6 mt-3">
+              {(tiers.compliance.length > 0 || tiers.unclassified.length > 0) && (
+                <div data-testid="doc-tier-compliance">
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-sm font-medium text-text">{TIER_META.compliance.title}</h2>
+                    <span className="text-[11px] text-text-faint">{TIER_META.compliance.blurb}</span>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                    {tiers.compliance.map((d) => (
+                      <DocCard
+                        key={d.id}
+                        doc={d}
+                        expiresOn={docExpiry(d)}
+                        canWrite={!!canWrite}
+                        onKindChange={(k) => void setDocKind(d.id, k)}
+                      />
+                    ))}
+                  </div>
+                  {tiers.unclassified.length > 0 && (
+                    <div className="mt-3" data-testid="doc-tier-unclassified">
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="text-xs font-medium text-warn uppercase tracking-widest">
+                          {TIER_META.unclassified.title}
+                        </h3>
+                        <span className="text-[11px] text-text-faint">{TIER_META.unclassified.blurb}</span>
+                      </div>
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                        {tiers.unclassified.map((d) => (
+                          <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {tiers.constitutional.length > 0 && (
+                <div data-testid="doc-tier-constitutional">
+                  <div className="flex items-baseline gap-2">
+                    <h2 className="text-sm font-medium text-text">{TIER_META.constitutional.title}</h2>
+                    <span className="text-[11px] text-text-faint">{TIER_META.constitutional.blurb}</span>
+                  </div>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                    {tiers.constitutional.map((d) => (
+                      <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {tiers.history.length > 0 && (
+                <details data-testid="doc-tier-history" className="group">
+                  <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
+                    <span className="text-sm font-medium text-text-mute group-open:text-text">
+                      {TIER_META.history.title}
+                    </span>
+                    <MonoChip>{tiers.history.length}</MonoChip>
+                    <span className="text-[11px] text-text-faint">{TIER_META.history.blurb}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-gold ml-auto group-open:hidden">
+                      Show
+                    </span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-gold ml-auto hidden group-open:inline">
+                      Hide
+                    </span>
+                  </summary>
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                    {tiers.history.map((d) => (
+                      <DocCard key={d.id} doc={d} muted canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+          )}
+        </section>
+
         {/* Registrations */}
         {e.registrations.length > 0 && (
           <section>
@@ -282,52 +408,6 @@ export default function FinanceEntityDetail() {
                 </div>
               ))}
             </div>
-          </section>
-        )}
-
-        {/* Documents — tiered shelf */}
-        <section data-testid="entity-documents-shelf">
-          <SectionHead headline="Documents" />
-          {documents.length === 0 ? (
-            <p className="text-sm text-text-mute mt-2">
-              No linked documents yet — link corporate/legal documents to this entity from the Document Library.
-            </p>
-          ) : (
-            <div className="space-y-6 mt-3">
-              {(Object.keys(TIER_META) as Tier[]).map((tier) => {
-                const docs = tiers[tier];
-                if (docs.length === 0) return null;
-                return (
-                  <div key={tier} data-testid={`doc-tier-${tier}`}>
-                    <div className="flex items-baseline gap-2">
-                      <h2 className="text-sm font-medium text-text">{TIER_META[tier].title}</h2>
-                      <span className="text-[11px] text-text-faint">{TIER_META[tier].blurb}</span>
-                    </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
-                      {docs.map((d) => (
-                        <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Activities */}
-        {e.activities.length > 0 && (
-          <section>
-            <SectionHead headline="Licensed activities" />
-            <ul className="mt-2 space-y-1">
-              {e.activities.map((a) => (
-                <li key={`${a.code}-${a.nameEn}`} className="text-sm flex items-baseline gap-2">
-                  <span className="font-mono text-xs text-gold whitespace-nowrap">{a.code}</span>
-                  <span className="text-text">{a.nameEn}</span>
-                  {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
-                </li>
-              ))}
-            </ul>
           </section>
         )}
 
@@ -391,6 +471,22 @@ export default function FinanceEntityDetail() {
             </section>
           )}
         </div>
+
+        {/* Activities */}
+        {e.activities.length > 0 && (
+          <section>
+            <SectionHead headline="Licensed activities" />
+            <ul className="mt-2 space-y-1">
+              {e.activities.map((a) => (
+                <li key={`${a.code}-${a.nameEn}`} className="text-sm flex items-baseline gap-2">
+                  <span className="font-mono text-xs text-gold whitespace-nowrap">{a.code}</span>
+                  <span className="text-text">{a.nameEn}</span>
+                  {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {e.notes && <p className="text-xs text-text-faint italic">{e.notes}</p>}
       </div>

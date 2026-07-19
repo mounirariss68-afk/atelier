@@ -160,6 +160,8 @@ export function useLegalEntities(includeArchived = false): {
 export function useLegalEntityDetail(id: string | null): {
   entity: LegalEntityRow | null;
   documents: LegalEntityLinkedDoc[];
+  isLoading: boolean;
+  isError: boolean;
 } {
   const q = useQuery<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[] }>({
     queryKey: ["atelier-v5", "legal-entity", id],
@@ -169,8 +171,15 @@ export function useLegalEntityDetail(id: string | null): {
       ),
     enabled: !!id,
     staleTime: 30_000,
+    retry: (failureCount, err) =>
+      failureCount < 2 && !(err instanceof Error && /\b404\b|not.?found/i.test(err.message)),
   });
-  return { entity: q.data?.entity ?? null, documents: q.data?.documents ?? [] };
+  return {
+    entity: q.data?.entity ?? null,
+    documents: q.data?.documents ?? [],
+    isLoading: q.isLoading,
+    isError: q.isError || !id,
+  };
 }
 
 // ============================================================
