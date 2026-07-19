@@ -79,6 +79,7 @@ export * from "./atelierAddAccountTeamMemberInput";
 export * from "./atelierAddJoinerInput";
 export * from "./atelierAddJoinerInputWorkerType";
 export * from "./atelierAddJoinerResponse";
+export * from "./atelierAddJoinerResponseWelcomeEmail";
 export * from "./atelierAdminSettings";
 export * from "./atelierAdminSettingsUpdate";
 export * from "./atelierAgentDecisionInput";

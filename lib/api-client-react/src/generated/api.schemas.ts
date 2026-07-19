@@ -3157,11 +3157,25 @@ export interface AtelierAddJoinerInput {
   startDate?: string;
 }
 
+/**
+ * Outcome of the best-effort welcome email with login details.
+ */
+export type AtelierAddJoinerResponseWelcomeEmail =
+  (typeof AtelierAddJoinerResponseWelcomeEmail)[keyof typeof AtelierAddJoinerResponseWelcomeEmail];
+
+export const AtelierAddJoinerResponseWelcomeEmail = {
+  sent: "sent",
+  failed: "failed",
+  not_configured: "not_configured",
+} as const;
+
 export interface AtelierAddJoinerResponse {
   user: AtelierPersona;
   personId: string;
   /** Shown exactly once — never persisted in plaintext. */
   tempPassword: string;
+  /** Outcome of the best-effort welcome email with login details. */
+  welcomeEmail: AtelierAddJoinerResponseWelcomeEmail;
 }
 
 export type AtelierHireRoleUrgency =

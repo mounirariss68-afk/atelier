@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierAddJoinerResponseWelcomeEmail } from "./atelierAddJoinerResponseWelcomeEmail";
 import type { AtelierPersona } from "./atelierPersona";
 
 export interface AtelierAddJoinerResponse {
@@ -12,4 +13,6 @@ export interface AtelierAddJoinerResponse {
   personId: string;
   /** Shown exactly once — never persisted in plaintext. */
   tempPassword: string;
+  /** Outcome of the best-effort welcome email with login details. */
+  welcomeEmail: AtelierAddJoinerResponseWelcomeEmail;
 }

@@ -7447,13 +7447,17 @@ components:
 
     AtelierAddJoinerResponse:
       type: object
-      required: [user, personId, tempPassword]
+      required: [user, personId, tempPassword, welcomeEmail]
       properties:
         user: { $ref: "#/components/schemas/AtelierPersona" }
         personId: { type: string }
         tempPassword:
           type: string
           description: Shown exactly once — never persisted in plaintext.
+        welcomeEmail:
+          type: string
+          enum: [sent, failed, not_configured]
+          description: Outcome of the best-effort welcome email with login details.
 
     # ---- Hiring (Task #125) ----
     AtelierHireRole:

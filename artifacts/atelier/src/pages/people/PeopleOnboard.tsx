@@ -87,7 +87,7 @@ function JoinersView() {
   const [title, setTitle] = React.useState(prefill.title);
   const [workerType, setWorkerType] = React.useState<"employee" | "contractor">("employee");
   const [startDate, setStartDate] = React.useState(prefill.start);
-  const [tempPassword, setTempPassword] = React.useState<{ email: string; password: string } | null>(null);
+  const [tempPassword, setTempPassword] = React.useState<{ email: string; password: string; welcomeEmail: "sent" | "failed" | "not_configured" } | null>(null);
 
   const linkOffer = useAtelierUpdateHireOffer({
     mutation: {
@@ -103,7 +103,7 @@ function JoinersView() {
   const addJoiner = useAtelierAddJoiner({
     mutation: {
       onSuccess: (res) => {
-        setTempPassword({ email: res.user.email, password: res.tempPassword });
+        setTempPassword({ email: res.user.email, password: res.tempPassword, welcomeEmail: res.welcomeEmail });
         setFullName(""); setEmail(""); setTitle(""); setStartDate("");
         invalidate();
         toast({ title: "Joiner added", description: `${res.user.name} can now sign in with the one-time password below.` });
@@ -181,6 +181,17 @@ function JoinersView() {
             <p className="text-xs text-text-mute">
               One-time temporary password for <span className="text-text font-medium">{tempPassword.email}</span> — shown once, never again. They must change it at first sign-in.
             </p>
+            {tempPassword.welcomeEmail === "sent" ? (
+              <p className="mt-2 text-xs text-emerald-400" data-testid="joiner-welcome-email-status">
+                Welcome email with these login details was sent to {tempPassword.email}.
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-amber-400" data-testid="joiner-welcome-email-status">
+                {tempPassword.welcomeEmail === "not_configured"
+                  ? "Welcome email not sent — email delivery isn't configured. Share the temporary password with them yourself."
+                  : "Welcome email couldn't be sent. Share the temporary password with them yourself."}
+              </p>
+            )}
             <div className="mt-2 flex items-center gap-3">
               <code className="font-mono text-sm text-gold select-all">{tempPassword.password}</code>
               <button

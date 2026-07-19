@@ -19,6 +19,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomBytes, randomUUID } from "node:crypto";
+import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email";
 import { and, desc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import {
   db,
@@ -309,6 +310,53 @@ router.post("/roster/joiners", async (req, res, next) => {
       );
     });
 
+    // Welcome email with login details — only after the transaction has
+    // committed, and strictly best-effort: a delivery failure must never
+    // fail or roll back the onboarding. The HR user sees the outcome so
+    // they can share the temporary password manually when needed.
+    // The sign-in link comes from the request Origin header, but only after
+    // strict URL parsing: we re-serialize url.origin (which can never carry
+    // quotes, paths or injected markup), and accept http(s) only. Anything
+    // malformed just drops the link — the email still explains how to sign in.
+    let signInUrl: string | null = null;
+    try {
+      const parsedOrigin = new URL(req.get("origin")?.trim() ?? "");
+      if (parsedOrigin.protocol === "https:" || parsedOrigin.protocol === "http:") {
+        signInUrl = parsedOrigin.origin;
+      }
+    } catch {
+      // No/invalid Origin (e.g. non-browser client) — omit the link.
+    }
+    const welcomeEmail = await sendJoinerWelcomeEmail({
+      fullName,
+      email,
+      tempPassword,
+      workerType,
+      signInUrl,
+    });
+    try {
+      await db.insert(atelierAuditEvents).values({
+        id: `audit_${randomUUID()}`,
+        entityType: "joiner",
+        entityId: userId,
+        actorType: "system",
+        actorId: "system",
+        actorLabel: "System",
+        action: "joiner_welcome_email",
+        // Never the password — only the delivery outcome.
+        payload: { email, workerType, status: welcomeEmail },
+        payloadSummary:
+          welcomeEmail === "sent"
+            ? `Welcome email with login details sent to ${email}`
+            : welcomeEmail === "not_configured"
+              ? `Welcome email to ${email} skipped — email delivery is not configured`
+              : `Welcome email to ${email} failed to send`,
+      });
+    } catch (err) {
+      // Audit of the email attempt is best-effort too.
+      console.error("[joiners] failed to audit welcome email attempt:", err);
+    }
+
     const [user] = await db
       .select()
       .from(atelierUsers)
@@ -319,6 +367,7 @@ router.post("/roster/joiners", async (req, res, next) => {
       user: personaToWire(user!),
       personId,
       tempPassword,
+      welcomeEmail,
     });
   } catch (err) {
     next(err);
