@@ -19,6 +19,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, isNull, or, ilike, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
 import { ensureEngAccess } from "./engagementRoutes.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
@@ -84,6 +85,11 @@ interface PersonWire {
   // enforced on write.
   cellPhones?: Array<{ country: string; number: string }>;
   officeAddress?: string | null;
+  // Task #199 — non-sensitive prefill fields for the full Edit Person form.
+  preferredName?: string | null;
+  employmentStatus?: string | null;
+  employingEntity?: string | null;
+  contractType?: string | null;
   avatarUrl?: string | null;
   notes?: string | null;
   partnerEconomicsId?: string | null;
@@ -251,6 +257,10 @@ function employeeToWire(
     endDate: r.endDate,
     employmentType: r.employmentType,
     homeOffice: r.homeOffice,
+    // Task #199 — prefill fields for the full Edit Person form.
+    preferredName: r.preferredName ?? null,
+    employmentStatus: r.employmentStatus ?? null,
+    employingEntity: r.employingEntity ?? null,
     // Task #645 — public contact fields for the business-card vCard QR.
     cellPhones: r.cellPhones ?? [],
     officeAddress: r.officeAddress ?? null,
@@ -289,6 +299,8 @@ function contractorToWire(
     startDate: r.startDate,
     endDate: r.endDate,
     vendorEntity: r.vendorEntity,
+    // Task #199 — prefill field for the full Edit Person form.
+    contractType: r.contractType ?? null,
     notes: r.notes,
     gender: r.gender ?? "unspecified",
     nationality: r.nationality ?? null,
@@ -984,6 +996,347 @@ router.patch("/roster/people/:id/contact", async (req, res, next) => {
   }
 });
 
+// -----------------------------------------------------------------
+// Task #199 — Full "Edit person" PATCH. One org-scoped endpoint accepting a
+// whitelisted set of editable fields per worker type, gated to hr / partner /
+// founding_partner (title stays hr / founding_partner-only, mirroring the
+// dedicated /title route). Sensitive comp/bank/lifecycle fields are rejected
+// explicitly, every accepted change is audited field-by-field.
+// -----------------------------------------------------------------
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const zIsoDate = z
+  .string()
+  .regex(ISO_DATE, "expected YYYY-MM-DD")
+  .refine((s) => !Number.isNaN(Date.parse(s)), "invalid date")
+  .nullable();
+const zGender = z.enum(["female", "male", "non_binary", "unspecified"]);
+const zNationality = z
+  .string()
+  .regex(/^[A-Za-z]{2}$/, "ISO alpha-2")
+  .transform((s) => s.toUpperCase())
+  .nullable();
+const zCells = z
+  .array(
+    z.object({
+      country: z.string().trim().min(1).max(60),
+      number: z.string().trim().min(3).max(40),
+    }),
+  )
+  .max(MAX_CELLS);
+const zTrimmed = (max: number) => z.string().trim().min(1).max(max);
+const zNullableTrimmed = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .transform((s) => (s.trim() ? s.trim() : null))
+    .nullable();
+
+const employeeEditSchema = z
+  .object({
+    fullName: zTrimmed(200),
+    preferredName: zNullableTrimmed(120),
+    email: z.string().trim().email().max(320),
+    personalEmail: z.string().trim().email().max(320).nullable(),
+    seniority: z.enum([
+      "analyst",
+      "consultant",
+      "senior_consultant",
+      "manager",
+      "principal",
+      "partner",
+    ]),
+    title: zTrimmed(MAX_TITLE_LEN),
+    homeOffice: zNullableTrimmed(120),
+    country: zNullableTrimmed(120),
+    employmentType: z.enum(["FTE", "fixed_term", "intern"]),
+    employmentStatus: z.enum(["active", "notice", "on_leave", "terminated"]),
+    employingEntity: zNullableTrimmed(120),
+    startDate: zIsoDate,
+    endDate: zIsoDate,
+    noticePeriodDays: z.number().int().min(0).max(365),
+    nationality: zNationality,
+    gender: zGender,
+    cellPhones: zCells,
+    officeAddress: zNullableTrimmed(500),
+  })
+  .partial()
+  .strict();
+
+const contractorEditSchema = z
+  .object({
+    fullName: zTrimmed(200),
+    email: z.string().trim().email().max(320),
+    personalEmail: z.string().trim().email().max(320).nullable(),
+    country: zNullableTrimmed(120),
+    nationality: zNationality,
+    gender: zGender,
+    vendorEntity: zNullableTrimmed(200),
+    contractType: z.enum(["T&M", "fixed_fee", "retainer"]).nullable(),
+    startDate: zIsoDate,
+    endDate: zIsoDate,
+    cellPhones: zCells,
+    officeAddress: zNullableTrimmed(500),
+  })
+  .partial()
+  .strict();
+
+const partnerResourceEditSchema = z
+  .object({
+    fullName: zTrimmed(200),
+    email: z.string().trim().email().max(320).nullable(),
+    role: zNullableTrimmed(120),
+    seniority: zNullableTrimmed(60),
+    country: zNullableTrimmed(120),
+    nationality: zNationality,
+    gender: zGender,
+    startDate: zIsoDate,
+    endDate: zIsoDate,
+    partnerFirmId: zTrimmed(80),
+  })
+  .partial()
+  .strict();
+
+// Fields that must NEVER pass through this endpoint — pay/bank data stays on
+// the finance flows, lifecycle + identity keys stay on their dedicated flows.
+const SENSITIVE_EDIT_FIELDS = new Set([
+  "iban",
+  "swift",
+  "dayRateAmount",
+  "dayRateCurrency",
+  "dayRateInternalCost",
+  "baseCompensation",
+  "baseCurrency",
+  "payrollCountry",
+  "payrollCountryCode",
+  "costToCognirisePerDay",
+  "partnerEconomicsId",
+  "paymentTermsDays",
+  "status",
+  "workerType",
+  "role", // employee RBAC role — access-managed; PFR free-text role IS allowed via its own schema
+  "userId",
+  "id",
+  "orgId",
+  "deletedAt",
+]);
+
+// Task #199 — id+name list of live partner firms for the Edit Person form's
+// partner-firm linkage dropdown. Editor-gated like the PATCH below.
+// @cli-skip: UI support read for the Edit Person form
+router.get("/roster/partner-firms", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const firms = await db
+      .select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
+      .from(atelierPartnerFirms)
+      .where(and(eq(atelierPartnerFirms.orgId, me.orgId), isNull(atelierPartnerFirms.deletedAt)));
+    firms.sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ firms });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.patch("/roster/people/:id", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const person = await getPerson(req.params.id, true);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const rawBody = (req.body ?? {}) as Record<string, unknown>;
+
+    // Explicit rejection of sensitive fields — before schema parsing so the
+    // caller gets a precise "locked" error rather than a generic unknown-key.
+    const offendingSensitive = Object.keys(rawBody).filter((k) =>
+      SENSITIVE_EDIT_FIELDS.has(k) &&
+      !(person.workerType === "partner_firm_resource" && k === "role"),
+    );
+    if (offendingSensitive.length > 0) {
+      res.status(422).json({
+        error: "field-locked",
+        fields: offendingSensitive,
+        hint: "Pay, bank and lifecycle fields are managed by their dedicated flows.",
+      });
+      return;
+    }
+
+    const schema =
+      person.workerType === "employee"
+        ? employeeEditSchema
+        : person.workerType === "contractor"
+          ? contractorEditSchema
+          : partnerResourceEditSchema;
+    const parsed = schema.safeParse(rawBody);
+    if (!parsed.success) {
+      res.status(422).json({
+        error: "invalid-body",
+        issues: parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+      });
+      return;
+    }
+    const patch = parsed.data as Record<string, unknown>;
+    if (Object.keys(patch).length === 0) {
+      res.status(400).json({ error: "no-updatable-fields" });
+      return;
+    }
+
+    // Title stays hr / founding_partner-only (Task #189 rule).
+    if ("title" in patch && !isHr(me.role) && !isFoundingPartner(me.role)) {
+      res.status(403).json({ error: "title-edit-restricted" });
+      return;
+    }
+
+    // Load the raw org-scoped row so we can diff exact from/to values.
+    const table =
+      person.workerType === "employee"
+        ? atelierEmployees
+        : person.workerType === "contractor"
+          ? atelierContractors
+          : atelierPartnerFirmResources;
+    const [row] = await db
+      .select()
+      .from(table)
+      .where(and(eq(table.id, person.id), eq(table.orgId, me.orgId)))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const raw = row as unknown as Record<string, unknown>;
+
+    // Partner-firm linkage must point at a live firm in this org.
+    if ("partnerFirmId" in patch) {
+      const [firm] = await db
+        .select({ id: atelierPartnerFirms.id })
+        .from(atelierPartnerFirms)
+        .where(
+          and(
+            eq(atelierPartnerFirms.id, String(patch.partnerFirmId)),
+            eq(atelierPartnerFirms.orgId, me.orgId),
+            isNull(atelierPartnerFirms.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!firm) {
+        res.status(422).json({ error: "partner-firm-not-found" });
+        return;
+      }
+    }
+
+    // Date sanity — the RESULTING pair must be ordered.
+    const nextStart =
+      "startDate" in patch ? (patch.startDate as string | null) : (raw.startDate as string | null);
+    const nextEnd =
+      "endDate" in patch ? (patch.endDate as string | null) : (raw.endDate as string | null);
+    if (nextStart && nextEnd && nextEnd < nextStart) {
+      res.status(422).json({ error: "end-date-before-start-date" });
+      return;
+    }
+
+    // Work-email uniqueness within the org (employees carry a unique index;
+    // enforce the same courtesy check for all worker types).
+    if ("email" in patch && patch.email && patch.email !== raw.email) {
+      const dupes = await listPersons({ workerType: "all", includeComp: false });
+      const emailLc = String(patch.email).toLowerCase();
+      if (dupes.some((p) => p.id !== person.id && (p.email ?? "").toLowerCase() === emailLc)) {
+        res.status(409).json({ error: "email-already-in-use" });
+        return;
+      }
+    }
+
+    // Diff — only persist fields whose value actually changes.
+    const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
+    const update: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      const before = raw[k] ?? null;
+      const after = v ?? null;
+      if (JSON.stringify(before) === JSON.stringify(after)) continue;
+      update[k] = v;
+      changes.push({ field: k, from: before, to: after });
+    }
+    if (changes.length === 0) {
+      res.json({ person: await getPerson(person.id, canSeeComp(me.role)), changes: [] });
+      return;
+    }
+    update.updatedAt = new Date();
+
+    if (person.workerType === "employee") {
+      await db
+        .update(atelierEmployees)
+        .set(update)
+        .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)));
+      // Keep the linked login row in sync for identity fields (mirrors the
+      // dedicated /title route's sync behaviour).
+      const emp = raw as unknown as typeof atelierEmployees.$inferSelect;
+      const userSync: Record<string, unknown> = {};
+      if ("title" in update) userSync.title = update.title;
+      if ("fullName" in update) userSync.name = update.fullName;
+      if (Object.keys(userSync).length > 0 && emp.userId) {
+        userSync.updatedAt = new Date();
+        await db
+          .update(atelierUsers)
+          .set(userSync)
+          .where(and(eq(atelierUsers.id, emp.userId), eq(atelierUsers.orgId, emp.orgId)));
+      }
+    } else if (person.workerType === "contractor") {
+      await db
+        .update(atelierContractors)
+        .set(update)
+        .where(and(eq(atelierContractors.id, person.id), eq(atelierContractors.orgId, me.orgId)));
+    } else {
+      await db
+        .update(atelierPartnerFirmResources)
+        .set(update)
+        .where(
+          and(
+            eq(atelierPartnerFirmResources.id, person.id),
+            eq(atelierPartnerFirmResources.orgId, me.orgId),
+          ),
+        );
+    }
+
+    assertAuditAction("roster.person.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person",
+      entityId: person.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name ?? me.id,
+      action: "roster.person.updated",
+      payload: {
+        workerType: person.workerType,
+        change: "profile",
+        changes,
+      },
+      payloadSummary: `${me.name ?? me.id} edited ${person.fullName}'s profile (${changes
+        .map((c) => c.field)
+        .join(", ")})`,
+    });
+    const updated = await getPerson(person.id, canSeeComp(me.role));
+    res.json({ person: updated, changes });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/roster/people/:id", async (req, res, next) => {
   try {
@@ -1000,6 +1353,9 @@ router.get("/roster/people/:id", async (req, res, next) => {
       // Task #189 — drives the title-edit affordance in the roster UI;
       // must mirror the gate on PATCH /roster/people/:id/title.
       viewerCanEditTitle: isHr(me.role) || isFoundingPartner(me.role),
+      // Task #199 — drives the full Edit Person affordance; must mirror the
+      // gate on PATCH /roster/people/:id.
+      viewerCanEdit: isHr(me.role) || isPartner(me.role) || isFoundingPartner(me.role),
     });
   } catch (err) {
     next(err);

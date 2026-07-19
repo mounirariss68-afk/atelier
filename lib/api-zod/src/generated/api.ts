@@ -2312,6 +2312,175 @@ export const AtelierDeleteMyEmergencyContactResponse = zod.object({
 });
 
 /**
+ * Updates a whitelisted set of editable person fields per worker type.
+Pay, bank (IBAN/SWIFT), day-rate and lifecycle fields are rejected —
+they stay locked to their dedicated flows. Job title stays
+hr / founding_partner-only. Every accepted change is audited
+field-by-field under `roster.person.updated`.
+
+ * @summary Roster — full Edit Person (HR / Partner / Founding Partner)
+ */
+export const AtelierUpdateRosterPersonParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateRosterPersonBodyFullNameMax = 200;
+
+export const atelierUpdateRosterPersonBodyPreferredNameMax = 120;
+
+export const atelierUpdateRosterPersonBodyEmailMax = 320;
+
+export const atelierUpdateRosterPersonBodyPersonalEmailMax = 320;
+
+export const atelierUpdateRosterPersonBodySeniorityMax = 60;
+
+export const atelierUpdateRosterPersonBodyTitleMax = 120;
+
+export const atelierUpdateRosterPersonBodyRoleMax = 120;
+
+export const atelierUpdateRosterPersonBodyHomeOfficeMax = 120;
+
+export const atelierUpdateRosterPersonBodyCountryMax = 120;
+
+export const atelierUpdateRosterPersonBodyEmployingEntityMax = 120;
+
+export const atelierUpdateRosterPersonBodyVendorEntityMax = 200;
+
+export const atelierUpdateRosterPersonBodyPartnerFirmIdMax = 80;
+
+export const atelierUpdateRosterPersonBodyNoticePeriodDaysMin = 0;
+export const atelierUpdateRosterPersonBodyNoticePeriodDaysMax = 365;
+
+export const atelierUpdateRosterPersonBodyNationalityMax = 2;
+
+export const atelierUpdateRosterPersonBodyCellPhonesItemCountryMax = 60;
+
+export const atelierUpdateRosterPersonBodyCellPhonesItemNumberMin = 3;
+export const atelierUpdateRosterPersonBodyCellPhonesItemNumberMax = 40;
+
+export const atelierUpdateRosterPersonBodyCellPhonesMax = 3;
+
+export const atelierUpdateRosterPersonBodyOfficeAddressMax = 500;
+
+export const AtelierUpdateRosterPersonBody = zod
+  .object({
+    fullName: zod
+      .string()
+      .min(1)
+      .max(atelierUpdateRosterPersonBodyFullNameMax)
+      .optional(),
+    preferredName: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyPreferredNameMax)
+      .nullish(),
+    email: zod.string().max(atelierUpdateRosterPersonBodyEmailMax).nullish(),
+    personalEmail: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyPersonalEmailMax)
+      .nullish(),
+    seniority: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodySeniorityMax)
+      .nullish(),
+    title: zod
+      .string()
+      .min(1)
+      .max(atelierUpdateRosterPersonBodyTitleMax)
+      .optional(),
+    role: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyRoleMax)
+      .nullish()
+      .describe("Partner-firm resources only (free-text role)"),
+    homeOffice: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyHomeOfficeMax)
+      .nullish(),
+    country: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyCountryMax)
+      .nullish(),
+    employmentType: zod.enum(["FTE", "fixed_term", "intern"]).optional(),
+    employmentStatus: zod
+      .enum(["active", "notice", "on_leave", "terminated"])
+      .optional(),
+    employingEntity: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyEmployingEntityMax)
+      .nullish(),
+    contractType: zod
+      .union([
+        zod.literal("T&M"),
+        zod.literal("fixed_fee"),
+        zod.literal("retainer"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    vendorEntity: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyVendorEntityMax)
+      .nullish(),
+    partnerFirmId: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyPartnerFirmIdMax)
+      .optional(),
+    startDate: zod.string().nullish(),
+    endDate: zod.string().nullish(),
+    noticePeriodDays: zod
+      .number()
+      .min(atelierUpdateRosterPersonBodyNoticePeriodDaysMin)
+      .max(atelierUpdateRosterPersonBodyNoticePeriodDaysMax)
+      .optional(),
+    nationality: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyNationalityMax)
+      .nullish(),
+    gender: zod
+      .enum(["female", "male", "non_binary", "unspecified"])
+      .optional(),
+    cellPhones: zod
+      .array(
+        zod.object({
+          country: zod
+            .string()
+            .min(1)
+            .max(atelierUpdateRosterPersonBodyCellPhonesItemCountryMax),
+          number: zod
+            .string()
+            .min(atelierUpdateRosterPersonBodyCellPhonesItemNumberMin)
+            .max(atelierUpdateRosterPersonBodyCellPhonesItemNumberMax),
+        }),
+      )
+      .max(atelierUpdateRosterPersonBodyCellPhonesMax)
+      .optional(),
+    officeAddress: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyOfficeAddressMax)
+      .nullish(),
+  })
+  .describe(
+    "Whitelisted editable fields. Which keys are accepted depends on the\nperson's worker type; the server rejects keys that don't apply and\nexplicitly refuses pay\/bank\/lifecycle fields.\n",
+  );
+
+export const AtelierUpdateRosterPersonResponse = zod.object({
+  person: zod
+    .object({
+      id: zod.string(),
+      workerType: zod.string(),
+      fullName: zod.string(),
+      status: zod.string(),
+    })
+    .describe("Updated PersonWire (comp fields only for comp viewers)"),
+  changes: zod.array(
+    zod.object({
+      field: zod.string(),
+      from: zod.unknown().optional(),
+      to: zod.unknown().optional(),
+    }),
+  ),
+});
+
+/**
  * @summary HR — personal-data view (dependents, emergency contacts, contact fields)
  */
 export const AtelierGetRosterPersonPersonalParams = zod.object({

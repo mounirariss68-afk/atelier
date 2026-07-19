@@ -1033,6 +1033,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/roster/people/{id}:
+    patch:
+      operationId: atelierUpdateRosterPerson
+      tags: [atelier]
+      summary: Roster — full Edit Person (HR / Partner / Founding Partner)
+      description: |
+        Updates a whitelisted set of editable person fields per worker type.
+        Pay, bank (IBAN/SWIFT), day-rate and lifecycle fields are rejected —
+        they stay locked to their dedicated flows. Job title stays
+        hr / founding_partner-only. Every accepted change is audited
+        field-by-field under `roster.person.updated`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierRosterPersonEdit"
+      responses:
+        "200":
+          description: Updated person + field-level change list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierRosterPersonEditResponse"
   /atelier/roster/people/{id}/personal:
     get:
       operationId: atelierGetRosterPersonPersonal
@@ -7157,6 +7186,67 @@ components:
         emergencyContacts:
           type: array
           items: { $ref: "#/components/schemas/AtelierEmergencyContact" }
+
+    # ---- Task #199 — full Edit Person form ----
+    AtelierRosterPersonEdit:
+      type: object
+      additionalProperties: false
+      description: |
+        Whitelisted editable fields. Which keys are accepted depends on the
+        person's worker type; the server rejects keys that don't apply and
+        explicitly refuses pay/bank/lifecycle fields.
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 200 }
+        preferredName: { type: ["string", "null"], maxLength: 120 }
+        email: { type: ["string", "null"], maxLength: 320 }
+        personalEmail: { type: ["string", "null"], maxLength: 320 }
+        seniority: { type: ["string", "null"], maxLength: 60 }
+        title: { type: string, minLength: 1, maxLength: 120 }
+        role: { type: ["string", "null"], maxLength: 120, description: "Partner-firm resources only (free-text role)" }
+        homeOffice: { type: ["string", "null"], maxLength: 120 }
+        country: { type: ["string", "null"], maxLength: 120 }
+        employmentType: { type: string, enum: [FTE, fixed_term, intern] }
+        employmentStatus: { type: string, enum: [active, notice, on_leave, terminated] }
+        employingEntity: { type: ["string", "null"], maxLength: 120 }
+        contractType: { type: ["string", "null"], enum: ["T&M", fixed_fee, retainer, null] }
+        vendorEntity: { type: ["string", "null"], maxLength: 200 }
+        partnerFirmId: { type: string, maxLength: 80 }
+        startDate: { type: ["string", "null"] }
+        endDate: { type: ["string", "null"] }
+        noticePeriodDays: { type: integer, minimum: 0, maximum: 365 }
+        nationality: { type: ["string", "null"], maxLength: 2 }
+        gender: { type: string, enum: [female, male, non_binary, unspecified] }
+        cellPhones:
+          type: array
+          maxItems: 3
+          items: { $ref: "#/components/schemas/AtelierCellPhone" }
+        officeAddress: { type: ["string", "null"], maxLength: 500 }
+
+    AtelierRosterPersonFieldChange:
+      type: object
+      required: [field]
+      properties:
+        field: { type: string }
+        from: {}
+        to: {}
+
+    AtelierRosterPersonEditResponse:
+      type: object
+      required: [person, changes]
+      properties:
+        person:
+          type: object
+          description: Updated PersonWire (comp fields only for comp viewers)
+          required: [id, workerType, fullName, status]
+          additionalProperties: true
+          properties:
+            id: { type: string }
+            workerType: { type: string }
+            fullName: { type: string }
+            status: { type: string }
+        changes:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierRosterPersonFieldChange" }
 
     AtelierOkResponse:
       type: object

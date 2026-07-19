@@ -2770,6 +2770,164 @@ export interface AtelierRosterPersonalView {
   emergencyContacts: AtelierEmergencyContact[];
 }
 
+export type AtelierRosterPersonEditEmploymentType =
+  (typeof AtelierRosterPersonEditEmploymentType)[keyof typeof AtelierRosterPersonEditEmploymentType];
+
+export const AtelierRosterPersonEditEmploymentType = {
+  FTE: "FTE",
+  fixed_term: "fixed_term",
+  intern: "intern",
+} as const;
+
+export type AtelierRosterPersonEditEmploymentStatus =
+  (typeof AtelierRosterPersonEditEmploymentStatus)[keyof typeof AtelierRosterPersonEditEmploymentStatus];
+
+export const AtelierRosterPersonEditEmploymentStatus = {
+  active: "active",
+  notice: "notice",
+  on_leave: "on_leave",
+  terminated: "terminated",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierRosterPersonEditContractType =
+  | (typeof AtelierRosterPersonEditContractType)[keyof typeof AtelierRosterPersonEditContractType]
+  | null;
+
+export const AtelierRosterPersonEditContractType = {
+  "T&M": "T&M",
+  fixed_fee: "fixed_fee",
+  retainer: "retainer",
+} as const;
+
+export type AtelierRosterPersonEditGender =
+  (typeof AtelierRosterPersonEditGender)[keyof typeof AtelierRosterPersonEditGender];
+
+export const AtelierRosterPersonEditGender = {
+  female: "female",
+  male: "male",
+  non_binary: "non_binary",
+  unspecified: "unspecified",
+} as const;
+
+/**
+ * Whitelisted editable fields. Which keys are accepted depends on the
+person's worker type; the server rejects keys that don't apply and
+explicitly refuses pay/bank/lifecycle fields.
+
+ */
+export interface AtelierRosterPersonEdit {
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  fullName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
+  /**
+   * @maxLength 320
+   * @nullable
+   */
+  email?: string | null;
+  /**
+   * @maxLength 320
+   * @nullable
+   */
+  personalEmail?: string | null;
+  /**
+   * @maxLength 60
+   * @nullable
+   */
+  seniority?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  title?: string;
+  /**
+   * Partner-firm resources only (free-text role)
+   * @maxLength 120
+   * @nullable
+   */
+  role?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  homeOffice?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  country?: string | null;
+  employmentType?: AtelierRosterPersonEditEmploymentType;
+  employmentStatus?: AtelierRosterPersonEditEmploymentStatus;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  employingEntity?: string | null;
+  /** @nullable */
+  contractType?: AtelierRosterPersonEditContractType;
+  /**
+   * @maxLength 200
+   * @nullable
+   */
+  vendorEntity?: string | null;
+  /** @maxLength 80 */
+  partnerFirmId?: string;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  /**
+   * @minimum 0
+   * @maximum 365
+   */
+  noticePeriodDays?: number;
+  /**
+   * @maxLength 2
+   * @nullable
+   */
+  nationality?: string | null;
+  gender?: AtelierRosterPersonEditGender;
+  /** @maxItems 3 */
+  cellPhones?: AtelierCellPhone[];
+  /**
+   * @maxLength 500
+   * @nullable
+   */
+  officeAddress?: string | null;
+}
+
+export interface AtelierRosterPersonFieldChange {
+  field: string;
+  from?: unknown;
+  to?: unknown;
+}
+
+/**
+ * Updated PersonWire (comp fields only for comp viewers)
+ */
+export type AtelierRosterPersonEditResponsePerson = {
+  id: string;
+  workerType: string;
+  fullName: string;
+  status: string;
+  [key: string]: unknown;
+};
+
+export interface AtelierRosterPersonEditResponse {
+  /** Updated PersonWire (comp fields only for comp viewers) */
+  person: AtelierRosterPersonEditResponsePerson;
+  changes: AtelierRosterPersonFieldChange[];
+}
+
 export interface AtelierOkResponse {
   ok: boolean;
 }

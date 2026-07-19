@@ -76,6 +76,10 @@ export {
   getAtelierDeleteMyDependentUrl,
   getAtelierDeleteMyDependentMutationOptions,
   useAtelierDeleteMyDependent,
+  // Task #199 — full Edit Person form (roster)
+  getAtelierUpdateRosterPersonUrl,
+  getAtelierUpdateRosterPersonMutationOptions,
+  useAtelierUpdateRosterPerson,
   getAtelierListMyEmergencyContactsUrl,
   getAtelierListMyEmergencyContactsQueryKey,
   getAtelierListMyEmergencyContactsQueryOptions,

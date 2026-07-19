@@ -218,6 +218,8 @@ import type {
   AtelierResearchFact,
   AtelierReviewReleaseInput,
   AtelierRevokeDocumentAccess200,
+  AtelierRosterPersonEdit,
+  AtelierRosterPersonEditResponse,
   AtelierRosterPersonalView,
   AtelierScoutInput,
   AtelierSelfDocumentList,
@@ -4428,6 +4430,103 @@ export const useAtelierDeleteMyEmergencyContact = <
   return useMutation(
     getAtelierDeleteMyEmergencyContactMutationOptions(options),
   );
+};
+
+/**
+ * Updates a whitelisted set of editable person fields per worker type.
+Pay, bank (IBAN/SWIFT), day-rate and lifecycle fields are rejected —
+they stay locked to their dedicated flows. Job title stays
+hr / founding_partner-only. Every accepted change is audited
+field-by-field under `roster.person.updated`.
+
+ * @summary Roster — full Edit Person (HR / Partner / Founding Partner)
+ */
+export const getAtelierUpdateRosterPersonUrl = (id: string) => {
+  return `/api/atelier/roster/people/${id}`;
+};
+
+export const atelierUpdateRosterPerson = async (
+  id: string,
+  atelierRosterPersonEdit: AtelierRosterPersonEdit,
+  options?: RequestInit,
+): Promise<AtelierRosterPersonEditResponse> => {
+  return customFetch<AtelierRosterPersonEditResponse>(
+    getAtelierUpdateRosterPersonUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRosterPersonEdit),
+    },
+  );
+};
+
+export const getAtelierUpdateRosterPersonMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateRosterPerson>>,
+    TError,
+    { id: string; data: BodyType<AtelierRosterPersonEdit> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateRosterPerson>>,
+  TError,
+  { id: string; data: BodyType<AtelierRosterPersonEdit> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateRosterPerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateRosterPerson>>,
+    { id: string; data: BodyType<AtelierRosterPersonEdit> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateRosterPerson(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateRosterPersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateRosterPerson>>
+>;
+export type AtelierUpdateRosterPersonMutationBody =
+  BodyType<AtelierRosterPersonEdit>;
+export type AtelierUpdateRosterPersonMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Roster — full Edit Person (HR / Partner / Founding Partner)
+ */
+export const useAtelierUpdateRosterPerson = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateRosterPerson>>,
+    TError,
+    { id: string; data: BodyType<AtelierRosterPersonEdit> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateRosterPerson>>,
+  TError,
+  { id: string; data: BodyType<AtelierRosterPersonEdit> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateRosterPersonMutationOptions(options));
 };
 
 /**

@@ -4,6 +4,8 @@ import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/com
 import { BusinessCardQR } from "./BusinessCardQR";
 // Task #159 — contract records linked to this roster person.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
+// Task #199 — full "Edit person" form (hr / partner / founding_partner).
+import { EditPersonForm } from "./EditPersonForm";
 
 interface Person {
   id: string;
@@ -35,6 +37,12 @@ interface Person {
   // Task #412 — self-identified demographics, optional.
   gender?: string | null;
   nationality?: string | null;
+  // Task #199 — extra prefill fields for the full Edit Person form.
+  preferredName?: string | null;
+  employmentStatus?: string | null;
+  employingEntity?: string | null;
+  contractType?: string | null;
+  partnerFirmId?: string | null;
 }
 
 const TABS = [
@@ -70,6 +78,7 @@ export default function RosterPerson() {
   const [person, setPerson] = React.useState<Person | null>(null);
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
   const [viewerCanEditTitle, setViewerCanEditTitle] = React.useState(false);
+  const [viewerCanEdit, setViewerCanEdit] = React.useState(false);
 
   React.useEffect(() => {
     if (!personId) return;
@@ -79,6 +88,7 @@ export default function RosterPerson() {
         setPerson(d.person ?? null);
         setViewerCanSeeComp(!!d.viewerCanSeeComp);
         setViewerCanEditTitle(!!d.viewerCanEditTitle);
+        setViewerCanEdit(!!d.viewerCanEdit);
       });
   }, [personId]);
 
@@ -126,7 +136,7 @@ export default function RosterPerson() {
 
       <div className="mt-6">
         {activeTab === "profile" && (
-          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEditTitle={viewerCanEditTitle} onUpdated={setPerson} />
+          <ProfileTab person={person} viewerCanSeeComp={viewerCanSeeComp} viewerCanEdit={viewerCanEdit} viewerCanEditTitle={viewerCanEditTitle} onUpdated={setPerson} />
         )}
         {activeTab === "access" && <AccessTab personId={personId} />}
         {activeTab === "engagements" && <EngagementsTab personId={personId} />}
@@ -160,16 +170,41 @@ export default function RosterPerson() {
 function ProfileTab({
   person,
   viewerCanSeeComp,
+  viewerCanEdit,
   viewerCanEditTitle,
   onUpdated,
 }: {
   person: Person;
   viewerCanSeeComp: boolean;
+  viewerCanEdit: boolean;
   viewerCanEditTitle: boolean;
   onUpdated: (p: Person) => void;
 }) {
+  // Task #199 — the full edit form replaces the read-only cards while open.
+  const [editing, setEditing] = React.useState(false);
+  if (editing) {
+    return (
+      <EditPersonForm
+        person={person}
+        viewerCanEditTitle={viewerCanEditTitle}
+        onSaved={(updated) => onUpdated({ ...person, ...(updated as Partial<Person>) })}
+        onClose={() => setEditing(false)}
+      />
+    );
+  }
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      {viewerCanEdit && (
+        <div className="md:col-span-2 flex justify-end">
+          <button
+            onClick={() => setEditing(true)}
+            className="text-[10px] font-mono uppercase tracking-widest border border-border-soft rounded px-3 py-1 text-text-mute hover:text-gold hover:border-gold/50"
+            data-testid="button-edit-person"
+          >
+            Edit person
+          </button>
+        </div>
+      )}
       <Card className="p-4 space-y-3">
         <h3 className="font-mono text-xs uppercase text-text-mute">
           Identity
