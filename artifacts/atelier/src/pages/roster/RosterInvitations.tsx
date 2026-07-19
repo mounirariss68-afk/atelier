@@ -1,8 +1,7 @@
 import * as React from "react";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { RosterNav } from "./RosterNav";
 
 interface Invitation {
   id: string;
@@ -90,15 +89,11 @@ export default function RosterInvitations(): React.ReactElement {
   };
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
-      <PageHero>
-        <SectionHead
-          eyebrow="The Roster"
-          headline="Invitations"
-          lede="Pre-onboarding hand-offs. The Onboarding Concierge materialises the person and starts the sequence on accept."
-        />
-      </PageHero>
-      <RosterNav />
+    <div>
+      <p className="text-text-mute text-sm mb-4">
+        Pre-onboarding hand-offs. The Onboarding Concierge materialises the person and starts the
+        sequence on accept.
+      </p>
 
       <Card className="p-4 mb-6 space-y-3" data-testid="invitation-form">
         <h3 className="font-mono text-xs uppercase text-text-mute">New invitation</h3>

@@ -1,8 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
-import { RosterNav } from "./RosterNav";
 
 interface Step {
   id: string;
@@ -63,15 +62,11 @@ export default function RosterOnboarding(): React.ReactElement {
   };
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
-      <PageHero>
-        <SectionHead
-          eyebrow="The Roster"
-          headline="Onboarding"
-          lede="Active onboarding sequences. The Onboarding Concierge holds the sequence open while any compliance gate is blocked."
-        />
-      </PageHero>
-      <RosterNav />
+    <div>
+      <p className="text-text-mute text-sm mb-4">
+        Active onboarding sequences. The Onboarding Concierge holds the sequence open while any
+        compliance gate is blocked.
+      </p>
 
       <div className="space-y-4">
         {rows === null && <div className="text-text-mute py-8">Loading…</div>}
