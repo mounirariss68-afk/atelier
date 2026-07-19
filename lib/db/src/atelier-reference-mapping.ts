@@ -210,6 +210,15 @@ export function countryAliasKeysForCode(code: string): string[] {
 }
 
 /**
+ * All ISO 3166-1 alpha-2 codes accepted by `mapCountryToCode`, sorted.
+ * Exposed so tests can assert that every storable code renders a
+ * human-readable name in mirrored frontend helpers.
+ */
+export function isoAlpha2Codes(): string[] {
+  return [...ISO_ALPHA_2_ALLOWLIST].sort();
+}
+
+/**
  * Map an array of free-text country strings, dropping any that don't
  * resolve. Returns the deduplicated set in input order.
  */

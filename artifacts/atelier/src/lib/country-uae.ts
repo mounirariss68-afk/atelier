@@ -50,30 +50,34 @@ export function isUaeCountry(raw: string | null | undefined): boolean {
   return key.length > 0 && UAE_KEYS.has(key);
 }
 
-/** Bare-ISO-code → human-readable name for the caution copy. */
-const ISO_DISPLAY: Record<string, string> = {
-  AE: "United Arab Emirates", SA: "Saudi Arabia", GB: "United Kingdom",
-  US: "United States", QA: "Qatar", KW: "Kuwait", BH: "Bahrain",
-  OM: "Oman", EG: "Egypt", JO: "Jordan", LB: "Lebanon", TR: "Türkiye",
-  DE: "Germany", FR: "France", NL: "Netherlands", CH: "Switzerland",
-  LU: "Luxembourg", IE: "Ireland", ES: "Spain", IT: "Italy", PT: "Portugal",
-  BE: "Belgium", AT: "Austria", SE: "Sweden", DK: "Denmark", NO: "Norway",
-  FI: "Finland", PL: "Poland", CZ: "Czechia", GR: "Greece", CY: "Cyprus",
-  MT: "Malta", IN: "India", PK: "Pakistan", SG: "Singapore", HK: "Hong Kong",
-  JP: "Japan", KR: "South Korea", CN: "China", AU: "Australia",
-  NZ: "New Zealand", CA: "Canada", BR: "Brazil", MX: "Mexico",
-  ZA: "South Africa", NG: "Nigeria", KE: "Kenya", MA: "Morocco",
-  TN: "Tunisia", DM: "Dominica", IL: "Israel",
-};
+/**
+ * Bare-ISO-code → human-readable English name, backed by the platform's
+ * built-in CLDR data (`Intl.DisplayNames`) instead of a hand-copied table,
+ * so it can never drift from the server-side ISO 3166-1 allowlist in
+ * `lib/db/src/atelier-reference-mapping.ts`.
+ */
+const regionDisplayNames: Intl.DisplayNames | null = (() => {
+  try {
+    return new Intl.DisplayNames(["en"], { type: "region" });
+  } catch {
+    return null;
+  }
+})();
 
 /**
  * Render a stored country value for display: bare ISO alpha-2 codes get
  * expanded to the country name when known; anything else is shown as-is.
+ * Unknown codes fall back to the uppercased code.
  */
 export function countryDisplayName(raw: string): string {
   const trimmed = raw.trim();
   if (/^[A-Za-z]{2}$/.test(trimmed)) {
-    return ISO_DISPLAY[trimmed.toUpperCase()] ?? trimmed.toUpperCase();
+    const upper = trimmed.toUpperCase();
+    try {
+      return regionDisplayNames?.of(upper) ?? upper;
+    } catch {
+      return upper;
+    }
   }
   return trimmed;
 }

@@ -12,6 +12,7 @@
 import { UAE_KEYS, countryDisplayName, isUaeCountry } from "./country-uae.js";
 import {
   countryAliasKeysForCode,
+  isoAlpha2Codes,
   mapCountryToCode,
 } from "../../../../lib/db/src/atelier-reference-mapping.js";
 
@@ -70,7 +71,11 @@ ok('"gb" → United Kingdom', countryDisplayName("gb") === "United Kingdom");
 ok('"AE" → United Arab Emirates', countryDisplayName("AE") === "United Arab Emirates");
 ok('"SA" → Saudi Arabia', countryDisplayName("SA") === "Saudi Arabia");
 ok('" GB " trims then expands', countryDisplayName(" GB ") === "United Kingdom");
-ok('unknown ISO "ZZ" → uppercased code', countryDisplayName("zz") === "ZZ");
+ok(
+  'unknown ISO "zz" → uppercased code or CLDR fallback label',
+  ["ZZ", "Unknown Region"].includes(countryDisplayName("zz")),
+  countryDisplayName("zz"),
+);
 
 console.log("[country-uae.test] countryDisplayName — full names pass through");
 ok(
@@ -103,6 +108,26 @@ ok(
   serverUaeKeys.length === UAE_KEYS.size &&
     serverUaeKeys.every((k) => UAE_KEYS.has(k)),
   { server: serverUaeKeys, frontend: [...UAE_KEYS].sort() },
+);
+
+console.log(
+  "[country-uae.test] every allowlisted ISO code renders a human-readable name",
+);
+const allCodes = isoAlpha2Codes();
+ok("server exposes the full allowlist", allCodes.length >= 200, allCodes.length);
+let unreadable = 0;
+for (const code of allCodes) {
+  const name = countryDisplayName(code);
+  const readable = name !== code && name.length > 2;
+  if (!readable) {
+    unreadable++;
+    console.error(`  ✗ "${code}" renders as "${name}" (not a readable name)`);
+  }
+}
+ok(
+  `all ${allCodes.length} allowlisted codes expand to readable names`,
+  unreadable === 0,
+  { unreadable },
 );
 
 if (failed > 0) {
