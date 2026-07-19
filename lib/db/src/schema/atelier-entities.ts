@@ -87,6 +87,23 @@ export interface EntityFiscal {
   ctExpectedAmount: number | null;
 }
 
+/**
+ * Task #272 — per-entity cash policy for the 13-week cash forecast.
+ * Amounts are in the entity's base currency. Maintained by finance
+ * leadership (partner-gated writes, like the rest of the registry).
+ */
+export interface EntityCashPolicy {
+  /** Opening cash balance as of the stated date (entity base currency). */
+  openingBalance: number | null;
+  /** ISO date the opening balance was taken (bank statement date). */
+  openingBalanceAsOf: string | null;
+  /** Minimum-cash policy floor; forecast flags weeks closing below it. */
+  minCashPolicy: number | null;
+  /** Optional covenant floor (e.g. lender covenant); null = no covenant. */
+  covenantFloor: number | null;
+  notes: string | null;
+}
+
 export const atelierLegalEntities = pgTable(
   "atelier_legal_entities",
   {
@@ -114,6 +131,7 @@ export const atelierLegalEntities = pgTable(
     premises: jsonb("premises").$type<EntityPremises | null>(),
     lease: jsonb("lease").$type<EntityLease | null>(),
     fiscal: jsonb("fiscal").$type<EntityFiscal | null>(),
+    cashPolicy: jsonb("cash_policy").$type<EntityCashPolicy | null>(),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

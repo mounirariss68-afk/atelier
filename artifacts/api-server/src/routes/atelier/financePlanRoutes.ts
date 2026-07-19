@@ -183,14 +183,17 @@ async function hydratePlanFacts(orgId: string): Promise<void> {
     covenantFloorLocal: null,
   };
   ENTITIES.length = 0;
+  // Task #272 — real per-entity cash policy from the registry (opening
+  // balance, min-cash floor, optional covenant floor, all in the entity's
+  // base currency). Entities without a policy on record stay at zero/none.
   for (const e of registry) {
     ENTITIES.push({
       id: e.id,
       shortName: e.shortName,
       baseCurrency: e.baseCurrency,
-      openingBalanceLocal: 0,
-      minCashPolicyLocal: 0,
-      covenantFloorLocal: null,
+      openingBalanceLocal: e.cashPolicy?.openingBalance ?? 0,
+      minCashPolicyLocal: e.cashPolicy?.minCashPolicy ?? 0,
+      covenantFloorLocal: e.cashPolicy?.covenantFloor ?? null,
     });
   }
   ENTITIES.push(firm);

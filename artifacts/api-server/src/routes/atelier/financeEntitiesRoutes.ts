@@ -167,6 +167,17 @@ const fiscalSchema = z.object({
   ctExpectedAmount: z.number().min(0).nullish(),
 });
 
+// Task #272 — per-entity cash policy (opening balance, min-cash floor,
+// optional covenant floor), amounts in the entity's base currency. Feeds
+// the 13-week cash forecast breach warnings.
+const cashPolicySchema = z.object({
+  openingBalance: z.number().finite().nullish(),
+  openingBalanceAsOf: optStr(20),
+  minCashPolicy: z.number().finite().min(0).nullish(),
+  covenantFloor: z.number().finite().min(0).nullish(),
+  notes: optStr(600),
+});
+
 const entityBody = z.object({
   legalNameEn: str(400).min(1),
   legalNameAr: optStr(400),
@@ -191,6 +202,7 @@ const entityBody = z.object({
   premises: premisesSchema.nullish(),
   lease: leaseSchema.nullish(),
   fiscal: fiscalSchema.nullish(),
+  cashPolicy: cashPolicySchema.nullish(),
   notes: optStr(4000),
 });
 
@@ -244,6 +256,19 @@ function normalizeFiscal(f: z.infer<typeof fiscalSchema> | null | undefined) {
   return hasValue ? out : null;
 }
 
+function normalizeCashPolicy(p: z.infer<typeof cashPolicySchema> | null | undefined) {
+  if (!p) return null;
+  const shaped = {
+    openingBalance: p.openingBalance ?? null,
+    openingBalanceAsOf: p.openingBalanceAsOf ?? null,
+    minCashPolicy: p.minCashPolicy ?? null,
+    covenantFloor: p.covenantFloor ?? null,
+    notes: p.notes ?? null,
+  };
+  const hasValue = Object.values(shaped).some((v) => v !== null);
+  return hasValue ? shaped : null;
+}
+
 function nullishObj<T extends Record<string, unknown>>(o: T | null | undefined): T | null {
   if (!o) return null;
   const hasValue = Object.values(o).some((v) => v !== null && v !== undefined && v !== "");
@@ -272,6 +297,7 @@ function entityShape(e: EntityRow) {
     premises: e.premises ?? null,
     lease: e.lease ?? null,
     fiscal: e.fiscal ?? null,
+    cashPolicy: e.cashPolicy ?? null,
     notes: e.notes,
     archivedAt: e.archivedAt,
     createdAt: e.createdAt,
@@ -306,6 +332,13 @@ export interface FinanceEntityInfo {
   baseCurrency: string;
   country: string;
   fiscal: FinanceEntityFiscal | null;
+  /** Task #272 — cash policy amounts in the entity's base currency. */
+  cashPolicy: {
+    openingBalance: number | null;
+    openingBalanceAsOf: string | null;
+    minCashPolicy: number | null;
+    covenantFloor: number | null;
+  } | null;
 }
 
 export async function listFinanceEntities(orgId: string): Promise<FinanceEntityInfo[]> {
@@ -322,6 +355,14 @@ export async function listFinanceEntities(orgId: string): Promise<FinanceEntityI
       baseCurrency: r.baseCurrency || "USD",
       country: r.country,
       fiscal: r.fiscal ?? null,
+      cashPolicy: r.cashPolicy
+        ? {
+            openingBalance: r.cashPolicy.openingBalance ?? null,
+            openingBalanceAsOf: r.cashPolicy.openingBalanceAsOf ?? null,
+            minCashPolicy: r.cashPolicy.minCashPolicy ?? null,
+            covenantFloor: r.cashPolicy.covenantFloor ?? null,
+          }
+        : null,
     }));
 }
 
@@ -567,6 +608,7 @@ router.post("/finance/entities", async (req, res) => {
       premises: nullishObj(b.premises ?? null) as EntityRow["premises"],
       lease: nullishObj(b.lease ?? null) as EntityRow["lease"],
       fiscal: normalizeFiscal(b.fiscal),
+      cashPolicy: normalizeCashPolicy(b.cashPolicy),
       notes: b.notes ?? null,
     })
     .returning();
@@ -624,6 +666,7 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.premises !== undefined) assign("premises", nullishObj(b.premises ?? null));
   if (b.lease !== undefined) assign("lease", nullishObj(b.lease ?? null));
   if (b.fiscal !== undefined) assign("fiscal", normalizeFiscal(b.fiscal));
+  if (b.cashPolicy !== undefined) assign("cashPolicy", normalizeCashPolicy(b.cashPolicy));
   if (b.notes !== undefined) assign("notes", b.notes ?? null);
   if (Object.keys(changes).length === 0) {
     res.json({ entity: entityShape(existing) });

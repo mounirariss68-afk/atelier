@@ -160,6 +160,10 @@ export interface EntityDraft {
     vatPeriod: string; nextVatFilingDate: string; vatExpectedAmount: string;
     nextCtFilingDate: string; ctExpectedAmount: string;
   };
+  cashPolicy: {
+    openingBalance: string; openingBalanceAsOf: string;
+    minCashPolicy: string; covenantFloor: string; notes: string;
+  };
   notes: string;
 }
 
@@ -172,6 +176,7 @@ function emptyDraft(): EntityDraft {
     premises: { addressLine: "", building: "", unit: "", area: "", city: "", plotNumber: "", makaniNo: "", sizeSqm: "", usage: "" },
     lease: { contractNo: "", ejariTenantNo: "", lessorName: "", lessorLicenseNo: "", ownerName: "", startDate: "", endDate: "", annualRentAed: "", securityDepositAed: "", areaSqm: "", registrationFeesAed: "" },
     fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "" },
+    cashPolicy: { openingBalance: "", openingBalanceAsOf: "", minCashPolicy: "", covenantFloor: "", notes: "" },
     notes: "",
   };
 }
@@ -215,6 +220,13 @@ function draftFromEntity(e: LegalEntityRow): EntityDraft {
       vatExpectedAmount: e.fiscal?.vatExpectedAmount?.toString() ?? "",
       nextCtFilingDate: e.fiscal?.nextCtFilingDate ?? "",
       ctExpectedAmount: e.fiscal?.ctExpectedAmount?.toString() ?? "",
+    },
+    cashPolicy: {
+      openingBalance: e.cashPolicy?.openingBalance?.toString() ?? "",
+      openingBalanceAsOf: e.cashPolicy?.openingBalanceAsOf ?? "",
+      minCashPolicy: e.cashPolicy?.minCashPolicy?.toString() ?? "",
+      covenantFloor: e.cashPolicy?.covenantFloor?.toString() ?? "",
+      notes: e.cashPolicy?.notes ?? "",
     },
     notes: e.notes ?? "",
   };
@@ -280,6 +292,13 @@ function draftToBody(d: EntityDraft): Record<string, unknown> {
       vatExpectedAmount: num(d.fiscal.vatExpectedAmount),
       nextCtFilingDate: nn(d.fiscal.nextCtFilingDate),
       ctExpectedAmount: num(d.fiscal.ctExpectedAmount),
+    },
+    cashPolicy: {
+      openingBalance: num(d.cashPolicy.openingBalance),
+      openingBalanceAsOf: nn(d.cashPolicy.openingBalanceAsOf),
+      minCashPolicy: num(d.cashPolicy.minCashPolicy),
+      covenantFloor: num(d.cashPolicy.covenantFloor),
+      notes: nn(d.cashPolicy.notes),
     },
     notes: nn(d.notes),
   };
@@ -612,6 +631,21 @@ export function EntityFormDialog(props: {
               <TextField label="Expected VAT amount" value={draft.fiscal.vatExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, vatExpectedAmount: v } })} testid="input-fiscal-vat-amount" />
               <TextField label="Next CT filing (YYYY-MM-DD)" value={draft.fiscal.nextCtFilingDate} onChange={(v) => up({ fiscal: { ...draft.fiscal, nextCtFilingDate: v } })} testid="input-fiscal-ct-date" />
               <TextField label="Expected CT amount" value={draft.fiscal.ctExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctExpectedAmount: v } })} testid="input-fiscal-ct-amount" />
+            </div>
+          </div>
+
+          {/* Cash policy — feeds the 13-week cash forecast (Task #272) */}
+          <div>
+            <span className={labelCls}>Cash policy (in {draft.baseCurrency.trim().toUpperCase() || "base currency"})</span>
+            <p className="text-[11px] text-text-faint mt-0.5 mb-1.5">
+              Drives the 13-week cash forecast: opening balance seeds the entity's cash line; weeks closing below the minimum-cash or covenant floor raise breach warnings.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <Input className="h-9" placeholder="Opening cash balance" value={draft.cashPolicy.openingBalance} onChange={(e) => up({ cashPolicy: { ...draft.cashPolicy, openingBalance: e.target.value } })} data-testid="input-cash-opening-balance" />
+              <Input className="h-9" placeholder="As of (YYYY-MM-DD)" value={draft.cashPolicy.openingBalanceAsOf} onChange={(e) => up({ cashPolicy: { ...draft.cashPolicy, openingBalanceAsOf: e.target.value } })} data-testid="input-cash-opening-asof" />
+              <Input className="h-9" placeholder="Minimum-cash policy" value={draft.cashPolicy.minCashPolicy} onChange={(e) => up({ cashPolicy: { ...draft.cashPolicy, minCashPolicy: e.target.value } })} data-testid="input-cash-min-policy" />
+              <Input className="h-9" placeholder="Covenant floor (optional)" value={draft.cashPolicy.covenantFloor} onChange={(e) => up({ cashPolicy: { ...draft.cashPolicy, covenantFloor: e.target.value } })} data-testid="input-cash-covenant-floor" />
+              <Input className="h-9 col-span-2" placeholder="Policy notes" value={draft.cashPolicy.notes} onChange={(e) => up({ cashPolicy: { ...draft.cashPolicy, notes: e.target.value } })} data-testid="input-cash-policy-notes" />
             </div>
           </div>
 

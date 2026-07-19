@@ -104,6 +104,13 @@ export interface LegalEntityFiscal {
   nextCtFilingDate: string | null;
   ctExpectedAmount: number | null;
 }
+export interface LegalEntityCashPolicy {
+  openingBalance: number | null;
+  openingBalanceAsOf: string | null;
+  minCashPolicy: number | null;
+  covenantFloor: number | null;
+  notes: string | null;
+}
 export interface LegalEntityRow {
   id: string;
   legalNameEn: string;
@@ -125,6 +132,7 @@ export interface LegalEntityRow {
   premises: LegalEntityPremises | null;
   lease: LegalEntityLease | null;
   fiscal: LegalEntityFiscal | null;
+  cashPolicy: LegalEntityCashPolicy | null;
   notes: string | null;
   archivedAt: string | null;
   createdAt: string;
