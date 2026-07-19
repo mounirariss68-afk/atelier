@@ -70,7 +70,7 @@ const stub = {
   authFailures: 0,
   /** Fields payload of the most recent POST /templates/pdf. */
   lastTemplateFields: null as
-    | Array<{ name: string; type?: string; role: string; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
+    | Array<{ name: string; type?: string; role: string; preferences?: { format?: string }; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
     | null,
 };
 
@@ -528,6 +528,22 @@ async function main(): Promise<void> {
       "extra field names are unique",
       new Set(xfFields.map((f) => f.name)).size === xfFields.length,
       xfFields.map((f) => f.name).join(","),
+    );
+    // Task #312 — date fields must carry the firm-wide explicit format
+    // preference so signed PDFs never render ambiguous US-style dates.
+    const { DATE_FIELD_FORMAT } = await import("../../src/lib/docuseal.js");
+    check(
+      "date fields carry preferences.format = DATE_FIELD_FORMAT",
+      dateFields.length > 0 &&
+        dateFields.every((f) => f.preferences?.format === DATE_FIELD_FORMAT),
+      JSON.stringify(dateFields.map((f) => ({ n: f.name, prefs: f.preferences }))),
+    );
+    check(
+      "non-date fields carry no date format preference",
+      xfFields
+        .filter((f) => f.type !== "date")
+        .every((f) => f.preferences?.format === undefined),
+      JSON.stringify(xfFields.map((f) => ({ n: f.name, t: f.type, prefs: f.preferences }))),
     );
     const dArea = dateFields[0]?.areas?.[0];
     check(
