@@ -20,6 +20,7 @@ import {
   useAtelierSendContractForSignature,
   type AtelierContract,
   type AtelierContractDocument,
+  type AtelierContractEnvelopeFieldsItem,
 } from "@workspace/api-client-react";
 import { BackLink, Card, MonoChip, PageHero, SectionHead } from "@/components/ui/primitives";
 import { isUaeCountry, countryDisplayName } from "@/lib/country-uae";
@@ -310,10 +311,12 @@ function SendSignatureDialog(props: {
 
 function FieldValuesCard({
   contract,
+  fields,
   canManage,
   onRefetch,
 }: {
   contract: AtelierContract;
+  fields: AtelierContractEnvelopeFieldsItem[];
   canManage: boolean;
   onRefetch: () => void;
 }) {
@@ -321,7 +324,16 @@ function FieldValuesCard({
   const { toast } = useToast();
   const [edit, setEdit] = React.useState(false);
   const [values, setValues] = React.useState<Record<string, string>>({});
-  const entries = Object.entries(contract.fieldValues ?? {});
+  const allEntries = Object.entries(contract.fieldValues ?? {});
+  // Task #311 — the counterparty's typed answers (captured at e-signing)
+  // get their own labelled group instead of hiding among firm-side values.
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+  const secondPartyKeys = new Set(
+    fields.filter((f) => f.role === "second_party").map((f) => f.key),
+  );
+  const entries = allEntries.filter(([k]) => !secondPartyKeys.has(k));
+  const signedEntries = allEntries.filter(([k]) => secondPartyKeys.has(k));
+  const labelFor = (k: string) => fieldByKey.get(k)?.label || k;
   const regen = useAtelierRegenerateContract({
     mutation: {
       onSuccess: () => {
@@ -353,7 +365,7 @@ function FieldValuesCard({
           </Button>
         )}
       </div>
-      {entries.length === 0 ? (
+      {allEntries.length === 0 ? (
         <div className="text-sm text-text-faint">No field values.</div>
       ) : edit ? (
         <div className="space-y-2">
@@ -382,14 +394,43 @@ function FieldValuesCard({
           </div>
         </div>
       ) : (
-        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          {entries.map(([k, v]) => (
-            <div key={k} className="min-w-0">
-              <dt className="text-[11px] text-text-faint font-mono">{k}</dt>
-              <dd className="text-text truncate">{String(v ?? "") || "—"}</dd>
+        <div className="space-y-4">
+          {entries.length > 0 && (
+            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              {entries.map(([k, v]) => (
+                <div key={k} className="min-w-0">
+                  <dt className="text-[11px] text-text-faint font-mono">{k}</dt>
+                  <dd className="text-text truncate">{String(v ?? "") || "—"}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {signedEntries.length > 0 && (
+            <div
+              className="rounded-md border border-border bg-surface-raised p-3"
+              data-testid="section-signed-by-counterparty"
+            >
+              <div className="mb-2">
+                <h4 className="text-xs font-semibold text-text">
+                  Signed by {contract.counterpartyLabel || "counterparty"}
+                </h4>
+                <p className="text-[11px] text-text-faint">
+                  Captured during e-signing.
+                </p>
+              </div>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                {signedEntries.map(([k, v]) => (
+                  <div key={k} className="min-w-0">
+                    <dt className="text-[11px] text-text-faint">{labelFor(k)}</dt>
+                    <dd className="text-text truncate" data-testid={`text-signed-${k}`}>
+                      {String(v ?? "") || "—"}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </div>
-          ))}
-        </dl>
+          )}
+        </div>
       )}
     </Card>
   );
@@ -553,7 +594,12 @@ export default function ContractDetail() {
         </Card>
       </div>
 
-      <FieldValuesCard contract={contract} canManage={canManage} onRefetch={invalidate} />
+      <FieldValuesCard
+        contract={contract}
+        fields={data?.fields ?? []}
+        canManage={canManage}
+        onRefetch={invalidate}
+      />
       <DocumentChain contract={contract} />
 
       <Card className="p-5">

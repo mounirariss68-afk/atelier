@@ -2947,6 +2947,15 @@ export const AtelierGetContractResponse = zod.object({
       .optional(),
   }),
   signatureRequestId: zod.string().optional(),
+  fields: zod
+    .array(
+      zod.object({
+        key: zod.string(),
+        label: zod.string(),
+        role: zod.enum(["standard", "second_party", "reference"]),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -3050,6 +3059,15 @@ export const AtelierUpdateContractResponse = zod.object({
       .optional(),
   }),
   signatureRequestId: zod.string().optional(),
+  fields: zod
+    .array(
+      zod.object({
+        key: zod.string(),
+        label: zod.string(),
+        role: zod.enum(["standard", "second_party", "reference"]),
+      }),
+    )
+    .optional(),
 });
 
 /**

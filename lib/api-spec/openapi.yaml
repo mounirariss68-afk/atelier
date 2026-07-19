@@ -10017,6 +10017,15 @@ components:
       properties:
         contract: { $ref: "#/components/schemas/AtelierContract" }
         signatureRequestId: { type: string }
+        fields:
+          type: array
+          items:
+            type: object
+            required: [key, label, role]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              role: { type: string, enum: [standard, second_party, reference] }
 
     AtelierContractCreate:
       type: object

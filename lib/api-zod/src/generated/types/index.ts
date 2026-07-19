@@ -188,6 +188,8 @@ export * from "./atelierContractCreateValues";
 export * from "./atelierContractDocument";
 export * from "./atelierContractDocumentKind";
 export * from "./atelierContractEnvelope";
+export * from "./atelierContractEnvelopeFieldsItem";
+export * from "./atelierContractEnvelopeFieldsItemRole";
 export * from "./atelierContractFieldValues";
 export * from "./atelierContractList";
 export * from "./atelierContractPrepareError";

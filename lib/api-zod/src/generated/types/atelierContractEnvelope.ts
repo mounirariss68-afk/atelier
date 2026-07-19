@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierContract } from "./atelierContract";
+import type { AtelierContractEnvelopeFieldsItem } from "./atelierContractEnvelopeFieldsItem";
 
 export interface AtelierContractEnvelope {
   contract: AtelierContract;
   signatureRequestId?: string;
+  fields?: AtelierContractEnvelopeFieldsItem[];
 }

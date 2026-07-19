@@ -6519,9 +6519,25 @@ export interface AtelierContractList {
   contracts: AtelierContract[];
 }
 
+export type AtelierContractEnvelopeFieldsItemRole =
+  (typeof AtelierContractEnvelopeFieldsItemRole)[keyof typeof AtelierContractEnvelopeFieldsItemRole];
+
+export const AtelierContractEnvelopeFieldsItemRole = {
+  standard: "standard",
+  second_party: "second_party",
+  reference: "reference",
+} as const;
+
+export type AtelierContractEnvelopeFieldsItem = {
+  key: string;
+  label: string;
+  role: AtelierContractEnvelopeFieldsItemRole;
+};
+
 export interface AtelierContractEnvelope {
   contract: AtelierContract;
   signatureRequestId?: string;
+  fields?: AtelierContractEnvelopeFieldsItem[];
 }
 
 export type AtelierContractCreateCounterpartyKind =

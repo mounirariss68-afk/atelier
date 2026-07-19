@@ -972,7 +972,24 @@ router.get("/contracts/:id", async (req, res) => {
     .from(atelierContractDocuments)
     .where(eq(atelierContractDocuments.contractId, contract.id))
     .orderBy(desc(atelierContractDocuments.versionNumber));
-  res.json({ contract: contractShape(contract, documents) });
+  // Task #311 — surface the template's field labels/roles so the UI can
+  // group the counterparty's captured-at-signing answers under their
+  // human-readable labels instead of raw keys.
+  let fields: Array<{ key: string; label: string; role: string }> = [];
+  if (contract.templateVersionId) {
+    const [version] = await db
+      .select({ fieldSchema: atelierContractTemplateVersions.fieldSchema })
+      .from(atelierContractTemplateVersions)
+      .where(eq(atelierContractTemplateVersions.id, contract.templateVersionId));
+    if (version) {
+      fields = normalizeFieldSchema(version.fieldSchema).map((f) => ({
+        key: f.key,
+        label: f.label || f.key,
+        role: f.role ?? "standard",
+      }));
+    }
+  }
+  res.json({ contract: contractShape(contract, documents), fields });
 });
 
 const contractPatch = z.object({
