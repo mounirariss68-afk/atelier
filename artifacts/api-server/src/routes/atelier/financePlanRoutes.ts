@@ -24,9 +24,9 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits } from "@workspace/db";
-import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import { listFinanceEntities } from "./financeEntitiesRoutes";
 import { loadFinanceFacts, FIRM_ENTITY_ID } from "./financeRealFacts";
-import { hydrateFpaFromFacts } from "./financePlanFpaEngine";
+import { hydrateFpaFromFacts, setFpaEntities } from "./financePlanFpaEngine";
 import {
   computeBudget as computeFpaBudget,
   computeHeadcount as computeFpaHeadcount,
@@ -115,11 +115,12 @@ function weekStarts(): string[] {
 }
 
 // ──────────────────────────────────────────────────────────────
-// Entities — derived from the Wave-1 entities backbone
-// (financeEntitiesRoutes.ENTITIES_SEED). The plan layer adds an
-// overlay of opening cash balance, min-cash policy and covenant
-// floor per entity, so id, shortName, baseCurrency stay in sync
-// with the rest of the Finance lens.
+// Entities — hydrated per-request from the persisted legal-entity
+// registry (atelier_legal_entities, see hydratePlanFacts). The plan
+// layer adds an overlay of opening cash balance, min-cash policy and
+// covenant floor per entity; with no cash policies on record these
+// default to zero / none. The firm pseudo-entity carries the real
+// firm-wide opening cash position.
 // ──────────────────────────────────────────────────────────────
 interface PlanEntity {
   id: string;
@@ -129,20 +130,7 @@ interface PlanEntity {
   minCashPolicyLocal: number;
   covenantFloorLocal: number | null;
 }
-// Fabricated demo cash overlay removed per the no-demo-data policy; entities
-// fall back to zero opening balance and no policy lines.
-const PLAN_OVERLAY: Record<string, { openingBalanceLocal: number; minCashPolicyLocal: number; covenantFloorLocal: number | null }> = {};
-const ENTITIES: PlanEntity[] = ENTITIES_SEED.map((e) => {
-  const o = PLAN_OVERLAY[e.id] ?? { openingBalanceLocal: 0, minCashPolicyLocal: 0, covenantFloorLocal: null };
-  return {
-    id: e.id,
-    shortName: e.shortName,
-    baseCurrency: e.baseCurrency,
-    openingBalanceLocal: o.openingBalanceLocal,
-    minCashPolicyLocal: o.minCashPolicyLocal,
-    covenantFloorLocal: o.covenantFloorLocal,
-  };
-});
+const ENTITIES: PlanEntity[] = [];
 
 // ──────────────────────────────────────────────────────────────
 // Cash-line primitives (receipts + disbursements).
@@ -171,7 +159,10 @@ const RECEIPTS: ReceiptLine[] = [];
 const DISBURSEMENTS: DisbursementLine[] = [];
 
 async function hydratePlanFacts(orgId: string): Promise<void> {
-  const facts = await loadFinanceFacts(orgId);
+  const [facts, registry] = await Promise.all([
+    loadFinanceFacts(orgId),
+    listFinanceEntities(orgId),
+  ]);
   RECEIPTS.length = 0;
   RECEIPTS.push(...facts.receipts);
   DISBURSEMENTS.length = 0;
@@ -190,61 +181,26 @@ async function hydratePlanFacts(orgId: string): Promise<void> {
     minCashPolicyLocal: 0,
     covenantFloorLocal: null,
   };
-  const idx = ENTITIES.findIndex((e) => e.id === FIRM_ENTITY_ID);
-  if (idx >= 0) ENTITIES[idx] = firm; else ENTITIES.push(firm);
+  ENTITIES.length = 0;
+  for (const e of registry) {
+    ENTITIES.push({
+      id: e.id,
+      shortName: e.shortName,
+      baseCurrency: e.baseCurrency,
+      openingBalanceLocal: 0,
+      minCashPolicyLocal: 0,
+      covenantFloorLocal: null,
+    });
+  }
+  ENTITIES.push(firm);
+  setFpaEntities(ENTITIES);
   hydrateFpaFromFacts(facts);
 }
 
-// ──────────────────────────────────────────────────────────────
-// Tax disbursements — derived from each entity's fiscal calendar
-// (ENTITIES_SEED.fiscal.nextVatFiling / nextCtFiling). For monthly
-// VAT entities we project the following month's filing too so it
-// lands inside the 13-week window.
-// ──────────────────────────────────────────────────────────────
-const VAT_AUTHORITY: Record<string, string> = { GB: "HMRC", SA: "ZATCA", AE: "FTA" };
-// Fabricated demo VAT amounts removed per the no-demo-data policy.
-const VAT_AMOUNT_LOCAL: Record<string, number> = {};
-// Fabricated demo corporate-tax amounts removed per the no-demo-data policy.
-const CT_AMOUNT_LOCAL: Record<string, number> = {};
-function nextMonthSameDay(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  const m = d.getUTCMonth();
-  d.setUTCMonth(m + 1);
-  return d.toISOString().slice(0, 10);
-}
-const TAX_DISBURSEMENTS: DisbursementLine[] = (() => {
-  const out: DisbursementLine[] = [];
-  for (const e of ENTITIES_SEED) {
-    const vatAmt = VAT_AMOUNT_LOCAL[e.id] ?? 0;
-    if (vatAmt > 0 && e.fiscal.nextVatFiling) {
-      out.push({
-        id: `dis_tax_vat_${e.id}_1`, entityId: e.id, currency: e.baseCurrency, amount: vatAmt,
-        expectedDate: e.fiscal.nextVatFiling, confidence: "high", category: "tax_vat",
-        label: `VAT filing — ${VAT_AUTHORITY[e.country] ?? "tax authority"} (${e.shortName})`,
-        vendor: VAT_AUTHORITY[e.country] ?? "Tax authority",
-      });
-      if (e.fiscal.vatPeriod === "monthly") {
-        out.push({
-          id: `dis_tax_vat_${e.id}_2`, entityId: e.id, currency: e.baseCurrency, amount: vatAmt,
-          expectedDate: nextMonthSameDay(e.fiscal.nextVatFiling), confidence: "high", category: "tax_vat",
-          label: `VAT filing (next month) — ${VAT_AUTHORITY[e.country] ?? "tax authority"} (${e.shortName})`,
-          vendor: VAT_AUTHORITY[e.country] ?? "Tax authority",
-        });
-      }
-    }
-    const ctAmt = CT_AMOUNT_LOCAL[e.id] ?? 0;
-    if (ctAmt > 0 && e.fiscal.nextCtFiling) {
-      out.push({
-        id: `dis_tax_ct_${e.id}`, entityId: e.id, currency: e.baseCurrency, amount: ctAmt,
-        expectedDate: e.fiscal.nextCtFiling, confidence: "medium", category: "tax_ct",
-        label: `Corporate tax filing (${e.shortName})`,
-        vendor: VAT_AUTHORITY[e.country] ?? "Tax authority",
-      });
-    }
-  }
-  return out;
-})();
-DISBURSEMENTS.push(...TAX_DISBURSEMENTS);
+// NOTE: seed-derived VAT / corporate-tax disbursement projections were
+// removed with the ENTITIES_SEED compat export — the legal-entity registry
+// has no fiscal calendar, and no fabricated tax amounts exist under the
+// no-demo-data policy. Real tax lines will come from real filings data.
 
 // ──────────────────────────────────────────────────────────────
 // Override / lock layer (in-memory). lineId → override.
@@ -458,19 +414,22 @@ interface ResolvedLine {
   override?: Override;
 }
 
-function resolveLine<T extends CashLine>(line: T, direction: Direction, presentation: string): ResolvedLine | null {
+function resolveLine(line: ReceiptLine | DisbursementLine, direction: Direction, presentation: string): ResolvedLine | null {
   const ovr = OVERRIDES.get(line.id);
   const amount = ovr?.lockedAmount ?? line.amount;
   const expectedDate = ovr?.lockedDate ?? line.expectedDate;
   const wi = weekIndexFor(expectedDate);
   if (wi < 0 || wi > 12) return null;
   const usd = toUsd(amount, line.currency);
+  const isReceipt = "counterparty" in line;
   return {
     id: line.id, direction, weekIndex: wi, weekStart: dateAdd(AS_OF_MONDAY, wi * 7),
     entityId: line.entityId, currency: line.currency, amount, amountUsd: usd,
     amountInPresentation: convert(usd, presentation),
-    counterparty: (line as ReceiptLine).counterparty, vendor: (line as DisbursementLine).vendor,
-    source: (line as ReceiptLine).source, category: (line as DisbursementLine).category,
+    counterparty: isReceipt ? line.counterparty : undefined,
+    vendor: isReceipt ? undefined : line.vendor,
+    source: isReceipt ? line.source : undefined,
+    category: isReceipt ? undefined : line.category,
     label: line.label, detail: line.detail, confidence: line.confidence,
     expectedDate, locked: !!ovr?.locked, override: ovr ?? undefined,
   };
@@ -782,37 +741,37 @@ router.post("/finance/plan/cash-13w/override", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   if (!isFinanceLeadership(me)) {
-    return res.status(403).json({ error: "forbidden", message: "Treasurer / finance / partner only." });
+    res.status(403).json({ error: "forbidden", message: "Treasurer / finance / partner only." }); return;
   }
   const body = req.body as { lineId?: string; lockedAmount?: number; lockedDate?: string; locked?: boolean; note?: string; clear?: boolean };
   if (!body?.lineId || typeof body.lineId !== "string") {
-    return res.status(400).json({ error: "invalid", message: "lineId required" });
+    res.status(400).json({ error: "invalid", message: "lineId required" }); return;
   }
   const exists = RECEIPTS.some((r) => r.id === body.lineId) || DISBURSEMENTS.some((d) => d.id === body.lineId);
-  if (!exists) return res.status(404).json({ error: "not-found", message: "line not found" });
+  if (!exists) { res.status(404).json({ error: "not-found", message: "line not found" }); return; }
   if (body.lockedAmount !== undefined) {
     if (typeof body.lockedAmount !== "number" || !Number.isFinite(body.lockedAmount) || body.lockedAmount < 0) {
-      return res.status(400).json({ error: "invalid", message: "lockedAmount must be a finite, non-negative number" });
+      res.status(400).json({ error: "invalid", message: "lockedAmount must be a finite, non-negative number" }); return;
     }
   }
   if (body.lockedDate !== undefined) {
     if (typeof body.lockedDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.lockedDate)) {
-      return res.status(400).json({ error: "invalid", message: "lockedDate must be ISO YYYY-MM-DD" });
+      res.status(400).json({ error: "invalid", message: "lockedDate must be ISO YYYY-MM-DD" }); return;
     }
     const d = new Date(`${body.lockedDate}T00:00:00Z`);
     if (Number.isNaN(d.getTime())) {
-      return res.status(400).json({ error: "invalid", message: "lockedDate is not a valid date" });
+      res.status(400).json({ error: "invalid", message: "lockedDate is not a valid date" }); return;
     }
   }
   if (body.note !== undefined && typeof body.note === "string" && body.note.length > 1000) {
-    return res.status(400).json({ error: "invalid", message: "note exceeds 1000 chars" });
+    res.status(400).json({ error: "invalid", message: "note exceeds 1000 chars" }); return;
   }
   await Promise.all([ensureHydrated(), hydratePlanFacts(me.orgId)]);
   if (body.clear) {
     await db.delete(atelierCashLineOverrides).where(eq(atelierCashLineOverrides.lineId, body.lineId));
     OVERRIDES.delete(body.lineId);
     await persistAudit(me.name, "cash13w.override.clear", body.lineId, { by: me.id });
-    return res.json({ ok: true, cleared: true });
+    res.json({ ok: true, cleared: true }); return;
   }
   const nowIso = new Date().toISOString();
   const ovr: Override = {
@@ -943,27 +902,27 @@ router.post("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   if (!isFinanceLeadership(me)) {
-    return res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
+    res.status(403).json({ error: "forbidden", message: "Finance leadership only." }); return;
   }
   const body = (req.body ?? {}) as { scenarioId?: string | null; note?: string; periodLabel?: string };
   if (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 1000)) {
-    return res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" });
+    res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" }); return;
   }
   if (body.periodLabel !== undefined && (typeof body.periodLabel !== "string" || body.periodLabel.length > 64)) {
-    return res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" });
+    res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" }); return;
   }
   // POST with scenarioId: null is an alias for DELETE (uncommit). Lets clients
   // that can't issue DELETE — or want to send a body with reason — use POST.
   if (body.scenarioId === null) {
     const out = await uncommitForecast(me, body.note, body.periodLabel);
-    return res.json(out);
+    res.json(out); return;
   }
   if (!body?.scenarioId || typeof body.scenarioId !== "string") {
-    return res.status(400).json({ error: "invalid", message: "scenarioId required (or pass null to uncommit)" });
+    res.status(400).json({ error: "invalid", message: "scenarioId required (or pass null to uncommit)" }); return;
   }
   const scenario = FPA_SCENARIOS.find((s) => s.id === body.scenarioId);
   if (!scenario) {
-    return res.status(400).json({ error: "invalid", message: "unknown scenarioId" });
+    res.status(400).json({ error: "invalid", message: "unknown scenarioId" }); return;
   }
   await ensureCommitsHydrated();
   const nowIso = new Date().toISOString();
@@ -1041,14 +1000,14 @@ router.delete("/finance/plan/scenarios/commit", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   if (!isFinanceLeadership(me)) {
-    return res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
+    res.status(403).json({ error: "forbidden", message: "Finance leadership only." }); return;
   }
   const body = (req.body ?? {}) as { note?: string; periodLabel?: string };
   if (body.note !== undefined && (typeof body.note !== "string" || body.note.length > 1000)) {
-    return res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" });
+    res.status(400).json({ error: "invalid", message: "note must be a string ≤ 1000 chars" }); return;
   }
   if (body.periodLabel !== undefined && (typeof body.periodLabel !== "string" || body.periodLabel.length > 64)) {
-    return res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" });
+    res.status(400).json({ error: "invalid", message: "periodLabel must be a string ≤ 64 chars" }); return;
   }
   const out = await uncommitForecast(me, body.note, body.periodLabel);
   res.json(out);

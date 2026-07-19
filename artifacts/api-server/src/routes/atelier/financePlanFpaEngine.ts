@@ -23,7 +23,7 @@
  * file so the engine remains side-effect free.
  */
 
-import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import type { FinanceEntityInfo } from "./financeEntitiesRoutes";
 
 export const FX_TO_USD: Record<string, number> = {
   USD: 1.0, GBP: 1.27, AED: 0.272, SAR: 0.267, EUR: 1.08,
@@ -92,12 +92,20 @@ export const HEADCOUNT_PLAN: HeadcountPlanRow[] = [];
 // Fabricated demo overhead plan removed per the no-demo-data policy.
 export const OVERHEAD_PLAN: Record<string, { fixedMonthlyUsd: number; variablePctOfRevenue: number; baseCurrency: string }> = {};
 
-export const ENTITY_BASE_CURRENCY: Record<string, string> = Object.fromEntries(
-  ENTITIES_SEED.map((e) => [e.id, e.baseCurrency]),
-);
-export const ENTITY_SHORT_NAME: Record<string, string> = Object.fromEntries(
-  ENTITIES_SEED.map((e) => [e.id, e.shortName]),
-);
+// Entity lookup maps — hydrated per-request from the persisted legal-entity
+// registry via setFpaEntities() (called by the plan routes' hydratePlanFacts),
+// plus the firm pseudo-entity via hydrateFpaFromFacts().
+export const ENTITY_BASE_CURRENCY: Record<string, string> = {};
+export const ENTITY_SHORT_NAME: Record<string, string> = {};
+
+export function setFpaEntities(entities: Pick<FinanceEntityInfo, "id" | "shortName" | "baseCurrency">[]): void {
+  for (const k of Object.keys(ENTITY_BASE_CURRENCY)) delete ENTITY_BASE_CURRENCY[k];
+  for (const k of Object.keys(ENTITY_SHORT_NAME)) delete ENTITY_SHORT_NAME[k];
+  for (const e of entities) {
+    ENTITY_BASE_CURRENCY[e.id] = e.baseCurrency;
+    ENTITY_SHORT_NAME[e.id] = e.shortName;
+  }
+}
 
 // ──────────────────────────────────────────────────────────────
 // Months — 12-month horizon starting at the current month.

@@ -33,7 +33,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import PDFDocument from "pdfkit";
 import { atelierUsers } from "@workspace/db";
-import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import { listFinanceEntities, type FinanceEntityInfo } from "./financeEntitiesRoutes";
 import { loadFinanceFacts, FIRM_ENTITY_ID, type FinanceFacts } from "./financeRealFacts";
 import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
 
@@ -186,10 +186,19 @@ const PROFILES: Record<string, EntityProfile> = {};
 // computation between ensureFacts() and res.json() is synchronous, so
 // concurrent requests from different orgs cannot interleave reads.
 let FACTS: FinanceFacts | null = null;
+// Registered legal entities (persisted registry), refreshed alongside FACTS
+// per-request for the caller's org.
+let REG_ENTITIES: FinanceEntityInfo[] = [];
 async function ensureFacts(orgId: string): Promise<void> {
-  FACTS = await loadFinanceFacts(orgId);
+  [FACTS, REG_ENTITIES] = await Promise.all([
+    loadFinanceFacts(orgId),
+    listFinanceEntities(orgId),
+  ]);
 }
 const FIRM_PSEUDO_ENTITY = { id: FIRM_ENTITY_ID, baseCurrency: "USD", shortName: "Cognirise (firm)" };
+function entityBaseCurrency(entityId: string): string {
+  return REG_ENTITIES.find((e) => e.id === entityId)?.baseCurrency ?? "USD";
+}
 
 function seasonality(month: number, eid: string): number {
   // Per-entity month-of-year seasonality, ±15%.
@@ -276,7 +285,7 @@ function pnlLocal(entityId: string, period: Period, scenario: "actual" | "budget
   const intercoCost = IC_FEES
     .filter((f) => f.counterpartyId === entityId)
     .reduce((s, f) => {
-      const ccy = PROFILES[entityId] ? ENTITIES_SEED.find((e) => e.id === entityId)?.baseCurrency ?? "USD" : "USD";
+      const ccy = PROFILES[entityId] ? entityBaseCurrency(entityId) : "USD";
       const fromGbp = f.currency === "GBP" ? 1 : 1 / averageRateToGbp(f.currency, period);
       // Express provider amount in GBP, then to my local at average rate.
       const inGbp = f.monthlyAmountLocal * (f.currency === "GBP" ? 1 : 1 / averageRateToGbp(f.currency, period));
@@ -416,7 +425,7 @@ function bsLocal(entityId: string, period: Period): BsLines {
   const intercoApMonthly = IC_FEES
     .filter((f) => f.counterpartyId === entityId)
     .reduce((s, f) => {
-      const ccy = ENTITIES_SEED.find((e) => e.id === entityId)?.baseCurrency ?? "USD";
+      const ccy = entityBaseCurrency(entityId);
       const inGbp = f.monthlyAmountLocal * (f.currency === "GBP" ? 1 : 1 / averageRateToGbp(f.currency, period));
       return s + convert(inGbp, 1, ccy, period, "closing");
     }, 0);
@@ -430,7 +439,7 @@ function bsLocal(entityId: string, period: Period): BsLines {
   const intercoLoanPayable = IC_LOANS
     .filter((l) => l.counterpartyId === entityId)
     .reduce((s, l) => {
-      const ccy = ENTITIES_SEED.find((e) => e.id === entityId)?.baseCurrency ?? "USD";
+      const ccy = entityBaseCurrency(entityId);
       const inGbp = l.balanceLocal * (l.currency === "GBP" ? 1 : 1 / closingRateToGbp(l.currency, period));
       return convert(inGbp, 1, ccy, period, "closing") + s;
     }, 0);
@@ -746,8 +755,8 @@ function parseQuery(req: Request) {
 function entitiesIn(scope: string | null): { id: string; baseCurrency: string; shortName: string }[] {
   // No legal entities registered yet → single firm pseudo-entity so the
   // consolidated view carries the real firm-wide facts (Task #177).
-  const all = ENTITIES_SEED.length > 0
-    ? ENTITIES_SEED.map((e) => ({ id: e.id, baseCurrency: e.baseCurrency, shortName: e.shortName }))
+  const all = REG_ENTITIES.length > 0
+    ? REG_ENTITIES.map((e) => ({ id: e.id, baseCurrency: e.baseCurrency, shortName: e.shortName }))
     : [FIRM_PSEUDO_ENTITY];
   if (scope) return all.filter((e) => e.id === scope);
   return all;

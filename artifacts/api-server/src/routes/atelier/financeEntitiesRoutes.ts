@@ -254,19 +254,32 @@ async function loadEntity(orgId: string, id: string): Promise<EntityRow | null> 
 }
 
 // ---------------------------------------------------------------------------
-// Legacy compat: the Task #372 finance plan/report modules imported a seeded
-// entity list from this file. Seeding is banned (no-demo-data policy), so
-// this stays empty; those modules already fall back to the firm pseudo-entity
-// or skip entity-derived lines when the list is empty.
+// Registry read model for the finance plan/report modules. Replaces the old
+// ENTITIES_SEED compat export: entity lists now come from the persisted
+// atelier_legal_entities registry (org-scoped, archived rows excluded).
 // ---------------------------------------------------------------------------
-export interface LegacyFinanceEntitySeed {
+export interface FinanceEntityInfo {
   id: string;
   shortName: string;
   baseCurrency: string;
   country: string;
-  fiscal: { nextVatFiling: string; nextCtFiling: string; vatPeriod: "monthly" | "quarterly" };
 }
-export const ENTITIES_SEED: LegacyFinanceEntitySeed[] = [];
+
+export async function listFinanceEntities(orgId: string): Promise<FinanceEntityInfo[]> {
+  const rows = await db
+    .select()
+    .from(atelierLegalEntities)
+    .where(eq(atelierLegalEntities.orgId, orgId))
+    .orderBy(desc(atelierLegalEntities.createdAt));
+  return rows
+    .filter((r) => r.status !== "archived")
+    .map((r) => ({
+      id: r.id,
+      shortName: r.shortName || r.legalNameEn,
+      baseCurrency: r.baseCurrency || "USD",
+      country: r.country,
+    }));
+}
 
 // ---------------------------------------------------------------------------
 // CRUD
