@@ -542,7 +542,12 @@ export function NewContractDialog(props: {
               </p>
             )}
           </div>
-          {entities.length > 0 && (
+          {entities.length === 0 ? (
+            <p className="text-[11px] text-amber-400" data-testid="text-no-signing-entities">
+              No Cognirise signing entities configured. Add a legal entity under Settings →
+              Firm profile before preparing contracts.
+            </p>
+          ) : (
             <div>
               <label className="text-xs text-text-faint">Cognirise signing entity</label>
               <select
@@ -647,7 +652,7 @@ export function NewContractDialog(props: {
                 data: {
                   templateId,
                   ...(title.trim() ? { title: title.trim() } : {}),
-                  ...(signingEntityId ? { signingEntityId } : {}),
+                  signingEntityId,
                   counterparty: { kind: cpKind, id: cpId.trim() },
                   values: Object.fromEntries(
                     Object.entries(values).filter(([, v]) => v.trim() !== ""),
@@ -655,7 +660,7 @@ export function NewContractDialog(props: {
                 },
               })
             }
-            disabled={create.isPending || !templateId || !cpId.trim()}
+            disabled={create.isPending || !templateId || !cpId.trim() || !signingEntityId}
             data-testid="button-create-contract"
           >
             {create.isPending ? "Preparing…" : "Prepare contract"}

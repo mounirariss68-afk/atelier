@@ -9976,7 +9976,7 @@ components:
 
     AtelierContractCreate:
       type: object
-      required: [templateId, counterparty]
+      required: [templateId, counterparty, signingEntityId]
       properties:
         templateId: { type: string, minLength: 1 }
         title: { type: string, minLength: 1, maxLength: 300 }

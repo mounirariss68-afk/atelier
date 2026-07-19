@@ -352,6 +352,15 @@ export async function prepareContract(args: {
       message: "The selected signing entity was not found in the firm's registry.",
     };
   }
+  // Task #237 — every contract must record which Cognirise legal entity signs it.
+  if (!entity) {
+    return {
+      ok: false,
+      code: "signing-entity-not-found",
+      message:
+        "No Cognirise signing entity is configured. Add a legal entity (and mark one as default) under Settings → Firm profile before preparing contracts.",
+    };
+  }
   const firm = await firmAutoFill(args.orgId, entity);
   const { values, missingRequired } = buildFieldValues({
     fields: version.fieldSchema,

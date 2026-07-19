@@ -512,24 +512,29 @@ export default function ContractDetail() {
         </Card>
       )}
 
-      {contract.signingEntityLabel && (
-        <Card className="p-4" data-testid="card-signing-entity">
-          <div className="text-[11px] text-text-faint">Cognirise signing entity</div>
+      <Card className="p-4" data-testid="card-signing-entity">
+        <div className="text-[11px] text-text-faint">Cognirise signing entity</div>
+        {contract.signingEntityLabel ? (
           <div className="text-sm text-text">
             {contract.signingEntityLabel}
             {contract.signingEntityCountry ? (
               <span className="text-text-faint"> · {contract.signingEntityCountry}</span>
             ) : null}
           </div>
-          {contract.signingEntityCountry &&
-            !/united arab emirates|\buae\b/i.test(contract.signingEntityCountry) && (
-              <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
-                Caution: this entity is registered in {contract.signingEntityCountry}, not the
-                UAE. Check the governing-law and jurisdiction wording in the document.
-              </p>
-            )}
-        </Card>
-      )}
+        ) : (
+          <div className="text-sm text-text-mute" data-testid="text-no-entity-recorded">
+            No entity recorded — this contract was prepared before signing entities were
+            required.
+          </div>
+        )}
+        {contract.signingEntityCountry &&
+          !/united arab emirates|\buae\b/i.test(contract.signingEntityCountry) && (
+            <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
+              Caution: this entity is registered in {contract.signingEntityCountry}, not the
+              UAE. Check the governing-law and jurisdiction wording in the document.
+            </p>
+          )}
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">

@@ -820,7 +820,8 @@ const contractCreateBody = z.object({
     kind: z.enum(["person", "contact", "account"]),
     id: z.string().trim().min(1),
   }),
-  signingEntityId: z.string().trim().min(1).max(120).optional(),
+  // Task #237 — required: every contract must record its Cognirise signing entity.
+  signingEntityId: z.string().trim().min(1).max(120),
   values: z.record(z.string().max(2000)).default({}),
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -843,7 +844,7 @@ router.post("/contracts", async (req, res) => {
     actor: { id: me.id, name: me.name },
     templateId: body.templateId,
     counterparty: body.counterparty,
-    signingEntityId: body.signingEntityId ?? null,
+    signingEntityId: body.signingEntityId,
     title: body.title ?? null,
     values: body.values,
     effectiveDate: body.effectiveDate ?? null,

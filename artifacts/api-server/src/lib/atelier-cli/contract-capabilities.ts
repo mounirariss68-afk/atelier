@@ -45,6 +45,7 @@ import {
   resolveCounterparty,
   firmAutoFill,
   buildFieldValues,
+  resolveSigningEntity,
   type Counterparty,
 } from "../atelier-contract-service.js";
 import { CONTRACT_TYPES } from "../atelier-contracts.js";
@@ -309,7 +310,18 @@ defineCapability({
         errorMessage: "The template's fields must be reviewed and activated first.",
       };
     }
-    const firm = await firmAutoFill(orgId);
+    // Task #237 — every contract must record a Cognirise signing entity; the
+    // chat/CLI flow always uses the registry's default entity.
+    const { entity: signingEntity } = await resolveSigningEntity(orgId, null);
+    if (!signingEntity) {
+      return {
+        ok: false,
+        errorCode: "signing_entity_not_found",
+        errorMessage:
+          "No Cognirise signing entity is configured. Add a legal entity (and mark one as default) under Settings → Firm profile before preparing contracts.",
+      };
+    }
+    const firm = await firmAutoFill(orgId, signingEntity);
     const explicit = (input.values && typeof input.values === "object"
       ? input.values
       : {}) as Record<string, string>;
@@ -351,6 +363,7 @@ defineCapability({
           diff: {
             template: { id: template.id, name: template.name, type: template.contractType },
             counterparty: { kind: counterparty.kind, id: counterparty.id, label: counterparty.label },
+            signingEntity: { id: signingEntity.id, name: signingEntity.name },
             values,
             effectiveDate: input.effectiveDate ?? null,
             expiryDate: input.expiryDate ?? null,
@@ -375,6 +388,7 @@ defineCapability({
       actor: { id: ctx.persona.id, name: ctx.persona.name },
       templateId: template.id,
       counterparty: { kind: counterparty.kind, id: counterparty.id },
+      signingEntityId: signingEntity.id,
       title: input.title ? String(input.title) : null,
       values: { ...explicit, ...values },
       effectiveDate: input.effectiveDate ? String(input.effectiveDate) : null,

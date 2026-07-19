@@ -1888,8 +1888,7 @@ export const AtelierCreateContractBody = zod.object({
   signingEntityId: zod
     .string()
     .min(1)
-    .max(atelierCreateContractBodySigningEntityIdMax)
-    .optional(),
+    .max(atelierCreateContractBodySigningEntityIdMax),
   values: zod
     .record(
       zod.string(),
