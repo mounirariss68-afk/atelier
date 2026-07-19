@@ -95,6 +95,7 @@ import {
 // pages under canonical /finance/* paths with old URLs preserved.
 import FinanceHome from "@/pages/finance/FinanceHome";
 import FinanceEntities from "@/pages/finance/FinanceEntities";
+import FinanceEntityDetail from "@/pages/finance/FinanceEntityDetail";
 import FinanceSection from "@/pages/finance/FinanceSection";
 // Task #418 — Finance Payables (P2P) hardening sub-pages.
 import {
@@ -666,7 +667,7 @@ function Router() {
             canonical /finance/* paths. */}
         <Route path="/finance" component={FinanceHome} />
         <Route path="/finance/entities" component={FinanceEntities} />
-        <Route path="/finance/entities/:id" component={FinanceEntities} />
+        <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/ledger">{() => <FinanceSection sectionId="ledger" />}</Route>
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
         <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>

@@ -45,8 +45,10 @@ import {
   hasDocumentGrant,
   auditDocument,
   DOC_CATEGORIES,
+  DOC_KINDS,
   DOC_MAX_BYTES,
   type DocCategory,
+  type LegalDocKind,
 } from "../../lib/atelier-documents.js";
 import { canSeeAccount } from "./accountRoutes";
 import { accessibleEngagementIds } from "./engagementRoutes";
@@ -116,6 +118,7 @@ function docShape(doc: DocRow, current?: typeof atelierDocumentVersions.$inferSe
     accountId: doc.accountId,
     engagementId: doc.engagementId,
     entityId: doc.entityId,
+    docKind: doc.docKind,
     uploaderUserId: doc.uploaderUserId,
     uploaderLabel: doc.uploaderLabel,
     currentVersionId: doc.currentVersionId,
@@ -217,6 +220,19 @@ router.post("/documents", uploadSingle, async (req, res) => {
   const notes =
     typeof req.body?.notes === "string" && req.body.notes ? req.body.notes.slice(0, 2000) : null;
   const aiRetrieval = req.body?.aiRetrieval !== "false" && req.body?.aiRetrieval !== false;
+  let docKind: LegalDocKind | null = null;
+  if (typeof req.body?.docKind === "string" && req.body.docKind) {
+    // Legal classification is partner-gated even at upload time.
+    if (!docPrivileged(me.role)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    if (!DOC_KINDS.includes(req.body.docKind as LegalDocKind)) {
+      res.status(400).json({ error: "invalid-doc-kind" });
+      return;
+    }
+    docKind = req.body.docKind as LegalDocKind;
+  }
 
   if (entityId) {
     const [ent] = await db
@@ -280,6 +296,7 @@ router.post("/documents", uploadSingle, async (req, res) => {
     accountId,
     engagementId,
     entityId,
+    docKind,
     aiRetrieval,
     notes,
     fileName: file.originalname || "upload",
@@ -393,6 +410,7 @@ router.patch("/documents/:id", async (req, res) => {
     category: string;
     notes: string | null;
     entityId: string | null;
+    docKind: string | null;
     updatedAt: Date;
   }> = {};
   const changes: Record<string, unknown> = {};
@@ -427,6 +445,24 @@ router.patch("/documents/:id", async (req, res) => {
     }
     patch.entityId = next;
     changes.entityId = next;
+  }
+  // Task #287 — manual classification override (null clears back to
+  // unclassified; validated against the known kinds otherwise). Legal
+  // classification is partner-gated: uploader-level PATCH access is not
+  // enough to reclassify legal documents.
+  if (req.body?.docKind !== undefined) {
+    if (!docPrivileged(me.role)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const nextKind =
+      typeof req.body.docKind === "string" && req.body.docKind ? req.body.docKind : null;
+    if (nextKind && !DOC_KINDS.includes(nextKind as LegalDocKind)) {
+      res.status(400).json({ error: "invalid-doc-kind" });
+      return;
+    }
+    patch.docKind = nextKind;
+    changes.docKind = nextKind;
   }
   if (Object.keys(patch).length > 0) {
     patch.updatedAt = new Date();

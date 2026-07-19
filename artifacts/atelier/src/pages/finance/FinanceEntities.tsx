@@ -23,11 +23,12 @@ import {
   useLegalEntityDetail,
   type LegalEntityRow,
 } from "@/lib/v5-hooks";
-import { Plus, Pencil, Archive, FileText, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Pencil, Archive, Sparkles, Loader2 } from "lucide-react";
+import { Link } from "wouter";
 
 const API_BASE = "/api/atelier";
 
-async function jsonReq<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function jsonReq<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     credentials: "include",
@@ -66,11 +67,11 @@ const ISO_COUNTRY: Record<string, string> = {
   MA: "🇲🇦 Morocco", TN: "🇹🇳 Tunisia", DM: "🇩🇲 Dominica", IL: "🇮🇱 Israel",
 };
 
-function countryLabel(code: string): string {
+export function countryLabel(code: string): string {
   return ISO_COUNTRY[code?.toUpperCase()] ?? code?.toUpperCase() ?? "—";
 }
 
-const STATUS_LABEL: Record<LegalEntityRow["status"], string> = {
+export const STATUS_LABEL: Record<LegalEntityRow["status"], string> = {
   active: "Active",
   in_formation: "In formation",
   dormant: "Dormant",
@@ -85,7 +86,7 @@ function daysUntil(iso: string | null | undefined): number {
   return Math.round((t - Date.now()) / 86_400_000);
 }
 
-function expiryTone(iso: string | null | undefined): "green" | "amber" | "red" | "default" {
+export function expiryTone(iso: string | null | undefined): "green" | "amber" | "red" | "default" {
   const d = daysUntil(iso);
   if (!Number.isFinite(d)) return "default";
   if (d < 0) return "red";
@@ -93,7 +94,7 @@ function expiryTone(iso: string | null | undefined): "green" | "amber" | "red" |
   return "green";
 }
 
-function expiryText(iso: string | null | undefined): string {
+export function expiryText(iso: string | null | undefined): string {
   const d = daysUntil(iso);
   if (!Number.isFinite(d)) return "no expiry";
   if (d < 0) return `expired ${Math.abs(d)}d ago`;
@@ -129,7 +130,7 @@ interface OwnerDraft {
   personNo: string;
 }
 
-interface EntityDraft {
+export interface EntityDraft {
   legalNameEn: string;
   legalNameAr: string;
   shortName: string;
@@ -407,7 +408,7 @@ function TextField(props: {
   );
 }
 
-function EntityFormDialog(props: {
+export function EntityFormDialog(props: {
   open: boolean;
   onClose: () => void;
   editing: LegalEntityRow | null;
@@ -757,9 +758,11 @@ function InfoRow(props: { label: string; value: React.ReactNode }) {
   );
 }
 
-function fmtAed(n: number | null | undefined): string | null {
+export function fmtAed(n: number | null | undefined): string | null {
   return typeof n === "number" ? `AED ${n.toLocaleString()}` : null;
 }
+
+export { InfoRow };
 
 function EntityCard(props: {
   entity: LegalEntityRow;
@@ -769,152 +772,63 @@ function EntityCard(props: {
 }) {
   const e = props.entity;
   const { documents } = useLegalEntityDetail(e.id);
+  const expiring = e.registrations.filter((r) => r.expiresOn);
+  const worst = expiring.reduce<{ iso: string | null; d: number }>(
+    (acc, r) => {
+      const d = daysUntil(r.expiresOn);
+      return d < acc.d ? { iso: r.expiresOn ?? null, d } : acc;
+    },
+    { iso: null, d: Number.POSITIVE_INFINITY },
+  );
+  const leaseEnd = e.lease?.endDate ?? null;
   return (
-    <Card className="p-5 space-y-4" data-testid={`entity-card-${e.id}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <Card className="p-5 flex flex-col gap-3" data-testid={`entity-card-${e.id}`}>
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <Eyebrow>{countryLabel(e.country)} · {e.legalForm || "—"}</Eyebrow>
-          <h3 className="text-lg text-text mt-0.5" data-testid={`text-entity-name-${e.id}`}>{e.legalNameEn}</h3>
-          {e.legalNameAr && <p className="text-sm text-text-mute" dir="rtl">{e.legalNameAr}</p>}
-          <p className="text-xs text-text-faint mt-0.5">
+          <Link href={`/finance/entities/${e.id}`} className="block group">
+            <h3 className="text-base text-text mt-0.5 group-hover:text-gold transition-colors" data-testid={`text-entity-name-${e.id}`}>
+              {e.legalNameEn}
+            </h3>
+          </Link>
+          {e.legalNameAr && <p className="text-xs text-text-mute" dir="rtl">{e.legalNameAr}</p>}
+          <p className="text-[11px] text-text-faint mt-0.5">
             {e.jurisdiction}{e.incorporationDate ? ` · incorporated ${e.incorporationDate}` : ""}
-            {e.durationYears ? ` · ${e.durationYears}-year term` : ""}
             {e.baseCurrency ? ` · ${e.baseCurrency}` : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <MonoChip tone={e.status === "active" ? "green" : e.status === "archived" ? "red" : "amber"}>
-            {STATUS_LABEL[e.status]}
-          </MonoChip>
-          {props.canWrite && e.status !== "archived" && (
-            <>
-              <Button size="sm" variant="outline" onClick={props.onEdit} data-testid={`button-edit-${e.id}`}>
-                <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
-              </Button>
-              <Button size="sm" variant="ghost" className="text-danger" onClick={props.onArchive} data-testid={`button-archive-${e.id}`}>
-                <Archive className="w-3.5 h-3.5 mr-1" /> Archive
-              </Button>
-            </>
-          )}
-        </div>
+        <MonoChip tone={e.status === "active" ? "green" : e.status === "archived" ? "red" : "amber"}>
+          {STATUS_LABEL[e.status]}
+        </MonoChip>
       </div>
 
-      {/* Registrations */}
-      {e.registrations.length > 0 && (
-        <div>
-          <SectionHead headline="Registrations & licenses" />
-          <div className="grid sm:grid-cols-2 gap-2 mt-2">
-            {e.registrations.map((r) => (
-              <div key={r.id} className="rounded-md border border-border-soft p-2.5" data-testid={`reg-${r.id}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-text truncate">{r.label}</span>
-                  {r.expiresOn && (
-                    <MonoChip tone={expiryTone(r.expiresOn)}>{expiryText(r.expiresOn)}</MonoChip>
-                  )}
-                </div>
-                <div className="text-xs text-text-mute font-mono mt-0.5">{r.number}</div>
-                <div className="text-[11px] text-text-faint mt-0.5">
-                  {r.issuer ?? ""}{r.issuedOn ? ` · issued ${r.issuedOn}` : ""}{r.expiresOn ? ` · expires ${r.expiresOn}` : ""}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="flex flex-wrap gap-1.5 text-xs">
+        <MonoChip>{e.registrations.length} registration{e.registrations.length === 1 ? "" : "s"}</MonoChip>
+        {worst.iso && <MonoChip tone={expiryTone(worst.iso)}>license {expiryText(worst.iso)}</MonoChip>}
+        {leaseEnd && <MonoChip tone={expiryTone(leaseEnd)}>lease {expiryText(leaseEnd)}</MonoChip>}
+        <MonoChip>{documents.length} document{documents.length === 1 ? "" : "s"}</MonoChip>
+        {e.owners.length > 0 && <MonoChip>{e.owners.length} owner{e.owners.length === 1 ? "" : "s"}</MonoChip>}
+      </div>
 
-      {/* Activities */}
-      {e.activities.length > 0 && (
-        <div>
-          <SectionHead headline="Licensed activities" />
-          <ul className="mt-2 space-y-1">
-            {e.activities.map((a) => (
-              <li key={`${a.code}-${a.nameEn}`} className="text-sm flex items-baseline gap-2">
-                <span className="font-mono text-xs text-gold whitespace-nowrap">{a.code}</span>
-                <span className="text-text">{a.nameEn}</span>
-                {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="grid sm:grid-cols-2 gap-4">
-        {/* Owners */}
-        {e.owners.length > 0 && (
-          <div>
-            <SectionHead headline="Ownership & management" />
-            <div className="mt-2 space-y-2">
-              {e.owners.map((o) => (
-                <div key={o.name} className="rounded-md border border-border-soft p-2.5 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-text">{o.name}</span>
-                    {typeof o.sharePct === "number" && <MonoChip>{o.sharePct}%</MonoChip>}
-                  </div>
-                  <div className="text-[11px] text-text-faint mt-0.5">
-                    {(o.roles ?? []).join(", ")}
-                    {o.nationality ? ` · ${o.nationality}` : ""}
-                    {o.passportNo ? ` · passport ${o.passportNo}` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Premises & lease */}
-        {(e.premises || e.lease) && (
-          <div>
-            <SectionHead headline="Premises & lease" />
-            <div className="mt-2">
-              {e.premises && (
-                <>
-                  <InfoRow label="Address" value={e.premises.addressLine} />
-                  <InfoRow label="Unit" value={e.premises.unit} />
-                  <InfoRow label="Building" value={e.premises.building} />
-                  <InfoRow label="Area" value={e.premises.area} />
-                  <InfoRow label="Plot" value={e.premises.plotNumber} />
-                  <InfoRow label="Makani" value={e.premises.makaniNo} />
-                  <InfoRow label="Size" value={e.premises.sizeSqm ? `${e.premises.sizeSqm} sqm` : null} />
-                </>
-              )}
-              {e.lease && (
-                <>
-                  <InfoRow label="Ejari contract" value={e.lease.contractNo} />
-                  <InfoRow label="Lessor" value={e.lease.lessorName} />
-                  <InfoRow
-                    label="Lease term"
-                    value={e.lease.startDate || e.lease.endDate ? (
-                      <span>
-                        {e.lease.startDate ?? "…"} → {e.lease.endDate ?? "…"}{" "}
-                        {e.lease.endDate && <MonoChip tone={expiryTone(e.lease.endDate)}>{expiryText(e.lease.endDate)}</MonoChip>}
-                      </span>
-                    ) : null}
-                  />
-                  <InfoRow label="Annual rent" value={fmtAed(e.lease.annualRentAed)} />
-                  <InfoRow label="Deposit" value={fmtAed(e.lease.securityDepositAed)} />
-                </>
-              )}
-            </div>
+      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+        <Link
+          href={`/finance/entities/${e.id}`}
+          className="text-xs font-mono uppercase tracking-widest text-gold hover:underline"
+          data-testid={`link-entity-detail-${e.id}`}
+        >
+          Open entity →
+        </Link>
+        {props.canWrite && e.status !== "archived" && (
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" variant="outline" onClick={props.onEdit} data-testid={`button-edit-${e.id}`}>
+              <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+            </Button>
+            <Button size="sm" variant="ghost" className="text-danger" onClick={props.onArchive} data-testid={`button-archive-${e.id}`}>
+              <Archive className="w-3.5 h-3.5 mr-1" /> Archive
+            </Button>
           </div>
         )}
       </div>
-
-      {/* Linked documents */}
-      {documents.length > 0 && (
-        <div>
-          <SectionHead headline="Linked documents" />
-          <ul className="mt-2 space-y-1">
-            {documents.map((d) => (
-              <li key={d.id} className="text-sm flex items-center gap-2" data-testid={`linked-doc-${d.id}`}>
-                <FileText className="w-3.5 h-3.5 text-text-mute shrink-0" />
-                <a className="text-text hover:text-gold truncate" href={`/documents?open=${d.id}`}>{d.title}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {e.notes && <p className="text-xs text-text-faint italic">{e.notes}</p>}
     </Card>
   );
 }
@@ -964,7 +878,7 @@ export default function FinanceEntities() {
     <div>
       <PageHero>
         <Eyebrow>Finance · Entities</Eyebrow>
-        <h1 className="text-2xl text-text mt-1">Legal-entity registry</h1>
+        <h1 className="text-xl text-text mt-1">Legal-entity registry</h1>
         <p className="text-sm text-text-mute mt-2 max-w-2xl">
           The firm's own legal entities, digitized from official registrations — licenses,
           activities, ownership, premises and linked corporate documents.
@@ -1018,7 +932,7 @@ export default function FinanceEntities() {
         </Card>
       )}
 
-      <div className="space-y-4">
+      <div className="grid md:grid-cols-2 gap-4">
         {visible.map((e) => (
           <EntityCard
             key={e.id}

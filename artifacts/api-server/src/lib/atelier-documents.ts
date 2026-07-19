@@ -256,6 +256,26 @@ async function setVersionRetrievable(versionId: string, on: boolean): Promise<vo
 // Create / version / update / delete
 // ---------------------------------------------------------------------------
 
+/**
+ * Task #287 — legal-function document kinds for entity-linked documents.
+ * Drives the three-tier presentation on the entity detail page
+ * (constitutional / active compliance / formation history). Null docKind
+ * = unclassified (always surfaced, never hidden).
+ */
+export const DOC_KINDS = [
+  "trade_license",
+  "commercial_register",
+  "chamber_membership",
+  "establishment_card",
+  "initial_approval",
+  "follow_up_receipt",
+  "memorandum_of_association",
+  "ejari_tenancy",
+  "tax_registration",
+  "other",
+] as const;
+export type LegalDocKind = (typeof DOC_KINDS)[number];
+
 export interface DocumentUploadArgs {
   orgId: string;
   uploader: { id: string; name: string };
@@ -264,6 +284,7 @@ export interface DocumentUploadArgs {
   accountId?: string | null;
   engagementId?: string | null;
   entityId?: string | null;
+  docKind?: LegalDocKind | null;
   aiRetrieval?: boolean;
   notes?: string | null;
   fileName: string;
@@ -328,6 +349,7 @@ export async function createDocument(args: DocumentUploadArgs): Promise<
       accountId: args.accountId ?? null,
       engagementId: args.engagementId ?? null,
       entityId: args.entityId ?? null,
+      docKind: args.docKind ?? null,
       uploaderUserId: args.uploader.id,
       uploaderLabel: args.uploader.name,
       currentVersionId: verId,

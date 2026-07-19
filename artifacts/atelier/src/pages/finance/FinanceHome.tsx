@@ -764,14 +764,14 @@ function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
 }) {
   // Compliance calendar — 90-day rolling from as-of
   const calendar = React.useMemo(() => {
-    const items: Array<{ id: string; label: string; entity: string; date: string; tone: "red" | "amber" | "gold" | "default"; daysOut: number }> = [];
+    const items: Array<{ id: string; label: string; entity: string; date: string; tone: "red" | "amber" | "gold" | "default"; daysOut: number; href: string }> = [];
     const dayMs = 86_400_000;
     for (const e of entities) {
       const push = (id: string, label: string, date: string) => {
         if (!date || date === "—") return;
         const d = Math.round((new Date(date).getTime() - asOfMs) / dayMs);
         if (d > 90 || d < -30) return;
-        items.push({ id, label, entity: e.shortName, date, daysOut: d, tone: d < 0 ? "red" : d <= 7 ? "amber" : d <= 30 ? "gold" : "default" });
+        items.push({ id, label, entity: e.shortName, date, daysOut: d, tone: d < 0 ? "red" : d <= 7 ? "amber" : d <= 30 ? "gold" : "default", href: `/finance/entities/${e.id}` });
       };
       push(`v-${e.id}`, "VAT filing", e.fiscal.nextVatFiling);
       push(`ct-${e.id}`, "CT filing", e.fiscal.nextCtFiling);
@@ -792,6 +792,8 @@ function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
         date: x.expiresOn,
         daysOut: d,
         tone: d < 0 ? "red" : d <= 30 ? "amber" : "gold",
+        // Task #287 — expiry alerts deep-link into the entity detail page
+        href: `/finance/entities/${x.entityId}`,
       });
     }
     items.sort((a, b) => a.daysOut - b.daysOut);
@@ -835,7 +837,9 @@ function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
             {calendar.map((c) => (
               <li key={c.id} className="flex items-baseline justify-between gap-2 text-[11px] border-b border-border-soft last:border-b-0 py-1">
                 <div className="min-w-0">
-                  <div className="text-text truncate">{c.label}</div>
+                  <Link href={c.href} className="block text-text truncate hover:text-gold transition-colors" data-testid={`link-calendar-${c.id}`}>
+                    {c.label}
+                  </Link>
                   <div className="text-text-faint font-mono text-[10px]">{c.entity}</div>
                 </div>
                 <div className="text-right">

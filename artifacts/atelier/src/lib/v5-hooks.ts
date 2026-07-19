@@ -134,7 +134,11 @@ export interface LegalEntityLinkedDoc {
   id: string;
   title: string;
   category: string;
+  /** Task #287 — legal-function classification (null = unclassified). */
+  docKind: string | null;
   aiRetrieval: boolean;
+  fileName: string | null;
+  mime: string | null;
   createdAt: string;
 }
 

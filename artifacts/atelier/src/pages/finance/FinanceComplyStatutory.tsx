@@ -2,6 +2,7 @@
  * FinanceComplyStatutory — Statutory filings register (Task #419).
  */
 import * as React from "react";
+import { Link } from "wouter";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip, BackLink } from "@/components/ui/primitives";
 import { useStatutoryFilings, useFinanceEntities, useEntityExpiries, type StatutoryFilingRow } from "@/lib/v5-hooks";
 
@@ -91,7 +92,14 @@ export default function FinanceComplyStatutory() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <Eyebrow>{x.entityShortName}{x.issuer ? ` · ${x.issuer}` : ""}</Eyebrow>
-                    <div className="text-base font-medium text-text mt-0.5">{x.label}</div>
+                    {/* Task #287 — deep link to the entity detail page */}
+                    <Link
+                      href={`/finance/entities/${x.entityId}`}
+                      className="block text-base font-medium text-text mt-0.5 hover:text-gold transition-colors"
+                      data-testid={`link-expiry-entity-${x.id}`}
+                    >
+                      {x.label}
+                    </Link>
                     {x.number && <p className="text-sm text-text-mute mt-1 font-mono">{x.number}</p>}
                   </div>
                   <div className="text-right shrink-0">

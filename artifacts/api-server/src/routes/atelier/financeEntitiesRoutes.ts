@@ -14,7 +14,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -23,7 +23,7 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { isFoundingPartner, isPartner } from "./personaRoles";
-import { loadDocBytes } from "../../lib/atelier-documents.js";
+import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
 import { extractAttachment } from "../../lib/atelier-cli/attachments/extractors.js";
 import { extractFirstJsonObject } from "../../lib/atelier-agents/runner.js";
 
@@ -462,15 +462,38 @@ router.get("/finance/entities/:id", async (req, res) => {
       ),
     )
     .orderBy(desc(atelierDocuments.createdAt));
+  // Task #287 — surface file name/mime so the entity page can open the
+  // file directly via /documents/:id/download.
+  const versionIds = docs
+    .map((d) => d.currentVersionId)
+    .filter((v): v is string => !!v);
+  const { atelierDocumentVersions } = await import("@workspace/db");
+  const versions = versionIds.length
+    ? await db
+        .select({
+          id: atelierDocumentVersions.id,
+          fileName: atelierDocumentVersions.fileName,
+          mime: atelierDocumentVersions.mime,
+        })
+        .from(atelierDocumentVersions)
+        .where(inArray(atelierDocumentVersions.id, versionIds))
+    : [];
+  const versionById = new Map(versions.map((v) => [v.id, v]));
   res.json({
     entity: entityShape(row),
-    documents: docs.map((d) => ({
-      id: d.id,
-      title: d.title,
-      category: d.category,
-      aiRetrieval: d.aiRetrieval,
-      createdAt: d.createdAt,
-    })),
+    documents: docs.map((d) => {
+      const v = d.currentVersionId ? versionById.get(d.currentVersionId) : null;
+      return {
+        id: d.id,
+        title: d.title,
+        category: d.category,
+        docKind: d.docKind ?? null,
+        aiRetrieval: d.aiRetrieval,
+        fileName: v?.fileName ?? null,
+        mime: v?.mime ?? null,
+        createdAt: d.createdAt,
+      };
+    }),
   });
 });
 
@@ -741,6 +764,20 @@ router.post("/finance/entities/extract", async (req, res) => {
           "The AI extraction produced no fields from this document. Review the document manually.",
       });
       return;
+    }
+    // Task #287 — capture the detected kind on the document itself the
+    // first time (manual overrides win: never clobber an existing kind).
+    const detectedKind =
+      typeof proposal.documentKind === "string" &&
+      (DOC_KINDS as readonly string[]).includes(proposal.documentKind)
+        ? proposal.documentKind
+        : null;
+    const normalizedKind = detectedKind;
+    if (normalizedKind && normalizedKind !== "other" && !doc.docKind) {
+      await db
+        .update(atelierDocuments)
+        .set({ docKind: normalizedKind, updatedAt: new Date() })
+        .where(eq(atelierDocuments.id, doc.id));
     }
     await auditEntity({
       entityId: documentId,

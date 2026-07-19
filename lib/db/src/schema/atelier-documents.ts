@@ -45,6 +45,14 @@ export const atelierDocuments = pgTable(
     engagementId: text("engagement_id"),
     /** Task #249 — optional link to a legal-entity registry record. */
     entityId: text("entity_id"),
+    /**
+     * Task #287 — detected/overridden document kind for entity-linked
+     * documents (trade_license | memorandum_of_association | ejari_tenancy |
+     * establishment_card | commercial_register | chamber_membership |
+     * initial_approval | follow_up_receipt | tax_registration | other).
+     * Null = unclassified (surfaced, never hidden).
+     */
+    docKind: text("doc_kind"),
     uploaderUserId: text("uploader_user_id").notNull(),
     uploaderLabel: text("uploader_label").notNull().default(""),
     /** Points at the latest version row. */

@@ -273,6 +273,26 @@ async function main() {
     );
     if (bogus.body?.document?.id) docIds.push(bogus.body.document.id);
 
+    const badKind = await uploadDoc(
+      fpId,
+      {
+        title: `Bad kind ${runTag}`,
+        category: "corporate_legal",
+        entityId: entity.id,
+        docKind: "not_a_kind",
+        aiRetrieval: "false",
+      },
+      Buffer.from(LICENSE_TEXT, "utf8"),
+      "license.txt",
+      "text/plain",
+    );
+    check(
+      "upload with invalid docKind -> 400 invalid-doc-kind",
+      badKind.status === 400 && badKind.body?.error === "invalid-doc-kind",
+      badKind,
+    );
+    if (badKind.body?.document?.id) docIds.push(badKind.body.document.id);
+
     const up = await uploadDoc(
       fpId,
       {
@@ -301,6 +321,16 @@ async function main() {
         Array.isArray(detail.body?.documents) &&
         detail.body.documents.some((d: any) => d.id === doc?.id),
       detail.body,
+    );
+    // Task #287 — detail docs carry docKind (null until classified) + file info
+    const detailDoc = (detail.body?.documents ?? []).find((d: any) => d.id === doc?.id);
+    check(
+      "entity detail doc carries docKind:null + fileName + mime",
+      detailDoc &&
+        detailDoc.docKind === null &&
+        detailDoc.fileName === "license.txt" &&
+        detailDoc.mime === "text/plain",
+      detailDoc,
     );
 
     const filtered = await api(fpId, "GET", `/documents?entityId=${entity.id}`);
@@ -343,6 +373,69 @@ async function main() {
         extract.body?.proposal?.documentKind === "trade_license" &&
         extract.body?.proposal?.fields?.legalNameEn === "Probe265 Ventures LLC",
       extract,
+    );
+
+    // Task #287 — extraction persists the detected kind onto the document
+    const detailAfterExtract = await api(fpId, "GET", `/finance/entities/${entity.id}`);
+    const docAfterExtract = (detailAfterExtract.body?.documents ?? []).find(
+      (d: any) => d.id === doc.id,
+    );
+    check(
+      "extract persisted docKind=trade_license on the linked doc",
+      docAfterExtract?.docKind === "trade_license",
+      docAfterExtract,
+    );
+
+    // Manual override wins: PATCH to another kind, then re-extract must NOT clobber
+    const badPatch = await api(fpId, "PATCH", `/documents/${doc.id}`, { docKind: "nope" });
+    check(
+      "patch invalid docKind -> 400 invalid-doc-kind",
+      badPatch.status === 400 && badPatch.body?.error === "invalid-doc-kind",
+      badPatch,
+    );
+    const kindPatch = await api(fpId, "PATCH", `/documents/${doc.id}`, {
+      docKind: "initial_approval",
+    });
+    check(
+      "patch docKind override -> 200 with docKind=initial_approval",
+      kindPatch.status === 200 && kindPatch.body?.document?.docKind === "initial_approval",
+      kindPatch,
+    );
+    await api(fpId, "POST", "/finance/entities/extract", { documentId: doc.id });
+    const detailAfterReextract = await api(fpId, "GET", `/finance/entities/${entity.id}`);
+    const docAfterReextract = (detailAfterReextract.body?.documents ?? []).find(
+      (d: any) => d.id === doc.id,
+    );
+    check(
+      "re-extract does not clobber manual docKind override",
+      docAfterReextract?.docKind === "initial_approval",
+      docAfterReextract,
+    );
+    const kindClear = await api(fpId, "PATCH", `/documents/${doc.id}`, { docKind: null });
+    check(
+      "patch docKind:null clears classification",
+      kindClear.status === 200 && kindClear.body?.document?.docKind === null,
+      kindClear,
+    );
+
+    // Partner gating: uploader-level access is NOT enough to classify legal docs.
+    const conDocId = `doc_${runTag}_con`;
+    await db.insert(atelierDocuments).values({
+      id: conDocId,
+      orgId: "aico",
+      title: `Consultant own doc ${runTag}`,
+      category: "other",
+      uploaderUserId: conId,
+      uploaderLabel: "Probe265 Consultant",
+    } as any);
+    docIds.push(conDocId);
+    const conKindPatch = await api(conId, "PATCH", `/documents/${conDocId}`, {
+      docKind: "trade_license",
+    });
+    check(
+      "consultant docKind patch on own doc -> 403",
+      conKindPatch.status === 403,
+      conKindPatch,
     );
 
     // ---- archive flow ----
