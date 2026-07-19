@@ -287,6 +287,106 @@ router.get("/finance/entities", async (req, res) => {
   res.json({ items: items.map(entityShape) });
 });
 
+/**
+ * Task #264 — upcoming registry expiries (registrations + lease end dates)
+ * across non-archived entities, for the Finance Home compliance calendar,
+ * the "Next action" inbox and the Comply deadlines surfaces. Window is
+ * configurable via ?windowDays (default 90, clamped 1–365); already-expired
+ * items within the last 30 days stay visible so a missed renewal cannot
+ * silently vanish.
+ *
+ * NOTE: must stay registered BEFORE /finance/entities/:id or "expiries"
+ * would be captured as an entity id.
+ */
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/finance/entities/expiries", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  const rawWindow = Number(req.query.windowDays);
+  const windowDays = Number.isFinite(rawWindow)
+    ? Math.min(365, Math.max(1, Math.round(rawWindow)))
+    : 90;
+  const dayMs = 86_400_000;
+  const now = Date.now();
+  const rows = await db
+    .select()
+    .from(atelierLegalEntities)
+    .where(eq(atelierLegalEntities.orgId, me.orgId));
+  const items: Array<{
+    id: string;
+    entityId: string;
+    entityShortName: string;
+    kind: "registration" | "lease";
+    registrationType: string | null;
+    label: string;
+    number: string | null;
+    issuer: string | null;
+    expiresOn: string;
+    daysOut: number;
+    severity: "overdue" | "critical" | "upcoming";
+  }> = [];
+  for (const e of rows) {
+    if (e.status === "archived" || e.archivedAt) continue;
+    const shortName = e.shortName || e.legalNameEn;
+    const push = (
+      id: string,
+      kind: "registration" | "lease",
+      registrationType: string | null,
+      label: string,
+      number: string | null,
+      issuer: string | null,
+      expiresOn: string,
+    ) => {
+      const t = new Date(expiresOn).getTime();
+      if (!Number.isFinite(t)) return;
+      const daysOut = Math.round((t - now) / dayMs);
+      if (daysOut > windowDays || daysOut < -30) return;
+      items.push({
+        id,
+        entityId: e.id,
+        entityShortName: shortName,
+        kind,
+        registrationType,
+        label,
+        number,
+        issuer,
+        expiresOn,
+        daysOut,
+        severity: daysOut < 0 ? "overdue" : daysOut <= 30 ? "critical" : "upcoming",
+      });
+    };
+    for (const r of e.registrations ?? []) {
+      if (!r.expiresOn) continue;
+      push(
+        `reg-${e.id}-${r.id}`,
+        "registration",
+        r.type ?? "other",
+        r.label || r.type || "Registration",
+        r.number ?? null,
+        r.issuer ?? null,
+        r.expiresOn,
+      );
+    }
+    if (e.lease?.endDate) {
+      const leaseLabel = e.lease.ejariTenantNo
+        ? "Ejari lease end"
+        : "Lease end";
+      push(
+        `lease-${e.id}`,
+        "lease",
+        null,
+        leaseLabel,
+        e.lease.contractNo ?? null,
+        e.lease.lessorName ?? null,
+        e.lease.endDate,
+      );
+    }
+  }
+  items.sort((a, b) => a.daysOut - b.daysOut);
+  res.json({ windowDays, items });
+});
+
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/finance/entities/:id", async (req, res) => {
   const me = ensurePersona(req, res);

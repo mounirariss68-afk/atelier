@@ -3,7 +3,7 @@
  */
 import * as React from "react";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip, BackLink } from "@/components/ui/primitives";
-import { useStatutoryFilings, useFinanceEntities, type StatutoryFilingRow } from "@/lib/v5-hooks";
+import { useStatutoryFilings, useFinanceEntities, useEntityExpiries, type StatutoryFilingRow } from "@/lib/v5-hooks";
 
 function daysUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -29,7 +29,9 @@ function fmtRel(d: number): string {
 export default function FinanceComplyStatutory() {
   const filings = useStatutoryFilings();
   const entities = useFinanceEntities();
+  const { expiries } = useEntityExpiries(90);
   const [filter, setFilter] = React.useState<"all" | string>("all");
+  const visibleExpiries = filter === "all" ? expiries : expiries.filter((x) => x.entityId === filter);
 
   const visible = filter === "all" ? filings : filings.filter((f) => f.entityId === filter);
   const sorted = [...visible].sort((a, b) => a.dueOn.localeCompare(b.dueOn));
@@ -79,6 +81,31 @@ export default function FinanceComplyStatutory() {
       </PageHero>
 
       <div className="container-atelier py-10 space-y-3">
+        {visibleExpiries.length > 0 && (
+          <div className="space-y-3" data-testid="registry-expiries">
+            <SectionHead
+              headline={`${visibleExpiries.length} registry expir${visibleExpiries.length === 1 ? "y" : "ies"} · next 90 days`}
+            />
+            {visibleExpiries.map((x) => (
+              <Card key={x.id} className="p-4" data-testid={`registry-expiry-${x.id}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Eyebrow>{x.entityShortName}{x.issuer ? ` · ${x.issuer}` : ""}</Eyebrow>
+                    <div className="text-base font-medium text-text mt-0.5">{x.label}</div>
+                    {x.number && <p className="text-sm text-text-mute mt-1 font-mono">{x.number}</p>}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <MonoChip tone={x.severity === "overdue" ? "red" : x.severity === "critical" ? "amber" : "default"}>
+                      {x.severity === "overdue" ? "expired" : x.kind === "lease" ? "lease ends" : "expires"}
+                    </MonoChip>
+                    <div className="font-mono text-xs text-text mt-1.5">{x.expiresOn}</div>
+                    <div className="font-mono text-[10px] text-text-faint">{fmtRel(x.daysOut)}</div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
         <SectionHead headline={`${sorted.length} filing${sorted.length === 1 ? "" : "s"}`} />
         {sorted.map((f) => {
           const ent = entities.find((e) => e.id === f.entityId);

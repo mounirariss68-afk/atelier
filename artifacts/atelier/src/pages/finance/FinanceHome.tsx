@@ -31,7 +31,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { useAtelierGetPipelineForecast, useAtelierListEngagements } from "@workspace/api-client-react";
 import { PageHero, SectionHead, Card, MonoChip, Eyebrow } from "@/components/ui/primitives";
-import { useFinanceEntities, type FinanceEntityRow } from "@/lib/v5-hooks";
+import { useFinanceEntities, useEntityExpiries, type FinanceEntityRow, type EntityExpiryRow } from "@/lib/v5-hooks";
 import {
   CfoFilterBar,
   MetricTile,
@@ -756,8 +756,9 @@ function toneClasses(t: "red" | "amber" | "gold" | "default"): string {
   }
 }
 
-function CloseComplianceInbox({ entities, inbox, asOfMs }: {
+function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
   entities: FinanceEntityRow[];
+  expiries: EntityExpiryRow[];
   inbox: ReturnType<typeof buildCfoInbox>;
   asOfMs: number;
 }) {
@@ -775,16 +776,27 @@ function CloseComplianceInbox({ entities, inbox, asOfMs }: {
       push(`v-${e.id}`, "VAT filing", e.fiscal.nextVatFiling);
       push(`ct-${e.id}`, "CT filing", e.fiscal.nextCtFiling);
       push(`cl-${e.id}`, "Period close", e.fiscal.nextClose);
-      for (const lic of e.tradeLicenses) {
-        const d = Math.round((new Date(lic.expiresOn).getTime() - asOfMs) / dayMs);
-        if (d <= 90 && d >= -30) {
-          items.push({ id: `lic-${lic.id}`, label: `${lic.authority} renewal`, entity: e.shortName, date: lic.expiresOn, daysOut: d, tone: d < 0 ? "red" : d <= 30 ? "amber" : "gold" });
-        }
-      }
+    }
+    // Task #264 — registry expiries (registrations + lease ends) come from
+    // the server-computed feed so lease end dates are covered too; scoped
+    // to the entities selected in the filter bar.
+    const selectedIds = new Set(entities.map((e) => e.id));
+    for (const x of expiries) {
+      if (!selectedIds.has(x.entityId)) continue;
+      const d = Math.round((new Date(x.expiresOn).getTime() - asOfMs) / dayMs);
+      if (d > 90 || d < -30) continue;
+      items.push({
+        id: `exp-${x.id}`,
+        label: x.kind === "lease" ? x.label : `${x.label} renewal`,
+        entity: x.entityShortName,
+        date: x.expiresOn,
+        daysOut: d,
+        tone: d < 0 ? "red" : d <= 30 ? "amber" : "gold",
+      });
     }
     items.sort((a, b) => a.daysOut - b.daysOut);
     return items.slice(0, 8);
-  }, [entities, asOfMs]);
+  }, [entities, expiries, asOfMs]);
 
   return (
     <div className="grid lg:grid-cols-3 gap-4">
@@ -890,11 +902,12 @@ export default function FinanceHome() {
   const { data: fpaBudget } = useFpaBudget("base", "USD", null);
   const { data: fpaHc } = useFpaHeadcount("base", null);
   const { data: fpaRenewals } = useFpaRenewals("USD", null);
+  const { expiries } = useEntityExpiries(90);
 
   // Inbox is entity-scoped: only producers tied to selected entities
   const inbox = React.useMemo(
-    () => buildCfoInbox(ar, margin, cash),
-    [ar, margin, cash],
+    () => buildCfoInbox(ar, margin, cash, expiries),
+    [ar, margin, cash, expiries],
   );
 
   const sources: FilterBarSource[] = [
@@ -953,7 +966,7 @@ export default function FinanceHome() {
         </section>
 
         <section>
-          <CloseComplianceInbox entities={ctx.selectedEntities} inbox={inbox} asOfMs={ctx.asOfMs} />
+          <CloseComplianceInbox entities={ctx.selectedEntities} expiries={expiries} inbox={inbox} asOfMs={ctx.asOfMs} />
         </section>
 
         <section data-testid="finance-plan-fpa">

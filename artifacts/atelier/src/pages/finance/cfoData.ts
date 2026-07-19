@@ -121,17 +121,44 @@ export interface NextAction {
   daysOut: number;
 }
 
+export interface EntityExpiryLike {
+  id: string;
+  entityId: string;
+  entityShortName: string;
+  kind: "registration" | "lease";
+  label: string;
+  expiresOn: string;
+  daysOut: number;
+  severity: "overdue" | "critical" | "upcoming";
+}
+
 export function buildCfoInbox(
   ar: ArAging | null,
   margin: MarginFirm | null,
   cash: CashForecastResp | null,
+  expiries: EntityExpiryLike[] = [],
 ): NextAction[] {
   const out: NextAction[] = [];
 
-  // Entity-derived producers (licence renewals, period close, VAT filings)
-  // were retired with the demo entity backbone: real legal entities from
-  // the signing-entity registry carry no fiscal calendars or licences yet,
-  // so no entity items are fabricated here.
+  // Task #264 — registry expiries (trade licences, establishment cards,
+  // Ejari lease ends) from the legal-entity registry. Overdue and
+  // ≤30-day items demand action; further-out ones stay on the
+  // compliance calendar only.
+  for (const x of expiries) {
+    if (x.severity === "upcoming") continue;
+    out.push({
+      id: `exp-${x.id}`,
+      section: "Entities",
+      href: `/finance/entities`,
+      title: x.severity === "overdue"
+        ? `${x.kind === "lease" ? "Lease" : "Registration"} expired — ${x.label}`
+        : `${x.kind === "lease" ? "Lease" : "Registration"} renewal — ${x.label}`,
+      detail: `${x.entityShortName} · expires ${x.expiresOn}`,
+      due: x.daysOut < 0 ? `${Math.abs(x.daysOut)}d overdue` : `${x.daysOut}d`,
+      tone: x.severity === "overdue" ? "red" : "amber",
+      daysOut: x.daysOut,
+    });
+  }
 
   // From AR — invoices > 90 days overdue
   if (ar) {

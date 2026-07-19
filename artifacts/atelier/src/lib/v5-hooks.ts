@@ -162,6 +162,40 @@ export function useLegalEntityDetail(id: string | null): {
 }
 
 // ============================================================
+// Finance — Registry expiries (Task #264): registrations + lease end
+// dates within a configurable window, server-computed from the
+// legal-entity registry (no hardcoded dates).
+// ============================================================
+export interface EntityExpiryRow {
+  id: string;
+  entityId: string;
+  entityShortName: string;
+  kind: "registration" | "lease";
+  registrationType: string | null;
+  label: string;
+  number: string | null;
+  issuer: string | null;
+  expiresOn: string;
+  daysOut: number;
+  severity: "overdue" | "critical" | "upcoming";
+}
+
+export function useEntityExpiries(windowDays = 90): {
+  expiries: EntityExpiryRow[];
+  isLoading: boolean;
+} {
+  const q = useQuery<{ windowDays: number; items: EntityExpiryRow[] }>({
+    queryKey: ["atelier-v5", "entity-expiries", windowDays],
+    queryFn: () =>
+      get<{ windowDays: number; items: EntityExpiryRow[] }>(
+        `/finance/entities/expiries?windowDays=${windowDays}`,
+      ),
+    staleTime: 30_000,
+  });
+  return { expiries: q.data?.items ?? [], isLoading: q.isLoading };
+}
+
+// ============================================================
 // Finance — Entities backbone (legacy Task #372 shape, adapted from the
 // Task #249 registry so FinanceHome / Close / Comply keep rendering)
 // ============================================================
