@@ -1463,6 +1463,13 @@ function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
   });
   if (!data?.coverage || data.coverage.length === 0) return null;
   const found = data.coverage.filter((c) => c.found);
+  // Task #209 — coverage staleness. Executives change jobs; a role marked
+  // "covered" silently goes stale. 30 days matches the research-staleness
+  // threshold used elsewhere on this page.
+  const sweepAgeDays = data.runAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(data.runAt).getTime()) / 86_400_000))
+    : null;
+  const sweepStale = sweepAgeDays !== null && sweepAgeDays >= 30;
   return (
     <div className="space-y-2" data-testid="block-critical-role-coverage">
       <div className="flex items-center justify-between">
@@ -1471,6 +1478,24 @@ function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
           {found.length}/{data.coverage.length} mapped
         </span>
       </div>
+      {data.runAt && sweepAgeDays !== null && (
+        <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono text-text-faint">
+          <span data-testid="text-coverage-run-at">
+            Last sweep {new Date(data.runAt).toLocaleDateString()}
+          </span>
+          <MonoChip
+            tone={sweepStale ? "amber" : "default"}
+            data-testid="chip-coverage-age"
+          >
+            {sweepAgeDays === 0 ? "today" : `${sweepAgeDays}d ago`}
+          </MonoChip>
+          {sweepStale && (
+            <MonoChip tone="amber" data-testid="chip-coverage-stale">
+              stale — executives may have moved
+            </MonoChip>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1.5">
         {data.coverage.map((c) => (
           <MonoChip
@@ -1487,6 +1512,18 @@ function CriticalRoleCoverageBlock({ accountId }: { accountId: string }) {
         From the last executive mapping sweep. Unfound roles stay unfilled —
         the Mapper never stretches a junior person into a critical role.
       </p>
+      {sweepStale && (
+        <div
+          className="flex items-center justify-between gap-3 border border-amber/30 bg-amber/10 rounded p-3"
+          data-testid="banner-coverage-rerun-nudge"
+        >
+          <p className="text-amber text-[11px] font-mono leading-relaxed">
+            This map is over a month old — re-run the Executive Mapper to
+            confirm these people are still in seat.
+          </p>
+          <MapExecutivesButton accountId={accountId} />
+        </div>
+      )}
     </div>
   );
 }
@@ -2162,6 +2199,9 @@ function MapExecutivesButton({ accountId }: { accountId: string }) {
       qc.invalidateQueries({
         queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
       });
+      // Task #209 — the coverage block (incl. staleness chip) reads from the
+      // latest completed run, so refresh it after a new sweep.
+      qc.invalidateQueries({ queryKey: ["atelier-exec-mapper-coverage", accountId] });
       toast({
         title:
           data.proposedCount > 0
