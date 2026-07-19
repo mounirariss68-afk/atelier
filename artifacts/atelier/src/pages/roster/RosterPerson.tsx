@@ -219,10 +219,10 @@ function ProfileTab({
           <Field label="Title" value={person.title} />
         )}
         <Field label="Country" value={person.country} />
-        <DemographicsEditor person={person} onUpdated={onUpdated} />
         <Field label="Status" value={person.status} />
         <Field label="Start" value={person.startDate} />
         <Field label="End" value={person.endDate} />
+        <DemographicsEditor person={person} onUpdated={onUpdated} />
       </Card>
       <Card className="p-4 space-y-3">
         <h3 className="font-mono text-xs uppercase text-text-mute">
@@ -319,7 +319,10 @@ function DemographicsEditor({
 
   if (!editing) {
     return (
-      <>
+      <div
+        className="space-y-2 border border-border-soft rounded p-2"
+        data-testid="demographics-group"
+      >
         <Field label="Nationality" value={person.nationality} />
         <Field
           label="Gender (self-identified)"
@@ -329,14 +332,16 @@ function DemographicsEditor({
               : null
           }
         />
-        <button
-          onClick={() => { setError(null); setEditing(true); }}
-          className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
-          data-testid="demographics-edit"
-        >
-          Edit demographics
-        </button>
-      </>
+        <div className="flex justify-end">
+          <button
+            onClick={() => { setError(null); setEditing(true); }}
+            className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-gold"
+            data-testid="demographics-edit"
+          >
+            Edit demographics
+          </button>
+        </div>
+      </div>
     );
   }
 
