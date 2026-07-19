@@ -12,7 +12,7 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { PageHero, SectionHead, Card, Eyebrow, MonoChip, BackLink } from "@/components/ui/primitives";
+import { PageHero, SectionLabel, Card, Eyebrow, MonoChip, BackLink } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAtelierGetMe } from "@workspace/api-client-react";
@@ -34,7 +34,7 @@ import {
   ExtractDialog,
   type EntityDraft,
 } from "./FinanceEntities";
-import { Pencil, Archive, FileText, ExternalLink, Vault, Sparkles } from "lucide-react";
+import { Pencil, Archive, FileText, Vault, Sparkles, Download, MoreVertical } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Document classification — three legal-function tiers + unclassified
@@ -112,58 +112,75 @@ function DocCard(props: {
   const d = props.doc;
   return (
     <div
-      className={`rounded-md border border-border-soft p-3 flex flex-col gap-2${props.muted ? " opacity-70" : ""}`}
+      className={`group card-flat p-3.5 flex flex-col gap-3 justify-between transition-colors hover:border-border ${props.muted ? " opacity-60 bg-transparent" : ""}`}
       data-testid={`entity-doc-${d.id}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <FileText className="w-3.5 h-3.5 text-text-mute shrink-0" />
-            <a
-              href={`/api/atelier/documents/${d.id}/download`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-text hover:text-gold truncate"
-              data-testid={`link-open-doc-${d.id}`}
-              title="Open the file"
-            >
-              {d.title}
-            </a>
-            <ExternalLink className="w-3 h-3 text-text-faint shrink-0" />
-          </div>
-          {d.fileName && (
-            <div className="text-[11px] text-text-faint font-mono mt-0.5 truncate">{d.fileName}</div>
-          )}
-          {props.expiresOn && (
-            <div className="mt-1">
-              <MonoChip tone={expiryTone(props.expiresOn)}>{expiryText(props.expiresOn)}</MonoChip>
+          <div className="flex items-start gap-2 min-w-0">
+            <FileText className="w-4 h-4 text-text-mute shrink-0 mt-0.5" />
+            <div>
+              <a
+                href={`/api/atelier/documents/${d.id}/download?disposition=inline`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium text-text hover:text-gold truncate block"
+                data-testid={`link-open-doc-${d.id}`}
+                title="View document inline"
+              >
+                {d.title}
+              </a>
+              {d.fileName && (
+                <div className="text-[11px] text-text-faint font-mono mt-0.5 truncate">{d.fileName}</div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-        <a
-          href={`/documents?open=${d.id}`}
-          className="shrink-0 text-text-faint hover:text-gold"
-          title="View in document vault"
-          data-testid={`link-vault-doc-${d.id}`}
-        >
-          <Vault className="w-3.5 h-3.5" />
-        </a>
+        <div className="flex items-center gap-1 shrink-0 opacity-50 group-hover:opacity-100 transition-opacity">
+          <a
+            href={`/api/atelier/documents/${d.id}/download`}
+            className="p-1.5 rounded hover:bg-bg-deep text-text-mute hover:text-text transition-colors"
+            title="Download file"
+            data-testid={`button-download-doc-${d.id}`}
+          >
+            <Download className="w-3.5 h-3.5" />
+          </a>
+          <a
+            href={`/documents?open=${d.id}`}
+            className="p-1.5 rounded hover:bg-bg-deep text-text-mute hover:text-text transition-colors"
+            title="View in document vault"
+            data-testid={`link-vault-doc-${d.id}`}
+          >
+            <Vault className="w-3.5 h-3.5" />
+          </a>
+        </div>
       </div>
-      {props.canWrite ? (
-        <select
-          className="h-7 w-full rounded border border-border bg-bg-elevate px-1.5 text-[11px] font-mono text-text-mute outline-none focus-visible:border-gold"
-          value={d.docKind ?? ""}
-          onChange={(e) => props.onKindChange(e.target.value || null)}
-          data-testid={`select-doc-kind-${d.id}`}
-        >
-          <option value="">Unclassified</option>
-          {KIND_OPTIONS.map(([v, l]) => (
-            <option key={v} value={v}>{l}</option>
-          ))}
-        </select>
-      ) : (
-        d.docKind && <MonoChip>{KIND_LABEL[d.docKind] ?? d.docKind}</MonoChip>
-      )}
+      
+      <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+        {props.expiresOn ? (
+          <MonoChip tone={expiryTone(props.expiresOn)}>{expiryText(props.expiresOn)}</MonoChip>
+        ) : <div />}
+        
+        {props.canWrite ? (
+          <div className="relative">
+            <select
+              className="appearance-none h-6 pl-2 pr-6 rounded bg-transparent hover:bg-bg border border-transparent hover:border-border text-[10px] font-mono text-text-mute outline-none focus-visible:border-gold transition-colors cursor-pointer"
+              value={d.docKind ?? ""}
+              onChange={(e) => props.onKindChange(e.target.value || null)}
+              data-testid={`select-doc-kind-${d.id}`}
+              title="Classify document"
+            >
+              <option value="">Unclassified</option>
+              {KIND_OPTIONS.map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+            <MoreVertical className="w-3 h-3 text-text-faint absolute right-1.5 top-1.5 pointer-events-none" />
+          </div>
+        ) : (
+          d.docKind && <MonoChip className="text-[10px]">{KIND_LABEL[d.docKind] ?? d.docKind}</MonoChip>
+        )}
+      </div>
     </div>
   );
 }
@@ -319,7 +336,7 @@ export default function FinanceEntityDetail() {
         {/* Documents — tiered shelf: compliance first, then constitutional,
             then a collapsed formation-history accordion. */}
         <section data-testid="entity-documents-shelf">
-          <SectionHead headline="Documents" />
+          <SectionLabel>Documents</SectionLabel>
           {documents.length === 0 ? (
             <p className="text-sm text-text-mute mt-2">
               No linked documents yet — link corporate/legal documents to this entity from the Document Library.
@@ -328,11 +345,11 @@ export default function FinanceEntityDetail() {
             <div className="space-y-6 mt-3">
               {(tiers.compliance.length > 0 || tiers.unclassified.length > 0) && (
                 <div data-testid="doc-tier-compliance">
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-sm font-medium text-text">{TIER_META.compliance.title}</h2>
+                  <div className="flex items-baseline gap-2 mb-3">
+                    <h2 className="text-[13px] font-mono uppercase tracking-widest text-text-mute">{TIER_META.compliance.title}</h2>
                     <span className="text-[11px] text-text-faint">{TIER_META.compliance.blurb}</span>
                   </div>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tiers.compliance.map((d) => (
                       <DocCard
                         key={d.id}
@@ -344,14 +361,14 @@ export default function FinanceEntityDetail() {
                     ))}
                   </div>
                   {tiers.unclassified.length > 0 && (
-                    <div className="mt-3" data-testid="doc-tier-unclassified">
-                      <div className="flex items-baseline gap-2">
-                        <h3 className="text-xs font-medium text-warn uppercase tracking-widest">
+                    <div className="mt-6" data-testid="doc-tier-unclassified">
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <h3 className="text-[13px] font-mono uppercase tracking-widest text-warn">
                           {TIER_META.unclassified.title}
                         </h3>
                         <span className="text-[11px] text-text-faint">{TIER_META.unclassified.blurb}</span>
                       </div>
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         {tiers.unclassified.map((d) => (
                           <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
                         ))}
@@ -362,12 +379,12 @@ export default function FinanceEntityDetail() {
               )}
 
               {tiers.constitutional.length > 0 && (
-                <div data-testid="doc-tier-constitutional">
-                  <div className="flex items-baseline gap-2">
-                    <h2 className="text-sm font-medium text-text">{TIER_META.constitutional.title}</h2>
+                <div className="mt-6" data-testid="doc-tier-constitutional">
+                  <div className="flex items-baseline gap-2 mb-3">
+                    <h2 className="text-[13px] font-mono uppercase tracking-widest text-text-mute">{TIER_META.constitutional.title}</h2>
                     <span className="text-[11px] text-text-faint">{TIER_META.constitutional.blurb}</span>
                   </div>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tiers.constitutional.map((d) => (
                       <DocCard key={d.id} doc={d} canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
                     ))}
@@ -376,9 +393,9 @@ export default function FinanceEntityDetail() {
               )}
 
               {tiers.history.length > 0 && (
-                <details data-testid="doc-tier-history" className="group">
-                  <summary className="flex items-center gap-2 cursor-pointer list-none select-none">
-                    <span className="text-sm font-medium text-text-mute group-open:text-text">
+                <details data-testid="doc-tier-history" className="group mt-6">
+                  <summary className="flex items-center gap-2 cursor-pointer list-none select-none mb-3">
+                    <span className="text-[13px] font-mono uppercase tracking-widest text-text-mute group-open:text-text transition-colors">
                       {TIER_META.history.title}
                     </span>
                     <MonoChip>{tiers.history.length}</MonoChip>
@@ -390,7 +407,7 @@ export default function FinanceEntityDetail() {
                       Hide
                     </span>
                   </summary>
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {tiers.history.map((d) => (
                       <DocCard key={d.id} doc={d} muted canWrite={!!canWrite} onKindChange={(k) => void setDocKind(d.id, k)} />
                     ))}
@@ -404,16 +421,16 @@ export default function FinanceEntityDetail() {
         {/* Registrations */}
         {e.registrations.length > 0 && (
           <section>
-            <SectionHead headline="Registrations & licenses" />
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-3">
+            <SectionLabel>Registrations & licenses</SectionLabel>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
               {e.registrations.map((r) => (
-                <div key={r.id} className="rounded-md border border-border-soft p-2.5" data-testid={`reg-${r.id}`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-text truncate">{r.label}</span>
+                <div key={r.id} className="card-flat p-3.5 flex flex-col justify-center" data-testid={`reg-${r.id}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-sm font-medium text-text">{r.label}</span>
                     {r.expiresOn && <MonoChip tone={expiryTone(r.expiresOn)}>{expiryText(r.expiresOn)}</MonoChip>}
                   </div>
-                  <div className="text-xs text-text-mute font-mono mt-0.5">{r.number}</div>
-                  <div className="text-[11px] text-text-faint mt-0.5">
+                  <div className="text-xs text-text-mute font-mono mt-2">{r.number}</div>
+                  <div className="text-[11px] text-text-faint mt-1">
                     {r.issuer ?? ""}{r.issuedOn ? ` · issued ${r.issuedOn}` : ""}{r.expiresOn ? ` · expires ${r.expiresOn}` : ""}
                   </div>
                 </div>
@@ -422,19 +439,19 @@ export default function FinanceEntityDetail() {
           </section>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid md:grid-cols-2 gap-8">
           {/* Owners */}
           {e.owners.length > 0 && (
             <section>
-              <SectionHead headline="Ownership & management" />
-              <div className="mt-2 space-y-2">
+              <SectionLabel>Ownership & management</SectionLabel>
+              <div className="mt-4 space-y-3">
                 {e.owners.map((o) => (
-                  <div key={o.name} className="rounded-md border border-border-soft p-2.5 text-sm">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-text">{o.name}</span>
+                  <div key={o.name} className="card-flat p-3.5 flex flex-col justify-center">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-medium text-text">{o.name}</span>
                       {typeof o.sharePct === "number" && <MonoChip>{o.sharePct}%</MonoChip>}
                     </div>
-                    <div className="text-[11px] text-text-faint mt-0.5">
+                    <div className="text-[11px] text-text-faint mt-1.5">
                       {(o.roles ?? []).join(", ")}
                       {o.nationality ? ` · ${o.nationality}` : ""}
                       {o.passportNo ? ` · passport ${o.passportNo}` : ""}
@@ -448,8 +465,8 @@ export default function FinanceEntityDetail() {
           {/* Premises & lease */}
           {(e.premises || e.lease) && (
             <section>
-              <SectionHead headline="Premises & lease" />
-              <div className="mt-2">
+              <SectionLabel>Premises & lease</SectionLabel>
+              <div className="mt-4 card-flat p-4 space-y-2">
                 {e.premises && (
                   <>
                     <InfoRow label="Address" value={e.premises.addressLine} />
@@ -468,8 +485,8 @@ export default function FinanceEntityDetail() {
                     <InfoRow
                       label="Lease term"
                       value={e.lease.startDate || e.lease.endDate ? (
-                        <span>
-                          {e.lease.startDate ?? "…"} → {e.lease.endDate ?? "…"}{" "}
+                        <span className="flex items-center gap-2">
+                          {e.lease.startDate ?? "…"} → {e.lease.endDate ?? "…"}
                           {e.lease.endDate && <MonoChip tone={expiryTone(e.lease.endDate)}>{expiryText(e.lease.endDate)}</MonoChip>}
                         </span>
                       ) : null}
@@ -486,16 +503,18 @@ export default function FinanceEntityDetail() {
         {/* Activities */}
         {e.activities.length > 0 && (
           <section>
-            <SectionHead headline="Licensed activities" />
-            <ul className="mt-2 space-y-1">
-              {e.activities.map((a) => (
-                <li key={`${a.code}-${a.nameEn}`} className="text-sm flex items-baseline gap-2">
-                  <span className="font-mono text-xs text-gold whitespace-nowrap">{a.code}</span>
-                  <span className="text-text">{a.nameEn}</span>
-                  {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
-                </li>
-              ))}
-            </ul>
+            <SectionLabel>Licensed activities</SectionLabel>
+            <div className="card-flat mt-4 py-2">
+              <ul className="divide-y divide-border-soft">
+                {e.activities.map((a) => (
+                  <li key={`${a.code}-${a.nameEn}`} className="text-sm px-4 py-2 flex items-baseline gap-3">
+                    <span className="font-mono text-xs text-gold whitespace-nowrap w-16">{a.code}</span>
+                    <span className="text-text flex-1">{a.nameEn}</span>
+                    {a.nameAr && <span className="text-text-faint text-xs" dir="rtl">{a.nameAr}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </section>
         )}
 

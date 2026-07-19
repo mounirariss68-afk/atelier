@@ -575,18 +575,26 @@ router.get("/documents/:id/download", async (req, res) => {
     res.status(410).json({ error: "blob-missing" });
     return;
   }
+  const inline = req.query.disposition === "inline";
   await auditDocument({
     documentId: doc.id,
     actorId: me.id,
     actorLabel: me.name,
     action: "document.download",
-    payload: { versionId: version.id, versionNumber: version.versionNumber, fileName: version.fileName },
-    summary: `Downloaded "${version.fileName}" (v${version.versionNumber})`,
+    payload: {
+      versionId: version.id,
+      versionNumber: version.versionNumber,
+      fileName: version.fileName,
+      mode: inline ? "view" : "download",
+    },
+    summary: inline
+      ? `Viewed "${version.fileName}" (v${version.versionNumber})`
+      : `Downloaded "${version.fileName}" (v${version.versionNumber})`,
   });
   res.setHeader("Content-Type", version.mime || "application/octet-stream");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(version.fileName)}"`,
+    `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(version.fileName)}"`,
   );
   res.send(bytes);
 });
