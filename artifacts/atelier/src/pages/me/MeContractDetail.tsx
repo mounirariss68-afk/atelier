@@ -47,6 +47,13 @@ interface MeSignatureRequest {
   signers: MeSignatureSigner[];
 }
 
+/** Task #318 — template field labels/roles (same shape as GET /contracts/:id). */
+interface MeContractField {
+  key: string;
+  label: string;
+  role: string;
+}
+
 const SIGNER_STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   sent: "Sent",
@@ -82,6 +89,7 @@ export default function MeContractDetail() {
   const { data, isLoading, error } = useQuery<{
     contract: AtelierContract;
     signatureRequest: MeSignatureRequest | null;
+    fields?: MeContractField[];
   }>({
     queryKey: ["me-contract", id],
     enabled: !!id,
@@ -113,6 +121,18 @@ export default function MeContractDetail() {
   }
 
   const docs = contract.documents ?? [];
+  // Task #318 — group the counterparty's typed answers (captured at
+  // e-signing) under their human-readable labels, mirroring the
+  // partner-facing contract detail page.
+  const fields = data?.fields ?? [];
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+  const secondPartyKeys = new Set(
+    fields.filter((f) => f.role === "second_party").map((f) => f.key),
+  );
+  const signedEntries = Object.entries(contract.fieldValues ?? {}).filter(([k]) =>
+    secondPartyKeys.has(k),
+  );
+  const labelFor = (k: string) => fieldByKey.get(k)?.label || k;
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <PageHero>
@@ -193,6 +213,27 @@ export default function MeContractDetail() {
               <div className="text-sm text-text-faint">No signers recorded.</div>
             ) : null}
           </div>
+        </Card>
+      ) : null}
+
+      {signedEntries.length > 0 ? (
+        <Card className="p-5" data-testid="section-signed-by-counterparty">
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold text-text">
+              Signed by {contract.counterpartyLabel || "counterparty"}
+            </h3>
+            <p className="text-[11px] text-text-faint">Captured during e-signing.</p>
+          </div>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            {signedEntries.map(([k, v]) => (
+              <div key={k} className="min-w-0">
+                <dt className="text-[11px] text-text-faint">{labelFor(k)}</dt>
+                <dd className="text-text truncate" data-testid={`text-signed-${k}`}>
+                  {String(v ?? "") || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </Card>
       ) : null}
 

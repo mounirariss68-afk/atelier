@@ -721,6 +721,28 @@ router.get("/me/contracts", async (req, res) => {
 });
 
 /**
+ * Task #311/#318 — template field labels/roles for a contract, shared by
+ * the partner detail (GET /contracts/:id) and the self-scope detail
+ * (GET /me/contracts/:id) so both can group the counterparty's
+ * captured-at-signing answers under human-readable labels.
+ */
+async function loadContractFieldMeta(
+  templateVersionId: string | null,
+): Promise<Array<{ key: string; label: string; role: string }>> {
+  if (!templateVersionId) return [];
+  const [version] = await db
+    .select({ fieldSchema: atelierContractTemplateVersions.fieldSchema })
+    .from(atelierContractTemplateVersions)
+    .where(eq(atelierContractTemplateVersions.id, templateVersionId));
+  if (!version) return [];
+  return normalizeFieldSchema(version.fieldSchema).map((f) => ({
+    key: f.key,
+    label: f.label || f.key,
+    role: f.role ?? "standard",
+  }));
+}
+
+/**
  * Task #161 — resolve the caller's roster row ids (org-scoped). Powers the
  * self-scope /me/contracts/* routes below.
  */
@@ -804,19 +826,27 @@ async function loadMySignatureHistory(
 // Task #161 — Me-lens read-only contract detail (documents chain + status).
 // Task #166 — includes signature history (signers + completion) when the
 // contract has been sent for e-signature.
+// Task #318 — includes the template field labels/roles (same shape as
+// GET /contracts/:id) so the self-scope page can render the counterparty's
+// captured-at-signing answers under human-readable labels.
 // @cli-skip: contract lifecycle is UI/chat-capability-driven (Task #159)
 router.get("/me/contracts/:id", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const contract = await loadMyContract(me, req.params.id, res);
   if (!contract) return;
+  // Task #318 — same repair safety net as the partner detail route: merge
+  // in the counterparty's typed answers if the completion webhook missed them.
+  const backfilled = await backfillSecondPartyValues(contract);
+  if (backfilled) contract.fieldValues = backfilled;
   const documents = await db
     .select()
     .from(atelierContractDocuments)
     .where(eq(atelierContractDocuments.contractId, contract.id))
     .orderBy(desc(atelierContractDocuments.versionNumber));
   const signatureRequest = await loadMySignatureHistory(me.orgId, contract.signatureRequestId);
-  res.json({ contract: contractShape(contract, documents), signatureRequest });
+  const fields = await loadContractFieldMeta(contract.templateVersionId);
+  res.json({ contract: contractShape(contract, documents), signatureRequest, fields });
 });
 
 // Task #161 — Me-lens document download (own signed PDF etc.).
@@ -975,20 +1005,7 @@ router.get("/contracts/:id", async (req, res) => {
   // Task #311 — surface the template's field labels/roles so the UI can
   // group the counterparty's captured-at-signing answers under their
   // human-readable labels instead of raw keys.
-  let fields: Array<{ key: string; label: string; role: string }> = [];
-  if (contract.templateVersionId) {
-    const [version] = await db
-      .select({ fieldSchema: atelierContractTemplateVersions.fieldSchema })
-      .from(atelierContractTemplateVersions)
-      .where(eq(atelierContractTemplateVersions.id, contract.templateVersionId));
-    if (version) {
-      fields = normalizeFieldSchema(version.fieldSchema).map((f) => ({
-        key: f.key,
-        label: f.label || f.key,
-        role: f.role ?? "standard",
-      }));
-    }
-  }
+  const fields = await loadContractFieldMeta(contract.templateVersionId);
   res.json({ contract: contractShape(contract, documents), fields });
 });
 
