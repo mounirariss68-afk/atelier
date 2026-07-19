@@ -3,6 +3,17 @@ import { useAtelierGetMe } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { Card, PillButton, MonoChip } from "@/components/ui/primitives";
 
+interface SigningEntity {
+  id: string;
+  name: string;
+  jurisdiction: string;
+  registeredAddress: string;
+  country: string;
+  governingLaw: string;
+  courts: string;
+  isDefault: boolean;
+}
+
 interface FirmPayload {
   firmName: string;
   tagline: string;
@@ -240,6 +251,159 @@ export default function FirmProfile() {
     );
   }
 
+  function SigningEntitiesCard() {
+    const [entities, setEntities] = React.useState<SigningEntity[] | null>(null);
+    const [saving, setSaving] = React.useState(false);
+    const [seErr, setSeErr] = React.useState<string | null>(null);
+    const [dirty, setDirty] = React.useState(false);
+
+    const load = React.useCallback(async () => {
+      try {
+        const r = await api<{ entities: SigningEntity[] }>("/signing-entities");
+        setEntities(r.entities);
+        setDirty(false);
+      } catch (e) {
+        setSeErr((e as Error).message);
+      }
+    }, []);
+    React.useEffect(() => { void load(); }, [load]);
+
+    function patchEntity(i: number, p: Partial<SigningEntity>) {
+      setEntities((prev) => {
+        if (!prev) return prev;
+        let next = prev.map((e, j) => (j === i ? { ...e, ...p } : e));
+        if (p.isDefault) next = next.map((e, j) => ({ ...e, isDefault: j === i }));
+        return next;
+      });
+      setDirty(true);
+    }
+
+    async function save() {
+      if (!entities) return;
+      setSaving(true); setSeErr(null);
+      try {
+        const r = await api<{ entities: SigningEntity[] }>("/firm-profile/legal-entities", {
+          method: "PUT",
+          body: JSON.stringify({
+            entities: entities.map(({ id, ...rest }) => ({
+              ...(id.startsWith("new-") ? {} : { id }),
+              ...rest,
+            })),
+          }),
+        });
+        setEntities(r.entities);
+        setDirty(false);
+      } catch (e) { setSeErr((e as Error).message); }
+      finally { setSaving(false); }
+    }
+
+    return (
+      <Card className="p-5 space-y-3" data-testid="firm-profile-signing-entities">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wide text-text-mute">Signing entities</div>
+          <p className="text-sm text-text-mute">
+            Legal entities Cognirise signs contracts under. The default is preselected when a
+            contract is prepared; the entity drives firm-name, address and governing-law auto-fill.
+          </p>
+        </div>
+        {seErr ? <div className="text-sm text-red-400" data-testid="signing-entities-error">{seErr}</div> : null}
+        {entities === null ? (
+          <div className="text-sm text-text-mute">Loading…</div>
+        ) : (
+          <div className="space-y-4">
+            {entities.length === 0 ? (
+              <div className="text-sm text-text-mute" data-testid="signing-entities-empty">
+                No signing entities yet — add the firm's registered legal entity below.
+              </div>
+            ) : null}
+            {entities.map((e, i) => (
+              <div key={e.id} className="border border-border-soft rounded p-3 space-y-2" data-testid={`signing-entity-${i}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <label className="space-y-1 md:col-span-2">
+                    <div className="text-xs uppercase text-text-mute">Legal name</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.name} onChange={(ev) => patchEntity(i, { name: ev.target.value })}
+                      data-testid={`signing-entity-name-${i}`} />
+                  </label>
+                  <label className="space-y-1 md:col-span-2">
+                    <div className="text-xs uppercase text-text-mute">Registered address</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.registeredAddress} onChange={(ev) => patchEntity(i, { registeredAddress: ev.target.value })}
+                      data-testid={`signing-entity-address-${i}`} />
+                  </label>
+                  <label className="space-y-1">
+                    <div className="text-xs uppercase text-text-mute">Country</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.country} onChange={(ev) => patchEntity(i, { country: ev.target.value })}
+                      data-testid={`signing-entity-country-${i}`} />
+                  </label>
+                  <label className="space-y-1">
+                    <div className="text-xs uppercase text-text-mute">Jurisdiction</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.jurisdiction} onChange={(ev) => patchEntity(i, { jurisdiction: ev.target.value })}
+                      data-testid={`signing-entity-jurisdiction-${i}`} />
+                  </label>
+                  <label className="space-y-1">
+                    <div className="text-xs uppercase text-text-mute">Governing law</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.governingLaw} onChange={(ev) => patchEntity(i, { governingLaw: ev.target.value })}
+                      data-testid={`signing-entity-law-${i}`} />
+                  </label>
+                  <label className="space-y-1">
+                    <div className="text-xs uppercase text-text-mute">Courts / dispute forum</div>
+                    <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+                      value={e.courts} onChange={(ev) => patchEntity(i, { courts: ev.target.value })}
+                      data-testid={`signing-entity-courts-${i}`} />
+                  </label>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <label className="flex items-center gap-1.5 text-text">
+                    <input type="radio" name="signing-entity-default" checked={e.isDefault}
+                      onChange={() => patchEntity(i, { isDefault: true })}
+                      data-testid={`signing-entity-default-${i}`} />
+                    Default entity
+                  </label>
+                  <button className="text-xs text-red-400 underline ml-auto"
+                    onClick={() => { setEntities((prev) => prev?.filter((_, j) => j !== i) ?? prev); setDirty(true); }}
+                    data-testid={`signing-entity-remove-${i}`}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="flex items-center gap-2">
+              <PillButton
+                onClick={() => {
+                  setEntities((prev) => [
+                    ...(prev ?? []),
+                    {
+                      id: `new-${Date.now()}`,
+                      name: "",
+                      jurisdiction: "",
+                      registeredAddress: "",
+                      country: "",
+                      governingLaw: "",
+                      courts: "",
+                      isDefault: (prev ?? []).length === 0,
+                    },
+                  ]);
+                  setDirty(true);
+                }}
+                data-testid="signing-entity-add"
+              >
+                Add entity
+              </PillButton>
+              <PillButton onClick={save} disabled={saving || !dirty} data-testid="signing-entities-save">
+                {saving ? "Saving…" : dirty ? "Save registry" : "Saved"}
+              </PillButton>
+              <span className="text-xs text-text-mute">Exactly one entity must be the default.</span>
+            </div>
+          </div>
+        )}
+      </Card>
+    );
+  }
+
   function PayloadView({ row, label }: { row: FirmRow; label: string }) {
     const p = row.payload;
     return (
@@ -318,6 +482,8 @@ export default function FirmProfile() {
           {loading ? "Drafting…" : "Draft a new version"}
         </PillButton>
       </Card>
+
+      <SigningEntitiesCard />
 
       {profile?.latestDraft ? (
         <DraftEditor

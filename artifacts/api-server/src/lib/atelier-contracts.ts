@@ -247,7 +247,7 @@ Return ONLY a JSON object of this exact shape:
       "label": "Human label",
       "placeholder": "EXACT literal text from the document to replace",
       "dataType": "text" | "date" | "money" | "number",
-      "autoFill": "counterparty_name" | "counterparty_address" | "counterparty_email" | "counterparty_country" | "firm_name" | "firm_address" | "effective_date" | "expiry_date" | "fee" | "term" | "none",
+      "autoFill": "counterparty_name" | "counterparty_address" | "counterparty_email" | "counterparty_country" | "firm_name" | "firm_address" | "firm_governing_law" | "firm_jurisdiction" | "effective_date" | "expiry_date" | "fee" | "term" | "none",
       "required": true | false,
       "note": "optional detection note"
     }

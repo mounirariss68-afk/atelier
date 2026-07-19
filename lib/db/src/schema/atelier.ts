@@ -3592,7 +3592,22 @@ export const atelierFirmProfile = pgTable(
       capabilitiesPitch: string;
       differentiators: string[];
       proofPoints: Array<{ label: string; metric: string }>;
-      legalEntities: Array<{ name: string; jurisdiction: string }>;
+      /**
+       * Task #232 — signing-entity registry. Legacy rows may carry only
+       * {name, jurisdiction}; the richer fields power contract preparation
+       * (entity picker, governing-law autofill). Exactly one isDefault
+       * entity is enforced server-side.
+       */
+      legalEntities: Array<{
+        id?: string;
+        name: string;
+        jurisdiction: string;
+        registeredAddress?: string;
+        country?: string;
+        governingLaw?: string;
+        courts?: string;
+        isDefault?: boolean;
+      }>;
       contactBlock: string;
       brandColors?: { primary?: string; ink?: string; gold?: string };
     }>().notNull().default({} as never),

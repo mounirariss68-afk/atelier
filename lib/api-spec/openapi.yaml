@@ -631,6 +631,21 @@ paths:
   # Multipart uploads (template upload / new version / final docx) and
   # binary downloads intentionally stay out of the spec — the UI calls
   # them with raw fetch, consistent with the Document Library pattern.
+  # Task #232 — signing-entity registry read surface (contract-prep picker).
+  # The management PUT (/atelier/firm-profile/legal-entities) stays out of
+  # the spec — the Firm Profile page calls it with raw fetch.
+  /atelier/signing-entities:
+    get:
+      operationId: atelierListSigningEntities
+      tags: [atelier]
+      summary: Contracts — list the firm's signing entities (Cognirise side)
+      responses:
+        "200":
+          description: Signing entities with the enforced default flagged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSigningEntityList"
   /atelier/contract-templates:
     get:
       operationId: atelierListContractTemplates
@@ -9921,6 +9936,9 @@ components:
         contactId: { type: ["string", "null"] }
         accountId: { type: ["string", "null"] }
         counterpartyLabel: { type: string }
+        signingEntityId: { type: ["string", "null"] }
+        signingEntityLabel: { type: ["string", "null"] }
+        signingEntityCountry: { type: ["string", "null"] }
         status:
           type: string
           enum: [draft, out_for_review, final_uploaded, out_for_signature, signed, declined, voided, expired]
@@ -9968,6 +9986,7 @@ components:
           properties:
             kind: { type: string, enum: [person, contact, account] }
             id: { type: string, minLength: 1 }
+        signingEntityId: { type: string, minLength: 1, maxLength: 120 }
         values:
           type: object
           additionalProperties: { type: string, maxLength: 2000 }
@@ -10010,6 +10029,28 @@ components:
         title: { type: string, minLength: 1, maxLength: 300 }
         message: { type: string, maxLength: 4000 }
         expiresAt: { type: string, format: date-time }
+
+    AtelierSigningEntity:
+      type: object
+      required: [id, name, jurisdiction, registeredAddress, country, governingLaw, courts, isDefault]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        jurisdiction: { type: string }
+        registeredAddress: { type: string }
+        country: { type: string }
+        governingLaw: { type: string }
+        courts: { type: string }
+        isDefault: { type: boolean }
+
+    AtelierSigningEntityList:
+      type: object
+      required: [entities]
+      properties:
+        entities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierSigningEntity" }
+        defaultEntityId: { type: ["string", "null"] }
 
     AtelierContractPrepareError:
       type: object

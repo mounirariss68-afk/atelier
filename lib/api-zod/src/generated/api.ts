@@ -1079,6 +1079,25 @@ export const AtelierSyncAllSignatureRequestsResponse = zod.object({
 });
 
 /**
+ * @summary Contracts — list the firm's signing entities (Cognirise side)
+ */
+export const AtelierListSigningEntitiesResponse = zod.object({
+  entities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      jurisdiction: zod.string(),
+      registeredAddress: zod.string(),
+      country: zod.string(),
+      governingLaw: zod.string(),
+      courts: zod.string(),
+      isDefault: zod.boolean(),
+    }),
+  ),
+  defaultEntityId: zod.string().nullish(),
+});
+
+/**
  * @summary Contracts — list templates (partner-tier only)
  */
 export const atelierListContractTemplatesResponseTemplatesItemCurrentVersionOneFieldSchemaItemKeyMax = 80;
@@ -1792,6 +1811,9 @@ export const AtelierListContractsResponse = zod.object({
       contactId: zod.string().nullish(),
       accountId: zod.string().nullish(),
       counterpartyLabel: zod.string(),
+      signingEntityId: zod.string().nullish(),
+      signingEntityLabel: zod.string().nullish(),
+      signingEntityCountry: zod.string().nullish(),
       status: zod.enum([
         "draft",
         "out_for_review",
@@ -1844,6 +1866,8 @@ export const AtelierListContractsResponse = zod.object({
 
 export const atelierCreateContractBodyTitleMax = 300;
 
+export const atelierCreateContractBodySigningEntityIdMax = 120;
+
 export const atelierCreateContractBodyValuesMaxOne = 2000;
 
 export const atelierCreateContractBodyEffectiveDateRegExp = new RegExp(
@@ -1861,6 +1885,11 @@ export const AtelierCreateContractBody = zod.object({
     kind: zod.enum(["person", "contact", "account"]),
     id: zod.string().min(1),
   }),
+  signingEntityId: zod
+    .string()
+    .min(1)
+    .max(atelierCreateContractBodySigningEntityIdMax)
+    .optional(),
   values: zod
     .record(
       zod.string(),
@@ -1897,6 +1926,9 @@ export const AtelierGetContractResponse = zod.object({
     contactId: zod.string().nullish(),
     accountId: zod.string().nullish(),
     counterpartyLabel: zod.string(),
+    signingEntityId: zod.string().nullish(),
+    signingEntityLabel: zod.string().nullish(),
+    signingEntityCountry: zod.string().nullish(),
     status: zod.enum([
       "draft",
       "out_for_review",
@@ -1997,6 +2029,9 @@ export const AtelierUpdateContractResponse = zod.object({
     contactId: zod.string().nullish(),
     accountId: zod.string().nullish(),
     counterpartyLabel: zod.string(),
+    signingEntityId: zod.string().nullish(),
+    signingEntityLabel: zod.string().nullish(),
+    signingEntityCountry: zod.string().nullish(),
     status: zod.enum([
       "draft",
       "out_for_review",

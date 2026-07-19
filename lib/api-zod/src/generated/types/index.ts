@@ -525,6 +525,8 @@ export * from "./atelierSignatureRequestCreateSignersItem";
 export * from "./atelierSignatureRequestEnvelope";
 export * from "./atelierSignatureRequestList";
 export * from "./atelierSignatureSigner";
+export * from "./atelierSigningEntity";
+export * from "./atelierSigningEntityList";
 export * from "./atelierSourceSignal";
 export * from "./atelierSourceSignalConfidence";
 export * from "./atelierSourceSignalKind";

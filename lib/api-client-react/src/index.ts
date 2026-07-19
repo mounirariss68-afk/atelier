@@ -633,6 +633,7 @@ export {
   getAtelierListContractTemplatesQueryKey,
   getAtelierListContractTemplatesQueryOptions,
   useAtelierListContractTemplates,
+  useAtelierListSigningEntities,
   getAtelierGetContractTemplateUrl,
   getAtelierGetContractTemplateQueryKey,
   getAtelierGetContractTemplateQueryOptions,

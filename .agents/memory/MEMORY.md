@@ -69,4 +69,5 @@
 - [Atelier finance real-facts wiring](atelier-finance-real-facts.md) — Plan/Comply/Reports read loadFinanceFacts()/DB; firm pseudo-entity; honest-zero scenarios; comply table is atelier_finance_compliance_entries (NOT the roster compliance_records).
 - [Chat person-write routing ACL](atelier-person-write-routing.md) — contact_update routes to employees/partner rosters; field-level ACL must mirror REST (titles HR/founding only; self = phone only).
 - [Roster person edit surface](atelier-person-edit.md) — full-profile PATCH whitelists per worker type; users table column is `name` (not fullName) when syncing employee identity to the login row.
+- [Signing-entity registry](atelier-signing-entities.md) — lives in firm-profile payload.legalEntities (no table/seeder); PUT replaces whole registry, server enforces one default; contracts snapshot entity fields.
 - [sendEmail log-only semantics](atelier-email-log-only.md) — sendEmail ok:true+via:"log-only" means NOT delivered; only ok+via:"resend" counts as sent when surfacing delivery status.

@@ -46,6 +46,7 @@ export interface ContractTemplateField {
   /**
    * CRM auto-fill hint: counterparty_name | counterparty_address |
    * counterparty_email | counterparty_country | firm_name | firm_address |
+   * firm_governing_law | firm_jurisdiction |
    * effective_date | expiry_date | fee | term | none
    */
   autoFill: string;
@@ -138,6 +139,12 @@ export const atelierContractRecords = pgTable(
     signatureRequestId: text("signature_request_id"),
     /** Document Library id of the archived signed PDF. */
     signedLibraryDocumentId: text("signed_library_document_id"),
+    /** Task #232 — Cognirise signing entity (firm-profile legalEntities id). */
+    signingEntityId: text("signing_entity_id"),
+    /** Snapshot of the signing entity's legal name at prepare time. */
+    signingEntityLabel: text("signing_entity_label"),
+    /** Snapshot of the signing entity's country (caution note when ≠ UAE). */
+    signingEntityCountry: text("signing_entity_country"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

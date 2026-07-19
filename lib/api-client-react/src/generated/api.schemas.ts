@@ -6437,6 +6437,12 @@ export interface AtelierContract {
   /** @nullable */
   accountId?: string | null;
   counterpartyLabel: string;
+  /** @nullable */
+  signingEntityId?: string | null;
+  /** @nullable */
+  signingEntityLabel?: string | null;
+  /** @nullable */
+  signingEntityCountry?: string | null;
   status: AtelierContractStatus;
   fieldValues: AtelierContractFieldValues;
   ownerUserId: string;
@@ -6493,6 +6499,11 @@ export interface AtelierContractCreate {
    */
   title?: string;
   counterparty: AtelierContractCreateCounterparty;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  signingEntityId?: string;
   values?: AtelierContractCreateValues;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   effectiveDate?: string;
@@ -6570,6 +6581,23 @@ export interface AtelierContractSend {
   /** @maxLength 4000 */
   message?: string;
   expiresAt?: string;
+}
+
+export interface AtelierSigningEntity {
+  id: string;
+  name: string;
+  jurisdiction: string;
+  registeredAddress: string;
+  country: string;
+  governingLaw: string;
+  courts: string;
+  isDefault: boolean;
+}
+
+export interface AtelierSigningEntityList {
+  entities: AtelierSigningEntity[];
+  /** @nullable */
+  defaultEntityId?: string | null;
 }
 
 export interface AtelierContractPrepareError {

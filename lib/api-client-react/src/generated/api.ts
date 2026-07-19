@@ -235,6 +235,7 @@ import type {
   AtelierSignatureRequestCreate,
   AtelierSignatureRequestEnvelope,
   AtelierSignatureRequestList,
+  AtelierSigningEntityList,
   AtelierStageChangeInput,
   AtelierStageTransitionInput,
   AtelierStartPovInput,
@@ -2744,6 +2745,85 @@ export const useAtelierSyncAllSignatureRequests = <
     getAtelierSyncAllSignatureRequestsMutationOptions(options),
   );
 };
+
+/**
+ * @summary Contracts — list the firm's signing entities (Cognirise side)
+ */
+export const getAtelierListSigningEntitiesUrl = () => {
+  return `/api/atelier/signing-entities`;
+};
+
+export const atelierListSigningEntities = async (
+  options?: RequestInit,
+): Promise<AtelierSigningEntityList> => {
+  return customFetch<AtelierSigningEntityList>(
+    getAtelierListSigningEntitiesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListSigningEntitiesQueryKey = () => {
+  return [`/api/atelier/signing-entities`] as const;
+};
+
+export const getAtelierListSigningEntitiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListSigningEntities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListSigningEntities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListSigningEntitiesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListSigningEntities>>
+  > = ({ signal }) => atelierListSigningEntities({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListSigningEntities>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListSigningEntitiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListSigningEntities>>
+>;
+export type AtelierListSigningEntitiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Contracts — list the firm's signing entities (Cognirise side)
+ */
+
+export function useAtelierListSigningEntities<
+  TData = Awaited<ReturnType<typeof atelierListSigningEntities>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListSigningEntities>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListSigningEntitiesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Contracts — list templates (partner-tier only)

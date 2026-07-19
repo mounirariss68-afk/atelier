@@ -129,14 +129,123 @@ export async function resolveCounterparty(
   return null;
 }
 
-export async function firmAutoFill(orgId: string): Promise<Record<string, string>> {
+// ---------------------------------------------------------------------------
+// Task #232 — Signing-entity registry (firm profile payload.legalEntities)
+// ---------------------------------------------------------------------------
+
+export type SigningEntity = {
+  id: string;
+  name: string;
+  jurisdiction: string;
+  registeredAddress: string;
+  country: string;
+  governingLaw: string;
+  courts: string;
+  isDefault: boolean;
+};
+
+type RawLegalEntity = {
+  id?: string;
+  name: string;
+  jurisdiction: string;
+  registeredAddress?: string;
+  country?: string;
+  governingLaw?: string;
+  courts?: string;
+  isDefault?: boolean;
+};
+
+function entitySlugId(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40);
+  return `le_${slug || "entity"}`;
+}
+
+/**
+ * Normalize the firm-profile legalEntities array into signing entities.
+ * Legacy rows ({name, jurisdiction} only) get a deterministic slug id and
+ * empty rich fields. Exactly one default: the first isDefault wins; when
+ * none is flagged, the first entity is treated as the default.
+ */
+export function normalizeSigningEntities(raw: unknown): SigningEntity[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: SigningEntity[] = [];
+  for (const e of raw as RawLegalEntity[]) {
+    if (!e || typeof e.name !== "string" || !e.name.trim()) continue;
+    let id = typeof e.id === "string" && e.id.trim() ? e.id.trim() : entitySlugId(e.name);
+    while (seen.has(id)) id = `${id}_2`;
+    seen.add(id);
+    out.push({
+      id,
+      name: e.name.trim(),
+      jurisdiction: String(e.jurisdiction ?? "").trim(),
+      registeredAddress: String(e.registeredAddress ?? "").trim(),
+      country: String(e.country ?? "").trim(),
+      governingLaw: String(e.governingLaw ?? "").trim(),
+      courts: String(e.courts ?? "").trim(),
+      isDefault: e.isDefault === true,
+    });
+  }
+  const firstDefault = out.findIndex((e) => e.isDefault);
+  out.forEach((e, i) => {
+    e.isDefault = firstDefault === -1 ? i === 0 : i === firstDefault;
+  });
+  return out;
+}
+
+export async function loadPublishedFirmProfile(
+  orgId: string,
+): Promise<typeof atelierFirmProfile.$inferSelect | null> {
   const [profile] = await db
     .select()
     .from(atelierFirmProfile)
     .where(and(eq(atelierFirmProfile.orgId, orgId), eq(atelierFirmProfile.status, "published")))
     .orderBy(desc(atelierFirmProfile.version))
     .limit(1);
+  return profile ?? null;
+}
+
+export async function listSigningEntities(orgId: string): Promise<SigningEntity[]> {
+  const profile = await loadPublishedFirmProfile(orgId);
+  const payload = profile?.payload as { legalEntities?: unknown } | undefined;
+  return normalizeSigningEntities(payload?.legalEntities);
+}
+
+/**
+ * Resolve a signing entity by id, or the default entity when id is null.
+ * Returns null when the registry is empty (legacy behaviour: plain
+ * firm-profile autofill) or the id is unknown ({found:false}).
+ */
+export async function resolveSigningEntity(
+  orgId: string,
+  entityId: string | null,
+): Promise<{ found: boolean; entity: SigningEntity | null }> {
+  const entities = await listSigningEntities(orgId);
+  if (entityId) {
+    const entity = entities.find((e) => e.id === entityId) ?? null;
+    return { found: !!entity, entity };
+  }
+  return { found: true, entity: entities.find((e) => e.isDefault) ?? null };
+}
+
+export async function firmAutoFill(
+  orgId: string,
+  entity?: SigningEntity | null,
+): Promise<Record<string, string>> {
+  const profile = await loadPublishedFirmProfile(orgId);
   const payload = profile?.payload as { firmName?: string; contactBlock?: string } | undefined;
+  if (entity) {
+    return {
+      firm_name: entity.name,
+      firm_address: entity.registeredAddress || payload?.contactBlock || "",
+      firm_governing_law: entity.governingLaw || "",
+      firm_jurisdiction: entity.courts || entity.jurisdiction || "",
+    };
+  }
   return {
     firm_name: payload?.firmName || "Cognirise",
     firm_address: payload?.contactBlock || "",
@@ -183,6 +292,7 @@ export type PrepareContractError = {
     | "template-not-active"
     | "template-version-missing"
     | "counterparty-not-found"
+    | "signing-entity-not-found"
     | "missing-required-fields"
     | "template-blob-missing"
     | "fill-failed";
@@ -200,6 +310,8 @@ export async function prepareContract(args: {
   actor: { id: string; name: string };
   templateId: string;
   counterparty: { kind: string; id: string };
+  /** Task #232 — Cognirise signing entity. Omitted/null → the default entity. */
+  signingEntityId?: string | null;
   title?: string | null;
   values?: Record<string, string>;
   effectiveDate?: string | null;
@@ -232,7 +344,15 @@ export async function prepareContract(args: {
   if (!counterparty) {
     return { ok: false, code: "counterparty-not-found", message: "Counterparty not found." };
   }
-  const firm = await firmAutoFill(args.orgId);
+  const { found, entity } = await resolveSigningEntity(args.orgId, args.signingEntityId ?? null);
+  if (!found) {
+    return {
+      ok: false,
+      code: "signing-entity-not-found",
+      message: "The selected signing entity was not found in the firm's registry.",
+    };
+  }
+  const firm = await firmAutoFill(args.orgId, entity);
   const { values, missingRequired } = buildFieldValues({
     fields: version.fieldSchema,
     counterparty,
@@ -282,6 +402,9 @@ export async function prepareContract(args: {
           ? counterparty.accountId
           : null,
     counterpartyLabel: counterparty.label,
+    signingEntityId: entity?.id ?? null,
+    signingEntityLabel: entity?.name ?? null,
+    signingEntityCountry: entity?.country ?? null,
     status: "draft",
     fieldValues: values,
     ownerUserId: args.actor.id,
@@ -313,6 +436,7 @@ export async function prepareContract(args: {
       templateId: template.id,
       templateVersionId: version.id,
       counterparty: { kind: counterparty.kind, id: counterparty.id, label: counterparty.label },
+      signingEntity: entity ? { id: entity.id, name: entity.name, country: entity.country } : null,
       values,
     },
     summary: `Prepared contract "${title}" from template "${template.name}"`,

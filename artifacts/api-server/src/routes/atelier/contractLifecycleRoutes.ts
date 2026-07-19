@@ -202,6 +202,9 @@ function contractShape(c: ContractRow, documents?: ContractDocRow[]) {
     contactId: c.contactId,
     accountId: c.accountId,
     counterpartyLabel: c.counterpartyLabel,
+    signingEntityId: c.signingEntityId,
+    signingEntityLabel: c.signingEntityLabel,
+    signingEntityCountry: c.signingEntityCountry,
     status: c.status,
     fieldValues: c.fieldValues ?? {},
     ownerUserId: c.ownerUserId,
@@ -817,6 +820,7 @@ const contractCreateBody = z.object({
     kind: z.enum(["person", "contact", "account"]),
     id: z.string().trim().min(1),
   }),
+  signingEntityId: z.string().trim().min(1).max(120).optional(),
   values: z.record(z.string().max(2000)).default({}),
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -839,6 +843,7 @@ router.post("/contracts", async (req, res) => {
     actor: { id: me.id, name: me.name },
     templateId: body.templateId,
     counterparty: body.counterparty,
+    signingEntityId: body.signingEntityId ?? null,
     title: body.title ?? null,
     values: body.values,
     effectiveDate: body.effectiveDate ?? null,
@@ -847,7 +852,9 @@ router.post("/contracts", async (req, res) => {
   });
   if (!result.ok) {
     const status =
-      result.code === "template-not-found" || result.code === "counterparty-not-found"
+      result.code === "template-not-found" ||
+      result.code === "counterparty-not-found" ||
+      result.code === "signing-entity-not-found"
         ? 404
         : result.code === "template-not-active" || result.code === "template-version-missing"
           ? 409

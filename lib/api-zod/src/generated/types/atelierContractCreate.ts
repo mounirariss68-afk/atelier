@@ -17,6 +17,11 @@ export interface AtelierContractCreate {
    */
   title?: string;
   counterparty: AtelierContractCreateCounterparty;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  signingEntityId?: string;
   values?: AtelierContractCreateValues;
   /** @pattern ^\d{4}-\d{2}-\d{2}$ */
   effectiveDate?: string;

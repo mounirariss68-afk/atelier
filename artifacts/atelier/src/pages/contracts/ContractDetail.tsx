@@ -197,12 +197,22 @@ function SendSignatureDialog(props: {
 }) {
   const onErr = useApiError();
   const { toast } = useToast();
-  const [signers, setSigners] = React.useState<Array<{ name: string; email: string }>>([
-    { name: props.contract.counterpartyLabel, email: "" },
-  ]);
+  const initialSigners = React.useCallback(
+    () => [
+      { name: props.contract.counterpartyLabel, email: "" },
+      // Task #232 — pre-label the Cognirise side with the signing entity.
+      ...(props.contract.signingEntityLabel
+        ? [{ name: props.contract.signingEntityLabel, email: "" }]
+        : []),
+    ],
+    [props.contract.counterpartyLabel, props.contract.signingEntityLabel],
+  );
+  const [signers, setSigners] = React.useState<Array<{ name: string; email: string }>>(
+    initialSigners,
+  );
   React.useEffect(() => {
-    if (props.open) setSigners([{ name: props.contract.counterpartyLabel, email: "" }]);
-  }, [props.open, props.contract.counterpartyLabel]);
+    if (props.open) setSigners(initialSigners());
+  }, [props.open, initialSigners]);
 
   const send = useAtelierSendContractForSignature({
     mutation: {
@@ -262,6 +272,12 @@ function SendSignatureDialog(props: {
           >
             + Add signer
           </Button>
+          {props.contract.signingEntityLabel && (
+            <p className="text-[11px] text-text-faint" data-testid="text-signing-entity-side">
+              Cognirise side signs as{" "}
+              <span className="text-text">{props.contract.signingEntityLabel}</span>.
+            </p>
+          )}
           <p className="text-[11px] text-text-faint">
             This emails the final PDF for e-signing and cannot be edited afterwards.
           </p>
@@ -493,6 +509,25 @@ export default function ContractDetail() {
             Document Library
           </Link>
           .
+        </Card>
+      )}
+
+      {contract.signingEntityLabel && (
+        <Card className="p-4" data-testid="card-signing-entity">
+          <div className="text-[11px] text-text-faint">Cognirise signing entity</div>
+          <div className="text-sm text-text">
+            {contract.signingEntityLabel}
+            {contract.signingEntityCountry ? (
+              <span className="text-text-faint"> · {contract.signingEntityCountry}</span>
+            ) : null}
+          </div>
+          {contract.signingEntityCountry &&
+            !/united arab emirates|\buae\b/i.test(contract.signingEntityCountry) && (
+              <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
+                Caution: this entity is registered in {contract.signingEntityCountry}, not the
+                UAE. Check the governing-law and jurisdiction wording in the document.
+              </p>
+            )}
         </Card>
       )}
 

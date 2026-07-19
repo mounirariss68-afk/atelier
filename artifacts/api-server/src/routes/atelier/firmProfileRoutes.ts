@@ -11,9 +11,15 @@
  * Mounted under /api/atelier by routes/atelier/index.ts.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import { z } from "zod";
 import { eq, and, desc, isNull, max } from "drizzle-orm";
 import { db, atelierFirmProfile, atelierUsers } from "@workspace/db";
 import { runBrandProfileWriter } from "../../lib/atelier-agents/runner.js";
+import {
+  listSigningEntities,
+  loadPublishedFirmProfile,
+  normalizeSigningEntities,
+} from "../../lib/atelier-contract-service.js";
 import { audit } from "./engagementRoutes.js";
 
 const router: IRouter = Router();
@@ -255,6 +261,126 @@ router.post("/firm-profile/:id/publish", async (req, res) => {
     .from(atelierFirmProfile)
     .where(and(eq(atelierFirmProfile.id, target.id), orgScope(me)));
   res.json({ published: toWire(row) });
+});
+
+// ---- Task #232 — signing-entity registry (payload.legalEntities) ----
+
+// Read surface for the contract-prep entity picker: any authenticated
+// persona may list the firm's signing entities (names are firm-public).
+// @cli-skip: contract-prep picker data source (Task #232)
+router.get("/signing-entities", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const entities = await listSigningEntities(me.orgId);
+  res.json({
+    entities,
+    defaultEntityId: entities.find((e) => e.isDefault)?.id ?? null,
+  });
+});
+
+const legalEntitiesBody = z.object({
+  entities: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(120).optional(),
+        name: z.string().trim().min(1).max(300),
+        jurisdiction: z.string().trim().max(300).default(""),
+        registeredAddress: z.string().trim().max(600).default(""),
+        country: z.string().trim().max(120).default(""),
+        governingLaw: z.string().trim().max(600).default(""),
+        courts: z.string().trim().max(600).default(""),
+        isDefault: z.boolean().default(false),
+      }),
+    )
+    .max(20),
+});
+
+/**
+ * Replace the signing-entity registry on the PUBLISHED firm profile row
+ * in place (audited). This is deliberately not a draft/publish cycle:
+ * the registry is operational contract-prep data, not brand copy.
+ * Exactly one default is enforced server-side.
+ */
+// @cli-skip: firm-profile management is UI-driven (Task #232)
+router.put("/firm-profile/legal-entities", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensurePublisher(me, res)) return;
+  const parsed = legalEntitiesBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+    return;
+  }
+  const input = parsed.data.entities;
+  const defaults = input.filter((e) => e.isDefault).length;
+  if (input.length > 0 && defaults !== 1) {
+    res.status(400).json({
+      error: "default-required",
+      message: "Exactly one signing entity must be marked as the default.",
+    });
+    return;
+  }
+  const names = input.map((e) => e.name.toLowerCase());
+  if (new Set(names).size !== names.length) {
+    res.status(400).json({ error: "duplicate-names", message: "Entity names must be unique." });
+    return;
+  }
+  // Assign stable ids to new entries; keep existing ids untouched so
+  // contracts that reference them stay resolvable.
+  const withIds = input.map((e) => ({ ...e, id: e.id ?? rid("le") }));
+  const ids = withIds.map((e) => e.id);
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: "duplicate-ids", message: "Entity ids must be unique." });
+    return;
+  }
+  const entities = normalizeSigningEntities(withIds);
+
+  let profile = await loadPublishedFirmProfile(me.orgId);
+  if (!profile) {
+    // Cold registry: create a minimal published profile row to carry it.
+    const [{ next }] = await db
+      .select({ next: max(atelierFirmProfile.version) })
+      .from(atelierFirmProfile)
+      .where(orgScope(me));
+    const id = rid("frm");
+    await db.insert(atelierFirmProfile).values({
+      id,
+      orgId: me.orgId,
+      version: (next ?? 0) + 1,
+      status: "published",
+      payload: { legalEntities: entities } as never,
+      notes: "Created to carry the signing-entity registry",
+      createdByUserId: me.id,
+      publishedAt: new Date(),
+      publishedByUserId: me.id,
+      publishedByName: me.name,
+    });
+    const [row] = await db
+      .select()
+      .from(atelierFirmProfile)
+      .where(and(eq(atelierFirmProfile.id, id), orgScope(me)));
+    profile = row;
+  } else {
+    const payload = { ...(profile.payload as Record<string, unknown>), legalEntities: entities };
+    await db
+      .update(atelierFirmProfile)
+      .set({ payload: payload as never, updatedAt: new Date() })
+      .where(and(eq(atelierFirmProfile.id, profile.id), eq(atelierFirmProfile.orgId, me.orgId)));
+  }
+  await audit({
+    entityType: "firm_profile",
+    entityId: profile!.id,
+    actor: me,
+    action: "firm_profile.legal_entities.updated",
+    payload: {
+      entities: entities.map((e) => ({ id: e.id, name: e.name, isDefault: e.isDefault })),
+    },
+    summary: `Updated signing-entity registry (${entities.length} entit${entities.length === 1 ? "y" : "ies"})`,
+  });
+  res.json({
+    entities,
+    defaultEntityId: entities.find((e) => e.isDefault)?.id ?? null,
+  });
 });
 
 export default router;

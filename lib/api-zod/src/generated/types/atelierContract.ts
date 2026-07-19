@@ -26,6 +26,12 @@ export interface AtelierContract {
   /** @nullable */
   accountId?: string | null;
   counterpartyLabel: string;
+  /** @nullable */
+  signingEntityId?: string | null;
+  /** @nullable */
+  signingEntityLabel?: string | null;
+  /** @nullable */
+  signingEntityCountry?: string | null;
   status: AtelierContractStatus;
   fieldValues: AtelierContractFieldValues;
   ownerUserId: string;

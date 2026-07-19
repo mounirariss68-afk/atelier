@@ -20,6 +20,7 @@ import {
   useAtelierUpdateContractTemplate,
   useAtelierReviewContractTemplateFields,
   useAtelierCreateContract,
+  useAtelierListSigningEntities,
   getAtelierListContractsQueryKey,
   type AtelierContract,
   type AtelierContractTemplate,
@@ -470,6 +471,13 @@ export function NewContractDialog(props: {
   );
   const [cpId, setCpId] = React.useState(props.fixedCounterparty?.id ?? "");
   const [values, setValues] = React.useState<Record<string, string>>({});
+  const { data: seData } = useAtelierListSigningEntities();
+  const entities = seData?.entities ?? [];
+  const [signingEntityId, setSigningEntityId] = React.useState("");
+  const selectedEntity = entities.find((e) => e.id === signingEntityId) ?? null;
+  const entityNonUae =
+    !!selectedEntity?.country &&
+    !/united arab emirates|\buae\b/i.test(selectedEntity.country);
 
   React.useEffect(() => {
     if (props.open) {
@@ -478,8 +486,9 @@ export function NewContractDialog(props: {
       setCpKind(props.fixedCounterparty?.kind ?? "contact");
       setCpId(props.fixedCounterparty?.id ?? "");
       setValues({});
+      setSigningEntityId(seData?.defaultEntityId ?? "");
     }
-  }, [props.open, props.fixedCounterparty]);
+  }, [props.open, props.fixedCounterparty, seData?.defaultEntityId]);
 
   const selected = templates.find((t) => t.id === templateId);
   const fields = selected?.currentVersion?.fieldSchema ?? [];
@@ -532,6 +541,33 @@ export function NewContractDialog(props: {
               </p>
             )}
           </div>
+          {entities.length > 0 && (
+            <div>
+              <label className="text-xs text-text-faint">Cognirise signing entity</label>
+              <select
+                className={`${selectCls} w-full`}
+                value={signingEntityId}
+                onChange={(e) => setSigningEntityId(e.target.value)}
+                data-testid="select-signing-entity"
+              >
+                {entities.map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.name}
+                    {e.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-text-faint mt-0.5">
+                Drives the firm name, address, governing law and jurisdiction auto-fill.
+              </p>
+              {entityNonUae && (
+                <p className="text-[11px] text-amber-400 mt-1" data-testid="text-entity-caution">
+                  Caution: this entity is registered in {selectedEntity?.country}, not the UAE.
+                  Check the template’s governing-law and jurisdiction clauses before sending.
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <label className="text-xs text-text-faint">Title (optional)</label>
             <Input
@@ -610,6 +646,7 @@ export function NewContractDialog(props: {
                 data: {
                   templateId,
                   ...(title.trim() ? { title: title.trim() } : {}),
+                  ...(signingEntityId ? { signingEntityId } : {}),
                   counterparty: { kind: cpKind, id: cpId.trim() },
                   values: Object.fromEntries(
                     Object.entries(values).filter(([, v]) => v.trim() !== ""),
