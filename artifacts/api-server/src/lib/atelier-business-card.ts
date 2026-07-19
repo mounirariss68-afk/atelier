@@ -87,6 +87,27 @@ function esc(value: string): string {
     .replace(/;/g, "\\;");
 }
 
+/**
+ * Task #233 — build the full international TEL value from a stored cell.
+ * `country` usually holds the dial code (e.g. "+971"); it must become part
+ * of the phone NUMBER, never the label. Handles: number already starting
+ * with "+" (kept as-is), number already containing the dial-code digits
+ * (not doubled), blank/name-label country (number used as-is), whitespace.
+ * Keep in sync with artifacts/atelier/src/lib/vcard.ts.
+ */
+export function telValue(country: string, number: string): string {
+  const num = number.trim();
+  const dial = country.trim();
+  if (!num) return "";
+  if (!dial.startsWith("+") || num.startsWith("+")) return num;
+  const dialDigits = dial.replace(/\D/g, "");
+  if (!dialDigits) return num;
+  const local = num.replace(/^0+/, "");
+  const localDigits = local.replace(/\D/g, "");
+  if (localDigits.startsWith(dialDigits)) return `+${local}`;
+  return `${dial} ${local}`;
+}
+
 function structuredName(fullName: string): string {
   const parts = fullName.trim().split(/\s+/);
   if (parts.length <= 1) return `${esc(fullName.trim())};;;;`;
@@ -104,14 +125,17 @@ export function buildVCard(p: CardPerson): string {
   if (p.email) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(p.email)}`);
   const cells = (p.cellPhones ?? []).filter((c) => c.number.trim());
   cells.forEach((c, i) => {
-    const num = c.number.trim();
-    const label = c.country.trim();
+    const tel = telValue(c.country, c.number);
+    const country = c.country.trim();
+    // Only a real non-dial-code label (e.g. "UAE") rides along as an
+    // Apple-style X-ABLabel; dial codes belong in the number itself.
+    const label = country.startsWith("+") ? "" : country;
     if (label) {
       const item = `item${i + 1}`;
-      lines.push(`${item}.TEL;TYPE=CELL,VOICE:${esc(num)}`);
+      lines.push(`${item}.TEL;TYPE=CELL,VOICE:${esc(tel)}`);
       lines.push(`${item}.X-ABLabel:${esc(label)}`);
     } else {
-      lines.push(`TEL;TYPE=CELL,VOICE:${esc(num)}`);
+      lines.push(`TEL;TYPE=CELL,VOICE:${esc(tel)}`);
     }
   });
   if (p.officeAddress && p.officeAddress.trim()) {
