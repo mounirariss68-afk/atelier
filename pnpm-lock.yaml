@@ -236,6 +236,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      libphonenumber-js:
+        specifier: ^1.13.9
+        version: 1.13.9
       mammoth:
         specifier: ^1.12.0
         version: 1.12.0
@@ -3586,6 +3589,9 @@ packages:
   leven@4.1.0:
     resolution: {integrity: sha512-KZ9W9nWDT7rF7Dazg8xyLHGLrmpgq2nVNFUckhqdW3szVP6YhCpp/RAnpmVExA9JvrMynjwSLVrEj3AepHR6ew==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  libphonenumber-js@1.13.9:
+    resolution: {integrity: sha512-VNS5vWMM7r0P66BYv+TQJATxExEgLxN+34hfHDVhDkUsGAE4cRg0shCNSLTXNKm7nIUscC7AfB51TjxEeF7msQ==}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -8110,6 +8116,8 @@ snapshots:
       readable-stream: 2.3.8
 
   leven@4.1.0: {}
+
+  libphonenumber-js@1.13.9: {}
 
   lie@3.3.0:
     dependencies:

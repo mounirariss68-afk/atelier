@@ -22,6 +22,7 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 
@@ -121,6 +122,73 @@ export function buildVCard(p: CardPerson): string {
   return lines.join("\r\n");
 }
 
+// ------------------------------------------------------------------
+// Phone display formatting — every stored cell renders on its own line,
+// grouped per the number's national dialing convention (libphonenumber).
+// ------------------------------------------------------------------
+
+/** Country-label → ISO-3166 alpha-2, for cells stored with a name label
+ *  instead of a dial code (matches the labels dialCodeCountry() emits). */
+const COUNTRY_LABEL_TO_ISO: Record<string, CountryCode> = {
+  uae: "AE",
+  "united arab emirates": "AE",
+  ksa: "SA",
+  "saudi arabia": "SA",
+  qatar: "QA",
+  kuwait: "KW",
+  bahrain: "BH",
+  oman: "OM",
+  egypt: "EG",
+  lebanon: "LB",
+  jordan: "JO",
+  turkey: "TR",
+  "türkiye": "TR",
+  uk: "GB",
+  "united kingdom": "GB",
+  france: "FR",
+  germany: "DE",
+  india: "IN",
+  pakistan: "PK",
+  usa: "US",
+  "united states": "US",
+};
+
+/**
+ * Format one stored cell for display. Cells are stored as
+ * `{ country, number }` where `country` is usually a dial code ("+971")
+ * and `number` the local part ("506504416"), but tolerate full E.164
+ * numbers and country-name labels. Falls back to a raw international
+ * join when the number can't be parsed.
+ */
+export function formatCardPhone(cell: CardCell): string {
+  const rawNumber = cell.number.trim();
+  const rawCountry = cell.country.trim();
+  if (!rawNumber) return "";
+
+  const candidates: Array<{ text: string; iso?: CountryCode }> = [];
+  if (rawNumber.startsWith("+")) {
+    candidates.push({ text: rawNumber });
+  }
+  if (rawCountry.startsWith("+")) {
+    candidates.push({ text: `${rawCountry}${rawNumber.replace(/^0+/, "")}` });
+  }
+  const iso = COUNTRY_LABEL_TO_ISO[rawCountry.toLowerCase()];
+  if (iso) {
+    candidates.push({ text: rawNumber, iso });
+  }
+  candidates.push({ text: rawNumber });
+
+  for (const c of candidates) {
+    const parsed = parsePhoneNumberFromString(c.text, c.iso);
+    if (parsed && parsed.isPossible()) return parsed.formatInternational();
+  }
+  // Unparseable: fall back to a readable international-style join.
+  if (rawCountry.startsWith("+") && !rawNumber.startsWith("+")) {
+    return `${rawCountry} ${rawNumber}`;
+  }
+  return rawNumber;
+}
+
 /** Sanitise a name into a safe download filename stem. */
 export function cardFilenameStem(fullName: string): string {
   return (
@@ -164,14 +232,33 @@ const DIVIDER_STOPS: Array<[number, string]> = [
   [1, "#C04A55"],
 ];
 
-/** Back-page geometry (slide2.xml). */
+/** Back-page geometry (slide2.xml of the new card PPTX). */
 const BACK = {
   // Gradient background: 020711 at 0% → 080A1A at 48% → 080A1A at 100%.
   gradFrom: "#020711",
   gradTo: "#080A1A",
-  art: { x: EMU(6626), y: EMU(354598), w: EMU(2036915), h: EMU(1216922) },
-  qr: { x: EMU(2323601), y: EMU(639538), size: EMU(521147) },
+  art: { x: EMU(0), y: EMU(351999), w: EMU(2187078), h: EMU(1229577) },
+  qr: { x: EMU(2328639), y: EMU(642714), size: EMU(521147) },
+  // Rounded-rect QR frame with the brand gradient stroke (roundRect,
+  // adj 8111 → corner radius = 8.111% of the side; ln w 6350 EMU = 0.5 pt).
+  qrFrame: {
+    x: EMU(2292350),
+    y: EMU(606425),
+    size: EMU(593725),
+    radiusFrac: 0.08111,
+    lineWidth: EMU(6350),
+  },
 } as const;
+
+/** QR-frame gradient stops (top → bottom), from the roundRect line fill. */
+const QR_FRAME_STOPS: Array<[number, string]> = [
+  [0, "#2971C6"],
+  [0.2, "#7650BB"],
+  [0.43, "#B23EAB"],
+  [0.62, "#C2447E"],
+  [0.81, "#C1466E"],
+  [1, "#C04A55"],
+];
 
 export interface BusinessCardPdfResult {
   pdf: Buffer;
@@ -187,8 +274,8 @@ export interface BusinessCardPdfResult {
 export async function generateBusinessCardPdf(
   person: CardPerson,
 ): Promise<BusinessCardPdfResult> {
-  const logo = loadTemplateAsset("card-logo.png");
-  const art = loadTemplateAsset("card-back-art.png");
+  const logo = loadTemplateAsset("card-front-logo.png");
+  const art = loadTemplateAsset("card-back-art-hires.png");
   const vcard = buildVCard(person);
   const qrPng = await QRCode.toBuffer(vcard, {
     type: "png",
@@ -240,9 +327,27 @@ export async function generateBusinessCardPdf(
   if (person.title) {
     doc.text(person.title, FRONT.textX, FRONT.title.y, { width: textW, lineBreak: false });
   }
-  const phone = (person.cellPhones ?? []).find((c) => c.number.trim())?.number.trim();
-  if (phone) {
-    doc.text(phone, FRONT.textX, FRONT.phone.y, { width: textW, lineBreak: false });
+  // Every stored cell renders on its own line (PPTX stacks them inside one
+  // textbox starting at the phone offset). With 3+ numbers, tighten the
+  // leading and shift the block up slightly so it never collides with the
+  // email line below.
+  const phones = (person.cellPhones ?? [])
+    .map((c) => formatCardPhone(c))
+    .filter((p) => p.length > 0);
+  if (phones.length > 0) {
+    // 1–2 numbers sit at the template's phone offset; 3+ anchor upward from
+    // the email line so the last phone always clears it.
+    const lineH = phones.length > 2 ? 7 : 7.6;
+    const startY =
+      phones.length > 2
+        ? FRONT.email.y - phones.length * lineH
+        : FRONT.phone.y;
+    phones.forEach((p, i) => {
+      doc.text(p, FRONT.textX, startY + i * lineH, {
+        width: textW,
+        lineBreak: false,
+      });
+    });
   }
   if (person.email) {
     doc.text(person.email, FRONT.textX, FRONT.email.y, { width: textW, lineBreak: false });
@@ -256,6 +361,18 @@ export async function generateBusinessCardPdf(
   doc.rect(0, 0, PAGE_W, PAGE_H).fill(bgGrad);
   doc.image(art, BACK.art.x, BACK.art.y, { width: BACK.art.w, height: BACK.art.h });
   doc.image(qrPng, BACK.qr.x, BACK.qr.y, { width: BACK.qr.size, height: BACK.qr.size });
+  const frame = BACK.qrFrame;
+  const frameGrad = doc.linearGradient(
+    frame.x,
+    frame.y,
+    frame.x,
+    frame.y + frame.size,
+  );
+  for (const [pos, color] of QR_FRAME_STOPS) frameGrad.stop(pos, color);
+  doc
+    .roundedRect(frame.x, frame.y, frame.size, frame.size, frame.size * frame.radiusFrac)
+    .lineWidth(frame.lineWidth)
+    .stroke(frameGrad);
 
   doc.end();
   const pdf = await done;
