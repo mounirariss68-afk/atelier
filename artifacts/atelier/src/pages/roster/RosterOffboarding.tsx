@@ -98,7 +98,7 @@ export default function RosterOffboarding(): React.ReactElement {
   };
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           eyebrow="The Roster"
@@ -106,6 +106,7 @@ export default function RosterOffboarding(): React.ReactElement {
           lede="11-step Offboarding Sentinel sequence. The reassignment gate blocks completion until the person has no active engagement grants."
         />
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
       <RosterNav />
 
       <Card className="p-4 mb-6 space-y-3" data-testid="offboarding-form">
@@ -232,6 +233,7 @@ export default function RosterOffboarding(): React.ReactElement {
             </div>
           </Card>
         ))}
+      </div>
       </div>
     </div>
   );

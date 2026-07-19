@@ -96,13 +96,17 @@ export default function WinLossIntake() {
 
   if (!items) {
     return (
-      <div className="p-6 md:p-10 space-y-6 max-w-6xl">
-        <PageHero
-          eyebrow="WIN/LOSS · INTAKE"
-          title="Debriefs in flight"
-          subtitle="Late-stage closes that need debriefing — open, pending, and awaiting approval."
-        />
-        <Skeleton className="h-32 bg-bg-elevate" />
+      <div>
+        <PageHero>
+          <SectionHead
+            eyebrow="WIN/LOSS · INTAKE"
+            headline="Debriefs in flight"
+            lede="Late-stage closes that need debriefing — open, pending, and awaiting approval."
+          />
+        </PageHero>
+        <div className="p-6 md:p-10 space-y-6 max-w-6xl">
+          <Skeleton className="h-32 bg-bg-elevate" />
+        </div>
       </div>
     );
   }
@@ -124,13 +128,15 @@ export default function WinLossIntake() {
   }).length;
 
   return (
-    <div className="p-6 md:p-10 space-y-6 max-w-6xl">
-      <PageHero
-        eyebrow="WIN/LOSS · INTAKE"
-        title="Debriefs in flight"
-        subtitle="Late-stage closes that need debriefing — open intake, synthesized drafts awaiting approval, and recently approved."
-      />
-
+    <div>
+      <PageHero>
+        <SectionHead
+          eyebrow="WIN/LOSS · INTAKE"
+          headline="Debriefs in flight"
+          lede="Late-stage closes that need debriefing — open intake, synthesized drafts awaiting approval, and recently approved."
+        />
+      </PageHero>
+      <div className="p-6 md:p-10 space-y-6 max-w-6xl">
       <div className="flex gap-2 text-sm font-mono">
         <span className="px-3 py-1 rounded bg-gold text-bg">Intake</span>
         <Link
@@ -207,6 +213,7 @@ export default function WinLossIntake() {
             }
           />
         ))}
+      </div>
       </div>
     </div>
   );

@@ -107,7 +107,7 @@ export default function RosterCompliance(): React.ReactElement {
   if (!data) return <div className="px-8 py-12 text-text-mute">Loading…</div>;
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           eyebrow="The Roster"
@@ -115,6 +115,7 @@ export default function RosterCompliance(): React.ReactElement {
           lede="GCC registrations, master agreements, visa & Iqama expirations. Reference numbers are stored redacted (last four only) — raw numbers are never persisted."
         />
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
       <RosterNav />
 
       <div className="grid gap-3 md:grid-cols-5 mb-6">
@@ -245,6 +246,7 @@ export default function RosterCompliance(): React.ReactElement {
             </div>
           </Card>
         ))}
+      </div>
       </div>
     </div>
   );

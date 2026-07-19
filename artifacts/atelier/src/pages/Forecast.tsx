@@ -43,12 +43,15 @@ export default function Forecast() {
     return () => { alive = false; };
   }, [by]);
   return (
-    <div className="p-6 md:p-10 space-y-6 max-w-6xl">
-      <PageHero
-        eyebrow="FORECAST"
-        title="Pipeline roll-ups"
-        subtitle="Weighted value derived from deal hypothesis × probability."
-      />
+    <div>
+      <PageHero>
+        <SectionHead
+          eyebrow="FORECAST"
+          headline="Pipeline roll-ups"
+          lede="Weighted value derived from deal hypothesis × probability."
+        />
+      </PageHero>
+      <div className="p-6 md:p-10 space-y-6 max-w-6xl">
       <div className="flex gap-2 flex-wrap">
         {TABS.map((t) => (
           <button
@@ -127,6 +130,7 @@ export default function Forecast() {
           </Card>
         </>
       )}
+      </div>
     </div>
   );
 }

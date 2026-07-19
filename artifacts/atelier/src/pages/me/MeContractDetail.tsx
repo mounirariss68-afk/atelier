@@ -15,8 +15,7 @@ import {
   type AtelierContract,
   type AtelierContractDocument,
 } from "@workspace/api-client-react";
-import { BackLink, Card } from "@/components/ui/primitives";
-import { LensPageHeader } from "@/components/layout/LensPageHeader";
+import { BackLink, Card, PageHero, SectionHead } from "@/components/ui/primitives";
 import { Download, FileText, PenLine } from "lucide-react";
 import {
   ContractStatusChip,
@@ -115,22 +114,25 @@ export default function MeContractDetail() {
 
   const docs = contract.documents ?? [];
   return (
-    <div className="mx-auto max-w-4xl px-4 md:px-6 py-6 space-y-5">
-      <BackLink href="/me">Me</BackLink>
-      <LensPageHeader
-        eyebrow="Me · My contracts"
-        headline={contract.title}
-        lede={
-          <span className="inline-flex items-center gap-2 flex-wrap">
-            <ContractStatusChip status={contract.status} />
-            <span>
-              {CONTRACT_TYPE_LABELS[contract.contractType] ?? contract.contractType} · with{" "}
-              {contract.counterpartyLabel}
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
+      <PageHero>
+        <BackLink href="/me" className="mb-4">Me</BackLink>
+        <SectionHead
+          eyebrow="Me · My contracts"
+          headline={contract.title}
+          lede={
+            <span className="inline-flex items-center gap-2 flex-wrap">
+              <ContractStatusChip status={contract.status} />
+              <span>
+                {CONTRACT_TYPE_LABELS[contract.contractType] ?? contract.contractType} · with{" "}
+                {contract.counterpartyLabel}
+              </span>
             </span>
-          </span>
-        }
-      />
+          }
+        />
+      </PageHero>
 
+      <div className="mx-auto w-full max-w-4xl px-4 md:px-6 py-6 space-y-5">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="p-4">
           <div className="text-[11px] text-text-faint">Effective date</div>
@@ -236,6 +238,7 @@ export default function MeContractDetail() {
           </div>
         )}
       </Card>
+      </div>
     </div>
   );
 }

@@ -114,7 +114,7 @@ export default function RosterSkillGraph(): React.ReactElement {
   }, [skills]);
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           eyebrow="The Roster"
@@ -122,6 +122,7 @@ export default function RosterSkillGraph(): React.ReactElement {
           lede="Find people by skill — verified evidence first, then inference. Use “+” for AND, “or” for OR."
         />
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
 
       <RosterNav />
 
@@ -257,6 +258,7 @@ export default function RosterSkillGraph(): React.ReactElement {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

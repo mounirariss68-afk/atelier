@@ -132,29 +132,36 @@ export default function WinLoss() {
   if (loading) return <div className="p-8 space-y-4"><Skeleton className="h-32 bg-bg-elevate" /></div>;
   if (!debrief)
     return (
-      <div className="p-8 max-w-3xl">
-        <PageHero eyebrow="Win/Loss" title="No debrief yet" />
-        <p className="text-text-mute mt-3">
-          A debrief is auto-created when the opportunity closes (signed / lost / withdrawn).
-        </p>
-        <Link href={`/opportunities/${oppId}`} className="text-gold underline mt-4 inline-block">
-          ← Back to opportunity
-        </Link>
+      <div>
+        <PageHero>
+          <SectionHead eyebrow="Win/Loss" headline="No debrief yet" />
+        </PageHero>
+        <div className="p-8 max-w-3xl">
+          <p className="text-text-mute mt-3">
+            A debrief is auto-created when the opportunity closes (signed / lost / withdrawn).
+          </p>
+          <Link href={`/opportunities/${oppId}`} className="text-gold underline mt-4 inline-block">
+            ← Back to opportunity
+          </Link>
+        </div>
       </div>
     );
 
   const isPartner = (me?.role === "partner" || me?.role === "founding_partner");
   return (
-    <div className="p-6 md:p-10 space-y-8 max-w-5xl">
-      <PageHero
-        eyebrow={`WIN/LOSS · ${debrief.outcome.replace(/_/g, " ").toUpperCase()}`}
-        title="Debrief workspace"
-        subtitle={
-          debrief.dueAt
-            ? `Due by ${new Date(debrief.dueAt).toLocaleDateString()} · status: ${debrief.status}`
-            : `Status: ${debrief.status}`
-        }
-      />
+    <div>
+      <PageHero>
+        <SectionHead
+          eyebrow={`WIN/LOSS · ${debrief.outcome.replace(/_/g, " ").toUpperCase()}`}
+          headline="Debrief workspace"
+          lede={
+            debrief.dueAt
+              ? `Due by ${new Date(debrief.dueAt).toLocaleDateString()} · status: ${debrief.status}`
+              : `Status: ${debrief.status}`
+          }
+        />
+      </PageHero>
+      <div className="p-6 md:p-10 space-y-8 max-w-5xl">
       <Card className="p-5 space-y-3">
         <SectionHead title="Seller view" />
         <p className="text-xs text-text-mute">
@@ -250,6 +257,7 @@ export default function WinLoss() {
           Approved {new Date(debrief.approvedAt).toLocaleString()}
         </div>
       )}
+      </div>
     </div>
   );
 }

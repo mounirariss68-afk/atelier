@@ -212,16 +212,16 @@ export default function EngagementPnl(): JSX.Element {
   const eac = data.eac;
 
   return (
-    <div className="px-6 py-10 max-w-[1280px] mx-auto">
-      <BackLink href="/finance/plan/engagement-health">Back to engagement health</BackLink>
-
-      <PageHero className="mt-4">
+    <div>
+      <PageHero>
+        <BackLink href="/finance/plan/engagement-health" className="mb-4">Back to engagement health</BackLink>
         <SectionHead
           eyebrow={`Finance · Plan · ${data.budget.sector}`}
           headline={data.engagementName}
           lede={`P&L · EAC engine · change orders. As of ${data.cost.asOf}. Baseline last set ${data.budget.baselinedAt.slice(0, 10)}.`}
         />
       </PageHero>
+      <div className="px-6 py-10 max-w-[1280px] mx-auto">
 
       <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="people-strip">
         <div>
@@ -436,6 +436,7 @@ export default function EngagementPnl(): JSX.Element {
           )}
         </div>
       </Card>
+      </div>
     </div>
   );
 }

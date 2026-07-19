@@ -97,7 +97,7 @@ export default function RosterPerson() {
     return <div className="px-8 py-12 text-text-mute">Loading…</div>;
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <Link href={dirHref} className="text-text-mute hover:text-gold text-xs font-mono uppercase">
           ← {underPeople ? "People directory" : "The Roster"}
@@ -116,6 +116,7 @@ export default function RosterPerson() {
           <MonoChip>{person.status}</MonoChip>
         </div>
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
 
       <TabNav className="mt-6">
         {TABS.map((t) => (
@@ -162,6 +163,7 @@ export default function RosterPerson() {
         )}
         {activeTab === "conflicts" && <ConflictsTab personId={personId} />}
         {activeTab === "audit" && <AuditTab personId={personId} />}
+      </div>
       </div>
     </div>
   );

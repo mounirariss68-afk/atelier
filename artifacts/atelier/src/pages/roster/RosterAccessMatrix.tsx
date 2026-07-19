@@ -58,13 +58,14 @@ export default function RosterAccessMatrix() {
     );
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           headline="The Roster — Access Matrix"
           lede="Who can see what, across every engagement. Grants are written through the Access Sentinel."
         />
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
       <Card className="mt-6 overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="text-text-mute font-mono uppercase text-[10px]">
@@ -136,6 +137,7 @@ export default function RosterAccessMatrix() {
           </tbody>
         </table>
       </Card>
+      </div>
     </div>
   );
 }

@@ -174,13 +174,15 @@ export default function Reports() {
     );
 
   return (
-    <div className="p-6 md:p-10 space-y-8 max-w-6xl">
-      <PageHero
-        eyebrow="REPORTS"
-        title="Branded exports & scheduled deliveries"
-        subtitle="9 templates per PRD §5. Schedules stub Slack/email — no real channels in v2."
-      />
-
+    <div>
+      <PageHero>
+        <SectionHead
+          eyebrow="REPORTS"
+          headline="Branded exports & scheduled deliveries"
+          lede="9 templates per PRD §5. Schedules stub Slack/email — no real channels in v2."
+        />
+      </PageHero>
+      <div className="p-6 md:p-10 space-y-8 max-w-6xl">
       <section>
         <SectionHead title="Templates" />
         <div className="grid gap-3 md:grid-cols-2 mt-3">
@@ -285,6 +287,7 @@ export default function Reports() {
           ))}
         </div>
       </section>
+      </div>
     </div>
   );
 }

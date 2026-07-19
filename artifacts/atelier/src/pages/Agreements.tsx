@@ -275,7 +275,7 @@ export default function Agreements() {
   const requests = data?.requests ?? [];
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-4xl mx-auto">
+    <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <LensPageHeader
         headline="Agreements"
         lede="Send documents for e-signature via DocuSeal and track signing progress."
@@ -298,6 +298,7 @@ export default function Agreements() {
         }
       />
 
+      <div className="mx-auto w-full max-w-4xl p-4 md:p-6 space-y-4">
       {missingNotice ? (
         <Card
           className="p-3 text-sm text-text-mute flex items-center justify-between gap-3"
@@ -381,6 +382,7 @@ export default function Agreements() {
       )}
 
       <SendForSignatureDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      </div>
     </div>
   );
 }

@@ -122,13 +122,14 @@ export default function RosterPeople() {
   const activeChips = COHORT_KEYS.filter((k) => cohort[k]);
 
   return (
-    <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           headline="The Roster — Firm-wide People"
           lede="Employees, contractors, and partner-firm seconded resources — one accessor, one access policy."
         />
       </PageHero>
+      <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
 
       <div className="flex flex-wrap items-center gap-3 mt-6">
         <div className="flex items-center gap-2 text-text-mute text-xs font-mono uppercase">
@@ -240,6 +241,7 @@ export default function RosterPeople() {
               </Card>
           </Link>
         ))}
+      </div>
       </div>
     </div>
   );

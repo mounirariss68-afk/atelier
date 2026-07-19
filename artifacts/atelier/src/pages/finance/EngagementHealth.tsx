@@ -142,7 +142,7 @@ export default function EngagementHealth(): JSX.Element {
   }, [q.data]);
 
   return (
-    <div className="px-6 py-10 max-w-[1400px] mx-auto">
+    <div>
       <PageHero>
         <SectionHead
           eyebrow="Finance · Plan · Engagement Health"
@@ -150,6 +150,7 @@ export default function EngagementHealth(): JSX.Element {
           lede="Per-engagement EAC, variance vs baseline budget, and forecast final margin. Drill into any row for the per-engagement P&L, EAC engine, change orders and audit trail."
         />
       </PageHero>
+      <div className="px-6 py-10 max-w-[1400px] mx-auto">
 
       <div className="mt-8 grid grid-cols-2 lg:grid-cols-5 gap-3">
         <SummaryTile label="Engagements" value={String(totals.count)} />
@@ -360,6 +361,7 @@ export default function EngagementHealth(): JSX.Element {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
