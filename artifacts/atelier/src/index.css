@@ -117,6 +117,36 @@
   --color-warn: var(--warn);
   --color-danger: var(--danger);
 
+  /* Stock shadcn token aliases mapped onto the Cognirise palette so
+     ui/* primitives (dialogs, popovers, menus…) render opaque, on-brand
+     surfaces instead of resolving to nothing. */
+  --color-background: var(--bg-elevate);
+  --color-foreground: var(--text);
+  --color-card: var(--bg-elevate);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--bg-elevate-2);
+  --color-popover-foreground: var(--text);
+  --color-primary: var(--gold);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--bg-elevate-2);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--bg-elevate-2);
+  --color-muted-foreground: var(--text-mute);
+  --color-accent: var(--gold-tint-08);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-input: var(--border);
+  --color-ring: var(--gold);
+  --color-sidebar: var(--bg-elevate);
+  --color-sidebar-foreground: var(--text);
+  --color-sidebar-primary: var(--gold);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: var(--gold-tint-08);
+  --color-sidebar-accent-foreground: var(--text);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--gold);
+
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-mono: var(--font-mono);
