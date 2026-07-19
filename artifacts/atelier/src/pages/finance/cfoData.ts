@@ -9,7 +9,6 @@
  */
 
 import * as React from "react";
-import type { FinanceEntityRow } from "@/lib/v5-hooks";
 
 interface ArAging {
   buckets: Array<{ bucket: string; totalUsd: number }>;
@@ -122,73 +121,17 @@ export interface NextAction {
   daysOut: number;
 }
 
-function daysUntil(iso: string): number {
-  if (!iso || iso === "—") return Number.POSITIVE_INFINITY;
-  const target = new Date(iso).getTime();
-  return Math.round((target - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
-function fmtRel(d: number): string {
-  if (!isFinite(d)) return "—";
-  if (d < 0) return `${Math.abs(d)}d overdue`;
-  if (d === 0) return "today";
-  if (d === 1) return "tomorrow";
-  if (d < 30) return `in ${d}d`;
-  return `in ${Math.round(d / 30)}mo`;
-}
-
 export function buildCfoInbox(
-  entities: FinanceEntityRow[],
   ar: ArAging | null,
   margin: MarginFirm | null,
   cash: CashForecastResp | null,
 ): NextAction[] {
   const out: NextAction[] = [];
 
-  // From entities — licences, period close, VAT (kept from #372)
-  for (const e of entities) {
-    for (const lic of e.tradeLicenses) {
-      const d = daysUntil(lic.expiresOn);
-      if (d <= 180) {
-        out.push({
-          id: `lic-${lic.id}`,
-          section: "Comply",
-          href: `/finance/entities`,
-          title: `${lic.authority} licence renewal — ${e.shortName}`,
-          detail: `${lic.scope} · ${lic.number}`,
-          due: `${lic.expiresOn} (${fmtRel(d)})`,
-          tone: d < 0 ? "red" : d <= 60 ? "amber" : d <= 120 ? "gold" : "default",
-          daysOut: d,
-        });
-      }
-    }
-    const closeD = daysUntil(e.fiscal.nextClose);
-    if (closeD <= 30) {
-      out.push({
-        id: `close-${e.id}`,
-        section: "Close",
-        href: `/finance/close`,
-        title: `Period close — ${e.shortName}`,
-        detail: `Fiscal year ends ${e.fiscal.yearEnd}`,
-        due: `${e.fiscal.nextClose} (${fmtRel(closeD)})`,
-        tone: closeD < 0 ? "red" : closeD <= 7 ? "amber" : "default",
-        daysOut: closeD,
-      });
-    }
-    const vatD = daysUntil(e.fiscal.nextVatFiling);
-    if (vatD <= 30) {
-      out.push({
-        id: `vat-${e.id}`,
-        section: "Comply",
-        href: `/finance/comply`,
-        title: `${e.fiscal.vatPeriod === "monthly" ? "Monthly" : "Quarterly"} VAT filing — ${e.shortName}`,
-        detail: e.taxIds.vat ?? "—",
-        due: `${e.fiscal.nextVatFiling} (${fmtRel(vatD)})`,
-        tone: vatD < 0 ? "red" : vatD <= 7 ? "amber" : "default",
-        daysOut: vatD,
-      });
-    }
-  }
+  // Entity-derived producers (licence renewals, period close, VAT filings)
+  // were retired with the demo entity backbone: real legal entities from
+  // the signing-entity registry carry no fiscal calendars or licences yet,
+  // so no entity items are fabricated here.
 
   // From AR — invoices > 90 days overdue
   if (ar) {

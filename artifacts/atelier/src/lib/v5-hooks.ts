@@ -45,67 +45,22 @@ function listHook<T>(key: string, path: string) {
 // ============================================================
 // Finance — Entities backbone (Task #372)
 // ============================================================
+/**
+ * Real legal entity from the firm's signing-entity registry (firm profile
+ * `payload.legalEntities`) — served by /finance/entities (Task #256).
+ * The registry carries no currency yet, so `baseCurrency` is null; the
+ * dashboard falls back to GBP presentation and says so.
+ */
 export interface FinanceEntityRow {
   id: string;
   legalName: string;
   shortName: string;
-  kind: "parent" | "subsidiary" | "branch" | "jv";
-  parentId: string | null;
-  status: "active" | "dormant" | "winding_down";
-  country: "SA" | "AE" | "GB";
   jurisdiction: string;
-  baseCurrency: string;
-  reportingCurrency: string;
-  incorporatedOn: string;
-  commercialRegistration: { number: string; authority: string; expiresOn: string };
-  taxIds: { vat: string | null; corporate: string | null; whtAgent: string | null };
-  eInvoicing: Array<{
-    scheme: "ZATCA" | "FTA" | "Peppol" | "HMRC_MTD";
-    id: string;
-    status: "live" | "sandbox" | "pending";
-    enrolledAt: string;
-  }>;
-  tradeLicenses: Array<{
-    id: string;
-    authority: string;
-    number: string;
-    issuedOn: string;
-    expiresOn: string;
-    status: "active" | "expiring_soon" | "expired" | "renewal_in_progress";
-    scope: string;
-  }>;
-  bankAccounts: Array<{
-    id: string;
-    bank: string;
-    iban: string;
-    currency: string;
-    purpose: "operating" | "tax" | "payroll" | "escrow";
-    signatories: string[];
-    primary: boolean;
-  }>;
-  signatories: Array<{
-    id: string;
-    name: string;
-    role: string;
-    authorityLevel: "A" | "B" | "C";
-    resolutionRef: string | null;
-  }>;
-  fiscal: {
-    yearEnd: string;
-    vatPeriod: "monthly" | "quarterly";
-    ctPeriod: "annual";
-    nextClose: string;
-    nextVatFiling: string;
-    nextCtFiling: string;
-  };
-  interCompany: Array<{
-    counterpartyId: string;
-    relationship: "subsidiary" | "branch" | "shareholder" | "service_provider";
-    tpMethod: "TNMM" | "CUP" | "Cost+" | "ResalePrice";
-    intercoServiceFeePct: number | null;
-  }>;
-  staffCount: number;
-  notes: string;
+  country: string;
+  registeredAddress: string;
+  governingLaw: string;
+  baseCurrency: string | null;
+  isDefault: boolean;
 }
 export const useFinanceEntities = listHook<FinanceEntityRow>(
   "finance-entities",

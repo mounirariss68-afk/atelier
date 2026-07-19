@@ -33,7 +33,12 @@ import { cn } from "@/lib/utils";
    Filter types + URL persistence
    ============================================================ */
 
-export type CfoEntityId = "all" | "fe_aico_uk" | "fe_aico_ksa" | "fe_aico_uae" | "fe_aico_uae_branch" | "fe_aico_jv_neom";
+/**
+ * Entity ids are dynamic — real legal-entity ids from the signing-entity
+ * registry (plus the "all" sentinel). The old hardcoded demo union was
+ * removed per the no-dummy-data policy (Task #256).
+ */
+export type CfoEntityId = string;
 export type CfoPeriod = "mtd" | "qtd" | "ytd" | "r12";
 export type CfoCurrency = "GBP" | "local" | "side";
 
@@ -44,14 +49,22 @@ export interface CfoFilters {
   asOf: string;
 }
 
-export const ENTITY_OPTIONS: { id: CfoEntityId; label: string }[] = [
-  { id: "all", label: "All entities" },
-  { id: "fe_aico_uk", label: "UK Parent" },
-  { id: "fe_aico_ksa", label: "KSA LLC" },
-  { id: "fe_aico_uae", label: "UAE DIFC" },
-  { id: "fe_aico_uae_branch", label: "ADGM Branch" },
-  { id: "fe_aico_jv_neom", label: "NEOM JV" },
-];
+export interface CfoEntityOption {
+  id: CfoEntityId;
+  label: string;
+}
+
+export const ALL_ENTITIES_OPTION: CfoEntityOption = { id: "all", label: "All entities" };
+
+/**
+ * Drop entity ids (e.g. from a stale bookmarked URL) that no longer exist
+ * in the registry. Falls back to ["all"] when nothing valid remains.
+ */
+export function sanitizeEntitySelection(selection: CfoEntityId[], knownIds: string[]): CfoEntityId[] {
+  const known = new Set<string>(["all", ...knownIds]);
+  const kept = selection.filter((id) => known.has(id));
+  return kept.length === 0 ? ["all"] : kept;
+}
 
 const PERIOD_LABEL: Record<CfoPeriod, string> = {
   mtd: "MTD",
@@ -366,11 +379,15 @@ export function CfoFilterBar({
   filters,
   setFilters,
   sources,
+  entityOptions,
 }: {
   filters: CfoFilters;
   setFilters: (next: Partial<CfoFilters>) => void;
   sources: FilterBarSource[];
+  /** Real legal entities from the registry; "All entities" is always prepended. */
+  entityOptions: CfoEntityOption[];
 }) {
+  const options = [ALL_ENTITIES_OPTION, ...entityOptions.filter((o) => o.id !== "all")];
   const toggleEntity = (id: CfoEntityId) => {
     if (id === "all") {
       setFilters({ entities: ["all"] });
@@ -390,7 +407,7 @@ export function CfoFilterBar({
         {/* Entities */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-mono uppercase tracking-widest text-text-faint mr-1">Entity</span>
-          {ENTITY_OPTIONS.map((opt) => {
+          {options.map((opt) => {
             const active = filters.entities.includes(opt.id);
             return (
               <button
@@ -410,6 +427,11 @@ export function CfoFilterBar({
               </button>
             );
           })}
+          {entityOptions.length === 0 && (
+            <span className="text-[10px] font-mono text-text-faint italic" data-testid="cfo-filter-no-entities">
+              no legal entities registered
+            </span>
+          )}
         </div>
 
         {/* Period */}
