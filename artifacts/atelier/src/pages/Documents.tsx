@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useLegalEntities } from "@/lib/v5-hooks";
 import {
   FileText,
   Upload,
@@ -53,6 +54,7 @@ const CATEGORIES = [
   { value: "client_deliverable", label: "Client deliverable" },
   { value: "contract", label: "Contract" },
   { value: "template", label: "Template" },
+  { value: "corporate_legal", label: "Corporate / Legal" },
   { value: "other", label: "Other" },
 ] as const;
 
@@ -95,8 +97,10 @@ function UploadDialog(props: {
   const privileged = me?.role === "founding_partner" || me?.role === "partner";
   const { data: accounts } = useAtelierListAccounts();
   const { data: engagements } = useAtelierListEngagements();
+  const { entities } = useLegalEntities();
   const [title, setTitle] = React.useState("");
   const [category, setCategory] = React.useState<string>("other");
+  const [entityId, setEntityId] = React.useState("");
   const [accountId, setAccountId] = React.useState(props.fixedAccountId ?? "");
   const [engagementId, setEngagementId] = React.useState(props.fixedEngagementId ?? "");
   const [aiRetrieval, setAiRetrieval] = React.useState(true);
@@ -107,6 +111,7 @@ function UploadDialog(props: {
     if (props.open) {
       setTitle("");
       setCategory("other");
+      setEntityId("");
       setAccountId(props.fixedAccountId ?? "");
       setEngagementId(props.fixedEngagementId ?? "");
       setAiRetrieval(true);
@@ -132,6 +137,7 @@ function UploadDialog(props: {
       fd.set("category", category);
       if (accountId) fd.set("accountId", accountId);
       if (engagementId) fd.set("engagementId", engagementId);
+      if (entityId) fd.set("entityId", entityId);
       fd.set("aiRetrieval", aiRetrieval ? "true" : "false");
       fd.set("file", file);
       const resp = await fetch(`${API_BASE}/documents`, {
@@ -205,6 +211,28 @@ function UploadDialog(props: {
                 ))}
               </select>
             </div>
+            {category === "corporate_legal" && (
+              <div className="flex-1">
+                <label className="text-xs font-mono uppercase tracking-widest text-text-mute">
+                  Legal entity
+                </label>
+                <select
+                  className={`${selectCls} w-full`}
+                  value={entityId}
+                  onChange={(e) => setEntityId(e.target.value)}
+                  data-testid="select-document-entity"
+                >
+                  <option value="">None</option>
+                  {entities
+                    .filter((en) => en.status !== "archived")
+                    .map((en) => (
+                      <option key={en.id} value={en.id}>
+                        {en.shortName || en.legalNameEn}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
           </div>
           {!scoped && (
             <div className="flex gap-3">

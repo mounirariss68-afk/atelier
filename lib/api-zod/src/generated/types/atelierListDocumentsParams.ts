@@ -10,4 +10,5 @@ export type AtelierListDocumentsParams = {
   accountId?: string;
   engagementId?: string;
   category?: string;
+  entityId?: string;
 };

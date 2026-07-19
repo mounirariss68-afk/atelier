@@ -442,6 +442,7 @@ export const AtelierListDocumentsQueryParams = zod.object({
   accountId: zod.coerce.string().optional(),
   engagementId: zod.coerce.string().optional(),
   category: zod.coerce.string().optional(),
+  entityId: zod.coerce.string().optional(),
 });
 
 export const AtelierListDocumentsResponse = zod.object({
@@ -452,6 +453,7 @@ export const AtelierListDocumentsResponse = zod.object({
       category: zod.string(),
       accountId: zod.string().nullish(),
       engagementId: zod.string().nullish(),
+      entityId: zod.string().nullish(),
       uploaderUserId: zod.string(),
       uploaderLabel: zod.string(),
       currentVersionId: zod.string().nullish(),
@@ -492,10 +494,18 @@ export const atelierCreateDocumentBodyNotesMax = 2000;
 export const AtelierCreateDocumentBody = zod.object({
   title: zod.string().max(atelierCreateDocumentBodyTitleMax),
   category: zod
-    .enum(["proposal", "client_deliverable", "contract", "template", "other"])
+    .enum([
+      "proposal",
+      "client_deliverable",
+      "contract",
+      "template",
+      "corporate_legal",
+      "other",
+    ])
     .optional(),
   accountId: zod.string().optional(),
   engagementId: zod.string().optional(),
+  entityId: zod.string().optional(),
   notes: zod.string().max(atelierCreateDocumentBodyNotesMax).optional(),
   aiRetrieval: zod.enum(["true", "false"]).optional(),
   file: zod.instanceof(File).describe("Document file, ≤50 MB"),
@@ -515,6 +525,7 @@ export const AtelierGetDocumentResponse = zod.object({
     category: zod.string(),
     accountId: zod.string().nullish(),
     engagementId: zod.string().nullish(),
+    entityId: zod.string().nullish(),
     uploaderUserId: zod.string(),
     uploaderLabel: zod.string(),
     currentVersionId: zod.string().nullish(),
@@ -590,9 +601,17 @@ export const atelierUpdateDocumentBodyNotesMax = 2000;
 export const AtelierUpdateDocumentBody = zod.object({
   title: zod.string().max(atelierUpdateDocumentBodyTitleMax).optional(),
   category: zod
-    .enum(["proposal", "client_deliverable", "contract", "template", "other"])
+    .enum([
+      "proposal",
+      "client_deliverable",
+      "contract",
+      "template",
+      "corporate_legal",
+      "other",
+    ])
     .optional(),
   notes: zod.string().max(atelierUpdateDocumentBodyNotesMax).nullish(),
+  entityId: zod.string().nullish(),
   aiRetrieval: zod.boolean().optional(),
 });
 
@@ -603,6 +622,7 @@ export const AtelierUpdateDocumentResponse = zod.object({
     category: zod.string(),
     accountId: zod.string().nullish(),
     engagementId: zod.string().nullish(),
+    entityId: zod.string().nullish(),
     uploaderUserId: zod.string(),
     uploaderLabel: zod.string(),
     currentVersionId: zod.string().nullish(),

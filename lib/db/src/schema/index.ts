@@ -13,4 +13,5 @@ export * from "./atelier-finance-plan-commits";
 export * from "./atelier-cli-rag";
 export * from "./atelier-documents";
 export * from "./atelier-esign";
+export * from "./atelier-entities";
 export * from "./atelier-contract-lifecycle";

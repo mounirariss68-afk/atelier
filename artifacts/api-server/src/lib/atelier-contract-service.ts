@@ -21,6 +21,7 @@ import {
   atelierContractTemplateVersions,
   atelierContractRecords,
   atelierContractDocuments,
+  atelierLegalEntities,
   type ContractTemplateField,
 } from "@workspace/db";
 import {
@@ -212,7 +213,37 @@ export async function loadPublishedFirmProfile(
 export async function listSigningEntities(orgId: string): Promise<SigningEntity[]> {
   const profile = await loadPublishedFirmProfile(orgId);
   const payload = profile?.payload as { legalEntities?: unknown } | undefined;
-  return normalizeSigningEntities(payload?.legalEntities);
+  const fromProfile = normalizeSigningEntities(payload?.legalEntities);
+  // Task #249 — the legal-entity registry (atelier_legal_entities) is a
+  // second source of signing entities: every active registry entity is
+  // signable, keyed by its stable lent_ id. Profile entities keep default
+  // precedence; when the profile registry is empty the first registry
+  // entity becomes the default.
+  const rows = await db
+    .select()
+    .from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.orgId, orgId), eq(atelierLegalEntities.status, "active")))
+    .orderBy(desc(atelierLegalEntities.createdAt));
+  const seen = new Set(fromProfile.map((e) => e.id));
+  const merged = [...fromProfile];
+  for (const r of rows) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    merged.push({
+      id: r.id,
+      name: r.legalNameEn,
+      jurisdiction: r.jurisdiction || "",
+      registeredAddress: r.registeredAddress || "",
+      country: r.country || "",
+      governingLaw: r.governingLaw || "",
+      courts: r.courts || "",
+      isDefault: false,
+    });
+  }
+  if (merged.length > 0 && !merged.some((e) => e.isDefault)) {
+    merged[0].isDefault = true;
+  }
+  return merged;
 }
 
 /**

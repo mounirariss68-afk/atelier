@@ -15,6 +15,8 @@ export interface AtelierLibraryDocument {
   accountId?: string | null;
   /** @nullable */
   engagementId?: string | null;
+  /** @nullable */
+  entityId?: string | null;
   uploaderUserId: string;
   uploaderLabel: string;
   /** @nullable */

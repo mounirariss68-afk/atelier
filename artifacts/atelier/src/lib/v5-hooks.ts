@@ -6,6 +6,7 @@
  * components can keep iterating directly without an extra null-guard. Cookies
  * are sent so the active persona on the API side resolves correctly.
  */
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Atelier proxy mounts the api-server at /api/*; using a vite-base-prefixed URL
@@ -43,29 +44,262 @@ function listHook<T>(key: string, path: string) {
 }
 
 // ============================================================
-// Finance — Entities backbone (Task #372)
+// Finance — Legal-entity registry (Task #249)
 // ============================================================
-/**
- * Real legal entity from the firm's signing-entity registry (firm profile
- * `payload.legalEntities`) — served by /finance/entities (Task #256).
- * The registry carries no currency yet, so `baseCurrency` is null; the
- * dashboard falls back to GBP presentation and says so.
- */
+export interface LegalEntityRegistration {
+  id: string;
+  type: string;
+  label: string;
+  number: string;
+  issuer: string | null;
+  issuedOn: string | null;
+  expiresOn: string | null;
+  notes: string | null;
+}
+export interface LegalEntityActivity {
+  code: string;
+  nameEn: string;
+  nameAr: string | null;
+  status: string | null;
+}
+export interface LegalEntityOwner {
+  name: string;
+  nameAr: string | null;
+  roles: string[];
+  sharePct: number | null;
+  nationality: string | null;
+  passportNo: string | null;
+  personNo: string | null;
+  userId: string | null;
+}
+export interface LegalEntityPremises {
+  addressLine: string | null;
+  building: string | null;
+  unit: string | null;
+  area: string | null;
+  city: string | null;
+  plotNumber: string | null;
+  makaniNo: string | null;
+  sizeSqm: number | null;
+  usage: string | null;
+}
+export interface LegalEntityLease {
+  contractNo: string | null;
+  ejariTenantNo: string | null;
+  lessorName: string | null;
+  lessorLicenseNo: string | null;
+  ownerName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  annualRentAed: number | null;
+  securityDepositAed: number | null;
+  areaSqm: number | null;
+  registrationFeesAed: number | null;
+  notes: string | null;
+}
+export interface LegalEntityRow {
+  id: string;
+  legalNameEn: string;
+  legalNameAr: string | null;
+  shortName: string;
+  legalForm: string;
+  country: string;
+  jurisdiction: string;
+  status: "active" | "in_formation" | "dormant" | "winding_down" | "archived";
+  incorporationDate: string | null;
+  durationYears: number | null;
+  baseCurrency: string;
+  registeredAddress: string;
+  governingLaw: string;
+  courts: string;
+  registrations: LegalEntityRegistration[];
+  activities: LegalEntityActivity[];
+  owners: LegalEntityOwner[];
+  premises: LegalEntityPremises | null;
+  lease: LegalEntityLease | null;
+  notes: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface LegalEntityLinkedDoc {
+  id: string;
+  title: string;
+  category: string;
+  aiRetrieval: boolean;
+  createdAt: string;
+}
+
+export function useLegalEntities(includeArchived = false): {
+  entities: LegalEntityRow[];
+  isLoading: boolean;
+} {
+  const q = useQuery<{ items: LegalEntityRow[] }>({
+    queryKey: ["atelier-v5", "legal-entities", includeArchived],
+    queryFn: () =>
+      get<{ items: LegalEntityRow[] }>(
+        `/finance/entities${includeArchived ? "?includeArchived=true" : ""}`,
+      ),
+    staleTime: 30_000,
+  });
+  return { entities: q.data?.items ?? [], isLoading: q.isLoading };
+}
+
+export function useLegalEntityDetail(id: string | null): {
+  entity: LegalEntityRow | null;
+  documents: LegalEntityLinkedDoc[];
+} {
+  const q = useQuery<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[] }>({
+    queryKey: ["atelier-v5", "legal-entity", id],
+    queryFn: () =>
+      get<{ entity: LegalEntityRow; documents: LegalEntityLinkedDoc[] }>(
+        `/finance/entities/${id}`,
+      ),
+    enabled: !!id,
+    staleTime: 30_000,
+  });
+  return { entity: q.data?.entity ?? null, documents: q.data?.documents ?? [] };
+}
+
+// ============================================================
+// Finance — Entities backbone (legacy Task #372 shape, adapted from the
+// Task #249 registry so FinanceHome / Close / Comply keep rendering)
+// ============================================================
 export interface FinanceEntityRow {
   id: string;
   legalName: string;
   shortName: string;
-  jurisdiction: string;
+  kind: "parent" | "subsidiary" | "branch" | "jv";
+  parentId: string | null;
+  status: "active" | "dormant" | "winding_down";
   country: string;
-  registeredAddress: string;
-  governingLaw: string;
-  baseCurrency: string | null;
-  isDefault: boolean;
+  jurisdiction: string;
+  baseCurrency: string;
+  reportingCurrency: string;
+  incorporatedOn: string;
+  commercialRegistration: { number: string; authority: string; expiresOn: string };
+  taxIds: { vat: string | null; corporate: string | null; whtAgent: string | null };
+  eInvoicing: Array<{
+    scheme: "ZATCA" | "FTA" | "Peppol" | "HMRC_MTD";
+    id: string;
+    status: "live" | "sandbox" | "pending";
+    enrolledAt: string;
+  }>;
+  tradeLicenses: Array<{
+    id: string;
+    authority: string;
+    number: string;
+    issuedOn: string;
+    expiresOn: string;
+    status: "active" | "expiring_soon" | "expired" | "renewal_in_progress";
+    scope: string;
+  }>;
+  bankAccounts: Array<{
+    id: string;
+    bank: string;
+    iban: string;
+    currency: string;
+    purpose: "operating" | "tax" | "payroll" | "escrow";
+    signatories: string[];
+    primary: boolean;
+  }>;
+  signatories: Array<{
+    id: string;
+    name: string;
+    role: string;
+    authorityLevel: "A" | "B" | "C";
+    resolutionRef: string | null;
+  }>;
+  fiscal: {
+    yearEnd: string;
+    vatPeriod: "monthly" | "quarterly";
+    ctPeriod: "annual";
+    nextClose: string;
+    nextVatFiling: string;
+    nextCtFiling: string;
+  };
+  interCompany: Array<{
+    counterpartyId: string;
+    relationship: "subsidiary" | "branch" | "shareholder" | "service_provider";
+    tpMethod: "TNMM" | "CUP" | "Cost+" | "ResalePrice";
+    intercoServiceFeePct: number | null;
+  }>;
+  staffCount: number;
+  notes: string;
 }
-export const useFinanceEntities = listHook<FinanceEntityRow>(
-  "finance-entities",
-  "/finance/entities",
-);
+function adaptLegalEntity(e: LegalEntityRow): FinanceEntityRow {
+  const dayMs = 86_400_000;
+  const licenses = (e.registrations ?? [])
+    .filter((r) => r.expiresOn)
+    .map((r) => {
+      const d = Math.round((new Date(r.expiresOn as string).getTime() - Date.now()) / dayMs);
+      return {
+        id: r.id,
+        authority: r.issuer ?? r.label,
+        number: r.number,
+        issuedOn: r.issuedOn ?? "—",
+        expiresOn: r.expiresOn as string,
+        status: (d < 0 ? "expired" : d <= 60 ? "expiring_soon" : "active") as
+          | "active"
+          | "expiring_soon"
+          | "expired"
+          | "renewal_in_progress",
+        scope: r.label,
+      };
+    });
+  const cr = (e.registrations ?? []).find((r) => r.type === "commercial_register");
+  return {
+    id: e.id,
+    legalName: e.legalNameEn,
+    shortName: e.shortName || e.legalNameEn,
+    kind: "parent",
+    parentId: null,
+    status: e.status === "dormant" || e.status === "winding_down" ? e.status : "active",
+    country: e.country,
+    jurisdiction: e.jurisdiction,
+    baseCurrency: e.baseCurrency || "—",
+    reportingCurrency: e.baseCurrency || "—",
+    incorporatedOn: e.incorporationDate ?? "—",
+    commercialRegistration: {
+      number: cr?.number ?? "—",
+      authority: cr?.issuer ?? "—",
+      expiresOn: cr?.expiresOn ?? "—",
+    },
+    taxIds: { vat: null, corporate: null, whtAgent: null },
+    eInvoicing: [],
+    tradeLicenses: licenses,
+    bankAccounts: [],
+    signatories: (e.owners ?? []).map((o, i) => ({
+      id: `${e.id}-own-${i}`,
+      name: o.name,
+      role: (o.roles ?? []).join(", ") || "Owner",
+      authorityLevel: "A" as const,
+      resolutionRef: null,
+    })),
+    fiscal: {
+      yearEnd: "—",
+      vatPeriod: "quarterly",
+      ctPeriod: "annual",
+      nextClose: "—",
+      nextVatFiling: "—",
+      nextCtFiling: "—",
+    },
+    interCompany: [],
+    staffCount: 0,
+    notes: e.notes ?? "",
+  };
+}
+
+/**
+ * Legacy Task #372 hook, now fed by the Task #249 legal-entity registry.
+ * Consumers (FinanceHome, Close, Comply, Reports) keep their shape; fields
+ * the registry doesn't track (fiscal calendar, banks, e-invoicing) are
+ * honest placeholders.
+ */
+export function useFinanceEntities(): FinanceEntityRow[] {
+  const { entities } = useLegalEntities();
+  return useMemo(() => entities.map(adaptLegalEntity), [entities]);
+}
 
 // ============================================================
 // Finance — Comply (Task #419, Wave 7)

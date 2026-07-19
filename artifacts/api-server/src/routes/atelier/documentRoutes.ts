@@ -34,6 +34,7 @@ import {
   atelierDocumentVersions,
   atelierDocumentAccess,
   atelierAuditEvents,
+  atelierLegalEntities,
 } from "@workspace/db";
 import {
   createDocument,
@@ -114,6 +115,7 @@ function docShape(doc: DocRow, current?: typeof atelierDocumentVersions.$inferSe
     category: doc.category,
     accountId: doc.accountId,
     engagementId: doc.engagementId,
+    entityId: doc.entityId,
     uploaderUserId: doc.uploaderUserId,
     uploaderLabel: doc.uploaderLabel,
     currentVersionId: doc.currentVersionId,
@@ -150,9 +152,11 @@ router.get("/documents", async (req, res) => {
   const accountId = typeof req.query.accountId === "string" ? req.query.accountId : null;
   const engagementId = typeof req.query.engagementId === "string" ? req.query.engagementId : null;
   const category = typeof req.query.category === "string" ? req.query.category : null;
+  const entityId = typeof req.query.entityId === "string" ? req.query.entityId : null;
   if (accountId) conds.push(eq(atelierDocuments.accountId, accountId));
   if (engagementId) conds.push(eq(atelierDocuments.engagementId, engagementId));
   if (category) conds.push(eq(atelierDocuments.category, category));
+  if (entityId) conds.push(eq(atelierDocuments.entityId, entityId));
 
   const rows = await db
     .select()
@@ -208,9 +212,24 @@ router.post("/documents", uploadSingle, async (req, res) => {
     typeof req.body?.engagementId === "string" && req.body.engagementId
       ? req.body.engagementId
       : null;
+  const entityId =
+    typeof req.body?.entityId === "string" && req.body.entityId ? req.body.entityId : null;
   const notes =
     typeof req.body?.notes === "string" && req.body.notes ? req.body.notes.slice(0, 2000) : null;
   const aiRetrieval = req.body?.aiRetrieval !== "false" && req.body?.aiRetrieval !== false;
+
+  if (entityId) {
+    const [ent] = await db
+      .select({ id: atelierLegalEntities.id })
+      .from(atelierLegalEntities)
+      .where(
+        and(eq(atelierLegalEntities.id, entityId), eq(atelierLegalEntities.orgId, me.orgId)),
+      );
+    if (!ent) {
+      res.status(404).json({ error: "entity-not-found" });
+      return;
+    }
+  }
 
   const access = await accessibleEngagementIds(me);
   if (accountId) {
@@ -260,6 +279,7 @@ router.post("/documents", uploadSingle, async (req, res) => {
     category: category as DocCategory,
     accountId,
     engagementId,
+    entityId,
     aiRetrieval,
     notes,
     fileName: file.originalname || "upload",
@@ -372,6 +392,7 @@ router.patch("/documents/:id", async (req, res) => {
     title: string;
     category: string;
     notes: string | null;
+    entityId: string | null;
     updatedAt: Date;
   }> = {};
   const changes: Record<string, unknown> = {};
@@ -390,6 +411,22 @@ router.patch("/documents/:id", async (req, res) => {
   if (req.body?.notes !== undefined) {
     patch.notes = typeof req.body.notes === "string" ? req.body.notes.slice(0, 2000) : null;
     changes.notes = patch.notes;
+  }
+  if (req.body?.entityId !== undefined) {
+    const next =
+      typeof req.body.entityId === "string" && req.body.entityId ? req.body.entityId : null;
+    if (next) {
+      const [ent] = await db
+        .select({ id: atelierLegalEntities.id })
+        .from(atelierLegalEntities)
+        .where(and(eq(atelierLegalEntities.id, next), eq(atelierLegalEntities.orgId, me.orgId)));
+      if (!ent) {
+        res.status(404).json({ error: "entity-not-found" });
+        return;
+      }
+    }
+    patch.entityId = next;
+    changes.entityId = next;
   }
   if (Object.keys(patch).length > 0) {
     patch.updatedAt = new Date();

@@ -14,5 +14,6 @@ export const AtelierUpdateDocumentBodyCategory = {
   client_deliverable: "client_deliverable",
   contract: "contract",
   template: "template",
+  corporate_legal: "corporate_legal",
   other: "other",
 } as const;

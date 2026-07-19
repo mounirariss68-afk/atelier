@@ -1364,6 +1364,9 @@ export const atelierCreateDocument = async (
   if (atelierCreateDocumentBody.engagementId !== undefined) {
     formData.append(`engagementId`, atelierCreateDocumentBody.engagementId);
   }
+  if (atelierCreateDocumentBody.entityId !== undefined) {
+    formData.append(`entityId`, atelierCreateDocumentBody.entityId);
+  }
   if (atelierCreateDocumentBody.notes !== undefined) {
     formData.append(`notes`, atelierCreateDocumentBody.notes);
   }

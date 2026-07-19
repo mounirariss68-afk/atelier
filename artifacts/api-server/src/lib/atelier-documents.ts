@@ -45,6 +45,7 @@ export const DOC_CATEGORIES = [
   "client_deliverable",
   "contract",
   "template",
+  "corporate_legal",
   "other",
 ] as const;
 export type DocCategory = (typeof DOC_CATEGORIES)[number];
@@ -262,6 +263,7 @@ export interface DocumentUploadArgs {
   category: DocCategory;
   accountId?: string | null;
   engagementId?: string | null;
+  entityId?: string | null;
   aiRetrieval?: boolean;
   notes?: string | null;
   fileName: string;
@@ -325,6 +327,7 @@ export async function createDocument(args: DocumentUploadArgs): Promise<
       category: args.category,
       accountId: args.accountId ?? null,
       engagementId: args.engagementId ?? null,
+      entityId: args.entityId ?? null,
       uploaderUserId: args.uploader.id,
       uploaderLabel: args.uploader.name,
       currentVersionId: verId,

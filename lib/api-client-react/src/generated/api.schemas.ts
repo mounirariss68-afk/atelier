@@ -2387,6 +2387,8 @@ export interface AtelierLibraryDocument {
   accountId?: string | null;
   /** @nullable */
   engagementId?: string | null;
+  /** @nullable */
+  entityId?: string | null;
   uploaderUserId: string;
   uploaderLabel: string;
   /** @nullable */
@@ -6675,6 +6677,7 @@ export type AtelierListDocumentsParams = {
   accountId?: string;
   engagementId?: string;
   category?: string;
+  entityId?: string;
 };
 
 export type AtelierListDocuments200 = {
@@ -6689,6 +6692,7 @@ export const AtelierCreateDocumentBodyCategory = {
   client_deliverable: "client_deliverable",
   contract: "contract",
   template: "template",
+  corporate_legal: "corporate_legal",
   other: "other",
 } as const;
 
@@ -6706,6 +6710,7 @@ export type AtelierCreateDocumentBody = {
   category?: AtelierCreateDocumentBodyCategory;
   accountId?: string;
   engagementId?: string;
+  entityId?: string;
   /** @maxLength 2000 */
   notes?: string;
   aiRetrieval?: AtelierCreateDocumentBodyAiRetrieval;
@@ -6726,6 +6731,7 @@ export const AtelierUpdateDocumentBodyCategory = {
   client_deliverable: "client_deliverable",
   contract: "contract",
   template: "template",
+  corporate_legal: "corporate_legal",
   other: "other",
 } as const;
 
@@ -6735,6 +6741,7 @@ export type AtelierUpdateDocumentBody = {
   category?: AtelierUpdateDocumentBodyCategory;
   /** @maxLength 2000 */
   notes?: string | null;
+  entityId?: string | null;
   aiRetrieval?: boolean;
 };
 

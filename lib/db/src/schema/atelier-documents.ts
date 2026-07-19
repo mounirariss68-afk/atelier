@@ -43,6 +43,8 @@ export const atelierDocuments = pgTable(
     category: text("category").notNull().default("other"),
     accountId: text("account_id"),
     engagementId: text("engagement_id"),
+    /** Task #249 — optional link to a legal-entity registry record. */
+    entityId: text("entity_id"),
     uploaderUserId: text("uploader_user_id").notNull(),
     uploaderLabel: text("uploader_label").notNull().default(""),
     /** Points at the latest version row. */

@@ -14,6 +14,7 @@ export type AtelierCreateDocumentBody = {
   category?: AtelierCreateDocumentBodyCategory;
   accountId?: string;
   engagementId?: string;
+  entityId?: string;
   /** @maxLength 2000 */
   notes?: string;
   aiRetrieval?: AtelierCreateDocumentBodyAiRetrieval;

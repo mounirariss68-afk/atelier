@@ -42,10 +42,10 @@ import {
   resolvePrimaryCode,
   PERIOD_DAYS,
   useCfoFilters,
-  sanitizeEntitySelection,
   type CfoCurrency,
   type CfoFilters,
   type FilterBarSource,
+  sanitizeEntitySelection,
 } from "./cfoPrimitives";
 import {
   useArAging,
@@ -89,13 +89,11 @@ interface FilterCtx {
   asOfMs: number;
 }
 
-function useFilterCtx(filters: CfoFilters, allEntities: FinanceEntityRow[]): FilterCtx {
+function useFilterCtx(filters: CfoFilters): FilterCtx {
+  const allEntities = useFinanceEntities();
   const isAll = filters.entities.includes("all");
   const selected = isAll ? allEntities : allEntities.filter((e) => (filters.entities as string[]).includes(e.id));
-  // Local currency comes from the single selected real entity; the registry
-  // has no currency yet, so this stays undefined (GBP fallback chip) rather
-  // than fabricating one.
-  const localCode = !isAll && selected.length === 1 ? selected[0].baseCurrency ?? undefined : undefined;
+  const localCode = !isAll && selected.length === 1 ? selected[0].baseCurrency : undefined;
   const asOfMs = filters.asOf ? new Date(filters.asOf).getTime() : Date.now();
   return {
     filters,
@@ -758,15 +756,35 @@ function toneClasses(t: "red" | "amber" | "gold" | "default"): string {
   }
 }
 
-function CloseComplianceInbox({ entities, inbox }: {
+function CloseComplianceInbox({ entities, inbox, asOfMs }: {
   entities: FinanceEntityRow[];
   inbox: ReturnType<typeof buildCfoInbox>;
+  asOfMs: number;
 }) {
-  // Compliance calendar — the retired demo backbone fabricated per-entity
-  // fiscal calendars and licence expiries. Real entities (signing-entity
-  // registry) carry no fiscal data yet, so the calendar is honestly empty
-  // until entity-level compliance data lands.
-  const calendar: Array<{ id: string; label: string; entity: string; date: string; tone: "red" | "amber" | "gold"; daysOut: number }> = [];
+  // Compliance calendar — 90-day rolling from as-of
+  const calendar = React.useMemo(() => {
+    const items: Array<{ id: string; label: string; entity: string; date: string; tone: "red" | "amber" | "gold" | "default"; daysOut: number }> = [];
+    const dayMs = 86_400_000;
+    for (const e of entities) {
+      const push = (id: string, label: string, date: string) => {
+        if (!date || date === "—") return;
+        const d = Math.round((new Date(date).getTime() - asOfMs) / dayMs);
+        if (d > 90 || d < -30) return;
+        items.push({ id, label, entity: e.shortName, date, daysOut: d, tone: d < 0 ? "red" : d <= 7 ? "amber" : d <= 30 ? "gold" : "default" });
+      };
+      push(`v-${e.id}`, "VAT filing", e.fiscal.nextVatFiling);
+      push(`ct-${e.id}`, "CT filing", e.fiscal.nextCtFiling);
+      push(`cl-${e.id}`, "Period close", e.fiscal.nextClose);
+      for (const lic of e.tradeLicenses) {
+        const d = Math.round((new Date(lic.expiresOn).getTime() - asOfMs) / dayMs);
+        if (d <= 90 && d >= -30) {
+          items.push({ id: `lic-${lic.id}`, label: `${lic.authority} renewal`, entity: e.shortName, date: lic.expiresOn, daysOut: d, tone: d < 0 ? "red" : d <= 30 ? "amber" : "gold" });
+        }
+      }
+    }
+    items.sort((a, b) => a.daysOut - b.daysOut);
+    return items.slice(0, 8);
+  }, [entities, asOfMs]);
 
   return (
     <div className="grid lg:grid-cols-3 gap-4">
@@ -774,18 +792,24 @@ function CloseComplianceInbox({ entities, inbox }: {
       <Card className="p-4" data-testid="cfo-close-panel">
         <PanelHead title="Close status · per entity" drillHref="/finance/close" />
         <ul className="space-y-2">
-          {entities.length === 0 && <li className="text-xs text-text-faint italic">No legal entities registered yet.</li>}
-          {entities.map((e) => (
-            <li key={e.id} className={`border ${toneClasses("default")} rounded p-2 text-xs`}>
-              <div className="flex items-baseline justify-between">
-                <span className="text-text">{e.shortName}</span>
-                <MonoChip>no close calendar yet</MonoChip>
-              </div>
-              <div className="text-text-faint font-mono mt-0.5 text-[10px]">
-                {e.jurisdiction || e.country || "—"}
-              </div>
-            </li>
-          ))}
+          {entities.length === 0 && <li className="text-xs text-text-faint italic">No entities in current selection.</li>}
+          {entities.map((e) => {
+            const closeD = Math.round((new Date(e.fiscal.nextClose).getTime() - asOfMs) / 86_400_000);
+            const tone = !Number.isFinite(closeD) ? "default" : closeD < 0 ? "red" : closeD <= 7 ? "amber" : "default";
+            return (
+              <li key={e.id} className={`border ${toneClasses(tone)} rounded p-2 text-xs`}>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-text">{e.shortName}</span>
+                  <MonoChip tone={tone === "red" ? "red" : tone === "amber" ? "amber" : "default"}>{!Number.isFinite(closeD) ? "no close date" : closeD < 0 ? `${Math.abs(closeD)}d late` : `${closeD}d to close`}</MonoChip>
+                </div>
+                <div className="text-text-faint font-mono mt-0.5 text-[10px] flex justify-between">
+                  <span>checklist <span className="italic">— W4</span></span>
+                  <span>recs <span className="italic">— W4</span></span>
+                  <span>sign-off <span className="italic">— W4</span></span>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </Card>
 
@@ -856,7 +880,7 @@ export default function FinanceHome() {
     return { ...rawFilters, entities: sanitizeEntitySelection(rawFilters.entities, allEntities.map((e) => e.id)) };
   }, [rawFilters, allEntities]);
   const entityOptions = allEntities.map((e) => ({ id: e.id, label: e.shortName }));
-  const ctx = useFilterCtx(filters, allEntities);
+  const ctx = useFilterCtx(filters);
 
   const ar = useArAging();
   const wip = useWipLatest();
@@ -867,8 +891,7 @@ export default function FinanceHome() {
   const { data: fpaHc } = useFpaHeadcount("base", null);
   const { data: fpaRenewals } = useFpaRenewals("USD", null);
 
-  // Inbox producers are firm-wide (AR, margin, cash) — real entities carry
-  // no fiscal/licence data yet, so there are no entity-scoped producers.
+  // Inbox is entity-scoped: only producers tied to selected entities
   const inbox = React.useMemo(
     () => buildCfoInbox(ar, margin, cash),
     [ar, margin, cash],
@@ -930,7 +953,7 @@ export default function FinanceHome() {
         </section>
 
         <section>
-          <CloseComplianceInbox entities={ctx.selectedEntities} inbox={inbox} />
+          <CloseComplianceInbox entities={ctx.selectedEntities} inbox={inbox} asOfMs={ctx.asOfMs} />
         </section>
 
         <section data-testid="finance-plan-fpa">

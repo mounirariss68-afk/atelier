@@ -252,6 +252,10 @@ paths:
           in: query
           required: false
           schema: { type: string }
+        - name: entityId
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: Visible documents, most recently updated first
@@ -277,9 +281,10 @@ paths:
               required: [title, file]
               properties:
                 title: { type: string, maxLength: 200 }
-                category: { type: string, enum: [proposal, client_deliverable, contract, template, other] }
+                category: { type: string, enum: [proposal, client_deliverable, contract, template, corporate_legal, other] }
                 accountId: { type: string }
                 engagementId: { type: string }
+                entityId: { type: string }
                 notes: { type: string, maxLength: 2000 }
                 aiRetrieval: { type: string, enum: ["true", "false"] }
                 file: { type: string, format: binary, description: "Document file, ≤50 MB" }
@@ -328,8 +333,9 @@ paths:
               type: object
               properties:
                 title: { type: string, maxLength: 200 }
-                category: { type: string, enum: [proposal, client_deliverable, contract, template, other] }
+                category: { type: string, enum: [proposal, client_deliverable, contract, template, corporate_legal, other] }
                 notes: { type: string, maxLength: 2000, nullable: true }
+                entityId: { type: string, nullable: true }
                 aiRetrieval: { type: boolean }
       responses:
         "200":
@@ -6890,6 +6896,7 @@ components:
         category: { type: string }
         accountId: { type: ["string", "null"] }
         engagementId: { type: ["string", "null"] }
+        entityId: { type: ["string", "null"] }
         uploaderUserId: { type: string }
         uploaderLabel: { type: string }
         currentVersionId: { type: ["string", "null"] }

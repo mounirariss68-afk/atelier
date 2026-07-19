@@ -13,5 +13,6 @@ export type AtelierUpdateDocumentBody = {
   category?: AtelierUpdateDocumentBodyCategory;
   /** @maxLength 2000 */
   notes?: string | null;
+  entityId?: string | null;
   aiRetrieval?: boolean;
 };
