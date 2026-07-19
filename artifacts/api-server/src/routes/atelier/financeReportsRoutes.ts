@@ -884,6 +884,15 @@ function buildPnlVariance(a: PnlLines, b: PnlLines, f: PnlLines, py: PnlLines): 
   };
 }
 
+const NO_FINANCIAL_DATA_NOTE = "No financial data has been recorded for this period yet — variance commentary is unavailable.";
+
+function pnlAllZero(cons: { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines }): boolean {
+  const keys: Array<keyof PnlLines> = ["netRevenue", "grossProfit", "payroll", "opex", "ebitda", "ebit", "netIncome"];
+  return (["actual", "budget", "forecast", "priorYear"] as const).every((k) =>
+    keys.every((key) => Math.abs(cons[k][key]) < 0.005),
+  );
+}
+
 function buildPnlCommentary(v: PnlVariance): string[] {
   return [
     autoCommentary("Net revenue", v.netRevenue),
@@ -1081,7 +1090,8 @@ router.get("/finance/reports/board-pack", async (req, res) => {
   };
   const consPnl = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
   const v = buildPnlVariance(consPnl.actual, consPnl.budget, consPnl.forecast, consPnl.priorYear);
-  const commentary = buildPnlCommentary(v);
+  const noData = pnlAllZero(consPnl);
+  const commentary = noData ? [NO_FINANCIAL_DATA_NOTE] : buildPnlCommentary(v);
 
   // BS at period close
   const bsPerEntity = entitiesIn(null).map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
@@ -1160,7 +1170,8 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   };
   const consPnl = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
   const v = buildPnlVariance(consPnl.actual, consPnl.budget, consPnl.forecast, consPnl.priorYear);
-  const commentary = buildPnlCommentary(v);
+  const noData = pnlAllZero(consPnl);
+  const commentary = noData ? [NO_FINANCIAL_DATA_NOTE] : buildPnlCommentary(v);
   const bsPerEntity = entitiesIn(null).map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
   const bsSum = sumBs(bsPerEntity);
   const elimsBs = computeEliminationsForPeriod(period);
