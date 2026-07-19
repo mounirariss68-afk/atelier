@@ -119,14 +119,14 @@ export function DocCard(props: {
         <div className="min-w-0">
           <div className="flex items-start gap-2 min-w-0">
             <FileText className="w-4 h-4 text-text-mute shrink-0 mt-0.5" />
-            <div>
+            <div className="min-w-0 flex-1">
               <a
                 href={`/api/atelier/documents/${d.id}/download?disposition=inline`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-sm font-medium text-text hover:text-gold truncate block"
                 data-testid={`link-open-doc-${d.id}`}
-                title="View document inline"
+                title={d.title}
               >
                 {d.docKind ? (KIND_LABEL[d.docKind] ?? d.docKind) : d.title}
               </a>

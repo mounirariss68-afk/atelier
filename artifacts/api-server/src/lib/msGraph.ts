@@ -340,10 +340,12 @@ export async function getCalendarView(
   let guard = 0;
   while (path && guard < 5) {
     guard += 1;
-    const page: { value: MsCalendarEvent[]; "@odata.nextLink"?: string } =
-      await graphGet(accessToken, path);
+    const page = await graphGet<{
+      value: MsCalendarEvent[];
+      "@odata.nextLink"?: string;
+    }>(accessToken, path);
     out.push(...(page.value ?? []));
-    const next: string | undefined = page["@odata.nextLink"];
+    const next = page["@odata.nextLink"];
     path = next ? next.replace(graphBase(), "") : null;
     if (path && !path.startsWith("/")) path = null; // absolute foreign URL — stop
   }
