@@ -56,6 +56,7 @@ export async function ensureAtelierReferenceSeed(): Promise<void> {
   );
   try {
     await seedMissingRows();
+    await normalizeRetiredGenderValues();
   } finally {
     await db.execute(
       sql`SELECT pg_advisory_unlock(${REFERENCE_SEED_LOCK_KEY})`,
@@ -140,6 +141,40 @@ async function seedMissingRows(): Promise<void> {
       { count: SUB_INDUSTRIES.length },
       "Reference seed: sub-industries",
     );
+  }
+}
+
+/**
+ * One-way data backfill: "non_binary" was removed from the gender option
+ * list (now female | male | unspecified), so any legacy rows still holding
+ * the retired value are folded into "unspecified". Idempotent and cheap
+ * (no-op UPDATE once clean), so it runs on every cold start — this also
+ * covers the production database on the next deploy. Guarded with
+ * to_regclass so a fresh DB mid-provisioning doesn't abort the boot batch.
+ */
+async function normalizeRetiredGenderValues(): Promise<void> {
+  const tables = [
+    "atelier_employees",
+    "atelier_contractors",
+    "atelier_partner_firm_resources",
+  ];
+  for (const table of tables) {
+    const exists = await db.execute(
+      sql.raw(`SELECT to_regclass('${table}') IS NOT NULL AS present`),
+    );
+    if (!(exists.rows[0] as { present?: boolean } | undefined)?.present) continue;
+    const res = await db.execute(
+      sql.raw(
+        `UPDATE ${table} SET gender = 'unspecified' WHERE gender = 'non_binary'`,
+      ),
+    );
+    const updated = res.rowCount ?? 0;
+    if (updated > 0) {
+      logger.info(
+        { table, updated },
+        "Gender backfill: normalized retired non_binary value to unspecified",
+      );
+    }
   }
 }
 

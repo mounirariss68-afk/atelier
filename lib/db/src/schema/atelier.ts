@@ -2159,7 +2159,7 @@ export const atelierEmployees = pgTable(
     // Task #412 — self-identified demographics for the People Lens
     // Team Composition dashboard. Optional, defaulting to `unspecified` /
     // null so we never imply coverage we don't actually have.
-    gender: text("gender").notNull().default("unspecified"), // female | male | non_binary | unspecified
+    gender: text("gender").notNull().default("unspecified"), // female | male | unspecified
     nationality: text("nationality"), // ISO-3166 alpha-2 country code, nullable
     employmentStatus: text("employment_status").notNull().default("active"), // active | notice | on_leave | terminated (PRD §2.1)
     employingEntity: text("employing_entity"), // DIFC | ADGM | KSA | Other (PRD §2.1)

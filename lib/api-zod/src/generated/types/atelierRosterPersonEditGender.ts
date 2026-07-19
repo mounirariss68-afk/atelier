@@ -12,6 +12,5 @@ export type AtelierRosterPersonEditGender =
 export const AtelierRosterPersonEditGender = {
   female: "female",
   male: "male",
-  non_binary: "non_binary",
   unspecified: "unspecified",
 } as const;

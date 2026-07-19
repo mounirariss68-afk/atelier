@@ -460,7 +460,6 @@ export function EditPersonForm({
               <option value="unspecified">unspecified</option>
               <option value="female">female</option>
               <option value="male">male</option>
-              <option value="non_binary">non-binary</option>
             </select>
           </FieldWrap>
         </div>

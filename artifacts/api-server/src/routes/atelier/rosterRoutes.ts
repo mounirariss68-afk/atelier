@@ -136,7 +136,7 @@ interface ListOpts {
   // dashboard's deep-links and directory chip strip. All optional and
   // case-insensitive where it makes sense.
   nationality?: string;          // ISO-3166 alpha-2
-  gender?: string;               // female | male | non_binary | unspecified
+  gender?: string;               // female | male | unspecified
   country?: string;              // current location ISO alpha-2
   seniority?: string;            // exact match against `seniority`
   includeComp: boolean;
@@ -732,9 +732,9 @@ router.get("/roster/people", async (req, res, next) => {
 // Task #412 — HR-only demographics edit. Gender + nationality are the
 // two columns added to the roster tables in this task; the dashboard
 // surfaces coverage % so HR can chase data quality from one place.
-// Wire-format: { gender?: "female"|"male"|"non_binary"|"unspecified",
+// Wire-format: { gender?: "female"|"male"|"unspecified",
 //                nationality?: string|null  // ISO-3166 alpha-2 or null }
-const ALLOWED_GENDERS = new Set(["female", "male", "non_binary", "unspecified"]);
+const ALLOWED_GENDERS = new Set(["female", "male", "unspecified"]);
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
 router.patch("/roster/people/:id/demographics", async (req, res, next) => {
   try {
@@ -1010,7 +1010,7 @@ const zIsoDate = z
   .regex(ISO_DATE, "expected YYYY-MM-DD")
   .refine((s) => !Number.isNaN(Date.parse(s)), "invalid date")
   .nullable();
-const zGender = z.enum(["female", "male", "non_binary", "unspecified"]);
+const zGender = z.enum(["female", "male", "unspecified"]);
 const zNationality = z
   .string()
   .regex(/^[A-Za-z]{2}$/, "ISO alpha-2")

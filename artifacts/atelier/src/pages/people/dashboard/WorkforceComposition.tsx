@@ -17,7 +17,6 @@ const SENIORITY_PALETTE = [
 const GENDER_PALETTE: Record<string, string> = {
   Female: "var(--gold)",
   Male: "var(--gold-deep)",
-  "Non-binary": "var(--success)",
   Unspecified: "var(--text-mute)",
 };
 
@@ -29,9 +28,10 @@ function prettySeniority(s: string): string {
 
 function prettyGender(g: string): string {
   const k = g.trim().toLowerCase();
-  if (!k || k === "unspecified") return "Unspecified";
-  if (k === "non_binary" || k === "non-binary") return "Non-binary";
-  return k.charAt(0).toUpperCase() + k.slice(1);
+  if (k === "female") return "Female";
+  if (k === "male") return "Male";
+  // Legacy/unknown values (e.g. the retired "non_binary") fold into Unspecified.
+  return "Unspecified";
 }
 
 export function WorkforceComposition() {

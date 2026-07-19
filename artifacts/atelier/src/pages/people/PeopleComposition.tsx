@@ -22,7 +22,7 @@ import { PeopleEmptyState } from "./PeopleEmptyState";
 // ------------------------------------------------------------------
 
 type WorkerKind = "employee" | "contractor" | "partner_firm_resource";
-type Gender = "female" | "male" | "non_binary" | "unspecified";
+type Gender = "female" | "male" | "unspecified";
 type LangProficiency = "basic" | "working" | "fluent" | "native";
 
 interface RosterPersonWire {
@@ -68,7 +68,7 @@ interface LoadState {
   skillsError: string | null;
 }
 
-const GENDERS: readonly Gender[] = ["female", "male", "non_binary", "unspecified"];
+const GENDERS: readonly Gender[] = ["female", "male", "unspecified"];
 const HARD_SKILL_KINDS = new Set(["tech", "industry", "function", "tool"]);
 
 /** Map the skill graph's 1–5 proficiency onto the language band scale. */
@@ -183,7 +183,6 @@ function applyFilters(rows: CompositionRow[], f: CompositionFilters): Compositio
 const GENDER_COLOR: Record<Gender, string> = {
   female: "#c9a86a",
   male: "#8aa7d6",
-  non_binary: "#a78bbb",
   unspecified: "#5b5d63",
 };
 

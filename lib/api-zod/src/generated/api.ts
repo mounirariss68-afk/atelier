@@ -209,9 +209,7 @@ export const AtelierUpdateMyProfileBody = zod
       .string()
       .max(atelierUpdateMyProfileBodyNationalityMax)
       .nullish(),
-    gender: zod
-      .enum(["female", "male", "non_binary", "unspecified"])
-      .optional(),
+    gender: zod.enum(["female", "male", "unspecified"]).optional(),
   })
   .describe(
     "Self-editable personal fields only. Sensitive HR fields (compensation, banking, employment type) are never accepted here.\n",
@@ -3013,9 +3011,7 @@ export const AtelierUpdateRosterPersonBody = zod
       .string()
       .max(atelierUpdateRosterPersonBodyNationalityMax)
       .nullish(),
-    gender: zod
-      .enum(["female", "male", "non_binary", "unspecified"])
-      .optional(),
+    gender: zod.enum(["female", "male", "unspecified"]).optional(),
     cellPhones: zod
       .array(
         zod.object({

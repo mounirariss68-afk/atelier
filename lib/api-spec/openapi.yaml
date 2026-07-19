@@ -6852,7 +6852,7 @@ components:
         officeAddress: { type: ["string", "null"], maxLength: 1000 }
         bio: { type: ["string", "null"], maxLength: 4000 }
         nationality: { type: ["string", "null"], maxLength: 2 }
-        gender: { type: string, enum: [female, male, non_binary, unspecified] }
+        gender: { type: string, enum: [female, male, unspecified] }
 
     AtelierSelfProfilePatchResponse:
       type: object
@@ -7237,7 +7237,7 @@ components:
         endDate: { type: ["string", "null"] }
         noticePeriodDays: { type: integer, minimum: 0, maximum: 365 }
         nationality: { type: ["string", "null"], maxLength: 2 }
-        gender: { type: string, enum: [female, male, non_binary, unspecified] }
+        gender: { type: string, enum: [female, male, unspecified] }
         cellPhones:
           type: array
           maxItems: 3

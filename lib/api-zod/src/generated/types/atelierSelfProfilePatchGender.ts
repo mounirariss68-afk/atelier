@@ -12,6 +12,5 @@ export type AtelierSelfProfilePatchGender =
 export const AtelierSelfProfilePatchGender = {
   female: "female",
   male: "male",
-  non_binary: "non_binary",
   unspecified: "unspecified",
 } as const;

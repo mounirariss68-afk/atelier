@@ -397,7 +397,6 @@ function DemographicsEditor({
           <option value="unspecified">unspecified</option>
           <option value="female">female</option>
           <option value="male">male</option>
-          <option value="non_binary">non-binary</option>
         </select>
       </label>
       <div className="flex items-center justify-end gap-2">

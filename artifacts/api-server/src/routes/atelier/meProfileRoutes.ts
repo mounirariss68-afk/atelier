@@ -171,7 +171,7 @@ const ProfilePatch = z
     officeAddress: z.string().max(1000).nullable().optional(),
     bio: z.string().max(4000).nullable().optional(),
     nationality: z.string().max(2).nullable().optional(),
-    gender: z.enum(["female", "male", "non_binary", "unspecified"]).optional(),
+    gender: z.enum(["female", "male", "unspecified"]).optional(),
   })
   .strict();
 
