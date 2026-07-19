@@ -62,6 +62,7 @@ import {
 } from "./savedPrompts";
 import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
+import { slashInsertionText, shouldSlashMenuOpen, enterAction } from "./slashComposer";
 import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
 import { Markdown } from "./Markdown";
 
@@ -458,8 +459,7 @@ export function CommandBar(props: CommandBarProps) {
     // token ("/contract-prepare using …"), close the menu so Enter
     // submits the turn instead of re-picking the candidate (which
     // silently reset the composer to the bare alias).
-    const hasArgs = /^\/\S+\s+\S/.test(input);
-    const willOpen = input.startsWith("/") && !hasArgs && slashCandidates.length > 0;
+    const willOpen = shouldSlashMenuOpen(input, slashCandidates.length);
     setSlashOpen((wasOpen) => {
       // Task #342 — record cli.opened with source=slash_command the
       // first time the slash menu opens after being closed. Treats
@@ -479,10 +479,9 @@ export function CommandBar(props: CommandBarProps) {
   }, [input, slashCandidates.length]);
 
   function pickSlash(c: CliCapability) {
-    const alias = c.slashAliases[locale]?.[0] ?? c.slashAliases.en?.[0] ?? c.toolName;
-    // Aliases in the catalog carry a leading "/" already — strip it so
-    // picking a candidate never yields "//contract-prepare".
-    setInput(`/${alias.replace(/^\/+/, "")} `);
+    // Aliases in the catalog carry a leading "/" already — slashInsertionText
+    // strips it so picking a candidate never yields "//contract-prepare".
+    setInput(slashInsertionText(c, locale));
     setSlashOpen(false);
     composerRef.current?.focus();
   }
@@ -588,7 +587,14 @@ export function CommandBar(props: CommandBarProps) {
         setSlashIndex((i) => Math.max(0, i - 1));
         return;
       }
-      if (e.key === "Enter" && !e.shiftKey && slashCandidates[slashIndex]) {
+      if (
+        e.key === "Enter" &&
+        !e.shiftKey &&
+        enterAction({
+          slashOpen,
+          hasHighlightedCandidate: Boolean(slashCandidates[slashIndex]),
+        }) === "pick"
+      ) {
         e.preventDefault();
         pickSlash(slashCandidates[slashIndex]);
         return;
