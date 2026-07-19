@@ -156,6 +156,12 @@ export interface ExtraSignerField extends SignaturePlacement {
 }
 
 /**
+ * Firm-wide date format for DocuSeal date fields ("Date signed" boxes).
+ * Unambiguous for European counterparties — renders as e.g. "19 Jul 2026".
+ */
+export const DATE_FIELD_FORMAT = "DD MMM YYYY";
+
+/**
  * Default two-column layout on the given page (1-based) — used when the
  * sender hasn't customized placement. Index is 0-based signer index.
  */
@@ -238,6 +244,9 @@ export async function createTemplateFromPdf(args: {
       type: f.type,
       role: signerRole(f.signerIndex + 1),
       required: true,
+      // European firm: render date fields as e.g. "19 Jul 2026" instead of
+      // DocuSeal's ambiguous US default (07/19/2026).
+      ...(f.type === "date" ? { preferences: { format: DATE_FIELD_FORMAT } } : {}),
       areas: [{ x: f.x, y: f.y, w: f.w, h: f.h, page: f.page }],
     });
   }
