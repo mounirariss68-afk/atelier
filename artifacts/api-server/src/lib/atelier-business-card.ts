@@ -335,11 +335,12 @@ export async function generateBusinessCardPdf(
     .map((c) => formatCardPhone(c))
     .filter((p) => p.length > 0);
   if (phones.length > 0) {
-    // 1–2 numbers sit at the template's phone offset; 3+ anchor upward from
-    // the email line so the last phone always clears it.
+    // A single number sits at the template's phone offset; 2+ anchor upward
+    // from the email line (tighter leading at 3+) so the last phone always
+    // clears the email and a single number leaves no odd gap.
     const lineH = phones.length > 2 ? 7 : 7.6;
     const startY =
-      phones.length > 2
+      phones.length > 1
         ? FRONT.email.y - phones.length * lineH
         : FRONT.phone.y;
     phones.forEach((p, i) => {
