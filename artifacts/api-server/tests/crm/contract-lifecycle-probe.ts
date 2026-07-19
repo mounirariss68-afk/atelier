@@ -428,6 +428,23 @@ async function main() {
     // via the self-scope /me/contracts/* routes.
     const mineDetail = await api("GET", `/me/contracts/${contractId}`, undefined, empUserId);
     check("employee /me/contracts/:id -> 200", mineDetail.status === 200, mineDetail);
+    // Task #166 — signature history rides beside the contract for the
+    // employee's own record: who signed, their status and completed-at.
+    const mineSig = mineDetail.body?.signatureRequest;
+    check("me detail includes signatureRequest", !!mineSig && mineSig.id === sigRequestId, mineSig);
+    check(
+      "signatureRequest completed after sync",
+      mineSig?.status === "completed" && !!mineSig?.completedAt,
+      mineSig,
+    );
+    const mineSigner = (mineSig?.signers ?? [])[0];
+    check(
+      "signer name/status/completedAt visible",
+      mineSigner?.name === "Nadia Probe" &&
+        mineSigner?.status === "completed" &&
+        !!mineSigner?.completedAt,
+      mineSig?.signers,
+    );
     const mineDocs = mineDetail.body?.contract?.documents ?? [];
     const mineSigned = mineDocs.find((d: any) => d.kind === "signed_pdf");
     check("me detail includes documents chain + signed_pdf", !!mineSigned, mineDocs);

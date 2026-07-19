@@ -42,6 +42,8 @@ import {
   atelierContractTemplateVersions,
   atelierContractRecords,
   atelierContractDocuments,
+  atelierSignatureRequests,
+  atelierSignatureSigners,
   type ContractTemplateField,
 } from "@workspace/db";
 import { canApproveAsPartner } from "./personaRoles";
@@ -671,7 +673,55 @@ async function loadMyContract(
   return contract;
 }
 
+/**
+ * Task #166 — signature history for a contract's e-sign request, shaped
+ * for the Me-lens read-only detail (who signed, when, request status).
+ * Returns null when the contract was never sent for signature.
+ */
+async function loadMySignatureHistory(
+  orgId: string,
+  signatureRequestId: string | null,
+): Promise<Record<string, unknown> | null> {
+  if (!signatureRequestId) return null;
+  const [request] = await db
+    .select()
+    .from(atelierSignatureRequests)
+    .where(
+      and(
+        eq(atelierSignatureRequests.id, signatureRequestId),
+        eq(atelierSignatureRequests.orgId, orgId),
+      ),
+    );
+  if (!request) return null;
+  const signers = await db
+    .select()
+    .from(atelierSignatureSigners)
+    .where(eq(atelierSignatureSigners.requestId, request.id));
+  signers.sort((a, b) => a.signingOrder - b.signingOrder);
+  return {
+    id: request.id,
+    title: request.title,
+    status: request.status,
+    createdAt: request.createdAt,
+    completedAt: request.completedAt,
+    declinedAt: request.declinedAt,
+    expiresAt: request.expiresAt,
+    signers: signers.map((s) => ({
+      id: s.id,
+      name: s.name,
+      email: s.email,
+      signingOrder: s.signingOrder,
+      status: s.status,
+      openedAt: s.openedAt,
+      completedAt: s.completedAt,
+      declinedAt: s.declinedAt,
+    })),
+  };
+}
+
 // Task #161 — Me-lens read-only contract detail (documents chain + status).
+// Task #166 — includes signature history (signers + completion) when the
+// contract has been sent for e-signature.
 // @cli-skip: contract lifecycle is UI/chat-capability-driven (Task #159)
 router.get("/me/contracts/:id", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -683,7 +733,8 @@ router.get("/me/contracts/:id", async (req, res) => {
     .from(atelierContractDocuments)
     .where(eq(atelierContractDocuments.contractId, contract.id))
     .orderBy(desc(atelierContractDocuments.versionNumber));
-  res.json({ contract: contractShape(contract, documents) });
+  const signatureRequest = await loadMySignatureHistory(me.orgId, contract.signatureRequestId);
+  res.json({ contract: contractShape(contract, documents), signatureRequest });
 });
 
 // Task #161 — Me-lens document download (own signed PDF etc.).

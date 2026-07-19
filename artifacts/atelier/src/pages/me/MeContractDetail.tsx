@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import { BackLink, Card } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, PenLine } from "lucide-react";
 import {
   ContractStatusChip,
   CONTRACT_TYPE_LABELS,
@@ -25,6 +25,49 @@ import {
 } from "@/components/contracts/ContractsPanel";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
+
+/** Task #166 — signature history returned beside the contract. */
+interface MeSignatureSigner {
+  id: string;
+  name: string;
+  email: string;
+  signingOrder: number;
+  status: string;
+  openedAt: string | null;
+  completedAt: string | null;
+  declinedAt: string | null;
+}
+interface MeSignatureRequest {
+  id: string;
+  title: string;
+  status: string;
+  createdAt: string;
+  completedAt: string | null;
+  declinedAt: string | null;
+  expiresAt: string | null;
+  signers: MeSignatureSigner[];
+}
+
+const SIGNER_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  sent: "Sent",
+  opened: "Opened",
+  completed: "Signed",
+  declined: "Declined",
+};
+const SIGNER_STATUS_CLASSES: Record<string, string> = {
+  completed: "text-emerald-400",
+  declined: "text-red-400",
+};
+
+const REQUEST_STATUS_LABELS: Record<string, string> = {
+  sent: "Out for signature",
+  partially_signed: "Partially signed",
+  completed: "Fully signed",
+  declined: "Declined",
+  voided: "Voided",
+  expired: "Expired",
+};
 
 const DOC_KIND_LABELS: Record<string, string> = {
   generated_draft: "Draft (generated)",
@@ -37,7 +80,10 @@ export default function MeContractDetail() {
   const [, params] = useRoute("/me/contracts/:id");
   const id = params?.id ?? "";
 
-  const { data, isLoading, error } = useQuery<{ contract: AtelierContract }>({
+  const { data, isLoading, error } = useQuery<{
+    contract: AtelierContract;
+    signatureRequest: MeSignatureRequest | null;
+  }>({
     queryKey: ["me-contract", id],
     enabled: !!id,
     retry: false,
@@ -50,6 +96,7 @@ export default function MeContractDetail() {
     },
   });
   const contract = data?.contract;
+  const sigRequest = data?.signatureRequest ?? null;
 
   if (isLoading || !contract) {
     return (
@@ -98,6 +145,54 @@ export default function MeContractDetail() {
           <div className="text-sm text-text">{fmtContractDate(contract.updatedAt)}</div>
         </Card>
       </div>
+
+      {sigRequest ? (
+        <Card className="p-5" data-testid="card-signatures">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-text inline-flex items-center gap-2">
+              <PenLine className="w-4 h-4 text-text-faint" />
+              Signatures
+            </h3>
+            <span className="text-[11px] text-text-mute" data-testid="text-signature-status">
+              {REQUEST_STATUS_LABELS[sigRequest.status] ?? sigRequest.status}
+              {sigRequest.completedAt ? ` · ${fmtContractDate(sigRequest.completedAt)}` : ""}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {sigRequest.signers.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center gap-3 rounded-md border border-border bg-bg-elevate/50 px-3 py-2"
+                data-testid={`row-signer-${s.id}`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm text-text truncate">{s.name}</div>
+                  <div className="text-[11px] text-text-faint truncate">{s.email}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div
+                    className={`text-xs font-medium ${SIGNER_STATUS_CLASSES[s.status] ?? "text-text-mute"}`}
+                  >
+                    {SIGNER_STATUS_LABELS[s.status] ?? s.status}
+                  </div>
+                  {s.completedAt ? (
+                    <div className="text-[11px] text-text-faint">
+                      {fmtContractDate(s.completedAt)}
+                    </div>
+                  ) : s.declinedAt ? (
+                    <div className="text-[11px] text-text-faint">
+                      {fmtContractDate(s.declinedAt)}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+            {sigRequest.signers.length === 0 ? (
+              <div className="text-sm text-text-faint">No signers recorded.</div>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       <Card className="p-5">
         <h3 className="text-sm font-semibold text-text mb-3">Documents</h3>
