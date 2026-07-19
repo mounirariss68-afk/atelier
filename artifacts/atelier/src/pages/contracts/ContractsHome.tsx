@@ -186,8 +186,14 @@ function ReviewFieldsDialog(props: {
   const qc = useQueryClient();
   const version = props.template.currentVersion;
   const [fields, setFields] = React.useState<AtelierContractTemplateField[]>([]);
+  const [mismatchedKeys, setMismatchedKeys] = React.useState<Set<string>>(new Set());
+  const [mismatchMessage, setMismatchMessage] = React.useState<string | null>(null);
   React.useEffect(() => {
-    if (props.open) setFields(version?.fieldSchema ?? []);
+    if (props.open) {
+      setFields(version?.fieldSchema ?? []);
+      setMismatchedKeys(new Set());
+      setMismatchMessage(null);
+    }
   }, [props.open, version]);
 
   const review = useAtelierReviewContractTemplateFields({
@@ -198,10 +204,33 @@ function ReviewFieldsDialog(props: {
         props.onClose();
       },
       onError: (err: unknown) => {
-        const e = err as { response?: { data?: { message?: string; error?: string } } };
+        const e = err as {
+          response?: {
+            data?: {
+              message?: string;
+              error?: string;
+              mismatches?: Array<{ key: string; label: string; placeholder: string }>;
+            };
+          };
+        };
+        const data = e.response?.data;
+        if (data?.error === "placeholder-mismatch" && Array.isArray(data.mismatches)) {
+          setMismatchedKeys(new Set(data.mismatches.map((m) => m.key)));
+          setMismatchMessage(
+            data.message ??
+              "Some fields no longer match the document text. Fix or remove them before confirming.",
+          );
+          toast({
+            title: "Some fields don't match the document",
+            description:
+              "The highlighted fields can't be found in the document text. Remove them or upload a corrected version.",
+            variant: "destructive",
+          });
+          return;
+        }
         toast({
           title: "Could not save fields",
-          description: e.response?.data?.message ?? e.response?.data?.error ?? "Unexpected error",
+          description: data?.message ?? data?.error ?? "Unexpected error",
           variant: "destructive",
         });
       },
@@ -218,6 +247,14 @@ function ReviewFieldsDialog(props: {
         <DialogHeader>
           <DialogTitle>Review detected fields — {props.template.name}</DialogTitle>
         </DialogHeader>
+        {mismatchMessage && (
+          <div
+            className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400"
+            data-testid="banner-placeholder-mismatch"
+          >
+            {mismatchMessage}
+          </div>
+        )}
         {(version?.detectionWarnings?.length ?? 0) > 0 && (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
             {version!.detectionWarnings.map((w, i) => (
@@ -232,9 +269,22 @@ function ReviewFieldsDialog(props: {
           {fields.map((f, i) => (
             <div
               key={i}
-              className="rounded-md border border-border bg-bg-elevate/50 p-3 space-y-2"
+              className={`rounded-md border p-3 space-y-2 ${
+                mismatchedKeys.has(f.key)
+                  ? "border-red-500/50 bg-red-500/5"
+                  : "border-border bg-bg-elevate/50"
+              }`}
               data-testid={`field-editor-${f.key}`}
             >
+              {mismatchedKeys.has(f.key) && (
+                <div
+                  className="text-[11px] text-red-400"
+                  data-testid={`mismatch-${f.key}`}
+                >
+                  Not found in the document — this text doesn&apos;t appear verbatim in the
+                  uploaded file. Remove this field or upload a corrected version.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[11px] text-text-faint">Label</label>

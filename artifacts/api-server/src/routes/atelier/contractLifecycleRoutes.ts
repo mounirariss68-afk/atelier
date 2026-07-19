@@ -61,6 +61,7 @@ import {
   extractDocxText,
   detectTemplateFields,
   verifyPlaceholders,
+  findMissingPlaceholders,
   ContractFieldDetectionError,
   ContractFillError,
   PdfConversionError,
@@ -475,6 +476,43 @@ router.put("/contract-templates/:id/fields", async (req, res) => {
   const keys = parsed.data.fields.map((f) => f.key);
   if (new Set(keys).size !== keys.length) {
     res.status(400).json({ error: "duplicate-keys", message: "Field keys must be unique." });
+    return;
+  }
+  // Validate every placeholder against the actual document BEFORE the
+  // template activates — the same matching used at generation time — so
+  // a contract can never fail later with "Could not locate placeholder".
+  const [currentVersion] = await db
+    .select()
+    .from(atelierContractTemplateVersions)
+    .where(eq(atelierContractTemplateVersions.id, template.currentVersionId));
+  if (!currentVersion) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const templateBytes = await loadContractBytes(currentVersion.blobRef);
+  if (!templateBytes) {
+    res.status(409).json({
+      error: "template-blob-missing",
+      message: "The template document could not be loaded from storage.",
+    });
+    return;
+  }
+  const missingPlaceholders = await findMissingPlaceholders(
+    templateBytes,
+    parsed.data.fields.map((f) => f.placeholder),
+  );
+  if (missingPlaceholders.length > 0) {
+    const missingSet = new Set(missingPlaceholders);
+    const mismatched = parsed.data.fields.filter((f) => missingSet.has(f.placeholder));
+    res.status(422).json({
+      error: "placeholder-mismatch",
+      message: `${mismatched.length} field${mismatched.length === 1 ? "" : "s"} cannot be matched to the document text. Fix or remove the highlighted fields — contract generation would fail with these placeholders.`,
+      mismatches: mismatched.map((f) => ({
+        key: f.key,
+        label: f.label,
+        placeholder: f.placeholder,
+      })),
+    });
     return;
   }
   const [version] = await db

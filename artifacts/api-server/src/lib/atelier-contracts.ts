@@ -423,6 +423,47 @@ export function fillXmlPart(
   return { xml: out, replaced };
 }
 
+/**
+ * Check which placeholders would NOT be found by fillDocxTemplate.
+ * Mirrors fillXmlPart's matching exactly (per-paragraph <w:t> join over
+ * the same XML parts), so a placeholder that passes here is guaranteed
+ * to substitute at generation time. Used at field-review time to block
+ * activation of a template whose placeholders no longer match the doc.
+ */
+export async function findMissingPlaceholders(
+  templateBytes: Buffer,
+  placeholders: string[],
+): Promise<string[]> {
+  if (placeholders.length === 0) return [];
+  const zip = await JSZip.loadAsync(templateBytes);
+  const remaining = new Set(placeholders);
+  const partNames = Object.keys(zip.files).filter(
+    (n) => XML_PARTS.includes(n) || /^word\/(header|footer)\d*\.xml$/.test(n),
+  );
+  const paraRe = /<w:p\b[\s\S]*?<\/w:p>/g;
+  for (const name of partNames) {
+    if (remaining.size === 0) break;
+    const file = zip.file(name);
+    if (!file) continue;
+    const xml = await file.async("string");
+    let pm: RegExpExecArray | null;
+    while (remaining.size > 0 && (pm = paraRe.exec(xml)) !== null) {
+      const para = pm[0];
+      const tRe = /<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g;
+      const texts: string[] = [];
+      let m: RegExpExecArray | null;
+      while ((m = tRe.exec(para)) !== null) texts.push(xmlUnescape(m[1]));
+      if (texts.length === 0) continue;
+      const joined = texts.join("");
+      for (const p of Array.from(remaining)) {
+        if (joined.includes(p)) remaining.delete(p);
+      }
+    }
+    paraRe.lastIndex = 0;
+  }
+  return placeholders.filter((p) => remaining.has(p));
+}
+
 export class ContractFillError extends Error {
   constructor(
     message: string,
