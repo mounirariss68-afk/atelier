@@ -34,6 +34,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import PDFDocument from "pdfkit";
 import { atelierUsers } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import { loadFinanceFacts, FIRM_ENTITY_ID, type FinanceFacts } from "./financeRealFacts";
 import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
 
 const router: IRouter = Router();
@@ -57,8 +58,11 @@ function denyRecruiter(me: Me, res: Response): boolean {
 // ──────────────────────────────────────────────────────────────
 // Period model — last 12 monthly periods ending 2026-05.
 // ──────────────────────────────────────────────────────────────
-const ANCHOR_YEAR = 2026;
-const ANCHOR_MONTH = 5; // May 2026 == current period (MTD)
+// Anchor = the real current month, so reports always cover the trailing
+// 12 months ending today (Task #177 — no hard-coded demo clock).
+const NOW = new Date();
+const ANCHOR_YEAR = NOW.getUTCFullYear();
+const ANCHOR_MONTH = NOW.getUTCMonth() + 1;
 
 function pad2(n: number): string { return n < 10 ? `0${n}` : `${n}`; }
 function periodIso(y: number, m: number): string { return `${y}-${pad2(m)}`; }
@@ -115,20 +119,15 @@ function noise(seed: string, range = 0.04): number {
   return ((h % 10000) / 10000 - 0.5) * 2 * range;
 }
 
-function closingRateToGbp(currency: string, period: Period): number {
-  const base = FX_BASE_TO_GBP[currency] ?? 1;
-  if (currency === "GBP") return 1;
-  return base * (1 + noise(`fx_close_${currency}_${period.id}`, 0.025));
+// Static reference rates — no fabricated per-month noise (Task #177).
+function closingRateToGbp(currency: string, _period: Period): number {
+  return FX_BASE_TO_GBP[currency] ?? 1;
 }
-function averageRateToGbp(currency: string, period: Period): number {
-  const base = FX_BASE_TO_GBP[currency] ?? 1;
-  if (currency === "GBP") return 1;
-  return base * (1 + noise(`fx_avg_${currency}_${period.id}`, 0.020));
+function averageRateToGbp(currency: string, _period: Period): number {
+  return FX_BASE_TO_GBP[currency] ?? 1;
 }
 function historicalRateToGbp(currency: string): number {
-  const base = FX_BASE_TO_GBP[currency] ?? 1;
-  if (currency === "GBP") return 1;
-  return base * (1 + noise(`fx_hist_${currency}`, 0.015));
+  return FX_BASE_TO_GBP[currency] ?? 1;
 }
 
 function convert(amount: number, fromGbp: number, toCurrency: string, period: Period, kind: "closing" | "average" | "historical" = "closing"): number {
@@ -178,6 +177,20 @@ interface EntityProfile {
 // data exists.
 const PROFILES: Record<string, EntityProfile> = {};
 
+// ──────────────────────────────────────────────────────────────
+// Real-data facts (Task #177). Every route awaits ensureFacts()
+// before computing, then the sync generators below read FACTS.
+// The firm pseudo-entity carries all firm-wide monthly facts.
+// ──────────────────────────────────────────────────────────────
+// NOTE: FACTS is set per-request for the caller's org, and all downstream
+// computation between ensureFacts() and res.json() is synchronous, so
+// concurrent requests from different orgs cannot interleave reads.
+let FACTS: FinanceFacts | null = null;
+async function ensureFacts(orgId: string): Promise<void> {
+  FACTS = await loadFinanceFacts(orgId);
+}
+const FIRM_PSEUDO_ENTITY = { id: FIRM_ENTITY_ID, baseCurrency: "USD", shortName: "Cognirise (firm)" };
+
 function seasonality(month: number, eid: string): number {
   // Per-entity month-of-year seasonality, ±15%.
   const wave = Math.sin(((month - 1) / 12) * 2 * Math.PI + (hash(eid) % 360) * (Math.PI / 180));
@@ -215,10 +228,30 @@ interface PnlLines {
   netIncome: number;
 }
 
+function zeroPnl(): PnlLines {
+  return { grossRevenue: 0, intercoRevenue: 0, netRevenue: 0, directCost: 0, intercoCost: 0, grossProfit: 0, payroll: 0, opex: 0, depreciation: 0, ebitda: 0, ebit: 0, interestExpense: 0, pretaxIncome: 0, tax: 0, netIncome: 0 };
+}
+
 function pnlLocal(entityId: string, period: Period, scenario: "actual" | "budget" | "forecast" = "actual"): PnlLines {
+  // Real firm-wide monthly facts (USD). Budget/forecast scenarios are
+  // honest zeros until a real planning scenario is committed.
+  if (entityId === FIRM_ENTITY_ID) {
+    if (scenario !== "actual") return zeroPnl();
+    const m = FACTS?.monthly[period.id];
+    if (!m) return zeroPnl();
+    const grossProfit = m.revenueUsd - m.directCostUsd;
+    const ebitda = grossProfit - m.payrollUsd - m.opexUsd;
+    return {
+      grossRevenue: round(m.revenueUsd), intercoRevenue: 0, netRevenue: round(m.revenueUsd),
+      directCost: round(m.directCostUsd), intercoCost: 0, grossProfit: round(grossProfit),
+      payroll: round(m.payrollUsd), opex: round(m.opexUsd), depreciation: 0,
+      ebitda: round(ebitda), ebit: round(ebitda), interestExpense: 0,
+      pretaxIncome: round(ebitda), tax: 0, netIncome: round(ebitda),
+    };
+  }
   const profile = PROFILES[entityId];
   if (!profile) {
-    return { grossRevenue: 0, intercoRevenue: 0, netRevenue: 0, directCost: 0, intercoCost: 0, grossProfit: 0, payroll: 0, opex: 0, depreciation: 0, ebitda: 0, ebit: 0, interestExpense: 0, pretaxIncome: 0, tax: 0, netIncome: 0 };
+    return zeroPnl();
   }
   const seas = seasonality(period.month, entityId);
   // Modest growth trend: +0.6% per month from 12mo ago.
@@ -338,6 +371,23 @@ interface BsLines {
 }
 
 function bsLocal(entityId: string, period: Period): BsLines {
+  // Real firm-wide balances snapshot (USD) as of the month end.
+  if (entityId === FIRM_ENTITY_ID) {
+    const b = FACTS?.balancesByMonth[period.id];
+    if (!b) return blankBs();
+    const cash = round(b.cashCollectedUsd - b.cashPaidOutUsd);
+    const ar = round(b.openArUsd);
+    const ap = round(b.openApUsd);
+    const totalAssets = cash + ar;
+    const totalLiabilities = ap;
+    const retainedEarnings = totalAssets - totalLiabilities;
+    return {
+      ...blankBs(),
+      cash, ar, ap, totalAssets, totalLiabilities,
+      retainedEarnings, totalEquity: retainedEarnings,
+      totalLiabilitiesAndEquity: totalAssets,
+    };
+  }
   const profile = PROFILES[entityId];
   if (!profile) return blankBs();
   // Number of months elapsed since opening (period 0 = first period).
@@ -430,9 +480,34 @@ interface CfLines {
   closingCash: number;
 }
 
+function zeroCf(): CfLines {
+  return { netIncome: 0, depreciation: 0, workingCapitalChange: 0, cashFromOps: 0, capex: 0, cashFromInvesting: 0, debtRepayment: 0, intercoFunding: 0, cashFromFinancing: 0, fxOnCash: 0, netChangeInCash: 0, openingCash: 0, closingCash: 0 };
+}
+
 function cfLocal(entityId: string, period: Period): CfLines {
+  // Real firm-wide cash flow (USD): indirect from monthly P&L facts plus
+  // balance-sheet deltas between month-end snapshots.
+  if (entityId === FIRM_ENTITY_ID) {
+    const prevYm = (() => { const { y, m } = addMonths(period.year, period.month, -1); return periodIso(y, m); })();
+    const bNow = FACTS?.balancesByMonth[period.id];
+    if (!bNow) return zeroCf();
+    const bPrev = FACTS?.balancesByMonth[prevYm] ?? { cashCollectedUsd: 0, cashPaidOutUsd: 0, openArUsd: 0, openApUsd: 0 };
+    const pnl = pnlLocal(entityId, period);
+    const openingCash = round(bPrev.cashCollectedUsd - bPrev.cashPaidOutUsd);
+    const closingCash = round(bNow.cashCollectedUsd - bNow.cashPaidOutUsd);
+    const net = closingCash - openingCash;
+    const wc = net - pnl.netIncome; // all non-P&L movement is working capital (no capex/debt facts yet)
+    return {
+      ...zeroCf(),
+      netIncome: pnl.netIncome,
+      workingCapitalChange: round(wc),
+      cashFromOps: round(net),
+      netChangeInCash: round(net),
+      openingCash, closingCash,
+    };
+  }
   const profile = PROFILES[entityId];
-  if (!profile) return { netIncome: 0, depreciation: 0, workingCapitalChange: 0, cashFromOps: 0, capex: 0, cashFromInvesting: 0, debtRepayment: 0, intercoFunding: 0, cashFromFinancing: 0, fxOnCash: 0, netChangeInCash: 0, openingCash: 0, closingCash: 0 };
+  if (!profile) return zeroCf();
   const idx = PERIODS.findIndex((p) => p.id === period.id);
   const prev = idx > 0 ? PERIODS[idx - 1] : null;
   const bsNow = bsLocal(entityId, period);
@@ -623,12 +698,29 @@ interface CubeRow {
   grossMarginPct: number;
 }
 
-// Fabricated demo engagement generation (synthetic partner, sector and
-// client names + hash-noise economics) fully removed per the no-demo-data
-// policy. The profitability cube is empty until real engagement economics
-// exist.
+// Profitability cube from real per-engagement economics (invoice revenue
+// vs contractor payments + billable expenses), translated USD → GBP at
+// the reference rate. Engagement type isn't tracked yet → "tm" default.
 function buildCube(_scopePeriods: Period[]): CubeRow[] {
-  return [];
+  const usdToGbp = FX_BASE_TO_GBP.USD ?? 1;
+  return (FACTS?.cube ?? []).map((r) => {
+    const revenueGbp = round(r.revenueUsd * usdToGbp);
+    const directCostGbp = round(r.directCostUsd * usdToGbp);
+    const gm = revenueGbp - directCostGbp;
+    return {
+      engagementId: r.engagementId,
+      engagementName: r.engagement,
+      client: r.client,
+      partner: r.partner,
+      sector: r.sector,
+      engagementType: "tm" as EngType,
+      entityId: r.entityId,
+      revenueGbp,
+      directCostGbp,
+      grossMarginGbp: gm,
+      grossMarginPct: revenueGbp === 0 ? 0 : gm / revenueGbp,
+    };
+  });
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -652,18 +744,21 @@ function parseQuery(req: Request) {
 }
 
 function entitiesIn(scope: string | null): { id: string; baseCurrency: string; shortName: string }[] {
-  if (scope) {
-    const e = ENTITIES_SEED.find((x) => x.id === scope);
-    return e ? [{ id: e.id, baseCurrency: e.baseCurrency, shortName: e.shortName }] : [];
-  }
-  return ENTITIES_SEED.map((e) => ({ id: e.id, baseCurrency: e.baseCurrency, shortName: e.shortName }));
+  // No legal entities registered yet → single firm pseudo-entity so the
+  // consolidated view carries the real firm-wide facts (Task #177).
+  const all = ENTITIES_SEED.length > 0
+    ? ENTITIES_SEED.map((e) => ({ id: e.id, baseCurrency: e.baseCurrency, shortName: e.shortName }))
+    : [FIRM_PSEUDO_ENTITY];
+  if (scope) return all.filter((e) => e.id === scope);
+  return all;
 }
 
 // ----- P&L
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/reports/pnl", (req, res) => {
+router.get("/finance/reports/pnl", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const { period, scope, entity, currency } = parseQuery(req);
   const ents = entitiesIn(entity);
   const periods = periodsForScope(scope, period);
@@ -800,9 +895,10 @@ function buildPnlCommentary(v: PnlVariance): string[] {
 
 // ----- BS
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/reports/bs", (req, res) => {
+router.get("/finance/reports/bs", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const { period, entity, currency } = parseQuery(req);
   const ents = entitiesIn(entity);
   const consolidated = !entity;
@@ -868,9 +964,10 @@ function convertBs(b: BsLines, target: string, period: Period): BsLines {
 
 // ----- CF
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/reports/cf", (req, res) => {
+router.get("/finance/reports/cf", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const { period, scope, entity, currency } = parseQuery(req);
   const ents = entitiesIn(entity);
   const periods = periodsForScope(scope, period);
@@ -922,9 +1019,10 @@ function convertCf(c: CfLines, target: string, period: Period): CfLines {
 
 // ----- Profitability cube
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/reports/profitability", (req, res) => {
+router.get("/finance/reports/profitability", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const { period, scope } = parseQuery(req);
   const periods = periodsForScope(scope, period);
   const cube = buildCube(periods);
@@ -954,16 +1052,17 @@ router.get("/finance/reports/profitability", (req, res) => {
 
 // ----- Board pack assembly
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/reports/board-pack", (req, res) => {
+router.get("/finance/reports/board-pack", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const periodId = (req.query.period as string) ?? CURRENT_PERIOD.id;
   const period = periodById(periodId) ?? CURRENT_PERIOD;
   const ytdPeriods = periodsForScope("ytd", period);
   const pyPeriods = priorYearScope("ytd", period);
 
   // Consolidated PnL (YTD)
-  const ytdPerEntity = ENTITIES_SEED.map((e) => {
+  const ytdPerEntity = entitiesIn(null).map((e) => {
     const local = aggregatePnl(ytdPeriods.map((p) => pnlLocal(e.id, p)));
     const budget = aggregatePnl(ytdPeriods.map((p) => pnlLocal(e.id, p, "budget")));
     const fcst = aggregatePnl(ytdPeriods.map((p) => pnlLocal(e.id, p, "forecast")));
@@ -985,7 +1084,7 @@ router.get("/finance/reports/board-pack", (req, res) => {
   const commentary = buildPnlCommentary(v);
 
   // BS at period close
-  const bsPerEntity = ENTITIES_SEED.map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
+  const bsPerEntity = entitiesIn(null).map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
   const bsSum = sumBs(bsPerEntity);
   const elimsBs = computeEliminationsForPeriod(period);
   const consBs: BsLines = {
@@ -998,7 +1097,7 @@ router.get("/finance/reports/board-pack", (req, res) => {
   consBs.totalLiabilitiesAndEquity = consBs.totalLiabilities + consBs.totalEquity;
 
   // CF YTD
-  const cfPerEntity = ENTITIES_SEED.map((e) => {
+  const cfPerEntity = entitiesIn(null).map((e) => {
     const agg = aggregateCf(ytdPeriods.map((p) => cfLocal(e.id, p)));
     const startBs = bsLocal(e.id, ytdPeriods[0]);
     const endBs = bsLocal(e.id, ytdPeriods[ytdPeriods.length - 1]);
@@ -1041,12 +1140,13 @@ function deriveRisks(v: PnlVariance, bs: BsLines): string[] {
 router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await ensureFacts(me.orgId);
   const periodId = (req.query.period as string) ?? CURRENT_PERIOD.id;
   const period = periodById(periodId) ?? CURRENT_PERIOD;
   // Reuse the JSON assembly inline.
   const ytdPeriods = periodsForScope("ytd", period);
   const pyPeriods = priorYearScope("ytd", period);
-  const ytdPerEntity = ENTITIES_SEED.map((e) => ({
+  const ytdPerEntity = entitiesIn(null).map((e) => ({
     e,
     actual: translatePnlToGbp(aggregatePnl(ytdPeriods.map((p) => pnlLocal(e.id, p))), e.baseCurrency, period),
     budget: translatePnlToGbp(aggregatePnl(ytdPeriods.map((p) => pnlLocal(e.id, p, "budget"))), e.baseCurrency, period),
@@ -1061,7 +1161,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   const consPnl = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
   const v = buildPnlVariance(consPnl.actual, consPnl.budget, consPnl.forecast, consPnl.priorYear);
   const commentary = buildPnlCommentary(v);
-  const bsPerEntity = ENTITIES_SEED.map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
+  const bsPerEntity = entitiesIn(null).map((e) => translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0));
   const bsSum = sumBs(bsPerEntity);
   const elimsBs = computeEliminationsForPeriod(period);
   const consBs: BsLines = {
@@ -1072,7 +1172,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     totalLiabilitiesAndEquity: 0,
   };
   consBs.totalLiabilitiesAndEquity = consBs.totalLiabilities + consBs.totalEquity;
-  const cfPerEntity = ENTITIES_SEED.map((e) => {
+  const cfPerEntity = entitiesIn(null).map((e) => {
     const agg = aggregateCf(ytdPeriods.map((p) => cfLocal(e.id, p)));
     const startBs = bsLocal(e.id, ytdPeriods[0]);
     const endBs = bsLocal(e.id, ytdPeriods[ytdPeriods.length - 1]);

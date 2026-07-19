@@ -25,6 +25,8 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { desc, eq } from "drizzle-orm";
 import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits } from "@workspace/db";
 import { ENTITIES_SEED } from "./financeEntitiesRoutes";
+import { loadFinanceFacts, FIRM_ENTITY_ID } from "./financeRealFacts";
+import { hydrateFpaFromFacts } from "./financePlanFpaEngine";
 import {
   computeBudget as computeFpaBudget,
   computeHeadcount as computeFpaHeadcount,
@@ -84,16 +86,19 @@ function convert(amountUsd: number, target: string): number {
 // is deterministic — receipts / disbursements seeded against this
 // fall predictably across the 13-week strip.
 // ──────────────────────────────────────────────────────────────
-// Anchor for the rolling 13-week strip. Hardcoded to 2026-05-11 so the
-// demo seed is deterministic; override at boot via ATELIER_PLAN_AS_OF=YYYY-MM-DD
-// (must be a Monday) for non-demo contexts.
+// Anchor for the rolling 13-week strip. Defaults to the most recent Monday
+// (UTC) so real AR/AP/payroll dates land inside the window; override at boot
+// via ATELIER_PLAN_AS_OF=YYYY-MM-DD (must be a Monday) for deterministic tests.
 const AS_OF_MONDAY: string = (() => {
   const env = process.env.ATELIER_PLAN_AS_OF;
   if (env && /^\d{4}-\d{2}-\d{2}$/.test(env)) {
     const d = new Date(`${env}T00:00:00Z`);
     if (!Number.isNaN(d.getTime()) && d.getUTCDay() === 1) return env;
   }
-  return "2026-05-11";
+  const now = new Date();
+  const dow = now.getUTCDay() || 7; // Mon=1 … Sun=7
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (dow - 1)));
+  return monday.toISOString().slice(0, 10);
 })();
 
 function dateAdd(iso: string, days: number): string {
@@ -158,13 +163,37 @@ interface CashLine {
 interface ReceiptLine extends CashLine { source: ReceiptSource; counterparty: string }
 interface DisbursementLine extends CashLine { category: DisbursementCategory; vendor: string }
 
-// Open AR (consistent with WalletAr-style buckets — synthetic but realistic)
-// Fabricated demo receipts removed per the no-demo-data policy; the 13-week
-// cash forecast renders an honest empty state until real AR data exists.
+// Cash lines are hydrated from real records on every request (short-TTL
+// cached in financeRealFacts): open AR on issued invoices + earned revenue
+// milestones (receipts); roster payroll, unpaid contractor payments and
+// approved-unreimbursed expenses (disbursements). See Task #177.
 const RECEIPTS: ReceiptLine[] = [];
-
-// Fabricated demo disbursements removed per the no-demo-data policy.
 const DISBURSEMENTS: DisbursementLine[] = [];
+
+async function hydratePlanFacts(orgId: string): Promise<void> {
+  const facts = await loadFinanceFacts(orgId);
+  RECEIPTS.length = 0;
+  RECEIPTS.push(...facts.receipts);
+  DISBURSEMENTS.length = 0;
+  DISBURSEMENTS.push(...facts.disbursements);
+  BACKLOG.length = 0;
+  BACKLOG.push(...facts.backlog);
+  PIPELINE.length = 0;
+  PIPELINE.push(...facts.pipeline);
+  // Firm pseudo-entity: opening cash = cumulative real receipts − payouts.
+  const openingUsd = facts.balances.cashCollectedUsd - facts.balances.cashPaidOutUsd;
+  const firm: PlanEntity = {
+    id: FIRM_ENTITY_ID,
+    shortName: "Cognirise",
+    baseCurrency: "USD",
+    openingBalanceLocal: Math.round(openingUsd),
+    minCashPolicyLocal: 0,
+    covenantFloorLocal: null,
+  };
+  const idx = ENTITIES.findIndex((e) => e.id === FIRM_ENTITY_ID);
+  if (idx >= 0) ENTITIES[idx] = firm; else ENTITIES.push(firm);
+  hydrateFpaFromFacts(facts);
+}
 
 // ──────────────────────────────────────────────────────────────
 // Tax disbursements — derived from each entity's fiscal calendar
@@ -729,7 +758,7 @@ function pickEntity(req: Request): string | null {
 router.get("/finance/plan/cash-13w", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  await ensureHydrated();
+  await Promise.all([ensureHydrated(), hydratePlanFacts(me.orgId)]);
   const out = computeForecast(pickPresentation(req), pickEntity(req));
   res.json(out);
 });
@@ -738,7 +767,7 @@ router.get("/finance/plan/cash-13w", async (req, res) => {
 router.get("/finance/plan/cash-13w/lines", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
-  await ensureHydrated();
+  await Promise.all([ensureHydrated(), hydratePlanFacts(me.orgId)]);
   const presentation = pickPresentation(req);
   const ef = pickEntity(req);
   const inLines = RECEIPTS.filter((r) => !ef || r.entityId === ef)
@@ -778,7 +807,7 @@ router.post("/finance/plan/cash-13w/override", async (req, res) => {
   if (body.note !== undefined && typeof body.note === "string" && body.note.length > 1000) {
     return res.status(400).json({ error: "invalid", message: "note exceeds 1000 chars" });
   }
-  await ensureHydrated();
+  await Promise.all([ensureHydrated(), hydratePlanFacts(me.orgId)]);
   if (body.clear) {
     await db.delete(atelierCashLineOverrides).where(eq(atelierCashLineOverrides.lineId, body.lineId));
     OVERRIDES.delete(body.lineId);
@@ -842,16 +871,18 @@ router.get("/finance/plan/cash-13w/audit", async (req, res) => {
 });
 
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/plan/backlog", (req, res) => {
+router.get("/finance/plan/backlog", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   res.json(computeBacklog(pickPresentation(req), pickEntity(req)));
 });
 
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/plan/entities", (req, res) => {
+router.get("/finance/plan/entities", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   res.json({ items: ENTITIES });
 });
 
@@ -868,6 +899,7 @@ router.get("/finance/plan/budget", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   const scenarioId = pickScenario(req);
+  await hydratePlanFacts(me.orgId);
   const out = computeFpaBudget(scenarioId, pickPresentation(req), pickEntity(req));
   const committed = await readCurrentCommit();
   res.json({
@@ -879,9 +911,10 @@ router.get("/finance/plan/budget", async (req, res) => {
 });
 
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/plan/headcount", (req, res) => {
+router.get("/finance/plan/headcount", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   res.json(computeFpaHeadcount(pickScenario(req), pickEntity(req)));
 });
 
@@ -889,6 +922,7 @@ router.get("/finance/plan/headcount", (req, res) => {
 router.get("/finance/plan/scenarios", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   const base = compareFpaScenarios(pickPresentation(req), pickEntity(req));
   const committed = await readCurrentCommit();
   res.json({
@@ -1036,16 +1070,18 @@ router.get("/finance/plan/scenarios/commit", async (req, res) => {
 });
 
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/plan/renewals", (req, res) => {
+router.get("/finance/plan/renewals", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   res.json(computeFpaRenewals(pickPresentation(req), pickEntity(req)));
 });
 
 // @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/plan/bonus", (req, res) => {
+router.get("/finance/plan/bonus", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
+  await hydratePlanFacts(me.orgId);
   res.json(computeFpaBonus(pickScenario(req), pickPresentation(req), pickEntity(req)));
 });
 

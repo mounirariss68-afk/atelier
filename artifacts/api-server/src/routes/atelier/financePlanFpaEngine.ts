@@ -35,8 +35,9 @@ export function convertUsd(amountUsd: number, target: string): number {
   return amountUsd / (FX_TO_USD[target] ?? 1);
 }
 
-export const FPA_AS_OF: string = "2026-05-11";
-export const FPA_FY_LABEL: string = "FY2026";
+// Plan "as of" anchors to today so real-data actuals prorate correctly.
+export const FPA_AS_OF: string = new Date().toISOString().slice(0, 10);
+export const FPA_FY_LABEL: string = `FY${new Date().getUTCFullYear()}`;
 
 // ──────────────────────────────────────────────────────────────
 // Roles — loaded cost & target rate are USD; localised by entity FX
@@ -70,7 +71,7 @@ export const ROLE_BY_CODE: Record<Role["code"], Role> = Object.fromEntries(
 // a sparse list of planned hires/exits over the 12-month horizon.
 // ──────────────────────────────────────────────────────────────
 export interface HeadcountChange {
-  monthIndex: number;            // 0 = May 2026 (FPA_AS_OF month)
+  monthIndex: number;            // 0 = the FPA_AS_OF month
   delta: number;                 // +N hires / -N exits
   reason: string;
 }
@@ -99,12 +100,13 @@ export const ENTITY_SHORT_NAME: Record<string, string> = Object.fromEntries(
 );
 
 // ──────────────────────────────────────────────────────────────
-// Months — 12 months starting May 2026
+// Months — 12-month horizon starting at the current month.
 // ──────────────────────────────────────────────────────────────
 const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 export interface PlanMonth { index: number; iso: string; label: string; quarter: string }
+const PLAN_ANCHOR = new Date(`${FPA_AS_OF}T00:00:00Z`);
 export const PLAN_MONTHS: PlanMonth[] = Array.from({ length: 12 }, (_, i) => {
-  const d = new Date(Date.UTC(2026, 4 + i, 1));
+  const d = new Date(Date.UTC(PLAN_ANCHOR.getUTCFullYear(), PLAN_ANCHOR.getUTCMonth() + i, 1));
   const mo = d.getUTCMonth();
   const yr = d.getUTCFullYear();
   const q = `Q${Math.floor(mo / 3) + 1} ${yr}`;
@@ -850,4 +852,79 @@ export function compareScenarios(presentation: string, entityFilter: string | nu
     presentationCurrency: presentation, entityFilter,
     asOf: FPA_AS_OF, comparisons,
   };
+}
+
+// ──────────────────────────────────────────────────────────────
+// Real-data hydration (Task #177).
+//
+// The exported plan arrays above are intentionally empty consts —
+// hydrateFpaFromFacts() mutates them in place from the shared
+// financeRealFacts loader (active roster headcount, trailing-opex
+// overhead, live engagement renewals, roster bonus population), so
+// every FP&A surface reads real records instead of demo seed.
+// ──────────────────────────────────────────────────────────────
+import type { FinanceFacts } from "./financeRealFacts";
+
+export function hydrateFpaFromFacts(facts: FinanceFacts): void {
+  HEADCOUNT_PLAN.length = 0;
+  for (const row of facts.headcount) {
+    HEADCOUNT_PLAN.push({
+      entityId: row.entityId,
+      roleCode: row.roleCode,
+      startingHeadcount: row.startingHeadcount,
+      changes: [], // no planned hires/exits on record — flat roster plan
+    });
+  }
+
+  for (const k of Object.keys(OVERHEAD_PLAN)) delete OVERHEAD_PLAN[k];
+  const firmId = facts.headcount[0]?.entityId ?? "firm";
+  if (facts.overheadFixedMonthlyUsd > 0 || facts.headcount.length > 0) {
+    OVERHEAD_PLAN[firmId] = {
+      fixedMonthlyUsd: Math.round(facts.overheadFixedMonthlyUsd),
+      variablePctOfRevenue: 0,
+      baseCurrency: "USD",
+    };
+  }
+  if (!ENTITY_BASE_CURRENCY[firmId]) ENTITY_BASE_CURRENCY[firmId] = "USD";
+  if (!ENTITY_SHORT_NAME[firmId]) ENTITY_SHORT_NAME[firmId] = "Cognirise";
+
+  RENEWALS.length = 0;
+  const today = new Date(`${FPA_AS_OF}T00:00:00Z`).getTime();
+  for (const r of facts.renewals) {
+    const daysUntil = Math.round((new Date(`${r.expiresOn}T00:00:00Z`).getTime() - today) / 86_400_000);
+    const riskBand: RenewalRow["riskBand"] = daysUntil < 60 ? "high" : daysUntil < 120 ? "medium" : "low";
+    RENEWALS.push({
+      id: r.id,
+      client: r.client,
+      kind: "framework",
+      entityId: r.entityId,
+      currency: r.currency,
+      arrLocal: r.arrLocal,
+      expiresOn: r.expiresOn,
+      ownerName: r.ownerName,
+      stage: "not_started",
+      riskBand,
+      recommendation: riskBand === "high"
+        ? "Engagement ends within 60 days — open the renewal conversation now."
+        : riskBand === "medium"
+          ? "Ends within 120 days — schedule a renewal check-in with the owner."
+          : "Monitor; begin renewal planning one quarter before end date.",
+    });
+  }
+
+  BONUS_PEOPLE.length = 0;
+  for (const p of facts.bonusPeople) {
+    const role = ROLE_BY_CODE[p.roleCode];
+    BONUS_PEOPLE.push({
+      id: p.id,
+      name: p.name,
+      roleCode: p.roleCode,
+      entityId: p.entityId,
+      baseSalaryAnnualUsd: Math.round(p.baseSalaryAnnualUsd),
+      bonusTargetPctOfBase: role?.bonusTargetPctOfBase ?? 0.1,
+      individualPerfMultiplier: 1.0, // no performance ratings on record yet
+      newArrClosedUsd: 0,            // no attributed net-new ARR on record
+      commissionRate: 0,
+    });
+  }
 }

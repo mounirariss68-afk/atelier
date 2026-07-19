@@ -65,3 +65,4 @@
 - [Headless browser E2E](headless-browser-e2e.md) — drive the logged-in UI with puppeteer-core + nix chromium in <115s phase scripts; restore pnpm-lock after add/remove.
 - [E-sign extra date/initials fields](atelier-esign-extra-fields.md) — optional extraFields (signerIndex/date|initials) ride beside placements; unique template names; audit-payload-only; roles stay "Signer N".
 - [Agent registry backup restore](agent-registry-restore.md) — backup "mvp" status is inflated; restore atelier_agents only via explicit ID allowlist, one-off script, never a seeder.
+- [Atelier finance real-facts wiring](atelier-finance-real-facts.md) — Plan/Comply/Reports read loadFinanceFacts()/DB; firm pseudo-entity; honest-zero scenarios; comply table is atelier_finance_compliance_entries (NOT the roster compliance_records).

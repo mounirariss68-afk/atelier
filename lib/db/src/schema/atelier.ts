@@ -4277,3 +4277,32 @@ export const atelierTrainingCompletions = pgTable(
     uniqueIndex("uq_atelier_training_done").on(t.materialId, t.userId),
   ],
 );
+
+/* ============================================================
+   Finance Comply registers (Task #177).
+
+   One generic table backs all five Comply registers (internal
+   controls, SoD conflicts, statutory filings, transfer-pricing
+   rows, insurance policies). `register` discriminates; the
+   register-specific payload lives in `data` (validated at the
+   route layer against the register's interface). Manual entry
+   by finance leadership replaces the removed demo seed.
+   ============================================================ */
+export const atelierFinanceComplianceEntries = pgTable(
+  "atelier_finance_compliance_entries",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    register: text("register").notNull(), // controls | sod | statutory | tp | insurance
+    data: jsonb("data").notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    updatedByUserId: text("updated_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_fin_comp_org").on(t.orgId),
+    index("idx_atelier_fin_comp_register").on(t.register),
+  ],
+);
