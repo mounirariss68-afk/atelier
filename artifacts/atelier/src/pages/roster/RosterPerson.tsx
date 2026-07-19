@@ -79,6 +79,10 @@ export default function RosterPerson() {
   const [viewerCanSeeComp, setViewerCanSeeComp] = React.useState(false);
   const [viewerCanEditTitle, setViewerCanEditTitle] = React.useState(false);
   const [viewerCanEdit, setViewerCanEdit] = React.useState(false);
+  // Task #221 — sensitive-people gate (founding_partner | hr): drives the
+  // Documents + Audit tabs; managers get a business-only "reports" scope.
+  const [viewerCanSeeSensitive, setViewerCanSeeSensitive] = React.useState(false);
+  const [viewerScope, setViewerScope] = React.useState<"full" | "reports">("full");
 
   React.useEffect(() => {
     if (!personId) return;
@@ -89,6 +93,8 @@ export default function RosterPerson() {
         setViewerCanSeeComp(!!d.viewerCanSeeComp);
         setViewerCanEditTitle(!!d.viewerCanEditTitle);
         setViewerCanEdit(!!d.viewerCanEdit);
+        setViewerCanSeeSensitive(!!d.viewerCanSeeSensitive);
+        setViewerScope(d.viewerScope === "reports" ? "reports" : "full");
       });
   }, [personId]);
 
@@ -119,7 +125,15 @@ export default function RosterPerson() {
       <div className="px-4 md:px-8 py-6 max-w-screen-2xl mx-auto">
 
       <TabNav className="mt-6">
-        {TABS.map((t) => (
+        {TABS.filter((t) => {
+          // Task #221 — per-viewer tab visibility. Documents (contracts,
+          // IDs, scans) + Audit are sensitive-people surfaces; Conflicts and
+          // Compensation drop out of the manager (business-only) view.
+          if ((t.id === "documents" || t.id === "audit") && !viewerCanSeeSensitive) return false;
+          if (t.id === "compensation" && !viewerCanSeeComp) return false;
+          if (t.id === "conflicts" && viewerScope !== "full") return false;
+          return true;
+        }).map((t) => (
           <TabNavLink
             key={t.id}
             href={
@@ -245,7 +259,7 @@ function ProfileTab({
           Compensation & banking
           {!viewerCanSeeComp && (
             <MonoChip className="text-warning border-warning/40">
-              hidden — Partner / Operations only (comp-policy lock)
+              hidden — comp-policy lock (Founding Partner / HR / Finance)
             </MonoChip>
           )}
         </h3>
@@ -274,8 +288,8 @@ function ProfileTab({
         ) : (
           <p className="text-sm text-text-mute">
             Bank, IBAN, SWIFT, day-rate, and notice-period details are locked
-            behind the compensation policy. Switch to a Partner or Operations
-            persona to view.
+            behind the compensation policy (Founding Partner, HR and Finance
+            only).
           </p>
         )}
       </Card>

@@ -58,6 +58,7 @@ import { gte, sql } from "drizzle-orm";
 import { assertAuditAction } from "./auditContract.js";
 // Task #53 — Me-home notification cards on timesheet decisions.
 import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
+import { canViewPersonViaRosterScope } from "./rosterRoutes";
 
 const router: IRouter = Router();
 
@@ -1056,7 +1057,12 @@ router.get("/ledger/roster/people/:id/timesheet-summary", async (req, res) => {
   if (!person) return void res.status(404).json({ error: "person-not-found" });
   const callerPerson = await resolvePersonForCaller(me);
   const isSelf = callerPerson?.id === person.id;
-  if (!isSelf && !canApproveLead(me)) return void res.status(403).json({ error: "forbidden" });
+  // Roster-scope model: full viewers see everyone; managers only their
+  // reports tree; everyone else self-only. (canApproveLead alone is NOT
+  // enough — a lead may not browse arbitrary people's timesheets.)
+  if (!isSelf && !(await canViewPersonViaRosterScope(me, person.id))) {
+    return void res.status(403).json({ error: "roster-scope-forbidden" });
+  }
 
   const weeks = await db
     .select()

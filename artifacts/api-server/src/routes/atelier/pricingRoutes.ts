@@ -35,7 +35,7 @@ import {
   type TeamMixEntry,
 } from "../../lib/atelier-pricing.js";
 import { runPricingStrategist } from "../../lib/atelier-agents/runner.js";
-import { canViewCompensation } from "./personaRoles.js";
+import { canViewEngagementCosting } from "./personaRoles.js";
 import { withRls } from "./rls.js";
 import { sql as dsql } from "drizzle-orm";
 
@@ -218,7 +218,7 @@ router.get("/rate-cards/:id", async (req, res) => {
                AND deleted_at IS NULL`);
   });
   const rows = rowsRes.rows;
-  const showCost = canViewCompensation(me.role);
+  const showCost = canViewEngagementCosting(me.role);
   res.json({
     id: card.id,
     name: card.name,
@@ -393,7 +393,7 @@ router.get("/opportunities/:oppId/pricing", async (req, res) => {
   // Cost-bearing rate card rows are also re-masked (loadRateCardRows
   // hits the base table for compute purposes; never serve raw cost to
   // non-comp viewers).
-  if (!canViewCompensation(me.role)) {
+  if (!canViewEngagementCosting(me.role)) {
     for (const r of rows as Array<{ dayRateInternalCost: number | null }>) {
       r.dayRateInternalCost = null;
     }

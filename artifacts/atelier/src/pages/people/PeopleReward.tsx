@@ -4,7 +4,7 @@ import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
 import { useCompBands, useCompReview, useRecognition } from "./peopleSeed";
-import { useCanSeeRewardAndSuccession } from "./peoplePerms";
+import { useCanSeeReward } from "./peoplePerms";
 import { PayDocsAdminView, BankChangesAdminView } from "./PeoplePayAdmin";
 
 const SUBS = [
@@ -19,7 +19,7 @@ const SUBS = [
 export default function PeopleReward() {
   const [, params] = useRoute("/people/reward/:section");
   const section = params?.section ?? "bands";
-  const { allowed, loading } = useCanSeeRewardAndSuccession();
+  const { allowed, loading } = useCanSeeReward();
 
   if (loading) {
     return <PeopleShell stage="reward"><div className="container-atelier py-12 text-text-mute">Loading…</div></PeopleShell>;

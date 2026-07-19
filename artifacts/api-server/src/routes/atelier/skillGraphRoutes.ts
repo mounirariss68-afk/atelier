@@ -18,6 +18,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { canViewPersonViaRosterScope } from "./rosterRoutes";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   db,
@@ -397,6 +398,12 @@ router.get("/roster/people/:id/skills", async (req, res) => {
   const person = await findPerson(personId);
   if (!person) {
     res.status(404).json({ error: "person-not-found" });
+    return;
+  }
+  // Roster-scope model: full viewers see everyone; managers only their
+  // reports tree; everyone else self-only.
+  if (!(await canViewPersonViaRosterScope(me, person.id))) {
+    res.status(403).json({ error: "roster-scope-forbidden" });
     return;
   }
   const skills = await loadPersonSkills(person.workerType, person.id);

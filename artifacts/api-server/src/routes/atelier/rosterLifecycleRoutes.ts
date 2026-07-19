@@ -47,6 +47,7 @@ import {
   atelierPaneAItems,
 } from "@workspace/db";
 import { runAccessSentinel } from "./rosterRoutes.js";
+import { canViewSensitivePeopleData } from "./personaRoles.js";
 import { assertAuditAction } from "./auditContract.js";
 
 const router: IRouter = Router();
@@ -1399,8 +1400,10 @@ router.get("/roster/compliance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isPartnerOrOps(me)) {
-      res.status(403).json({ error: "partner-or-operations-only" });
+    // Task #221 — compliance registers hold visa/work-permit/insurance PII;
+    // restricted to sensitive-people viewers (founding_partner | hr).
+    if (!canViewSensitivePeopleData(me.role)) {
+      res.status(403).json({ error: "sensitive-people-forbidden" });
       return;
     }
     const horizon = Number(req.query.horizonDays ?? 90);
@@ -1471,8 +1474,9 @@ router.post("/roster/compliance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isPartnerOrOps(me)) {
-      res.status(403).json({ error: "partner-or-operations-only" });
+    // Task #221 — sensitive-people viewers only (founding_partner | hr).
+    if (!canViewSensitivePeopleData(me.role)) {
+      res.status(403).json({ error: "sensitive-people-forbidden" });
       return;
     }
     const body = req.body as {
@@ -1727,8 +1731,10 @@ router.post("/roster/steward/run", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isPartnerOrOps(me)) {
-      res.status(403).json({ error: "partner-or-operations-only" });
+    // Task #221 — the steward scan reads the compliance register; gate it
+    // like /roster/compliance (founding_partner | hr).
+    if (!canViewSensitivePeopleData(me.role)) {
+      res.status(403).json({ error: "sensitive-people-forbidden" });
       return;
     }
     const targets = await db

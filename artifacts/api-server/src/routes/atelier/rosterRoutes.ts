@@ -37,6 +37,7 @@ import {
   atelierConflictDisclosures,
   atelierDependents,
   atelierEmergencyContacts,
+  atelierRosterReportsTo,
 } from "@workspace/db";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
@@ -100,11 +101,210 @@ interface PersonWire {
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
-import { canViewCompensation, canViewPersonnelContract, isHr, isPartner, isFoundingPartner } from "./personaRoles.js";
+import {
+  canViewCompensation,
+  canViewPersonnelContract,
+  canViewSensitivePeopleData,
+  canEditPeople,
+  isHr,
+  isPartner,
+  isFinance,
+  isFoundingPartner,
+} from "./personaRoles.js";
 import { withRls } from "./rls.js";
 
 function canSeeComp(role: string | undefined | null): boolean {
   return canViewCompensation(role);
+}
+
+// -----------------------------------------------------------------
+// Task #221 — roster visibility scoping.
+//
+// Full-roster viewers: founding_partner | hr | finance (comp per the comp
+// gate, personal data per the sensitive gate). Everyone else is scoped to
+// the people who report to them (transitive reports_to tree, org-scoped,
+// cycle-safe, multi-manager aware) and sees ONLY business fields. A
+// non-manager gets an empty roster.
+// -----------------------------------------------------------------
+
+function hasFullRosterView(role: string | undefined | null): boolean {
+  return isFoundingPartner(role) || isHr(role) || isFinance(role);
+}
+
+type RosterScope =
+  | { kind: "full" }
+  | { kind: "reports"; personIds: Set<string>; selfPersonId: string | null };
+
+/** Resolve the viewer's own roster person id (employee link via userId,
+ *  falling back to an org-scoped work-email match). */
+async function resolveViewerPersonId(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<string | null> {
+  const byUser = await db
+    .select({ id: atelierEmployees.id })
+    .from(atelierEmployees)
+    .where(
+      and(
+        eq(atelierEmployees.userId, me.id),
+        eq(atelierEmployees.orgId, me.orgId),
+        isNull(atelierEmployees.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (byUser[0]) return byUser[0].id;
+  if (!me.email) return null;
+  const byEmail = await db
+    .select({ id: atelierEmployees.id })
+    .from(atelierEmployees)
+    .where(
+      and(
+        eq(atelierEmployees.email, me.email),
+        eq(atelierEmployees.orgId, me.orgId),
+        isNull(atelierEmployees.deletedAt),
+      ),
+    )
+    .limit(1);
+  return byEmail[0]?.id ?? null;
+}
+
+/** Transitive reports (BFS over ALL reports_to edges — a person may have
+ *  multiple managers and the graph carries no uniqueness constraint, so we
+ *  walk every edge with a visited-set to stay cycle-safe). Org-scoped. */
+async function getManagedPersonIds(
+  orgId: string,
+  managerPersonId: string,
+): Promise<Set<string>> {
+  const edges = await db
+    .select({
+      personId: atelierRosterReportsTo.personId,
+      managerPersonId: atelierRosterReportsTo.managerPersonId,
+    })
+    .from(atelierRosterReportsTo)
+    .where(eq(atelierRosterReportsTo.orgId, orgId));
+  const byManager = new Map<string, string[]>();
+  for (const e of edges) {
+    const arr = byManager.get(e.managerPersonId) ?? [];
+    arr.push(e.personId);
+    byManager.set(e.managerPersonId, arr);
+  }
+  const out = new Set<string>();
+  const queue = [managerPersonId];
+  const visited = new Set<string>([managerPersonId]);
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    for (const child of byManager.get(cur) ?? []) {
+      if (visited.has(child)) continue;
+      visited.add(child);
+      out.add(child);
+      queue.push(child);
+    }
+  }
+  return out;
+}
+
+async function resolveRosterScope(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<RosterScope> {
+  if (hasFullRosterView(me.role)) return { kind: "full" };
+  const selfPersonId = await resolveViewerPersonId(me);
+  const personIds = selfPersonId
+    ? await getManagedPersonIds(me.orgId, selfPersonId)
+    : new Set<string>();
+  return { kind: "reports", personIds, selfPersonId };
+}
+
+/** Business-only projection for manager-scoped viewers: work identity,
+ *  role/title/seniority, work contact, office, dates, status. NO comp,
+ *  NO personal data, NO HR notes, NO demographics. */
+function toBusinessWire(p: PersonWire): PersonWire {
+  return {
+    id: p.id,
+    workerType: p.workerType,
+    fullName: p.fullName,
+    email: p.email,
+    role: p.role,
+    seniority: p.seniority,
+    title: p.title,
+    country: p.country,
+    status: p.status,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    gender: "unspecified",
+    nationality: null,
+    partnerFirmId: p.partnerFirmId ?? null,
+    partnerFirmName: p.partnerFirmName ?? null,
+    vendorEntity: p.vendorEntity ?? null,
+    employmentType: p.employmentType ?? null,
+    homeOffice: p.homeOffice ?? null,
+    cellPhones: p.cellPhones ?? [],
+    officeAddress: p.officeAddress ?? null,
+    preferredName: p.preferredName ?? null,
+    employmentStatus: p.employmentStatus ?? null,
+    employingEntity: p.employingEntity ?? null,
+    contractType: p.contractType ?? null,
+    avatarUrl: p.avatarUrl ?? null,
+    notes: null,
+  };
+}
+
+/** Strip sensitive-people fields (HR notes + self-identified demographics)
+ *  for full-roster viewers who are not on the sensitive allow-list
+ *  (i.e. finance). */
+function sanitizeForViewer(
+  p: PersonWire,
+  me: typeof atelierUsers.$inferSelect,
+): PersonWire {
+  if (canViewSensitivePeopleData(me.role)) return p;
+  return { ...p, notes: null, gender: "unspecified", nationality: null };
+}
+
+/**
+ * Shared per-person access resolver for the dossier sub-routes. Emits the
+ * 404/403 itself and returns null when the caller may not view the person.
+ * Managers get business-only wires for people in their reports tree (plus
+ * themselves); full viewers get comp per the comp gate + sensitive strip.
+ */
+async function ensureRosterViewAccess(
+  me: typeof atelierUsers.$inferSelect,
+  personId: string,
+  res: Response,
+): Promise<PersonWire | null> {
+  const scope = await resolveRosterScope(me);
+  const person = await getPerson(
+    personId,
+    scope.kind === "full" && canSeeComp(me.role),
+  );
+  if (!person) {
+    res.status(404).json({ error: "person-not-found" });
+    return null;
+  }
+  if (scope.kind === "full") return sanitizeForViewer(person, me);
+  if (
+    scope.personIds.has(person.id) ||
+    (scope.selfPersonId !== null && scope.selfPersonId === person.id)
+  ) {
+    return toBusinessWire(person);
+  }
+  res.status(403).json({ error: "roster-scope-forbidden" });
+  return null;
+}
+
+/**
+ * Shared boolean predicate for OTHER route modules that expose per-person
+ * business data (skills, timesheet summaries, …). Mirrors the roster scope
+ * model exactly: full viewers (founding_partner/hr/finance) see everyone;
+ * everyone else sees only themselves + their transitive reports tree.
+ */
+export async function canViewPersonViaRosterScope(
+  me: typeof atelierUsers.$inferSelect,
+  personId: string,
+): Promise<boolean> {
+  const scope = await resolveRosterScope(me);
+  if (scope.kind === "full") return true;
+  return (
+    scope.personIds.has(personId) ||
+    (scope.selfPersonId !== null && scope.selfPersonId === personId)
+  );
 }
 
 function ensurePersona(
@@ -713,17 +913,32 @@ router.get("/roster/people", async (req, res, next) => {
     // dashboard's deep-links and the directory's chip strip.
     const str = (k: string): string | undefined =>
       typeof req.query[k] === "string" ? (req.query[k] as string) : undefined;
+    // Task #221 — roster visibility scoping (see helpers above).
+    const scope = await resolveRosterScope(me);
+    const sensitiveViewer = canViewSensitivePeopleData(me.role);
     const list = await listPersons({
       workerType: wt,
       q,
       status,
-      nationality: str("nationality"),
-      gender: str("gender"),
+      // Demographic cohort filters are sensitive-people surfaces.
+      nationality: sensitiveViewer ? str("nationality") : undefined,
+      gender: sensitiveViewer ? str("gender") : undefined,
       country: str("country"),
       seniority: str("seniority"),
-      includeComp: canSeeComp(me.role),
+      includeComp: scope.kind === "full" && canSeeComp(me.role),
     });
-    res.json({ people: list, viewerCanSeeComp: canSeeComp(me.role) });
+    if (scope.kind === "reports") {
+      const people = list
+        .filter((p) => scope.personIds.has(p.id))
+        .map(toBusinessWire);
+      res.json({ people, viewerCanSeeComp: false, viewerScope: "reports" });
+      return;
+    }
+    res.json({
+      people: list.map((p) => sanitizeForViewer(p, me)),
+      viewerCanSeeComp: canSeeComp(me.role),
+      viewerScope: "full",
+    });
   } catch (err) {
     next(err);
   }
@@ -740,7 +955,8 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+    // Task #221 — people edits are founding_partner | hr only.
+    if (!canEditPeople(me.role)) {
       res.status(403).json({ error: "demographics-edit-restricted" });
       return;
     }
@@ -911,7 +1127,8 @@ router.patch("/roster/people/:id/contact", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+    // Task #221 — people edits are founding_partner | hr only.
+    if (!canEditPeople(me.role)) {
       res.status(403).json({ error: "contact-edit-restricted" });
       return;
     }
@@ -1128,7 +1345,8 @@ router.get("/roster/partner-firms", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+    // Task #221 — people edits are founding_partner | hr only.
+    if (!canEditPeople(me.role)) {
       res.status(403).json({ error: "person-edit-restricted" });
       return;
     }
@@ -1148,7 +1366,8 @@ router.patch("/roster/people/:id", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!isHr(me.role) && !isPartner(me.role) && !isFoundingPartner(me.role)) {
+    // Task #221 — people edits are founding_partner | hr only.
+    if (!canEditPeople(me.role)) {
       res.status(403).json({ error: "person-edit-restricted" });
       return;
     }
@@ -1342,20 +1561,24 @@ router.get("/roster/people/:id", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const person = await getPerson(req.params.id, canSeeComp(me.role));
-    if (!person) {
-      res.status(404).json({ error: "person-not-found" });
-      return;
-    }
+    // Task #221 — manager-scoped detail: full viewers get the (sensitive-
+    // stripped) dossier; managers get a business-only wire for their tree.
+    const person = await ensureRosterViewAccess(me, req.params.id, res);
+    if (!person) return;
+    const full = hasFullRosterView(me.role);
     res.json({
       person,
-      viewerCanSeeComp: canSeeComp(me.role),
+      viewerCanSeeComp: full && canSeeComp(me.role),
+      // Task #221 — drives the sensitive tabs (personal / documents / HR
+      // notes) in the roster UI; mirrors canViewSensitivePeopleData.
+      viewerCanSeeSensitive: canViewSensitivePeopleData(me.role),
       // Task #189 — drives the title-edit affordance in the roster UI;
       // must mirror the gate on PATCH /roster/people/:id/title.
       viewerCanEditTitle: isHr(me.role) || isFoundingPartner(me.role),
-      // Task #199 — drives the full Edit Person affordance; must mirror the
-      // gate on PATCH /roster/people/:id.
-      viewerCanEdit: isHr(me.role) || isPartner(me.role) || isFoundingPartner(me.role),
+      // Task #199/#221 — drives the full Edit Person affordance; must
+      // mirror the gate on PATCH /roster/people/:id (founding_partner | hr).
+      viewerCanEdit: canEditPeople(me.role),
+      viewerScope: full ? "full" : "reports",
     });
   } catch (err) {
     next(err);
@@ -1367,11 +1590,8 @@ router.get("/roster/people/:id/engagements", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const person = await getPerson(req.params.id, canSeeComp(me.role));
-    if (!person) {
-      res.status(404).json({ error: "person-not-found" });
-      return;
-    }
+    const person = await ensureRosterViewAccess(me, req.params.id, res);
+    if (!person) return;
     const userId = await resolveLinkedUserId(person);
     if (!userId) {
       res.json({ engagements: [] });
@@ -1419,11 +1639,8 @@ router.get("/roster/people/:id/access", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const person = await getPerson(req.params.id, canSeeComp(me.role));
-    if (!person) {
-      res.status(404).json({ error: "person-not-found" });
-      return;
-    }
+    const person = await ensureRosterViewAccess(me, req.params.id, res);
+    if (!person) return;
     const userId = await resolveLinkedUserId(person);
     if (!userId) {
       res.json({
@@ -1741,6 +1958,12 @@ router.get("/roster/people/:id/audit", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
+    // Task #221 — the per-person audit feed exposes HR/lifecycle activity;
+    // restrict to sensitive-people viewers (founding_partner | hr).
+    if (!canViewSensitivePeopleData(me.role)) {
+      res.status(403).json({ error: "sensitive-people-forbidden" });
+      return;
+    }
     const person = await getPerson(req.params.id, canSeeComp(me.role));
     if (!person) {
       res.status(404).json({ error: "person-not-found" });
@@ -1916,11 +2139,8 @@ router.get("/roster/people/:id/conflicts", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const person = await getPerson(req.params.id, canSeeComp(me.role));
-    if (!person) {
-      res.status(404).json({ error: "person-not-found" });
-      return;
-    }
+    const person = await ensureRosterViewAccess(me, req.params.id, res);
+    if (!person) return;
     const result = await withRls(req, async (tx) => {
       return tx.execute(sql`
         SELECT id, person_type, person_id, disclosure_text, disclosed_at,

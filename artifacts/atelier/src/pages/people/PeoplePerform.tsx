@@ -21,7 +21,7 @@ import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
 import { useCalibrationCohorts, useSuccession } from "./peopleSeed";
-import { useCanSeeRewardAndSuccession } from "./peoplePerms";
+import { useCanSeeSuccession } from "./peoplePerms";
 import { useEmployeeOptions } from "./useEmployeeOptions";
 
 const BASE_SUBS = [
@@ -36,7 +36,7 @@ const SUCCESSION_SUB = { id: "succession",  label: "Succession" };
 export default function PeoplePerform() {
   const [, params] = useRoute("/people/perform/:section");
   const section = params?.section ?? "goals";
-  const { allowed: canSeeSuccession } = useCanSeeRewardAndSuccession();
+  const { allowed: canSeeSuccession } = useCanSeeSuccession();
   const SUBS = canSeeSuccession ? [...BASE_SUBS, SUCCESSION_SUB] : BASE_SUBS;
 
   return (

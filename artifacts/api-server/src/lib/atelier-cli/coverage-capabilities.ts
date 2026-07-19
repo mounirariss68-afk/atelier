@@ -56,7 +56,7 @@ import {
 } from "@workspace/db";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
-import { isHr, isPartner, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
+import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
 
 /**
  * Task — chat person writes must land on the right roster. Maps an
@@ -1544,7 +1544,7 @@ defineCapability({
  * isn't a client contact. Returns null when the id matches neither,
  * letting the caller fall through to its own not_found error.
  *
- * Gating mirrors the REST roster routes: HR / partner / founding
+ * Gating mirrors the REST roster routes (Task #221): HR / founding
  * partner may edit anyone; an employee may edit their OWN roster
  * record (self-service, e.g. "add my mobile number").
  */
@@ -1555,7 +1555,9 @@ async function updateInternalPerson(
 ): Promise<{ ok: boolean; errorCode?: string; errorMessage?: string; data?: Record<string, unknown> } | null> {
   const orgId = ctx.persona.orgId;
   const role = ctx.persona.role;
-  const privileged = isHr(role ?? "") || isPartner(role ?? "") || isFoundingPartner(role ?? "");
+  // Task #221 — people edits are founding_partner | hr only (partners lost
+  // the edit surface); self-service phone edits stay allowed below.
+  const privileged = isHr(role ?? "") || isFoundingPartner(role ?? "");
 
   const [emp] = await db
     .select()

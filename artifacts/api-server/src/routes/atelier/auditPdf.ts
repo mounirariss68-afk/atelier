@@ -10,6 +10,7 @@ import {
   atelierOffboardings,
 } from "@workspace/db";
 import { withRls } from "./rls";
+import { resolveUserIdForPerson } from "./meRoutes";
 
 const ENTITY_TYPES = new Set([
   "account",
@@ -157,19 +158,24 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
   // this guard any employee/lead could exfiltrate another person's
   // full audit trail (IDOR).
   const persona = (req as Request & {
-    atelierPersona?: { id: string; role: string };
+    atelierPersona?: { id: string; role: string; orgId: string };
   }).atelierPersona;
   if (!persona) {
     res.status(401).json({ error: "unauthenticated" });
     return;
   }
-  // Task #292 — privileged audit-PDF access = partner-tier + finance + hr.
+  // Task #221 — the per-person audit pack is a sensitive-people surface:
+  // founding_partner | hr only, plus a strict self-export. Self must be
+  // resolved via the person row's login linkage (employees.userId /
+  // contractor email), because :id is a roster person id while
+  // persona.id is an atelier_users id — they are different namespaces.
   const isPrivileged =
-    persona.role === "founding_partner" ||
-    persona.role === "partner" ||
-    persona.role === "finance" ||
-    persona.role === "hr";
-  const isSelf = persona.id === personId;
+    persona.role === "founding_partner" || persona.role === "hr";
+  let isSelf = false;
+  if (!isPrivileged) {
+    const ownerUserId = await resolveUserIdForPerson(persona.orgId, personId);
+    isSelf = ownerUserId !== null && ownerUserId === persona.id;
+  }
   if (!isPrivileged && !isSelf) {
     res.status(403).json({ error: "forbidden" });
     return;

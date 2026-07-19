@@ -53,18 +53,35 @@ const LEADERSHIP = SET("founding_partner", "partner");
 // gets lead-approve rights because operations split into finance/hr.
 const LEAD_APPROVERS = SET("founding_partner", "partner", "senior_manager", "finance");
 
-// Compensation viewers (day rates, base comp). HR + finance + leadership.
-// Task #293 — Compensation visibility tightened to spec: founding_partner |
-// partner | finance only. HR keeps personnel_contract visibility but loses
-// raw comp visibility. Mirrors atelier_can_view_comp() in 0025_atelier_column_rls.sql.
-const COMP_VIEWERS = SET("founding_partner", "partner", "finance");
+// Compensation viewers (payroll, salary/base comp, day rates, banking).
+// Task #221 — tightened: founding_partner | hr | finance. Regular partners
+// lose person-level compensation; they keep engagement-costing visibility
+// via ENGAGEMENT_COSTING_VIEWERS below. Mirrors atelier_can_view_comp()
+// in lib/db/drizzle/0025_atelier_column_rls.sql (updated in 0027).
+const COMP_VIEWERS = SET("founding_partner", "hr", "finance");
 
-// Personnel-contract viewers (employment contract, NDA, COI, ID/tax docs).
-// Subjects can always read their own — caller-side check, not in this set.
-// Task #293 — pairs with the column-level RLS mask
-// `atelier_can_view_personnel(owner_user_id)` defined in
-// lib/db/drizzle/0025_atelier_column_rls.sql.
-const PERSONNEL_CONTRACT_VIEWERS = SET("founding_partner", "partner", "hr");
+// Sensitive-people viewers (personal data, HR notes, person documents,
+// dependents, compliance records, personnel contracts / NDA / COI / ID /
+// tax docs). Subjects can always read their own — caller-side check, not
+// in this set. Task #221 — founding_partner | hr ONLY (partners removed;
+// finance never had it). Pairs with the column-level RLS mask
+// `atelier_can_view_personnel(owner_user_id)`.
+const SENSITIVE_PEOPLE_VIEWERS = SET("founding_partner", "hr");
+
+// Engagement-costing viewers (deal pricing internal cost, engagement P&L,
+// change-order value deltas, wallet/ledger cost roll-ups). Task #221 —
+// this is the ONLY cost surface where regular partners keep visibility;
+// it is engagement economics, not person-level compensation.
+const ENGAGEMENT_COSTING_VIEWERS = SET(
+  "founding_partner",
+  "partner",
+  "finance",
+  "hr",
+);
+
+// People-record editors (roster demographics / contact / titles / PATCH).
+// Task #221 — founding_partner | hr only.
+const PEOPLE_EDITORS = SET("founding_partner", "hr");
 
 // Restricted personas that must be narrowed to their explicit engagement
 // grants (no firm-wide visibility). Board observers are intentionally not
@@ -110,13 +127,33 @@ export const canViewCompensation = (r: RoleLike): boolean =>
   !!r && COMP_VIEWERS.has(r);
 
 /**
+ * Sensitive-people read access (personal data, HR notes, person documents,
+ * dependents, compliance records). Self-access (the subject reading their
+ * own data) is checked by the caller — this helper only answers the
+ * "is this persona on the firm-wide allow-list?" question. Task #221.
+ */
+export const canViewSensitivePeopleData = (r: RoleLike): boolean =>
+  !!r && SENSITIVE_PEOPLE_VIEWERS.has(r);
+
+/**
  * Personnel-contract read access (employment contract, NDA, COI, ID/tax,
- * cert files). Self-access (the subject reading their own docs) is checked
- * by the caller against the doc's owner — this helper only answers the
- * "is this persona on the firm-wide allow-list?" question. Task #293.
+ * cert files). Task #221 — now an alias of the sensitive-people gate
+ * (founding_partner | hr); kept for existing call sites.
  */
 export const canViewPersonnelContract = (r: RoleLike): boolean =>
-  !!r && PERSONNEL_CONTRACT_VIEWERS.has(r);
+  !!r && SENSITIVE_PEOPLE_VIEWERS.has(r);
+
+/**
+ * Engagement-costing read access (deal pricing internal cost, P&L value
+ * deltas, change-order economics, cost roll-ups). Task #221 — regular
+ * partners keep this even though they lost person-level comp.
+ */
+export const canViewEngagementCosting = (r: RoleLike): boolean =>
+  !!r && ENGAGEMENT_COSTING_VIEWERS.has(r);
+
+/** People-record edit access (roster person writes). Task #221. */
+export const canEditPeople = (r: RoleLike): boolean =>
+  !!r && PEOPLE_EDITORS.has(r);
 
 /**
  * Principle-override (breakglass) actor allow-list. Only partner-tier may

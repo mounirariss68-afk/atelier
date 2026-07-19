@@ -1,24 +1,39 @@
 /**
- * Role gates for People lens surfaces (Task #364, Wave-4 review).
+ * Role gates for People lens surfaces (Task #364, Wave-4 review;
+ * tightened in Task #221).
  *
- * Reward and Succession contain compensation, comp-band positioning and
- * succession-slate data and must only render for Partner/Admin personas.
+ * Reward contains compensation / comp-band positioning — visible to the
+ * comp-viewer set (founding_partner | hr | finance). Succession contains
+ * HR assessments and slates — sensitive-people viewers only
+ * (founding_partner | hr). Regular partners lost both surfaces in #221.
  * Everyone else gets a "Restricted" placeholder and the surface is
  * suppressed from the lifecycle ribbon and dossier tabs.
  */
 import { useAtelierGetMe } from "@workspace/api-client-react";
 
-const PARTNER_OR_ADMIN_ROLES = new Set([
-  "founding_partner",
-  "partner",
-  "hr", // HR/People Ops admin can see comp + succession
-]);
+const COMP_VIEWER_ROLES = new Set(["founding_partner", "hr", "finance"]);
+const SENSITIVE_PEOPLE_ROLES = new Set(["founding_partner", "hr"]);
 
-export function canSeeRewardAndSuccession(role: string | undefined | null): boolean {
-  return !!role && PARTNER_OR_ADMIN_ROLES.has(role);
+export function canSeeReward(role: string | undefined | null): boolean {
+  return !!role && COMP_VIEWER_ROLES.has(role);
 }
 
-export function useCanSeeRewardAndSuccession(): { allowed: boolean; loading: boolean } {
+export function canSeeSuccession(role: string | undefined | null): boolean {
+  return !!role && SENSITIVE_PEOPLE_ROLES.has(role);
+}
+
+/** Sensitive people data: personal details, person documents, HR notes,
+ *  compliance registers. Mirrors the server's canViewSensitivePeopleData. */
+export function canSeeSensitivePeople(role: string | undefined | null): boolean {
+  return !!role && SENSITIVE_PEOPLE_ROLES.has(role);
+}
+
+export function useCanSeeReward(): { allowed: boolean; loading: boolean } {
   const { data: me, isLoading } = useAtelierGetMe();
-  return { allowed: canSeeRewardAndSuccession(me?.role), loading: isLoading };
+  return { allowed: canSeeReward(me?.role), loading: isLoading };
+}
+
+export function useCanSeeSuccession(): { allowed: boolean; loading: boolean } {
+  const { data: me, isLoading } = useAtelierGetMe();
+  return { allowed: canSeeSuccession(me?.role), loading: isLoading };
 }

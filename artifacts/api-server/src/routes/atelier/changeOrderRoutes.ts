@@ -42,6 +42,7 @@ import { withRls } from "./rls";
 import {
   isLeadership,
   isFinance,
+  canViewEngagementCosting,
   isRestrictedPersona,
   isBoardObserver,
 } from "./personaRoles";
@@ -68,7 +69,8 @@ function canReadChangeOrder(role: string | null | undefined): boolean {
 }
 
 function canSeeValueDelta(role: string | null | undefined): boolean {
-  return isLeadership(role) || isFinance(role);
+  // Task #221 — engagement-costing gate (fp | partner | finance | hr).
+  return canViewEngagementCosting(role);
 }
 
 type ChangeOrderRow = typeof atelierChangeOrder.$inferSelect;

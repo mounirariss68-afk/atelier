@@ -25,7 +25,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { eq, and, isNull, inArray, desc } from "drizzle-orm";
 import { db, atelierEngagements, atelierChangeOrder } from "@workspace/db";
 import { withRls } from "./rls";
-import { isLeadership, isFinance } from "./personaRoles";
+import { canViewEngagementCosting } from "./personaRoles";
 import {
   getBudget,
   getCost,
@@ -74,7 +74,8 @@ function canWrite(role: string | null | undefined): boolean {
 }
 
 function canSeeValueDelta(role: string | null | undefined): boolean {
-  return isLeadership(role) || isFinance(role);
+  // Task #221 — engagement-costing gate (fp | partner | finance | hr).
+  return canViewEngagementCosting(role);
 }
 
 async function loadEngagementNames(ids: string[]): Promise<Map<string, string>> {

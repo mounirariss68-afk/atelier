@@ -67,6 +67,7 @@ const COHORT_LABEL: Record<CohortKey, string> = {
 export default function RosterPeople() {
   const [, navigate] = useLocation();
   const [people, setPeople] = React.useState<PersonRow[] | null>(null);
+  const [viewerScope, setViewerScope] = React.useState<"full" | "reports">("full");
   const [filter, setFilter] = React.useState<WorkerType | "all">(() => {
     if (typeof window === "undefined") return "all";
     const wt = new URLSearchParams(window.location.search).get("workerType");
@@ -106,6 +107,9 @@ export default function RosterPeople() {
       .then((r) => r.json())
       .then((d) => {
         setPeople(d.people ?? []);
+        // Task #221 — manager-scoped viewers see only their reports tree;
+        // non-managers get an empty, explained state.
+        setViewerScope(d.viewerScope === "reports" ? "reports" : "full");
       })
       .catch(() => setPeople([]));
   }, [filter, q, cohort]);
@@ -201,10 +205,17 @@ export default function RosterPeople() {
 
       {!people && <div className="py-12 text-text-mute">Loading…</div>}
       {people && people.length === 0 && (
-        <Card className="p-8 mt-6 text-center text-text-mute">
+        <Card className="p-8 mt-6 text-center text-text-mute" data-testid="roster-empty-state">
           <Users className="w-6 h-6 mx-auto mb-2 opacity-50" />
-          No people match the current filter.
+          {viewerScope === "reports"
+            ? "You can see the people who report to you here. No direct or indirect reports are currently linked to your profile."
+            : "No people match the current filter."}
         </Card>
+      )}
+      {people && people.length > 0 && viewerScope === "reports" && (
+        <p className="mt-4 text-xs text-text-mute font-mono uppercase tracking-widest">
+          Showing your reporting line only — business profile fields
+        </p>
       )}
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-6">

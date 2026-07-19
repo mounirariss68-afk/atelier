@@ -1,7 +1,7 @@
 /**
  * PeoplePayAdmin — Task #54: HR side of the personal pay hub.
  *
- * Two views hosted as sub-tabs of People › Reward (fp/partner/hr only, the
+ * Two views hosted as sub-tabs of People › Reward (fp/hr only per Task #221; the
  * same gate as the rest of Reward):
  *  - PayDocsAdminView: pick a person, upload pay/benefit documents, publish
  *    (which drops a card on their Me home) or retract, maintain insurance.
