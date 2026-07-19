@@ -402,9 +402,10 @@ function TemplatesSection({ canManage }: { canManage: boolean }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-text-faint">
-          Word templates the firm fills to produce contracts. Upload a .docx — the AI
-          detects fill-in fields for your review.
+        <p className="text-sm text-text-faint" data-testid="text-templates-flow-hint">
+          Word templates the firm fills to produce contracts. To add one: upload a .docx —
+          the AI detects fill-in fields — review and confirm them, and the template
+          activates for use in Prepare a contract. No engineering help needed.
         </p>
         {canManage && (
           <Button onClick={() => setUploadOpen(true)} data-testid="button-new-template">
