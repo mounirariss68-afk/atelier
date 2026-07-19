@@ -550,6 +550,51 @@ async function main(): Promise<void> {
       JSON.stringify(plainFields)?.slice(0, 160),
     );
 
+    // Task #298 — labelled TEXT boxes (the counterparty's own fill-in
+    // fields, e.g. printed name/title) pass through with type "text",
+    // the given label as the field name, and the right signer role.
+    // Exercised via the lib (the contract send path builds these).
+    const { sendSignatureRequest } = await import("../../src/lib/atelier-esign.js");
+    const txtOut = await sendSignatureRequest({
+      orgId: ORG,
+      actor: { id: FP, name: founder.name },
+      title: `${TAG} counterparty text fields`,
+      documentId: pdf.document.id,
+      documentVersionId: pdf.version.id,
+      fileName: `${TAG}-agreement.pdf`,
+      pdfBytes: Buffer.from("%PDF-1.4 fixture\n1 0 obj<<>>endobj\n%%EOF"),
+      signers: [
+        { name: "Client CP", email: "cp@example.com" },
+        { name: "Firm Partner", email: "fp@example.com" },
+      ],
+      clientPageCount: 1,
+      extraFields: [
+        { signerIndex: 0, type: "date", page: 9999, x: 0.08, y: 0.72, w: 0.18, h: 0.03 },
+        { signerIndex: 0, type: "text", label: "Name (print)", page: 9999, x: 0.08, y: 0.75, w: 0.32, h: 0.03 },
+        { signerIndex: 0, type: "text", label: "Title", page: 9999, x: 0.08, y: 0.79, w: 0.32, h: 0.03 },
+      ],
+    });
+    const txtFields = stub.lastTemplateFields ?? [];
+    const textBoxes = txtFields.filter((f) => f.type === "text");
+    check(
+      "text extraFields → typed text boxes with labels on the counterparty role",
+      txtFields.length === 5 &&
+        textBoxes.length === 2 &&
+        textBoxes.every((f) => f.role === "Signer 1") &&
+        textBoxes.some((f) => f.name === "Name (print) 1") &&
+        textBoxes.some((f) => f.name === "Title 1"),
+      JSON.stringify(txtFields.map((f) => ({ n: f.name, t: f.type, r: f.role })))?.slice(0, 300),
+    );
+    check(
+      "text/date extraField pages clamped to the last page (9999 → 1)",
+      txtFields
+        .filter((f) => f.type === "text" || f.type === "date")
+        .every((f) => f.areas?.[0]?.page === 1),
+      JSON.stringify(txtFields.map((f) => f.areas?.[0]?.page)),
+    );
+    // Track for cleanup alongside the route-created requests.
+    check("lib send with text fields → sent request row", txtOut.request?.status === "sent", JSON.stringify(txtOut.request)?.slice(0, 160));
+
     console.log("— webhook-triggered sync —");
 
     // Spoofed webhook for an unknown submission: acknowledged, no-op.

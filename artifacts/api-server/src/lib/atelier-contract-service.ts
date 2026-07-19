@@ -593,6 +593,42 @@ export type SendContractResult =
   | { ok: true; contract: ContractRow; pdfDoc: ContractDocRow; signatureRequestId: string }
   | SendContractError;
 
+/**
+ * Task #298 — pick the signer who is the contract's counterparty so the
+ * second-party fill-in boxes are assigned to them. Matches the signer
+ * email against the contract's person/contact record; falls back to the
+ * first signer (the client is added before the firm-side partner by
+ * convention, and single-signer sends are the common case).
+ */
+async function resolveCounterpartySignerIndex(
+  contract: ContractRow,
+  signers: Array<{ name: string; email: string }>,
+): Promise<number> {
+  let cpEmail: string | null = null;
+  if (contract.counterpartyKind === "person" && contract.personId) {
+    const [p] = await db
+      .select({ email: atelierEmployees.email })
+      .from(atelierEmployees)
+      .where(
+        and(eq(atelierEmployees.id, contract.personId), eq(atelierEmployees.orgId, contract.orgId)),
+      );
+    cpEmail = p?.email ?? null;
+  } else if (contract.counterpartyKind === "contact" && contract.contactId) {
+    const [c] = await db
+      .select({ email: atelierContacts.email })
+      .from(atelierContacts)
+      .where(
+        and(eq(atelierContacts.id, contract.contactId), eq(atelierContacts.orgId, contract.orgId)),
+      );
+    cpEmail = c?.email ?? null;
+  }
+  if (cpEmail) {
+    const idx = signers.findIndex((s) => s.email.toLowerCase() === cpEmail!.toLowerCase());
+    if (idx >= 0) return idx;
+  }
+  return 0;
+}
+
 export async function sendContract(args: {
   orgId: string;
   actor: { id: string; name: string };
@@ -680,31 +716,39 @@ export async function sendContract(args: {
     return { ok: false, code: "library-store-failed", message: libDoc.reason };
   }
 
-  // Task #291 — when the template has counterparty ("second party")
-  // signature-block date fields, stamp a "Date signed" box beside every
-  // signer's default signature box so the date is captured at signing
-  // (DocuSeal fills date fields automatically when the signer signs).
-  let extraFields: Array<{
+  // Task #291/#298 — the template's counterparty ("second party")
+  // signature-block fields are left as blanks in the prepared document,
+  // so matching DocuSeal boxes are stamped near the signature block:
+  //   date fields — a "Date signed" box beneath EVERY signer's signature
+  //     (DocuSeal fills date fields automatically at signing);
+  //   other fields (printed name, title, …) — a labelled text box the
+  //     COUNTERPARTY signer completes while signing.
+  type ContractExtraField = {
     signerIndex: number;
-    type: "date";
+    type: "date" | "text";
+    label?: string | null;
     page: number;
     x: number;
     y: number;
     w: number;
     h: number;
-  }> | null = null;
+  };
+  let extraFields: ContractExtraField[] | null = null;
   if (contract.templateVersionId) {
     const [tv] = await db
       .select()
       .from(atelierContractTemplateVersions)
       .where(eq(atelierContractTemplateVersions.id, contract.templateVersionId));
-    const hasSecondPartyDate = normalizeFieldSchema(tv?.fieldSchema ?? []).some(
-      (f) => f.role === "second_party" && f.dataType === "date",
+    const spFields = normalizeFieldSchema(tv?.fieldSchema ?? []).filter(
+      (f) => f.role === "second_party",
     );
+    const hasSecondPartyDate = spFields.some((f) => f.dataType === "date");
+    const spTextFields = spFields.filter((f) => f.dataType !== "date");
+    const built: ContractExtraField[] = [];
     if (hasSecondPartyDate) {
-      extraFields = args.signers.map((_, i) => {
+      for (let i = 0; i < args.signers.length; i++) {
         const sig = defaultSignaturePlacement(i, 0); // page overwritten below
-        return {
+        built.push({
           signerIndex: i,
           type: "date" as const,
           // Same column as the signature box, directly beneath it. The
@@ -714,9 +758,31 @@ export async function sendContract(args: {
           y: Math.min(0.95, sig.y + 0.055),
           w: 0.18,
           h: 0.03,
-        };
+        });
+      }
+    }
+    if (spTextFields.length > 0) {
+      // The counterparty is the signer whose email matches the contract's
+      // person/contact record; when no email matches (or the counterparty
+      // is a whole account), the first signer is assumed — the firm-side
+      // partner is added after the client in practice.
+      const cpIndex = await resolveCounterpartySignerIndex(contract, args.signers);
+      const sig = defaultSignaturePlacement(cpIndex, 0);
+      const base = sig.y + 0.055 + (hasSecondPartyDate ? 0.035 : 0);
+      spTextFields.forEach((f, k) => {
+        built.push({
+          signerIndex: cpIndex,
+          type: "text" as const,
+          label: f.label || f.key,
+          page: 9999,
+          x: sig.x,
+          y: Math.min(0.95, base + k * 0.035),
+          w: 0.32,
+          h: 0.03,
+        });
       });
     }
+    if (built.length > 0) extraFields = built;
   }
 
   // 3. Hand off to the existing DocuSeal e-sign flow.

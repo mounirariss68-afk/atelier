@@ -63,6 +63,26 @@ const DETECTED_FIELDS = {
       autoFill: "none",
       required: false,
     },
+    // Task #298 — counterparty signature-block fields: skipped at
+    // preparation, surfaced as DocuSeal boxes at send time.
+    {
+      key: "counterparty_sign_date",
+      label: "Counterparty date signed",
+      placeholder: "[CP_SIGN_DATE]",
+      dataType: "date",
+      autoFill: "none",
+      required: false,
+      role: "second_party",
+    },
+    {
+      key: "counterparty_signatory_title",
+      label: "Signatory title",
+      placeholder: "[CP_TITLE]",
+      dataType: "text",
+      autoFill: "none",
+      required: false,
+      role: "second_party",
+    },
   ],
   warnings: ["probe warning"],
 };
@@ -96,12 +116,14 @@ async function main() {
   // ---- stub DocuSeal BEFORE app import ----
   const SIGNED_PDF = Buffer.from("%PDF-1.4 probe159 signed pdf\n%%EOF");
   let submissionCompleted = false;
+  let lastTemplateFields: Array<{ name: string; type?: string; role: string; areas: Array<{ page: number }> }> | null = null;
   const docusealStub = createServer((req, res) => {
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
       const url = req.url ?? "";
       if (req.method === "POST" && url === "/templates/pdf") {
+        lastTemplateFields = JSON.parse(raw || "{}")?.documents?.[0]?.fields ?? null;
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify({ id: 7159 }));
         return;
@@ -174,6 +196,7 @@ async function main() {
     atelierSignatureRequests,
     atelierSignatureSigners,
     atelierDocuments,
+    atelierLegalEntities,
   } = D as any;
   const { eq, inArray, like } = await import("drizzle-orm");
   const { Document, Packer, Paragraph, TextRun } = await import("docx");
@@ -184,6 +207,7 @@ async function main() {
   const fpId = `u_${runTag}_fp`;
   const empUserId = `u_${runTag}_emp`;
   const empId = `emp_${runTag}`;
+  const entityId = `lent_${runTag}`;
 
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -275,6 +299,7 @@ async function main() {
       "INDIVIDUAL NON-DISCLOSURE AGREEMENT",
       "This NDA is entered into by [COUNTERPARTY_NAME] effective [EFFECTIVE_DATE].",
       "The engagement fee is [FEE_AMOUNT].",
+      "Signed by the recipient: date [CP_SIGN_DATE], title [CP_TITLE].",
     ]);
     const tplUp = await upload(
       "/contract-templates",
@@ -284,7 +309,7 @@ async function main() {
     check("template upload -> 201", tplUp.status === 201, tplUp);
     templateId = tplUp.body?.template?.id ?? null;
     const tplV = tplUp.body?.template?.currentVersion;
-    check("fields detected from stub LLM", tplV?.fieldStatus === "detected" && tplV?.fieldSchema?.length === 3, tplV);
+    check("fields detected from stub LLM", tplV?.fieldStatus === "detected" && tplV?.fieldSchema?.length === 5, tplV);
     check("template starts draft", tplUp.body?.template?.status === "draft", tplUp.body?.template?.status);
     if (!templateId) throw new Error("no template id — aborting");
 
@@ -314,9 +339,22 @@ async function main() {
     check("template auto-activated", review.body?.template?.status === "active", review.body?.template?.status);
 
     // ---- 3. create contract for roster person (auto-fill) ----
+    // Task #237 — a Cognirise signing entity is mandatory at create.
+    await db.insert(atelierLegalEntities).values({
+      id: entityId,
+      orgId: "aico",
+      legalNameEn: "Probe159 Consulting FZ-LLC",
+      jurisdiction: "DIFC",
+      registeredAddress: "Unit 1, DIFC, Dubai",
+      country: "AE",
+      governingLaw: "DIFC Law",
+      courts: "DIFC Courts",
+      status: "active",
+    } as any);
     const created = await api("POST", "/contracts", {
       templateId,
       counterparty: { kind: "person", id: empId },
+      signingEntityId: entityId,
       values: { fee: "AED 25,000" },
       effectiveDate: "2026-07-18",
     });
@@ -382,6 +420,28 @@ async function main() {
     check("status out_for_signature", sent.body?.contract?.status === "out_for_signature", sent.body?.contract?.status);
     sigRequestId = sent.body?.contract?.signatureRequestId ?? null;
     check("signatureRequestId linked", !!sigRequestId, sent.body?.contract);
+
+    // Task #298 — the second-party template fields become DocuSeal boxes:
+    // a date box (auto-filled at signing) and a labelled text box the
+    // counterparty completes, both on the signer's role.
+    const dsFields = (lastTemplateFields ?? []) as any[];
+    const dsDate = dsFields.filter((f) => f.type === "date");
+    const dsText = dsFields.filter((f) => f.type === "text");
+    check(
+      "second-party date box stamped for the signer",
+      dsDate.length === 1 && dsDate[0].role === "Signer 1",
+      JSON.stringify(dsFields.map((f) => ({ n: f.name, t: f.type, r: f.role }))),
+    );
+    check(
+      "second-party text box stamped with the field label",
+      dsText.length === 1 && dsText[0].role === "Signer 1" && String(dsText[0].name).startsWith("Signatory title"),
+      JSON.stringify(dsFields.map((f) => ({ n: f.name, t: f.type, r: f.role }))),
+    );
+    check(
+      "extra boxes land on a real page (clamped)",
+      dsFields.every((f) => (f.areas ?? []).every((a: any) => a.page >= 1)),
+      JSON.stringify(dsFields.map((f) => f.areas)),
+    );
 
     const afterSend = await api("GET", `/contracts/${contractId}`);
     const pdfDocs = (afterSend.body?.contract?.documents ?? []).filter(
@@ -500,6 +560,7 @@ async function main() {
       }
       await db.delete(atelierDocuments).where(like(atelierDocuments.title, `%${runTag}%`));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, empId));
+      await db.delete(atelierLegalEntities).where(eq(atelierLegalEntities.id, entityId));
       await db.delete(atelierUsers).where(inArray(atelierUsers.id, [fpId, empUserId]));
     } catch (e) {
       console.error("cleanup error", e);

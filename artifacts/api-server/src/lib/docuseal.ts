@@ -140,7 +140,13 @@ export interface SignaturePlacement {
  */
 export interface ExtraSignerField extends SignaturePlacement {
   signerIndex: number;
-  type: "date" | "initials";
+  type: "date" | "initials" | "text";
+  /**
+   * Optional display label for the box (shown to the signer in the
+   * DocuSeal form). Mostly used for text fields ("Name", "Title", …);
+   * date/initials fall back to their standard labels.
+   */
+  label?: string | null;
 }
 
 /**
@@ -215,10 +221,12 @@ export async function createTemplateFromPdf(args: {
   // template, so number them per signer.
   const perSignerCounts = new Map<string, number>();
   for (const f of args.extraFields ?? []) {
-    const key = `${f.type}:${f.signerIndex}`;
+    const label =
+      (typeof f.label === "string" && f.label.trim()) ||
+      (f.type === "date" ? "Date signed" : f.type === "initials" ? "Initials" : "Text");
+    const key = `${f.type}:${f.signerIndex}:${label.toLowerCase()}`;
     const n = (perSignerCounts.get(key) ?? 0) + 1;
     perSignerCounts.set(key, n);
-    const label = f.type === "date" ? "Date signed" : "Initials";
     fields.push({
       name: `${label} ${f.signerIndex + 1}${n > 1 ? `.${n}` : ""}`,
       type: f.type,
