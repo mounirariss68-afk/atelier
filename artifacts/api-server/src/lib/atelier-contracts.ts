@@ -708,6 +708,100 @@ export function extractSecondPartyValues(
   return out;
 }
 
+/**
+ * Task #310 — repair path for the one-shot completed→signed merge.
+ *
+ * The counterparty's typed answers are normally merged into fieldValues
+ * exactly once, on the completed→signed transition inside
+ * syncContractFromSignatureRequest. If that single pass failed after the
+ * signature request flipped (or DocuSeal briefly omitted submitter
+ * values), the answers would be lost forever because terminal statuses
+ * never regress and the sync never re-runs the merge.
+ *
+ * This backfill re-fetches the authoritative DocuSeal submission for a
+ * signed contract whose second-party fields are still empty and merges
+ * the values in — WITHOUT touching status. It is idempotent (a contract
+ * with all second-party values already present is a no-op) and safe to
+ * call on every contract-detail open: fetch errors are swallowed so a
+ * DocuSeal outage can never break the detail view; the next open simply
+ * retries.
+ *
+ * Returns the updated fieldValues when a merge happened, else null.
+ */
+export async function backfillSecondPartyValues(contract: {
+  id: string;
+  status: string;
+  title: string;
+  templateVersionId: string | null;
+  signatureRequestId: string | null;
+  fieldValues: Record<string, string> | null;
+}): Promise<Record<string, string> | null> {
+  if (contract.status !== "signed") return null;
+  if (!contract.signatureRequestId || !contract.templateVersionId) return null;
+  const { atelierContractTemplateVersions, atelierSignatureRequests } = await import(
+    "@workspace/db"
+  );
+  const [tv] = await db
+    .select()
+    .from(atelierContractTemplateVersions)
+    .where(eq(atelierContractTemplateVersions.id, contract.templateVersionId));
+  if (!tv) return null;
+  const spFields = normalizeFieldSchema(tv.fieldSchema ?? []).filter(
+    (f) => f.role === "second_party",
+  );
+  if (spFields.length === 0) return null;
+  const existing = contract.fieldValues ?? {};
+  const missing = spFields.some((f) => !(existing[f.key] ?? "").trim());
+  if (!missing) return null;
+
+  const [sigReq] = await db
+    .select()
+    .from(atelierSignatureRequests)
+    .where(eq(atelierSignatureRequests.id, contract.signatureRequestId));
+  if (!sigReq?.docusealSubmissionId) return null;
+
+  let submitters: Array<{ values?: Array<{ field: string; value: unknown }> }>;
+  try {
+    const { getSubmission } = await import("./docuseal.js");
+    const submission = await getSubmission(Number(sigReq.docusealSubmissionId));
+    submitters = (submission?.submitters ?? []) as typeof submitters;
+  } catch (err) {
+    // Never let a DocuSeal hiccup break the contract detail view — the
+    // next open retries the backfill.
+    console.warn(
+      `[contracts] second-party backfill fetch failed for ${contract.id}:`,
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  }
+  const extracted = extractSecondPartyValues(tv.fieldSchema ?? [], submitters);
+  const changed = Object.fromEntries(
+    Object.entries(extracted).filter(([k, v]) => (existing[k] ?? "").trim() !== v),
+  );
+  if (Object.keys(changed).length === 0) return null;
+
+  const mergedValues = { ...existing, ...changed };
+  await db
+    .update(atelierContractRecords)
+    .set({ fieldValues: mergedValues, updatedAt: new Date() })
+    .where(eq(atelierContractRecords.id, contract.id));
+  await auditContractEntity({
+    entityType: "atelier_contract_record",
+    entityId: contract.id,
+    actorType: "system",
+    actorId: "esign-sync",
+    actorLabel: "DocuSeal sync",
+    action: "contract.second_party_values",
+    payload: {
+      signatureRequestId: contract.signatureRequestId,
+      values: changed,
+      backfill: true,
+    },
+    summary: `Backfilled ${Object.keys(changed).length} second-party value(s) from signing on "${contract.title}"`,
+  });
+  return mergedValues;
+}
+
 export async function syncContractFromSignatureRequest(
   request: {
     id: string;

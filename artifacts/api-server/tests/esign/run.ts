@@ -49,6 +49,8 @@ interface StubSubmitter {
   opened_at?: string | null;
   completed_at?: string | null;
   declined_at?: string | null;
+  /** Task #310 — typed answers (text/date boxes) the submitter filled. */
+  values?: Array<{ field: string; value: unknown }>;
 }
 interface StubSubmission {
   id: number;
@@ -161,6 +163,17 @@ function markSigned(submissionId: number, count: number, baseUrl: string): void 
     sub.documents = [{ name: "signed.pdf", url: `${baseUrl}/files/signed.pdf` }];
     sub.audit_log_url = `${baseUrl}/files/audit.pdf`;
   }
+}
+
+/** Task #310 — attach typed answers to a stub submitter (by index). */
+function setSubmitterValues(
+  submissionId: number,
+  submitterIndex: number,
+  values: Array<{ field: string; value: unknown }>,
+): void {
+  const sub = stub.submissions.get(submissionId);
+  if (!sub) throw new Error(`stub submission ${submissionId} missing`);
+  sub.submitters[submitterIndex].values = values;
 }
 
 // ---------------------------------------------------------------------------
@@ -706,6 +719,152 @@ async function main(): Promise<void> {
     const synced = await syncSignatureRequest(req3Id);
     check("past expiresAt → expired on sync", synced.request.status === "expired", synced.request.status);
 
+    console.log("— contract second-party values (Task #306/#310) —");
+
+    // Fixture: a template version with second-party fields and a contract
+    // record linked to a fresh signature request. Rows inserted directly
+    // (template upload needs LLM detection; irrelevant to this path).
+    const {
+      atelierContractTemplates,
+      atelierContractTemplateVersions,
+      atelierContractRecords,
+    } = await import("@workspace/db");
+    const tplId = `ctpl_${TAG}_1`;
+    const tvId = `ctv_${TAG}_1`;
+    const ctrId = `ctr_${TAG}_1`;
+    const spSchema = [
+      { key: "counterparty_printed_name", label: "Name (print)", placeholder: "[NAME]", dataType: "text", role: "second_party" },
+      { key: "counterparty_title", label: "Title", placeholder: "[TITLE]", dataType: "text", role: "second_party" },
+      { key: "date_signed", label: "Date signed", placeholder: "[DATE]", dataType: "date", role: "second_party" },
+      { key: "firm_name", label: "Firm name", placeholder: "[FIRM]", dataType: "text", role: "first_party" },
+    ];
+    await db.insert(atelierContractTemplates).values({
+      id: tplId, orgId: ORG, name: `${TAG} tpl`, contractType: "individual_nda",
+      status: "active", currentVersionId: tvId, createdBy: FP,
+    } as any);
+    await db.insert(atelierContractTemplateVersions).values({
+      id: tvId, orgId: ORG, templateId: tplId, versionNumber: 1,
+      fileName: `${TAG}.docx`, sizeBytes: 10, sha256: "0".repeat(64),
+      blobRef: "enc:cdoc:test", fieldSchema: spSchema as any,
+      fieldStatus: "reviewed", createdBy: FP,
+    } as any);
+
+    const ctrSend = await sendSignatureRequest({
+      orgId: ORG,
+      actor: { id: FP, name: founder.name },
+      title: `${TAG} contract signing`,
+      documentId: pdf.document.id,
+      documentVersionId: pdf.version.id,
+      fileName: `${TAG}-agreement.pdf`,
+      pdfBytes: Buffer.from("%PDF-1.4 fixture\n1 0 obj<<>>endobj\n%%EOF"),
+      signers: [
+        { name: "Counter Party", email: "counter@example.com" },
+        { name: "Firm Signer", email: "firm@example.com" },
+      ],
+      clientPageCount: 1,
+    });
+    const ctrReqId = ctrSend.request.id;
+    const ctrSubId = Number(ctrSend.request.docusealSubmissionId);
+    await db.insert(atelierContractRecords).values({
+      id: ctrId, orgId: ORG, title: `${TAG} NDA`, contractType: "individual_nda",
+      templateId: tplId, templateVersionId: tvId,
+      counterpartyKind: "contact", counterpartyLabel: "Counter Party",
+      status: "out_for_signature", fieldValues: { firm_name: "Cognirise" },
+      ownerUserId: FP, ownerLabel: founder.name, signatureRequestId: ctrReqId,
+    } as any);
+
+    // Counterparty types their answers, everyone signs, sync runs.
+    setSubmitterValues(ctrSubId, 0, [
+      { field: "Name (print) 1", value: "Jane Roe" },
+      { field: "Title 1", value: "Director" },
+      { field: "Date signed 1", value: "2026-07-19" },
+    ]);
+    markSigned(ctrSubId, 2, stubBase);
+    await syncSignatureRequest(ctrReqId);
+
+    const [ctrAfter] = await db
+      .select()
+      .from(atelierContractRecords)
+      .where(eq(atelierContractRecords.id, ctrId));
+    check("contract flips to signed on sync", ctrAfter?.status === "signed", ctrAfter?.status);
+    const fvAfter = (ctrAfter?.fieldValues ?? {}) as Record<string, string>;
+    check(
+      "counterparty typed answers merged into fieldValues",
+      fvAfter.counterparty_printed_name === "Jane Roe" &&
+        fvAfter.counterparty_title === "Director" &&
+        fvAfter.date_signed === "2026-07-19" &&
+        fvAfter.firm_name === "Cognirise",
+      JSON.stringify(fvAfter),
+    );
+    const ctrAudits1 = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(eq(atelierAuditEvents.entityId, ctrId));
+    check(
+      "contract.second_party_values audit event recorded",
+      ctrAudits1.some((a) => a.action === "contract.second_party_values"),
+      ctrAudits1.map((a) => a.action).join(","),
+    );
+    if (ctrAfter?.signedLibraryDocumentId) createdDocIds.push(ctrAfter.signedLibraryDocumentId);
+
+    console.log("— second-party backfill on detail open (Task #310) —");
+
+    // Simulate the lost-merge failure mode: signed contract, values gone.
+    await db
+      .update(atelierContractRecords)
+      .set({ fieldValues: { firm_name: "Cognirise" } })
+      .where(eq(atelierContractRecords.id, ctrId));
+
+    const rDetail = await call("GET", `/api/atelier/contracts/${ctrId}`, FP);
+    const fvRepaired = rDetail.body?.contract?.fieldValues ?? {};
+    check(
+      "detail open repairs missing second-party values",
+      rDetail.status === 200 &&
+        fvRepaired.counterparty_printed_name === "Jane Roe" &&
+        fvRepaired.counterparty_title === "Director" &&
+        fvRepaired.date_signed === "2026-07-19",
+      `status=${rDetail.status} fv=${JSON.stringify(fvRepaired)}`,
+    );
+    check(
+      "backfill does not regress status",
+      rDetail.body?.contract?.status === "signed",
+      rDetail.body?.contract?.status,
+    );
+    const [ctrRepaired] = await db
+      .select()
+      .from(atelierContractRecords)
+      .where(eq(atelierContractRecords.id, ctrId));
+    check(
+      "repaired values persisted to the DB",
+      ((ctrRepaired?.fieldValues ?? {}) as Record<string, string>).counterparty_printed_name === "Jane Roe",
+      JSON.stringify(ctrRepaired?.fieldValues),
+    );
+    const ctrAudits2 = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(eq(atelierAuditEvents.entityId, ctrId));
+    check(
+      "backfill audited with backfill:true",
+      ctrAudits2.some(
+        (a) => a.action === "contract.second_party_values" && (a.payload as any)?.backfill === true,
+      ),
+      ctrAudits2.map((a) => `${a.action}${(a.payload as any)?.backfill ? "(bf)" : ""}`).join(","),
+    );
+
+    // Idempotent: a second open with values present writes nothing new.
+    const beforeCount = ctrAudits2.filter((a) => a.action === "contract.second_party_values").length;
+    const rDetail2 = await call("GET", `/api/atelier/contracts/${ctrId}`, FP);
+    const ctrAudits3 = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(eq(atelierAuditEvents.entityId, ctrId));
+    check(
+      "backfill is idempotent (no new audit on repeat open)",
+      rDetail2.status === 200 &&
+        ctrAudits3.filter((a) => a.action === "contract.second_party_values").length === beforeCount,
+      `before=${beforeCount} after=${ctrAudits3.filter((a) => a.action === "contract.second_party_values").length}`,
+    );
+
     console.log("— webhook secret gate —");
     process.env.DOCUSEAL_WEBHOOK_SECRET = "hook-secret";
     const rBadSecret = await call("POST", "/api/esign/webhook/docuseal", null, {
@@ -724,6 +883,19 @@ async function main(): Promise<void> {
   } finally {
     // ---- cleanup --------------------------------------------------------
     try {
+      // Task #310 contract fixtures.
+      const {
+        atelierContractTemplates: ctpl,
+        atelierContractTemplateVersions: ctv,
+        atelierContractRecords: ctr,
+        atelierContractDocuments: cdoc,
+      } = await import("@workspace/db");
+      await db.delete(cdoc).where(like(cdoc.contractId, `ctr_${TAG}%`));
+      await db.delete(ctr).where(like(ctr.id, `ctr_${TAG}%`));
+      await db.delete(ctv).where(like(ctv.id, `ctv_${TAG}%`));
+      await db.delete(ctpl).where(like(ctpl.id, `ctpl_${TAG}%`));
+      await db.delete(atelierAuditEvents).where(like(atelierAuditEvents.entityId, `ctr_${TAG}%`));
+
       const reqs = await db
         .select({ id: atelierSignatureRequests.id })
         .from(atelierSignatureRequests)

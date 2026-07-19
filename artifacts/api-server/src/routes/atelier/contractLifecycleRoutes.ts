@@ -74,6 +74,7 @@ import {
   addContractDocument,
   auditContractEntity,
   sweepExpiredContracts,
+  backfillSecondPartyValues,
 } from "../../lib/atelier-contracts.js";
 import {
   loadTemplate,
@@ -961,6 +962,11 @@ router.get("/contracts/:id", async (req, res) => {
     res.status(contract ? 403 : 404).json({ error: contract ? "forbidden" : "not-found" });
     return;
   }
+  // Task #310 — safety net: if the one-shot completed→signed merge ever
+  // missed the counterparty's typed answers, repair them on detail open
+  // (status untouched; DocuSeal errors are swallowed inside).
+  const backfilled = await backfillSecondPartyValues(contract);
+  if (backfilled) contract.fieldValues = backfilled;
   const documents = await db
     .select()
     .from(atelierContractDocuments)
