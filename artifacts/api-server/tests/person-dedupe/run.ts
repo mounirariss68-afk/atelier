@@ -403,6 +403,80 @@ function build(
   );
 }
 
+// 9) Initials + transliteration variants (review-mandated cases).
+console.log("samePersonName — initials & transliteration");
+check(
+  "initial matches expanded given name",
+  samePersonName("M. Al Jasser", "Mohammed Al Jasser"),
+);
+check(
+  "initial without dot matches too",
+  samePersonName("M Al-Jasser", "Mohammed Al Jasser"),
+);
+check(
+  "initial does NOT satisfy the surname",
+  !samePersonName("Mohammed J.", "Mohammed Al Jasser"),
+);
+check(
+  "Mohammad / Mohammed / Muhammad fold together",
+  samePersonName("Mohammad Al Jasser", "Mohammed Al Jasser") &&
+    samePersonName("Muhammad Al Jasser", "Mohammed Al Jasser"),
+);
+check(
+  "Hussain / Hussein fold together",
+  samePersonName("Hussain Al Nowais", "Hussein Al Nowais"),
+);
+check(
+  "Khaled / Khalid fold together",
+  samePersonName("Khaled Al-Falih", "Khalid AlFalih"),
+);
+check(
+  "Yousef / Yusuf fold together",
+  samePersonName("Yousef Al Otaiba", "Yusuf Al-Otaiba"),
+);
+check(
+  "transliterated surname folds too",
+  samePersonName("Ali Al-Rasheed", "Ali Al Rashid"),
+);
+check(
+  "Hassan vs Hussein stay distinct",
+  !samePersonName("Hassan Al Nowais", "Hussein Al Nowais"),
+);
+check(
+  "different surnames never match on shared initial",
+  !samePersonName("M. Al Jasser", "Mohammed Al Mansoori"),
+);
+
+// 9b) Proposal-path: initial/transliteration variant of a pending proposal
+//     is blocked, and enriches (not duplicates) an existing CRM contact.
+{
+  const pending: PendingProfileUpdate[] = [
+    {
+      id: "pp_x4",
+      proposedBy: "ag_executive_mapper",
+      proposedAt: new Date().toISOString(),
+      field: "contact",
+      fromValue: null,
+      toValue: { fullName: "Mohammed Al Jasser", title: "CEO" },
+      rationale: "prior run",
+      status: "pending",
+    } as unknown as PendingProfileUpdate,
+  ];
+  const out = build([dm({ fullName: "M. Al-Jasser", title: "CEO" })], [], pending);
+  check("initial variant blocked by pending proposal", out.length === 0, String(out.length));
+
+  const out2 = build(
+    [dm({ fullName: "Muhammad Al Jasser", title: "CEO", linkedinUrl: "https://li/maj" })],
+    [{ fullName: "Mohammed Al-Jasser", title: "CEO", linkedinUrl: null }],
+  );
+  check("transliteration variant enriches existing contact", out2.length === 1, String(out2.length));
+  check(
+    "no discovery proposal for transliteration variant",
+    /existing contact/.test(out2[0]?.rationale ?? ""),
+    out2[0]?.rationale,
+  );
+}
+
 // 8) Blank names skipped.
 {
   const out = build([dm({ fullName: "   " }), dm({ fullName: "Jane Doe", title: "CFO" })]);

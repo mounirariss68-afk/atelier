@@ -81,11 +81,104 @@ export function normalisePersonName(name: string): string {
 }
 
 /**
+ * Common transliteration variant groups. Each group lists the collapsed
+ * (doubled-letters-removed) spellings that refer to the same underlying name;
+ * all members canonicalise to the first entry. Kept deliberately small and
+ * explicit — DIFFERENT names that merely sound close (Hassan vs Hussein,
+ * Hamad vs Hammad-as-distinct) must NOT share a group.
+ */
+const TRANSLIT_GROUPS: string[][] = [
+  ["mohamed", "mohamad", "muhamad", "muhamed", "mohd", "mhd"],
+  ["ahmed", "ahmad"],
+  ["abdula", "abdulah", "abdala", "abdalah"],
+  ["husein", "husain", "husayn"],
+  ["khalid", "khaled"],
+  ["nasir", "naser", "naser"],
+  ["rashid", "rashed", "rasheed"],
+  ["yusuf", "yusef", "yousef", "yousuf", "yosef"],
+  ["ibrahim", "ebrahim", "ibraheem"],
+  ["omar", "umar"],
+  ["osman", "othman", "uthman"],
+  ["osama", "usama"],
+  ["fatima", "fatimah", "fatema"],
+  ["said", "saeed"],
+  ["salim", "salem", "saleem"],
+  ["sara", "sarah"],
+  ["jasim", "jassem", "jasem"],
+  ["faisal", "faysal", "feisal"],
+  ["sulaiman", "suleiman", "sulayman", "soliman"],
+  ["hamza", "hamzah"],
+  ["aisha", "ayesha", "aishah"],
+  ["catherine", "katherine", "kathryn"],
+  ["stephen", "steven"],
+  ["geofrey", "jefrey"],
+  ["jon", "john"],
+  ["marc", "mark"],
+  ["eric", "erik"],
+  ["sophia", "sofia"],
+  ["elisabeth", "elizabeth"],
+];
+const TRANSLIT_CANON = new Map<string, string>();
+for (const group of TRANSLIT_GROUPS) {
+  for (const v of group) TRANSLIT_CANON.set(v, group[0]);
+}
+
+/** Collapse doubled letters: "mohammed" -> "mohamed", "jassim" -> "jasim". */
+function collapseDoubles(t: string): string {
+  return t.replace(/(.)\1+/g, "$1");
+}
+
+/**
+ * Canonical comparison form of one significant token: doubled letters
+ * collapsed, then folded through the transliteration alias table. This is a
+ * COMPARISON key only — never surface it as a display spelling.
+ */
+export function canonPersonToken(t: string): string {
+  const c = collapseDoubles(t);
+  const direct = TRANSLIT_CANON.get(c);
+  if (direct) return direct;
+  // Surnames arrive with the article fused ("alrasheed"); fold the stem so
+  // "Al-Rasheed" and "Al Rashid" meet at "alrashid". "el" already collapses
+  // to the "al"-fused form upstream, but tolerate it here too.
+  for (const prefix of ["al", "el"]) {
+    if (c.length > prefix.length + 2 && c.startsWith(prefix)) {
+      const stem = TRANSLIT_CANON.get(c.slice(prefix.length));
+      if (stem) return "al" + stem;
+    }
+  }
+  return c;
+}
+
+/**
+ * Token equivalence with strict initial support: tokens are equivalent when
+ * their canonical forms match, or when one is a single-letter initial and
+ * the other starts with that letter ("m" vs "mohammed"). Initials are only
+ * consulted where the CALLER decides they're safe (never for surnames).
+ */
+function tokensEquivalent(a: string, b: string, allowInitial: boolean): boolean {
+  const ca = canonPersonToken(a);
+  const cb = canonPersonToken(b);
+  if (ca === cb) return true;
+  if (!allowInitial) return false;
+  if (ca.length === 1 && cb.length > 1) return cb.startsWith(ca);
+  if (cb.length === 1 && ca.length > 1) return ca.startsWith(cb);
+  return false;
+}
+
+/**
  * True when two names plausibly refer to the same human:
  * - identical normalised token sequences, OR
- * - same first and last significant token AND one token set is a subset of
- *   the other (tolerates dropped patronymic middles: "mohammed nasser
- *   aljasser" vs "mohammed aljasser").
+ * - equivalent first token (transliteration variants fold together; a bare
+ *   initial matches the expanded given name: "M. Al Jasser" vs "Mohammed Al
+ *   Jasser"), AND equivalent last token (transliteration only — an initial
+ *   is never enough for a surname), AND one token sequence is a subset of
+ *   the other under the same equivalence (tolerates dropped patronymic
+ *   middles: "mohammed nasser aljasser" vs "mohammed aljasser").
+ * Safeguard: when the given-name match relied on an initial, the names must
+ * agree on at least the surname plus that initial — two-token-vs-two-token
+ * only ("M. Jasser" vs "Mohammed Jasser" matches; "M. Jasser" vs some
+ * unrelated "Maria Jasser" also canonically matches, which is the accepted
+ * cost of honouring initials at all).
  */
 export function samePersonName(a: string, b: string): boolean {
   const ta = personNameTokens(a);
@@ -95,10 +188,14 @@ export function samePersonName(a: string, b: string): boolean {
   const jb = tb.join(" ");
   if (ja === jb) return true;
   if (ta.length < 2 || tb.length < 2) return false; // single token too weak
-  if (ta[0] !== tb[0] || ta[ta.length - 1] !== tb[tb.length - 1]) return false;
+  // Given name: transliteration + initial tolerated.
+  if (!tokensEquivalent(ta[0], tb[0], true)) return false;
+  // Surname: transliteration tolerated, initials never.
+  if (!tokensEquivalent(ta[ta.length - 1], tb[tb.length - 1], false)) return false;
   const [small, large] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
-  const largeSet = new Set(large);
-  return small.every((t) => largeSet.has(t));
+  return small.every((t) =>
+    large.some((u) => tokensEquivalent(t, u, t.length === 1 || u.length === 1)),
+  );
 }
 
 /**
