@@ -7,6 +7,6 @@ Mounir Ariss's official title is "CEO and Co-founder"; Gökhan Güney's is "Co-f
 **Why:** Corrected 2026-07-19 from "Founding Partner". `role`/`role_label` deliberately stay `founding_partner` / "Founding Partner" — that is the RBAC role name, not the job title.
 
 **How to apply:**
-- No route currently writes titles (self-PATCH whitelist excludes `title`; roster has no title PATCH). If one is added, it must update BOTH tables and audit.
-- The boot auth seed only touches credentials — never make any boot/repair loop write titles, or these corrections revert on restart.
+- Title writes exist now: roster PATCH /roster/people/:id/title (HR/founding-partner only) and the chat contact_update employee routing — both must update BOTH tables (employees + users) and audit.
+- Boot includes a title repair step; any boot/seed logic touching titles must preserve these official values.
 - Business cards, /auth/me, roster, pay hub all read the title columns; nothing is hardcoded for these two people (test fixtures excepted).

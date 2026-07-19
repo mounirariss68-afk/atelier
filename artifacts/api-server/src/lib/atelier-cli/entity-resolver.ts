@@ -46,6 +46,8 @@ import {
   atelierPartnerFirms,
   atelierTimesheetEntries,
   atelierExpenses,
+  atelierEmployees,
+  atelierPartnerFirmResources,
 } from "@workspace/db";
 import { cosine, embedText } from "./embeddings.js";
 
@@ -174,7 +176,22 @@ async function tryIdLookup(
       .from(atelierContacts)
       .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, orgId), isNull(atelierContacts.deletedAt)))
       .limit(1);
-    return r ? { id: r.id, label: r.fullName, secondary: r.title ?? undefined } : null;
+    if (r) return { id: r.id, label: r.fullName, secondary: r.title ?? undefined };
+    // People also live in the HR roster and partner-firm rosters — an
+    // exact id for either should resolve just like a client contact.
+    const [e] = await db
+      .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, title: atelierEmployees.title })
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.id, id), eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt)))
+      .limit(1);
+    if (e) return { id: e.id, label: e.fullName, secondary: e.title ? `Employee — ${e.title}` : "Employee" };
+    const [p] = await db
+      .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, role: atelierPartnerFirmResources.role })
+      .from(atelierPartnerFirmResources)
+      .where(and(eq(atelierPartnerFirmResources.id, id), eq(atelierPartnerFirmResources.orgId, orgId), isNull(atelierPartnerFirmResources.deletedAt)))
+      .limit(1);
+    if (p) return { id: p.id, label: p.fullName, secondary: p.role ? `Partner resource — ${p.role}` : "Partner resource" };
+    return null;
   }
   if (kind === "deliverable") {
     const [r] = await db
@@ -406,8 +423,34 @@ async function trigramPass(
   }
   const desc = nameCol[kind];
   if (!desc) return [];
+  // Person searches span three rosters: client contacts, HR employees,
+  // and partner-firm resources. Run the extra passes alongside the
+  // regular contacts pass and merge (contacts win ties via ordering).
+  if (kind === "contact") {
+    const [contacts, people] = await Promise.all([
+      safeTrigram<ResolverCandidate>(async () => {
+        const scopeFilter = scopes.accountId ? sql` AND account_id = ${scopes.accountId}` : sql``;
+        const r = await db.execute<{ id: string; label: string; sim: number }>(sql`
+          SELECT id, full_name AS label, similarity(full_name, ${query}) AS sim
+            FROM atelier_contacts
+           WHERE org_id = ${orgId} AND deleted_at IS NULL
+             AND full_name % ${query}
+             ${scopeFilter}
+           ORDER BY sim DESC
+           LIMIT ${TOP_K}
+        `);
+        return (r.rows as unknown as Array<{ id: string; label: string; sim: number }>)
+          .filter((row) => row.sim >= TRGM_THRESHOLD)
+          .map((row) => ({ id: row.id, label: row.label, score: Number(row.sim), via: "trgm" as const }));
+      }, () => fallbackIlikeGeneric("contact", query, orgId, scopes)),
+      // Skip the internal rosters when the caller scoped to an account —
+      // an account-scoped person search means a client contact.
+      scopes.accountId ? Promise.resolve([] as ResolverCandidate[]) : internalPeoplePass(query, orgId),
+    ]);
+    return [...contacts, ...people].sort((a, b) => b.score - a.score).slice(0, TOP_K);
+  }
   return safeTrigram(async () => {
-    const scopeFilter = scopes.accountId && (kind === "opportunity" || kind === "contact")
+    const scopeFilter = scopes.accountId && kind === "opportunity"
       ? sql` AND account_id = ${scopes.accountId}`
       : scopes.engagementId && kind === "deliverable"
         ? sql` AND engagement_id = ${scopes.engagementId}`
@@ -426,6 +469,84 @@ async function trigramPass(
       .filter((row) => row.sim >= TRGM_THRESHOLD)
       .map((row) => ({ id: row.id, label: row.label, score: Number(row.sim), via: "trgm" as const }));
   }, () => fallbackIlikeGeneric(kind, query, orgId, scopes) as Promise<Array<{ id: string; label: string; score: number; via: "trgm" }>>);
+}
+
+/**
+ * Fuzzy pass over the two internal people rosters — HR employees and
+ * partner-firm resources. Merged into the "contact" kind so a person
+ * search finds people wherever they live. Candidates carry a
+ * `secondary` tag so the disambiguation card (and the LLM) can tell
+ * the rosters apart and route writes to the right record.
+ */
+async function internalPeoplePass(query: string, orgId: string): Promise<ResolverCandidate[]> {
+  const employees = safeTrigram<ResolverCandidate>(async () => {
+    const r = await db.execute<{ id: string; label: string; title: string | null; sim: number }>(sql`
+      SELECT id, full_name AS label, title, similarity(full_name, ${query}) AS sim
+        FROM atelier_employees
+       WHERE org_id = ${orgId} AND deleted_at IS NULL
+         AND full_name % ${query}
+       ORDER BY sim DESC
+       LIMIT ${TOP_K}
+    `);
+    return (r.rows as unknown as Array<{ id: string; label: string; title: string | null; sim: number }>)
+      .filter((row) => row.sim >= TRGM_THRESHOLD)
+      .map((row) => ({
+        id: row.id,
+        label: row.label,
+        secondary: row.title ? `Employee — ${row.title}` : "Employee",
+        score: Number(row.sim),
+        via: "trgm" as const,
+      }));
+  }, async () => {
+    const like = `%${query.replace(/[%_]/g, "")}%`;
+    const r = await db
+      .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, title: atelierEmployees.title })
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt), ilike(atelierEmployees.fullName, like)))
+      .limit(TOP_K);
+    return r.map((e) => ({
+      id: e.id,
+      label: e.fullName,
+      secondary: e.title ? `Employee — ${e.title}` : "Employee",
+      score: 0.4,
+      via: "trgm" as const,
+    }));
+  });
+  const partners = safeTrigram<ResolverCandidate>(async () => {
+    const r = await db.execute<{ id: string; label: string; role: string | null; sim: number }>(sql`
+      SELECT id, full_name AS label, role, similarity(full_name, ${query}) AS sim
+        FROM atelier_partner_firm_resources
+       WHERE org_id = ${orgId} AND deleted_at IS NULL
+         AND full_name % ${query}
+       ORDER BY sim DESC
+       LIMIT ${TOP_K}
+    `);
+    return (r.rows as unknown as Array<{ id: string; label: string; role: string | null; sim: number }>)
+      .filter((row) => row.sim >= TRGM_THRESHOLD)
+      .map((row) => ({
+        id: row.id,
+        label: row.label,
+        secondary: row.role ? `Partner resource — ${row.role}` : "Partner resource",
+        score: Number(row.sim),
+        via: "trgm" as const,
+      }));
+  }, async () => {
+    const like = `%${query.replace(/[%_]/g, "")}%`;
+    const r = await db
+      .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, role: atelierPartnerFirmResources.role })
+      .from(atelierPartnerFirmResources)
+      .where(and(eq(atelierPartnerFirmResources.orgId, orgId), isNull(atelierPartnerFirmResources.deletedAt), ilike(atelierPartnerFirmResources.fullName, like)))
+      .limit(TOP_K);
+    return r.map((p) => ({
+      id: p.id,
+      label: p.fullName,
+      secondary: p.role ? `Partner resource — ${p.role}` : "Partner resource",
+      score: 0.4,
+      via: "trgm" as const,
+    }));
+  });
+  const [e, p] = await Promise.all([employees, partners]);
+  return [...e, ...p];
 }
 
 async function safeTrigram<T>(primary: () => Promise<T[]>, fallback: () => Promise<T[]>): Promise<T[]> {

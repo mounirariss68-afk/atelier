@@ -50,9 +50,31 @@ import {
   atelierExpenses,
   atelierEngagements,
   atelierEngagementAccess,
+  atelierEmployees,
+  atelierPartnerFirmResources,
+  atelierUsers,
 } from "@workspace/db";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
+import { isHr, isPartner, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
+
+/**
+ * Task — chat person writes must land on the right roster. Maps an
+ * E.164 dial code to the country label used by the employee
+ * `cellPhones` entries (the roster route requires a non-empty country
+ * on every cell). Falls back to "Intl" for unrecognised codes.
+ */
+function dialCodeCountry(phone: string): string {
+  const p = phone.replace(/[\s()-]/g, "");
+  const map: Array<[string, string]> = [
+    ["+971", "UAE"], ["+966", "KSA"], ["+974", "Qatar"], ["+965", "Kuwait"],
+    ["+973", "Bahrain"], ["+968", "Oman"], ["+20", "Egypt"], ["+961", "Lebanon"],
+    ["+962", "Jordan"], ["+44", "UK"], ["+33", "France"], ["+49", "Germany"],
+    ["+91", "India"], ["+92", "Pakistan"], ["+1", "USA"],
+  ];
+  for (const [code, country] of map) if (p.startsWith(code)) return country;
+  return "Intl";
+}
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1516,12 +1538,175 @@ defineCapability({
   },
 });
 
+/**
+ * Route a person write to the HR roster (atelier_employees) or the
+ * partner-firm roster (atelier_partner_firm_resources) when the id
+ * isn't a client contact. Returns null when the id matches neither,
+ * letting the caller fall through to its own not_found error.
+ *
+ * Gating mirrors the REST roster routes: HR / partner / founding
+ * partner may edit anyone; an employee may edit their OWN roster
+ * record (self-service, e.g. "add my mobile number").
+ */
+async function updateInternalPerson(
+  id: string,
+  input: Record<string, unknown>,
+  ctx: { persona: { id: string; orgId: string; role?: string } },
+): Promise<{ ok: boolean; errorCode?: string; errorMessage?: string; data?: Record<string, unknown> } | null> {
+  const orgId = ctx.persona.orgId;
+  const role = ctx.persona.role;
+  const privileged = isHr(role ?? "") || isPartner(role ?? "") || isFoundingPartner(role ?? "");
+
+  const [emp] = await db
+    .select()
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.id, id), eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt)));
+  if (emp) {
+    const isSelf = emp.userId != null && emp.userId === ctx.persona.id;
+    if (!privileged && !isSelf) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit employee record for ${emp.fullName}` };
+    }
+    // Field-level ACL mirroring the REST roster routes:
+    //   - phone (business-card contact): HR / partner / founding partner,
+    //     plus SELF (self-service, e.g. "add my mobile number").
+    //   - title: HR / founding partner ONLY (Task #189 — titles are
+    //     HR-controlled; partners and self may not edit them).
+    //   - fullName / email: identity fields — HR / founding partner only.
+    const canEditIdentity = isHr(role ?? "") || isFoundingPartner(role ?? "");
+    const canEditPhone = privileged || isSelf;
+    const patch: Partial<typeof atelierEmployees.$inferInsert> = { updatedAt: new Date() };
+    const applied: string[] = [];
+    const skipped: string[] = [];
+    const denied: string[] = [];
+    let titleChanged: string | null = null;
+    if (input.fullName !== undefined) {
+      if (canEditIdentity) { patch.fullName = String(input.fullName); applied.push("fullName"); }
+      else denied.push("fullName (HR or founding partner only)");
+    }
+    if (input.title !== undefined) {
+      if (canEditIdentity) { titleChanged = input.title ? String(input.title) : null; patch.title = titleChanged; applied.push("title"); }
+      else denied.push("title (HR or founding partner only)");
+    }
+    if (input.email !== undefined && input.email) {
+      if (canEditIdentity) { patch.email = String(input.email); applied.push("email"); }
+      else denied.push("email (HR or founding partner only)");
+    }
+    if (input.phone !== undefined && !canEditPhone) {
+      denied.push("phone (HR, partner, founding partner, or the person themself)");
+    } else if (input.phone !== undefined) {
+      const phone = String(input.phone ?? "").trim();
+      if (!phone) {
+        skipped.push("phone (empty — employee cell numbers can't be cleared from chat; use the People page)");
+      } else {
+        const cells = Array.isArray(emp.cellPhones) ? [...emp.cellPhones] : [];
+        const country = dialCodeCountry(phone);
+        const existingIdx = cells.findIndex((c) => c.number.replace(/[\s()-]/g, "") === phone.replace(/[\s()-]/g, ""));
+        if (existingIdx === -1) {
+          const sameCountryIdx = cells.findIndex((c) => c.country === country);
+          if (sameCountryIdx !== -1) cells[sameCountryIdx] = { country, number: phone };
+          else if (cells.length >= 3) cells[cells.length - 1] = { country, number: phone };
+          else cells.push({ country, number: phone });
+          patch.cellPhones = cells;
+          applied.push("phone");
+        } else {
+          skipped.push("phone (already on file)");
+        }
+      }
+    }
+    for (const k of ["seniority", "linkedinUrl", "buyerPersona", "influenceScore", "disposition", "notes"]) {
+      if (input[k] !== undefined) skipped.push(`${k} (not an employee-record field)`);
+    }
+    if (applied.length === 0 && denied.length > 0) {
+      return {
+        ok: false,
+        errorCode: "forbidden",
+        errorMessage: `not authorized to edit these fields on ${emp.fullName}'s employee record: ${denied.join("; ")}`,
+      };
+    }
+    if (applied.length > 0) {
+      await db
+        .update(atelierEmployees)
+        .set(patch)
+        .where(and(eq(atelierEmployees.id, id), eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt)));
+      // Mirror the REST title route: keep the linked login's title in sync.
+      if (applied.includes("title") && titleChanged !== null && emp.userId) {
+        await db
+          .update(atelierUsers)
+          .set({ title: titleChanged, updatedAt: new Date() })
+          .where(and(eq(atelierUsers.id, emp.userId), eq(atelierUsers.orgId, orgId)));
+      }
+    }
+    await audit(orgId, ctx.persona.id, "person", id, "roster.person.updated", { via: "chat", applied, skipped, denied, input });
+    return {
+      ok: true,
+      data: {
+        id,
+        kind: "employee",
+        roster: "hr",
+        label: emp.fullName,
+        applied,
+        ...(skipped.length > 0 ? { skipped } : {}),
+        ...(denied.length > 0 ? { denied } : {}),
+        navigateTo: null,
+      },
+    };
+  }
+
+  const [pr] = await db
+    .select()
+    .from(atelierPartnerFirmResources)
+    .where(and(eq(atelierPartnerFirmResources.id, id), eq(atelierPartnerFirmResources.orgId, orgId), isNull(atelierPartnerFirmResources.deletedAt)));
+  if (pr) {
+    if (!privileged) {
+      return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit partner-firm person ${pr.fullName}` };
+    }
+    const patch: Partial<typeof atelierPartnerFirmResources.$inferInsert> = { updatedAt: new Date() };
+    const applied: string[] = [];
+    const skipped: string[] = [];
+    if (input.fullName !== undefined) { patch.fullName = String(input.fullName); applied.push("fullName"); }
+    if (input.email !== undefined) { patch.email = input.email ? String(input.email) : null; applied.push("email"); }
+    if (input.title !== undefined) { patch.role = input.title ? String(input.title) : null; applied.push("role"); }
+    if (input.notes !== undefined) { patch.notes = input.notes ? String(input.notes) : null; applied.push("notes"); }
+    if (input.phone !== undefined) {
+      return {
+        ok: false,
+        errorCode: "unsupported_field",
+        errorMessage: `${pr.fullName} is a partner-firm person — their record has no phone field. Ask their firm's PM to update their contact details.`,
+      };
+    }
+    for (const k of ["seniority", "linkedinUrl", "buyerPersona", "influenceScore", "disposition"]) {
+      if (input[k] !== undefined) skipped.push(`${k} (not a partner-resource field)`);
+    }
+    if (applied.length > 0) {
+      await db
+        .update(atelierPartnerFirmResources)
+        .set(patch)
+        .where(and(eq(atelierPartnerFirmResources.id, id), eq(atelierPartnerFirmResources.orgId, orgId), isNull(atelierPartnerFirmResources.deletedAt)));
+    }
+    await audit(orgId, ctx.persona.id, "partner_firm_resource", id, "update", { via: "chat", applied, skipped, input });
+    return {
+      ok: true,
+      data: {
+        id,
+        kind: "partner_firm_resource",
+        roster: "partner",
+        label: pr.fullName,
+        applied,
+        ...(skipped.length > 0 ? { skipped } : {}),
+        navigateTo: null,
+      },
+    };
+  }
+
+  return null;
+}
+
 defineCapability({
   id: "coverage.contact_update",
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "account",
   toolName: "contact_update",
-  description: "Update a contact's profile fields (name, title, seniority, email, phone, LinkedIn, buyer persona, influence, disposition, notes).",
+  description: "Update a person's profile fields (name, title, seniority, email, phone, LinkedIn, buyer persona, influence, disposition, notes). Works for client contacts, internal employees (HR roster), and partner-firm people — the write is routed to the correct record automatically.",
   slashAliases: { en: ["/contact-update"] },
   representativePrompts: { en: ["Update Jane Doe's title to SVP and bump her influence to 5."] },
   inputSchema: {
@@ -1560,6 +1745,11 @@ defineCapability({
       .from(atelierContacts)
       .where(and(eq(atelierContacts.id, id), eq(atelierContacts.orgId, ctx.persona.orgId), isNull(atelierContacts.deletedAt)));
     if (!existing) {
+      // People resolve across three rosters (client contacts, HR
+      // employees, partner-firm resources). Route the write to
+      // whichever roster owns the id instead of failing.
+      const routed = await updateInternalPerson(id, input, ctx);
+      if (routed) return routed;
       return { ok: false, errorCode: "not_found", errorMessage: `contact ${id} not found` };
     }
     // Task #555 — account-visibility guard. Mirrors the REST PATCH route's

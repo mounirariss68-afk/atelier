@@ -282,14 +282,18 @@ defineCapability({
       engagementId: scopeEngagementId,
     });
     if (candidates.length === 0) {
+      // "contact" is really a person search — it spans client contacts,
+      // HR employees, and partner-firm people. Say so, so the user
+      // knows all three rosters were checked.
+      const kindLabel = kind === "contact" ? "person (searched client contacts, employees, and partner-firm people)" : kind;
       return {
         ok: false,
         errorCode: "not_found",
-        errorMessage: `No ${kind} matched "${query}".`,
+        errorMessage: `No ${kindLabel} matched "${query}".`,
         clarification: {
           field: "query",
           tool: "resolve_entity",
-          question: `I couldn't find a ${kind} matching "${query}". Try a different name or paste the id.`,
+          question: `I couldn't find a ${kind === "contact" ? "person" : kind} matching "${query}"${kind === "contact" ? " in client contacts, the employee roster, or partner-firm people" : ""}. Try a different name or paste the id.`,
           partial: { kind, scopeAccountId, scopeEngagementId },
           suggestions: [],
         },
