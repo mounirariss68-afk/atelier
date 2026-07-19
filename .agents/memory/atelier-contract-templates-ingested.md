@@ -6,4 +6,6 @@ Task agents run on isolated DBs — only code merges back. A merged "ingest temp
 
 **How it was done (2026-07-19):** login as founding partner, `PUT /api/atelier/firm-profile/legal-entities` (Dubai LLC entity, isDefault), then per .docx in `attached_assets/`: `POST /contract-templates` (multipart `file` + `name` + `contractType`) → returns detected `fieldSchema` → `PUT /contract-templates/:id/fields` with `{fields: fieldSchema}` (activates). All six firm templates active: mutual NDA, contractor NDA, internship offer, non-equity partner agreement, 2× partnership MoU.
 
+**Legal-entity registry (2026-07-19):** Dubai LLC also re-ingested into `atelier_legal_entities` via the live API: uploaded the 6 official PDFs as `corporate_legal` vault docs, ran `POST /finance/entities/extract` per doc, merged proposals (owners from the MoA proposal — the Ejari "Owner" is the building lessor, not a shareholder), `POST /finance/entities`, then PATCHed each doc with `entityId`. Firm-profile `legalEntities` was emptied so the registry entity is the sole/default signing entity.
+
 **Gotchas:** curl `-F file=@path` silently fails (HTTP 000) when the path has `,`/`&` — copy to a simple /tmp name first. Dev DB data won't be in production; the same ingestion must be repeated on the deployed app (or data migrated) before go-live.
