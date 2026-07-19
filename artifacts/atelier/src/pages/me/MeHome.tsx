@@ -34,6 +34,7 @@ import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import MePay from "./MePay";
 // Task #53 — self-service Time (timesheet grid + leave) and Expenses tabs.
 import MeTime from "./MeTime";
+import type { TimesheetWeekMeta } from "@/pages/ledger/Timesheet";
 import MeExpenses from "./MeExpenses";
 // Task #51 — self-service profile section (edit details, docs, dependents…)
 import MeProfileSection from "./MeProfileSection";
@@ -65,12 +66,28 @@ export default function MeHome() {
     profile?.user?.role === "contractor";
   const sections = SECTIONS.filter((s) => !(isContractor && s.id === "performance"));
 
+  // Time tab: ONE header. The Timesheet grid reports its loaded week up
+  // here so the page hero reads "Timesheet — 2026-W29" (instead of the
+  // generic workspace hero plus a second navy band inside the tab).
+  const [weekMeta, setWeekMeta] = React.useState<TimesheetWeekMeta | null>(null);
+  const onWeekMeta = React.useCallback((m: TimesheetWeekMeta | null) => setWeekMeta(m), []);
+
+  const hero =
+    section === "time"
+      ? {
+          headline: weekMeta ? `Timesheet — ${weekMeta.weekIso}` : "Timesheet",
+          lede: weekMeta
+            ? `${weekMeta.personName} · week of ${weekMeta.weekStartDate}`
+            : "Your hours this week, plus leave requests.",
+        }
+      : {
+          headline: firstName ? `Your workspace, ${firstName}` : "Your workspace",
+          lede: "Your profile, time, expenses, pay, performance and learning — everything about you at the firm, in one place.",
+        };
+
   return (
     <div className="animate-in fade-in" data-testid="me-home">
-      <LensPageHeader
-        headline={firstName ? `Your workspace, ${firstName}` : "Your workspace"}
-        lede="Your profile, time, expenses, pay, performance and learning — everything about you at the firm, in one place."
-      />
+      <LensPageHeader headline={hero.headline} lede={hero.lede} />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
           {sections.map((s) => (
@@ -82,7 +99,7 @@ export default function MeHome() {
         <div className="mt-4">
           {section === "overview" && <OverviewSection loading={isLoading} profile={profile} />}
           {section === "profile" && <MeProfileSection loading={isLoading} profile={profile} />}
-          {section === "time" && <MeTime />}
+          {section === "time" && <MeTime onWeekMeta={onWeekMeta} />}
           {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
           {section === "performance" &&

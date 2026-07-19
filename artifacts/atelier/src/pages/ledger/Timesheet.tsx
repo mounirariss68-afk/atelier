@@ -122,16 +122,33 @@ interface RowModel {
 // Task #53 — the grid is reused by the Me lens (self-service personas who
 // can only reach /me/* routes). Props swap the API base + the engagement
 // option source; defaults preserve the original /ledger behaviour.
+export interface TimesheetWeekMeta {
+  weekIso: string;
+  personName: string;
+  weekStartDate: string;
+}
+
 interface TimesheetProps {
   apiBase?: string;
   engagementsUrl?: string;
   eyebrow?: string;
+  /**
+   * Embedded mode (e.g. the Me lens Time tab): the page already has its own
+   * hero, so skip this component's navy PageHero band — the status chips and
+   * banners render inline in the body instead. Pair with `onWeekMeta` so the
+   * host page can put the week in its hero.
+   */
+  hideHero?: boolean;
+  /** Reports the loaded week's headline facts to the host page's hero. */
+  onWeekMeta?: (meta: TimesheetWeekMeta | null) => void;
 }
 
 export default function Timesheet({
   apiBase = "/api/atelier/ledger/timesheets",
   engagementsUrl = "/api/atelier/engagements",
   eyebrow = "Firm \u00b7 Ledger",
+  hideHero = false,
+  onWeekMeta,
 }: TimesheetProps = {}) {
   // Past-week routes pass /:personId/:weekIso. When absent we load the
   // active persona's current week via /ledger/timesheets/current.
@@ -171,6 +188,21 @@ export default function Timesheet({
   }, [fetchUrl]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  // Embedded mode: surface the loaded week's headline facts to the host
+  // page's hero (e.g. Me lens shows "Timesheet — 2026-W29" up top).
+  React.useEffect(() => {
+    if (!onWeekMeta) return;
+    onWeekMeta(
+      data
+        ? {
+            weekIso: data.week.weekIso,
+            personName: data.week.personName,
+            weekStartDate: data.week.weekStartDate,
+          }
+        : null,
+    );
+  }, [data, onWeekMeta]);
 
   // Load engagements for the add-row dropdown. The endpoint returns a bare
   // array; tolerate a { engagements } envelope too.
@@ -441,36 +473,49 @@ export default function Timesheet({
   const narrativeColIdx = narrativeCell ? dates.indexOf(narrativeCell.date) : -1;
   const narrativeCellModel = narrativeRow && narrativeColIdx >= 0 ? narrativeRow.cells[narrativeColIdx] : null;
 
+  // Chips + banners are shared between the standalone hero and embedded mode.
+  const headerChips = (
+    <>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <MonoChip tone={statusTone(w.status)}>{w.status.replace("_", " ")}</MonoChip>
+        <MonoChip>{weekTotal.toFixed(1)}h total</MonoChip>
+        <MonoChip tone="green">{w.billableHours.toFixed(1)}h billable</MonoChip>
+        {w.suspiciousFlags.length > 0 && (
+          <MonoChip tone="amber">{w.suspiciousFlags.length} flag(s)</MonoChip>
+        )}
+      </div>
+      {w.rejectionReason && (
+        <Card className="mt-3 border-red-500/40 p-3 text-sm text-red-300">
+          Rejected: {w.rejectionReason}
+        </Card>
+      )}
+      {(data?.approvedLeave?.length ?? 0) > 0 && (
+        <Card className="mt-3 border-emerald-500/40 bg-emerald-500/5 p-3 text-sm" data-testid="approved-leave-banner">
+          <span className="text-emerald-300 font-medium">On leave this week: </span>
+          <span className="text-text">
+            {data!.approvedLeave!.map((l) => `${l.leaveType} ${l.dates[0]}${l.dates.length > 1 ? ` → ${l.dates[l.dates.length - 1]}` : ""}`).join(" · ")}
+          </span>
+        </Card>
+      )}
+    </>
+  );
+
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      <PageHero>
-        <SectionHead
-          eyebrow={eyebrow}
-          headline={`Timesheet — ${w.weekIso}`}
-          lede={`${w.personName} · week of ${w.weekStartDate}`}
-        />
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <MonoChip tone={statusTone(w.status)}>{w.status.replace("_", " ")}</MonoChip>
-          <MonoChip>{weekTotal.toFixed(1)}h total</MonoChip>
-          <MonoChip tone="green">{w.billableHours.toFixed(1)}h billable</MonoChip>
-          {w.suspiciousFlags.length > 0 && (
-            <MonoChip tone="amber">{w.suspiciousFlags.length} flag(s)</MonoChip>
-          )}
-        </div>
-        {w.rejectionReason && (
-          <Card className="mt-3 border-red-500/40 p-3 text-sm text-red-300">
-            Rejected: {w.rejectionReason}
-          </Card>
-        )}
-        {(data?.approvedLeave?.length ?? 0) > 0 && (
-          <Card className="mt-3 border-emerald-500/40 bg-emerald-500/5 p-3 text-sm" data-testid="approved-leave-banner">
-            <span className="text-emerald-300 font-medium">On leave this week: </span>
-            <span className="text-text">
-              {data!.approvedLeave!.map((l) => `${l.leaveType} ${l.dates[0]}${l.dates.length > 1 ? ` → ${l.dates[l.dates.length - 1]}` : ""}`).join(" · ")}
-            </span>
-          </Card>
-        )}
-      </PageHero>
+    <div className={hideHero ? "space-y-6" : "p-4 md:p-6 space-y-6"}>
+      {hideHero ? (
+        // Embedded (Me lens): the page hero above already says
+        // "Timesheet — {week}", so only the status chips render here.
+        <div data-testid="timesheet-embedded-header">{headerChips}</div>
+      ) : (
+        <PageHero>
+          <SectionHead
+            eyebrow={eyebrow}
+            headline={`Timesheet — ${w.weekIso}`}
+            lede={`${w.personName} · week of ${w.weekStartDate}`}
+          />
+          {headerChips}
+        </PageHero>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <PillButton onClick={runSteward} disabled={!editable} className="min-h-[44px]">

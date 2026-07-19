@@ -6,7 +6,7 @@
  * (annual/sick/unpaid/other) and request history with cancel.
  */
 import * as React from "react";
-import Timesheet from "@/pages/ledger/Timesheet";
+import Timesheet, { type TimesheetWeekMeta } from "@/pages/ledger/Timesheet";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 
 const API = "/api/atelier/me";
@@ -52,16 +52,20 @@ function statusTone(s: string): "default" | "amber" | "green" | "gold" | "red" {
 const inputCls =
   "w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text min-h-[44px] focus:outline-none focus:ring-1 focus:ring-gold/50";
 
-export default function MeTime() {
+export default function MeTime({
+  onWeekMeta,
+}: {
+  /** Lets the Me page hero show "Timesheet — {week}" instead of a second hero band. */
+  onWeekMeta?: (meta: TimesheetWeekMeta | null) => void;
+} = {}) {
   return (
     <div className="space-y-8">
-      <div className="-m-4 md:-m-6">
-        <Timesheet
-          apiBase={`${API}/timesheets`}
-          engagementsUrl={`${API}/expense-contexts`}
-          eyebrow="Me · Time"
-        />
-      </div>
+      <Timesheet
+        apiBase={`${API}/timesheets`}
+        engagementsUrl={`${API}/expense-contexts`}
+        hideHero
+        onWeekMeta={onWeekMeta}
+      />
       <LeaveSection />
     </div>
   );
