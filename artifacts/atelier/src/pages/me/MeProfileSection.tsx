@@ -9,6 +9,7 @@
  */
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatPhoneCell, formatPhoneDisplay } from "@/lib/phone-format";
 import {
   useAtelierGetMyProfile,
   getAtelierGetMyProfileQueryKey,
@@ -223,7 +224,7 @@ function PhotoAndContactCard({ loading, profile }: { loading: boolean; profile: 
             label="Cell phones"
             value={
               (p.cellPhones ?? []).length > 0
-                ? (p.cellPhones ?? []).map((c) => `${c.country} ${c.number}`).join(" · ")
+                ? (p.cellPhones ?? []).map((c) => formatPhoneCell(c)).join(" · ")
                 : null
             }
           />
@@ -1306,7 +1307,7 @@ function EmergencyContactRow({
         <div className="min-w-0">
           <span className="text-sm text-text">{c.name}</span>
           <p className="text-xs text-text-mute">
-            {c.relationship} · {(c.phones ?? []).join(" · ")}
+            {c.relationship} · {(c.phones ?? []).map(formatPhoneDisplay).join(" · ")}
             {c.email ? ` · ${c.email}` : ""}
           </p>
         </div>

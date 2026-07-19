@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { useAtelierGetMyProfile } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { buildVCard, vcardFilename, type VCardCell } from "@/lib/vcard";
+import { formatPhoneCell } from "@/lib/phone-format";
 
 const FIRM = "Cognirise";
 
@@ -177,7 +178,7 @@ export function BusinessCardQR({
               <PreviewRow
                 key={i}
                 label={c.country ? `Cell · ${c.country}` : "Cell"}
-                value={c.number}
+                value={formatPhoneCell(c)}
               />
             ))}
             {person.officeAddress && (

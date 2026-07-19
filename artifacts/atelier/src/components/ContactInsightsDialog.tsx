@@ -17,6 +17,7 @@ import {
   type AtelierContactRelationship,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 
 const REL_TYPES = ["reports_to", "partners_with", "blocks"] as const;
 type RelType = (typeof REL_TYPES)[number];
@@ -258,6 +259,11 @@ export function ContactInsightsDialog({
             {contact.email && (
               <span className="px-2 py-0.5 rounded border border-border text-text-mute font-mono">
                 {contact.email}
+              </span>
+            )}
+            {contact.phone && (
+              <span className="px-2 py-0.5 rounded border border-border text-text-mute font-mono">
+                {formatPhoneDisplay(contact.phone)}
               </span>
             )}
             <span

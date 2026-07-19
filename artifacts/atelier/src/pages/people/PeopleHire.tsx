@@ -32,6 +32,7 @@ import { TabNav, TabNavLink, Card, MonoChip, PillButton } from "@/components/ui/
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { useReferenceChecks } from "@/lib/v5-hooks";
+import { formatPhoneDisplay } from "@/lib/phone-format";
 import { PeopleShell } from "./PeopleShell";
 
 const SUBS = [
@@ -433,7 +434,7 @@ function CandidatesView() {
                     {c.source ? `${c.currentRole || c.currentEmployer ? " · " : ""}via ${c.source}` : ""}
                   </div>
                   <div className="text-xs text-text-faint mt-0.5">
-                    {[c.email, c.phone].filter(Boolean).join(" · ")}
+                    {[c.email, c.phone ? formatPhoneDisplay(c.phone) : null].filter(Boolean).join(" · ")}
                   </div>
                   {c.roleTitle ? (
                     <div className="text-sm text-text-mute mt-1">For position: <span className="text-gold">{c.roleTitle}</span></div>
