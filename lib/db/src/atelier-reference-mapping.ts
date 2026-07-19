@@ -192,6 +192,24 @@ const ISO_ALPHA_2_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * All normalised alias keys that resolve to the given ISO alpha-2 code
+ * (plus the lowercased code itself when it's in the allowlist). Exposed so
+ * tests can cross-check mirrored per-country helpers (e.g. the frontend's
+ * `isUaeCountry` in `artifacts/atelier/src/lib/country-uae.ts`) against this
+ * server-side table without duplicating it.
+ */
+export function countryAliasKeysForCode(code: string): string[] {
+  const upper = code.toUpperCase();
+  const keys = Object.keys(COUNTRY_ALIASES).filter(
+    (k) => COUNTRY_ALIASES[k] === upper,
+  );
+  if (ISO_ALPHA_2_ALLOWLIST.has(upper) && !keys.includes(upper.toLowerCase())) {
+    keys.push(upper.toLowerCase());
+  }
+  return keys.sort();
+}
+
+/**
  * Map an array of free-text country strings, dropping any that don't
  * resolve. Returns the deduplicated set in input order.
  */

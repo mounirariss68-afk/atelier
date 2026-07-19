@@ -16,7 +16,12 @@ function normalize(input: string): string {
     .replace(/\s+/g, " ");
 }
 
-const UAE_KEYS = new Set([
+/**
+ * Normalised keys recognised as UAE. Exported (as a readonly copy accessor)
+ * only so the cross-check test can verify parity with the server-side alias
+ * table in `lib/db/src/atelier-reference-mapping.ts`.
+ */
+export const UAE_KEYS: ReadonlySet<string> = new Set([
   "ae",
   "uae",
   "u a e",

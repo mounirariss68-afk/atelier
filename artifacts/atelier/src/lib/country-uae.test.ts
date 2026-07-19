@@ -9,7 +9,11 @@
  * Exits non-zero on any failed assertion.
  */
 
-import { countryDisplayName, isUaeCountry } from "./country-uae.js";
+import { UAE_KEYS, countryDisplayName, isUaeCountry } from "./country-uae.js";
+import {
+  countryAliasKeysForCode,
+  mapCountryToCode,
+} from "../../../../lib/db/src/atelier-reference-mapping.js";
 
 let failed = 0;
 function ok(label: string, condition: boolean, detail?: unknown) {
@@ -76,6 +80,30 @@ ok(
 ok('"Saudi Arabia" unchanged', countryDisplayName("Saudi Arabia") === "Saudi Arabia");
 ok('"  France  " trimmed', countryDisplayName("  France  ") === "France");
 ok('"U.A.E." not treated as ISO', countryDisplayName("U.A.E.") === "U.A.E.");
+
+console.log(
+  "[country-uae.test] cross-check vs server alias table (atelier-reference-mapping)",
+);
+const serverUaeKeys = countryAliasKeysForCode("AE");
+ok("server exposes at least one AE alias key", serverUaeKeys.length > 0);
+for (const key of serverUaeKeys) {
+  ok(
+    `server AE alias "${key}" recognised by isUaeCountry`,
+    isUaeCountry(key) === true,
+  );
+}
+for (const key of UAE_KEYS) {
+  ok(
+    `frontend UAE key "${key}" resolves to AE via mapCountryToCode`,
+    mapCountryToCode(key) === "AE",
+  );
+}
+ok(
+  "frontend and server UAE key sets are identical",
+  serverUaeKeys.length === UAE_KEYS.size &&
+    serverUaeKeys.every((k) => UAE_KEYS.has(k)),
+  { server: serverUaeKeys, frontend: [...UAE_KEYS].sort() },
+);
 
 if (failed > 0) {
   console.error(`\n[country-uae.test] FAILED: ${failed} assertion(s)`);
