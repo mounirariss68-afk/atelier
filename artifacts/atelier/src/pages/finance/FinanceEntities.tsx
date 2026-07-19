@@ -921,7 +921,7 @@ export default function FinanceEntities() {
   }
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHero>
         <Eyebrow>Finance · Entities</Eyebrow>
         <h1 className="text-2xl text-text mt-1">Legal-entity registry</h1>
@@ -931,6 +931,7 @@ export default function FinanceEntities() {
         </p>
       </PageHero>
 
+      <div className="container-atelier py-10 space-y-6">
       <div className="flex flex-wrap items-center gap-2">
         <button
           className={`px-3 h-8 rounded-full text-xs font-mono border ${countryFilter === "all" ? "border-gold text-gold" : "border-border text-text-mute hover:text-text"}`}
@@ -1008,6 +1009,7 @@ export default function FinanceEntities() {
           setFormOpen(true);
         }}
       />
+      </div>
     </div>
   );
 }
