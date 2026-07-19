@@ -3749,6 +3749,57 @@ router.get("/executive-mapper/coverage-rollup", async (req, res) => {
   res.json({ totalRoles, accounts });
 });
 
+// Task #210 — bulk executive-map staleness for the accounts list. Returns,
+// for every account the caller can see that has at least one completed
+// Executive Mapper run, the latest run timestamp and whether it is stale
+// (>= 30 days, matching the in-account coverage chip from Task #209).
+// Accounts with no run ever are omitted — there is no map to be stale.
+// Bespoke raw-fetch route (not in the OpenAPI spec), same pattern as the
+// other account-agent routes. Registered as a static 3-segment path so it
+// cannot collide with the /accounts/:accountId/* routes (all 2- or 4-seg).
+// @cli-skip: bespoke agent-read route, surfaced in the Accounts list UI only
+export const EXEC_MAP_STALE_DAYS = 30;
+router.get("/accounts/executive-mapper/coverage-staleness", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  // Latest completed run per account, one query. Runs for deleted accounts
+  // are filtered by the visibility join below.
+  const runs = await db
+    .select({
+      targetId: atelierAgentRuns.targetId,
+      createdAt: atelierAgentRuns.createdAt,
+    })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.targetType, "account"),
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.status, "complete"),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt));
+  const latestByAccount = new Map<string, Date>();
+  for (const r of runs) {
+    if (!r.targetId || !r.createdAt) continue;
+    if (!latestByAccount.has(r.targetId)) latestByAccount.set(r.targetId, r.createdAt);
+  }
+  const now = Date.now();
+  const entries: { accountId: string; lastRunAt: string; ageDays: number; stale: boolean }[] = [];
+  for (const [accountId, lastRunAt] of latestByAccount) {
+    if (!(await canSeeAccount(access, me, accountId))) continue;
+    const ageDays = Math.floor((now - lastRunAt.getTime()) / 86_400_000);
+    entries.push({
+      accountId,
+      lastRunAt: lastRunAt.toISOString(),
+      ageDays,
+      stale: ageDays >= EXEC_MAP_STALE_DAYS,
+    });
+  }
+  res.json({ staleDays: EXEC_MAP_STALE_DAYS, entries });
+});
+
 // ---------- contacts (graph) ----------
 // @cli-skip: pending Task #340 read-parity migration
 router.get("/accounts/:accountId/contacts", async (req, res) => {

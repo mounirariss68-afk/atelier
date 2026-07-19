@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp, UserX } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
 // Task #292 — Account creation: partner-tier + senior_manager.
@@ -41,12 +41,41 @@ const ENTITY_ROLE_LABEL: Record<string, string> = {
   office: "Office",
 };
 
+// Task #210 — surface stale executive maps (>30d since the last completed
+// Executive Mapper sweep) on the accounts list, not just inside each account.
+// Bespoke raw-fetch route (not in the OpenAPI spec), same pattern as the
+// other account-agent surfaces (see atelier-account-agent-ui memory).
+function useStaleExecMaps() {
+  return useQuery({
+    queryKey: ["atelier-exec-mapper-coverage-staleness"],
+    queryFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/accounts/executive-mapper/coverage-staleness`,
+        { credentials: "include" },
+      );
+      if (!res.ok) throw new Error(`coverage-staleness fetch failed (${res.status})`);
+      return (await res.json()) as {
+        staleDays: number;
+        entries: { accountId: string; lastRunAt: string; ageDays: number; stale: boolean }[];
+      };
+    },
+  });
+}
+
 export default function Crm() {
   const [lifecycle, setLifecycle] = useState<"active" | "archived">("active");
   const { data: accounts, isLoading } = useAtelierListAccounts(
     lifecycle === "archived" ? { status: "archived" } : undefined,
   );
   const { data: me } = useAtelierGetMe();
+  const { data: staleMaps } = useStaleExecMaps();
+  const staleMapAges = useMemo(() => {
+    const m = new Map<string, number>();
+    (staleMaps?.entries ?? []).forEach((e) => {
+      if (e.stale) m.set(e.accountId, e.ageDays);
+    });
+    return m;
+  }, [staleMaps]);
   const canCreate = !!me && CREATE_ROLES.has(me.role);
   const [view, setView] = useState<"accounts" | "renewals">("accounts");
   const [tier, setTier] = useState<string>("");
@@ -278,6 +307,14 @@ export default function Crm() {
                   <MonoChip>{a.activeEngagementCount} active eng{a.activeEngagementCount === 1 ? "" : "s"}</MonoChip>
                   {(a.pendingUpdateCount ?? 0) > 0 && (
                     <MonoChip tone="amber">{a.pendingUpdateCount} pending update{a.pendingUpdateCount === 1 ? "" : "s"}</MonoChip>
+                  )}
+                  {staleMapAges.has(a.id) && (
+                    <MonoChip tone="amber" data-testid={`chip-stale-map-${a.id}`}>
+                      <span className="inline-flex items-center gap-1">
+                        <UserX className="w-3 h-3" />
+                        buyer map stale · {staleMapAges.get(a.id)}d
+                      </span>
+                    </MonoChip>
                   )}
                 </div>
                 <div className="mt-auto pt-3 border-t border-border-soft flex items-center justify-between text-xs font-mono text-text-faint">
