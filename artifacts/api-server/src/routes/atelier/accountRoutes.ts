@@ -133,6 +133,7 @@ import {
   runExecutiveMapperAndQueue,
   chainExecutiveMapperAfterCartographer,
 } from "../../lib/atelier-agents/executive-mapper-chain.js";
+import { CRITICAL_ROLES } from "../../lib/atelier-agents/critical-roles.js";
 import {
   runAccountCartographer,
   runWhitespaceMapper,
@@ -3592,6 +3593,117 @@ router.get("/accounts/:accountId/executive-mapper/coverage", async (req, res) =>
       ? out.droppedBySeniorityGuard
       : [],
   });
+});
+
+// Task #207 — cross-account critical-role coverage rollup. Summarises the
+// latest completed Executive Mapper run per visible account so partners can
+// see portfolio-wide gaps ("which accounts have no CFO / Head of AI mapped?")
+// at a glance. Same bespoke raw-fetch pattern as the per-account coverage
+// route above; pure read of stored run outputs — nothing is recomputed.
+// Registered on its own path (not under /accounts/:accountId) to avoid the
+// param-route shadowing trap.
+// @cli-skip: bespoke agent-read route, surfaced in the Accounts UI only
+router.get("/executive-mapper/coverage-rollup", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const access = await accessibleEngagementIds(me);
+  // Active (non-archived, non-deleted) accounts only — archived accounts are
+  // out of the pursuit portfolio, so their gaps aren't actionable.
+  const rows = await db
+    .select({
+      id: atelierAccounts.id,
+      name: atelierAccounts.name,
+      brandName: atelierAccounts.brandName,
+      tier: atelierAccounts.tier,
+      status: atelierAccounts.status,
+    })
+    .from(atelierAccounts)
+    .where(isNull(atelierAccounts.deletedAt));
+  const active = rows.filter((r) => (r.status ?? "active") !== "archived");
+  // Account-level RLS: mirror the /accounts list — only accounts the caller
+  // can see contribute to the rollup.
+  const visible = (
+    await Promise.all(
+      active.map(async (r) => ((await canSeeAccount(access, me, r.id)) ? r : null)),
+    )
+  ).filter((r): r is NonNullable<typeof r> => r !== null);
+
+  const totalRoles = CRITICAL_ROLES.length;
+  if (visible.length === 0) {
+    res.json({ totalRoles, accounts: [] });
+    return;
+  }
+
+  // Latest completed Executive Mapper run per account: fetch all completed
+  // runs for the visible ids newest-first, keep the first per account.
+  const runs = await db
+    .select({
+      targetId: atelierAgentRuns.targetId,
+      output: atelierAgentRuns.output,
+      createdAt: atelierAgentRuns.createdAt,
+    })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.targetType, "account"),
+        inArray(
+          atelierAgentRuns.targetId,
+          visible.map((r) => r.id),
+        ),
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.status, "complete"),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt));
+  const latestByAccount = new Map<string, (typeof runs)[number]>();
+  for (const run of runs) {
+    if (run.targetId && !latestByAccount.has(run.targetId)) {
+      latestByAccount.set(run.targetId, run);
+    }
+  }
+
+  const accounts = visible.map((a) => {
+    const run = latestByAccount.get(a.id);
+    const out = (run?.output ?? {}) as { criticalRoleCoverage?: unknown };
+    const coverage = Array.isArray(out.criticalRoleCoverage)
+      ? (out.criticalRoleCoverage as Array<{
+          role?: unknown;
+          label?: unknown;
+          found?: unknown;
+        }>)
+      : null;
+    if (!run || !coverage) {
+      // No completed sweep (or an old run predating coverage) — surfaced as
+      // "not yet swept" rather than pretending 0/15 gaps are confirmed.
+      return {
+        accountId: a.id,
+        name: a.name,
+        brandName: a.brandName,
+        tier: a.tier ?? "C",
+        runAt: null,
+        mappedCount: null,
+        missingRoles: [],
+      };
+    }
+    const missingRoles = coverage
+      .filter((c) => c && c.found !== true)
+      .map((c) => ({
+        role: typeof c.role === "string" ? c.role : "",
+        label: typeof c.label === "string" ? c.label : "",
+      }));
+    return {
+      accountId: a.id,
+      name: a.name,
+      brandName: a.brandName,
+      tier: a.tier ?? "C",
+      runAt: run.createdAt,
+      mappedCount: coverage.filter((c) => c && c.found === true).length,
+      missingRoles,
+    };
+  });
+
+  res.json({ totalRoles, accounts });
 });
 
 // ---------- contacts (graph) ----------

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAtelierListAccounts, useAtelierGetMe } from "@workspace/api-client-react";
 import { TabNav, TabNavLink } from "@/components/ui/primitives";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Plus, Users, Building2, MapPin } from "lucide-react";
+import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 import { CreateAccountDialog } from "@/components/CreateAccountDialog";
 
 // Task #292 — Account creation: partner-tier + senior_manager.
@@ -202,6 +203,8 @@ export default function Crm() {
           <span className="ml-auto text-text-mute">{filtered.length} of {accounts?.length ?? 0}</span>
         </div>
 
+        {lifecycle === "active" && <CoverageRollupCard />}
+
         {isLoading && <Skeleton className="h-64 bg-bg-elevate" />}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -294,6 +297,142 @@ export default function Crm() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Task #207 — cross-account critical buyer-role coverage rollup. Reads the
+// bespoke /executive-mapper/coverage-rollup route (raw fetch, same pattern as
+// the per-account coverage block on the Account page). Accounts with the
+// biggest gaps sort first so the card doubles as a prioritisation list.
+interface CoverageRollupAccount {
+  accountId: string;
+  name: string;
+  brandName: string | null;
+  tier: string;
+  runAt: string | null;
+  mappedCount: number | null;
+  missingRoles: Array<{ role: string; label: string }>;
+}
+
+function CoverageRollupCard() {
+  const [expanded, setExpanded] = useState(false);
+  const { data } = useQuery({
+    queryKey: ["atelier-exec-mapper-coverage-rollup"],
+    queryFn: async () => {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/executive-mapper/coverage-rollup`,
+        { credentials: "include" },
+      );
+      if (!res.ok) throw new Error(`coverage rollup fetch failed (${res.status})`);
+      return (await res.json()) as {
+        totalRoles: number;
+        accounts: CoverageRollupAccount[];
+      };
+    },
+  });
+  if (!data || data.accounts.length === 0) return null;
+
+  const swept = data.accounts
+    .filter((a) => a.mappedCount != null)
+    .sort((a, b) => (a.mappedCount ?? 0) - (b.mappedCount ?? 0));
+  const unswept = data.accounts.filter((a) => a.mappedCount == null);
+  // Nothing swept yet — no coverage data to summarise, stay out of the way.
+  if (swept.length === 0) return null;
+
+  const fullyMapped = swept.filter((a) => a.missingRoles.length === 0).length;
+  const COLLAPSED_ROWS = 5;
+  const rows = expanded ? swept : swept.slice(0, COLLAPSED_ROWS);
+
+  return (
+    <Card className="p-5 space-y-3" data-testid="card-coverage-rollup">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-mono uppercase tracking-widest text-text-faint">
+          Critical buyer-role coverage
+        </div>
+        <span className="text-[10px] font-mono text-text-faint">
+          {fullyMapped}/{swept.length} accounts fully mapped
+          {unswept.length > 0 ? ` · ${unswept.length} not yet swept` : ""}
+        </span>
+      </div>
+      <p className="text-text-mute text-xs leading-relaxed">
+        From each account's latest executive mapping sweep — the accounts with
+        the biggest gaps in the {data.totalRoles} critical buyer roles sort
+        first.
+      </p>
+      <div className="space-y-2">
+        {rows.map((a) => (
+          <Link
+            key={a.accountId}
+            href={`/accounts/${a.accountId}`}
+            className="block group"
+            data-testid={`rollup-account-${a.accountId}`}
+          >
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-border-soft pt-2 first:border-t-0 first:pt-0">
+              <span className="text-sm text-text group-hover:text-gold transition-colors">
+                {a.brandName ?? a.name}
+              </span>
+              <span
+                className={`text-[11px] font-mono ${a.missingRoles.length === 0 ? "text-success" : "text-text-faint"}`}
+                data-testid={`rollup-count-${a.accountId}`}
+              >
+                {a.mappedCount}/{data.totalRoles} mapped
+              </span>
+              {a.missingRoles.length > 0 && (
+                <span className="flex flex-wrap gap-1">
+                  {a.missingRoles.slice(0, 6).map((m) => (
+                    <MonoChip key={m.role} data-testid={`rollup-gap-${a.accountId}-${m.role}`}>
+                      {m.label}
+                    </MonoChip>
+                  ))}
+                  {a.missingRoles.length > 6 && (
+                    <span className="text-[10px] font-mono text-text-faint self-center">
+                      +{a.missingRoles.length - 6} more
+                    </span>
+                  )}
+                </span>
+              )}
+              {a.missingRoles.length === 0 && (
+                <MonoChip tone="green">All critical roles mapped</MonoChip>
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+      {(swept.length > COLLAPSED_ROWS || unswept.length > 0) && (
+        <div className="flex items-center justify-between pt-1">
+          {swept.length > COLLAPSED_ROWS ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-[11px] font-mono uppercase tracking-wider text-text-faint hover:text-gold inline-flex items-center gap-1"
+              data-testid="button-rollup-toggle"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="w-3 h-3" /> Show fewer
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3 h-3" /> Show all {swept.length} accounts
+                </>
+              )}
+            </button>
+          ) : (
+            <span />
+          )}
+          {unswept.length > 0 && (
+            <span className="text-[10px] font-mono text-text-faint">
+              Not yet swept:{" "}
+              {unswept
+                .slice(0, 4)
+                .map((a) => a.brandName ?? a.name)
+                .join(", ")}
+              {unswept.length > 4 ? ` +${unswept.length - 4} more` : ""}
+            </span>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
