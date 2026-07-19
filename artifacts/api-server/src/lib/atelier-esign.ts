@@ -578,7 +578,10 @@ export async function syncSignatureRequest(requestId: string): Promise<SyncOutco
   if (changed) {
     // Task #159 — flip any linked contract record on terminal statuses.
     const { syncContractFromSignatureRequest } = await import("./atelier-contracts.js");
-    await syncContractFromSignatureRequest(updated);
+    // Task #306 — the submission carries each submitter's typed values;
+    // on completion the contract sync merges the counterparty's answers
+    // into the contract record's fieldValues.
+    await syncContractFromSignatureRequest(updated, submission);
     await auditSignatureRequest({
       requestId: row.id,
       actorType: "system",

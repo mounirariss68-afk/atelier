@@ -98,6 +98,12 @@ export interface DocusealSubmitter {
   opened_at?: string | null;
   completed_at?: string | null;
   declined_at?: string | null;
+  /**
+   * Values the submitter entered into their fields at signing time
+   * (`field` is the template field name, e.g. "Printed name 1").
+   * Present on GET /submissions/{id} once the submitter has completed.
+   */
+  values?: Array<{ field: string; value: unknown }>;
 }
 
 export interface DocusealSubmission {

@@ -649,11 +649,81 @@ export async function convertDocxToPdf(docxBytes: Buffer): Promise<Buffer> {
  * expired→expired. On completion the signed PDF is copied onto the
  * contract's own document chain and the Document Library pointer stored.
  */
-export async function syncContractFromSignatureRequest(request: {
-  id: string;
-  status: string;
-  signedDocumentId: string | null;
-}): Promise<void> {
+/**
+ * Task #306 — pull the counterparty's typed answers (printed name,
+ * title, date signed, …) out of the DocuSeal submitters' submitted
+ * values and map them back onto the contract's second-party template
+ * fields.
+ *
+ * The DocuSeal boxes were named `${label} ${signerNumber}` (with an
+ * optional `.n` de-dupe suffix) by the send path, where label is the
+ * field's display label (falling back to its key) — so matching strips
+ * the trailing numbering and compares against the label, case-
+ * insensitively. Date boxes are always named "Date signed N"; the
+ * counterparty's date is taken from the submitter who supplied a
+ * matching text value (or the sole submitter when there is only one).
+ */
+export function extractSecondPartyValues(
+  fields: ContractTemplateField[],
+  submitters: Array<{ values?: Array<{ field: string; value: unknown }> }>,
+): Record<string, string> {
+  const spFields = normalizeFieldSchema(fields).filter((f) => f.role === "second_party");
+  if (spFields.length === 0) return {};
+  const spText = spFields.filter((f) => f.dataType !== "date");
+  const spDate = spFields.filter((f) => f.dataType === "date");
+
+  const baseName = (name: string) => name.replace(/\s+\d+(\.\d+)?$/, "").trim().toLowerCase();
+  const asString = (v: unknown): string =>
+    typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim();
+
+  const out: Record<string, string> = {};
+  let counterpartyDate: string | null = null;
+  let soleSubmitterDate: string | null = null;
+
+  for (const sub of submitters) {
+    let matchedText = false;
+    let dateValue: string | null = null;
+    for (const v of sub.values ?? []) {
+      const base = baseName(v.field);
+      const value = asString(v.value);
+      if (value === "") continue;
+      if (base === "date signed") {
+        dateValue = value;
+        continue;
+      }
+      const field = spText.find(
+        (f) => (f.label || f.key).trim().toLowerCase() === base,
+      );
+      if (field) {
+        out[field.key] = value;
+        matchedText = true;
+      }
+    }
+    if (matchedText && dateValue) counterpartyDate = dateValue;
+    if (submitters.length === 1 && dateValue) soleSubmitterDate = dateValue;
+  }
+
+  const date = counterpartyDate ?? soleSubmitterDate;
+  if (date) for (const f of spDate) out[f.key] = date;
+  return out;
+}
+
+export async function syncContractFromSignatureRequest(
+  request: {
+    id: string;
+    status: string;
+    signedDocumentId: string | null;
+  },
+  /**
+   * Task #306 — the authoritative DocuSeal submission (when the caller
+   * has it). On completion the submitters' typed values are merged into
+   * the contract's fieldValues so they are searchable + visible in the
+   * contract detail view.
+   */
+  submission?: {
+    submitters?: Array<{ values?: Array<{ field: string; value: unknown }> }>;
+  } | null,
+): Promise<void> {
   const STATUS_MAP: Record<string, ContractStatus> = {
     completed: "signed",
     declined: "declined",
@@ -699,6 +769,22 @@ export async function syncContractFromSignatureRequest(request: {
       }
     }
   }
+  // Task #306 — on completion, write the counterparty's typed answers
+  // (second-party fields) back into the contract's fieldValues.
+  let mergedValues: Record<string, string> | null = null;
+  if (next === "signed" && submission?.submitters?.length && record.templateVersionId) {
+    const { atelierContractTemplateVersions } = await import("@workspace/db");
+    const [tv] = await db
+      .select()
+      .from(atelierContractTemplateVersions)
+      .where(eq(atelierContractTemplateVersions.id, record.templateVersionId));
+    if (tv) {
+      const extracted = extractSecondPartyValues(tv.fieldSchema ?? [], submission.submitters);
+      if (Object.keys(extracted).length > 0) {
+        mergedValues = { ...((record.fieldValues as Record<string, string>) ?? {}), ...extracted };
+      }
+    }
+  }
   await db
     .update(atelierContractRecords)
     .set({
@@ -709,9 +795,29 @@ export async function syncContractFromSignatureRequest(request: {
             currentDocumentId: signedDocId,
           }
         : {}),
+      ...(mergedValues ? { fieldValues: mergedValues } : {}),
       updatedAt: new Date(),
     })
     .where(eq(atelierContractRecords.id, record.id));
+  if (mergedValues) {
+    const previous = (record.fieldValues as Record<string, string>) ?? {};
+    const changed = Object.fromEntries(
+      Object.entries(mergedValues).filter(([k, v]) => previous[k] !== v),
+    );
+    await auditContractEntity({
+      entityType: "atelier_contract_record",
+      entityId: record.id,
+      actorType: "system",
+      actorId: "esign-sync",
+      actorLabel: "DocuSeal sync",
+      action: "contract.second_party_values",
+      payload: {
+        signatureRequestId: request.id,
+        values: changed,
+      },
+      summary: `Recorded ${Object.keys(changed).length} second-party value(s) from signing on "${record.title}"`,
+    });
+  }
   await auditContractEntity({
     entityType: "atelier_contract_record",
     entityId: record.id,
