@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
+import { formatMoney } from "@/lib/format";
 import { flushQueue, getQueueCount } from "@/lib/offlineQueue";
 
 function statusStyle(
@@ -84,7 +85,7 @@ function ExpenseRow({
   onPress: () => void;
 }) {
   const c = useColors();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const rtl = useRTL();
   const sc = statusStyle(item.status, c);
   const date = item.expenseDate ?? item.createdAt?.slice(0, 10);
@@ -144,7 +145,7 @@ function ExpenseRow({
                 fontVariant: ["tabular-nums"],
               }}
             >
-              {item.currency} {item.amount.toFixed(2)}
+              {formatMoney(item.amount, item.currency, lang)}
             </Text>
           </View>
           <View

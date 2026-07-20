@@ -206,6 +206,11 @@ const en: Dict = {
   "mtg.overdue": "Overdue",
   "mtg.due": "Due {d}",
   "mtg.reminderBody": "Starts in {mins} min · Tap for your {name} brief",
+  // feedback / pickers
+  "common.search": "Search…",
+  "common.continue": "Continue",
+  "common.noResults": "No matches",
+  "exp.parseRetry": "Try reading again",
 };
 
 const tr: Dict = {
@@ -391,6 +396,11 @@ const tr: Dict = {
   "mtg.overdue": "Gecikmiş",
   "mtg.due": "Son tarih {d}",
   "mtg.reminderBody": "{mins} dk sonra başlıyor · {name} brifingi için dokunun",
+  // feedback / pickers
+  "common.search": "Ara…",
+  "common.continue": "Devam et",
+  "common.noResults": "Sonuç yok",
+  "exp.parseRetry": "Tekrar okumayı dene",
 };
 
 const ar: Dict = {
@@ -576,6 +586,11 @@ const ar: Dict = {
   "mtg.overdue": "متأخر",
   "mtg.due": "الاستحقاق {d}",
   "mtg.reminderBody": "يبدأ خلال {mins} دقيقة · اضغط لعرض موجز {name}",
+  // feedback / pickers
+  "common.search": "بحث…",
+  "common.continue": "متابعة",
+  "common.noResults": "لا توجد نتائج",
+  "exp.parseRetry": "حاول القراءة مجددًا",
 };
 
 export const translations: Record<Lang, Dict> = { en, tr, ar };

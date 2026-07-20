@@ -1,8 +1,9 @@
 import { fetch as expoFetch } from "expo/fetch";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   API_BASE,
+  apiJson,
   authHeader,
   type CliSessionMeta,
   listCliSessions,
@@ -37,6 +38,15 @@ export interface ResultCard {
   summary?: string;
 }
 
+export interface ToolResult {
+  tool: string;
+  ok: boolean;
+  data?: unknown;
+  errorCode?: string;
+  errorMessage?: string;
+  prelude?: boolean;
+}
+
 export type TurnStatus =
   | "streaming"
   | "complete"
@@ -60,6 +70,7 @@ export interface ChatTurn {
   clarification?: { question: string; fields: ClarificationField[] };
   pending?: PendingConfirmation;
   result?: ResultCard;
+  toolResults: ToolResult[];
   serverTurnId?: string;
   error?: string;
 }
@@ -111,9 +122,28 @@ function applyFrame(turn: ChatTurn, type: string, data: Record<string, unknown>)
       return { ...turn, status: "streaming", trace: [...turn.trace, { kind: "progress", text: message }] };
     }
     case "tool_result": {
-      const d = data as { tool?: string; ok?: boolean };
+      const d = data as {
+        tool?: string;
+        ok?: boolean;
+        data?: unknown;
+        errorCode?: string;
+        errorMessage?: string;
+        prelude?: boolean;
+      };
       const ok = d.ok !== false;
-      return { ...turn, trace: [...turn.trace, { kind: "tool", text: `${ok ? "✓" : "✗"} ${d.tool ?? "tool"}` }] };
+      const tr: ToolResult = {
+        tool: d.tool ?? "tool",
+        ok,
+        data: d.data,
+        errorCode: d.errorCode,
+        errorMessage: d.errorMessage,
+        prelude: d.prelude === true,
+      };
+      return {
+        ...turn,
+        toolResults: [...turn.toolResults, tr],
+        trace: [...turn.trace, { kind: "tool", text: `${ok ? "✓" : "✗"} ${tr.tool}` }],
+      };
     }
     case "needs_clarification": {
       const d = data as {
@@ -156,6 +186,45 @@ function applyFrame(turn: ChatTurn, type: string, data: Record<string, unknown>)
     default:
       return turn;
   }
+}
+
+/** tool name → resultCard shape, from the role-filtered capability catalog. */
+export type CapabilityShapes = Record<string, string>;
+
+let capabilityShapesCache: CapabilityShapes | null = null;
+
+/**
+ * Fetches (once per app run) the capability catalog and exposes the
+ * tool → resultCard shape map used to pick a renderer for each
+ * tool_result frame. Failure degrades to an empty map — cards fall
+ * back to the generic key/value grid.
+ */
+export function useCapabilityShapes(): CapabilityShapes {
+  const [shapes, setShapes] = useState<CapabilityShapes>(
+    capabilityShapesCache ?? {},
+  );
+  useEffect(() => {
+    if (capabilityShapesCache) return;
+    let alive = true;
+    apiJson<{ capabilities?: { toolName?: string; resultCard?: string | null }[] }>(
+      "/api/atelier/cli/capabilities",
+    )
+      .then((j) => {
+        const map: CapabilityShapes = {};
+        for (const c of j.capabilities ?? []) {
+          if (c.toolName && c.resultCard) map[c.toolName] = c.resultCard;
+        }
+        capabilityShapesCache = map;
+        if (alive) setShapes(map);
+      })
+      .catch(() => {
+        // Non-fatal — renderers degrade to the fallback grid.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return shapes;
 }
 
 export function useChat() {
@@ -252,6 +321,7 @@ export function useChat() {
         status: "streaming",
         text: "",
         trace: [],
+        toolResults: [],
       };
       setTurns((t) => [...t, seed]);
       await runStream(
@@ -351,6 +421,7 @@ export function useChat() {
         status: "complete",
         text: [t.result?.title, t.result?.summary ?? t.summary].filter(Boolean).join("\n\n"),
         trace: [],
+        toolResults: [],
         result: t.result,
         serverTurnId: t.id,
       }));

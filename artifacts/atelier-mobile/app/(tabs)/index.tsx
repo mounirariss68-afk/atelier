@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -32,10 +33,12 @@ import {
   WEB_TOP_INSET,
   softShadow,
 } from "@/components/ui";
+import { ToolResultCards } from "@/components/ResultCards";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
+import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { MAX_ATTACHMENT_BYTES } from "@/lib/api";
-import { type ChatTurn, useChat } from "@/lib/useChat";
+import { type ChatTurn, useCapabilityShapes, useChat } from "@/lib/useChat";
 
 interface PendingAttachment {
   id: string;
@@ -108,6 +111,7 @@ function ClarificationCard({
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
+  const scheme = useThemeScheme();
   const [values, setValues] = useState<Record<string, string>>({});
   const fields = turn.clarification?.fields ?? [];
   return (
@@ -172,6 +176,7 @@ function ClarificationCard({
               placeholder={f.hint}
               placeholderTextColor={c.mutedForeground}
               value={values[f.field] ?? ""}
+              keyboardAppearance={scheme}
               onChangeText={(text) =>
                 setValues((v) => ({ ...v, [f.field]: text }))
               }
@@ -209,6 +214,7 @@ function ConfirmCard({
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
+  const scheme = useThemeScheme();
   const [typed, setTyped] = useState("");
   const p = turn.pending;
   const needName = !!p?.requiresTypedName;
@@ -248,6 +254,7 @@ function ConfirmCard({
           value={typed}
           onChangeText={setTyped}
           autoCapitalize="words"
+          keyboardAppearance={scheme}
           style={{
             backgroundColor: c.secondary,
             borderRadius: c.radius + 2,
@@ -295,6 +302,7 @@ function TurnBlock({
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
+  const shapes = useCapabilityShapes();
   return (
     <View style={{ gap: 8, paddingVertical: 8 }}>
       {turn.prompt ? (
@@ -380,6 +388,10 @@ function TurnBlock({
         </View>
       ) : null}
 
+      {turn.toolResults.length > 0 && turn.status !== "streaming" ? (
+        <ToolResultCards toolResults={turn.toolResults} shapes={shapes} />
+      ) : null}
+
       {turn.status === "needs_clarification" ? (
         <ClarificationCard
           turn={turn}
@@ -425,7 +437,25 @@ export default function ChatScreen() {
   const rtl = useRTL();
   const insets = useSafeAreaInsets();
   const chat = useChat();
+  const scheme = useThemeScheme();
   const [input, setInput] = useState("");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardOpen(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardOpen(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [attachSheet, setAttachSheet] = useState(false);
@@ -564,8 +594,15 @@ export default function ChatScreen() {
           style={{
             paddingHorizontal: 12,
             paddingTop: 10,
+            // The floating tab bar hides behind the keyboard, so the
+            // input only needs tab-bar clearance while the keyboard is
+            // closed. When it's open, hug the keyboard instead.
             paddingBottom:
-              (Platform.OS === "web" ? WEB_TAB_BAR + 4 : Math.max(insets.bottom, 10) + 78),
+              Platform.OS === "web"
+                ? WEB_TAB_BAR + 4
+                : keyboardOpen
+                  ? 10
+                  : Math.max(insets.bottom, 10) + 78,
             backgroundColor: "transparent",
             gap: 8,
           }}
@@ -614,6 +651,7 @@ export default function ChatScreen() {
               placeholderTextColor={c.faint}
               value={input}
               onChangeText={setInput}
+              keyboardAppearance={scheme}
               multiline
               style={{
                 flex: 1,

@@ -12,6 +12,7 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  ScrollView,
   TextInput,
   type TextInputProps,
   type TextStyle,
@@ -21,6 +22,7 @@ import {
 
 import { COG_GRADIENT, COG_GRADIENT_LOCATIONS } from "@/constants/colors";
 import { useRTL } from "@/contexts/I18nContext";
+import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 
 export const WEB_TOP_INSET = 67;
@@ -362,6 +364,7 @@ export function Field({
   ...props
 }: TextInputProps & { label?: string; style?: TextStyle; error?: string | null }) {
   const c = useColors();
+  const scheme = useThemeScheme();
   const rtl = useRTL();
   const [focused, setFocused] = useState(false);
   const lifted = focused || !!(value && String(value).length > 0);
@@ -408,6 +411,7 @@ export function Field({
         ) : null}
         <TextInput
           placeholderTextColor={c.faint}
+          keyboardAppearance={scheme}
           {...props}
           value={value}
           placeholder={lifted ? props.placeholder : undefined}
@@ -774,9 +778,9 @@ export function IconButton({
     <PressScale onPress={onPress} scaleTo={0.9}>
       <View
         style={{
-          width: 40,
-          height: 40,
-          borderRadius: 14,
+          width: 44,
+          height: 44,
+          borderRadius: 15,
           alignItems: "center",
           justifyContent: "center",
           backgroundColor: filled ? c.tint08 : "transparent",
@@ -787,5 +791,180 @@ export function IconButton({
         <Feather name={icon} size={size} color={color ?? c.foreground} />
       </View>
     </PressScale>
+  );
+}
+
+/**
+ * Searchable picker sheet for long entity lists (accounts, engagements).
+ * A filter field appears once the list is long enough to need one.
+ */
+export function PickerSheet({
+  visible,
+  title,
+  items,
+  selectedId,
+  onSelect,
+  onClose,
+  cancelLabel,
+  searchPlaceholder,
+  emptyLabel,
+}: {
+  visible: boolean;
+  title?: string;
+  items: { id: string; name: string }[];
+  selectedId?: string | null;
+  onSelect: (item: { id: string; name: string }) => void;
+  onClose: () => void;
+  cancelLabel: string;
+  searchPlaceholder: string;
+  emptyLabel: string;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const scheme = useThemeScheme();
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    if (!visible) setQuery("");
+  }, [visible]);
+  const q = query.trim().toLowerCase();
+  const filtered = q ? items.filter((x) => x.name.toLowerCase().includes(q)) : items;
+  const searchable = items.length > 6;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "flex-end", padding: 10 }}
+      >
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <Glass
+            radius={28}
+            style={[{ padding: 16, paddingBottom: Platform.OS === "web" ? 20 : 32, gap: 6 }, softShadow(c.shadow)]}
+          >
+            <View
+              style={{
+                alignSelf: "center",
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: c.faint,
+                opacity: 0.5,
+                marginBottom: 8,
+              }}
+            />
+            {title ? (
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 13,
+                  letterSpacing: 0.4,
+                  textAlign: "center",
+                  paddingBottom: 8,
+                }}
+              >
+                {title}
+              </Text>
+            ) : null}
+            {searchable ? (
+              <View
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: c.secondary,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: c.borderSoft,
+                  paddingHorizontal: 12,
+                  marginBottom: 6,
+                }}
+              >
+                <Feather name="search" size={15} color={c.mutedForeground} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder={searchPlaceholder}
+                  placeholderTextColor={c.faint}
+                  keyboardAppearance={scheme}
+                  autoCorrect={false}
+                  style={{
+                    flex: 1,
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 15,
+                    paddingVertical: 10,
+                    textAlign: rtl.textAlign,
+                  }}
+                />
+                {query.length > 0 ? (
+                  <Pressable onPress={() => setQuery("")} hitSlop={8}>
+                    <Feather name="x" size={15} color={c.mutedForeground} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+            <ScrollView
+              style={{ maxHeight: 340 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {filtered.length === 0 ? (
+                <Text
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 14,
+                    textAlign: "center",
+                    paddingVertical: 20,
+                  }}
+                >
+                  {emptyLabel}
+                </Text>
+              ) : (
+                filtered.map((item) => {
+                  const selected = item.id === selectedId;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      onPress={() => {
+                        hapticLight();
+                        onClose();
+                        onSelect(item);
+                      }}
+                      style={({ pressed }) => ({
+                        flexDirection: rtl.row,
+                        alignItems: "center",
+                        gap: 12,
+                        paddingVertical: 14,
+                        paddingHorizontal: 12,
+                        borderRadius: 14,
+                        backgroundColor: pressed ? c.tint08 : selected ? c.tint08 : "transparent",
+                      })}
+                    >
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flex: 1,
+                          color: selected ? c.primary : c.foreground,
+                          fontFamily: selected
+                            ? "PlusJakartaSans_700Bold"
+                            : "PlusJakartaSans_600SemiBold",
+                          fontSize: 15.5,
+                          textAlign: rtl.textAlign,
+                        }}
+                      >
+                        {item.name}
+                      </Text>
+                      {selected ? <Feather name="check" size={17} color={c.primary} /> : null}
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+            <View style={{ height: 6 }} />
+            <Button label={cancelLabel} onPress={onClose} variant="secondary" />
+          </Glass>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }

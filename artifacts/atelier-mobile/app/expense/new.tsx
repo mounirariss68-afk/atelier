@@ -10,7 +10,6 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -33,9 +32,10 @@ import {
   hapticError,
   hapticSuccess,
 } from "@/components/ui";
+import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
-import { HttpError, putFileToSignedUrl } from "@/lib/api";
+import { putFileToSignedUrl } from "@/lib/api";
 import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -46,6 +46,7 @@ export default function NewExpenseScreen() {
   const rtl = useRTL();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const feedback = useFeedback();
 
   const uploadUrl = useAtelierGetMyReceiptUploadUrl();
   const create = useAtelierCreateMyExpense();
@@ -62,6 +63,9 @@ export default function NewExpenseScreen() {
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [busyLabel, setBusyLabel] = useState("");
+  // Set when the receipt was uploaded but AI parsing failed — offers a retry.
+  const [parseFailedId, setParseFailedId] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const pick = useCallback(
     async (mode: "camera" | "library") => {
@@ -70,7 +74,7 @@ export default function NewExpenseScreen() {
           ? await ImagePicker.requestCameraPermissionsAsync()
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert(t(mode === "camera" ? "perm.camera" : "perm.photos"));
+        feedback.toast(t(mode === "camera" ? "perm.camera" : "perm.photos"), "error");
         return;
       }
       const res =
@@ -82,7 +86,7 @@ export default function NewExpenseScreen() {
       setReceiptUri(asset.uri);
       setReceiptMime(asset.mimeType ?? "image/jpeg");
     },
-    [t],
+    [t, feedback],
   );
 
   const buildFields = useCallback((): AtelierSelfExpenseCreate | null => {
@@ -91,7 +95,7 @@ export default function NewExpenseScreen() {
       // Merchant/amount can be missing when a receipt will be parsed.
       if (!receiptUri) {
         hapticError();
-        Alert.alert(t("exp.requiredFields"));
+        feedback.toast(t("exp.requiredFields"), "error");
         return null;
       }
     }
@@ -104,7 +108,7 @@ export default function NewExpenseScreen() {
     if (category.trim()) fields.category = category.trim();
     if (description.trim()) fields.description = description.trim();
     return fields;
-  }, [amount, merchant, currency, date, category, description, receiptUri, t]);
+  }, [amount, merchant, currency, date, category, description, receiptUri, t, feedback]);
 
   const save = useCallback(async () => {
     const fields = buildFields();
@@ -116,7 +120,7 @@ export default function NewExpenseScreen() {
         setBusyLabel(t("exp.saving"));
         await enqueueExpense({ localUri: receiptUri, mime: receiptMime, fields });
         hapticSuccess();
-        Alert.alert(t("exp.offlineTitle"), t("exp.offlineBody"));
+        feedback.toast(t("exp.offlineBody"), "success");
         router.back();
         return;
       }
@@ -139,23 +143,39 @@ export default function NewExpenseScreen() {
         setBusyLabel(t("exp.reading"));
         try {
           await parse.mutateAsync({ id });
-        } catch (err) {
-          // 422 / parse failure is non-fatal — user fills details manually.
-          if (!(err instanceof HttpError) || err.status !== 422) {
-            // still non-fatal; surface a soft note
-          }
+        } catch {
+          // Parse failure is non-fatal but must be surfaced — the user
+          // can retry or continue and fill the details manually.
+          hapticError();
+          setParseFailedId(id);
+          return;
         }
       }
       hapticSuccess();
       router.replace(`/expense/${id}`);
     } catch {
       hapticError();
-      Alert.alert(t("common.error"));
+      feedback.toast(t("common.error"), "error");
     } finally {
       setBusy(false);
       setBusyLabel("");
     }
-  }, [buildFields, receiptUri, receiptMime, uploadUrl, create, parse, router, t]);
+  }, [buildFields, receiptUri, receiptMime, uploadUrl, create, parse, router, t, feedback]);
+
+  const retryParse = useCallback(async () => {
+    if (!parseFailedId) return;
+    setRetrying(true);
+    try {
+      await parse.mutateAsync({ id: parseFailedId });
+      hapticSuccess();
+      router.replace(`/expense/${parseFailedId}`);
+    } catch {
+      hapticError();
+      feedback.toast(t("exp.parseFailed"), "error");
+    } finally {
+      setRetrying(false);
+    }
+  }, [parseFailedId, parse, router, t, feedback]);
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
 
@@ -278,7 +298,45 @@ export default function NewExpenseScreen() {
           </Card>
           </FadeInView>
 
-          {busy ? (
+          {parseFailedId ? (
+            <Card style={{ gap: 12, borderColor: c.destructive }}>
+              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+                <Feather name="alert-triangle" size={16} color={c.destructive} />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 14,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {t("exp.parseFailed")}
+                </Text>
+              </View>
+              {retrying ? (
+                <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "center", gap: 10 }}>
+                  <ActivityIndicator color={c.primary} />
+                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 14 }}>
+                    {t("exp.reading")}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: rtl.row, gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label={t("common.continue")}
+                      variant="secondary"
+                      onPress={() => router.replace(`/expense/${parseFailedId}`)}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button label={t("exp.parseRetry")} icon="refresh-cw" onPress={retryParse} />
+                  </View>
+                </View>
+              )}
+            </Card>
+          ) : busy ? (
             <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "center", gap: 10 }}>
               <ActivityIndicator color={c.primary} />
               <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 14 }}>

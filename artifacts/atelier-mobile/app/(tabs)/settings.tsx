@@ -3,7 +3,6 @@ import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -15,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useFeedback } from "@/components/feedback";
 import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
@@ -137,6 +137,7 @@ export default function SettingsScreen() {
   const { lang, setLang } = useI18n();
   const { pref, setPref } = useThemePref();
   const { logout } = useAuth();
+  const feedback = useFeedback();
 
   const themes: { key: ThemePref; label: string }[] = [
     { key: "system", label: t("set.theme.system") },
@@ -175,29 +176,31 @@ export default function SettingsScreen() {
       return;
     }
     if (perm === "blocked") {
-      Alert.alert(t("set.meetingReminders"), t("set.notifBlocked"), [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("set.openSettings"),
-          onPress: () => {
-            if (Platform.OS !== "web") {
-              try {
-                Linking.openSettings();
-              } catch {
-                // best effort
-              }
-            }
-          },
-        },
-      ]);
+      const ok = await feedback.confirm({
+        title: t("set.meetingReminders"),
+        message: t("set.notifBlocked"),
+        confirmLabel: t("set.openSettings"),
+        cancelLabel: t("common.cancel"),
+      });
+      if (ok && Platform.OS !== "web") {
+        try {
+          Linking.openSettings();
+        } catch {
+          // best effort
+        }
+      }
     }
   };
 
-  const doLogout = () => {
-    Alert.alert(t("set.title"), t("set.logoutConfirm"), [
-      { text: t("common.cancel"), style: "cancel" },
-      { text: t("set.logout"), style: "destructive", onPress: () => logout() },
-    ]);
+  const doLogout = async () => {
+    const ok = await feedback.confirm({
+      title: t("set.logout"),
+      message: t("set.logoutConfirm"),
+      confirmLabel: t("set.logout"),
+      cancelLabel: t("common.cancel"),
+      destructive: true,
+    });
+    if (ok) logout();
   };
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;

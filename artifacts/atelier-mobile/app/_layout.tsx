@@ -22,6 +22,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { FeedbackProvider } from "@/components/feedback";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -78,7 +79,7 @@ function Gate() {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: "#0A1230",
+          backgroundColor: colors.background,
           gap: 20,
         }}
       >
@@ -140,9 +141,11 @@ export default function RootLayout() {
             <I18nProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
-                  <AuthProvider>
-                    <Gate />
-                  </AuthProvider>
+                  <FeedbackProvider>
+                    <AuthProvider>
+                      <Gate />
+                    </AuthProvider>
+                  </FeedbackProvider>
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </I18nProvider>

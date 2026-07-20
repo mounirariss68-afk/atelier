@@ -10,7 +10,6 @@ import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   Modal,
@@ -41,6 +40,7 @@ import {
   hapticSuccess,
   softShadow,
 } from "@/components/ui";
+import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
@@ -55,16 +55,25 @@ function docIcon(kind: string): React.ComponentProps<typeof Feather>["name"] {
   return "file";
 }
 
+/** Escape vCard text values per RFC 6350 (backslash, comma, semicolon, newline). */
+function vEsc(v: string): string {
+  return v
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
 function vCard(name: string, title: string, email: string, phone: string): string {
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
-    `N:${name}`,
-    `FN:${name}`,
+    `N:${vEsc(name)}`,
+    `FN:${vEsc(name)}`,
     "ORG:Cognirise",
-    title ? `TITLE:${title}` : "",
-    email ? `EMAIL;TYPE=WORK:${email}` : "",
-    phone ? `TEL;TYPE=CELL:${phone}` : "",
+    title ? `TITLE:${vEsc(title)}` : "",
+    email ? `EMAIL;TYPE=WORK:${vEsc(email)}` : "",
+    phone ? `TEL;TYPE=CELL:${vEsc(phone)}` : "",
     "END:VCARD",
   ].filter(Boolean);
   return lines.join("\n");
@@ -75,6 +84,7 @@ export default function MeScreen() {
   const { t } = useI18n();
   const rtl = useRTL();
   const insets = useSafeAreaInsets();
+  const feedback = useFeedback();
 
   const profile = useAtelierGetMyProfile();
   const docs = useAtelierListMyDocuments();
@@ -97,7 +107,7 @@ export default function MeScreen() {
   const changePhoto = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert(t("perm.photos"));
+      feedback.toast(t("perm.photos"), "error");
       return;
     }
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -119,9 +129,9 @@ export default function MeScreen() {
       hapticSuccess();
     } catch {
       hapticError();
-      Alert.alert(t("common.error"));
+      feedback.toast(t("common.error"), "error");
     }
-  }, [uploadPhoto, profile, t]);
+  }, [uploadPhoto, profile, t, feedback]);
 
   const openDocument = useCallback(
     async (doc: AtelierSelfDocument) => {
@@ -148,12 +158,12 @@ export default function MeScreen() {
         hapticSuccess();
       } catch {
         hapticError();
-        Alert.alert(t("me.downloadFailed"));
+        feedback.toast(t("me.downloadFailed"), "error");
       } finally {
         setDownloadingId(null);
       }
     },
-    [t],
+    [t, feedback],
   );
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
@@ -264,6 +274,24 @@ export default function MeScreen() {
               </Text>
             ) : null}
             <View style={{ height: 6 }} />
+            {/* Inline QR — scannable right from the page; tap to enlarge. */}
+            <PressScale onPress={() => setQrOpen(true)}>
+              <View
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: 18,
+                  padding: 12,
+                  alignItems: "center",
+                }}
+              >
+                <QRCode
+                  value={card || "BEGIN:VCARD\nEND:VCARD"}
+                  size={124}
+                  backgroundColor="#FFFFFF"
+                  color="#0A1230"
+                />
+              </View>
+            </PressScale>
             <PressScale onPress={() => setQrOpen(true)}>
               <View
                 style={{
@@ -278,7 +306,7 @@ export default function MeScreen() {
                   backgroundColor: "rgba(255,255,255,0.08)",
                 }}
               >
-                <Feather name="share-2" size={15} color="#EEF1FA" />
+                <Feather name="maximize" size={15} color="#EEF1FA" />
                 <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_700Bold", fontSize: 14 }}>
                   {t("me.shareCard")}
                 </Text>
@@ -369,23 +397,24 @@ export default function MeScreen() {
           style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "center", padding: 32 }}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={[{ backgroundColor: "#FFFFFF", borderRadius: 28, padding: 24, alignItems: "center", gap: 14, overflow: "hidden" }, softShadow(c.shadow)]}>
+            <View style={[{ backgroundColor: c.card, borderRadius: 28, padding: 24, alignItems: "center", gap: 14, overflow: "hidden" }, softShadow(c.shadow)]}>
               <BrandGradient
                 start={{ x: 0, y: 0.5 }}
                 end={{ x: 1, y: 0.5 }}
                 style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4 }}
               />
-              <Text style={{ color: "#0A1230", fontFamily: "PlusJakartaSans_700Bold", fontSize: 18 }}>
+              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 18 }}>
                 {t("me.qrTitle")}
               </Text>
-              <View style={{ padding: 12, backgroundColor: "#FFFFFF" }}>
+              {/* QR keeps a white surround for reliable scanning in both themes. */}
+              <View style={{ padding: 12, backgroundColor: "#FFFFFF", borderRadius: 16 }}>
                 <QRCode value={card || "BEGIN:VCARD\nEND:VCARD"} size={220} backgroundColor="#FFFFFF" color="#0A1230" />
               </View>
-              <Text style={{ color: "#0A1230", fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16 }}>{name}</Text>
+              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16 }}>{name}</Text>
               {title ? (
-                <Text style={{ color: "#4A5675", fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>{title}</Text>
+                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>{title}</Text>
               ) : null}
-              <Text style={{ color: "#4A5675", fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
+              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
                 {t("me.qrHint")}
               </Text>
               <Button label={t("common.close")} variant="secondary" onPress={() => setQrOpen(false)} />

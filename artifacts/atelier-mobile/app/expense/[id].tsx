@@ -12,9 +12,9 @@ import type {
   AtelierSelfExpenseCreateContextType,
 } from "@workspace/api-client-react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Platform,
   Pressable,
   ScrollView,
@@ -32,15 +32,18 @@ import {
   ErrorState,
   Field,
   IconButton,
+  PickerSheet,
   Sheet,
   Skeleton,
   WEB_TOP_INSET,
   hapticError,
   hapticSuccess,
 } from "@/components/ui";
+import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { HttpError } from "@/lib/api";
+import { formatMoney } from "@/lib/format";
 
 const CONTEXT_TYPES: AtelierSelfExpenseCreateContextType[] = [
   "bd",
@@ -95,8 +98,9 @@ function FindingsCard({ findings }: { findings: unknown }) {
 
 export default function ExpenseDetailScreen() {
   const c = useColors();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const rtl = useRTL();
+  const feedback = useFeedback();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -127,6 +131,7 @@ export default function ExpenseDetailScreen() {
 
   const [ctxSheet, setCtxSheet] = useState(false);
   const [pickSheet, setPickSheet] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   const [rationaleOpen, setRationaleOpen] = useState(false);
   const [rationale, setRationale] = useState("");
   const [blocked, setBlocked] = useState<unknown | null>(null);
@@ -181,34 +186,33 @@ export default function ExpenseDetailScreen() {
       await update.mutateAsync({ id, data: patchBody() });
       await list.refetch();
       hapticSuccess();
-      Alert.alert(t("exp.savedDraft"));
+      feedback.toast(t("exp.savedDraft"), "success");
     } catch {
       hapticError();
-      Alert.alert(t("common.error"));
+      feedback.toast(t("common.error"), "error");
     }
-  }, [id, update, patchBody, list, t]);
+  }, [id, update, patchBody, list, t, feedback]);
 
-  const remove = useCallback(() => {
+  const remove = useCallback(async () => {
     if (!id) return;
-    Alert.alert(t("exp.deleteTitle"), t("exp.deleteConfirm"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("common.delete"),
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await del.mutateAsync({ id });
-            await list.refetch();
-            hapticSuccess();
-            router.back();
-          } catch {
-            hapticError();
-            Alert.alert(t("common.error"));
-          }
-        },
-      },
-    ]);
-  }, [id, del, list, router, t]);
+    const ok = await feedback.confirm({
+      title: t("exp.deleteTitle"),
+      message: t("exp.deleteConfirm"),
+      confirmLabel: t("common.delete"),
+      cancelLabel: t("common.cancel"),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await del.mutateAsync({ id });
+      await list.refetch();
+      hapticSuccess();
+      router.back();
+    } catch {
+      hapticError();
+      feedback.toast(t("common.error"), "error");
+    }
+  }, [id, del, list, router, t, feedback]);
 
   const doSubmit = useCallback(
     async (overrideRationale?: string) => {
@@ -236,10 +240,10 @@ export default function ExpenseDetailScreen() {
           }
           return;
         }
-        Alert.alert(t("common.error"));
+        feedback.toast(t("common.error"), "error");
       }
     },
-    [id, update, submit, patchBody, list, router, t],
+    [id, update, submit, patchBody, list, router, t, feedback],
   );
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
@@ -355,7 +359,60 @@ export default function ExpenseDetailScreen() {
                     />
                   </View>
                 </View>
-                <Field label={t("exp.date")} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+                {Platform.OS === "web" ? (
+                  <Field label={t("exp.date")} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+                ) : (
+                  <View style={{ gap: 6 }}>
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontSize: 13,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t("exp.date")}
+                    </Text>
+                    <Pressable
+                      onPress={() => setDateOpen(true)}
+                      style={{
+                        backgroundColor: c.secondary,
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: c.borderSoft,
+                        paddingHorizontal: 14,
+                        paddingVertical: 15,
+                        flexDirection: rtl.row,
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
+                        {date || "—"}
+                      </Text>
+                      <Feather name="calendar" size={18} color={c.mutedForeground} />
+                    </Pressable>
+                    {dateOpen ? (
+                      <DateTimePicker
+                        value={date ? new Date(date) : new Date()}
+                        mode="date"
+                        display={Platform.OS === "ios" ? "inline" : "default"}
+                        themeVariant={undefined}
+                        onChange={(event, selected) => {
+                          if (Platform.OS === "android") setDateOpen(false);
+                          if (event.type === "dismissed") {
+                            setDateOpen(false);
+                            return;
+                          }
+                          if (selected) {
+                            setDate(selected.toISOString().slice(0, 10));
+                            if (Platform.OS === "ios") setDateOpen(false);
+                          }
+                        }}
+                      />
+                    ) : null}
+                  </View>
+                )}
                 <Field
                   label={t("exp.category")}
                   value={category}
@@ -434,7 +491,7 @@ export default function ExpenseDetailScreen() {
             ) : (
               <Card style={{ gap: 12 }}>
                 <ReadRow label={t("exp.merchant")} value={expense.merchant ?? "—"} />
-                <ReadRow label={t("exp.amount")} value={`${expense.currency} ${expense.amount.toFixed(2)}`} />
+                <ReadRow label={t("exp.amount")} value={formatMoney(expense.amount, expense.currency, lang)} />
                 <ReadRow label={t("exp.date")} value={expense.expenseDate ?? "—"} />
                 <ReadRow label={t("exp.category")} value={expense.category ?? "—"} />
                 {expense.description ? (
@@ -496,18 +553,19 @@ export default function ExpenseDetailScreen() {
         }))}
       />
 
-      <Sheet
+      <PickerSheet
         visible={pickSheet}
         title={contextType === "account" ? t("exp.pickAccount") : t("exp.pickEngagement")}
         cancelLabel={t("common.cancel")}
+        searchPlaceholder={t("common.search")}
+        emptyLabel={t("common.noResults")}
         onClose={() => setPickSheet(false)}
-        options={pickList.map((x) => ({
-          label: x.name,
-          onPress: () => {
-            if (contextType === "account") setAccountId(x.id);
-            else setEngagementId(x.id);
-          },
-        }))}
+        items={pickList.map((x) => ({ id: x.id, name: x.name }))}
+        selectedId={selectedId}
+        onSelect={(item) => {
+          if (contextType === "account") setAccountId(item.id);
+          else setEngagementId(item.id);
+        }}
       />
 
       <RationaleModal
