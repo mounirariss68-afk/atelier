@@ -139,6 +139,13 @@ export default function NewExpenseScreen() {
     await new Promise((r) => setTimeout(r, Platform.OS === "ios" ? 550 : 250));
   }, []);
 
+  // Task #411 — pick/pickPdf are memoized, so calling autoProcess directly
+  // would freeze the first render's closure (draftId=null) and re-attaching
+  // could create a duplicate draft. The ref always points at the latest one.
+  const autoProcessRef = React.useRef<(uri: string, mime: string) => Promise<void>>(
+    async () => {},
+  );
+
   const pick = useCallback(
     async (mode: "camera" | "library") => {
       await afterSheetDismissed();
@@ -156,9 +163,8 @@ export default function NewExpenseScreen() {
           : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
       if (res.canceled || !res.assets[0]) return;
       const asset = res.assets[0];
-      void autoProcess(asset.uri, asset.mimeType ?? "image/jpeg");
+      void autoProcessRef.current(asset.uri, asset.mimeType ?? "image/jpeg");
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, feedback, afterSheetDismissed],
   );
 
@@ -173,8 +179,7 @@ export default function NewExpenseScreen() {
     });
     if (res.canceled || !res.assets?.[0]) return;
     const asset = res.assets[0];
-    void autoProcess(asset.uri, asset.mimeType ?? "application/pdf");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void autoProcessRef.current(asset.uri, asset.mimeType ?? "application/pdf");
   }, [afterSheetDismissed]);
 
   const receiptIsPdf = receiptMime === "application/pdf";
@@ -336,6 +341,7 @@ export default function NewExpenseScreen() {
     },
     [draftId, amount, currency, merchant, date, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
   );
+  autoProcessRef.current = autoProcess;
 
   const save = useCallback(async () => {
     const fields = buildFields();
