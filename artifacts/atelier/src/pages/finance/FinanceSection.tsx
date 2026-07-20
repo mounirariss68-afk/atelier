@@ -73,6 +73,7 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Vendors", href: "/finance/payables/vendors", blurb: "Vendor master with KYC, beneficial ownership, sanctions screen, bank-detail change controls.", status: "live" },
       { label: "Purchase orders", href: "/finance/payables/po", blurb: "POs, GRNs, 3-way match against invoices.", status: "live" },
       { label: "Payment runs", href: "/finance/payables/payment-runs", blurb: "Maker-checker + dual-signatory payment runs with bank-file output.", status: "live" },
+      { label: "Run history", href: "/finance/payables/run-history", blurb: "Settled and cancelled runs with signatures, remittance references, and audit trail.", status: "live" },
       { label: "WHT register", href: "/finance/payables/wht", blurb: "Withholding-tax certificate tracking and per-jurisdiction remittance.", status: "live" },
       { label: "Subcontractors", href: "/finance/payables/subcontractors", blurb: "Pay-when-paid links between subcontractor invoices and client AR receipts.", status: "live" },
       { label: "Expenses", href: "/wallet/expenses", blurb: "Submitted, approved, and paid expense reports.", status: "live" },

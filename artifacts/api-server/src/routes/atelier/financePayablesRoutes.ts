@@ -552,7 +552,25 @@ router.get("/finance/payables/payment-runs/:id", async (req, res, next) => {
     const run = await loadRun(me, req.params.id);
     if (!run) { res.status(404).json({ error: "not-found" }); return; }
     const items = await db.select().from(atelierPaymentRunItems).where(eq(atelierPaymentRunItems.runId, run.id));
-    res.json({ run: runWire(run, items) });
+    const auditRows = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(and(
+        eq(atelierAuditEvents.orgId, me.orgId),
+        eq(atelierAuditEvents.entityType, "payment_run"),
+        eq(atelierAuditEvents.entityId, run.id),
+      ))
+      .orderBy(desc(atelierAuditEvents.createdAt));
+    res.json({
+      run: runWire(run, items),
+      auditEvents: auditRows.map((a) => ({
+        id: a.id,
+        action: a.action,
+        actorLabel: a.actorLabel,
+        summary: a.payloadSummary,
+        at: a.createdAt.toISOString(),
+      })),
+    });
   } catch (err) { next(err); }
 });
 

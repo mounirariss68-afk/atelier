@@ -61,6 +61,7 @@ function useMutate() {
 const TABS = [
   { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing" },
   { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
+  { id: "run-history", label: "Run history", href: "/finance/payables/run-history" },
   { id: "vendors", label: "Vendors", href: "/finance/payables/vendors" },
   { id: "po", label: "Purchase orders", href: "/finance/payables/po" },
   { id: "wht", label: "WHT register", href: "/finance/payables/wht" },
@@ -572,7 +573,9 @@ function runStatusTone(s: PaymentRunRow["status"]): "default" | "amber" | "green
 }
 
 export function FinancePayablesPaymentRuns() {
-  const runs = usePayablesRuns();
+  const allRuns = usePayablesRuns();
+  const runs = allRuns.filter((r) => r.status !== "paid" && r.status !== "cancelled");
+  const settled = allRuns.length - runs.length;
   const bankAccounts = usePayablesBankAccounts();
   const { busy, error, run } = useMutate();
   const [info, setInfo] = React.useState<string | null>(null);
@@ -593,10 +596,15 @@ export function FinancePayablesPaymentRuns() {
       lede="A run gathers approved self-billed invoices and approved unreimbursed expense claims. Two distinct, active bank signatories must sign before the bank file can be exported and the run marked paid; remittance references cascade to every invoice and reimbursement."
     >
       <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-        <MonoChip>{runs.length} run(s)</MonoChip>
+        <MonoChip>{runs.length} active run(s)</MonoChip>
         <MonoChip tone={runs.some((r) => r.status === "pending_signatures") ? "amber" : "default"}>
           {runs.filter((r) => r.status === "pending_signatures").length} awaiting signatures
         </MonoChip>
+        {settled > 0 && (
+          <Link href="/finance/payables/run-history" className="text-gold hover:underline normal-case" data-testid="link-run-history">
+            {settled} settled run(s) in history →
+          </Link>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {info && <span className="text-text-mute normal-case font-sans text-xs">{info}</span>}
           <select
@@ -618,7 +626,11 @@ export function FinancePayablesPaymentRuns() {
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
       <div className="grid gap-3" data-testid="runs-list">
         {runs.length === 0 && (
-          <EmptyCard testId="runs-empty">No payment runs yet. Approve self-billed invoices, then build a run.</EmptyCard>
+          <EmptyCard testId="runs-empty">
+            {settled > 0
+              ? "No active payment runs. Settled and cancelled runs live under Run history."
+              : "No payment runs yet. Approve self-billed invoices, then build a run."}
+          </EmptyCard>
         )}
         {runs.map((r) => (
           <PaymentRunCard key={r.id} runRow={r} />
@@ -739,6 +751,186 @@ function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
         )}
       </div>
       {error && <div className="text-xs text-danger mt-2">⚠ {error}</div>}
+    </Card>
+  );
+}
+
+// ============================================================
+// Payment-run history (paid / cancelled) — audit trail view
+// ============================================================
+interface RunAuditEvent {
+  id: string;
+  action: string;
+  actorLabel: string | null;
+  summary: string | null;
+  at: string;
+}
+
+function fmtTs(iso: string | null): string {
+  return iso ? iso.replace("T", " ").slice(0, 16) : "—";
+}
+
+export function FinancePayablesRunHistory() {
+  const allRuns = usePayablesRuns();
+  const runs = allRuns.filter((r) => r.status === "paid" || r.status === "cancelled");
+  const paid = runs.filter((r) => r.status === "paid");
+  const paidUsd = paid.reduce((n, r) => n + r.totalUsd, 0);
+  return (
+    <PayablesShell
+      eyebrow="Manage · Finance · Pay · Run history"
+      headline="Payment-run history"
+      lede="The permanent record of settled and cancelled payment runs: who signed, when the bank file was exported, when payment was confirmed, remittance references per line, and the full audit trail behind each run."
+    >
+      <div className="flex flex-wrap gap-2 text-xs font-mono">
+        <MonoChip>{runs.length} settled run(s)</MonoChip>
+        <MonoChip tone="green">{paid.length} paid · {fmtUsd(paidUsd)}</MonoChip>
+        <MonoChip tone={runs.some((r) => r.status === "cancelled") ? "red" : "default"}>
+          {runs.filter((r) => r.status === "cancelled").length} cancelled
+        </MonoChip>
+      </div>
+      <div className="grid gap-3" data-testid="run-history-list">
+        {runs.length === 0 && (
+          <EmptyCard testId="run-history-empty">
+            No settled runs yet. Paid and cancelled payment runs will appear here with their signatures, remittance references, and audit trail.
+          </EmptyCard>
+        )}
+        {runs.map((r) => (
+          <RunHistoryCard key={r.id} runRow={r} />
+        ))}
+      </div>
+    </PayablesShell>
+  );
+}
+
+function RunHistoryCard({ runRow }: { runRow: PaymentRunRow }) {
+  const [open, setOpen] = React.useState(false);
+  const [detail, setDetail] = React.useState<PaymentRunRow | null>(null);
+  const [auditEvents, setAuditEvents] = React.useState<RunAuditEvent[] | null>(null);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const loadDetail = React.useCallback(async () => {
+    setLoadError(null);
+    try {
+      const res = await fetch(`${API_BASE}/finance/payables/payment-runs/${runRow.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      const j = (await res.json()) as { run: PaymentRunRow; auditEvents?: RunAuditEvent[] };
+      setDetail(j.run);
+      setAuditEvents(j.auditEvents ?? []);
+    } catch (e) {
+      setLoadError((e as Error).message);
+    }
+  }, [runRow.id]);
+  React.useEffect(() => {
+    if (open && !detail) void loadDetail();
+  }, [open, detail, loadDetail]);
+  const items = detail?.items ?? [];
+  return (
+    <Card className="p-4" data-testid={`hist-run-${runRow.id}`}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <Eyebrow>{runRow.runNumber}</Eyebrow>
+          <div className="text-base font-medium mt-1">{runRow.itemCount} item(s) · {runRow.bankAccountLabel}</div>
+          <div className="text-xs text-text-mute mt-1">Maker: {runRow.makerName} · created {fmtTs(runRow.createdAt)}</div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <MonoChip tone={runRow.status === "paid" ? "green" : "red"} data-testid={`hist-run-status-${runRow.id}`}>
+            {runRow.status}
+          </MonoChip>
+          <span className="font-mono text-sm">{fmtUsd(runRow.totalUsd)}</span>
+        </div>
+      </div>
+      <div className="grid sm:grid-cols-4 gap-3 mt-3 text-xs">
+        <div>
+          <Eyebrow>Signatures</Eyebrow>
+          <ul className="mt-1.5 space-y-0.5">
+            {(runRow.signatures ?? []).length === 0 && <li className="text-text-mute">None recorded.</li>}
+            {(runRow.signatures ?? []).map((s) => (
+              <li key={s.userId} className="text-text-mute">
+                <span className="text-text">{s.name}</span> · {s.authority.replace(/_/g, " ")} · {fmtTs(s.signedAt)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <Eyebrow>Approved</Eyebrow>
+          <div className="mt-1.5 font-mono text-text-mute">{fmtTs(runRow.approvedAt)}</div>
+        </div>
+        <div>
+          <Eyebrow>Exported</Eyebrow>
+          <div className="mt-1.5 font-mono text-text-mute">{fmtTs(runRow.exportedAt)}</div>
+        </div>
+        <div>
+          <Eyebrow>{runRow.status === "paid" ? "Paid" : "Cancelled"}</Eyebrow>
+          <div className="mt-1.5 font-mono text-text-mute">
+            {fmtTs(runRow.status === "paid" ? runRow.paidAt : runRow.cancelledAt)}
+          </div>
+          {runRow.cancelReason && <div className="mt-1 text-danger">{runRow.cancelReason}</div>}
+        </div>
+      </div>
+      <div className="mt-3">
+        <Button size="sm" variant="outline" onClick={() => setOpen((o) => !o)} data-testid={`btn-hist-detail-${runRow.id}`}>
+          {open ? "Hide detail" : "View items & audit trail"}
+        </Button>
+      </div>
+      {open && (
+        <div className="mt-3 space-y-4">
+          {loadError && <div className="text-xs text-danger">⚠ Could not load run detail: {loadError}</div>}
+          {!loadError && !detail && <div className="text-xs text-text-mute">Loading…</div>}
+          {items.length > 0 && (
+            <div className="text-xs">
+              <Eyebrow>Line items & remittance</Eyebrow>
+              <table className="w-full mt-1.5" data-testid={`hist-items-${runRow.id}`}>
+                <thead className="text-text-faint">
+                  <tr>
+                    <th className="text-left py-1">Payee</th>
+                    <th className="text-left">Detail</th>
+                    <th className="text-left">Type</th>
+                    <th className="text-right">Amount</th>
+                    <th className="text-left">Status</th>
+                    <th className="text-left">Remittance ref</th>
+                    <th className="text-left">Paid at</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((it) => (
+                    <tr key={it.id} className="border-t border-border-soft">
+                      <td className="py-1.5">{it.payeeName}</td>
+                      <td className="text-text-mute">{it.description}</td>
+                      <td className="font-mono">{it.itemType === "self_billed_invoice" ? "invoice" : "reimbursement"}</td>
+                      <td className="text-right font-mono">{it.currency} {it.amount.toFixed(2)}</td>
+                      <td>
+                        <MonoChip tone={it.status === "paid" ? "green" : it.status === "removed" ? "red" : "amber"}>{it.status}</MonoChip>
+                      </td>
+                      <td className="font-mono text-text-mute">{it.remittanceRef ?? "—"}</td>
+                      <td className="font-mono text-text-mute">{fmtTs(it.paidAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {auditEvents && (
+            <div className="text-xs">
+              <Eyebrow>Audit trail</Eyebrow>
+              {auditEvents.length === 0 && <p className="mt-1.5 text-text-mute">No audit events recorded for this run.</p>}
+              <ul className="mt-1.5 divide-y divide-border-soft" data-testid={`hist-audit-${runRow.id}`}>
+                {auditEvents.map((a) => (
+                  <li key={a.id} className="py-1.5">
+                    <div className="flex items-baseline justify-between gap-2 text-text-mute">
+                      <span>
+                        <span className="text-text font-medium">{a.actorLabel ?? "System"}</span>
+                        {" · "}
+                        <span className="font-mono">{a.action}</span>
+                      </span>
+                      <span className="font-mono text-text-faint">{fmtTs(a.at)}</span>
+                    </div>
+                    {a.summary && <div className="text-text-mute">{a.summary}</div>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

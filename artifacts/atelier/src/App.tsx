@@ -102,6 +102,7 @@ import {
   FinancePayablesVendors,
   FinancePayablesPo,
   FinancePayablesPaymentRuns,
+  FinancePayablesRunHistory,
   FinancePayablesSelfBilling,
   FinancePayablesWht,
   FinancePayablesSubcontractors,
@@ -676,6 +677,7 @@ function Router() {
         <Route path="/finance/payables/vendors" component={FinancePayablesVendors} />
         <Route path="/finance/payables/po" component={FinancePayablesPo} />
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />
+        <Route path="/finance/payables/run-history" component={FinancePayablesRunHistory} />
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
         <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
         <Route path="/finance/close" component={FinanceClose} />
