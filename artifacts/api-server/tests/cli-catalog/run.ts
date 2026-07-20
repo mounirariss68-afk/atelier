@@ -138,6 +138,42 @@ async function main() {
     const tools = getToolsForPersona(persona);
     assert.ok(!tools.some((t) => t.name === "account_delete"), "contractor saw account_delete");
   });
+  await test("employee/contractor chat surface is exactly the non-write me.* catalog (Task #445)", () => {
+    // Task #422 clamp: self-only personas get ONLY identity-locked me.*
+    // reads. This pins the perimeter so a future tool registration
+    // (catalog OR legacy TOOL_REGISTRY) cannot silently widen it.
+    const meReadToolNames = new Set(
+      listCapabilities()
+        .filter((c) => c.id.startsWith("me.") && !c.isWrite)
+        .map((c) => c.toolName),
+    );
+    assert.ok(meReadToolNames.size > 0, "expected at least one me.* read capability");
+    const byToolName = new Map(listCapabilities().map((c) => [c.toolName, c] as const));
+    for (const role of ["employee", "contractor"] as const) {
+      const persona = { id: `p_${role}`, name: role, role, orgId: "aico" };
+      const tools = getToolsForPersona(persona);
+      assert.ok(tools.length > 0, `${role} chat surface is empty`);
+      for (const t of tools) {
+        assert.equal(t.isWrite, false, `${role} leaked write tool ${t.name}`);
+        const entry = byToolName.get(t.name);
+        assert.ok(entry, `${role} got tool ${t.name} not in the capability catalog (legacy leak)`);
+        assert.ok(
+          entry!.id.startsWith("me."),
+          `${role} leaked org-wide tool ${t.name} (capability ${entry!.id})`,
+        );
+      }
+      // Exact-set equality: nothing missing, nothing extra.
+      const got = new Set(tools.map((t) => t.name));
+      for (const name of meReadToolNames) {
+        assert.ok(got.has(name), `${role} missing self-scoped tool ${name}`);
+      }
+      assert.equal(
+        got.size,
+        meReadToolNames.size,
+        `${role} chat surface (${got.size}) differs from me.* read set (${meReadToolNames.size})`,
+      );
+    }
+  });
   await test("founding_partner sees the irreversible account.delete capability", () => {
     // Task #484 strips legacy chat-writes owned by propose_write
     // (account_delete included) from the chat surface, so assert the
