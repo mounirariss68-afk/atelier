@@ -26,7 +26,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FeedbackProvider } from "@/components/feedback";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { I18nProvider } from "@/contexts/I18nContext";
-import { ThemeProvider, useThemeScheme } from "@/contexts/ThemeContext";
+import { ThemeProvider, useThemePref, useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
@@ -53,6 +53,23 @@ const queryClient = new QueryClient({
 function ThemedStatusBar() {
   const scheme = useThemeScheme();
   return <StatusBar style={scheme === "dark" ? "light" : "dark"} translucent />;
+}
+
+function ThemeGate({ children }: { children: React.ReactNode }) {
+  const { hydrated } = useThemePref();
+
+  useEffect(() => {
+    if (hydrated) SplashScreen.hideAsync();
+  }, [hydrated]);
+
+  if (!hydrated) return null;
+
+  return (
+    <>
+      <ThemedStatusBar />
+      {children}
+    </>
+  );
 }
 
 function Gate() {
@@ -133,10 +150,6 @@ export default function RootLayout() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded || fontError) SplashScreen.hideAsync();
-  }, [fontsLoaded, fontError]);
-
   if (!fontsLoaded && !fontError) return null;
 
   return (
@@ -144,8 +157,8 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
-            <ThemedStatusBar />
-            <I18nProvider>
+            <ThemeGate>
+              <I18nProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>
                   <FeedbackProvider>
@@ -156,6 +169,7 @@ export default function RootLayout() {
                 </KeyboardProvider>
               </GestureHandlerRootView>
             </I18nProvider>
+            </ThemeGate>
           </ThemeProvider>
         </QueryClientProvider>
       </ErrorBoundary>

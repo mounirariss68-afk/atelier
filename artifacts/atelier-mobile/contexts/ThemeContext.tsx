@@ -16,22 +16,28 @@ interface ThemeCtx {
   pref: ThemePref;
   setPref: (p: ThemePref) => void;
   scheme: "light" | "dark";
+  hydrated: boolean;
 }
 
 const Ctx = createContext<ThemeCtx>({
   pref: "system",
   setPref: () => {},
   scheme: "dark",
+  hydrated: false,
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useRNColorScheme();
   const [pref, setPrefState] = useState<ThemePref>("system");
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((v) => {
-      if (v === "system" || v === "light" || v === "dark") setPrefState(v);
-    });
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((v) => {
+        if (v === "system" || v === "light" || v === "dark") setPrefState(v);
+      })
+      .catch(() => {})
+      .finally(() => setHydrated(true));
   }, []);
 
   const setPref = (p: ThemePref) => {
@@ -42,7 +48,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const scheme: "light" | "dark" =
     pref === "system" ? (system === "light" ? "light" : "dark") : pref;
 
-  const value = useMemo(() => ({ pref, setPref, scheme }), [pref, scheme]);
+  const value = useMemo(
+    () => ({ pref, setPref, scheme, hydrated }),
+    [pref, scheme, hydrated],
+  );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
