@@ -32,6 +32,7 @@
     "test:proposal-enrich": "tsx ./tests/crm/proposal-contact-enrich-probe.ts",
     "test:change-password": "tsx ./tests/change-password/run.ts",
     "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
+    "test:cli-finance-ops": "tsx ./tests/cli-finance-ops/run.ts",
     "test:suggestion-jargon": "tsx ./tests/cli-catalog/suggestion-jargon.ts",
     "test:cartographer-guard": "tsx ./tests/cartographer-guard/run.ts",
     "test:person-dedupe": "tsx ./tests/person-dedupe/run.ts",

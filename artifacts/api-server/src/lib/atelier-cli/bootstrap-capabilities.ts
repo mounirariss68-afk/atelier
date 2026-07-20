@@ -58,6 +58,10 @@ import "./contract-capabilities.js";
 // identity-locked: empty input schema + subject always resolved from
 // the session persona, never from model-supplied arguments.
 import "./me-capabilities.js";
+// Task #406 — read-only finance reports (P&L/BS/CF/profitability),
+// entity expiries, win/loss knowledge, manager-scoped leave queues, and
+// contract/template browsing. Mirrors REST ACLs with explicit refusals.
+import "./finance-ops-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

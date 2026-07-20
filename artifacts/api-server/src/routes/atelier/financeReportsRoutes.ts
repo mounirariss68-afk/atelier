@@ -1421,4 +1421,166 @@ router.post("/finance/reports/schedules", (req, res) => {
   res.json({ item: created });
 });
 
+// ──────────────────────────────────────────────────────────────
+// Task #406 — compact read model for the chat/CLI finance report
+// tools. Reuses the exact same internals as the REST routes above
+// (ensureFacts → sync generators → FX translation → consolidation)
+// so chat answers always tie out with the Reports UI. Caller is
+// responsible for the persona gate (recruiter / self-scope refusals
+// mirror the REST middleware).
+// ──────────────────────────────────────────────────────────────
+export type CliFinanceReportKind = "pnl" | "bs" | "cf" | "profitability";
+
+export async function cliFinanceReportSummary(
+  orgId: string,
+  kind: CliFinanceReportKind,
+  opts: { scope?: string; currency?: string; periodId?: string } = {},
+): Promise<Record<string, unknown>> {
+  await ensureFacts(orgId);
+  const scope: Scope = (["mtd", "qtd", "ytd", "r12"] as readonly string[]).includes(opts.scope ?? "")
+    ? (opts.scope as Scope)
+    : "ytd";
+  const rawCcy = (opts.currency ?? "USD").toUpperCase();
+  const currency = PRESENTATION_CCYS.has(rawCcy) ? rawCcy : "USD";
+  const period = (opts.periodId ? periodById(opts.periodId) : null) ?? CURRENT_PERIOD;
+  const periods = periodsForScope(scope, period);
+  const ents = entitiesIn(null);
+  const base = {
+    period: period.id,
+    periodLabel: period.label,
+    scope,
+    currency,
+    periodsCovered: periods.map((p) => p.id),
+    entities: ents.map((e) => ({ id: e.id, name: e.shortName, baseCurrency: e.baseCurrency })),
+  };
+
+  if (kind === "pnl") {
+    const pyPeriods = priorYearScope(scope, period);
+    const perEntity = ents.map((e) => ({
+      entityId: e.id,
+      entityName: e.shortName,
+      actual: translatePnlToGbp(aggregatePnl(periods.map((p) => pnlLocal(e.id, p))), e.baseCurrency, period),
+      budget: translatePnlToGbp(aggregatePnl(periods.map((p) => pnlLocal(e.id, p, "budget"))), e.baseCurrency, period),
+      forecast: translatePnlToGbp(aggregatePnl(periods.map((p) => pnlLocal(e.id, p, "forecast"))), e.baseCurrency, period),
+      priorYear: translatePnlToGbp(aggregatePnl(pyPeriods.map((p) => pnlLocal(e.id, p))), e.baseCurrency, period),
+    }));
+    const elim = aggregateElims(periods);
+    const sum = (key: "actual" | "budget" | "forecast" | "priorYear") => {
+      const s = aggregatePnl(perEntity.map((x) => x[key]));
+      return { ...s, intercoRevenue: 0, intercoCost: 0, netRevenue: s.netRevenue - elim.intercoRevenueGbp };
+    };
+    let cons = { actual: sum("actual"), budget: sum("budget"), forecast: sum("forecast"), priorYear: sum("priorYear") };
+    if (currency !== "GBP") {
+      cons = {
+        actual: convertPnl(cons.actual, currency, period),
+        budget: convertPnl(cons.budget, currency, period),
+        forecast: convertPnl(cons.forecast, currency, period),
+        priorYear: convertPnl(cons.priorYear, currency, period),
+      };
+    }
+    const v = buildPnlVariance(cons.actual, cons.budget, cons.forecast, cons.priorYear);
+    const noData = pnlAllZero(cons);
+    return {
+      ...base,
+      consolidated: cons,
+      variance: v,
+      commentary: noData ? [NO_FINANCIAL_DATA_NOTE] : buildPnlCommentary(v),
+      perEntity: perEntity.map((x) => ({
+        entityId: x.entityId,
+        entityName: x.entityName,
+        netRevenueGbp: x.actual.netRevenue,
+        ebitdaGbp: x.actual.ebitda,
+        netIncomeGbp: x.actual.netIncome,
+      })),
+    };
+  }
+
+  if (kind === "bs") {
+    const perEntity = ents.map((e) => ({
+      entityId: e.id,
+      entityName: e.shortName,
+      gbp: translateBsToGbp(bsLocal(e.id, period), e.baseCurrency, period, PROFILES[e.id]?.openingBalances.shareCapital ?? 0),
+    }));
+    const sum = sumBs(perEntity.map((x) => x.gbp));
+    const cons: BsLines = {
+      ...sum,
+      intercoAr: 0, intercoAp: 0, intercoLoanReceivable: 0, intercoLoanPayable: 0,
+      totalAssets: sum.totalAssets - sum.intercoAr - sum.intercoLoanReceivable,
+      totalLiabilities: sum.totalLiabilities - sum.intercoAp - sum.intercoLoanPayable,
+    };
+    cons.totalLiabilitiesAndEquity = cons.totalLiabilities + cons.totalEquity;
+    const out = currency !== "GBP" ? convertBs(cons, currency, period) : cons;
+    return {
+      ...base,
+      consolidated: out,
+      perEntity: perEntity.map((x) => ({
+        entityId: x.entityId,
+        entityName: x.entityName,
+        cashGbp: x.gbp.cash,
+        totalAssetsGbp: x.gbp.totalAssets,
+        totalEquityGbp: x.gbp.totalEquity,
+      })),
+    };
+  }
+
+  if (kind === "cf") {
+    const perEntity = ents.map((e) => {
+      const agg = aggregateCf(periods.map((p) => cfLocal(e.id, p)));
+      const startBs = bsLocal(e.id, periods[0]);
+      const endBs = bsLocal(e.id, periods[periods.length - 1]);
+      const adj: CfLines = { ...agg, openingCash: startBs.cash - agg.netChangeInCash, closingCash: endBs.cash };
+      return { entityId: e.id, entityName: e.shortName, gbp: translateCfToGbp(adj, e.baseCurrency, period) };
+    });
+    const sum = aggregateCf(perEntity.map((x) => x.gbp));
+    const cons = currency !== "GBP" ? convertCf(sum, currency, period) : sum;
+    return {
+      ...base,
+      consolidated: cons,
+      perEntity: perEntity.map((x) => ({
+        entityId: x.entityId,
+        entityName: x.entityName,
+        cashFromOpsGbp: x.gbp.cashFromOps,
+        netChangeInCashGbp: x.gbp.netChangeInCash,
+        closingCashGbp: x.gbp.closingCash,
+      })),
+    };
+  }
+
+  // profitability
+  const cube = convertCubeRows(buildCube(periods), currency, period);
+  const rollup = (key: keyof CubeRow) => {
+    const m = new Map<string, { dim: string; revenue: number; directCost: number; grossMargin: number; engagementCount: number }>();
+    for (const r of cube) {
+      const k = String(r[key]);
+      const cur = m.get(k) ?? { dim: k, revenue: 0, directCost: 0, grossMargin: 0, engagementCount: 0 };
+      cur.revenue += r.revenueGbp;
+      cur.directCost += r.directCostGbp;
+      cur.grossMargin += r.grossMarginGbp;
+      cur.engagementCount += 1;
+      m.set(k, cur);
+    }
+    return Array.from(m.values())
+      .map((x) => ({ ...x, grossMarginPct: pct(x.grossMargin, x.revenue) }))
+      .sort((a, b) => b.revenue - a.revenue);
+  };
+  return {
+    ...base,
+    engagementCount: cube.length,
+    byClient: rollup("client").slice(0, 15),
+    byPartner: rollup("partner").slice(0, 15),
+    bySector: rollup("sector").slice(0, 15),
+    topEngagements: cube
+      .slice()
+      .sort((a, b) => b.revenueGbp - a.revenueGbp)
+      .slice(0, 10)
+      .map((r) => ({
+        engagement: r.engagementName,
+        client: r.client,
+        revenue: r.revenueGbp,
+        grossMargin: r.grossMarginGbp,
+        grossMarginPct: r.grossMarginPct,
+      })),
+  };
+}
+
 export default router;

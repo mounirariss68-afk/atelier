@@ -396,34 +396,39 @@ router.get("/finance/entities", async (req, res) => {
  * NOTE: must stay registered BEFORE /finance/entities/:id or "expiries"
  * would be captured as an entity id.
  */
-// @cli-skip: pending Task #340 read-parity migration
-router.get("/finance/entities/expiries", async (req, res) => {
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  if (denyRecruiter(me, res)) return;
-  const rawWindow = Number(req.query.windowDays);
-  const windowDays = Number.isFinite(rawWindow)
-    ? Math.min(365, Math.max(1, Math.round(rawWindow)))
+export interface EntityExpiryItem {
+  id: string;
+  entityId: string;
+  entityShortName: string;
+  kind: "registration" | "lease";
+  registrationType: string | null;
+  label: string;
+  number: string | null;
+  issuer: string | null;
+  expiresOn: string;
+  daysOut: number;
+  severity: "overdue" | "critical" | "upcoming";
+}
+
+/**
+ * Task #406 — shared expiry computation, used by the REST route below and
+ * the chat/CLI `finance_entity_expiries` capability. Caller enforces the
+ * persona gate (recruiter / self-scope refusals).
+ */
+export async function listEntityExpiries(
+  orgId: string,
+  windowDaysRaw?: number,
+): Promise<{ windowDays: number; items: EntityExpiryItem[] }> {
+  const windowDays = Number.isFinite(windowDaysRaw)
+    ? Math.min(365, Math.max(1, Math.round(windowDaysRaw as number)))
     : 90;
   const dayMs = 86_400_000;
   const now = Date.now();
   const rows = await db
     .select()
     .from(atelierLegalEntities)
-    .where(eq(atelierLegalEntities.orgId, me.orgId));
-  const items: Array<{
-    id: string;
-    entityId: string;
-    entityShortName: string;
-    kind: "registration" | "lease";
-    registrationType: string | null;
-    label: string;
-    number: string | null;
-    issuer: string | null;
-    expiresOn: string;
-    daysOut: number;
-    severity: "overdue" | "critical" | "upcoming";
-  }> = [];
+    .where(eq(atelierLegalEntities.orgId, orgId));
+  const items: EntityExpiryItem[] = [];
   for (const e of rows) {
     if (e.status === "archived" || e.archivedAt) continue;
     const shortName = e.shortName || e.legalNameEn;
@@ -482,7 +487,16 @@ router.get("/finance/entities/expiries", async (req, res) => {
     }
   }
   items.sort((a, b) => a.daysOut - b.daysOut);
-  res.json({ windowDays, items });
+  return { windowDays, items };
+}
+
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/finance/entities/expiries", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  const out = await listEntityExpiries(me.orgId, Number(req.query.windowDays));
+  res.json(out);
 });
 
 // @cli-skip: pending Task #340 read-parity migration

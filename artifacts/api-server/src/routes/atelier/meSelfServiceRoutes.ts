@@ -618,7 +618,7 @@ function isFallbackDecider(me: typeof atelierUsers.$inferSelect): boolean {
  * HR/founders may only when the person has NO manager (fallback), keeping
  * routing org-chart-scoped rather than role-wide.
  */
-async function canDecideLeaveFor(
+export async function canDecideLeaveFor(
   me: typeof atelierUsers.$inferSelect,
   personId: string,
 ): Promise<boolean> {
@@ -814,7 +814,7 @@ router.post("/me/leave/:id/cancel", async (req, res, next) => {
  * separately by canDecideLeaveFor (manager edges, HR/founder fallback) —
  * this only keeps boundary-locked self personas off the surface entirely.
  */
-function canReachApproverSurface(me: typeof atelierUsers.$inferSelect): boolean {
+export function canReachApproverSurface(me: typeof atelierUsers.$inferSelect): boolean {
   return canApproveAsLead(me.role) || isHr(me.role);
 }
 
