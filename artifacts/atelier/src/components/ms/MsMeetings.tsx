@@ -19,13 +19,27 @@ import {
   getAtelierGetMyMsConnectionQueryKey,
   useAtelierGetMyCalendar,
   getAtelierGetMyCalendarQueryKey,
+  useAtelierGetAccountMeetingBrief,
+  getAtelierGetAccountMeetingBriefQueryKey,
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, SectionLabel, PillButton, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Video, MapPin, Unplug, ExternalLink, RefreshCw, Trash2, Sparkles } from "lucide-react";
+import {
+  CalendarClock,
+  Video,
+  MapPin,
+  Unplug,
+  ExternalLink,
+  RefreshCw,
+  Trash2,
+  Sparkles,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -74,7 +88,175 @@ function fmtDay(iso: string) {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
+function fmtDue(iso: string | null | undefined) {
+  if (!iso) return null;
+  const d = new Date(iso.slice(0, 10) + "T00:00:00");
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function fmtMoney(n: number) {
+  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  suspect: "Suspect",
+  prospect: "Prospect",
+  convert: "Convert",
+  runner: "Runner",
+  contract: "Contract",
+  lost: "Lost",
+  no_decision: "No decision",
+  withdrawn: "Withdrawn",
+};
+
+/**
+ * Pre-meeting client briefing (Task #337) — deterministic snapshot of the
+ * matched account: recent activity, open opportunities, outstanding
+ * tasks/actions. Fetched lazily when the panel is opened.
+ */
+function MeetingBriefPanel({ meetingId, accountId }: { meetingId: string; accountId: string }) {
+  const { data, isPending, error } = useAtelierGetAccountMeetingBrief(accountId, {
+    query: {
+      queryKey: getAtelierGetAccountMeetingBriefQueryKey(accountId),
+      retry: false,
+      staleTime: 60_000,
+    },
+  });
+
+  if (isPending) {
+    return <Skeleton className="h-16 mt-2 bg-bg-elevate" data-testid={`meeting-brief-loading-${meetingId}`} />;
+  }
+  if (error || !data) {
+    return (
+      <p className="text-xs text-text-mute mt-2" data-testid={`meeting-brief-error-${meetingId}`}>
+        Couldn't load the briefing for this account right now.
+      </p>
+    );
+  }
+
+  const tasks = [
+    ...data.openTasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      due: t.dueDate,
+      overdue: t.overdue,
+      who: t.ownerName ?? null,
+      kind: "task" as const,
+    })),
+    ...data.openActions.map((a) => ({
+      id: a.id,
+      title: a.title,
+      due: a.dueDate,
+      overdue: a.overdue,
+      who: a.ownerName ?? null,
+      kind: "action" as const,
+    })),
+  ].slice(0, 6);
+
+  return (
+    <div
+      className="mt-2 rounded-lg border border-border-soft bg-bg-soft p-3 space-y-3"
+      data-testid={`meeting-brief-panel-${meetingId}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+          Pre-meeting brief · {data.accountName}
+        </span>
+        <Link
+          href={`/clients/accounts/${data.accountId}`}
+          className="text-xs text-gold hover:underline shrink-0"
+          data-testid={`meeting-brief-open-account-${meetingId}`}
+        >
+          Open account
+        </Link>
+      </div>
+
+      <div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+          Recent activity
+        </div>
+        {data.recentActivity.length === 0 ? (
+          <p className="text-xs text-text-mute font-mono">No recent activity on this account.</p>
+        ) : (
+          <ul className="space-y-1">
+            {data.recentActivity.slice(0, 4).map((e) => (
+              <li key={e.id} className="text-xs text-text-mute flex items-baseline gap-2 min-w-0">
+                <span className="font-mono text-text-faint shrink-0">
+                  {new Date(e.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                </span>
+                <span className="truncate">
+                  {e.title}
+                  {e.actorName ? ` — ${e.actorName}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+          Open opportunities
+        </div>
+        {data.openOpportunities.length === 0 ? (
+          <p className="text-xs text-text-mute font-mono">No open opportunities.</p>
+        ) : (
+          <ul className="space-y-1">
+            {data.openOpportunities.slice(0, 4).map((o) => (
+              <li key={o.id} className="text-xs text-text-mute flex items-baseline gap-2 min-w-0">
+                <span className="truncate text-text">{o.name}</span>
+                <MonoChip className="shrink-0">{STAGE_LABELS[o.salesStage] ?? o.salesStage}</MonoChip>
+                <span className="font-mono text-text-faint shrink-0">
+                  {fmtMoney(o.dealSizeHypothesis)} · {Math.round(o.probabilityPct)}%
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+          Outstanding tasks
+        </div>
+        {tasks.length === 0 ? (
+          <p className="text-xs text-text-mute font-mono">Nothing outstanding.</p>
+        ) : (
+          <ul className="space-y-1">
+            {tasks.map((t) => (
+              <li key={`${t.kind}-${t.id}`} className="text-xs text-text-mute flex items-baseline gap-2 min-w-0">
+                <span className="truncate">{t.title}</span>
+                {t.who && <span className="text-text-faint shrink-0">{t.who}</span>}
+                {t.due && (
+                  <span
+                    className={`font-mono shrink-0 ${t.overdue ? "text-danger" : "text-text-faint"}`}
+                  >
+                    {t.overdue ? "overdue · " : "due "}
+                    {fmtDue(t.due)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; showMatches?: boolean }) {
+  // One brief per matched account. Meetings usually match a single account;
+  // when several are matched, the viewer picks which account to brief on.
+  const uniqueAccounts = React.useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const match of m.matches) {
+      if (!seen.has(match.accountId)) seen.set(match.accountId, match.accountName);
+    }
+    return [...seen.entries()].map(([accountId, accountName]) => ({ accountId, accountName }));
+  }, [m.matches]);
+  const [briefAccountId, setBriefAccountId] = React.useState<string | null>(null);
+
   return (
     <div
       className="flex items-start gap-3 py-3 border-b border-border-soft last:border-b-0"
@@ -119,6 +301,27 @@ function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; show
             ))}
           </div>
         )}
+        {uniqueAccounts.length > 0 && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {uniqueAccounts.map((acc) => {
+              const open = briefAccountId === acc.accountId;
+              return (
+                <button
+                  key={`${m.id}-brief-${acc.accountId}`}
+                  type="button"
+                  onClick={() => setBriefAccountId(open ? null : acc.accountId)}
+                  className="inline-flex items-center gap-1 text-xs text-gold hover:underline"
+                  data-testid={`meeting-brief-toggle-${m.id}-${acc.accountId}`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  {uniqueAccounts.length > 1 ? `Briefing · ${acc.accountName}` : "Briefing"}
+                  {open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {briefAccountId && <MeetingBriefPanel meetingId={m.id} accountId={briefAccountId} />}
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ import type {
   AtelierAccount360,
   AtelierAccountDuplicateCandidates,
   AtelierAccountDuplicateError,
+  AtelierAccountMeetingBrief,
   AtelierAccountSummary,
   AtelierAccountTimeline,
   AtelierAccountWorkspace,
@@ -18740,6 +18741,102 @@ export function useAtelierGetAccountTimeline<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierGetAccountTimelineQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Pre-meeting client briefing — recent account activity, open opportunities and outstanding tasks/actions, assembled for the calendar meeting row
+ */
+export const getAtelierGetAccountMeetingBriefUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/meeting-brief`;
+};
+
+export const atelierGetAccountMeetingBrief = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierAccountMeetingBrief> => {
+  return customFetch<AtelierAccountMeetingBrief>(
+    getAtelierGetAccountMeetingBriefUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetAccountMeetingBriefQueryKey = (accountId: string) => {
+  return [`/api/atelier/accounts/${accountId}/meeting-brief`] as const;
+};
+
+export const getAtelierGetAccountMeetingBriefQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierGetAccountMeetingBriefQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>
+  > = ({ signal }) =>
+    atelierGetAccountMeetingBrief(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetAccountMeetingBriefQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>
+>;
+export type AtelierGetAccountMeetingBriefQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Pre-meeting client briefing — recent account activity, open opportunities and outstanding tasks/actions, assembled for the calendar meeting row
+ */
+
+export function useAtelierGetAccountMeetingBrief<
+  TData = Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetAccountMeetingBrief>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetAccountMeetingBriefQueryOptions(
     accountId,
     options,
   );

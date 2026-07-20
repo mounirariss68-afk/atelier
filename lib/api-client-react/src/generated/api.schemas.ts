@@ -2101,6 +2101,38 @@ export interface AtelierAccountTimeline {
   canManage?: boolean;
 }
 
+export interface AtelierMeetingBriefOpportunity {
+  id: string;
+  name: string;
+  salesStage: string;
+  /** @nullable */
+  subStatus?: string | null;
+  dealSizeHypothesis: number;
+  probabilityPct: number;
+}
+
+export interface AtelierMeetingBriefAction {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  ownerName?: string | null;
+  overdue: boolean;
+}
+
+export interface AtelierAccountMeetingBrief {
+  accountId: string;
+  accountName: string;
+  generatedAt: string;
+  recentActivity: AtelierTimelineEntry[];
+  openOpportunities: AtelierMeetingBriefOpportunity[];
+  openTasks: AtelierActivity[];
+  openActions: AtelierMeetingBriefAction[];
+}
+
 export interface AtelierCreateActivityInput {
   title: string;
   type?: AtelierActivityType;

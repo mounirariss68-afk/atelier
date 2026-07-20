@@ -4529,6 +4529,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierAccountTimeline" }
 
+  /atelier/accounts/{accountId}/meeting-brief:
+    get:
+      operationId: atelierGetAccountMeetingBrief
+      tags: [atelier]
+      summary: >-
+        Pre-meeting client briefing — recent account activity, open
+        opportunities and outstanding tasks/actions, assembled for the
+        calendar meeting row
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Briefing payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierAccountMeetingBrief" }
+
   /atelier/accounts/{accountId}/activities:
     post:
       operationId: atelierCreateActivity
@@ -7045,6 +7065,56 @@ components:
           items: { $ref: "#/components/schemas/AtelierActivity" }
         # True when the persona may create / mutate activities here.
         canManage: { type: boolean }
+
+    AtelierMeetingBriefOpportunity:
+      type: object
+      required: [id, name, salesStage, dealSizeHypothesis, probabilityPct]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        salesStage: { type: string }
+        subStatus: { type: ["string", "null"] }
+        dealSizeHypothesis: { type: number }
+        probabilityPct: { type: number }
+
+    AtelierMeetingBriefAction:
+      type: object
+      required: [id, title, status, priority, overdue]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string }
+        priority: { type: string }
+        dueDate: { type: ["string", "null"] }
+        ownerName: { type: ["string", "null"] }
+        # True when an open action's dueDate is in the past.
+        overdue: { type: boolean }
+
+    AtelierAccountMeetingBrief:
+      type: object
+      required:
+        [accountId, accountName, generatedAt, recentActivity, openOpportunities, openTasks, openActions]
+      properties:
+        accountId: { type: string }
+        accountName: { type: string }
+        generatedAt: { type: string }
+        # Newest-first unified timeline entries (activities, insights,
+        # meetings, stage moves, agent runs) — capped for the briefing.
+        recentActivity:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTimelineEntry" }
+        # Live (non-terminal) opportunities on the account.
+        openOpportunities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierMeetingBriefOpportunity" }
+        # Open tasks from the activity layer (overdue-first).
+        openTasks:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierActivity" }
+        # Open / in-progress account-plan actions.
+        openActions:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierMeetingBriefAction" }
 
     AtelierCreateActivityInput:
       type: object

@@ -2768,6 +2768,86 @@ router.get("/accounts/:accountId/timeline", async (req, res) => {
   res.json(await timelinePayload(account, canManage));
 });
 
+// ---------- pre-meeting client briefing (Task #337) ----------
+// Deterministic brief assembled for a calendar meeting matched to this
+// account: recent activity (unified timeline), open (non-terminal)
+// opportunities, and outstanding tasks/actions. Read-only, gated on the same
+// canSeeAccount predicate as the calendar match itself, so anyone who can
+// see the meeting chip can open the brief.
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/accounts/:accountId/meeting-brief", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const account = await loadAccount(req.params.accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, account.id))) {
+    res.status(403).json({ error: "account-forbidden" });
+    return;
+  }
+  const TERMINAL_OPP_STAGES = new Set(["contract", "lost", "no_decision", "withdrawn"]);
+  const [timeline, oppRows, actionRows] = await Promise.all([
+    buildAccountTimeline({ accountId: account.id }),
+    db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        subStatus: atelierOpportunities.subStatus,
+        dealSizeHypothesis: atelierOpportunities.dealSizeHypothesis,
+        probabilityPct: atelierOpportunities.probabilityPct,
+      })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.accountId, account.id),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierOpportunities.dealSizeHypothesis)),
+    db
+      .select()
+      .from(atelierAccountActions)
+      .where(
+        and(
+          eq(atelierAccountActions.accountId, account.id),
+          inArray(atelierAccountActions.status, ["open", "in_progress"]),
+          isNull(atelierAccountActions.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierAccountActions.createdAt)),
+  ]);
+  // Resolve action owner names in one pass.
+  const ownerIds = [...new Set(actionRows.map((a) => a.ownerId).filter((x): x is string => !!x))];
+  const owners = ownerIds.length
+    ? await db
+        .select({ id: atelierUsers.id, name: atelierUsers.name })
+        .from(atelierUsers)
+        .where(inArray(atelierUsers.id, ownerIds))
+    : [];
+  const ownerName = new Map(owners.map((o) => [o.id, o.name]));
+  res.json({
+    accountId: account.id,
+    accountName: account.brandName ?? account.name,
+    generatedAt: new Date().toISOString(),
+    recentActivity: timeline.timeline.slice(0, 8),
+    openOpportunities: oppRows.filter((o) => !TERMINAL_OPP_STAGES.has(o.salesStage)),
+    openTasks: timeline.openTasks.slice(0, 8),
+    openActions: actionRows.slice(0, 8).map((a) => ({
+      id: a.id,
+      title: a.title,
+      status: a.status,
+      priority: a.priority,
+      dueDate: a.dueDate ?? null,
+      ownerName: a.ownerId ? (ownerName.get(a.ownerId) ?? null) : null,
+      overdue: isOverdue(a.status, a.dueDate),
+    })),
+  });
+});
+
 // ---------- create activity / task (any persona who can see the account) ----
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/accounts/:accountId/activities", async (req, res) => {

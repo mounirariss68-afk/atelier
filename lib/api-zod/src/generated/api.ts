@@ -30643,6 +30643,83 @@ export const AtelierGetAccountTimelineResponse = zod.object({
 });
 
 /**
+ * @summary Pre-meeting client briefing — recent account activity, open opportunities and outstanding tasks/actions, assembled for the calendar meeting row
+ */
+export const AtelierGetAccountMeetingBriefParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierGetAccountMeetingBriefResponse = zod.object({
+  accountId: zod.string(),
+  accountName: zod.string(),
+  generatedAt: zod.string(),
+  recentActivity: zod.array(
+    zod.object({
+      id: zod.string(),
+      kind: zod.enum([
+        "activity",
+        "insight",
+        "meeting",
+        "stage_move",
+        "agent_run",
+      ]),
+      subtype: zod.string().nullish(),
+      title: zod.string(),
+      detail: zod.string().nullish(),
+      actorName: zod.string().nullish(),
+      date: zod.string(),
+      refKind: zod.string().nullish(),
+      refId: zod.string().nullish(),
+    }),
+  ),
+  openOpportunities: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      salesStage: zod.string(),
+      subStatus: zod.string().nullish(),
+      dealSizeHypothesis: zod.number(),
+      probabilityPct: zod.number(),
+    }),
+  ),
+  openTasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      accountId: zod.string(),
+      accountName: zod.string().nullish(),
+      parentType: zod.enum(["account", "contact", "opportunity"]),
+      parentId: zod.string(),
+      parentLabel: zod.string().nullish(),
+      type: zod.enum(["task", "call", "email", "meeting"]),
+      title: zod.string(),
+      body: zod.string().nullish(),
+      ownerId: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      ownerInitials: zod.string().nullish(),
+      dueDate: zod.string().nullish(),
+      status: zod.enum(["open", "done"]),
+      overdue: zod.boolean(),
+      completedAt: zod.string().nullish(),
+      createdByUserId: zod.string().nullish(),
+      createdByName: zod.string().nullish(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  openActions: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      status: zod.string(),
+      priority: zod.string(),
+      dueDate: zod.string().nullish(),
+      ownerName: zod.string().nullish(),
+      overdue: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * @summary Log an activity / create a task on the account (audited)
  */
 export const AtelierCreateActivityParams = zod.object({
