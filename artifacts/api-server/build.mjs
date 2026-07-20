@@ -57,6 +57,10 @@ async function buildAll() {
       "onnxruntime-node",
       "@huggingface/transformers",
       "unpdf",
+      // pdfjs-dist legacy build breaks when bundled (PDFDocumentLoadingTask
+      // is not a constructor) — keep it external so the dynamic import in
+      // atelier-merchant/pdf.ts resolves the real package at runtime.
+      "pdfjs-dist",
       "mammoth",
       "exceljs",
       "@tensorflow/*",
