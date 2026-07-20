@@ -383,7 +383,7 @@ function TurnBlock({
               fontSize: 13,
             }}
           >
-            {t("chat.thinking")}
+            {turn.reconnecting ? t("chat.reconnecting") : t("chat.thinking")}
           </Text>
         </View>
       ) : null}
@@ -417,7 +417,9 @@ function TurnBlock({
               textAlign: rtl.textAlign,
             }}
           >
-            {turn.error ?? t("common.error")}
+            {turn.errorKind === "network"
+              ? t("chat.serverUnreachable")
+              : (turn.error ?? t("common.error"))}
           </Text>
           <Button
             label={t("chat.retry")}
@@ -577,6 +579,7 @@ export default function ChatScreen() {
             inverted
             keyExtractor={(item) => item.key}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
             renderItem={({ item }) => (
               <TurnBlock
@@ -645,7 +648,11 @@ export default function ChatScreen() {
           ) : null}
 
           <View style={{ flexDirection: rtl.row, alignItems: "flex-end", gap: 8 }}>
-            <IconButton icon="plus-circle" onPress={() => setAttachSheet(true)} filled />
+            {keyboardOpen && Platform.OS !== "web" ? (
+              <IconButton icon="chevron-down" onPress={() => Keyboard.dismiss()} filled />
+            ) : (
+              <IconButton icon="plus-circle" onPress={() => setAttachSheet(true)} filled />
+            )}
             <TextInput
               placeholder={t("chat.placeholder")}
               placeholderTextColor={c.faint}

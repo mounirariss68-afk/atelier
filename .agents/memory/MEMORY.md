@@ -82,5 +82,6 @@
 - [Atelier roster visibility scoping](atelier-roster-visibility.md) — sensitive-people=fp/hr, comp=+finance, costing=+partner; manager BFS scope; per-person reads leak via side channels — use the shared scope predicate.
 - [Contract field roles & ref sequences](atelier-contract-field-roles.md) — always normalizeFieldSchema() before using contract field schemas; refs allocated race-safe at commit; prod sequences table arrives via Publish diff (never boot DDL).
 - [CLI slash-command UX](cli-slash-command-ux.md) — aliases carry leading "/"; slash menu must close once args typed or Enter re-picks and resets; parse-rejoin controlled inputs eat commas.
+- [Mobile chat retry policy](atelier-mobile-chat-retry.md) — auto-retry transient 502s only pre-first-SSE-frame on dedupe-safe /cli/turn; never on confirm (writes).
 - [Signing-entity authorised signatories](atelier-entity-signatories.md) — signatory gate lives INSIDE sendContract (caller+signFirst args); any new send surface must pass caller identity; empty list = any partner may sign.
 - [Mobile meeting reminders](atelier-mobile-meeting-reminders.md) — device-local expo-notifications, opt-in OFF default; sync cancels stale "mtgbrief-" ids; tap deep-links via focusMeetingId/focusAccountId params.

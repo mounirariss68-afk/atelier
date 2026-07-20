@@ -73,6 +73,33 @@ export interface ChatTurn {
   toolResults: ToolResult[];
   serverTurnId?: string;
   error?: string;
+  /** Set when the error is a transient connectivity failure (proxy 502/503/network) so the UI can show a friendly message. */
+  errorKind?: "network";
+  /** True while the client is auto-retrying a transient failure. */
+  reconnecting?: boolean;
+}
+
+/** Transient upstream statuses worth auto-retrying (proxy 502 while the API server restarts, etc.). */
+function isTransientStatus(status: number): boolean {
+  return status === 502 || status === 503 || status === 504;
+}
+
+const RETRY_DELAYS_MS = [1_500, 3_000, 5_000];
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve(), ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        const err = new Error("Aborted");
+        (err as { name: string }).name = "AbortError";
+        reject(err);
+      },
+      { once: true },
+    );
+  });
 }
 
 function uuid() {
@@ -254,55 +281,105 @@ export function useChat() {
   }, []);
 
   const runStream = useCallback(
-    async (url: string, body: unknown, key: string) => {
+    async (url: string, body: unknown, key: string, opts?: { allowRetry?: boolean }) => {
+      // Only retry routes that are dedupe-safe server-side: /cli/turn dedupes
+      // on sessionId + clientTurnKey. The confirm route performs writes, so a
+      // failed confirm surfaces an error instead of being auto-resent.
+      const allowRetry = opts?.allowRetry ?? true;
       setBusy(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
+      // Auto-retry transient failures (proxy 502/503/504 or a network error
+      // before any SSE frame arrived — e.g. the dev API server mid-restart).
+      // Never retry once frames have been processed: the server may already
+      // be acting on the turn.
+      let attempt = 0;
       try {
-        const res = await expoFetch(`${API_BASE}${url}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-            ...authHeader(),
-          },
-          body: JSON.stringify(body),
-          signal: ctrl.signal,
-        });
-        if (res.status === 401) {
-          triggerUnauthorized();
-          return;
-        }
-        if (!res.ok || !res.body) {
-          upsert(key, (t) => ({ ...t, status: "error", error: `HTTP ${res.status}` }));
-          return;
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let buffer = "";
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let sep: number;
-          while ((sep = buffer.indexOf("\n\n")) !== -1) {
-            const block = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + 2);
-            const frame = parseFrame(block);
-            if (!frame) continue;
-            const sid = (frame.data as { sessionId?: string }).sessionId;
-            if (sid && !sessionRef.current) {
-              sessionRef.current = sid;
-              setSessionId(sid);
+        for (;;) {
+          let receivedFrame = false;
+          try {
+            const res = await expoFetch(`${API_BASE}${url}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "text/event-stream",
+                ...authHeader(),
+              },
+              body: JSON.stringify(body),
+              signal: ctrl.signal,
+            });
+            if (res.status === 401) {
+              triggerUnauthorized();
+              return;
             }
-            upsert(key, (t) => applyFrame(t, frame.type, frame.data));
+            if (!res.ok || !res.body) {
+              if (allowRetry && isTransientStatus(res.status) && attempt < RETRY_DELAYS_MS.length) {
+                upsert(key, (t) => ({ ...t, reconnecting: true }));
+                await sleep(RETRY_DELAYS_MS[attempt], ctrl.signal);
+                attempt += 1;
+                continue;
+              }
+              upsert(key, (t) => ({
+                ...t,
+                status: "error",
+                reconnecting: false,
+                error: `HTTP ${res.status}`,
+                errorKind: isTransientStatus(res.status) ? "network" : undefined,
+              }));
+              return;
+            }
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              let sep: number;
+              while ((sep = buffer.indexOf("\n\n")) !== -1) {
+                const block = buffer.slice(0, sep);
+                buffer = buffer.slice(sep + 2);
+                const frame = parseFrame(block);
+                if (!frame) continue;
+                receivedFrame = true;
+                const sid = (frame.data as { sessionId?: string }).sessionId;
+                if (sid && !sessionRef.current) {
+                  sessionRef.current = sid;
+                  setSessionId(sid);
+                }
+                upsert(key, (t) => ({ ...applyFrame(t, frame.type, frame.data), reconnecting: false }));
+              }
+            }
+            return;
+          } catch (e) {
+            if ((e as { name?: string }).name === "AbortError") {
+              upsert(key, (t) =>
+                t.status === "streaming" ? { ...t, status: "cancelled", reconnecting: false } : t,
+              );
+              return;
+            }
+            if (allowRetry && !receivedFrame && attempt < RETRY_DELAYS_MS.length) {
+              upsert(key, (t) => ({ ...t, reconnecting: true }));
+              try {
+                await sleep(RETRY_DELAYS_MS[attempt], ctrl.signal);
+              } catch {
+                upsert(key, (t) =>
+                  t.status === "streaming" ? { ...t, status: "cancelled", reconnecting: false } : t,
+                );
+                return;
+              }
+              attempt += 1;
+              continue;
+            }
+            upsert(key, (t) => ({
+              ...t,
+              status: "error",
+              reconnecting: false,
+              error: (e as Error).message,
+              errorKind: receivedFrame ? undefined : "network",
+            }));
+            return;
           }
-        }
-      } catch (e) {
-        if ((e as { name?: string }).name === "AbortError") {
-          upsert(key, (t) => (t.status === "streaming" ? { ...t, status: "cancelled" } : t));
-        } else {
-          upsert(key, (t) => ({ ...t, status: "error", error: (e as Error).message }));
         }
       } finally {
         setBusy(false);
@@ -367,7 +444,9 @@ export function useChat() {
       const turnId = turn?.pending?.turnId ?? turn?.serverTurnId;
       if (!turnId) return;
       upsert(key, (t) => ({ ...t, status: "streaming", pending: undefined }));
-      await runStream(`/api/atelier/cli/turn/${turnId}/confirm`, { typedName }, key);
+      await runStream(`/api/atelier/cli/turn/${turnId}/confirm`, { typedName }, key, {
+        allowRetry: false,
+      });
     },
     [runStream, turns, upsert],
   );
