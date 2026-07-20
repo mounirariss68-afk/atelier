@@ -98,3 +98,4 @@
 - [Self-only chat roles clamp](atelier-selfonly-chat-roles.md) — employee/contractor chat limited to me.* tools via SELF_ONLY_CHAT_ROLES + legacy-registry skip + /cli boundary allowlist.
 - [Self-billing (RCTI) invariants](atelier-self-billing.md) — clerk reruns skip approved/disputed/paid; run builds take approved-only; harness now auto-creates pgvector before push (stale-scratch-schema failures fixed).
 - [Chat person-name scoping](atelier-chat-person-scoping.md) — listPersons is unscoped; filter name matches through roster scope BEFORE disambiguation or options leak out-of-perimeter people; contractor/employee chat = me.* only.
+- [Atelier self-only shell gating](atelier-selfonly-shell-gating.md) — guard holds org routes unmounted until /me loads; app-wide dialogs gate queries on open; polls/tabs gated on role or employees 403-flood.

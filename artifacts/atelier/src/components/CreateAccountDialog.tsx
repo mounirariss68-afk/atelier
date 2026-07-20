@@ -27,6 +27,7 @@ import {
   useAtelierGetMe,
   useAtelierListAccounts,
   getAtelierListAccountsQueryKey,
+  getAtelierListPersonasQueryKey,
   type AtelierAccountSummary,
   type AtelierAccountDuplicateError,
   type AtelierAccountDuplicateCandidate,
@@ -294,8 +295,15 @@ export function CreateAccountDialog({
   const create = useAtelierCreateAccount();
   const checkDup = useAtelierCheckAccountDuplicates();
   const { data: me } = useAtelierGetMe();
-  const { data: personas } = useAtelierListPersonas();
-  const { data: accounts } = useAtelierListAccounts();
+  // Task #444 — this dialog is mounted app-wide (CreateAccountProvider),
+  // including for self-only personas whose server boundary 403s these
+  // org-wide endpoints. Don't fetch anything until the dialog is opened.
+  const { data: personas } = useAtelierListPersonas({
+    query: { enabled: open, queryKey: getAtelierListPersonasQueryKey() },
+  });
+  const { data: accounts } = useAtelierListAccounts(undefined, {
+    query: { enabled: open, queryKey: getAtelierListAccountsQueryKey() },
+  });
 
   const partners = React.useMemo(
     // Task #292 — partner-tier owners include founding_partner.
@@ -325,7 +333,7 @@ export function CreateAccountDialog({
   const [countryPresence, setCountryPresence] = React.useState<
     Array<{ country: string; role: string; note: string }>
   >([]);
-  const { data: referenceData } = useReferenceBootstrap();
+  const { data: referenceData } = useReferenceBootstrap(open);
   // True once the partner manually edits the currency, so the country→currency
   // effect stops auto-resolving. Reset on each open.
   const currencyTouched = React.useRef(false);

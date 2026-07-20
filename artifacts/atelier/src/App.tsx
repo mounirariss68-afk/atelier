@@ -1,5 +1,7 @@
 import * as React from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { useAtelierGetMe } from "@workspace/api-client-react";
+import { isSelfOnlyRole } from "@/lib/lens";
 import {
   QueryClient,
   QueryClientProvider,
@@ -256,9 +258,39 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Task #444 — route-level guard for self-only personas (employee /
+ * contractor). Their server boundary is locked to /me + /cli, so every
+ * org-wide page (Clients, People, Reports, …) would just mount and fire
+ * a stream of 403'd fetches. Steer them to the Me lens instead of
+ * rendering the dead-end page at all.
+ */
+function SelfOnlyRouteGuard({ children }: { children: React.ReactNode }) {
+  const { data: me } = useAtelierGetMe();
+  const [location, setLocation] = useLocation();
+  const selfOnly = isSelfOnlyRole(me?.role);
+  const allowed =
+    location === "/sign-in" ||
+    location === "/me" ||
+    location.startsWith("/me/") ||
+    location === "/cli" ||
+    location.startsWith("/cli/");
+  const blocked = selfOnly && !allowed;
+  React.useEffect(() => {
+    if (blocked) setLocation("/me", { replace: true });
+  }, [blocked, setLocation]);
+  if (blocked) return null;
+  // Task #444 — while /me is still loading we can't tell whether the user is
+  // self-only. Hold off mounting org routes so their queries (accounts,
+  // executive-mapper rollups, …) don't fire-and-403 for employee/contractor.
+  if (!me && !allowed) return null;
+  return <>{children}</>;
+}
+
 function Router() {
   return (
     <Shell>
+      <SelfOnlyRouteGuard>
       <Switch>
         <Route path="/sign-in" component={SignIn} />
         <Route path="/cli" component={Cli} />
@@ -732,6 +764,7 @@ function Router() {
         <Route path="/finance/_lens" component={FinanceLensHome} />
         <Route component={NotFound} />
       </Switch>
+      </SelfOnlyRouteGuard>
     </Shell>
   );
 }

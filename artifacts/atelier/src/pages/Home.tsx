@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks } from "@workspace/api-client-react";
+import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks, getAtelierGetHomeQueryKey } from "@workspace/api-client-react";
 import { SectionHead, PageHero, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -764,14 +764,21 @@ export default function Home() {
   // Use `isPending` (initial load only) instead of `isLoading` so background
   // refetches — e.g. on window focus or after a persona switch — don't flip
   // the page back into the full-page skeleton and snap to content again.
-  const { data: home, isPending } = useAtelierGetHome();
   const { data: me } = useAtelierGetMe();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Task #50 — self-only personas (employee/contractor) have no org-wide
   // Home; their landing page is the Me lens.
+  // Task #444 — don't fire the org-wide /home fetch (which 403s for
+  // self-only roles) until the profile has loaded and the role may see it.
   const selfOnly = isSelfOnlyRole(me?.role);
+  const { data: home, isPending } = useAtelierGetHome({
+    query: {
+      enabled: !!me && !selfOnly,
+      queryKey: getAtelierGetHomeQueryKey(),
+    },
+  });
   React.useEffect(() => {
     if (selfOnly) setLocation("/me", { replace: true });
   }, [selfOnly, setLocation]);

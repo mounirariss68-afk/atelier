@@ -38,6 +38,7 @@ import { emitCliOpened } from "@/components/cli/telemetry";
 import { derivePageContext } from "@/components/cli/pageContext";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
+import { isSelfOnlyRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 
 /**
@@ -73,7 +74,7 @@ export function TopNav() {
   // and whenever the switcher is disabled.
   const personaSwitcherEnabled =
     import.meta.env.VITE_ATELIER_PERSONA_SWITCHER === "true";
-  const selfOnly = me?.role === "employee" || me?.role === "contractor";
+  const selfOnly = isSelfOnlyRole(me?.role);
   const { data: fetchedPersonas } = useAtelierListPersonas({
     query: {
       enabled: personaSwitcherEnabled && !!me && !selfOnly,
@@ -241,7 +242,11 @@ export function TopNav() {
                 <div className="border-t border-border mt-1 pt-1">
                   {/* Task #368 — Firm submenu groups items that don't belong
                       to a managed entity lens (firm IP, ops, settings).
-                      Old top-nav entries for these were removed. */}
+                      Old top-nav entries for these were removed.
+                      Task #444 — self-only personas (employee/contractor) are
+                      server-locked to /me; every Firm page would 403, so the
+                      submenu is hidden entirely for them. */}
+                  {!selfOnly && (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger
                       data-testid="avatar-firm-submenu"
@@ -269,6 +274,7 @@ export function TopNav() {
                       </DropdownMenuSubContent>
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
+                  )}
                   <DropdownMenuItem
                     onClick={() => setChangePwOpen(true)}
                     data-testid="menu-change-password"
@@ -529,16 +535,30 @@ export function RightRail() {
     }
   };
   const cliTriggerRef = React.useContext(CliContext).triggerRef;
+  // Task #444 — self-only personas (employee/contractor) are server-locked
+  // to /me + /cli; the org-wide /activity and /reports endpoints 403 for
+  // them. Don't start the 5s activity poll until the profile has loaded
+  // AND the role is allowed, and hide the Activity/Reports rail tabs so
+  // they aren't dead ends.
+  const { data: railMe } = useAtelierGetMe();
+  const selfOnly = isSelfOnlyRole(railMe?.role);
+  const canSeeOrgRail = !!railMe && !selfOnly;
   const { data: activities } = useAtelierGetActivity(
     { limit: 15 },
     {
       query: {
+        enabled: canSeeOrgRail,
         refetchInterval: 5000,
         refetchIntervalInBackground: false,
         queryKey: getAtelierGetActivityQueryKey({ limit: 15 }),
       },
     },
   );
+  // If a self-only user somehow lands on a hidden tab (stale state),
+  // snap back to the Agent tab.
+  React.useEffect(() => {
+    if (selfOnly && tab !== "agent") setTab("agent");
+  }, [selfOnly, tab, setTab]);
 
   // Task #333 — merge CLI sessions into the activity rail. Each
   // session is rendered as a "CLI" row alongside agent activity so the
@@ -627,6 +647,8 @@ export function RightRail() {
               <Sparkles className="w-3.5 h-3.5" />
               Agent
             </button>
+            {canSeeOrgRail && (
+            <>
             <button
               type="button"
               onClick={() => setTab("activity")}
@@ -657,6 +679,8 @@ export function RightRail() {
               <FileText className="w-3.5 h-3.5" />
               Reports
             </button>
+            </>
+            )}
           </div>
         )}
         {collapsed && (

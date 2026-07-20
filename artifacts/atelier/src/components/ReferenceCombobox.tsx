@@ -53,7 +53,7 @@ export function invalidateReferenceBootstrap() {
   cachedBootstrap = null;
 }
 
-export function useReferenceBootstrap(): {
+export function useReferenceBootstrap(enabled: boolean = true): {
   data: ReferenceBootstrap | null;
   loading: boolean;
   error: Error | null;
@@ -64,6 +64,10 @@ export function useReferenceBootstrap(): {
   const [error, setError] = React.useState<Error | null>(null);
 
   React.useEffect(() => {
+    // Task #444 — allow callers (e.g. the app-wide CreateAccountDialog) to
+    // defer the fetch until they're actually visible, so personas without
+    // access to /reference/bootstrap don't fire guaranteed-403 requests.
+    if (!enabled) return;
     let mounted = true;
     if (cachedBootstrap) {
       setData(cachedBootstrap);
@@ -89,7 +93,7 @@ export function useReferenceBootstrap(): {
       mounted = false;
       subscribers.delete(sub);
     };
-  }, []);
+  }, [enabled]);
 
   const refetch = React.useCallback(async () => {
     invalidateReferenceBootstrap();
