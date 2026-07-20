@@ -36,6 +36,7 @@ import {
   integer,
   index,
   uniqueIndex,
+  vector,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -77,6 +78,15 @@ export const atelierDocumentChunkEmbeddings = pgTable(
     provider: text("provider").notNull(),
     dim: integer("dim").notNull(),
     vec: jsonb("vec").$type<number[]>().notNull(),
+    /**
+     * Real pgvector ANN column (all-MiniLM-L6-v2, 384 dims). Nullable on
+     * purpose: `vec` (jsonb) is the write-time source of truth and older /
+     * extension-less rows may have no vector. Historically added by
+     * atelier-cli-rag.sql at boot; declared here too so `drizzle-kit push`
+     * no longer proposes dropping it (which aborted every post-merge push
+     * and kept new schema out of the dev DB → Publish diff).
+     */
+    embedding: vector("embedding", { dimensions: 384 }),
     /**
      * Task #61 — retrieval opt-out. Rows with retrievable=false stay
      * stored (and access-controlled) but are never surfaced by
