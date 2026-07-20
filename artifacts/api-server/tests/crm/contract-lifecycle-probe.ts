@@ -208,6 +208,8 @@ async function main() {
     atelierSignatureSigners,
     atelierDocuments,
     atelierLegalEntities,
+    atelierSigningEntitySignatories,
+    atelierSelfNotifications,
   } = D as any;
   const { eq, inArray, like } = await import("drizzle-orm");
   const { Document, Packer, Paragraph, TextRun } = await import("docx");
@@ -219,6 +221,10 @@ async function main() {
   const empUserId = `u_${runTag}_emp`;
   const empId = `emp_${runTag}`;
   const entityId = `lent_${runTag}`;
+  // Task #335 — a second partner: contract manager but NOT an authorised signatory.
+  const p2Id = `u_${runTag}_p2`;
+  let contract2Id: string | null = null;
+  let sigRequestId2: string | null = null;
 
   const server = app.listen(0);
   await new Promise<void>((r) => server.once("listening", () => r()));
@@ -357,6 +363,16 @@ async function main() {
       role: "employee",
       roleLabel: "Employee",
       title: "Consultant",
+    } as any);
+    await db.insert(atelierUsers).values({
+      id: p2Id,
+      orgId: "aico",
+      name: "Probe335 Partner2",
+      initials: "P2",
+      email: `${runTag}_p2@example.test`,
+      role: "partner",
+      roleLabel: "Partner",
+      title: "Partner",
     } as any);
     await db.insert(atelierEmployees).values({
       id: empId,
@@ -513,6 +529,102 @@ async function main() {
     const finDocs = (cf?.documents ?? []).filter((d: any) => d.kind === "final_docx");
     check("final_docx on chain", finDocs.length === 1, cf?.documents);
 
+    // ---- 5b. Task #335 — per-entity authorised signatories ----
+    // Configure: only fp is an authorised signatory of the entity.
+    const setSig = await api("PUT", `/signing-entities/${entityId}/signatories`, {
+      userIds: [fpId],
+    });
+    check("set signatories -> 200", setSig.status === 200, setSig);
+    check(
+      "signatories echo resolved user",
+      (setSig.body?.authorisedSignatories ?? []).some((s: any) => s.userId === fpId),
+      setSig.body,
+    );
+    const badSig = await api("PUT", `/signing-entities/${entityId}/signatories`, {
+      userIds: ["u_not_a_real_user"],
+    });
+    check("unknown signatory user -> 400", badSig.status === 400, badSig);
+    const empSig = await api(
+      "PUT",
+      `/signing-entities/${entityId}/signatories`,
+      { userIds: [] },
+      empUserId,
+    );
+    check("employee cannot set signatories -> 403", empSig.status === 403, empSig);
+    const entList = await api("GET", "/signing-entities");
+    const entWire = (entList.body?.entities ?? []).find((e: any) => e.id === entityId);
+    check(
+      "GET signing-entities includes authorisedSignatories",
+      (entWire?.authorisedSignatories ?? []).some((s: any) => s.userId === fpId),
+      entWire,
+    );
+
+    // Viewer flags on contract detail.
+    const detailFp = await api("GET", `/contracts/${contractId}`);
+    check(
+      "fp viewerIsAuthorisedSignatory true",
+      detailFp.body?.signing?.viewerIsAuthorisedSignatory === true,
+      detailFp.body?.signing,
+    );
+    const detailP2 = await api("GET", `/contracts/${contractId}`, undefined, p2Id);
+    check(
+      "p2 viewerIsAuthorisedSignatory false",
+      detailP2.body?.signing?.viewerIsAuthorisedSignatory === false,
+      detailP2.body?.signing,
+    );
+
+    // Crafted signFirst by a non-signatory manager -> 403.
+    const p2Sign = await api(
+      "POST",
+      `/contracts/${contractId}/send-for-signature`,
+      {
+        signers: [
+          { name: "Probe335 Partner2", email: `${runTag}_p2@example.test` },
+          { name: "Nadia Probe", email: "p159_signer@example.test" },
+        ],
+        signFirst: true,
+      },
+      p2Id,
+    );
+    check("non-signatory signFirst -> 403", p2Sign.status === 403, p2Sign);
+    check(
+      "403 code not-authorised-signatory",
+      p2Sign.body?.error === "not-authorised-signatory",
+      p2Sign.body,
+    );
+    // Signatory signFirst where the first signer is NOT the caller -> 403.
+    const fpWrongFirst = await api("POST", `/contracts/${contractId}/send-for-signature`, {
+      signers: [{ name: "Someone Else", email: "someone_else@example.test" }],
+      signFirst: true,
+    });
+    check("signFirst first-signer-not-caller -> 403", fpWrongFirst.status === 403, fpWrongFirst);
+    check(
+      "403 code sign-first-not-caller",
+      fpWrongFirst.body?.error === "sign-first-not-caller",
+      fpWrongFirst.body,
+    );
+
+    // Non-signatory "Send for signature" (internal request) -> awaiting + notify.
+    const reqSig = await api("POST", `/contracts/${contractId}/request-signature`, {}, p2Id);
+    check("request-signature -> 200", reqSig.status === 200, reqSig);
+    check(
+      "awaiting fields set",
+      !!reqSig.body?.contract?.firmSignatureRequestedAt &&
+        reqSig.body?.contract?.firmSignatureRequestedBy === p2Id,
+      reqSig.body?.contract,
+    );
+    const notifRows = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(eq(atelierSelfNotifications.userId, fpId));
+    check(
+      "signatory notified",
+      notifRows.some((n: any) => n.kind === "contract_signature_requested"),
+      notifRows.map((n: any) => n.kind),
+    );
+    const empReq = await api("POST", `/contracts/${contractId}/request-signature`, {}, empUserId);
+    check("employee request-signature -> 403", empReq.status === 403, empReq);
+
     // ---- 6. send for signature (LibreOffice PDF + stub DocuSeal) ----
     const sent = await api("POST", `/contracts/${contractId}/send-for-signature`, {
       signers: [{ name: "Nadia Probe", email: "p159_signer@example.test" }],
@@ -521,6 +633,12 @@ async function main() {
     check("status out_for_signature", sent.body?.contract?.status === "out_for_signature", sent.body?.contract?.status);
     sigRequestId = sent.body?.contract?.signatureRequestId ?? null;
     check("signatureRequestId linked", !!sigRequestId, sent.body?.contract);
+    // Task #335 — a successful send clears the awaiting-firm-signatory flag.
+    check(
+      "awaiting flag cleared on send",
+      sent.body?.contract?.firmSignatureRequestedAt == null,
+      sent.body?.contract?.firmSignatureRequestedAt,
+    );
 
     // Task #298 — the second-party template fields become DocuSeal boxes:
     // a date box (auto-filled at signing) and a labelled text box the
@@ -574,6 +692,31 @@ async function main() {
     check("terminal status never regresses -> 409", regress.status === 409, regress);
     const regen2 = await api("POST", `/contracts/${contractId}/regenerate`, { values: {} });
     check("regenerate after signed rejected", regen2.status >= 400, regen2);
+
+    // ---- 7b. Task #335 — authorised signatory signs & sends from DRAFT ----
+    const created2 = await api("POST", "/contracts", {
+      templateId,
+      counterparty: { kind: "person", id: empId },
+      signingEntityId: entityId,
+      values: { fee: "AED 5,000", effective_date: "20 July 2026" },
+    });
+    check("second contract create -> 201", created2.status === 201, created2);
+    contract2Id = created2.body?.contract?.id ?? null;
+    check("second contract is draft", created2.body?.contract?.status === "draft", created2.body?.contract?.status);
+    const sent2 = await api("POST", `/contracts/${contract2Id}/send-for-signature`, {
+      signers: [
+        { name: "Probe159 Partner", email: `${runTag}_fp@example.test` },
+        { name: "Nadia Probe", email: "p159_signer@example.test" },
+      ],
+      signFirst: true,
+    });
+    check("signatory signFirst from draft -> 201", sent2.status === 201, sent2);
+    check(
+      "second contract out_for_signature",
+      sent2.body?.contract?.status === "out_for_signature",
+      sent2.body?.contract?.status,
+    );
+    sigRequestId2 = sent2.body?.contract?.signatureRequestId ?? null;
 
     // ---- 8. RBAC: employee sees OWN contract via Me lens, cannot manage ----
     // Employee personas are hard-gated to /me/* (Task #50 self-scope).
@@ -655,6 +798,16 @@ async function main() {
         await db.delete(atelierSignatureSigners).where(eq(atelierSignatureSigners.requestId, sigRequestId));
         await db.delete(atelierSignatureRequests).where(eq(atelierSignatureRequests.id, sigRequestId));
       }
+      if (contract2Id) {
+        await db.delete(atelierContractDocuments).where(eq(atelierContractDocuments.contractId, contract2Id));
+        await db.delete(atelierContractRecords).where(eq(atelierContractRecords.id, contract2Id));
+      }
+      if (sigRequestId2) {
+        await db.delete(atelierSignatureSigners).where(eq(atelierSignatureSigners.requestId, sigRequestId2));
+        await db.delete(atelierSignatureRequests).where(eq(atelierSignatureRequests.id, sigRequestId2));
+      }
+      await db.delete(atelierSigningEntitySignatories).where(eq(atelierSigningEntitySignatories.entityId, entityId));
+      await db.delete(atelierSelfNotifications).where(inArray(atelierSelfNotifications.userId, [fpId, p2Id]));
       if (templateId) {
         await db.delete(atelierContractTemplateVersions).where(eq(atelierContractTemplateVersions.templateId, templateId));
         await db.delete(atelierContractTemplates).where(eq(atelierContractTemplates.id, templateId));
@@ -665,7 +818,7 @@ async function main() {
       await db.delete(atelierDocuments).where(like(atelierDocuments.title, `%${runTag}%`));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, empId));
       await db.delete(atelierLegalEntities).where(eq(atelierLegalEntities.id, entityId));
-      await db.delete(atelierUsers).where(inArray(atelierUsers.id, [fpId, empUserId]));
+      await db.delete(atelierUsers).where(inArray(atelierUsers.id, [fpId, empUserId, p2Id]));
     } catch (e) {
       console.error("cleanup error", e);
     }

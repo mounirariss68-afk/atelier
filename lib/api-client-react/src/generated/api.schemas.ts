@@ -6719,6 +6719,12 @@ export interface AtelierContract {
   signedLibraryDocumentId?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  firmSignatureRequestedAt?: string | null;
+  /** @nullable */
+  firmSignatureRequestedBy?: string | null;
+  /** @nullable */
+  firmSignatureRequestedByLabel?: string | null;
   createdAt: string;
   updatedAt: string;
   documents?: AtelierContractDocument[];
@@ -6727,6 +6733,19 @@ export interface AtelierContract {
 export interface AtelierContractList {
   contracts: AtelierContract[];
 }
+
+export type AtelierContractEnvelopeSigningSignatoriesItem = {
+  userId: string;
+  name: string;
+};
+
+/**
+ * Task 335 — firm-side signing authority for the contract's signing entity
+ */
+export type AtelierContractEnvelopeSigning = {
+  signatories: AtelierContractEnvelopeSigningSignatoriesItem[];
+  viewerIsAuthorisedSignatory: boolean;
+};
 
 export type AtelierContractEnvelopeFieldsItemRole =
   (typeof AtelierContractEnvelopeFieldsItemRole)[keyof typeof AtelierContractEnvelopeFieldsItemRole];
@@ -6746,6 +6765,8 @@ export type AtelierContractEnvelopeFieldsItem = {
 export interface AtelierContractEnvelope {
   contract: AtelierContract;
   signatureRequestId?: string;
+  /** Task 335 — firm-side signing authority for the contract's signing entity */
+  signing?: AtelierContractEnvelopeSigning;
   fields?: AtelierContractEnvelopeFieldsItem[];
 }
 
@@ -6878,7 +6899,15 @@ export interface AtelierContractSend {
   /** @maxLength 4000 */
   message?: string;
   expiresAt?: string;
+  /** Task 335 — caller signs in-app first; requires the caller to be an authorised signatory of the contract's signing entity */
+  signFirst?: boolean;
 }
+
+export type AtelierSigningEntityAuthorisedSignatoriesItem = {
+  userId: string;
+  name: string;
+  email: string;
+};
 
 export interface AtelierSigningEntity {
   id: string;
@@ -6889,6 +6918,8 @@ export interface AtelierSigningEntity {
   governingLaw: string;
   courts: string;
   isDefault: boolean;
+  /** Task 335 — users allowed to execute the firm-side Sign & send for this entity */
+  authorisedSignatories?: AtelierSigningEntityAuthorisedSignatoriesItem[];
 }
 
 export interface AtelierSigningEntityList {

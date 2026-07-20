@@ -10603,6 +10603,9 @@ components:
         signatureRequestId: { type: ["string", "null"] }
         signedLibraryDocumentId: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
+        firmSignatureRequestedAt: { type: ["string", "null"], format: date-time }
+        firmSignatureRequestedBy: { type: ["string", "null"] }
+        firmSignatureRequestedByLabel: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         documents:
@@ -10623,6 +10626,20 @@ components:
       properties:
         contract: { $ref: "#/components/schemas/AtelierContract" }
         signatureRequestId: { type: string }
+        signing:
+          type: object
+          description: Task 335 — firm-side signing authority for the contract's signing entity
+          required: [signatories, viewerIsAuthorisedSignatory]
+          properties:
+            signatories:
+              type: array
+              items:
+                type: object
+                required: [userId, name]
+                properties:
+                  userId: { type: string }
+                  name: { type: string }
+            viewerIsAuthorisedSignatory: { type: boolean }
         fields:
           type: array
           items:
@@ -10705,6 +10722,9 @@ components:
         title: { type: string, minLength: 1, maxLength: 300 }
         message: { type: string, maxLength: 4000 }
         expiresAt: { type: string, format: date-time }
+        signFirst:
+          type: boolean
+          description: Task 335 — caller signs in-app first; requires the caller to be an authorised signatory of the contract's signing entity
 
     AtelierSigningEntity:
       type: object
@@ -10718,6 +10738,16 @@ components:
         governingLaw: { type: string }
         courts: { type: string }
         isDefault: { type: boolean }
+        authorisedSignatories:
+          type: array
+          description: Task 335 — users allowed to execute the firm-side Sign & send for this entity
+          items:
+            type: object
+            required: [userId, name, email]
+            properties:
+              userId: { type: string }
+              name: { type: string }
+              email: { type: string }
 
     AtelierSigningEntityList:
       type: object

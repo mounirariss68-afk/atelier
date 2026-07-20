@@ -48,6 +48,12 @@ export interface AtelierContract {
   signedLibraryDocumentId?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  firmSignatureRequestedAt?: Date | null;
+  /** @nullable */
+  firmSignatureRequestedBy?: string | null;
+  /** @nullable */
+  firmSignatureRequestedByLabel?: string | null;
   createdAt: Date;
   updatedAt: Date;
   documents?: AtelierContractDocument[];

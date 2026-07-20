@@ -333,6 +333,9 @@ function SendSignatureDialog(props: {
                 id: props.contract.id,
                 data: {
                   signers: signers.map((s) => ({ name: s.name.trim(), email: s.email.trim() })),
+                  // Task #335 — server enforces that only an authorised
+                  // signatory of the signing entity may sign first.
+                  ...(props.signFirst ? { signFirst: true } : {}),
                 },
               })
             }
@@ -570,6 +573,10 @@ export default function ContractDetail() {
   const canManage = me?.role === "founding_partner" || me?.role === "partner";
   const { data, isLoading } = useAtelierGetContract(id);
   const contract = data?.contract;
+  // Task #335 — per-entity authorised signatories: who may "Sign & send".
+  const signing = (data as { signing?: { signatories: Array<{ userId: string; name: string }>; viewerIsAuthorisedSignatory: boolean } } | undefined)?.signing;
+  const viewerCanSign = signing?.viewerIsAuthorisedSignatory ?? true;
+  const [requestBusy, setRequestBusy] = React.useState(false);
   const [uploadOpen, setUploadOpen] = React.useState(false);
   const [sendOpen, setSendOpen] = React.useState(false);
   // Task #300 — "Sign & send" (partner signs in-app first).
@@ -632,6 +639,45 @@ export default function ContractDetail() {
     }
     invalidate();
   };
+  // Task #335 — non-signatory managers flag the contract as awaiting a
+  // firm signatory; every authorised signatory gets a notification.
+  const requestSignature = async () => {
+    setRequestBusy(true);
+    try {
+      const resp = await fetch(`${API_BASE}/contracts/${id}/request-signature`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        toast({
+          title: "Could not request signature",
+          description: String(body?.message ?? body?.error ?? `Error ${resp.status}`),
+          variant: "destructive",
+        });
+        return;
+      }
+      const names = Array.isArray(body?.notified)
+        ? body.notified.map((n: { name: string }) => n.name).join(", ")
+        : "";
+      toast({
+        title: "Signature requested",
+        description: names
+          ? `Authorised signatories notified: ${names}.`
+          : "Authorised signatories have been notified.",
+      });
+      invalidate();
+    } catch {
+      toast({
+        title: "Could not request signature",
+        description: "Could not reach the server. Try again in a moment.",
+        variant: "destructive",
+      });
+    } finally {
+      setRequestBusy(false);
+    }
+  };
+
   const patch = useAtelierUpdateContract({
     mutation: {
       onSuccess: () => {
@@ -697,31 +743,43 @@ export default function ContractDetail() {
                   Upload Word
                 </Button>
               )}
-              {contract.status === "final_uploaded" && (
-                <>
+              {["draft", "out_for_review", "final_uploaded"].includes(contract.status) &&
+                Boolean(contract.currentDocumentId) &&
+                (viewerCanSign ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setSignFirst(false);
+                        setSendOpen(true);
+                      }}
+                      data-testid="button-open-send"
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Send to counterparty
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setSignFirst(true);
+                        setSendOpen(true);
+                      }}
+                      data-testid="button-open-sign-send"
+                    >
+                      <Send className="w-4 h-4 mr-1" />
+                      Sign & send
+                    </Button>
+                  </>
+                ) : (
+                  // Task #335 — not an authorised signatory: request one.
                   <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setSignFirst(false);
-                      setSendOpen(true);
-                    }}
-                    data-testid="button-open-send"
+                    onClick={() => void requestSignature()}
+                    disabled={requestBusy}
+                    data-testid="button-request-signature"
                   >
                     <Send className="w-4 h-4 mr-1" />
-                    Send for signature
+                    {requestBusy ? "Requesting…" : "Send for signature"}
                   </Button>
-                  <Button
-                    onClick={() => {
-                      setSignFirst(true);
-                      setSendOpen(true);
-                    }}
-                    data-testid="button-open-sign-send"
-                  >
-                    <Send className="w-4 h-4 mr-1" />
-                    Sign & send
-                  </Button>
-                </>
-              )}
+                ))}
               {contract.status === "out_for_signature" && contract.signatureRequestId && (
                 <Button
                   onClick={() => void openEmbeddedSigning(contract.signatureRequestId!)}
@@ -750,6 +808,19 @@ export default function ContractDetail() {
           . Status updates here automatically once everyone signs.
         </Card>
       )}
+      {contract.firmSignatureRequestedAt &&
+        !TERMINAL.has(contract.status) &&
+        contract.status !== "out_for_signature" && (
+          <Card className="p-4 text-sm text-text-mute" data-testid="card-awaiting-signatory">
+            Awaiting firm signature
+            {signing && signing.signatories.length > 0
+              ? ` — ${signing.signatories.map((s) => s.name).join(", ")}`
+              : ""}
+            . Requested by {contract.firmSignatureRequestedByLabel ?? "a contract manager"} on{" "}
+            {new Date(contract.firmSignatureRequestedAt).toLocaleDateString()}.
+            {viewerCanSign ? " Use Sign & send above to sign and send it out." : ""}
+          </Card>
+        )}
       {contract.status === "signed" && contract.signedLibraryDocumentId && (
         <Card className="p-4 text-sm text-text-mute">
           Signed ✓ — the executed PDF is archived in the{" "}

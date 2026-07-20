@@ -12,11 +12,18 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
-import { eq, and, desc, isNull, max } from "drizzle-orm";
-import { db, atelierFirmProfile, atelierUsers } from "@workspace/db";
+import { eq, and, desc, isNull, max, inArray } from "drizzle-orm";
+import {
+  db,
+  atelierFirmProfile,
+  atelierUsers,
+  atelierSigningEntitySignatories,
+} from "@workspace/db";
+import { canApproveAsPartner } from "./personaRoles";
 import { runBrandProfileWriter } from "../../lib/atelier-agents/runner.js";
 import {
   listSigningEntities,
+  listEntitySignatories,
   loadPublishedFirmProfile,
   normalizeSigningEntities,
 } from "../../lib/atelier-contract-service.js";
@@ -272,10 +279,104 @@ router.get("/signing-entities", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
   const entities = await listSigningEntities(me.orgId);
+  // Task #335 — attach each entity's authorised signatories (resolved to
+  // live users) so the management UI and contract surfaces share one read.
+  const withSignatories = await Promise.all(
+    entities.map(async (e) => ({
+      ...e,
+      authorisedSignatories: await listEntitySignatories(me.orgId, e.id),
+    })),
+  );
   res.json({
-    entities,
+    entities: withSignatories,
     defaultEntityId: entities.find((e) => e.isDefault)?.id ?? null,
   });
+});
+
+// ---- Task #335 — authorised signatories per signing entity ----
+
+const signatoriesBody = z.object({
+  userIds: z.array(z.string().trim().min(1).max(120)).max(20),
+});
+
+/**
+ * Replace the authorised-signatories list of one signing entity.
+ * Partner-tier only. Every id must be a live org user. Audited.
+ */
+// @cli-skip: firm-profile management is UI-driven (Task #335)
+router.put("/signing-entities/:entityId/signatories", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!canApproveAsPartner(me.role)) {
+    res.status(403).json({
+      error: "forbidden",
+      message: "Only partners and founding partners manage authorised signatories.",
+    });
+    return;
+  }
+  const parsed = signatoriesBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+    return;
+  }
+  const entityId = String(req.params.entityId);
+  const entities = await listSigningEntities(me.orgId);
+  const entity = entities.find((e) => e.id === entityId);
+  if (!entity) {
+    res.status(404).json({ error: "entity-not-found" });
+    return;
+  }
+  const userIds = [...new Set(parsed.data.userIds)];
+  if (userIds.length > 0) {
+    const users = await db
+      .select({ id: atelierUsers.id })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.orgId, me.orgId),
+          inArray(atelierUsers.id, userIds),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    const found = new Set(users.map((u) => u.id));
+    const unknown = userIds.filter((id) => !found.has(id));
+    if (unknown.length > 0) {
+      res.status(400).json({
+        error: "unknown-users",
+        message: `Not active users in this org: ${unknown.join(", ")}`,
+      });
+      return;
+    }
+  }
+  await db
+    .insert(atelierSigningEntitySignatories)
+    .values({
+      id: rid("sesig"),
+      orgId: me.orgId,
+      entityId,
+      userIds,
+      updatedBy: me.id,
+      updatedByLabel: me.name,
+    })
+    .onConflictDoUpdate({
+      target: [atelierSigningEntitySignatories.orgId, atelierSigningEntitySignatories.entityId],
+      set: {
+        userIds,
+        updatedBy: me.id,
+        updatedByLabel: me.name,
+        updatedAt: new Date(),
+      },
+    });
+  await audit({
+    entityType: "signing_entity",
+    entityId,
+    actor: me,
+    action: "signing_entity.signatories.updated",
+    payload: { entityName: entity.name, userIds },
+    summary: `Set ${userIds.length} authorised signator${userIds.length === 1 ? "y" : "ies"} for "${entity.name}"`,
+  });
+  const authorisedSignatories = await listEntitySignatories(me.orgId, entityId);
+  res.json({ entityId, authorisedSignatories });
 });
 
 const legalEntitiesBody = z.object({

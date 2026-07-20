@@ -7,9 +7,12 @@
  */
 import type { AtelierContract } from "./atelierContract";
 import type { AtelierContractEnvelopeFieldsItem } from "./atelierContractEnvelopeFieldsItem";
+import type { AtelierContractEnvelopeSigning } from "./atelierContractEnvelopeSigning";
 
 export interface AtelierContractEnvelope {
   contract: AtelierContract;
   signatureRequestId?: string;
+  /** Task 335 — firm-side signing authority for the contract's signing entity */
+  signing?: AtelierContractEnvelopeSigning;
   fields?: AtelierContractEnvelopeFieldsItem[];
 }

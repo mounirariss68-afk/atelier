@@ -10,13 +10,15 @@
  * (partner-tier) before invoking the mutating services.
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, inArray } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
   atelierContacts,
   atelierEmployees,
   atelierFirmProfile,
+  atelierUsers,
+  atelierSigningEntitySignatories,
   atelierContractTemplates,
   atelierContractTemplateVersions,
   atelierContractRecords,
@@ -248,6 +250,46 @@ export async function listSigningEntities(orgId: string): Promise<SigningEntity[
     merged[0].isDefault = true;
   }
   return merged;
+}
+
+/**
+ * Task #335 — authorised signatories of a signing entity, resolved to live
+ * atelier_users rows (deleted users silently drop out). Empty array means
+ * "no restriction configured" (legacy: any partner-tier manager may sign).
+ */
+export async function listEntitySignatories(
+  orgId: string,
+  entityId: string,
+): Promise<Array<{ userId: string; name: string; email: string }>> {
+  const [row] = await db
+    .select()
+    .from(atelierSigningEntitySignatories)
+    .where(
+      and(
+        eq(atelierSigningEntitySignatories.orgId, orgId),
+        eq(atelierSigningEntitySignatories.entityId, entityId),
+      ),
+    );
+  const ids = (row?.userIds ?? []).filter((v): v is string => typeof v === "string");
+  if (ids.length === 0) return [];
+  const users = await db
+    .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
+    .from(atelierUsers)
+    .where(
+      and(
+        eq(atelierUsers.orgId, orgId),
+        inArray(atelierUsers.id, ids),
+        isNull(atelierUsers.deletedAt),
+      ),
+    );
+  const byId = new Map(users.map((u) => [u.id, u]));
+  // Preserve the configured order.
+  return ids
+    .filter((id) => byId.has(id))
+    .map((id) => {
+      const u = byId.get(id)!;
+      return { userId: u.id, name: u.name, email: u.email };
+    });
 }
 
 /**

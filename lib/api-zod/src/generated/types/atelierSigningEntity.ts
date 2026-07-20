@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierSigningEntityAuthorisedSignatoriesItem } from "./atelierSigningEntityAuthorisedSignatoriesItem";
 
 export interface AtelierSigningEntity {
   id: string;
@@ -15,4 +16,6 @@ export interface AtelierSigningEntity {
   governingLaw: string;
   courts: string;
   isDefault: boolean;
+  /** Task 335 — users allowed to execute the firm-side Sign & send for this entity */
+  authorisedSignatories?: AtelierSigningEntityAuthorisedSignatoriesItem[];
 }

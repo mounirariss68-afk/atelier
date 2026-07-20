@@ -1544,6 +1544,18 @@ export const AtelierListSigningEntitiesResponse = zod.object({
       governingLaw: zod.string(),
       courts: zod.string(),
       isDefault: zod.boolean(),
+      authorisedSignatories: zod
+        .array(
+          zod.object({
+            userId: zod.string(),
+            name: zod.string(),
+            email: zod.string(),
+          }),
+        )
+        .optional()
+        .describe(
+          "Task 335 — users allowed to execute the firm-side Sign & send for this entity",
+        ),
     }),
   ),
   defaultEntityId: zod.string().nullish(),
@@ -3242,6 +3254,9 @@ export const AtelierListContractsResponse = zod.object({
       signatureRequestId: zod.string().nullish(),
       signedLibraryDocumentId: zod.string().nullish(),
       notes: zod.string().nullish(),
+      firmSignatureRequestedAt: zod.coerce.date().nullish(),
+      firmSignatureRequestedBy: zod.string().nullish(),
+      firmSignatureRequestedByLabel: zod.string().nullish(),
       createdAt: zod.coerce.date(),
       updatedAt: zod.coerce.date(),
       documents: zod
@@ -3386,6 +3401,9 @@ export const AtelierGetContractResponse = zod.object({
     signatureRequestId: zod.string().nullish(),
     signedLibraryDocumentId: zod.string().nullish(),
     notes: zod.string().nullish(),
+    firmSignatureRequestedAt: zod.coerce.date().nullish(),
+    firmSignatureRequestedBy: zod.string().nullish(),
+    firmSignatureRequestedByLabel: zod.string().nullish(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
     documents: zod
@@ -3411,6 +3429,20 @@ export const AtelierGetContractResponse = zod.object({
       .optional(),
   }),
   signatureRequestId: zod.string().optional(),
+  signing: zod
+    .object({
+      signatories: zod.array(
+        zod.object({
+          userId: zod.string(),
+          name: zod.string(),
+        }),
+      ),
+      viewerIsAuthorisedSignatory: zod.boolean(),
+    })
+    .optional()
+    .describe(
+      "Task 335 — firm-side signing authority for the contract's signing entity",
+    ),
   fields: zod
     .array(
       zod.object({
@@ -3498,6 +3530,9 @@ export const AtelierUpdateContractResponse = zod.object({
     signatureRequestId: zod.string().nullish(),
     signedLibraryDocumentId: zod.string().nullish(),
     notes: zod.string().nullish(),
+    firmSignatureRequestedAt: zod.coerce.date().nullish(),
+    firmSignatureRequestedBy: zod.string().nullish(),
+    firmSignatureRequestedByLabel: zod.string().nullish(),
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date(),
     documents: zod
@@ -3523,6 +3558,20 @@ export const AtelierUpdateContractResponse = zod.object({
       .optional(),
   }),
   signatureRequestId: zod.string().optional(),
+  signing: zod
+    .object({
+      signatories: zod.array(
+        zod.object({
+          userId: zod.string(),
+          name: zod.string(),
+        }),
+      ),
+      viewerIsAuthorisedSignatory: zod.boolean(),
+    })
+    .optional()
+    .describe(
+      "Task 335 — firm-side signing authority for the contract's signing entity",
+    ),
   fields: zod
     .array(
       zod.object({
@@ -3595,6 +3644,12 @@ export const AtelierSendContractForSignatureBody = zod.object({
     .max(atelierSendContractForSignatureBodyMessageMax)
     .optional(),
   expiresAt: zod.coerce.date().optional(),
+  signFirst: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Task 335 — caller signs in-app first; requires the caller to be an authorised signatory of the contract's signing entity",
+    ),
 });
 
 /**

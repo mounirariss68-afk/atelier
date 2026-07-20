@@ -21,4 +21,6 @@ export interface AtelierContractSend {
   /** @maxLength 4000 */
   message?: string;
   expiresAt?: Date;
+  /** Task 335 — caller signs in-app first; requires the caller to be an authorised signatory of the contract's signing entity */
+  signFirst?: boolean;
 }

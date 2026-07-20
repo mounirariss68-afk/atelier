@@ -48,6 +48,7 @@ import {
   type PriorFieldReview,
 } from "@workspace/db";
 import { canApproveAsPartner } from "./personaRoles";
+import { emitSelfNotification } from "./meRoutes.js";
 import { canSeeAccount } from "./accountRoutes";
 import { accessibleEngagementIds } from "./engagementRoutes";
 import {
@@ -79,6 +80,7 @@ import {
 import {
   loadTemplate,
   loadContract,
+  listEntitySignatories,
   resolveCounterparty,
   firmAutoFill,
   buildFieldValues,
@@ -224,6 +226,9 @@ function contractShape(c: ContractRow, documents?: ContractDocRow[]) {
     signatureRequestId: c.signatureRequestId,
     signedLibraryDocumentId: c.signedLibraryDocumentId,
     notes: c.notes,
+    firmSignatureRequestedAt: c.firmSignatureRequestedAt,
+    firmSignatureRequestedBy: c.firmSignatureRequestedBy,
+    firmSignatureRequestedByLabel: c.firmSignatureRequestedByLabel,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     ...(documents ? { documents: documents.map(docShape) } : {}),
@@ -1106,7 +1111,19 @@ router.get("/contracts/:id", async (req, res) => {
   // group the counterparty's captured-at-signing answers under their
   // human-readable labels instead of raw keys.
   const fields = await loadContractFieldMeta(contract.templateVersionId);
-  res.json({ contract: contractShape(contract, documents), fields });
+  // Task #335 — firm-side signing authority for this contract's signing
+  // entity: who may "Sign & send" and whether the viewer is one of them.
+  const signatories = contract.signingEntityId
+    ? await listEntitySignatories(me.orgId, contract.signingEntityId)
+    : [];
+  const signing = {
+    signatories: signatories.map((s) => ({ userId: s.userId, name: s.name })),
+    // Empty list = legacy behaviour: any partner-tier manager may sign.
+    viewerIsAuthorisedSignatory:
+      canApproveAsPartner(me.role) &&
+      (signatories.length === 0 || signatories.some((s) => s.userId === me.id)),
+  };
+  res.json({ contract: contractShape(contract, documents), fields, signing });
 });
 
 const contractPatch = z.object({
@@ -1353,6 +1370,13 @@ const sendBody = z.object({
   title: z.string().trim().min(1).max(300).optional(),
   message: z.string().max(4000).optional(),
   expiresAt: z.string().datetime().optional(),
+  /**
+   * Task #335 — "Sign & send": the caller signs in-app FIRST (they are the
+   * first signer), then DocuSeal emails the counterparty. Only authorised
+   * signatories of the contract's signing entity may use this flow (when
+   * the entity has a configured list; empty list = legacy: any partner).
+   */
+  signFirst: z.boolean().default(false),
 });
 
 // @cli-skip: e-sign handoff is UI/chat-capability-driven (Task #159)
@@ -1364,6 +1388,35 @@ router.post("/contracts/:id/send-for-signature", async (req, res) => {
   if (!parsed.success) {
     res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
     return;
+  }
+  // Task #335 — server-side signatory enforcement for the firm-side
+  // signing step. Crafted signFirst requests from non-signatories → 403.
+  if (parsed.data.signFirst) {
+    const target = await loadContract(me.orgId, String(req.params.id));
+    if (!target) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    const signatories = target.signingEntityId
+      ? await listEntitySignatories(me.orgId, target.signingEntityId)
+      : [];
+    if (signatories.length > 0 && !signatories.some((s) => s.userId === me.id)) {
+      res.status(403).json({
+        error: "not-authorised-signatory",
+        message: `Only an authorised signatory of ${target.signingEntityLabel ?? "the signing entity"} may sign on behalf of the firm. Use "Send for signature" to request one.`,
+      });
+      return;
+    }
+    // The first signer must be the caller — signFirst means "I sign now",
+    // not "route the firm signature to an arbitrary inbox".
+    const first = parsed.data.signers[0];
+    if (first.email.trim().toLowerCase() !== me.email.trim().toLowerCase()) {
+      res.status(403).json({
+        error: "sign-first-not-caller",
+        message: "With Sign & send, the first signer must be you.",
+      });
+      return;
+    }
   }
   const result = await sendContract({
     orgId: me.orgId,
@@ -1390,9 +1443,116 @@ router.post("/contracts/:id/send-for-signature", async (req, res) => {
     res.status(status).json({ error: result.code, message: result.message });
     return;
   }
+  // Task #335 — a successful send resolves any pending internal
+  // "awaiting firm signatory" request.
+  if (result.contract.firmSignatureRequestedAt) {
+    await db
+      .update(atelierContractRecords)
+      .set({
+        firmSignatureRequestedAt: null,
+        firmSignatureRequestedBy: null,
+        firmSignatureRequestedByLabel: null,
+      })
+      .where(eq(atelierContractRecords.id, result.contract.id));
+    result.contract.firmSignatureRequestedAt = null;
+    result.contract.firmSignatureRequestedBy = null;
+    result.contract.firmSignatureRequestedByLabel = null;
+  }
+  if (parsed.data.signFirst) {
+    await auditContractEntity({
+      entityType: "atelier_contract_record",
+      entityId: result.contract.id,
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "contract.sign_first",
+      payload: { signingEntityId: result.contract.signingEntityId },
+      summary: `${me.name} signed & sent contract "${result.contract.title}" as authorised signatory`,
+    });
+  }
   res.status(201).json({
     contract: contractShape(result.contract, [result.pdfDoc]),
     signatureRequestId: result.signatureRequestId,
+  });
+});
+
+/**
+ * Task #335 — "Send for signature" (internal request). A contract manager
+ * who is NOT an authorised signatory of the contract's signing entity flags
+ * the contract as awaiting a firm signatory and notifies every authorised
+ * signatory, who then executes "Sign & send" themselves.
+ */
+// @cli-skip: contract lifecycle is UI-driven (Task #335)
+router.post("/contracts/:id/request-signature", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureContractManager(me, res)) return;
+  const contract = await loadContract(me.orgId, String(req.params.id));
+  if (!contract) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (!["draft", "out_for_review", "final_uploaded"].includes(contract.status)) {
+    res.status(409).json({
+      error: "invalid-status",
+      message: `Cannot request a firm signature while the contract is ${contract.status}.`,
+    });
+    return;
+  }
+  if (!contract.currentDocumentId) {
+    res.status(409).json({
+      error: "no-document",
+      message: "Prepare or upload a document before requesting signature.",
+    });
+    return;
+  }
+  const signatories = contract.signingEntityId
+    ? await listEntitySignatories(me.orgId, contract.signingEntityId)
+    : [];
+  if (signatories.length === 0) {
+    res.status(409).json({
+      error: "no-signatories",
+      message:
+        "This signing entity has no authorised signatories configured — configure them on the Firm Profile page, or use Sign & send directly.",
+    });
+    return;
+  }
+  const now = new Date();
+  const [updated] = await db
+    .update(atelierContractRecords)
+    .set({
+      firmSignatureRequestedAt: now,
+      firmSignatureRequestedBy: me.id,
+      firmSignatureRequestedByLabel: me.name,
+      updatedAt: now,
+    })
+    .where(eq(atelierContractRecords.id, contract.id))
+    .returning();
+  for (const s of signatories) {
+    if (s.userId === me.id) continue;
+    await emitSelfNotification({
+      orgId: me.orgId,
+      userId: s.userId,
+      kind: "contract_signature_requested",
+      title: `Signature needed: ${contract.title}`,
+      body: `${me.name} asked you to sign "${contract.title}" (${contract.signingEntityLabel ?? "firm"} side) and send it to ${contract.counterpartyLabel || "the counterparty"}.`,
+      href: `/contracts/${contract.id}`,
+    });
+  }
+  await auditContractEntity({
+    entityType: "atelier_contract_record",
+    entityId: contract.id,
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "contract.signature_requested",
+    payload: {
+      signingEntityId: contract.signingEntityId,
+      notified: signatories.filter((s) => s.userId !== me.id).map((s) => s.userId),
+    },
+    summary: `${me.name} requested a firm signatory for contract "${contract.title}"`,
+  });
+  res.json({
+    contract: contractShape(updated),
+    notified: signatories.map((s) => ({ userId: s.userId, name: s.name })),
   });
 });
 

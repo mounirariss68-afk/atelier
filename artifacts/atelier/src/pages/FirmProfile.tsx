@@ -12,6 +12,15 @@ interface SigningEntity {
   governingLaw: string;
   courts: string;
   isDefault: boolean;
+  // Task #335 — users allowed to execute the firm-side "Sign & send".
+  authorisedSignatories?: { userId: string; name: string; email: string }[];
+}
+
+interface OrgUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 interface FirmPayload {
@@ -256,6 +265,9 @@ export default function FirmProfile() {
     const [saving, setSaving] = React.useState(false);
     const [seErr, setSeErr] = React.useState<string | null>(null);
     const [dirty, setDirty] = React.useState(false);
+    // Task #335 — org users for the authorised-signatory pickers.
+    const [users, setUsers] = React.useState<OrgUser[]>([]);
+    const [sigBusy, setSigBusy] = React.useState<string | null>(null);
 
     const load = React.useCallback(async () => {
       try {
@@ -267,6 +279,28 @@ export default function FirmProfile() {
       }
     }, []);
     React.useEffect(() => { void load(); }, [load]);
+    React.useEffect(() => {
+      api<OrgUser[]>("/users")
+        .then((rows) => setUsers(rows))
+        .catch(() => setUsers([]));
+    }, []);
+
+    // Task #335 — persist an entity's authorised-signatories list.
+    async function saveSignatories(entityId: string, userIds: string[]) {
+      setSigBusy(entityId); setSeErr(null);
+      try {
+        const r = await api<{ authorisedSignatories: SigningEntity["authorisedSignatories"] }>(
+          `/signing-entities/${entityId}/signatories`,
+          { method: "PUT", body: JSON.stringify({ userIds }) },
+        );
+        setEntities((prev) =>
+          prev?.map((e) =>
+            e.id === entityId ? { ...e, authorisedSignatories: r.authorisedSignatories ?? [] } : e,
+          ) ?? prev,
+        );
+      } catch (e) { setSeErr((e as Error).message); }
+      finally { setSigBusy(null); }
+    }
 
     function patchEntity(i: number, p: Partial<SigningEntity>) {
       setEntities((prev) => {
@@ -382,6 +416,49 @@ export default function FirmProfile() {
                     Remove
                   </button>
                 </div>
+                {/* Task #335 — authorised signatories for this entity */}
+                {e.id.startsWith("new-") ? (
+                  <div className="text-xs text-text-mute" data-testid={`signing-entity-signatories-pending-${i}`}>
+                    Save the registry first, then pick this entity's authorised signatories.
+                  </div>
+                ) : (
+                  <div className="space-y-1" data-testid={`signing-entity-signatories-${i}`}>
+                    <div className="text-xs uppercase text-text-mute">Authorised signatories</div>
+                    <p className="text-xs text-text-mute">
+                      Only these people can sign contracts under this entity ("Sign &amp; send").
+                      Leave empty to allow any partner.
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1">
+                      {users.map((u) => {
+                        const selected = (e.authorisedSignatories ?? []).some((s) => s.userId === u.id);
+                        return (
+                          <label key={u.id} className="flex items-center gap-1.5 text-sm text-text">
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              disabled={sigBusy === e.id}
+                              onChange={() => {
+                                const current = (e.authorisedSignatories ?? []).map((s) => s.userId);
+                                const next = selected
+                                  ? current.filter((idn) => idn !== u.id)
+                                  : [...current, u.id];
+                                void saveSignatories(e.id, next);
+                              }}
+                              data-testid={`signing-entity-${i}-signatory-${u.id}`}
+                            />
+                            {u.name}
+                          </label>
+                        );
+                      })}
+                      {users.length === 0 ? (
+                        <span className="text-xs text-text-mute">No users found.</span>
+                      ) : null}
+                    </div>
+                    {sigBusy === e.id ? (
+                      <div className="text-xs text-text-mute">Saving signatories…</div>
+                    ) : null}
+                  </div>
+                )}
               </div>
             ))}
             <div className="flex items-center gap-2">

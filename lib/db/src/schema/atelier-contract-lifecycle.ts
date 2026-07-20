@@ -191,6 +191,14 @@ export const atelierContractRecords = pgTable(
     /** Snapshot of the signing entity's country (caution note when ≠ UAE). */
     signingEntityCountry: text("signing_entity_country"),
     notes: text("notes"),
+    /**
+     * Task #335 — "Send for signature" (internal): a contract manager who is
+     * NOT an authorised signatory of the signing entity flags the contract as
+     * awaiting a firm signatory. Cleared on send / regenerate-driven edits.
+     */
+    firmSignatureRequestedAt: timestamp("firm_signature_requested_at"),
+    firmSignatureRequestedBy: text("firm_signature_requested_by"),
+    firmSignatureRequestedByLabel: text("firm_signature_requested_by_label"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -224,6 +232,29 @@ export const atelierContractReferenceSequences = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [uniqueIndex("uniq_atelier_crseq_template_year").on(t.templateId, t.year)],
+);
+
+/**
+ * Task #335 — authorised signatories per Cognirise signing entity.
+ * `entityId` references EITHER a firm-profile legal entity (`le_…`) or a
+ * legal-entity-registry row (`lent_…`) — the merged signing-entity list is
+ * the source of truth, so no FK. `userIds` are atelier_users ids; only these
+ * users may execute the firm-side "Sign & send" step for contracts prepared
+ * under the entity (empty/missing row = legacy behaviour: any partner-tier
+ * manager may sign).
+ */
+export const atelierSigningEntitySignatories = pgTable(
+  "atelier_signing_entity_signatories",
+  {
+    id: text("id").primaryKey(), // sesig_...
+    orgId: text("org_id").notNull().default("aico"),
+    entityId: text("entity_id").notNull(),
+    userIds: jsonb("user_ids").$type<string[]>().notNull(),
+    updatedBy: text("updated_by").notNull(),
+    updatedByLabel: text("updated_by_label").notNull().default(""),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("uniq_atelier_sesig_entity").on(t.orgId, t.entityId)],
 );
 
 export const atelierContractDocuments = pgTable(
