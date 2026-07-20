@@ -1686,6 +1686,56 @@ export const PreMeetingBriefing = defineAgent({
   ],
 });
 
+// ====================== FINANCE GL (Task #428) ======================
+// Rule-based like the Revenue Recognizer: deterministic compute for
+// auditability, registered so runs land in atelier_agent_runs.
+
+export const Bookkeeper = defineAgent({
+  id: "ag_bookkeeper",
+  name: "Bookkeeper",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Rule-based GL posting engine: converts invoices, revenue recognition, expenses, payments and bank transactions into balanced journal entries per legal entity and period; surfaces exceptions instead of guessing.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/bookkeeper.v1.md",
+  inputSchema: z.object({
+    periodLabel: z.string().regex(/^\d{4}-\d{2}$/),
+    entityId: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    periodLabel: z.string(),
+    entitiesConsidered: z.number(),
+    sourcesScanned: z.number(),
+    entriesCreated: z.number(),
+    entriesSkippedExisting: z.number(),
+    tagsBackfilled: z.number(),
+    exceptionsOpen: z.number(),
+    exceptions: z.array(
+      z.object({
+        code: z.string(),
+        sourceKind: z.string(),
+        sourceRef: z.string(),
+        message: z.string(),
+      }),
+    ),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Deterministic and idempotent per period — same inputs, same journal.",
+    "Never invents accounts; unmapped or untagged sources become exceptions.",
+    "Never posts into a period whose close lock covers the GL module.",
+    "Journal is append-only; corrections are reversing entries.",
+  ],
+  humanCheckpoints: [
+    { id: "cp_finance", label: "Finance resolves posting exceptions", decider: "partner", blocking: false },
+  ],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1742,6 +1792,8 @@ export const ATELIER_AGENTS: Agent[] = [
   // L2C Wave 4 (Task #363)
   CashApplicationMatcher,
   CashFlowForecaster,
+  // Finance GL (Task #428)
+  Bookkeeper,
   // Account-management agents — propose-then-approve
   NextBestAction,
   RelationshipHealth,

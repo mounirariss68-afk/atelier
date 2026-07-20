@@ -40,8 +40,9 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     lede:
       "Record-to-report. Chart of accounts and dimensions (entity · cost-centre · project · client), manual / recurring / accrual / FX-revaluation journals, and AR / AP / fixed-assets / inter-company sub-ledgers.",
     subPages: [
-      { label: "Chart of accounts", href: "/finance/ledger", blurb: "Account hierarchy + dimensions per entity.", status: "coming_soon" },
-      { label: "Journals", href: "/finance/ledger", blurb: "Manual, recurring, accruals, FX revaluation.", status: "coming_soon" },
+      { label: "Chart of accounts", href: "/finance/ledger", blurb: "Default professional-services chart per legal entity, seeded and editable.", status: "live" },
+      { label: "Journal & trial balance", href: "/finance/ledger", blurb: "Append-only journal with entity · account · engagement dimensions; per-entity trial balance.", status: "live" },
+      { label: "Bookkeeper agent", href: "/finance/ledger", blurb: "Rule-based posting from invoices, rev-rec, expenses, payments and bank activity. Exceptions, not guesses.", status: "live" },
       { label: "Inter-company", href: "/finance/ledger", blurb: "IC matching, eliminations, cost-plus mark-ups.", status: "coming_soon" },
     ],
   },

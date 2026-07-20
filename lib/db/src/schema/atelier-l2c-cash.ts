@@ -97,6 +97,9 @@ export const atelierBankTransaction = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     bankAccountId: text("bank_account_id").notNull(),
+    // Task #428 — legal-entity tag for GL posting; backfilled from the
+    // bank account's legalEntityId when null.
+    legalEntityId: text("legal_entity_id"),
     statementImportId: text("statement_import_id").notNull(),
     postedDate: text("posted_date").notNull(),
     amount: doublePrecision("amount").notNull(),

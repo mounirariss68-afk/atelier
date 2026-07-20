@@ -1960,3 +1960,80 @@ export async function deleteJson<T = unknown>(path: string, body?: unknown): Pro
   }
   return parsed as T;
 }
+
+// ============================================================
+// Finance GL — Task #428 (chart of accounts, journal, trial
+// balance, exceptions, untagged, Bookkeeper run)
+// ============================================================
+export interface GlAccountRow {
+  id: string; legalEntityId: string; code: string; name: string;
+  type: string; normalSide: string; active: boolean; isSystem: boolean; notes: string | null;
+}
+export function useGlAccounts(entityId: string | null) {
+  return useQuery<{ ok: boolean; data: { rows: GlAccountRow[] } }>({
+    queryKey: ["atelier-gl-accounts", entityId],
+    queryFn: () => get(`/gl/accounts${entityId ? `?entityId=${entityId}` : ""}`),
+    staleTime: 15_000,
+  });
+}
+export interface GlJournalLineRow {
+  id: string; accountCode: string; accountName: string;
+  engagementId: string | null; debit: number; credit: number; memo: string | null;
+}
+export interface GlJournalEntryRow {
+  id: string; legalEntityId: string; periodLabel: string; entryDate: string;
+  kind: string; sourceKind: string; sourceRef: string; memo: string;
+  currency: string; totalDebit: number; totalCredit: number;
+  lines: GlJournalLineRow[];
+}
+export function useGlJournal(params: { entityId?: string | null; period?: string; accountCode?: string }) {
+  const qs = new URLSearchParams();
+  if (params.entityId) qs.set("entityId", params.entityId);
+  if (params.period) qs.set("period", params.period);
+  if (params.accountCode) qs.set("accountCode", params.accountCode);
+  return useQuery<{ ok: boolean; data: { rows: GlJournalEntryRow[] } }>({
+    queryKey: ["atelier-gl-journal", params.entityId ?? "", params.period ?? "", params.accountCode ?? ""],
+    queryFn: () => get(`/gl/journal?${qs.toString()}`),
+    staleTime: 10_000,
+  });
+}
+export interface GlTrialBalanceRow {
+  accountCode: string; accountName: string; currency: string; debit: number; credit: number;
+}
+export function useGlTrialBalance(entityId: string | null, period: string) {
+  return useQuery<{ ok: boolean; data: { rows: GlTrialBalanceRow[]; totals: { debit: number; credit: number }; balanced: boolean } }>({
+    queryKey: ["atelier-gl-tb", entityId ?? "", period],
+    queryFn: () => get(`/gl/trial-balance?entityId=${entityId}${period ? `&period=${period}` : ""}`),
+    enabled: !!entityId,
+    staleTime: 10_000,
+  });
+}
+export interface GlExceptionRow {
+  id: string; legalEntityId: string | null; periodLabel: string;
+  sourceKind: string; sourceRef: string; sourceLabel: string | null;
+  code: string; message: string; status: string; updatedAt: string;
+}
+export function useGlExceptions(status: "open" | "resolved" | "all") {
+  return useQuery<{ ok: boolean; data: { rows: GlExceptionRow[] } }>({
+    queryKey: ["atelier-gl-exceptions", status],
+    queryFn: () => get(`/gl/exceptions?status=${status}`),
+    staleTime: 10_000,
+  });
+}
+export interface GlUntaggedRow {
+  kind: string; id: string; label: string; amount: number; currency: string; date: string | null;
+}
+export function useGlUntagged() {
+  return useQuery<{ ok: boolean; data: { rows: GlUntaggedRow[] } }>({
+    queryKey: ["atelier-gl-untagged"],
+    queryFn: () => get(`/gl/untagged`),
+    staleTime: 10_000,
+  });
+}
+export interface BookkeeperRunResult {
+  periodLabel: string; entitiesConsidered: number; sourcesScanned: number;
+  entriesCreated: number; entriesSkippedExisting: number; tagsBackfilled: number;
+  exceptionsOpen: number;
+  exceptions: Array<{ code: string; sourceKind: string; sourceRef: string; message: string }>;
+  rationaleSummary: string;
+}

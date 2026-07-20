@@ -101,6 +101,7 @@ import codexRoutes from "./codexRoutes";
 import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 import revrecRoutes from "./revrecRoutes";
+import glRoutes from "./glRoutes";
 import bankRoutes from "./bankRoutes";
 import cashRoutes from "./cashRoutes";
 import renewalRoutes from "./renewalRoutes";
@@ -371,6 +372,10 @@ router.use(deliverableAcceptanceRoutes);
 // adjustments, WIP snapshots, engagement margin, leakage. Mounts
 // /revrec/*, /wip/*, /margin/*, /leakage. Gated per-handler.
 router.use(revrecRoutes);
+
+// Task #428 — Finance GL backbone: chart of accounts, append-only
+// journal, entity tagging, Bookkeeper posting agent, trial balance.
+router.use(glRoutes);
 
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register.
 router.use(engagementPnlRoutes);

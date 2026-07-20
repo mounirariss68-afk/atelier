@@ -3434,6 +3434,8 @@ export const atelierContractorPayments = pgTable(
     payeePersonType: text("payee_person_type").notNull().default("contractor"), // employee | contractor
     payeeName: text("payee_name").notNull(),
     engagementId: text("engagement_id").notNull(),
+    // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
+    legalEntityId: text("legal_entity_id"),
     weekIso: text("week_iso").notNull(),
     hours: doublePrecision("hours").notNull().default(0),
     ratePerHour: doublePrecision("rate_per_hour").notNull().default(0),
@@ -3480,6 +3482,8 @@ export const atelierPartnerFirmInvoices = pgTable(
     partnerFirmId: text("partner_firm_id").notNull(),
     partnerFirmName: text("partner_firm_name").notNull(),
     engagementId: text("engagement_id").notNull(),
+    // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
+    legalEntityId: text("legal_entity_id"),
     weekIso: text("week_iso").notNull(),
     hours: doublePrecision("hours").notNull().default(0),
     costAmount: doublePrecision("cost_amount").notNull().default(0),
@@ -3970,6 +3974,8 @@ export const atelierInvoice = pgTable(
     orgId: ORG("org_id"),
     engagementId: text("engagement_id"),
     accountId: text("account_id"),
+    // Task #428 — legal-entity tag for GL posting (atelier_legal_entities.id).
+    legalEntityId: text("legal_entity_id"),
     jurisdiction: text("jurisdiction").notNull(),
     invoiceNumber: text("invoice_number"),
     currency: text("currency").notNull().default("USD"),

@@ -122,6 +122,7 @@ import FinanceReportsBoardPack from "@/pages/finance/FinanceReportsBoardPack";
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
 import FinanceClose from "@/pages/finance/FinanceClose";
+import LedgerPage from "@/pages/finance/LedgerPage";
 // Task #420 — Wave 8: FP&A driver-based plan surfaces. Renewals/Scenarios
 // supersede the simpler Task #440 stubs with the FP&A-engine versions.
 import FinancePlanBudget from "@/pages/finance/FinancePlanBudget";
@@ -668,7 +669,6 @@ function Router() {
         <Route path="/finance" component={FinanceHome} />
         <Route path="/finance/entities" component={FinanceEntities} />
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
-        <Route path="/finance/ledger">{() => <FinanceSection sectionId="ledger" />}</Route>
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
         <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
         <Route path="/finance/payables/vendors" component={FinancePayablesVendors} />
@@ -677,6 +677,9 @@ function Router() {
         <Route path="/finance/payables/wht" component={FinancePayablesWht} />
         <Route path="/finance/payables/subcontractors" component={FinancePayablesSubcontractors} />
         <Route path="/finance/close" component={FinanceClose} />
+        {/* Task #428 — Finance GL backbone: chart of accounts, journal,
+            trial balance, Bookkeeper, exceptions, entity tagging. */}
+        <Route path="/finance/ledger" component={LedgerPage} />
         <Route path="/finance/plan/cash-13w" component={FinancePlanCash13w} />
         <Route path="/finance/plan/backlog" component={FinancePlanBacklog} />
         <Route path="/finance/plan/budget" component={FinancePlanBudget} />
