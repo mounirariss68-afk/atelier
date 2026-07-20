@@ -29,7 +29,7 @@
 - [api-server typecheck baseline](api-server-typecheck-baseline.md) — `tsc -b` on api-server/atelier has many PRE-EXISTING errors (dup resolveNavPath import, role enums, ToolResult shapes); not a clean signal — diff against HEAD to attribute.
 - [Atelier firmographic columns need push](atelier-firmographics-db.md) — Drizzle cols/FKs may be absent in a fresh isolated DB → 500s; run `@workspace/db push`; clean orphan FK rows if push aborts.
 - [Atelier firmographic history & revert](atelier-firmographic-history.md) — Company Details "Recent changes" is a projection of audit `payload.changes`; revert re-PATCHes the old value (itself audited); render history in BOTH card branches.
-- [Running the CRM test harness](crm-harness-run.md) — auto-provisions isolated crm_test DB (sync bootstrap; ESM TLA doesn't block sibling imports!); >120s one-shot; verify subsets with a standalone tsx probe that boots app.listen(0).
+- [Running the CRM test harness](crm-harness-run.md) — auto-provisions isolated crm_test DB (sync bootstrap; ESM TLA doesn't block sibling imports!; now creates pgvector ext before push); >120s one-shot; verify subsets with a standalone tsx probe that boots app.listen(0).
 - [Atelier expense taxonomy surfaces](atelier-expense-taxonomy.md) — new non-/me endpoints for Me-lens UIs must be allowlisted in EVERY persona branch of the central gate; CRM harness now auto-creates the pgvector extension in its create phase (fresh non-harness scratch DBs still need `CREATE EXTENSION vector` before drizzle push).
 - [CRM harness tag-sweep cleanup](crm-harness-leak-sweep.md) — harness cleanup must end with a __t542 pattern sweep (tracked IDs leak hook-created rows; SIGKILL skips finally); never register test:crm as a workflow.
 - [Account-revenue write surfaces](atelier-revenue-write-surfaces.md) — annualRevenue is written ONLY by POST /accounts + PATCH /accounts/:id; financials gate must cover BOTH (create gate uses would-be partnerOwnerId).
@@ -94,3 +94,4 @@
 - [Atelier async receipt parse](atelier-receipt-async-parse.md) — launch-map watchdog required; draftId reuse prevents dupes; offline+draft must not enqueue a create.
 - [Clarification resume across errors](atelier-clarification-resume.md) — asked-then-errored turns promote back to awaiting_clarification + relaxed rehydration; mobile chip/label rules; 2 pre-existing probe fails.
 - [Finance route shadowing](atelier-finance-route-shadowing.md) — wouter Switch first-match: remove the FinanceSection placeholder route when adding a real page at the same /finance/* path.
+- [Self-only chat roles clamp](atelier-selfonly-chat-roles.md) — employee/contractor chat limited to me.* tools via SELF_ONLY_CHAT_ROLES + legacy-registry skip + /cli boundary allowlist.

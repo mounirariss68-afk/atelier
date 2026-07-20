@@ -189,6 +189,11 @@ router.use((req, res, next) => {
     // Task #51 — profile photos are org-visible (roster views, bio flow).
     if (p.startsWith("/people-photos/")) return next();
     if (isExpenseTaxonomyHelper(p)) return next();
+    // Task #422 — chat is allowed for self personas: their capability
+    // surface is clamped server-side to the identity-locked me.* tools
+    // (SELF_ONLY_CHAT_ROLES in the capability catalog), so /cli/* cannot
+    // reach anything outside the Me lens.
+    if (p === "/cli" || p.startsWith("/cli/")) return next();
     res.status(403).json({
       error: "employee-self-scope",
       message: "Employee persona may only access /me and /personas.",
@@ -206,6 +211,9 @@ router.use((req, res, next) => {
     // Task #51 — profile photos are org-visible (roster views, bio flow).
     if (p.startsWith("/people-photos/")) return next();
     if (isExpenseTaxonomyHelper(p)) return next();
+    // Task #422 — chat for self personas, clamped to me.* tools (see
+    // SELF_ONLY_CHAT_ROLES in the capability catalog).
+    if (p === "/cli" || p.startsWith("/cli/")) return next();
     res.status(403).json({
       error: "contractor-self-scope",
       message: "Contractor persona may only access /me and /personas.",

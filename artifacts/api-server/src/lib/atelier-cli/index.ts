@@ -44,6 +44,7 @@ import type { Response } from "express";
 // individual catalog entries without circular-import warnings.
 import {
   capabilitiesForPersona,
+  SELF_ONLY_CHAT_ROLES,
   findByToolName,
   CATALOG_SCHEMA_VERSION,
   getSessionDraft,
@@ -801,6 +802,10 @@ export function getToolsForPersona(persona: CliPersona): ToolDef[] {
   // that pre-Task-332 writes still work for the personas that had
   // them.
   const READ_ONLY_ROLES = new Set(["board_observer"]);
+  // Task #422 — self-only personas (employee / contractor) never receive
+  // the legacy TOOL_REGISTRY fallthrough: their chat surface is exactly
+  // the identity-locked me.* catalog entries already collected above.
+  if (SELF_ONLY_CHAT_ROLES.has(persona.role)) return out;
   for (const t of Object.values(TOOL_REGISTRY)) {
     if (seenNames.has(t.name)) continue;
     if (t.isWrite && READ_ONLY_ROLES.has(persona.role)) continue;

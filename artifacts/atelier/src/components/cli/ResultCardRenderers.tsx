@@ -2349,9 +2349,24 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
     "currency",
   ]);
   const kind = asStr(data.kind);
-  const allRows = Object.entries(data).filter(
-    ([k, v]) => !skip.has(k) && k !== "kind" && v != null && v !== "",
-  );
+  // Task #422 — nested plain objects (e.g. me.leave's `balance`) used to
+  // string-coerce to "[object Object]". Flatten one level of scalar-valued
+  // sub-objects into their own grid rows; skip anything deeper.
+  const allRows: [string, unknown][] = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (skip.has(k) || k === "kind" || v == null || v === "") continue;
+    if (typeof v === "object" && !Array.isArray(v)) {
+      const entries = Object.entries(v as Json).filter(
+        ([sk, sv]) =>
+          sv != null && sv !== "" && typeof sv !== "object" && sk.toLowerCase() !== "year",
+      );
+      if (entries.length > 0 && entries.length <= 12) {
+        for (const [sk, sv] of entries) allRows.push([`${k} ${sk}`, sv]);
+      }
+      continue;
+    }
+    allRows.push([k, v]);
+  }
   // Task #549 — pull free-text note fields (mitigation / notes) out of the
   // grid so they render as full-width wrapped blocks instead of truncating.
   const noteRows = allRows.filter(

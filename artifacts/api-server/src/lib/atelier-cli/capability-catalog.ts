@@ -497,8 +497,22 @@ export const BOARD_OBSERVER_ROLLUP_ALLOWLIST: ReadonlySet<string> = new Set([
   "cash_forecast_13w", // Wave 4 — declared up-front
 ]);
 
+/**
+ * Task #422 — self-only personas (employee / contractor) get chat access
+ * strictly for the identity-locked `me.*` capabilities (Task #405).
+ * Their entire REST world is the /me lens; the chat surface mirrors that
+ * perimeter exactly so opening /cli/* to them cannot leak org-wide tools.
+ */
+export const SELF_ONLY_CHAT_ROLES: ReadonlySet<string> = new Set([
+  "employee",
+  "contractor",
+]);
+
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
+  if (SELF_ONLY_CHAT_ROLES.has(role)) {
+    return REGISTRY.filter((e) => e.id.startsWith("me.") && !e.isWrite);
+  }
   const restrictedSet: ReadonlySet<AtelierRole> = new Set([
     "contractor",
     "partner_firm_resource",
