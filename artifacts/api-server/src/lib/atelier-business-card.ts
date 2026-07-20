@@ -291,21 +291,94 @@ export interface BusinessCardPdfResult {
 }
 
 /**
+ * Task #352 — output variants.
+ *   standard: exactly 90×50 mm, no bleed or marks (screen / office print).
+ *   print:    professional print shop output — the same trim layout with
+ *             3 mm bleed on all sides (backgrounds + the left-edge-touching
+ *             back artwork extended into the bleed via a pre-baked mirrored
+ *             strip) plus a 3 mm slug margin carrying corner crop marks that
+ *             mark the 90×50 mm trim. TrimBox/BleedBox metadata is set on
+ *             both pages. Colors remain RGB (no CMYK/ICC conversion).
+ */
+export type CardVariant = "standard" | "print";
+
+const MM = (v: number): number => (v / 25.4) * 72;
+const BLEED = MM(3);
+const SLUG = MM(3); // white margin beyond the bleed that carries crop marks
+const PRINT_OFF = BLEED + SLUG; // trim origin offset on print pages
+
+/** Draw the 8 corner crop marks (in trim coordinates: trim = 0..w/0..h).
+ *  Marks live entirely in the slug area — from the bleed edge outward — so
+ *  they never touch bleed artwork. */
+function drawCropMarks(doc: PDFKit.PDFDocument, w: number, h: number): void {
+  doc.save();
+  doc.lineWidth(0.3).strokeColor("#000000");
+  for (const x of [0, w]) {
+    doc.moveTo(x, -BLEED - SLUG).lineTo(x, -BLEED).stroke();
+    doc.moveTo(x, h + BLEED).lineTo(x, h + BLEED + SLUG).stroke();
+  }
+  for (const y of [0, h]) {
+    doc.moveTo(-BLEED - SLUG, y).lineTo(-BLEED, y).stroke();
+    doc.moveTo(w + BLEED, y).lineTo(w + BLEED + SLUG, y).stroke();
+  }
+  doc.restore();
+}
+
+/** Add a page for the given variant, set its Trim/Bleed boxes, draw crop
+ *  marks (print only) and translate so 0,0 = trim top-left. Content code
+ *  below always draws in trim coordinates. */
+function beginCardPage(doc: PDFKit.PDFDocument, variant: CardVariant): void {
+  if (variant === "standard") {
+    doc.addPage({ size: [PAGE_W, PAGE_H], margin: 0 });
+    return;
+  }
+  const pw = PAGE_W + 2 * PRINT_OFF;
+  const ph = PAGE_H + 2 * PRINT_OFF;
+  doc.addPage({ size: [pw, ph], margin: 0 });
+  // PDF box metadata (PDF user space, symmetric so no y-flip concerns).
+  const dict = (doc.page as unknown as {
+    dictionary: { data: Record<string, unknown> };
+  }).dictionary;
+  dict.data.TrimBox = [PRINT_OFF, PRINT_OFF, pw - PRINT_OFF, ph - PRINT_OFF];
+  dict.data.BleedBox = [SLUG, SLUG, pw - SLUG, ph - SLUG];
+  doc.translate(PRINT_OFF, PRINT_OFF);
+  drawCropMarks(doc, PAGE_W, PAGE_H);
+}
+
+/** Fill the page background: exactly the trim on standard pages, trim +
+ *  bleed on print pages (the slug stays white for the crop marks). Gradient
+ *  fills stay anchored to trim coordinates — pdfkit shadings extend their
+ *  end colors, so the trimmed area is pixel-identical across variants. */
+function bgRect(
+  doc: PDFKit.PDFDocument,
+  variant: CardVariant,
+): PDFKit.PDFDocument {
+  return variant === "standard"
+    ? doc.rect(0, 0, PAGE_W, PAGE_H)
+    : doc.rect(-BLEED, -BLEED, PAGE_W + 2 * BLEED, PAGE_H + 2 * BLEED);
+}
+
+/**
  * Render the two-sided business-card PDF for a person. Throws if the
  * person has no usable contact fields at all (name is always required
  * upstream) or if template assets are missing.
  */
 export async function generateBusinessCardPdf(
   person: CardPerson,
+  variant: CardVariant = "standard",
 ): Promise<BusinessCardPdfResult> {
   const logo = loadTemplateAsset("card-front-logo.png");
-  const art = loadTemplateAsset("card-back-art-hires.png");
+  // Print pages use the bleed-extended artwork (mirrored 3 mm strip baked
+  // onto the left, the only trim-touching edge).
+  const art = loadTemplateAsset(
+    variant === "print" ? "card-back-art-bleed.png" : "card-back-art-hires.png",
+  );
   const vcard = buildVCard(person);
   const qrPng = await QRCode.toBuffer(vcard, {
     type: "png",
     errorCorrectionLevel: "M",
     margin: 2,
-    width: 640,
+    width: 1280,
     color: { dark: "#0b1220", light: "#ffffff" },
   });
 
@@ -323,8 +396,8 @@ export async function generateBusinessCardPdf(
   });
 
   // ---- Front ----
-  doc.addPage({ size: [PAGE_W, PAGE_H], margin: 0 });
-  doc.rect(0, 0, PAGE_W, PAGE_H).fill(FRONT.bg);
+  beginCardPage(doc, variant);
+  bgRect(doc, variant).fill(FRONT.bg);
   doc.image(logo, FRONT.logo.x, FRONT.logo.y, {
     fit: [FRONT.logo.w, FRONT.logo.h],
     align: "center",
@@ -380,11 +453,20 @@ export async function generateBusinessCardPdf(
   doc.text(WEBSITE, FRONT.textX, FRONT.website.y, { width: textW, lineBreak: false });
 
   // ---- Back ----
-  doc.addPage({ size: [PAGE_W, PAGE_H], margin: 0 });
+  beginCardPage(doc, variant);
   const bgGrad = doc.linearGradient(0, 0, PAGE_W, 0);
   bgGrad.stop(0, BACK.gradFrom).stop(0.48, BACK.gradTo).stop(1, BACK.gradTo);
-  doc.rect(0, 0, PAGE_W, PAGE_H).fill(bgGrad);
-  doc.image(art, BACK.art.x, BACK.art.y, { width: BACK.art.w, height: BACK.art.h });
+  bgRect(doc, variant).fill(bgGrad);
+  if (variant === "print") {
+    // Bleed-extended artwork: mirrored 3 mm strip runs into the left bleed;
+    // the trim-visible portion is pixel-identical to the standard variant.
+    doc.image(art, BACK.art.x - BLEED, BACK.art.y, {
+      width: BACK.art.w + BLEED,
+      height: BACK.art.h,
+    });
+  } else {
+    doc.image(art, BACK.art.x, BACK.art.y, { width: BACK.art.w, height: BACK.art.h });
+  }
   doc.image(qrPng, BACK.qr.x, BACK.qr.y, { width: BACK.qr.size, height: BACK.qr.size });
   const frame = BACK.qrFrame;
   const frameGrad = doc.linearGradient(
@@ -401,9 +483,10 @@ export async function generateBusinessCardPdf(
 
   doc.end();
   const pdf = await done;
+  const suffix = variant === "print" ? "_Print" : "";
   return {
     pdf,
     vcard,
-    filename: `${cardFilenameStem(person.fullName)}_Cognirise_Business_Card.pdf`,
+    filename: `${cardFilenameStem(person.fullName)}_Cognirise_Business_Card${suffix}.pdf`,
   };
 }

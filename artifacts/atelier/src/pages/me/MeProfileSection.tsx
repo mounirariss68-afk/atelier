@@ -487,20 +487,32 @@ function BioAndCardCard() {
     <Card className="p-4" data-testid="me-bio-card">
       <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <h3 className="text-sm font-semibold text-text">Biography &amp; business card</h3>
-        <a
-          className={btnCls}
-          href={`${API_BASE}/me/business-card.pdf`}
-          download
-          data-testid="me-download-card-pdf"
-        >
-          Download business card PDF
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <a
+            className={btnCls}
+            href={`${API_BASE}/me/business-card.pdf`}
+            download
+            data-testid="me-download-card-pdf"
+          >
+            Business card PDF
+          </a>
+          <a
+            className={btnCls}
+            href={`${API_BASE}/me/business-card.pdf?variant=print`}
+            download
+            data-testid="me-download-card-pdf-print"
+          >
+            Print-ready PDF (bleed + crop marks)
+          </a>
+        </div>
       </div>
       <p className="text-xs text-text-mute mb-3">
         Download the official Cognirise biography template, fill it in offline, then
         upload the completed deck here. Re-uploading keeps every previous version.
         The business-card PDF is generated from your current profile — name, title,
-        mobile, email — with a QR code that saves your contact when scanned.
+        mobile, email — with a QR code that saves your contact when scanned. Use the
+        print-ready variant when sending to a professional print shop: it adds 3 mm
+        bleed and crop marks around the same 90×50 mm card.
       </p>
       <div className="flex flex-wrap gap-2 mb-3">
         <a

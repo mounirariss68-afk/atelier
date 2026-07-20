@@ -153,14 +153,25 @@ export function BusinessCardQR({
                 .vcf
               </DownloadBtn>
               {isSelf && (
-                <a
-                  href={cardPdfHref}
-                  download
-                  data-testid="qr-download-card-pdf"
-                  className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
-                >
-                  Card · PDF
-                </a>
+                <>
+                  <a
+                    href={cardPdfHref}
+                    download
+                    data-testid="qr-download-card-pdf"
+                    className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
+                  >
+                    Card · PDF
+                  </a>
+                  <a
+                    href={`${cardPdfHref}?variant=print`}
+                    download
+                    data-testid="qr-download-card-pdf-print"
+                    title="3 mm bleed + crop marks for professional printing"
+                    className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
+                  >
+                    Card · Print PDF
+                  </a>
+                </>
               )}
             </div>
           </div>

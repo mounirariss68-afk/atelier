@@ -7,3 +7,5 @@ description: Task-52 biography template/upload + generated business-card PDF inv
 - Card slide size is 90×50mm (3.543"×1.969") per the real template — not the 3.375"×1.875" a spec may claim; QR sits on the BACK slide.
 - **Why:** template fidelity was verified visually against the original card; deviating breaks print parity.
 - **How to apply:** any card-layout change should re-rasterize via `pdftoppm` (gs is absent; ImageMagick PDF delegate fails) and eyeball both pages.
+- Card PDF has two variants: `?variant=print` adds 3mm bleed + 3mm slug with crop marks + TrimBox/BleedBox; trim layout must stay pixel-identical (verify: pdftoppm at 1270 DPI so the 6mm offset is exactly 300px, crop, RMSE — front should be 0, back only subpixel raster phase).
+- There is NO vector source for the back dotted-C art (PPTX SVG holds only the front logo lockup). Raster assets are regenerated deterministically by `api-server/scripts/regen-card-assets.ts` (needs `card-back-art-src.png` preserved); bleed art bakes a mirrored 3mm strip on the LEFT (only trim-touching edge).

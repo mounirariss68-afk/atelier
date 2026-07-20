@@ -278,6 +278,38 @@ async function main(): Promise<void> {
         `status=${res.status} len=${buf.length}`,
       );
     }
+    // Task #352 — print variant: 3 mm bleed + crop marks, distinct filename,
+    // TrimBox/BleedBox metadata, larger MediaBox than the standard card.
+    const stdRes = await fetch(`${API}/me/business-card.pdf`, { headers: cookie(EMP_ID) });
+    const stdBuf = Buffer.from(await stdRes.arrayBuffer());
+    const prnRes = await fetch(`${API}/me/business-card.pdf?variant=print`, {
+      headers: cookie(EMP_ID),
+    });
+    const prnBuf = Buffer.from(await prnRes.arrayBuffer());
+    const prnDisp = prnRes.headers.get("content-disposition") ?? "";
+    const prnTxt = prnBuf.toString("latin1");
+    check(
+      "print variant 200 with _Print filename",
+      prnRes.status === 200 &&
+        prnBuf.subarray(0, 4).toString() === "%PDF" &&
+        prnDisp.includes("Business_Card_Print.pdf"),
+      `status=${prnRes.status} disp=${prnDisp}`,
+    );
+    check(
+      "print variant carries TrimBox + BleedBox",
+      prnTxt.includes("/TrimBox") && prnTxt.includes("/BleedBox"),
+    );
+    check(
+      "standard variant has no TrimBox and is smaller page",
+      !stdBuf.toString("latin1").includes("/TrimBox") &&
+        stdBuf.toString("latin1").includes("MediaBox [0 0 255.125") &&
+        prnTxt.includes("MediaBox [0 0 289.140"),
+    );
+    const badVar = await fetch(`${API}/me/business-card.pdf?variant=poster`, {
+      headers: cookie(EMP_ID),
+    });
+    check("unknown variant 400s", badVar.status === 400, `status=${badVar.status}`);
+
     const consCard = await fetch(`${API}/me/business-card.pdf`, { headers: cookie(CONS_ID) });
     check("consultant 404s on card PDF", consCard.status === 404, `status=${consCard.status}`);
 

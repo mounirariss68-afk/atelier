@@ -808,25 +808,36 @@ router.post(
 );
 
 // @cli-skip: self-scope generated PDF download; no CLI shape (Task #52)
+// Task #352 — ?variant=print adds 3 mm bleed + crop marks for print shops;
+// default (standard) stays the exact 90×50 mm card.
 router.get("/me/business-card.pdf", async (req, res, next) => {
   try {
     const ctx = await requireSelfPerson(req, res);
     if (!ctx) return;
+    const rawVariant = String(req.query.variant ?? "standard");
+    if (rawVariant !== "standard" && rawVariant !== "print") {
+      res.status(400).json({ error: "invalid-variant", allowed: ["standard", "print"] });
+      return;
+    }
+    const variant = rawVariant;
     const row = ctx.person.row;
-    const { pdf, filename } = await generateBusinessCardPdf({
-      fullName: row.fullName,
-      title: ctx.person.workerType === "employee" ? (ctx.person.row.title ?? null) : null,
-      email: row.email ?? null,
-      cellPhones: (row.cellPhones ?? []) as Array<{ country: string; number: string }>,
-      officeAddress: row.officeAddress ?? null,
-    });
+    const { pdf, filename } = await generateBusinessCardPdf(
+      {
+        fullName: row.fullName,
+        title: ctx.person.workerType === "employee" ? (ctx.person.row.title ?? null) : null,
+        email: row.email ?? null,
+        cellPhones: (row.cellPhones ?? []) as Array<{ country: string; number: string }>,
+        officeAddress: row.officeAddress ?? null,
+      },
+      variant,
+    );
     await audit({
       me: ctx.me,
       entityType: ctx.person.workerType,
       entityId: row.id,
       action: "document.downloaded",
-      payload: { personId: row.id, kind: "business_card_pdf", self: true },
-      summary: `${ctx.me.name} generated their business-card PDF`,
+      payload: { personId: row.id, kind: "business_card_pdf", self: true, variant },
+      summary: `${ctx.me.name} generated their business-card PDF (${variant})`,
     });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
