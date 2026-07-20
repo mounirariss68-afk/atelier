@@ -298,6 +298,16 @@ defineCapability({
         description:
           "Optional filter: 'active' (default, hides archived), 'archived', or 'all'.",
       },
+      // Task #404 — firmographic filters so "accounts in Saudi Arabia"
+      // and "clients in the energy sector" answer directly.
+      country: {
+        type: "string",
+        description: "Optional country filter (name or ISO code, case-insensitive).",
+      },
+      sector: {
+        type: "string",
+        description: "Optional sector/industry filter (case-insensitive substring).",
+      },
     },
   },
   isWrite: false,
@@ -338,6 +348,21 @@ defineCapability({
       filtered = filtered.filter((r) => (r.status ?? "active") === "archived");
     } else if (statusFilter !== "all") {
       filtered = filtered.filter((r) => (r.status ?? "active") !== "archived");
+    }
+    // Task #404 — firmographic filters (country / sector), matching the
+    // Accounts list UI filters. Case-insensitive substring so "KSA",
+    // "Saudi" or "SA" style inputs still land.
+    const countryFilter = String(input.country ?? "").trim().toLowerCase();
+    if (countryFilter) {
+      filtered = filtered.filter((r) =>
+        (r.country ?? "").toLowerCase().includes(countryFilter),
+      );
+    }
+    const sectorFilter = String(input.sector ?? "").trim().toLowerCase();
+    if (sectorFilter) {
+      filtered = filtered.filter((r) =>
+        (r.sector ?? "").toLowerCase().includes(sectorFilter),
+      );
     }
     // Account-level visibility — mirrors the REST list route: partners see
     // everything; others need an engagement grant on the account or to be

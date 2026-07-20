@@ -60,7 +60,7 @@ const router: IRouter = Router();
 
 export type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 
-interface PersonWire {
+export interface PersonWire {
   id: string;
   workerType: WorkerType;
   fullName: string;
@@ -138,7 +138,7 @@ function hasFullRosterView(role: string | undefined | null): boolean {
   return isFoundingPartner(role) || isHr(role) || isFinance(role);
 }
 
-type RosterScope =
+export type RosterScope =
   | { kind: "full" }
   | { kind: "reports"; personIds: Set<string>; selfPersonId: string | null };
 
@@ -177,7 +177,7 @@ async function resolveViewerPersonId(
 /** Transitive reports (BFS over ALL reports_to edges — a person may have
  *  multiple managers and the graph carries no uniqueness constraint, so we
  *  walk every edge with a visited-set to stay cycle-safe). Org-scoped. */
-async function getManagedPersonIds(
+export async function getManagedPersonIds(
   orgId: string,
   managerPersonId: string,
 ): Promise<Set<string>> {
@@ -209,7 +209,7 @@ async function getManagedPersonIds(
   return out;
 }
 
-async function resolveRosterScope(
+export async function resolveRosterScope(
   me: typeof atelierUsers.$inferSelect,
 ): Promise<RosterScope> {
   if (hasFullRosterView(me.role)) return { kind: "full" };
@@ -223,7 +223,7 @@ async function resolveRosterScope(
 /** Business-only projection for manager-scoped viewers: work identity,
  *  role/title/seniority, work contact, office, dates, status. NO comp,
  *  NO personal data, NO HR notes, NO demographics. */
-function toBusinessWire(p: PersonWire): PersonWire {
+export function toBusinessWire(p: PersonWire): PersonWire {
   return {
     id: p.id,
     workerType: p.workerType,
@@ -257,7 +257,7 @@ function toBusinessWire(p: PersonWire): PersonWire {
 /** Strip sensitive-people fields (HR notes + self-identified demographics)
  *  for full-roster viewers who are not on the sensitive allow-list
  *  (i.e. finance). */
-function sanitizeForViewer(
+export function sanitizeForViewer(
   p: PersonWire,
   me: typeof atelierUsers.$inferSelect,
 ): PersonWire {
@@ -335,7 +335,7 @@ function rid(prefix: string): string {
 // Persons accessor (the union)
 // -----------------------------------------------------------------
 
-interface ListOpts {
+export interface ListOpts {
   workerType?: WorkerType | "all";
   q?: string;
   status?: string;
@@ -349,7 +349,7 @@ interface ListOpts {
   includeComp: boolean;
 }
 
-async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
+export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   const wt = opts.workerType ?? "all";
   const q = opts.q?.trim().toLowerCase() ?? "";
   const matches = (s: string | null | undefined) =>
@@ -553,7 +553,7 @@ function partnerResourceToWire(
   return base;
 }
 
-async function getPerson(
+export async function getPerson(
   id: string,
   includeComp: boolean,
 ): Promise<PersonWire | null> {

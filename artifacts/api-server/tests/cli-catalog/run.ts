@@ -291,6 +291,112 @@ async function main() {
     }
   });
 
+  console.log("\n[8] Task #404 — read-capability coverage for resolvable entity kinds");
+  await test("every resolvable entity kind has at least one read capability", () => {
+    // The entity-resolution flow can hand the model an account, contact,
+    // engagement, opportunity, meeting, expense, document, or internal
+    // person — each must have a read verb so resolution never dead-ends.
+    const KIND_READ_CAPABILITY: Record<string, string[]> = {
+      account: ["account_list", "account_360"],
+      contact: ["contact_list", "contact_detail"],
+      person: ["roster_list", "person_detail", "person_reports"],
+      engagement: ["engagement_detail", "meeting_list"],
+      opportunity: ["opportunity_detail", "pipeline_list"],
+      meeting: ["meeting_list", "meeting_detail"],
+      expense: ["expense_list"],
+      document: ["document_list"],
+    };
+    for (const [kind, toolNames] of Object.entries(KIND_READ_CAPABILITY)) {
+      const found = toolNames.filter((t) => findByToolName(t));
+      assert.ok(
+        found.length > 0,
+        `entity kind "${kind}" has no registered read capability (expected one of: ${toolNames.join(", ")})`,
+      );
+      for (const t of found) {
+        const c = findByToolName(t)!;
+        assert.equal(c.isWrite, false, `${t} must be read-only`);
+        assert.equal(c.twoPhaseConfirm, false, `${t} must not require confirm`);
+      }
+    }
+  });
+  await test("Task #404 read capabilities are registered with correct card shapes", () => {
+    const expected: Array<[string, string]> = [
+      ["roster_list", "ranked_list"],
+      ["person_detail", "contact_card"],
+      ["person_reports", "entity_card"],
+      ["contact_list", "ranked_list"],
+      ["contact_detail", "contact_card"],
+      ["meeting_list", "ranked_list"],
+      ["meeting_detail", "meeting_card"],
+      ["document_list", "ranked_list"],
+      ["opportunity_detail", "opportunity_card"],
+      ["engagement_detail", "entity_card"],
+      ["expense_list", "ranked_list"],
+    ];
+    for (const [toolName, card] of expected) {
+      const c = findByToolName(toolName);
+      assert.ok(c, `capability ${toolName} not registered`);
+      assert.equal(c!.resultCard, card, `${toolName} wrong resultCard`);
+      assert.equal(c!.isWrite, false, `${toolName} must be isWrite:false`);
+      assert.equal(c!.source, "cli-only", `${toolName} must be source=cli-only`);
+    }
+  });
+  await test("restricted personas keep roster tools but board_observer does not", () => {
+    // Catalog gate: board_observer only sees meta+raid, so roster/account
+    // reads are stripped. Restricted personas (contractor etc.) still see
+    // the tools — the run() handlers deny/scoped-filter at call time.
+    const obs = { id: "p_obs", name: "Obs", role: "board_observer", orgId: "aico" };
+    const obsTools = capabilitiesForPersona(obs).map((c) => c.toolName);
+    for (const t of ["roster_list", "person_detail", "contact_list", "document_list"]) {
+      assert.ok(!obsTools.includes(t), `board_observer leaked ${t}`);
+    }
+    const ctr = { id: "p_ctr", name: "Ctr", role: "contractor", orgId: "aico" };
+    const ctrTools = capabilitiesForPersona(ctr).map((c) => c.toolName);
+    assert.ok(ctrTools.includes("expense_list"), "contractor lost self-scoped expense_list");
+  });
+  await test("chat person projection hard-excludes comp/bank/HR fields", async () => {
+    const { toChatPersonCard, CHAT_PERSON_FORBIDDEN_FIELDS } = await import(
+      "../../src/lib/atelier-cli/people-read-capabilities.js"
+    );
+    const loaded: Record<string, unknown> = {
+      id: "pp1",
+      workerType: "employee",
+      fullName: "Test Person",
+      email: "t@cognirise.ma",
+      role: "consultant",
+      seniority: "senior",
+      title: "Consultant",
+      country: "MA",
+      status: "active",
+      startDate: "2024-01-01",
+      endDate: null,
+      gender: "female",
+      nationality: "MA",
+      dayRateAmount: 1200,
+      dayRateCurrency: "USD",
+      iban: "MA640115190000012050",
+      swift: "ABCDMAMC",
+      noticePeriodDays: 30,
+      payrollCountry: "MA",
+      notes: "HR-sensitive note",
+      employeeIdExternal: "EXT-1",
+      partnerEconomicsId: "pe1",
+    };
+    const card = toChatPersonCard(loaded as never) as Record<string, unknown>;
+    for (const f of CHAT_PERSON_FORBIDDEN_FIELDS) {
+      assert.ok(!(f in card), `chat person card leaked sensitive field "${f}"`);
+    }
+    assert.equal(card.fullName, "Test Person");
+    assert.equal(card.email, "t@cognirise.ma", "business contact info must remain");
+  });
+  await test("account_list exposes country + sector filters in its schema", () => {
+    const c = findByToolName("account_list");
+    assert.ok(c, "account_list missing");
+    const props = (c!.inputSchema as { properties?: Record<string, unknown> }).properties ?? {};
+    assert.ok("country" in props, "account_list schema missing country filter");
+    assert.ok("sector" in props, "account_list schema missing sector filter");
+  });
+
   console.log("\n[7] Task #49 — no raw opportunity deletes outside the shared helper");
   await test("every raw opportunity-row delete goes through hardDeleteOpportunities()", () => {
     // Opportunity children (meetings, transcripts, debriefs, pane rows)

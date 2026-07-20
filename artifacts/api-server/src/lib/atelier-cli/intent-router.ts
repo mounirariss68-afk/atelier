@@ -83,7 +83,10 @@ export interface Intent {
 const KIND_KEYWORDS: Array<[IntentKind, RegExp]> = [
   ["account", /\b(account|client|customer|firm|company|organization)\b/i],
   ["opportunity", /\b(opp|opportunity|deal|pipeline|pursuit)\b/i],
-  ["contact", /\b(contact|stakeholder|champion|buyer|person)\b/i],
+  // Task #404 — internal-people phrasings route to the contact kind
+  // (the resolver's "contact" pass already spans employees + partner
+  // resources alongside CRM contacts).
+  ["contact", /\b(contact|stakeholder|champion|buyer|person|employee|roster|staff|directory|colleague|contractor)\b/i],
   ["engagement", /\b(engagement|project|delivery|workstream)\b/i],
   ["meeting", /\b(meeting|workshop|discovery|kickoff|steering)\b/i],
   ["raid_item", /\b(raid|risk|assumption|issue|dependency)\b/i],

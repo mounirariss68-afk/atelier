@@ -77,7 +77,7 @@ async function engagementAccountId(engagementId: string, orgId: string): Promise
   return eng?.accountId ?? null;
 }
 
-async function canSeeDocument(me: Me, access: EngAccess, doc: DocRow): Promise<boolean> {
+export async function canSeeDocument(me: Me, access: EngAccess, doc: DocRow): Promise<boolean> {
   if (docPrivileged(me.role)) return true;
   if (doc.uploaderUserId === me.id) return true;
   if (doc.engagementId) {

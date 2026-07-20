@@ -62,6 +62,9 @@ import "./me-capabilities.js";
 // entity expiries, win/loss knowledge, manager-scoped leave queues, and
 // contract/template browsing. Mirrors REST ACLs with explicit refusals.
 import "./finance-ops-capabilities.js";
+// Task #404 — read-only people / contact / meeting / document /
+// opportunity / engagement / expense chat reads (ACL-parity with REST).
+import "./people-read-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
