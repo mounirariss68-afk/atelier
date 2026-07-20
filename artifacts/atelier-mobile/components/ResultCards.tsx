@@ -534,6 +534,11 @@ export function ToolResultCards({
         }
         // Silent prelude failures are internal noise.
         if (tr.prelude && !tr.ok) return null;
+        // Task #410 — a "clarification pending" tool result is not a real
+        // result; the dedicated clarification card is the actual UI. The
+        // raw key/value grid ("PREFILL FROM SPECIALIST / CLARIFICATION
+        // PENDING / true") is confusing duplicate noise — hide it.
+        if (tr.ok && dataObj.clarificationPending === true) return null;
 
         if (shape === "write_success" && tr.ok) {
           return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} lang={lang} />;

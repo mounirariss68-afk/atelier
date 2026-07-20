@@ -127,28 +127,37 @@ function ClarificationCard({
           {turn.clarification.question}
         </Text>
       ) : null}
-      {fields.map((f) => (
+      {fields.map((f) => {
+        // Task #410 — normalize both chip sources: server suggestion
+        // choices ({id,label} — submit the id) and plain string options.
+        const chips: { value: string; label: string }[] =
+          f.choices && f.choices.length > 0
+            ? f.choices.map((ch) => ({ value: ch.id, label: ch.label }))
+            : (f.options ?? []).map((opt) => ({ value: opt, label: opt }));
+        return (
         <View key={f.field} style={{ gap: 6 }}>
-          <Text
-            style={{
-              color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_500Medium",
-              fontSize: 13,
-              textAlign: rtl.textAlign,
-            }}
-          >
-            {f.label}
-          </Text>
-          {f.options && f.options.length > 0 ? (
+          {f.label ? (
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 13,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {f.label}
+            </Text>
+          ) : null}
+          {chips.length > 0 ? (
             <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 8 }}>
-              {f.options.map((opt) => {
-                const active = values[f.field] === opt;
+              {chips.map((opt) => {
+                const active = values[f.field] === opt.value;
                 return (
                   <Pressable
-                    key={opt}
+                    key={opt.value}
                     onPress={() => {
                       hapticLight();
-                      setValues((v) => ({ ...v, [f.field]: opt }));
+                      setValues((v) => ({ ...v, [f.field]: opt.value }));
                     }}
                     style={{
                       paddingHorizontal: 14,
@@ -164,7 +173,7 @@ function ClarificationCard({
                         fontSize: 14,
                       }}
                     >
-                      {opt}
+                      {opt.label}
                     </Text>
                   </Pressable>
                 );
@@ -195,7 +204,8 @@ function ClarificationCard({
             />
           )}
         </View>
-      ))}
+        );
+      })}
       <Button label={t("chat.send")} onPress={() => onSubmit(values)} icon="send" />
     </Card>
   );

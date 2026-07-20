@@ -91,3 +91,4 @@
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (org alias→memory→global fuzzy→keyword→AI); org aliases learned from manual corrections apply pre-memory; wallet parse/enrich routes stay out of openapi, raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
 - [Atelier async receipt parse](atelier-receipt-async-parse.md) — launch-map watchdog required; draftId reuse prevents dupes; offline+draft must not enqueue a create.
+- [Clarification resume across errors](atelier-clarification-resume.md) — asked-then-errored turns promote back to awaiting_clarification + relaxed rehydration; mobile chip/label rules; 2 pre-existing probe fails.

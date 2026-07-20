@@ -10,74 +10,24 @@ import {
   uploadCliAttachment,
 } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
+import {
+  applyFrame,
+  parseFrame,
+  type ChatTurn,
+  type ResultCard,
+} from "@/lib/chatFrames";
 
 export type { CliSessionMeta } from "@/lib/api";
-
-export interface ClarificationField {
-  field: string;
-  label: string;
-  hint?: string;
-  options?: string[];
-  inputType?: string;
-  defaultValue?: string;
-}
-
-export interface PendingConfirmation {
-  turnId?: string;
-  title?: string;
-  summary?: string;
-  capability?: string;
-  requiresTypedName?: boolean;
-  entityName?: string;
-  steps?: { label?: string }[];
-  [k: string]: unknown;
-}
-
-export interface ResultCard {
-  title: string;
-  summary?: string;
-}
-
-export interface ToolResult {
-  tool: string;
-  ok: boolean;
-  data?: unknown;
-  errorCode?: string;
-  errorMessage?: string;
-  prelude?: boolean;
-}
-
-export type TurnStatus =
-  | "streaming"
-  | "complete"
-  | "error"
-  | "cancelled"
-  | "needs_clarification"
-  | "needs_confirmation";
-
-export interface Trace {
-  kind: string;
-  text: string;
-}
-
-export interface ChatTurn {
-  key: string;
-  prompt: string;
-  attachments?: { id: string; name: string }[];
-  status: TurnStatus;
-  text: string;
-  trace: Trace[];
-  clarification?: { question: string; fields: ClarificationField[] };
-  pending?: PendingConfirmation;
-  result?: ResultCard;
-  toolResults: ToolResult[];
-  serverTurnId?: string;
-  error?: string;
-  /** Set when the error is a transient connectivity failure (proxy 502/503/network) so the UI can show a friendly message. */
-  errorKind?: "network";
-  /** True while the client is auto-retrying a transient failure. */
-  reconnecting?: boolean;
-}
+export type {
+  ChatTurn,
+  ClarificationChoice,
+  ClarificationField,
+  PendingConfirmation,
+  ResultCard,
+  ToolResult,
+  Trace,
+  TurnStatus,
+} from "@/lib/chatFrames";
 
 /** Transient upstream statuses worth auto-retrying (proxy 502 while the API server restarts, etc.). */
 function isTransientStatus(status: number): boolean {
@@ -104,115 +54,6 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 function uuid() {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function parseFrame(block: string): { type: string; data: Record<string, unknown> } | null {
-  let event: string | null = null;
-  const dataLines: string[] = [];
-  for (const raw of block.split(/\r?\n/)) {
-    if (raw.startsWith("event:")) event = raw.slice(6).trim();
-    else if (raw.startsWith("data:")) dataLines.push(raw.slice(5).trim());
-  }
-  if (!event) return null;
-  let data: Record<string, unknown> = {};
-  if (dataLines.length > 0) {
-    try {
-      data = JSON.parse(dataLines.join("\n"));
-    } catch {
-      data = { _raw: dataLines.join("\n") };
-    }
-  }
-  return { type: event, data };
-}
-
-function applyFrame(turn: ChatTurn, type: string, data: Record<string, unknown>): ChatTurn {
-  switch (type) {
-    case "narration": {
-      const text = String((data as { text?: string }).text ?? "");
-      return { ...turn, status: "streaming", text: turn.text + text };
-    }
-    case "plan_step": {
-      const d = data as { index?: number; label?: string; step?: number };
-      if (!d.label?.trim()) return { ...turn, status: "streaming" };
-      const idx = d.index ?? d.step;
-      const prefix = typeof idx === "number" ? `${idx}. ` : "";
-      return { ...turn, status: "streaming", trace: [...turn.trace, { kind: "step", text: `${prefix}${d.label}` }] };
-    }
-    case "progress": {
-      const d = data as { message?: string };
-      const message = String(d.message ?? "").trim();
-      if (!message) return { ...turn, status: "streaming" };
-      const last = turn.trace[turn.trace.length - 1];
-      if (last && last.kind === "progress") {
-        return { ...turn, status: "streaming", trace: [...turn.trace.slice(0, -1), { kind: "progress", text: message }] };
-      }
-      return { ...turn, status: "streaming", trace: [...turn.trace, { kind: "progress", text: message }] };
-    }
-    case "tool_result": {
-      const d = data as {
-        tool?: string;
-        ok?: boolean;
-        data?: unknown;
-        errorCode?: string;
-        errorMessage?: string;
-        prelude?: boolean;
-      };
-      const ok = d.ok !== false;
-      const tr: ToolResult = {
-        tool: d.tool ?? "tool",
-        ok,
-        data: d.data,
-        errorCode: d.errorCode,
-        errorMessage: d.errorMessage,
-        prelude: d.prelude === true,
-      };
-      return {
-        ...turn,
-        toolResults: [...turn.toolResults, tr],
-        trace: [...turn.trace, { kind: "tool", text: `${ok ? "✓" : "✗"} ${tr.tool}` }],
-      };
-    }
-    case "needs_clarification": {
-      const d = data as {
-        question?: string;
-        field?: string;
-        fields?: ClarificationField[];
-      };
-      const fields = Array.isArray(d.fields) && d.fields.length > 0
-        ? d.fields
-        : [{ field: d.field ?? "value", label: d.question ?? "Answer" }];
-      return {
-        ...turn,
-        status: "needs_clarification",
-        clarification: { question: d.question ?? "", fields },
-      };
-    }
-    case "needs_confirmation": {
-      return { ...turn, status: "needs_confirmation", pending: data as PendingConfirmation };
-    }
-    case "final": {
-      const d = data as { status?: string; turnId?: string; result?: ResultCard };
-      const ss = d.status;
-      let next: TurnStatus;
-      if (ss === "awaiting_confirmation") next = "needs_confirmation";
-      else if (ss === "awaiting_clarification") next = "needs_clarification";
-      else if (ss === "cancelled") next = "cancelled";
-      else if (ss === "error") next = "error";
-      else next = "complete";
-      let text = turn.text;
-      if (d.result && !text.trim()) {
-        text = [d.result.title, d.result.summary].filter(Boolean).join("\n\n");
-      }
-      return { ...turn, status: next, text, result: d.result ?? turn.result, serverTurnId: d.turnId ?? turn.serverTurnId };
-    }
-    case "budget_exceeded":
-    case "error": {
-      const d = data as { message?: string };
-      return { ...turn, status: "error", error: d.message ?? "Unknown error" };
-    }
-    default:
-      return turn;
-  }
 }
 
 /** tool name → resultCard shape, from the role-filtered capability catalog. */

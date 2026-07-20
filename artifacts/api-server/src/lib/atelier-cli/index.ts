@@ -2197,6 +2197,31 @@ export function sanitizeClarificationFields(
   return out.length > 0 ? out : null;
 }
 
+/**
+ * Task #410 — does a persisted frames array contain a `needs_clarification`
+ * frame? Used to treat a turn that ASKED a question but then hit a later
+ * in-turn failure (e.g. classifier abort → status `error`) as resumable:
+ * the user saw the question, so their answer must still continue it.
+ */
+export function framesContainClarification(frames: unknown): boolean {
+  if (!Array.isArray(frames)) return false;
+  return frames.some(
+    (f) => (f as { type?: string } | null)?.type === "needs_clarification",
+  );
+}
+
+/** Task #410 — statuses under which an asked clarification is still answerable. */
+export function isClarificationResumable(
+  status: string | null | undefined,
+  frames: unknown,
+): boolean {
+  if (status === "awaiting_clarification") return true;
+  return (
+    (status === "error" || status === "partial") &&
+    framesContainClarification(frames)
+  );
+}
+
 export interface RunTurnDeps {
   persona: CliPersona;
   emit: (frame: CliFrame) => void;
@@ -2585,11 +2610,16 @@ export async function runTurn(
           .from(atelierCliTurns)
           .where(eq(atelierCliTurns.id, input.continuesTurnId))
           .limit(1);
+        // Task #410 — accept `error`/`partial` turns whose frames still
+        // contain the asked question: a partial in-turn failure AFTER the
+        // clarification was emitted (e.g. a classifier abort) must not
+        // strand the question, or answering re-runs the whole prompt and
+        // re-asks the same thing in a loop.
         if (
           contTurn &&
           contTurn.userId === persona.id &&
           contTurn.orgId === persona.orgId &&
-          contTurn.status === "awaiting_clarification"
+          isClarificationResumable(contTurn.status, contTurn.frames)
         ) {
           explicitContinuation = rehydrateFromTurnRow(contTurn);
         }
@@ -2611,7 +2641,10 @@ export async function runTurn(
           )
           .orderBy(desc(atelierCliTurns.createdAt))
           .limit(1);
-        if (prevTurn && prevTurn.status === "awaiting_clarification") {
+        // Task #410 — same relaxation as the explicit path: a turn that
+        // asked a question but then errored mid-orchestration is still
+        // answerable by recency.
+        if (prevTurn && isClarificationResumable(prevTurn.status, prevTurn.frames)) {
           rehydrateFromTurnRow(prevTurn);
         }
       } else if (_drRehydrate.pendingClarification && !pendingSourceTurnId) {
@@ -3036,6 +3069,10 @@ export async function runTurn(
               suggestions: cl.suggestions ?? [],
               fields: cl.fields ?? [],
               continuation: true,
+              // Task #410 — clients capture the turn id from this frame so
+              // the answer carries continuesTurnId even if the turn's
+              // `final` frame is lost or reports a later failure.
+              turnId,
             },
           });
           status = "awaiting_clarification";
@@ -3120,7 +3157,14 @@ export async function runTurn(
             .where(
               and(
                 eq(atelierCliTurns.id, pendingSourceTurnId),
-                eq(atelierCliTurns.status, "awaiting_clarification"),
+                // Task #410 — a source turn resumed out of `error`/`partial`
+                // (asked, then failed mid-orchestration) must also be
+                // retired once its question is consumed.
+                inArray(atelierCliTurns.status, [
+                  "awaiting_clarification",
+                  "error",
+                  "partial",
+                ]),
               ),
             );
         }
@@ -3443,6 +3487,9 @@ export async function runTurn(
             partial: cl.partial ?? {},
             suggestions: cl.suggestions ?? [],
             fields: cl.fields ?? [],
+            // Task #410 — see continuation emit site: lets clients set
+            // continuesTurnId even when the final frame is degraded.
+            turnId,
           },
         });
         status = "awaiting_clarification";
@@ -3637,6 +3684,20 @@ export async function runTurn(
       });
       status = "error";
     } finally {
+      // Task #410 — a turn that EMITTED a clarification question must stay
+      // resumable even if a later step in the same turn failed (classifier
+      // abort, supersession bookkeeping error, …). The user saw the
+      // question; persisting `error` here would make the answer turn fail
+      // rehydration and re-run the whole prompt — re-asking the same
+      // question in a loop (and re-paying the specialist research cost).
+      // Emitting a clarification always ends the turn's productive work,
+      // so no answered-then-errored case can be misclassified here.
+      if (
+        (status === "error" || status === "partial") &&
+        frames.some((f) => f.type === "needs_clarification")
+      ) {
+        status = "awaiting_clarification";
+      }
       const latencyMs = Date.now() - t0;
       const costCents = Math.round(totalCost * 100);
       // Build planJson from the proposed_plan frame (if any) for replay.
