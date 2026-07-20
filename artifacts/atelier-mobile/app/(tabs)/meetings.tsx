@@ -13,8 +13,11 @@ import {
   useAtelierGetMyMsConnection,
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
-import React, { useMemo, useState } from "react";
+import * as ExpoLinking from "expo-linking";
+import * as WebBrowser from "expo-web-browser";
+import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Linking,
   Platform,
   Pressable,
@@ -25,6 +28,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { apiJson } from "@/lib/api";
 
 import {
   Card,
@@ -443,6 +448,39 @@ export default function MeetingsScreen() {
   const insets = useSafeAreaInsets();
 
   const conn = useAtelierGetMyMsConnection();
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  // Task #360 — on-device OAuth: fetch the Microsoft sign-in URL (bearer-
+  // authed), open it in the in-app browser, and refetch once we're back.
+  const connRefetch = conn.refetch;
+  const connectMs = useCallback(async () => {
+    hapticLight();
+    setConnectError(null);
+    setConnecting(true);
+    try {
+      const returnTo =
+        Platform.OS === "web"
+          ? window.location.href
+          : ExpoLinking.createURL("msauth-done");
+      const { url } = await apiJson<{ url: string }>(
+        "/api/atelier/me/msauth/mobile/start",
+        { method: "POST", body: { returnTo } },
+      );
+      if (Platform.OS === "web") {
+        // Full-page redirect; the callback sends the browser back here and
+        // the fresh page load refetches the connection status.
+        window.location.assign(url);
+        return;
+      }
+      await WebBrowser.openAuthSessionAsync(url, returnTo);
+      await connRefetch();
+    } catch {
+      setConnectError(t("mtg.connectError"));
+    } finally {
+      setConnecting(false);
+    }
+  }, [connRefetch, t]);
   const win = useMemo(() => windowIso(7), []);
   const enabled = Boolean(conn.data?.configured && conn.data?.connected);
   const calendar = useAtelierGetMyCalendar(win, {
@@ -521,11 +559,55 @@ export default function MeetingsScreen() {
             body={t("mtg.notConfiguredBody")}
           />
         ) : !conn.data.connected ? (
-          <EmptyState
-            icon="calendar"
-            title={t("mtg.notConnected")}
-            body={t("mtg.notConnectedBody")}
-          />
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <EmptyState
+              icon="calendar"
+              title={t("mtg.notConnected")}
+              body={t("mtg.notConnectedBody")}
+            />
+            <Pressable
+              disabled={connecting}
+              onPress={connectMs}
+              style={({ pressed }) => ({
+                flexDirection: rtl.row,
+                alignItems: "center",
+                gap: 8,
+                backgroundColor: c.primary,
+                borderRadius: c.radius,
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                opacity: pressed || connecting ? 0.7 : 1,
+              })}
+            >
+              {connecting ? (
+                <ActivityIndicator size="small" color={c.primaryForeground} />
+              ) : (
+                <Feather name="link" size={16} color={c.primaryForeground} />
+              )}
+              <Text
+                style={{
+                  color: c.primaryForeground,
+                  fontFamily: "Inter_600SemiBold",
+                  fontSize: 14,
+                }}
+              >
+                {connecting ? t("mtg.connecting") : t("mtg.connectCta")}
+              </Text>
+            </Pressable>
+            {connectError ? (
+              <Text
+                style={{
+                  marginTop: 8,
+                  color: c.destructive,
+                  fontFamily: "Inter_400Regular",
+                  fontSize: 13,
+                  textAlign: "center",
+                }}
+              >
+                {connectError}
+              </Text>
+            ) : null}
+          </View>
         ) : calendar.isLoading ? (
           <View style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (

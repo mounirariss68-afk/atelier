@@ -117,6 +117,13 @@ export interface MsOauthState {
   nonce: string;
   codeVerifier: string;
   issuedAt: number; // epoch ms
+  /**
+   * Task #360 — "mobile" marks a bearer-token-initiated flow (no session
+   * cookie in the system browser); the callback authenticates via this
+   * HMAC-signed state alone and redirects to `returnTo` (the app deep link).
+   */
+  flow?: "mobile";
+  returnTo?: string;
 }
 
 export function signState(s: MsOauthState): string {

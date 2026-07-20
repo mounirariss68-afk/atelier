@@ -8,6 +8,7 @@ import atelierRouter from "./atelier";
 import salonRouter from "./salon";
 import authRouter from "./auth";
 import esignWebhookRouter from "./esignWebhook";
+import { msMobileOauthRouter } from "./atelier/msAuthRoutes";
 import { requireAuthSession } from "../lib/auth/session";
 
 const router: IRouter = Router();
@@ -19,6 +20,10 @@ router.use("/auth", authRouter);
 // the payload is never trusted — it only triggers an authoritative
 // re-fetch from the DocuSeal API).
 router.use("/esign/webhook", esignWebhookRouter);
+// Task #360 — mobile-initiated MS365 OAuth callback: the system browser
+// carries no session cookie; the HMAC-signed, user-bound state is the
+// credential. Web-flow callbacks fall through to the gated atelier router.
+router.use(msMobileOauthRouter);
 
 // Task #1 — everything else requires a valid server-side session. There is
 // no default-persona fallback anywhere behind this gate; unauthenticated

@@ -112,6 +112,44 @@ function settingsRedirect(params: Record<string, string>): string {
   return `/me/profile${qs ? `?${qs}` : ""}`;
 }
 
+/** Append query params to a returnTo target (works for custom schemes too). */
+function appendQuery(base: string, params: Record<string, string>): string {
+  const qs = new URLSearchParams(params).toString();
+  if (!qs) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}${qs}`;
+}
+
+/**
+ * Task #360 — allowlist for the mobile flow's post-consent redirect.
+ * Custom app schemes (dev-client / Expo Go) and same-ish-origin https
+ * (Expo web preview) only — never an arbitrary URL (open-redirect guard).
+ */
+const MOBILE_RETURN_SCHEMES = new Set(["atelier-mobile:", "exp:", "exps:"]);
+function isAllowedMobileReturnTo(returnTo: string, req: Request): boolean {
+  let u: URL;
+  try {
+    u = new URL(returnTo);
+  } catch {
+    return false;
+  }
+  if (MOBILE_RETURN_SCHEMES.has(u.protocol)) return true;
+  if (u.protocol === "https:") {
+    return (
+      u.hostname === req.hostname ||
+      u.hostname.endsWith(".replit.dev") ||
+      u.hostname.endsWith(".repl.co") ||
+      u.hostname.endsWith(".replit.app")
+    );
+  }
+  if (
+    u.protocol === "http:" &&
+    (u.hostname === "localhost" || u.hostname === "127.0.0.1")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 async function loadConnection(me: typeof atelierUsers.$inferSelect) {
   const [row] = await db
     .select()
@@ -123,6 +161,88 @@ async function loadConnection(me: typeof atelierUsers.$inferSelect) {
       ),
     );
   return row ?? null;
+}
+
+/**
+ * Shared tail of the OAuth callback: exchange the code, fetch the MS
+ * profile, upsert the (encrypted) connection row, audit. Returns a wire
+ * error code on failure — the caller decides where to redirect.
+ */
+async function completeConnection(args: {
+  me: typeof atelierUsers.$inferSelect;
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { me } = args;
+  let tokens;
+  try {
+    tokens = await exchangeCode({
+      code: args.code,
+      redirectUri: args.redirectUri,
+      codeVerifier: args.codeVerifier,
+    });
+  } catch (e) {
+    if (e instanceof MsAuthError && e.code === "admin-consent-required") {
+      return { ok: false, error: "admin-consent" };
+    }
+    console.error("[msauth] token exchange failed", e);
+    return { ok: false, error: "oauth-failed" };
+  }
+  if (!tokens.refreshToken) {
+    // offline_access missing — nothing durable to store.
+    return { ok: false, error: "no-refresh-token" };
+  }
+
+  let profile;
+  try {
+    profile = await getMsProfile(tokens.accessToken);
+  } catch (e) {
+    console.error("[msauth] /me profile fetch failed", e);
+    return { ok: false, error: "oauth-failed" };
+  }
+
+  const email = (profile.mail || profile.userPrincipalName || "").toLowerCase();
+  const enc = encryptToken(tokens.refreshToken);
+  const existing = await loadConnection(me);
+  const now = new Date();
+  if (existing) {
+    await db
+      .update(atelierMsConnections)
+      .set({
+        msEmail: email,
+        msOid: profile.id,
+        msDisplayName: profile.displayName ?? null,
+        encRefreshToken: enc,
+        scopes: tokens.scopes.length ? tokens.scopes : MS_SCOPES,
+        connectedAt: now,
+        lastSyncedAt: now,
+        lastError: null,
+        updatedAt: now,
+      })
+      .where(eq(atelierMsConnections.id, existing.id));
+  } else {
+    await db.insert(atelierMsConnections).values({
+      id: rid("msc"),
+      orgId: me.orgId,
+      userId: me.id,
+      msEmail: email,
+      msOid: profile.id,
+      msDisplayName: profile.displayName ?? null,
+      encRefreshToken: enc,
+      scopes: tokens.scopes.length ? tokens.scopes : MS_SCOPES,
+      connectedAt: now,
+      lastSyncedAt: now,
+    });
+  }
+  await audit({
+    me,
+    action: "ms.connection.connected",
+    entityId: existing?.id ?? me.id,
+    payload: { msEmail: email },
+    summary: `${me.name} connected Microsoft 365 (${email})`,
+  });
+  return { ok: true };
 }
 
 // ------------------------------------------------------------------
@@ -211,82 +331,134 @@ router.get("/me/msauth/callback", async (req, res, next) => {
       return;
     }
 
-    let tokens;
-    try {
-      tokens = await exchangeCode({
-        code,
-        redirectUri: redirectUri(req),
-        codeVerifier: state.codeVerifier,
-      });
-    } catch (e) {
-      if (e instanceof MsAuthError && e.code === "admin-consent-required") {
-        res.redirect(settingsRedirect({ ms_error: "admin-consent" }));
-        return;
-      }
-      console.error("[msauth] token exchange failed", e);
-      res.redirect(settingsRedirect({ ms_error: "oauth-failed" }));
-      return;
-    }
-    if (!tokens.refreshToken) {
-      // offline_access missing — nothing durable to store.
-      res.redirect(settingsRedirect({ ms_error: "no-refresh-token" }));
-      return;
-    }
-
-    let profile;
-    try {
-      profile = await getMsProfile(tokens.accessToken);
-    } catch (e) {
-      console.error("[msauth] /me profile fetch failed", e);
-      res.redirect(settingsRedirect({ ms_error: "oauth-failed" }));
-      return;
-    }
-
-    const email = (profile.mail || profile.userPrincipalName || "").toLowerCase();
-    const enc = encryptToken(tokens.refreshToken);
-    const existing = await loadConnection(me);
-    const now = new Date();
-    if (existing) {
-      await db
-        .update(atelierMsConnections)
-        .set({
-          msEmail: email,
-          msOid: profile.id,
-          msDisplayName: profile.displayName ?? null,
-          encRefreshToken: enc,
-          scopes: tokens.scopes.length ? tokens.scopes : MS_SCOPES,
-          connectedAt: now,
-          lastSyncedAt: now,
-          lastError: null,
-          updatedAt: now,
-        })
-        .where(eq(atelierMsConnections.id, existing.id));
-    } else {
-      await db.insert(atelierMsConnections).values({
-        id: rid("msc"),
-        orgId: me.orgId,
-        userId: me.id,
-        msEmail: email,
-        msOid: profile.id,
-        msDisplayName: profile.displayName ?? null,
-        encRefreshToken: enc,
-        scopes: tokens.scopes.length ? tokens.scopes : MS_SCOPES,
-        connectedAt: now,
-        lastSyncedAt: now,
-      });
-    }
-    await audit({
+    const out = await completeConnection({
       me,
-      action: "ms.connection.connected",
-      entityId: existing?.id ?? me.id,
-      payload: { msEmail: email },
-      summary: `${me.name} connected Microsoft 365 (${email})`,
+      code,
+      codeVerifier: state.codeVerifier,
+      redirectUri: redirectUri(req),
     });
-    res.redirect(settingsRedirect({ ms: "connected" }));
+    res.redirect(
+      out.ok
+        ? settingsRedirect({ ms: "connected" })
+        : settingsRedirect({ ms_error: out.error }),
+    );
   } catch (err) {
     next(err);
   }
 });
+
+// ------------------------------------------------------------------
+// Task #360 — mobile connect flow (bearer token, no session cookie)
+// ------------------------------------------------------------------
+// POST /me/msauth/mobile/start — return the Microsoft sign-in URL for the
+// in-app browser. The state alone (HMAC-signed, 10-min, user-bound, PKCE
+// verifier inside) authenticates the callback; no cookie is involved.
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+router.post("/me/msauth/mobile/start", (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!msConfigured()) {
+    res.status(400).json({ error: "not-configured" });
+    return;
+  }
+  const returnTo =
+    typeof (req.body as { returnTo?: unknown })?.returnTo === "string"
+      ? ((req.body as { returnTo: string }).returnTo)
+      : "";
+  if (!returnTo || !isAllowedMobileReturnTo(returnTo, req)) {
+    res.status(400).json({ error: "invalid-return-to" });
+    return;
+  }
+  const { verifier, challenge } = makePkce();
+  const state = signState({
+    userId: me.id,
+    nonce: crypto.randomBytes(16).toString("base64url"),
+    codeVerifier: verifier,
+    issuedAt: Date.now(),
+    flow: "mobile",
+    returnTo,
+  });
+  res.json({
+    url: buildAuthorizeUrl({
+      redirectUri: redirectUri(req),
+      state,
+      codeChallenge: challenge,
+    }),
+  });
+});
+
+/**
+ * Public router (mounted BEFORE the global auth gate) handling the OAuth
+ * callback for mobile-initiated flows only. The system browser carries no
+ * session cookie, so authentication rests entirely on the HMAC-signed,
+ * user-bound, 10-minute state minted by /me/msauth/mobile/start. Web-flow
+ * callbacks (state without flow:"mobile") fall through to the gated route.
+ */
+export const msMobileOauthRouter: IRouter = Router();
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+msMobileOauthRouter.get(
+  "/atelier/me/msauth/callback",
+  async (req, res, next) => {
+    try {
+      const stateParam =
+        typeof req.query.state === "string" ? req.query.state : null;
+      const state = stateParam ? verifyState(stateParam) : null;
+      if (!state || state.flow !== "mobile" || !state.returnTo) {
+        next(); // web flow (or invalid) → gated cookie-based handler
+        return;
+      }
+      const finish = (params: Record<string, string>) =>
+        res.redirect(appendQuery(state.returnTo!, params));
+
+      const oauthError =
+        typeof req.query.error === "string" ? req.query.error : null;
+      const oauthErrorDesc =
+        typeof req.query.error_description === "string"
+          ? req.query.error_description
+          : "";
+      if (oauthError) {
+        const friendly = /AADSTS65001|AADSTS650052|consent_required/i.test(
+          `${oauthError} ${oauthErrorDesc}`,
+        )
+          ? "admin-consent"
+          : oauthError === "access_denied"
+            ? "cancelled"
+            : "oauth-failed";
+        console.error(
+          `[msauth] mobile callback error: ${oauthError} ${oauthErrorDesc.slice(0, 300)}`,
+        );
+        finish({ ms_error: friendly });
+        return;
+      }
+
+      const code = typeof req.query.code === "string" ? req.query.code : null;
+      if (!code) {
+        finish({ ms_error: "state-mismatch" });
+        return;
+      }
+      const [me] = await db
+        .select()
+        .from(atelierUsers)
+        .where(
+          and(eq(atelierUsers.id, state.userId), isNull(atelierUsers.deletedAt)),
+        );
+      if (!me) {
+        finish({ ms_error: "state-mismatch" });
+        return;
+      }
+
+      const out = await completeConnection({
+        me,
+        code,
+        codeVerifier: state.codeVerifier,
+        redirectUri: redirectUri(req),
+      });
+      finish(out.ok ? { ms: "connected" } : { ms_error: out.error });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 // ------------------------------------------------------------------
 // GET /me/msconnection — status (no tokens, ever)
