@@ -18,6 +18,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: "bubble.left", selected: "bubble.left.fill" }} />
         <Label>{t("tab.chat")}</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="meetings">
+        <Icon sf={{ default: "calendar", selected: "calendar" }} />
+        <Label>{t("tab.meetings")}</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="expenses">
         <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
         <Label>{t("tab.expenses")}</Label>
@@ -44,12 +48,14 @@ function ClassicTabLayout() {
 
   const sf: Record<string, string> = {
     index: "bubble.left",
+    meetings: "calendar",
     expenses: "creditcard",
     me: "person",
     settings: "gearshape",
   };
   const feather: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
     index: "message-circle",
+    meetings: "calendar",
     expenses: "credit-card",
     me: "user",
     settings: "settings",
@@ -92,6 +98,7 @@ function ClassicTabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: t("tab.chat"), tabBarIcon: icon("index") }} />
+      <Tabs.Screen name="meetings" options={{ title: t("tab.meetings"), tabBarIcon: icon("meetings") }} />
       <Tabs.Screen name="expenses" options={{ title: t("tab.expenses"), tabBarIcon: icon("expenses") }} />
       <Tabs.Screen name="me" options={{ title: t("tab.me"), tabBarIcon: icon("me") }} />
       <Tabs.Screen name="settings" options={{ title: t("tab.settings"), tabBarIcon: icon("settings") }} />
