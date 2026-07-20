@@ -88,6 +88,6 @@
 - [Mobile store icon pipeline](atelier-mobile-store-icons.md) — iOS icon must stay alpha-free; adaptive foreground ≤313px radius (now 96%); verify via temp-copy `expo prebuild`, never in-repo.
 - [Mobile meeting reminders](atelier-mobile-meeting-reminders.md) — device-local expo-notifications, opt-in OFF default; sync cancels stale "mtgbrief-" ids; tap deep-links via focusMeetingId/focusAccountId params.
 - [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
-- [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (org alias→global fuzzy→keyword→AI); wallet parse/enrich routes stay out of openapi, raw fetch + 202/poll.
+- [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (org alias→memory→global fuzzy→keyword→AI); org aliases learned from manual corrections apply pre-memory; wallet parse/enrich routes stay out of openapi, raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
 - [Atelier async receipt parse](atelier-receipt-async-parse.md) — launch-map watchdog required; draftId reuse prevents dupes; offline+draft must not enqueue a create.

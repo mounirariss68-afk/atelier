@@ -17,6 +17,7 @@ import { drizzleMerchantStorage } from "./storage";
 import { normalizeMerchant } from "./normalizer";
 import { findBestMatch, buildMerchantIndex } from "./tokenMatcher";
 import { matchByKeyword } from "./keywords";
+import { lookupMerchantAlias } from "./aliases";
 
 export interface MerchantMatchResult {
   merchantId?: string;
@@ -25,6 +26,7 @@ export interface MerchantMatchResult {
   subCategoryCode: string | null;
   confidence: number;
   matchMethod:
+    | "ORG_ALIAS"
     | "EXACT_NORMALIZED"
     | "TOKEN_STRONG"
     | "TOKEN_WEAK"
@@ -54,7 +56,33 @@ export async function matchMerchant(
   rawText: string,
   region = "global",
   storage: MerchantStorage = drizzleMerchantStorage,
+  opts?: { orgId?: string },
 ): Promise<MerchantMatchResult> {
+  // Tier 0 (Task #408) — org-scoped manual-correction alias, consulted
+  // before every other tier. On a hit, the corrected label replaces the
+  // raw text and matching continues against the corrected name.
+  if (opts?.orgId) {
+    let alias = null;
+    try {
+      alias = await lookupMerchantAlias(rawText, opts.orgId);
+    } catch (e) {
+      console.log(`[MerchantMatcher] Alias lookup error: ${e}`);
+    }
+    if (alias) {
+      const inner = await matchMerchant(alias.aliasLabel, region, storage);
+      return {
+        ...inner,
+        merchantName: alias.aliasLabel,
+        matchMethod: inner.matchMethod === "NONE" ? "ORG_ALIAS" : inner.matchMethod,
+        confidence: inner.matchMethod === "NONE" ? 0.6 : inner.confidence,
+        evidence: [
+          `org_alias:${alias.matchKey}->${alias.aliasLabel}`,
+          ...inner.evidence,
+        ],
+      };
+    }
+  }
+
   const normalized = normalizeMerchant(rawText);
 
   // 2. Exact normalized match against the global merchant database

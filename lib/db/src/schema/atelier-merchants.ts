@@ -48,6 +48,35 @@ export const atelierGlobalMerchants = pgTable(
   ],
 );
 
+/**
+ * Task #408 — org-scoped merchant aliases learned from manual corrections.
+ * When a user renames a parsed merchant and opts to "remember this
+ * correction", the original raw text (normalized with the matcher's
+ * normalizeMerchant) maps to the corrected label. Consulted before every
+ * other matcher tier.
+ */
+export const atelierMerchantAliases = pgTable(
+  "atelier_merchant_aliases",
+  {
+    id: text("id").primaryKey(),
+    orgId: text("org_id").notNull(),
+    /** normalizeMerchant() of the original raw/parsed merchant text. */
+    matchKey: text("match_key").notNull(),
+    /** Verbatim original text the alias was learned from (audit). */
+    rawSample: text("raw_sample").notNull(),
+    /** The corrected merchant display name. */
+    aliasLabel: text("alias_label").notNull(),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_merchalias_org_key").on(t.orgId, t.matchKey),
+    index("idx_atelier_merchalias_org").on(t.orgId),
+  ],
+);
+
 /** Merchants that fell through every matcher tier — AI enrichment queue. */
 export const atelierUnmatchedMerchants = pgTable(
   "atelier_unmatched_merchants",

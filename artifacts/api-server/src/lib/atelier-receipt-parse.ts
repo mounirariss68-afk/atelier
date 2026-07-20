@@ -20,6 +20,7 @@ import { extractPdfText, renderPdfPageImage } from "./atelier-merchant/pdf.js";
 import { matchMerchant } from "./atelier-merchant/matcher.js";
 import { normalizeMerchant } from "./atelier-merchant/normalizer.js";
 import { lookupMerchantMemory } from "./atelier-expense-categorizer.js";
+import { lookupMerchantAlias } from "./atelier-merchant/aliases.js";
 import { mapLegacyCategory } from "./atelier-expense-taxonomy.js";
 import { buildContractDigest } from "./atelier-contract-digest.js";
 import { convertToUsd } from "./atelier-fx.js";
@@ -336,7 +337,24 @@ export async function parseReceiptForExpense(args: {
   // Task #383/#396 — layered category resolution:
   // org merchant memory → global merchant DB / keyword / fuzzy matcher →
   // AI (auditor legacy category mapped onto the taxonomy tree).
-  const merchantForMemory = (ocr.merchant ?? row.merchant ?? "").trim();
+  let merchantForMemory = (ocr.merchant ?? row.merchant ?? "").trim();
+  let merchantDisplay = (ocr.merchant ?? row.merchant ?? "Unknown merchant");
+  // Task #408 — tier 0: org alias from a manual correction rewrites the
+  // merchant BEFORE memory/matcher tiers, so a remembered rename applies
+  // immediately to future parses.
+  let aliasApplied = false;
+  if (merchantForMemory) {
+    try {
+      const alias = await lookupMerchantAlias(merchantForMemory, me.orgId);
+      if (alias) {
+        merchantForMemory = alias.aliasLabel;
+        merchantDisplay = alias.aliasLabel;
+        aliasApplied = true;
+      }
+    } catch (e) {
+      console.log(`[ReceiptParse] Alias lookup error: ${e}`);
+    }
+  }
   let taxonomyPatch: Record<string, unknown> = {};
   let merchantResolution = "ai";
   const memoryHit = merchantForMemory
@@ -380,10 +398,12 @@ export async function parseReceiptForExpense(args: {
     }
   }
 
+  if (aliasApplied) merchantResolution = `org_alias_${merchantResolution}`;
+
   const [updated] = await db
     .update(atelierExpenses)
     .set({
-      merchant: (ocr.merchant ?? row.merchant ?? "Unknown merchant").slice(0, 200),
+      merchant: merchantDisplay.slice(0, 200),
       merchantNormalized: merchantForMemory
         ? normalizeMerchant(merchantForMemory).slice(0, 200)
         : null,

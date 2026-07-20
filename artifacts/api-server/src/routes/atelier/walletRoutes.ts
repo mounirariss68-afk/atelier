@@ -60,6 +60,9 @@ import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStora
 // Task #396 — shared receipt/invoice parse pipeline + merchant enrichment.
 import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
 import { runMerchantEnrichment } from "../../lib/atelier-merchant/enrichment.js";
+// Task #408 — manual merchant corrections feed org-scoped aliases.
+import { rememberMerchantAlias, listAliasMatchKeys } from "../../lib/atelier-merchant/aliases.js";
+import { normalizeMerchant } from "../../lib/atelier-merchant/normalizer.js";
 import { atelierUnmatchedMerchants } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -808,6 +811,86 @@ router.post("/wallet/expenses/:id/parse-receipt", async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
     });
   }
+});
+
+// =============================================================
+// Task #408 — manual merchant correction (+ "remember this correction")
+// =============================================================
+// When a parsed merchant is wrong or unrecognized, the user can correct it
+// here. With remember=true the original→corrected pair is stored as an
+// org-scoped alias consulted first by the matcher on future parses.
+// @cli-skip: inline edit surface; no CLI shape (Task #408)
+router.post("/wallet/expenses/:id/merchant", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [existing] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (existing.personId !== me.id && !isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (existing.status !== "draft" && existing.status !== "submitted") {
+    res.status(409).json({
+      error: "not-editable",
+      message: `Merchant can only be corrected on draft or submitted claims (status: ${existing.status}).`,
+    });
+    return;
+  }
+  const body = (req.body ?? {}) as { merchant?: unknown; remember?: unknown };
+  const merchant = typeof body.merchant === "string" ? body.merchant.trim() : "";
+  if (!merchant || merchant.length > 200) {
+    res.status(400).json({
+      error: "invalid-merchant",
+      message: "Provide a merchant name (1–200 characters).",
+    });
+    return;
+  }
+  const remember = body.remember === true;
+  const original = (existing.merchant ?? "").trim();
+
+  let alias: Awaited<ReturnType<typeof rememberMerchantAlias>> = null;
+  if (remember && original && original !== merchant) {
+    alias = await rememberMerchantAlias({
+      originalText: original,
+      correctedLabel: merchant,
+      orgId: me.orgId,
+      userId: me.id,
+    });
+  }
+
+  const [updated] = await db
+    .update(atelierExpenses)
+    .set({
+      merchant: merchant.slice(0, 200),
+      merchantNormalized: normalizeMerchant(merchant).slice(0, 200),
+      merchantResolution: "manual",
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierExpenses.id, existing.id))
+    .returning();
+
+  await audit({
+    entityType: "expense",
+    entityId: existing.id,
+    actor: me,
+    action: "wallet.expense.merchant_corrected",
+    payload: {
+      from: original || null,
+      to: merchant,
+      remembered: !!alias,
+      aliasId: alias?.id ?? null,
+      aliasMatchKey: alias?.matchKey ?? null,
+    },
+    summary: `Merchant corrected "${original || "(none)"}" → "${merchant}"${alias ? " · remembered as org alias" : ""}`,
+  });
+
+  res.json({ expense: expenseToWire(updated, me), remembered: !!alias });
 });
 
 interface SubmitBody {
@@ -1801,11 +1884,15 @@ router.get("/wallet/merchants/unmatched", async (req, res) => {
     res.status(403).json({ error: "forbidden" });
     return;
   }
-  const rows = await db
+  const allRows = await db
     .select()
     .from(atelierUnmatchedMerchants)
     .orderBy(desc(atelierUnmatchedMerchants.count))
     .limit(200);
+  // Task #408 — entries a user has already corrected via an org alias are
+  // no longer "unknown"; drop them from the admin queue.
+  const aliasKeys = await listAliasMatchKeys(me.orgId);
+  const rows = allRows.filter((r) => !aliasKeys.has(r.normalizedMerchantText));
   res.json({
     merchants: rows.map((r) => ({
       id: r.id,

@@ -82,11 +82,117 @@ function ReceiptPreview({ src }: { src: string }) {
   );
 }
 
+// Task #408 — correct a wrong/unrecognized parsed merchant, optionally
+// remembering the correction as an org-wide alias for future parses.
+function MerchantEditor({
+  expense,
+  busy,
+  onSaved,
+  onError,
+}: {
+  expense: Expense;
+  busy: boolean;
+  onSaved: (e: Expense, remembered: boolean) => void;
+  onError: (msg: string) => void;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(expense.merchant ?? "");
+  const [remember, setRemember] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+
+  if (expense.status !== "draft" && expense.status !== "submitted") return null;
+
+  if (!editing) {
+    return (
+      <button
+        className="mt-2 text-xs text-stone-500 underline hover:text-stone-700"
+        disabled={busy}
+        onClick={() => {
+          setValue(expense.merchant ?? "");
+          setRemember(true);
+          setEditing(true);
+        }}
+        data-testid="btn-edit-merchant"
+      >
+        Wrong merchant? Correct it
+      </button>
+    );
+  }
+
+  const changed = value.trim().length > 0 && value.trim() !== (expense.merchant ?? "").trim();
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch(`/api/atelier/wallet/expenses/${expense.id}/merchant`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ merchant: value.trim(), remember: remember && changed }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        onError(d.message ?? d.error ?? `error-${r.status}`);
+      } else {
+        onSaved(d.expense, d.remembered === true);
+        setEditing(false);
+      }
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 space-y-2 rounded border border-stone-200 bg-stone-50 p-3" data-testid="merchant-editor">
+      <label className="block text-xs text-stone-500">Correct merchant name</label>
+      <input
+        className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm"
+        value={value}
+        maxLength={200}
+        onChange={(e) => setValue(e.target.value)}
+        data-testid="input-merchant-correction"
+      />
+      {changed && expense.merchant ? (
+        <label className="flex items-center gap-2 text-xs text-stone-600">
+          <input
+            type="checkbox"
+            checked={remember}
+            onChange={(e) => setRemember(e.target.checked)}
+            data-testid="checkbox-remember-correction"
+          />
+          Remember this correction — recognize “{expense.merchant}” as “{value.trim()}” from now on
+        </label>
+      ) : null}
+      <div className="flex gap-2">
+        <button
+          className="rounded bg-stone-900 px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          disabled={saving || !value.trim()}
+          onClick={() => void save()}
+          data-testid="btn-save-merchant"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          className="rounded border px-3 py-1.5 text-xs"
+          disabled={saving}
+          onClick={() => setEditing(false)}
+          data-testid="btn-cancel-merchant"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function WalletExpenseDetail() {
   const [, params] = useRoute("/wallet/expenses/:id");
   const [, setLocation] = useLocation();
   const [expense, setExpense] = React.useState<Expense | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const [notice, setNotice] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const id = params?.id;
 
@@ -152,6 +258,11 @@ export default function WalletExpenseDetail() {
       {error ? (
         <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-800">{error}</div>
       ) : null}
+      {notice ? (
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-800" data-testid="merchant-notice">
+          {notice}
+        </div>
+      ) : null}
 
       {expense ? (
         <>
@@ -172,6 +283,20 @@ export default function WalletExpenseDetail() {
               </p>
             ) : null}
             {expense.description ? <p className="mt-3 text-sm text-stone-700">{expense.description}</p> : null}
+            <MerchantEditor
+              expense={expense}
+              busy={busy}
+              onSaved={(e, remembered) => {
+                setExpense(e);
+                setError(null);
+                setNotice(
+                  remembered
+                    ? "Merchant corrected — this correction will be recognized automatically next time."
+                    : "Merchant corrected.",
+                );
+              }}
+              onError={(msg) => setError(msg)}
+            />
           </Card>
 
           {expense.receiptFileRef?.startsWith("/objects/") ? (
