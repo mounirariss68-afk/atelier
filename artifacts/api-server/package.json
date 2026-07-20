@@ -40,7 +40,8 @@
     "test:exec-mapper-critical": "tsx ./tests/crm/exec-mapper-critical-roles-probe.ts",
     "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts",
     "test:finance-entity-lifecycle": "tsx ./tests/crm/finance-entity-lifecycle-probe.ts",
-    "test:mobile-auth": "tsx ./tests/mobile-auth/run.ts"
+    "test:mobile-auth": "tsx ./tests/mobile-auth/run.ts",
+    "test:meeting-brief": "tsx ./tests/meeting-brief/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
