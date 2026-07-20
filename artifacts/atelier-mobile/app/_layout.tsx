@@ -1,10 +1,11 @@
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
   useFonts,
-} from "@expo-google-fonts/inter";
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   ApiError,
@@ -13,8 +14,9 @@ import {
 } from "@workspace/api-client-react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Image, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -76,9 +78,29 @@ function Gate() {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: colors.background,
+          backgroundColor: "#0A1230",
+          gap: 20,
         }}
       >
+        <LinearGradient
+          colors={["#5B7CFF", "#8A5BD6", "#C45BB8", "#FF7B5A"]}
+          locations={[0, 0.35, 0.65, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{
+            width: 76,
+            height: 76,
+            borderRadius: 24,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Image
+            source={require("@/assets/images/cognirise-mark.png")}
+            style={{ width: 44, height: 44 }}
+            resizeMode="contain"
+          />
+        </LinearGradient>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
@@ -97,10 +119,11 @@ function Gate() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
   });
 
   useEffect(() => {

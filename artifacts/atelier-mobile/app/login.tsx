@@ -11,10 +11,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Button, Field, hapticError } from "@/components/ui";
+import {
+  BrandGradient,
+  Button,
+  Card,
+  FadeInView,
+  Field,
+  hapticError,
+  softShadow,
+} from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
-import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { apiJson } from "@/lib/api";
 
@@ -29,13 +36,12 @@ function cmpSemver(a: string, b: string): number {
 }
 
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
+const NAVY = "#0A1230";
 
-const logoLight = require("@/assets/images/cognirise-logo-light.png");
 const logoDark = require("@/assets/images/cognirise-logo-dark-bg.png");
 
 export default function LoginScreen() {
   const c = useColors();
-  const scheme = useThemeScheme();
   const { t } = useI18n();
   const { login } = useAuth();
   const insets = useSafeAreaInsets();
@@ -75,29 +81,41 @@ export default function LoginScreen() {
       <View
         style={{
           flex: 1,
-          backgroundColor: c.background,
+          backgroundColor: NAVY,
           alignItems: "center",
           justifyContent: "center",
           padding: 32,
-          gap: 16,
+          gap: 18,
         }}
       >
-        <Feather name="download-cloud" size={48} color={c.primary} />
+        <BrandGradient
+          style={{
+            width: 84,
+            height: 84,
+            borderRadius: 28,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Feather name="download-cloud" size={38} color="#FFFFFF" />
+        </BrandGradient>
         <Text
           style={{
-            color: c.foreground,
-            fontFamily: "Inter_700Bold",
-            fontSize: 22,
+            color: "#EEF1FA",
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 23,
             textAlign: "center",
+            letterSpacing: -0.4,
           }}
         >
           {t("update.title")}
         </Text>
         <Text
           style={{
-            color: c.mutedForeground,
-            fontFamily: "Inter_400Regular",
+            color: "#9AA5C4",
+            fontFamily: "PlusJakartaSans_400Regular",
             fontSize: 15,
+            lineHeight: 22,
             textAlign: "center",
           }}
         >
@@ -108,92 +126,115 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          justifyContent: "center",
-          padding: 28,
-          paddingTop: insets.top + 40,
-        }}
-        keyboardShouldPersistTaps="handled"
+    <View style={{ flex: 1, backgroundColor: NAVY }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
       >
-        <View style={{ alignItems: "center", marginBottom: 36 }}>
-          <Image
-            source={scheme === "dark" ? logoDark : logoLight}
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+        >
+          {/* Navy hero with gradient glow and brand logo */}
+          <View
             style={{
-              width: 232,
-              height: 62,
-              marginBottom: 20,
-            }}
-            resizeMode="contain"
-            accessibilityLabel="Cognirise"
-          />
-          <Text
-            style={{
-              color: c.foreground,
-              fontFamily: "Inter_700Bold",
-              fontSize: 26,
+              paddingTop: insets.top + 64,
+              paddingBottom: 48,
+              alignItems: "center",
+              gap: 22,
+              overflow: "hidden",
             }}
           >
-            {t("login.title")}
-          </Text>
-          <Text
-            style={{
-              color: c.mutedForeground,
-              fontFamily: "Inter_400Regular",
-              fontSize: 15,
-              marginTop: 4,
-            }}
-          >
-            {t("login.subtitle")}
-          </Text>
-        </View>
-
-        <View style={{ gap: 16 }}>
-          <Field
-            label={t("login.email")}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            textContentType="emailAddress"
-            placeholder="you@cognirise.com"
-          />
-          <Field
-            label={t("login.password")}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete="password"
-            textContentType="password"
-            placeholder="••••••••••"
-            onSubmitEditing={onSubmit}
-          />
-          {error ? (
-            <Text
+            <BrandGradient
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={{
-                color: c.destructive,
-                fontFamily: "Inter_500Medium",
-                fontSize: 13,
+                position: "absolute",
+                top: -140,
+                left: -80,
+                right: -80,
+                height: 300,
+                opacity: 0.22,
+                borderRadius: 300,
               }}
-            >
-              {error}
-            </Text>
-          ) : null}
-          <Button
-            label={t("login.signIn")}
-            onPress={onSubmit}
-            loading={loading}
-            disabled={!email || !password}
-            icon="log-in"
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            />
+            <FadeInView style={{ alignItems: "center", gap: 22 }}>
+              <Image
+                source={logoDark}
+                style={{ width: 210, height: 56 }}
+                resizeMode="contain"
+              />
+              <View style={{ alignItems: "center", gap: 6 }}>
+                <Text
+                  style={{
+                    color: "#EEF1FA",
+                    fontFamily: "PlusJakartaSans_800ExtraBold",
+                    fontSize: 27,
+                    letterSpacing: -0.5,
+                  }}
+                >
+                  {t("login.title")}
+                </Text>
+                <Text
+                  style={{
+                    color: "#9AA5C4",
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 15,
+                  }}
+                >
+                  {t("login.subtitle")}
+                </Text>
+              </View>
+            </FadeInView>
+          </View>
+
+          {/* Form card rises out of the navy hero */}
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: c.background,
+              borderTopLeftRadius: 32,
+              borderTopRightRadius: 32,
+              padding: 24,
+              paddingTop: 32,
+              paddingBottom: insets.bottom + 32,
+            }}
+          >
+            <FadeInView delay={120}>
+              <Card style={{ gap: 16, padding: 20 }}>
+                <Field
+                  label={t("login.email")}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  placeholder="you@cognirise.com"
+                />
+                <Field
+                  label={t("login.password")}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoComplete="password"
+                  textContentType="password"
+                  onSubmitEditing={onSubmit}
+                  error={error}
+                />
+                <Button
+                  label={t("login.signIn")}
+                  onPress={onSubmit}
+                  loading={loading}
+                  disabled={!email || !password}
+                  icon="log-in"
+                />
+              </Card>
+            </FadeInView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }

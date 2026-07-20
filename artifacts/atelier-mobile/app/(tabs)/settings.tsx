@@ -5,7 +5,7 @@ import React from "react";
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Card, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
+import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
@@ -19,10 +19,10 @@ function SectionTitle({ children }: { children: string }) {
     <Text
       style={{
         color: c.mutedForeground,
-        fontFamily: "Inter_600SemiBold",
+        fontFamily: "PlusJakartaSans_600SemiBold",
         fontSize: 13,
         textTransform: "uppercase",
-        letterSpacing: 0.5,
+        letterSpacing: 1,
         marginBottom: 8,
         marginTop: 8,
         textAlign: rtl.textAlign,
@@ -68,12 +68,27 @@ function OptionRow({
       })}
     >
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 12 }}>
-        {icon ? <Feather name={icon} size={18} color={destructive ? c.destructive : c.foreground} /> : null}
+        {icon ? (
+          <View
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 12,
+              backgroundColor: destructive ? c.destructiveTint : c.tint08,
+              borderWidth: 1,
+              borderColor: destructive ? "transparent" : c.tint25,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather name={icon} size={16} color={destructive ? c.destructive : c.primary} />
+          </View>
+        ) : null}
         <Text
           style={{
             color: destructive ? c.destructive : c.foreground,
-            fontFamily: "Inter_500Medium",
-            fontSize: 16,
+            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontSize: 15.5,
           }}
         >
           {label}
@@ -81,11 +96,15 @@ function OptionRow({
       </View>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
         {detail ? (
-          <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 14 }}>
+          <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 14 }}>
             {detail}
           </Text>
         ) : null}
-        {active ? <Feather name="check" size={18} color={c.primary} /> : null}
+        {active ? (
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" }}>
+            <Feather name="check" size={13} color="#FFFFFF" />
+          </View>
+        ) : null}
         {chevron ? <Feather name={rtl.isRTL ? "chevron-left" : "chevron-right"} size={18} color={c.mutedForeground} /> : null}
       </View>
     </Pressable>
@@ -122,7 +141,7 @@ export default function SettingsScreen() {
   };
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom) + 24;
+  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -130,12 +149,10 @@ export default function SettingsScreen() {
         style={{
           paddingHorizontal: 16,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 12,
         }}
       >
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 22, textAlign: rtl.textAlign }}>
+        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 24, letterSpacing: -0.4, textAlign: rtl.textAlign }}>
           {t("set.title")}
         </Text>
       </View>
@@ -147,7 +164,7 @@ export default function SettingsScreen() {
             <View key={th.key}>
               <OptionRow label={th.label} active={pref === th.key} onPress={() => setPref(th.key)} />
               {i < themes.length - 1 ? (
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border }} />
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />
               ) : null}
             </View>
           ))}
@@ -163,7 +180,7 @@ export default function SettingsScreen() {
                 onPress={() => setLang(l.code as Lang)}
               />
               {i < LANGS.length - 1 ? (
-                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border }} />
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />
               ) : null}
             </View>
           ))}
@@ -177,7 +194,7 @@ export default function SettingsScreen() {
             chevron
             onPress={() => router.push("/change-password")}
           />
-          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border }} />
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />
           <OptionRow label={t("set.logout")} icon="log-out" destructive onPress={doLogout} />
         </Card>
 

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Button, Field, hapticError, hapticSuccess, IconButton } from "@/components/ui";
+import { Button, Card, FadeInView, Field, hapticError, hapticSuccess, IconButton } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
@@ -72,17 +72,31 @@ export default function ChangePasswordScreen() {
       >
         {!mustChangePassword ? (
           <View style={{ marginBottom: 8 }}>
-            <IconButton icon="chevron-left" onPress={() => router.back()} />
+            <IconButton icon="chevron-left" onPress={() => router.back()} filled />
           </View>
         ) : null}
 
         <View style={{ marginBottom: 28 }}>
-          <Feather name="lock" size={36} color={c.primary} />
+          <View
+            style={{
+              width: 60,
+              height: 60,
+              borderRadius: 20,
+              backgroundColor: c.tint08,
+              borderWidth: 1,
+              borderColor: c.tint25,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Feather name="lock" size={26} color={c.primary} />
+          </View>
           <Text
             style={{
               color: c.foreground,
-              fontFamily: "Inter_700Bold",
-              fontSize: 24,
+              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontSize: 25,
+              letterSpacing: -0.4,
               marginTop: 14,
             }}
           >
@@ -92,7 +106,7 @@ export default function ChangePasswordScreen() {
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 fontSize: 15,
                 marginTop: 6,
               }}
@@ -102,7 +116,8 @@ export default function ChangePasswordScreen() {
           ) : null}
         </View>
 
-        <View style={{ gap: 16 }}>
+        <FadeInView>
+        <Card style={{ gap: 16, padding: 20 }}>
           <Field
             label={t("cp.current")}
             value={current}
@@ -128,7 +143,7 @@ export default function ChangePasswordScreen() {
             <Text
               style={{
                 color: c.destructive,
-                fontFamily: "Inter_500Medium",
+                fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 13,
               }}
             >
@@ -145,7 +160,8 @@ export default function ChangePasswordScreen() {
           {mustChangePassword ? (
             <Button label={t("set.logout")} onPress={logout} variant="ghost" />
           ) : null}
-        </View>
+        </Card>
+        </FadeInView>
       </ScrollView>
     </KeyboardAvoidingView>
   );

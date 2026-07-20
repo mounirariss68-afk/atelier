@@ -60,7 +60,7 @@ function FindingsCard({ findings }: { findings: unknown }) {
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "Inter_600SemiBold",
+          fontFamily: "PlusJakartaSans_600SemiBold",
           fontSize: 14,
           textAlign: rtl.textAlign,
         }}
@@ -78,7 +78,7 @@ function FindingsCard({ findings }: { findings: unknown }) {
             <Text
               style={{
                 color: c.mutedForeground,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 fontSize: 13,
                 flex: 1,
                 textAlign: rtl.textAlign,
@@ -261,19 +261,21 @@ export default function ExpenseDetailScreen() {
           justifyContent: "space-between",
           paddingHorizontal: 16,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 12,
         }}
       >
-        <IconButton icon="chevron-left" onPress={() => router.back()} />
-        <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 17 }}>
+        <IconButton
+          icon={rtl.isRTL ? "chevron-right" : "chevron-left"}
+          onPress={() => router.back()}
+          filled
+        />
+        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 18, letterSpacing: -0.3 }}>
           {editable ? t("exp.review") : t("exp.detail")}
         </Text>
         {editable ? (
-          <IconButton icon="trash-2" color={c.destructive} onPress={remove} />
+          <IconButton icon="trash-2" color={c.destructive} onPress={remove} filled />
         ) : (
-          <View style={{ width: 30 }} />
+          <View style={{ width: 40 }} />
         )}
       </View>
 
@@ -289,21 +291,43 @@ export default function ExpenseDetailScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
           <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}>
             <View style={{ flexDirection: rtl.row, gap: 8, flexWrap: "wrap" }}>
-              <Chip label={t(`exp.status.${expense.status}`)} />
+              <Chip
+                label={t(`exp.status.${expense.status}`)}
+                color={
+                  expense.status === "approved" || expense.status === "reimbursed"
+                    ? c.success
+                    : expense.status === "rejected"
+                      ? c.destructive
+                      : expense.status === "submitted"
+                        ? c.accent
+                        : c.mutedForeground
+                }
+                bg={
+                  expense.status === "approved" || expense.status === "reimbursed"
+                    ? c.successTint
+                    : expense.status === "rejected"
+                      ? c.destructiveTint
+                      : expense.status === "submitted"
+                        ? c.tint08
+                        : c.elevate2
+                }
+              />
               {expense.policyStatus !== "green" ? (
                 <Chip
+                  icon={expense.policyStatus === "red" ? "x-octagon" : "alert-triangle"}
                   label={expense.policyStatus.toUpperCase()}
                   color={expense.policyStatus === "red" ? c.destructive : c.warning}
+                  bg={expense.policyStatus === "red" ? c.destructiveTint : c.warningTint}
                 />
               ) : null}
             </View>
 
             {expense.rejectedReason ? (
-              <Card style={{ borderColor: c.destructive, gap: 6 }}>
-                <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 14 }}>
+              <Card style={{ borderColor: c.destructive, backgroundColor: c.destructiveTint, gap: 6 }}>
+                <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 14 }}>
                   {t("exp.status.rejected")}
                 </Text>
-                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
+                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
                   {expense.rejectedReason}
                 </Text>
               </Card>
@@ -350,7 +374,7 @@ export default function ExpenseDetailScreen() {
                   <Text
                     style={{
                       color: c.mutedForeground,
-                      fontFamily: "Inter_500Medium",
+                      fontFamily: "PlusJakartaSans_500Medium",
                       fontSize: 13,
                       textAlign: rtl.textAlign,
                     }}
@@ -361,17 +385,17 @@ export default function ExpenseDetailScreen() {
                     onPress={() => setCtxSheet(true)}
                     style={{
                       backgroundColor: c.secondary,
-                      borderRadius: c.radius + 2,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: c.border,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: c.borderSoft,
                       paddingHorizontal: 14,
-                      paddingVertical: 14,
+                      paddingVertical: 15,
                       flexDirection: rtl.row,
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: c.foreground, fontFamily: "Inter_500Medium", fontSize: 15 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
                       {t(`exp.contextType.${contextType}`)}
                     </Text>
                     <Feather name="chevron-down" size={18} color={c.mutedForeground} />
@@ -383,17 +407,17 @@ export default function ExpenseDetailScreen() {
                     onPress={() => setPickSheet(true)}
                     style={{
                       backgroundColor: c.secondary,
-                      borderRadius: c.radius + 2,
-                      borderWidth: StyleSheet.hairlineWidth,
-                      borderColor: c.border,
+                      borderRadius: 14,
+                      borderWidth: 1.5,
+                      borderColor: c.borderSoft,
                       paddingHorizontal: 14,
-                      paddingVertical: 14,
+                      paddingVertical: 15,
                       flexDirection: rtl.row,
                       justifyContent: "space-between",
                       alignItems: "center",
                     }}
                   >
-                    <Text style={{ color: c.foreground, fontFamily: "Inter_500Medium", fontSize: 15 }}>
+                    <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 15 }}>
                       {selectedName}
                     </Text>
                     <Feather name="chevron-down" size={18} color={c.mutedForeground} />
@@ -421,14 +445,14 @@ export default function ExpenseDetailScreen() {
             )}
 
             {blocked ? (
-              <Card style={{ borderColor: c.destructive, gap: 8 }}>
+              <Card style={{ borderColor: c.destructive, backgroundColor: c.destructiveTint, gap: 8 }}>
                 <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
                   <Feather name="x-octagon" size={18} color={c.destructive} />
-                  <Text style={{ color: c.destructive, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
+                  <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15 }}>
                     {t("exp.redTitle")}
                   </Text>
                 </View>
-                <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
+                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
                   {t("exp.blockedBody")}
                 </Text>
               </Card>
@@ -503,10 +527,10 @@ function ReadRow({ label, value }: { label: string; value: string }) {
   const rtl = useRTL();
   return (
     <View style={{ gap: 2 }}>
-      <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 12, textAlign: rtl.textAlign }}>
+      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 12, textAlign: rtl.textAlign }}>
         {label}
       </Text>
-      <Text style={{ color: c.foreground, fontFamily: "Inter_500Medium", fontSize: 15, textAlign: rtl.textAlign }}>
+      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15, fontVariant: ["tabular-nums"], textAlign: rtl.textAlign }}>
         {value}
       </Text>
     </View>
@@ -536,17 +560,17 @@ function RationaleModal({
     <View
       style={[
         StyleSheet.absoluteFill,
-        { backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", padding: 24 },
+        { backgroundColor: c.scrim, justifyContent: "center", padding: 24 },
       ]}
     >
       <Card style={{ gap: 12 }}>
         <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
           <Feather name="alert-triangle" size={18} color={c.warning} />
-          <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 }}>
+          <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16, flex: 1 }}>
             {t("exp.amberTitle")}
           </Text>
         </View>
-        <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
+        <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
           {t("exp.amberBody")}
         </Text>
         <Field

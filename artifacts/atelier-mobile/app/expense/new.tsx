@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Button,
   Card,
+  FadeInView,
   Field,
   IconButton,
   Sheet,
@@ -167,16 +168,14 @@ export default function NewExpenseScreen() {
           justifyContent: "space-between",
           paddingHorizontal: 16,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 12,
         }}
       >
-        <IconButton icon="x" onPress={() => router.back()} />
-        <Text style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 17 }}>
+        <IconButton icon="x" onPress={() => router.back()} filled />
+        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 18, letterSpacing: -0.3 }}>
           {t("exp.new")}
         </Text>
-        <View style={{ width: 30 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
@@ -188,35 +187,54 @@ export default function NewExpenseScreen() {
             <Pressable onPress={() => setSourceSheet(true)}>
               <Image
                 source={{ uri: receiptUri }}
-                style={{ width: "100%", height: 200, borderRadius: c.radius + 4 }}
+                style={{ width: "100%", height: 200, borderRadius: 18 }}
                 resizeMode="cover"
               />
             </Pressable>
           ) : (
             <Pressable onPress={() => setSourceSheet(true)}>
-              <Card
+              <View
                 style={{
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 8,
-                  paddingVertical: 32,
+                  gap: 10,
+                  paddingVertical: 36,
                   borderStyle: "dashed",
+                  borderWidth: 1.5,
+                  borderColor: c.tint25,
+                  borderRadius: 18,
+                  backgroundColor: c.tint08,
                 }}
               >
-                <Feather name="camera" size={28} color={c.mutedForeground} />
+                <View
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 18,
+                    backgroundColor: c.card,
+                    borderWidth: 1,
+                    borderColor: c.tint25,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Feather name="camera" size={24} color={c.primary} />
+                </View>
                 <Text
                   style={{
-                    color: c.mutedForeground,
-                    fontFamily: "Inter_500Medium",
+                    color: c.primary,
+                    fontFamily: "PlusJakartaSans_700Bold",
                     fontSize: 14,
                   }}
                 >
                   {t("exp.chooseSource")}
                 </Text>
-              </Card>
+              </View>
             </Pressable>
           )}
 
+          <FadeInView delay={60}>
+          <Card style={{ gap: 16, padding: 18 }}>
           <Field
             label={t("exp.merchant")}
             value={merchant}
@@ -257,11 +275,13 @@ export default function NewExpenseScreen() {
             multiline
             style={{ minHeight: 72, textAlignVertical: "top" }}
           />
+          </Card>
+          </FadeInView>
 
           {busy ? (
             <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "center", gap: 10 }}>
               <ActivityIndicator color={c.primary} />
-              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 14 }}>
+              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 14 }}>
                 {busyLabel}
               </Text>
             </View>

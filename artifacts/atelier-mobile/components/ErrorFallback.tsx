@@ -12,6 +12,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LinearGradient } from "expo-linear-gradient";
+
+import { COG_GRADIENT } from "@/constants/colors";
 import { useColors } from "@/hooks/useColors";
 
 export type ErrorFallbackProps = {
@@ -80,22 +83,24 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
         <Pressable
           onPress={handleRestart}
           style={({ pressed }) => [
-            styles.button,
             {
-              backgroundColor: colors.primary,
               opacity: pressed ? 0.9 : 1,
               transform: [{ scale: pressed ? 0.98 : 1 }],
+              borderRadius: 16,
+              overflow: "hidden",
             },
           ]}
         >
-          <Text
-            style={[
-              styles.buttonText,
-              { color: colors.primaryForeground },
-            ]}
+          <LinearGradient
+            colors={COG_GRADIENT}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={styles.button}
           >
-            Try Again
-          </Text>
+            <Text style={[styles.buttonText, { color: "#FFFFFF" }]}>
+              Try Again
+            </Text>
+          </LinearGradient>
         </Pressable>
       </View>
 
@@ -188,22 +193,24 @@ const styles = StyleSheet.create({
     maxWidth: 600,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: 26,
+    fontFamily: "PlusJakartaSans_800ExtraBold",
+    letterSpacing: -0.5,
     textAlign: "center",
-    lineHeight: 40,
+    lineHeight: 36,
   },
   message: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: "PlusJakartaSans_500Medium",
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: 22,
   },
   topButton: {
     position: "absolute",
     right: 16,
     width: 44,
     height: 44,
-    borderRadius: 8,
+    borderRadius: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -211,7 +218,7 @@ const styles = StyleSheet.create({
   },
   button: {
     paddingVertical: 16,
-    borderRadius: 8,
+    borderRadius: 16,
     paddingHorizontal: 24,
     minWidth: 200,
     shadowColor: "#000",
@@ -224,7 +231,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   buttonText: {
-    fontWeight: "600",
+    fontFamily: "PlusJakartaSans_700Bold",
     textAlign: "center",
     fontSize: 16,
   },
@@ -250,7 +257,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "600",
+    fontFamily: "PlusJakartaSans_700Bold",
   },
   closeButton: {
     width: 44,
@@ -266,7 +273,7 @@ const styles = StyleSheet.create({
   },
   errorContainer: {
     width: "100%",
-    borderRadius: 8,
+    borderRadius: 14,
     overflow: "hidden",
     padding: 16,
   },

@@ -6,109 +6,161 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
   Platform,
-  Pressable,
   RefreshControl,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  BrandGradient,
   Card,
   Chip,
   EmptyState,
   ErrorState,
-  IconButton,
+  FadeInView,
+  Glass,
+  PressScale,
   Skeleton,
   WEB_TAB_BAR,
   WEB_TOP_INSET,
-  hapticLight,
+  softShadow,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { flushQueue, getQueueCount } from "@/lib/offlineQueue";
 
-function statusColors(
+function statusStyle(
   status: string,
   c: ReturnType<typeof useColors>,
 ): { color: string; bg: string } {
   switch (status) {
     case "approved":
     case "reimbursed":
-      return { color: c.success, bg: c.secondary };
+      return { color: c.success, bg: c.successTint };
     case "rejected":
-      return { color: c.destructive, bg: c.secondary };
+      return { color: c.destructive, bg: c.destructiveTint };
     case "submitted":
-      return { color: c.accent, bg: c.secondary };
+      return { color: c.accent, bg: c.tint08 };
     default:
-      return { color: c.mutedForeground, bg: c.secondary };
+      return { color: c.mutedForeground, bg: c.elevate2 };
   }
 }
 
-function policyColor(policyStatus: string, c: ReturnType<typeof useColors>): string {
-  if (policyStatus === "red") return c.destructive;
-  if (policyStatus === "amber") return c.warning;
-  return c.success;
+function categoryIcon(category?: string | null): React.ComponentProps<typeof Feather>["name"] {
+  const k = (category ?? "").toLowerCase();
+  if (k.includes("travel") || k.includes("flight") || k.includes("air")) return "send";
+  if (k.includes("hotel") || k.includes("lodg") || k.includes("accom")) return "home";
+  if (k.includes("meal") || k.includes("food") || k.includes("dinner") || k.includes("lunch")) return "coffee";
+  if (k.includes("taxi") || k.includes("transport") || k.includes("car") || k.includes("uber")) return "navigation";
+  if (k.includes("software") || k.includes("subscript") || k.includes("saas")) return "monitor";
+  if (k.includes("office") || k.includes("suppl")) return "briefcase";
+  if (k.includes("phone") || k.includes("comm")) return "phone";
+  return "credit-card";
 }
 
-function ExpenseRow({ item, onPress }: { item: AtelierSelfExpense; onPress: () => void }) {
+function PolicyBadge({ policyStatus }: { policyStatus: string }) {
+  const c = useColors();
+  const { t } = useI18n();
+  if (policyStatus === "green") return null;
+  const danger = policyStatus === "red";
+  return (
+    <Chip
+      icon={danger ? "x-octagon" : "alert-triangle"}
+      label={danger ? t("exp.redTitle") : t("exp.amberTitle")}
+      color={danger ? c.destructive : c.warning}
+      bg={danger ? c.destructiveTint : c.warningTint}
+    />
+  );
+}
+
+function ExpenseRow({
+  item,
+  index,
+  onPress,
+}: {
+  item: AtelierSelfExpense;
+  index: number;
+  onPress: () => void;
+}) {
   const c = useColors();
   const { t } = useI18n();
   const rtl = useRTL();
-  const sc = statusColors(item.status, c);
+  const sc = statusStyle(item.status, c);
   const date = item.expenseDate ?? item.createdAt?.slice(0, 10);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}>
-      <Card style={{ gap: 10 }}>
-        <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8, flex: 1 }}>
+    <FadeInView delay={Math.min(index, 8) * 45}>
+      <PressScale onPress={onPress}>
+        <Card style={{ gap: 12 }}>
+          <View
+            style={{
+              flexDirection: rtl.row,
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
             <View
               style={{
-                width: 8,
-                height: 8,
-                borderRadius: 4,
-                backgroundColor: policyColor(item.policyStatus, c),
-              }}
-            />
-            <Text
-              numberOfLines={1}
-              style={{
-                color: c.foreground,
-                fontFamily: "Inter_600SemiBold",
-                fontSize: 16,
-                flex: 1,
-                textAlign: rtl.textAlign,
+                width: 44,
+                height: 44,
+                borderRadius: 15,
+                backgroundColor: c.tint08,
+                borderWidth: 1,
+                borderColor: c.tint25,
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
-              {item.merchant || t("exp.merchant")}
+              <Feather name={categoryIcon(item.category)} size={19} color={c.primary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontSize: 15.5,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {item.merchant || t("exp.merchant")}
+              </Text>
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontSize: 12.5,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {date}
+              </Text>
+            </View>
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_800ExtraBold",
+                fontSize: 16.5,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {item.currency} {item.amount.toFixed(2)}
             </Text>
           </View>
-          <Text
+          <View
             style={{
-              color: c.foreground,
-              fontFamily: "Inter_700Bold",
-              fontSize: 16,
+              flexDirection: rtl.row,
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
             }}
           >
-            {item.currency} {item.amount.toFixed(2)}
-          </Text>
-        </View>
-        <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <Text
-            style={{
-              color: c.mutedForeground,
-              fontFamily: "Inter_400Regular",
-              fontSize: 13,
-              textAlign: rtl.textAlign,
-            }}
-          >
-            {date}
-          </Text>
-          <Chip label={t(`exp.status.${item.status}`)} color={sc.color} bg={sc.bg} />
-        </View>
-      </Card>
-    </Pressable>
+            <Chip label={t(`exp.status.${item.status}`)} color={sc.color} bg={sc.bg} />
+            <PolicyBadge policyStatus={item.policyStatus} />
+          </View>
+        </Card>
+      </PressScale>
+    </FadeInView>
   );
 }
 
@@ -146,73 +198,92 @@ export default function ExpensesScreen() {
     await query.refetch();
   }, [query, syncAndRefresh]);
 
-  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom) + 24;
+  const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 10;
+  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
+  const fabBottom = (Platform.OS === "web" ? WEB_TAB_BAR + 12 : Math.max(insets.bottom, 10) + 80);
 
   const expenses = query.data?.expenses ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      {/* Dark-island header: stays navy in both themes. */}
       <View
         style={{
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: 16,
+          backgroundColor: "#0A1230",
+          paddingHorizontal: 20,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 18,
+          borderBottomLeftRadius: 28,
+          borderBottomRightRadius: 28,
+          overflow: "hidden",
         }}
       >
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 22 }}>
+        <BrandGradient
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 }}
+        />
+        <Text
+          style={{
+            color: "#EEF1FA",
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 26,
+            letterSpacing: -0.4,
+            textAlign: rtl.textAlign,
+          }}
+        >
           {t("exp.title")}
         </Text>
-        <IconButton
-          icon="plus"
-          color={c.primary}
-          size={26}
-          onPress={() => {
-            hapticLight();
-            router.push("/expense/new");
-          }}
-        />
       </View>
 
       {queued > 0 ? (
-        <View
+        <Glass
+          radius={16}
           style={{
-            flexDirection: rtl.row,
-            alignItems: "center",
-            gap: 8,
             marginHorizontal: 16,
-            marginTop: 12,
+            marginTop: 14,
             padding: 12,
-            borderRadius: c.radius + 4,
-            backgroundColor: c.secondary,
           }}
         >
-          <Feather name="cloud-off" size={16} color={c.warning} />
-          <Text
-            style={{
-              color: c.secondaryForeground,
-              fontFamily: "Inter_500Medium",
-              fontSize: 13,
-              flex: 1,
-              textAlign: rtl.textAlign,
-            }}
-          >
-            {t("exp.queuedBanner", { n: queued })}
-          </Text>
-        </View>
+          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 10 }}>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 11,
+                backgroundColor: c.warningTint,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Feather name="cloud-off" size={15} color={c.warning} />
+            </View>
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 13,
+                flex: 1,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {t("exp.queuedBanner", { n: queued })}
+            </Text>
+          </View>
+        </Glass>
       ) : null}
 
       {query.isLoading ? (
         <View style={{ padding: 16, gap: 12 }}>
           {[0, 1, 2, 3].map((i) => (
             <Card key={i} style={{ gap: 12 }}>
-              <Skeleton height={18} width="60%" />
-              <Skeleton height={14} width="40%" />
+              <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                <Skeleton height={44} width={44} style={{ borderRadius: 15 }} />
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Skeleton height={16} width="60%" />
+                  <Skeleton height={12} width="35%" />
+                </View>
+              </View>
             </Card>
           ))}
         </View>
@@ -232,13 +303,42 @@ export default function ExpensesScreen() {
               refreshing={query.isRefetching}
               onRefresh={onRefresh}
               tintColor={c.primary}
+              colors={["#C45BB8", "#8A5BD6", "#FF7B5A"]}
+              progressBackgroundColor={c.card}
             />
           }
-          renderItem={({ item }) => (
-            <ExpenseRow item={item} onPress={() => router.push(`/expense/${item.id}`)} />
+          renderItem={({ item, index }) => (
+            <ExpenseRow
+              item={item}
+              index={index}
+              onPress={() => router.push(`/expense/${item.id}`)}
+            />
           )}
         />
       )}
+
+      {/* Floating add button, above the pill tab bar. */}
+      <View
+        pointerEvents="box-none"
+        style={{ position: "absolute", bottom: fabBottom, [rtl.isRTL ? "left" : "right"]: 20 }}
+      >
+        <PressScale onPress={() => router.push("/expense/new")} scaleTo={0.9}>
+          <BrandGradient
+            style={[
+              {
+                width: 58,
+                height: 58,
+                borderRadius: 29,
+                alignItems: "center",
+                justifyContent: "center",
+              },
+              softShadow(c.tint45),
+            ]}
+          >
+            <Feather name="plus" size={26} color="#FFFFFF" />
+          </BrandGradient>
+        </PressScale>
+      </View>
     </View>
   );
 }

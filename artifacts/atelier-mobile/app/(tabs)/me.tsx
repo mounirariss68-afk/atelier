@@ -25,17 +25,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 
 import {
+  BrandGradient,
   Button,
   Card,
   Chip,
   EmptyState,
   ErrorState,
+  FadeInView,
   IconButton,
+  PressScale,
   Skeleton,
   WEB_TAB_BAR,
   WEB_TOP_INSET,
   hapticError,
   hapticSuccess,
+  softShadow,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
@@ -153,7 +157,7 @@ export default function MeScreen() {
   );
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom) + 24;
+  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const documents = docs.data?.documents ?? [];
 
   return (
@@ -165,15 +169,13 @@ export default function MeScreen() {
           justifyContent: "space-between",
           paddingHorizontal: 16,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 12,
         }}
       >
-        <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 22 }}>
+        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 24, letterSpacing: -0.4 }}>
           {t("me.title")}
         </Text>
-        <IconButton icon="maximize" onPress={() => setQrOpen(true)} />
+        <IconButton icon="maximize" onPress={() => setQrOpen(true)} filled />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }}>
@@ -186,8 +188,24 @@ export default function MeScreen() {
         ) : profile.isError ? (
           <ErrorState onRetry={() => profile.refetch()} message={t("common.error")} />
         ) : (
-          <Card style={{ alignItems: "center", gap: 10 }}>
+          <FadeInView>
+          <View
+            style={[{
+              backgroundColor: "#0A1230",
+              borderRadius: 24,
+              padding: 22,
+              alignItems: "center",
+              gap: 10,
+              overflow: "hidden",
+            }, softShadow(c.shadow)]}
+          >
+            <BrandGradient
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, opacity: 0.9 }}
+            />
             <Pressable onPress={changePhoto} style={{ alignItems: "center" }}>
+              <BrandGradient style={{ width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center" }}>
               {avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -199,16 +217,17 @@ export default function MeScreen() {
                     width: 88,
                     height: 88,
                     borderRadius: 44,
-                    backgroundColor: c.secondary,
+                    backgroundColor: "#141D45",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 28 }}>
+                  <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 28 }}>
                     {user?.initials ?? name.slice(0, 2).toUpperCase()}
                   </Text>
                 </View>
               )}
+              </BrandGradient>
               <View
                 style={{
                   position: "absolute",
@@ -221,39 +240,60 @@ export default function MeScreen() {
                   alignItems: "center",
                   justifyContent: "center",
                   borderWidth: 2,
-                  borderColor: c.card,
+                  borderColor: "#0A1230",
                 }}
               >
                 {uploadPhoto.isPending ? (
-                  <ActivityIndicator size="small" color={c.primaryForeground} />
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <Feather name="camera" size={14} color={c.primaryForeground} />
+                  <Feather name="camera" size={14} color="#FFFFFF" />
                 )}
               </View>
             </Pressable>
-            <Text style={{ color: c.foreground, fontFamily: "Inter_700Bold", fontSize: 20 }}>
+            <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 21, letterSpacing: -0.3 }}>
               {name}
             </Text>
             {title ? (
-              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_500Medium", fontSize: 14 }}>
+              <Text style={{ color: "#9AA5C4", fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 14 }}>
                 {title}
               </Text>
             ) : null}
             {email ? (
-              <Text style={{ color: c.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>
+              <Text style={{ color: "#9AA5C4", fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
                 {email}
               </Text>
             ) : null}
-            <View style={{ height: 4 }} />
-            <Button label={t("me.shareCard")} icon="share-2" variant="secondary" onPress={() => setQrOpen(true)} />
-          </Card>
+            <View style={{ height: 6 }} />
+            <PressScale onPress={() => setQrOpen(true)}>
+              <View
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 8,
+                  paddingHorizontal: 18,
+                  paddingVertical: 11,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.25)",
+                  backgroundColor: "rgba(255,255,255,0.08)",
+                }}
+              >
+                <Feather name="share-2" size={15} color="#EEF1FA" />
+                <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_700Bold", fontSize: 14 }}>
+                  {t("me.shareCard")}
+                </Text>
+              </View>
+            </PressScale>
+          </View>
+          </FadeInView>
         )}
 
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 16,
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 17,
+            letterSpacing: -0.2,
             textAlign: rtl.textAlign,
             marginTop: 4,
           }}
@@ -287,8 +327,10 @@ export default function MeScreen() {
                     style={{
                       width: 40,
                       height: 40,
-                      borderRadius: c.radius + 2,
-                      backgroundColor: c.secondary,
+                      borderRadius: 14,
+                      backgroundColor: c.tint08,
+                      borderWidth: 1,
+                      borderColor: c.tint25,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
@@ -298,7 +340,7 @@ export default function MeScreen() {
                   <View style={{ flex: 1, gap: 4 }}>
                     <Text
                       numberOfLines={1}
-                      style={{ color: c.foreground, fontFamily: "Inter_600SemiBold", fontSize: 15, textAlign: rtl.textAlign }}
+                      style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 15, textAlign: rtl.textAlign }}
                     >
                       {doc.title}
                     </Text>
@@ -324,21 +366,26 @@ export default function MeScreen() {
       <Modal visible={qrOpen} animationType="slide" transparent onRequestClose={() => setQrOpen(false)}>
         <Pressable
           onPress={() => setQrOpen(false)}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", padding: 32 }}
+          style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "center", padding: 32 }}
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
-            <View style={{ backgroundColor: "#FFFFFF", borderRadius: 20, padding: 24, alignItems: "center", gap: 16 }}>
-              <Text style={{ color: "#0A1230", fontFamily: "Inter_700Bold", fontSize: 18 }}>
+            <View style={[{ backgroundColor: "#FFFFFF", borderRadius: 28, padding: 24, alignItems: "center", gap: 14, overflow: "hidden" }, softShadow(c.shadow)]}>
+              <BrandGradient
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4 }}
+              />
+              <Text style={{ color: "#0A1230", fontFamily: "PlusJakartaSans_700Bold", fontSize: 18 }}>
                 {t("me.qrTitle")}
               </Text>
               <View style={{ padding: 12, backgroundColor: "#FFFFFF" }}>
                 <QRCode value={card || "BEGIN:VCARD\nEND:VCARD"} size={220} backgroundColor="#FFFFFF" color="#0A1230" />
               </View>
-              <Text style={{ color: "#0A1230", fontFamily: "Inter_600SemiBold", fontSize: 16 }}>{name}</Text>
+              <Text style={{ color: "#0A1230", fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 16 }}>{name}</Text>
               {title ? (
-                <Text style={{ color: "#4A5675", fontFamily: "Inter_400Regular", fontSize: 13 }}>{title}</Text>
+                <Text style={{ color: "#4A5675", fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>{title}</Text>
               ) : null}
-              <Text style={{ color: "#4A5675", fontFamily: "Inter_400Regular", fontSize: 12 }}>
+              <Text style={{ color: "#4A5675", fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
                 {t("me.qrHint")}
               </Text>
               <Button label={t("common.close")} variant="secondary" onPress={() => setQrOpen(false)} />

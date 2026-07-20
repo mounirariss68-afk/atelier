@@ -32,6 +32,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiJson } from "@/lib/api";
 
 import {
+  BrandGradient,
   Card,
   Chip,
   EmptyState,
@@ -98,7 +99,7 @@ function SectionHeading({ label }: { label: string }) {
     <Text
       style={{
         color: c.mutedForeground,
-        fontFamily: "Inter_600SemiBold",
+        fontFamily: "PlusJakartaSans_600SemiBold",
         fontSize: 11,
         textTransform: "uppercase",
         letterSpacing: 0.8,
@@ -138,7 +139,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
         style={{
           marginTop: 10,
           color: c.mutedForeground,
-          fontFamily: "Inter_400Regular",
+          fontFamily: "PlusJakartaSans_400Regular",
           fontSize: 13,
           textAlign: rtl.textAlign,
         }}
@@ -167,7 +168,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
 
   const line = {
     color: c.mutedForeground,
-    fontFamily: "Inter_400Regular" as const,
+    fontFamily: "PlusJakartaSans_400Regular" as const,
     fontSize: 13,
     textAlign: rtl.textAlign,
   };
@@ -220,7 +221,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
                 style={{
                   flexShrink: 1,
                   color: c.foreground,
-                  fontFamily: "Inter_500Medium",
+                  fontFamily: "PlusJakartaSans_500Medium",
                   fontSize: 13,
                   textAlign: rtl.textAlign,
                 }}
@@ -231,7 +232,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
               <Text
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "Inter_400Regular",
+                  fontFamily: "PlusJakartaSans_400Regular",
                   fontSize: 12,
                 }}
               >
@@ -260,7 +261,7 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
                 <Text
                   style={{
                     color: task.overdue ? c.destructive : c.mutedForeground,
-                    fontFamily: "Inter_500Medium",
+                    fontFamily: "PlusJakartaSans_500Medium",
                     fontSize: 12,
                   }}
                 >
@@ -302,7 +303,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "Inter_600SemiBold",
+              fontFamily: "PlusJakartaSans_600SemiBold",
               fontSize: 12,
             }}
           >
@@ -311,7 +312,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "Inter_400Regular",
+              fontFamily: "PlusJakartaSans_400Regular",
               fontSize: 12,
             }}
           >
@@ -323,7 +324,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
             numberOfLines={2}
             style={{
               color: c.foreground,
-              fontFamily: "Inter_600SemiBold",
+              fontFamily: "PlusJakartaSans_600SemiBold",
               fontSize: 15,
               textAlign: rtl.textAlign,
             }}
@@ -347,7 +348,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
               <Text
                 style={{
                   color: c.primary,
-                  fontFamily: "Inter_600SemiBold",
+                  fontFamily: "PlusJakartaSans_600SemiBold",
                   fontSize: 13,
                 }}
               >
@@ -361,7 +362,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
                 numberOfLines={1}
                 style={{
                   color: c.mutedForeground,
-                  fontFamily: "Inter_400Regular",
+                  fontFamily: "PlusJakartaSans_400Regular",
                   fontSize: 13,
                 }}
               >
@@ -411,7 +412,7 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
                 <Text
                   style={{
                     color: c.primary,
-                    fontFamily: "Inter_600SemiBold",
+                    fontFamily: "PlusJakartaSans_600SemiBold",
                     fontSize: 13,
                   }}
                 >
@@ -492,26 +493,35 @@ export default function MeetingsScreen() {
   });
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
-  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom) + 24;
+  const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const meetings = calendar.data?.meetings ?? [];
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
+      {/* Dark-island header: stays navy in both themes. */}
       <View
         style={{
-          paddingHorizontal: 16,
+          backgroundColor: "#0A1230",
+          paddingHorizontal: 20,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 18,
+          borderBottomLeftRadius: 28,
+          borderBottomRightRadius: 28,
+          overflow: "hidden",
           gap: 2,
         }}
       >
+        <BrandGradient
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 }}
+        />
         <Text
           style={{
-            color: c.foreground,
-            fontFamily: "Inter_700Bold",
-            fontSize: 22,
+            color: "#EEF1FA",
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 26,
+            letterSpacing: -0.4,
             textAlign: rtl.textAlign,
           }}
         >
@@ -519,8 +529,8 @@ export default function MeetingsScreen() {
         </Text>
         <Text
           style={{
-            color: c.mutedForeground,
-            fontFamily: "Inter_400Regular",
+            color: "#9AA5C4",
+            fontFamily: "PlusJakartaSans_500Medium",
             fontSize: 13,
             textAlign: rtl.textAlign,
           }}

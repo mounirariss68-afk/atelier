@@ -1,112 +1,203 @@
 import { Feather } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Tabs } from "expo-router";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { SymbolView } from "expo-symbols";
-import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 
-import { useI18n } from "@/contexts/I18nContext";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Platform, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import {
+  BRAND_EASING,
+  BrandGradient,
+  Glass,
+  hapticLight,
+  softShadow,
+} from "@/components/ui";
+import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 
-function NativeTabLayout() {
-  const { t } = useI18n();
+const ICONS: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
+  index: "message-circle",
+  expenses: "credit-card",
+  meetings: "calendar",
+  me: "user",
+  settings: "settings",
+};
+
+interface TabBarRoute {
+  key: string;
+  name: string;
+}
+interface TabBarProps {
+  state: { index: number; routes: TabBarRoute[] };
+  descriptors: Record<string, { options: { title?: string } }>;
+  navigation: {
+    emit: (e: { type: string; target?: string; canPreventDefault?: boolean }) => {
+      defaultPrevented: boolean;
+    };
+    navigate: (name: string) => void;
+  };
+}
+
+const BAR_MARGIN = 16;
+const BAR_HEIGHT = 64;
+
+/**
+ * Floating glassmorphic pill tab bar with a gradient highlight pill that
+ * spring-animates between tabs. Safe-area and RTL aware; the bar itself is
+ * a "dark island" — it stays navy-tinted glass in both themes.
+ */
+function FloatingPillTabBar({ state, descriptors, navigation }: TabBarProps) {
+  const c = useColors();
+  const rtl = useRTL();
+  const insets = useSafeAreaInsets();
+  const [barWidth, setBarWidth] = useState(0);
+
+  const routes = state.routes.filter((r: TabBarRoute) => ICONS[r.name]);
+  const count = routes.length || 1;
+  const segment = barWidth / count;
+  const activeIndex = routes.findIndex((r: TabBarRoute) => r.key === state.routes[state.index]?.key);
+  // Visual order flips in RTL.
+  const visualIndex = rtl.isRTL ? count - 1 - activeIndex : activeIndex;
+
+  const pillX = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (barWidth === 0 || visualIndex < 0) return;
+    Animated.spring(pillX, {
+      toValue: visualIndex * segment,
+      useNativeDriver: Platform.OS !== "web",
+      stiffness: 220,
+      damping: 24,
+      mass: 0.9,
+    }).start();
+  }, [visualIndex, segment, barWidth, pillX]);
+
+  const bottom = Math.max(insets.bottom, 10) + (Platform.OS === "web" ? 12 : 0);
+  const orderedRoutes = rtl.isRTL ? [...routes].reverse() : routes;
+
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "bubble.left", selected: "bubble.left.fill" }} />
-        <Label>{t("tab.chat")}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="meetings">
-        <Icon sf={{ default: "calendar", selected: "calendar" }} />
-        <Label>{t("tab.meetings")}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="expenses">
-        <Icon sf={{ default: "creditcard", selected: "creditcard.fill" }} />
-        <Label>{t("tab.expenses")}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="me">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>{t("tab.me")}</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf={{ default: "gearshape", selected: "gearshape.fill" }} />
-        <Label>{t("tab.settings")}</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: "absolute",
+        left: BAR_MARGIN,
+        right: BAR_MARGIN,
+        bottom,
+      }}
+    >
+      <Glass radius={BAR_HEIGHT / 2} style={[{ height: BAR_HEIGHT }, softShadow(c.shadow)]}>
+        <View
+          style={{ flex: 1, flexDirection: "row", paddingHorizontal: 6, alignItems: "center" }}
+          onLayout={(e) => setBarWidth(e.nativeEvent.layout.width - 12)}
+        >
+          {barWidth > 0 && visualIndex >= 0 ? (
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: 6,
+                top: 8,
+                bottom: 8,
+                width: segment,
+                transform: [{ translateX: pillX }],
+              }}
+            >
+              <BrandGradient
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={{ flex: 1, borderRadius: (BAR_HEIGHT - 16) / 2, opacity: 0.92 }}
+              />
+            </Animated.View>
+          ) : null}
+          {orderedRoutes.map((route: TabBarRoute) => {
+            const { options } = descriptors[route.key];
+            const label = options.title ?? route.name;
+            const focused = route.key === state.routes[state.index]?.key;
+            return (
+              <Pressable
+                key={route.key}
+                accessibilityRole="button"
+                accessibilityState={focused ? { selected: true } : {}}
+                accessibilityLabel={label}
+                onPress={() => {
+                  hapticLight();
+                  const event = navigation.emit({
+                    type: "tabPress",
+                    target: route.key,
+                    canPreventDefault: true,
+                  });
+                  if (!focused && !event.defaultPrevented) {
+                    navigation.navigate(route.name);
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  height: BAR_HEIGHT - 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 2,
+                }}
+              >
+                <Feather
+                  name={ICONS[route.name]}
+                  size={20}
+                  color={focused ? "#FFFFFF" : c.mutedForeground}
+                />
+                <AnimatedLabel focused={focused} label={label} muted={c.mutedForeground} />
+              </Pressable>
+            );
+          })}
+        </View>
+      </Glass>
+    </View>
   );
 }
 
-function ClassicTabLayout() {
-  const colors = useColors();
-  const { t } = useI18n();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const isIOS = Platform.OS === "ios";
-  const isWeb = Platform.OS === "web";
-
-  const sf: Record<string, string> = {
-    index: "bubble.left",
-    meetings: "calendar",
-    expenses: "creditcard",
-    me: "person",
-    settings: "gearshape",
-  };
-  const feather: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
-    index: "message-circle",
-    meetings: "calendar",
-    expenses: "credit-card",
-    me: "user",
-    settings: "settings",
-  };
-
-  const icon =
-    (name: string) =>
-    ({ color }: { color: string }) =>
-      isIOS ? (
-        <SymbolView name={sf[name] as never} tintColor={color} size={24} />
-      ) : (
-        <Feather name={feather[name]} size={22} color={color} />
-      );
-
+function AnimatedLabel({
+  focused,
+  label,
+  muted,
+}: {
+  focused: boolean;
+  label: string;
+  muted: string;
+}) {
+  const anim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: focused ? 1 : 0,
+      duration: 260,
+      easing: BRAND_EASING,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [focused, anim]);
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.mutedForeground,
-        headerShown: false,
-        tabBarStyle: {
-          position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.background,
-          borderTopWidth: isWeb ? 1 : 0,
-          borderTopColor: colors.border,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
-        tabBarLabelStyle: { fontFamily: "Inter_500Medium", fontSize: 11 },
-        tabBarBackground: () =>
-          isIOS ? (
-            <BlurView
-              intensity={100}
-              tint={isDark ? "dark" : "light"}
-              style={StyleSheet.absoluteFill}
-            />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
-          ) : null,
-      }}
-    >
-      <Tabs.Screen name="index" options={{ title: t("tab.chat"), tabBarIcon: icon("index") }} />
-      <Tabs.Screen name="meetings" options={{ title: t("tab.meetings"), tabBarIcon: icon("meetings") }} />
-      <Tabs.Screen name="expenses" options={{ title: t("tab.expenses"), tabBarIcon: icon("expenses") }} />
-      <Tabs.Screen name="me" options={{ title: t("tab.me"), tabBarIcon: icon("me") }} />
-      <Tabs.Screen name="settings" options={{ title: t("tab.settings"), tabBarIcon: icon("settings") }} />
-    </Tabs>
+    <Animated.View style={{ opacity: anim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }}>
+      <Text
+        numberOfLines={1}
+        style={{
+          fontFamily: focused ? "PlusJakartaSans_700Bold" : "PlusJakartaSans_500Medium",
+          fontSize: 10.5,
+          letterSpacing: 0.2,
+          color: focused ? "#FFFFFF" : muted,
+        }}
+      >
+        {label}
+      </Text>
+    </Animated.View>
   );
 }
 
 export default function TabLayout() {
-  if (isLiquidGlassAvailable()) return <NativeTabLayout />;
-  return <ClassicTabLayout />;
+  const { t } = useI18n();
+  return (
+    <Tabs
+      tabBar={(props) => <FloatingPillTabBar {...(props as unknown as TabBarProps)} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" } }}
+    >
+      <Tabs.Screen name="index" options={{ title: t("tab.chat") }} />
+      <Tabs.Screen name="expenses" options={{ title: t("tab.expenses") }} />
+      <Tabs.Screen name="meetings" options={{ title: t("tab.meetings") }} />
+      <Tabs.Screen name="me" options={{ title: t("tab.me") }} />
+      <Tabs.Screen name="settings" options={{ title: t("tab.settings") }} />
+    </Tabs>
+  );
 }

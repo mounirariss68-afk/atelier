@@ -18,6 +18,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  BrandGradient,
   Button,
   Card,
   Chip,
@@ -25,8 +26,11 @@ import {
   hapticError,
   hapticLight,
   IconButton,
+  PressScale,
   Sheet,
+  WEB_TAB_BAR,
   WEB_TOP_INSET,
+  softShadow,
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
@@ -58,7 +62,7 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
               <Text
                 style={{
                   color,
-                  fontFamily: "Inter_400Regular",
+                  fontFamily: "PlusJakartaSans_400Regular",
                   fontSize: 15,
                   lineHeight: 22,
                 }}
@@ -69,7 +73,7 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
             <Text
               style={{
                 color,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 fontSize: 15,
                 lineHeight: 22,
                 flex: 1,
@@ -79,7 +83,7 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
             >
               {parts.map((p, j) =>
                 p.startsWith("**") && p.endsWith("**") ? (
-                  <Text key={j} style={{ fontFamily: "Inter_600SemiBold" }}>
+                  <Text key={j} style={{ fontFamily: "PlusJakartaSans_600SemiBold" }}>
                     {p.slice(2, -2)}
                   </Text>
                 ) : (
@@ -112,7 +116,7 @@ function ClarificationCard({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "PlusJakartaSans_600SemiBold",
             fontSize: 15,
             textAlign: rtl.textAlign,
           }}
@@ -125,7 +129,7 @@ function ClarificationCard({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "Inter_500Medium",
+              fontFamily: "PlusJakartaSans_500Medium",
               fontSize: 13,
               textAlign: rtl.textAlign,
             }}
@@ -153,7 +157,7 @@ function ClarificationCard({
                     <Text
                       style={{
                         color: active ? c.primaryForeground : c.secondaryForeground,
-                        fontFamily: "Inter_500Medium",
+                        fontFamily: "PlusJakartaSans_500Medium",
                         fontSize: 14,
                       }}
                     >
@@ -179,7 +183,7 @@ function ClarificationCard({
                 paddingHorizontal: 14,
                 paddingVertical: 12,
                 color: c.foreground,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 fontSize: 15,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
@@ -216,7 +220,7 @@ function ConfirmCard({
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "Inter_600SemiBold",
+            fontFamily: "PlusJakartaSans_600SemiBold",
             fontSize: 15,
             flex: 1,
             textAlign: rtl.textAlign,
@@ -229,7 +233,7 @@ function ConfirmCard({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "Inter_400Regular",
+            fontFamily: "PlusJakartaSans_400Regular",
             fontSize: 14,
             textAlign: rtl.textAlign,
           }}
@@ -252,7 +256,7 @@ function ConfirmCard({
             paddingHorizontal: 14,
             paddingVertical: 12,
             color: c.foreground,
-            fontFamily: "Inter_400Regular",
+            fontFamily: "PlusJakartaSans_400Regular",
             fontSize: 15,
             textAlign: rtl.textAlign,
           }}
@@ -295,19 +299,22 @@ function TurnBlock({
     <View style={{ gap: 8, paddingVertical: 8 }}>
       {turn.prompt ? (
         <View style={{ alignItems: rtl.isRTL ? "flex-start" : "flex-end" }}>
-          <View
+          <BrandGradient
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
             style={{
-              backgroundColor: c.primary,
-              borderRadius: 18,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
+              borderRadius: 20,
+              borderBottomRightRadius: rtl.isRTL ? 20 : 6,
+              borderBottomLeftRadius: rtl.isRTL ? 6 : 20,
+              paddingHorizontal: 15,
+              paddingVertical: 11,
               maxWidth: "85%",
             }}
           >
             <Text
               style={{
-                color: c.primaryForeground,
-                fontFamily: "Inter_400Regular",
+                color: "#FFFFFF",
+                fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 15,
                 lineHeight: 21,
                 textAlign: rtl.textAlign,
@@ -316,7 +323,7 @@ function TurnBlock({
             >
               {turn.prompt}
             </Text>
-          </View>
+          </BrandGradient>
           {turn.attachments && turn.attachments.length > 0 ? (
             <View
               style={{
@@ -341,7 +348,7 @@ function TurnBlock({
               key={i}
               style={{
                 color: c.mutedForeground,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_400Regular",
                 fontSize: 12,
                 textAlign: rtl.textAlign,
               }}
@@ -364,7 +371,7 @@ function TurnBlock({
           <Text
             style={{
               color: c.mutedForeground,
-              fontFamily: "Inter_400Regular",
+              fontFamily: "PlusJakartaSans_400Regular",
               fontSize: 13,
             }}
           >
@@ -393,7 +400,7 @@ function TurnBlock({
           <Text
             style={{
               color: c.destructive,
-              fontFamily: "Inter_500Medium",
+              fontFamily: "PlusJakartaSans_500Medium",
               fontSize: 14,
               textAlign: rtl.textAlign,
             }}
@@ -502,24 +509,28 @@ export default function ChatScreen() {
           justifyContent: "space-between",
           paddingHorizontal: 16,
           paddingTop: topPad,
-          paddingBottom: 10,
-          borderBottomWidth: StyleSheet.hairlineWidth,
-          borderBottomColor: c.border,
+          paddingBottom: 12,
           backgroundColor: c.background,
         }}
       >
-        <IconButton icon="clock" onPress={openHistory} />
+        <IconButton icon="clock" onPress={openHistory} filled />
         <Text
           style={{
             color: c.foreground,
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 18,
+            letterSpacing: -0.3,
           }}
         >
           {t("tab.chat")}
         </Text>
-        <IconButton icon="edit" onPress={() => chat.newChat()} />
+        <IconButton icon="edit" onPress={() => chat.newChat()} filled />
       </View>
+      <BrandGradient
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ height: 2, opacity: 0.85 }}
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {chat.turns.length === 0 ? (
@@ -551,12 +562,11 @@ export default function ChatScreen() {
 
         <View
           style={{
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: c.border,
             paddingHorizontal: 12,
             paddingTop: 10,
-            paddingBottom: Platform.OS === "web" ? 12 : Math.max(insets.bottom, 10),
-            backgroundColor: c.background,
+            paddingBottom:
+              (Platform.OS === "web" ? WEB_TAB_BAR + 4 : Math.max(insets.bottom, 10) + 78),
+            backgroundColor: "transparent",
             gap: 8,
           }}
         >
@@ -582,7 +592,7 @@ export default function ChatScreen() {
                   <Text
                     style={{
                       color: c.secondaryForeground,
-                      fontFamily: "Inter_500Medium",
+                      fontFamily: "PlusJakartaSans_500Medium",
                       fontSize: 12,
                       maxWidth: 140,
                     }}
@@ -598,10 +608,10 @@ export default function ChatScreen() {
           ) : null}
 
           <View style={{ flexDirection: rtl.row, alignItems: "flex-end", gap: 8 }}>
-            <IconButton icon="plus-circle" onPress={() => setAttachSheet(true)} />
+            <IconButton icon="plus-circle" onPress={() => setAttachSheet(true)} filled />
             <TextInput
               placeholder={t("chat.placeholder")}
-              placeholderTextColor={c.mutedForeground}
+              placeholderTextColor={c.faint}
               value={input}
               onChangeText={setInput}
               multiline
@@ -609,26 +619,38 @@ export default function ChatScreen() {
                 flex: 1,
                 maxHeight: 120,
                 backgroundColor: c.secondary,
-                borderRadius: 20,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: c.borderSoft,
                 paddingHorizontal: 16,
-                paddingTop: 10,
-                paddingBottom: 10,
+                paddingTop: 11,
+                paddingBottom: 11,
                 color: c.foreground,
-                fontFamily: "Inter_400Regular",
+                fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 15,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
               }}
             />
             {chat.busy ? (
-              <IconButton icon="square" color={c.destructive} onPress={chat.stop} />
+              <IconButton icon="square" color={c.destructive} onPress={chat.stop} filled />
             ) : (
-              <IconButton
-                icon="arrow-up-circle"
-                color={c.primary}
-                size={30}
-                onPress={send}
-              />
+              <PressScale onPress={send} scaleTo={0.88}>
+                <BrandGradient
+                  style={[
+                    {
+                      width: 42,
+                      height: 42,
+                      borderRadius: 21,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    },
+                    softShadow(c.tint45),
+                  ]}
+                >
+                  <Feather name="arrow-up" size={20} color="#FFFFFF" />
+                </BrandGradient>
+              </PressScale>
             )}
           </View>
         </View>
@@ -666,7 +688,7 @@ export default function ChatScreen() {
             <Text
               style={{
                 color: c.foreground,
-                fontFamily: "Inter_600SemiBold",
+                fontFamily: "PlusJakartaSans_600SemiBold",
                 fontSize: 17,
               }}
             >
@@ -706,7 +728,7 @@ export default function ChatScreen() {
                   <Text
                     style={{
                       color: c.foreground,
-                      fontFamily: "Inter_500Medium",
+                      fontFamily: "PlusJakartaSans_500Medium",
                       fontSize: 15,
                       textAlign: rtl.textAlign,
                     }}

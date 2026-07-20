@@ -1,8 +1,12 @@
 import { Feather } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import React from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Modal,
   Platform,
   Pressable,
@@ -15,11 +19,15 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { COG_GRADIENT, COG_GRADIENT_LOCATIONS } from "@/constants/colors";
 import { useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 
 export const WEB_TOP_INSET = 67;
-export const WEB_TAB_BAR = 84;
+export const WEB_TAB_BAR = 96;
+
+/** Brand-standard easing (cubic-bezier(0.22, 1, 0.36, 1) from the web). */
+export const BRAND_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 
 export function hapticLight() {
   if (Platform.OS !== "web")
@@ -39,6 +47,183 @@ export function hapticError() {
 }
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"];
+
+/** Soft, large drop shadow matching the web's depth language. */
+export function softShadow(color: string): ViewStyle {
+  return Platform.OS === "web"
+    ? ({ boxShadow: `0 18px 36px -18px ${color}` } as unknown as ViewStyle)
+    : {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.28,
+        shadowRadius: 24,
+        elevation: 8,
+      };
+}
+
+/**
+ * Press-scale wrapper: standard micro-interaction for tappable surfaces.
+ */
+export function PressScale({
+  onPress,
+  disabled,
+  children,
+  style,
+  scaleTo = 0.97,
+  haptic = true,
+}: {
+  onPress?: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  scaleTo?: number;
+  haptic?: boolean;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const animate = (to: number) =>
+    Animated.timing(scale, {
+      toValue: to,
+      duration: 180,
+      easing: BRAND_EASING,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  return (
+    <Pressable
+      onPress={() => {
+        if (disabled || !onPress) return;
+        if (haptic) hapticLight();
+        onPress();
+      }}
+      disabled={disabled}
+      onPressIn={() => animate(scaleTo)}
+      onPressOut={() => animate(1)}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>
+        {children}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+/**
+ * Staggered entrance: fades and slides content in with the brand easing.
+ */
+export function FadeInView({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: ViewStyle;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translate = useRef(new Animated.Value(14)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 420,
+        delay,
+        easing: BRAND_EASING,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(translate, {
+        toValue: 0,
+        duration: 420,
+        delay,
+        easing: BRAND_EASING,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    ]).start();
+  }, [opacity, translate, delay]);
+  return (
+    <Animated.View style={[style, { opacity, transform: [{ translateY: translate }] }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/**
+ * Glass surface: native blur with a solid translucent fallback (web /
+ * platforms without blur). For floating/overlay layers only.
+ */
+export function Glass({
+  children,
+  style,
+  intensity = 40,
+  radius,
+}: {
+  children?: React.ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  intensity?: number;
+  radius?: number;
+}) {
+  const c = useColors();
+  const scheme = c.background === "#0A1230" ? "dark" : "light";
+  const borderRadius = radius ?? 24;
+  const frame: ViewStyle = {
+    borderRadius,
+    borderWidth: 1,
+    borderColor: c.glassBorder,
+    overflow: "hidden",
+  };
+  if (Platform.OS === "web") {
+    return (
+      <View
+        style={[
+          frame,
+          {
+            backgroundColor: c.glass,
+            backdropFilter: "blur(18px)",
+            WebkitBackdropFilter: "blur(18px)",
+          } as unknown as ViewStyle,
+          style,
+        ]}
+      >
+        {children}
+      </View>
+    );
+  }
+  if (Platform.OS === "android") {
+    // Blur is unreliable on Android — solid translucent fallback.
+    return (
+      <View style={[frame, { backgroundColor: scheme === "dark" ? "rgba(13,20,52,0.94)" : "rgba(255,255,255,0.94)" }, style]}>
+        {children}
+      </View>
+    );
+  }
+  return (
+    <BlurView intensity={intensity + 40} tint={scheme === "dark" ? "dark" : "light"} style={[frame, { backgroundColor: c.glass }, style]}>
+      {children}
+    </BlurView>
+  );
+}
+
+/** Signature Cognirise gradient surface. */
+export function BrandGradient({
+  children,
+  style,
+  start = { x: 0, y: 0 },
+  end = { x: 1, y: 1 },
+}: {
+  children?: React.ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  start?: { x: number; y: number };
+  end?: { x: number; y: number };
+}) {
+  return (
+    <LinearGradient
+      colors={[...COG_GRADIENT]}
+      locations={[...COG_GRADIENT_LOCATIONS]}
+      start={start}
+      end={end}
+      style={style}
+    >
+      {children}
+    </LinearGradient>
+  );
+}
 
 export function Button({
   label,
@@ -60,56 +245,79 @@ export function Button({
   const c = useColors();
   const rtl = useRTL();
   const isDisabled = disabled || loading;
-  const bg =
-    variant === "primary"
-      ? c.primary
-      : variant === "destructive"
-        ? c.destructive
-        : variant === "secondary"
-          ? c.secondary
-          : "transparent";
   const fg =
     variant === "primary"
-      ? c.primaryForeground
+      ? "#FFFFFF"
       : variant === "destructive"
         ? c.destructiveForeground
         : variant === "secondary"
           ? c.secondaryForeground
           : c.primary;
-  return (
-    <Pressable
-      onPress={() => {
-        if (isDisabled) return;
-        hapticLight();
-        onPress();
+
+  const inner = (
+    <View
+      style={{
+        paddingVertical: 15,
+        paddingHorizontal: 18,
+        flexDirection: rtl.row,
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        minHeight: 50,
       }}
-      disabled={isDisabled}
-      style={({ pressed }) => [
-        {
-          backgroundColor: bg,
-          borderRadius: c.radius + 4,
-          paddingVertical: 14,
-          paddingHorizontal: 18,
-          flexDirection: rtl.row,
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          opacity: isDisabled ? 0.5 : pressed ? 0.85 : 1,
-        },
-        style,
-      ]}
     >
       {loading ? (
         <ActivityIndicator color={fg} />
       ) : (
         <>
           {icon ? <Feather name={icon} size={18} color={fg} /> : null}
-          <Text style={{ color: fg, fontFamily: "Inter_600SemiBold", fontSize: 15 }}>
+          <Text
+            style={{
+              color: fg,
+              fontFamily: "PlusJakartaSans_700Bold",
+              fontSize: 15,
+              letterSpacing: 0.2,
+            }}
+          >
             {label}
           </Text>
         </>
       )}
-    </Pressable>
+    </View>
+  );
+
+  return (
+    <PressScale
+      onPress={onPress}
+      disabled={isDisabled}
+      style={[{ opacity: isDisabled ? 0.55 : 1 }, style ?? {}]}
+    >
+      {variant === "primary" ? (
+        <BrandGradient
+          style={[{ borderRadius: 16, overflow: "hidden" }, softShadow(c.tint45)]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        >
+          {inner}
+        </BrandGradient>
+      ) : (
+        <View
+          style={{
+            backgroundColor:
+              variant === "destructive"
+                ? c.destructive
+                : variant === "secondary"
+                  ? c.secondary
+                  : "transparent",
+            borderRadius: 16,
+            borderWidth: variant === "secondary" ? 1 : 0,
+            borderColor: c.borderSoft,
+          }}
+        >
+          {inner}
+        </View>
+      )}
+    </PressScale>
   );
 }
 
@@ -126,11 +334,12 @@ export function Card({
       style={[
         {
           backgroundColor: c.card,
-          borderRadius: c.radius + 4,
-          borderWidth: StyleSheet.hairlineWidth,
-          borderColor: c.border,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: c.borderSoft,
           padding: 16,
         },
+        softShadow(c.shadow),
         style,
       ]}
     >
@@ -139,47 +348,103 @@ export function Card({
   );
 }
 
+/**
+ * Floating-label text field: label rests as placeholder, floats up on
+ * focus or when filled; magenta focus ring.
+ */
 export function Field({
   label,
   style,
+  error,
+  onFocus,
+  onBlur,
+  value,
   ...props
-}: TextInputProps & { label?: string; style?: TextStyle }) {
+}: TextInputProps & { label?: string; style?: TextStyle; error?: string | null }) {
   const c = useColors();
   const rtl = useRTL();
+  const [focused, setFocused] = useState(false);
+  const lifted = focused || !!(value && String(value).length > 0);
+  const anim = useRef(new Animated.Value(lifted ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: lifted ? 1 : 0,
+      duration: 200,
+      easing: BRAND_EASING,
+      useNativeDriver: false,
+    }).start();
+  }, [lifted, anim]);
+
+  const multiline = props.multiline;
   return (
-    <View style={{ gap: 6 }}>
-      {label ? (
+    <View style={{ gap: 4 }}>
+      <View
+        style={{
+          backgroundColor: c.secondary,
+          borderRadius: 14,
+          borderWidth: 1.5,
+          borderColor: error ? c.destructive : focused ? c.primary : c.borderSoft,
+          paddingHorizontal: 14,
+          paddingTop: label ? 22 : 12,
+          paddingBottom: 10,
+          minHeight: label ? 58 : 46,
+        }}
+      >
+        {label ? (
+          <Animated.Text
+            numberOfLines={1}
+            style={{
+              position: "absolute",
+              [rtl.isRTL ? "right" : "left"]: 14,
+              top: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 8] }),
+              fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11.5] }),
+              color: focused ? c.primary : c.mutedForeground,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              letterSpacing: 0.2,
+            }}
+          >
+            {label}
+          </Animated.Text>
+        ) : null}
+        <TextInput
+          placeholderTextColor={c.faint}
+          {...props}
+          value={value}
+          placeholder={lifted ? props.placeholder : undefined}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          style={[
+            {
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_500Medium",
+              fontSize: 15,
+              padding: 0,
+              textAlign: rtl.textAlign,
+              writingDirection: rtl.writingDirection,
+              ...(multiline ? { minHeight: 60, textAlignVertical: "top" as const } : {}),
+            },
+            style,
+          ]}
+        />
+      </View>
+      {error ? (
         <Text
           style={{
-            color: c.mutedForeground,
-            fontFamily: "Inter_500Medium",
-            fontSize: 13,
+            color: c.destructive,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 12.5,
             textAlign: rtl.textAlign,
           }}
         >
-          {label}
+          {error}
         </Text>
       ) : null}
-      <TextInput
-        placeholderTextColor={c.mutedForeground}
-        {...props}
-        style={[
-          {
-            backgroundColor: c.secondary,
-            borderRadius: c.radius + 2,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: c.border,
-            paddingHorizontal: 14,
-            paddingVertical: 12,
-            color: c.foreground,
-            fontFamily: "Inter_400Regular",
-            fontSize: 15,
-            textAlign: rtl.textAlign,
-            writingDirection: rtl.writingDirection,
-          },
-          style,
-        ]}
-      />
     </View>
   );
 }
@@ -188,26 +453,36 @@ export function Chip({
   label,
   color,
   bg,
+  icon,
 }: {
   label: string;
   color?: string;
   bg?: string;
+  icon?: FeatherName;
 }) {
   const c = useColors();
+  const rtl = useRTL();
   return (
     <View
       style={{
         paddingHorizontal: 10,
-        paddingVertical: 4,
+        paddingVertical: 5,
         borderRadius: 999,
-        backgroundColor: bg ?? c.secondary,
+        backgroundColor: bg ?? c.elevate2,
+        borderWidth: 1,
+        borderColor: c.borderSoft,
+        flexDirection: rtl.row,
+        alignItems: "center",
+        gap: 5,
       }}
     >
+      {icon ? <Feather name={icon} size={11} color={color ?? c.secondaryForeground} /> : null}
       <Text
         style={{
           color: color ?? c.secondaryForeground,
-          fontFamily: "Inter_600SemiBold",
+          fontFamily: "PlusJakartaSans_700Bold",
           fontSize: 11,
+          letterSpacing: 0.3,
         }}
       >
         {label}
@@ -227,24 +502,26 @@ export function EmptyState({
 }) {
   const c = useColors();
   return (
-    <View style={{ alignItems: "center", justifyContent: "center", padding: 40, gap: 10 }}>
+    <FadeInView style={{ alignItems: "center", justifyContent: "center", padding: 40, gap: 12 }}>
       <View
         style={{
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          backgroundColor: c.secondary,
+          width: 72,
+          height: 72,
+          borderRadius: 36,
+          backgroundColor: c.tint08,
+          borderWidth: 1,
+          borderColor: c.tint25,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Feather name={icon} size={28} color={c.mutedForeground} />
+        <Feather name={icon} size={30} color={c.primary} />
       </View>
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "Inter_600SemiBold",
-          fontSize: 16,
+          fontFamily: "PlusJakartaSans_700Bold",
+          fontSize: 17,
           textAlign: "center",
         }}
       >
@@ -254,27 +531,39 @@ export function EmptyState({
         <Text
           style={{
             color: c.mutedForeground,
-            fontFamily: "Inter_400Regular",
+            fontFamily: "PlusJakartaSans_400Regular",
             fontSize: 14,
+            lineHeight: 21,
             textAlign: "center",
           }}
         >
           {body}
         </Text>
       ) : null}
-    </View>
+    </FadeInView>
   );
 }
 
 export function ErrorState({ onRetry, message }: { onRetry?: () => void; message?: string }) {
   const c = useColors();
   return (
-    <View style={{ alignItems: "center", justifyContent: "center", padding: 40, gap: 12 }}>
-      <Feather name="alert-triangle" size={28} color={c.destructive} />
+    <View style={{ alignItems: "center", justifyContent: "center", padding: 40, gap: 14 }}>
+      <View
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          backgroundColor: c.destructiveTint,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Feather name="alert-triangle" size={26} color={c.destructive} />
+      </View>
       <Text
         style={{
           color: c.foreground,
-          fontFamily: "Inter_500Medium",
+          fontFamily: "PlusJakartaSans_600SemiBold",
           fontSize: 15,
           textAlign: "center",
         }}
@@ -286,27 +575,70 @@ export function ErrorState({ onRetry, message }: { onRetry?: () => void; message
   );
 }
 
-export function Skeleton({ height = 16, width = "100%", style }: { height?: number; width?: number | string; style?: ViewStyle }) {
+/** Shimmer skeleton: animated highlight sweep with the brand easing. */
+export function Skeleton({
+  height = 16,
+  width = "100%",
+  style,
+}: {
+  height?: number;
+  width?: number | string;
+  style?: ViewStyle;
+}) {
   const c = useColors();
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 1400,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [anim]);
   return (
     <View
       style={[
         {
           height,
           width: width as ViewStyle["width"],
-          backgroundColor: c.secondary,
-          borderRadius: 8,
-          opacity: 0.6,
+          backgroundColor: c.elevate2,
+          borderRadius: 10,
+          overflow: "hidden",
         },
         style,
       ]}
-    />
+    >
+      <Animated.View
+        style={{
+          ...StyleSheet.absoluteFillObject,
+          transform: [
+            {
+              translateX: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [-260, 260],
+              }),
+            },
+          ],
+        }}
+      >
+        <LinearGradient
+          colors={["transparent", c.tint08, "transparent"]}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={{ flex: 1, width: 260 }}
+        />
+      </Animated.View>
+    </View>
   );
 }
 
 export function Divider() {
   const c = useColors();
-  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.border }} />;
+  return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />;
 }
 
 export interface SheetOption {
@@ -316,6 +648,7 @@ export interface SheetOption {
   destructive?: boolean;
 }
 
+/** Bottom sheet: glass panel over a dimmed scrim, grab handle, soft radius. */
 export function Sheet({
   visible,
   title,
@@ -330,79 +663,93 @@ export function Sheet({
   cancelLabel: string;
 }) {
   const c = useColors();
+  const rtl = useRTL();
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         onPress={onClose}
-        style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}
+        style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "flex-end", padding: 10 }}
       >
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: c.card,
-            borderTopLeftRadius: 20,
-            borderTopRightRadius: 20,
-            padding: 16,
-            paddingBottom: Platform.OS === "web" ? 24 : 40,
-            gap: 8,
-          }}
-        >
-          {title ? (
-            <Text
+        <Pressable onPress={(e) => e.stopPropagation()}>
+          <Glass
+            radius={28}
+            style={[{ padding: 16, paddingBottom: Platform.OS === "web" ? 20 : 32, gap: 6 }, softShadow(c.shadow)]}
+          >
+            <View
               style={{
-                color: c.mutedForeground,
-                fontFamily: "Inter_500Medium",
-                fontSize: 13,
-                textAlign: "center",
-                paddingBottom: 6,
+                alignSelf: "center",
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: c.faint,
+                opacity: 0.5,
+                marginBottom: 8,
               }}
-            >
-              {title}
-            </Text>
-          ) : null}
-          {options.map((o, i) => (
-            <Pressable
-              key={i}
-              onPress={() => {
-                hapticLight();
-                onClose();
-                o.onPress();
-              }}
-              style={({ pressed }) => ({
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 12,
-                paddingVertical: 14,
-                paddingHorizontal: 8,
-                borderRadius: c.radius + 2,
-                backgroundColor: pressed ? c.secondary : "transparent",
-              })}
-            >
-              {o.icon ? (
-                <Feather
-                  name={o.icon}
-                  size={20}
-                  color={o.destructive ? c.destructive : c.foreground}
-                />
-              ) : null}
+            />
+            {title ? (
               <Text
                 style={{
-                  color: o.destructive ? c.destructive : c.foreground,
-                  fontFamily: "Inter_500Medium",
-                  fontSize: 16,
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 13,
+                  letterSpacing: 0.4,
+                  textAlign: "center",
+                  paddingBottom: 8,
                 }}
               >
-                {o.label}
+                {title}
               </Text>
-            </Pressable>
-          ))}
-          <View style={{ height: 4 }} />
-          <Button label={cancelLabel} onPress={onClose} variant="secondary" />
+            ) : null}
+            {options.map((o, i) => (
+              <Pressable
+                key={i}
+                onPress={() => {
+                  hapticLight();
+                  onClose();
+                  o.onPress();
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 12,
+                  borderRadius: 14,
+                  backgroundColor: pressed ? c.tint08 : "transparent",
+                })}
+              >
+                {o.icon ? (
+                  <View
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 12,
+                      backgroundColor: o.destructive ? c.destructiveTint : c.tint08,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Feather
+                      name={o.icon}
+                      size={17}
+                      color={o.destructive ? c.destructive : c.primary}
+                    />
+                  </View>
+                ) : null}
+                <Text
+                  style={{
+                    color: o.destructive ? c.destructive : c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 15.5,
+                  }}
+                >
+                  {o.label}
+                </Text>
+              </Pressable>
+            ))}
+            <View style={{ height: 6 }} />
+            <Button label={cancelLabel} onPress={onClose} variant="secondary" />
+          </Glass>
         </Pressable>
       </Pressable>
     </Modal>
@@ -413,24 +760,32 @@ export function IconButton({
   icon,
   onPress,
   color,
-  size = 22,
+  size = 20,
+  filled = false,
 }: {
   icon: FeatherName;
   onPress: () => void;
   color?: string;
   size?: number;
+  filled?: boolean;
 }) {
   const c = useColors();
   return (
-    <Pressable
-      onPress={() => {
-        hapticLight();
-        onPress();
-      }}
-      hitSlop={10}
-      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 4 })}
-    >
-      <Feather name={icon} size={size} color={color ?? c.foreground} />
-    </Pressable>
+    <PressScale onPress={onPress} scaleTo={0.9}>
+      <View
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 14,
+          alignItems: "center",
+          justifyContent: "center",
+          backgroundColor: filled ? c.tint08 : "transparent",
+          borderWidth: filled ? 1 : 0,
+          borderColor: c.tint25,
+        }}
+      >
+        <Feather name={icon} size={size} color={color ?? c.foreground} />
+      </View>
+    </PressScale>
   );
 }
