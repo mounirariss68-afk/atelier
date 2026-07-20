@@ -525,12 +525,12 @@ router.get("/me/calendar", async (req, res, next) => {
       if (accountIdFilter && !matches.some((m) => m.accountId === accountIdFilter)) {
         continue;
       }
-      const startIso = ev.start?.dateTime
-        ? `${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`
-        : "";
-      const endIso = ev.end?.dateTime
-        ? `${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`
-        : "";
+      // The wire contract promises valid ISO datetimes for start/end; a
+      // Graph event without them can't be rendered meaningfully, so drop it
+      // rather than emit empty strings that break Date parsing downstream.
+      if (!ev.start?.dateTime || !ev.end?.dateTime) continue;
+      const startIso = `${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`;
+      const endIso = `${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`;
       meetings.push({
         id: ev.id,
         subject: ev.subject ?? "(no subject)",

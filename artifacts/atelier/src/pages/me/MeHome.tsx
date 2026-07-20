@@ -40,6 +40,7 @@ import MeExpenses from "./MeExpenses";
 import MeProfileSection from "./MeProfileSection";
 // Task #159 — self-scope contract records panel.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
+import { MyMeetingsCard } from "@/components/ms/MsMeetings";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -162,6 +163,8 @@ function OverviewSection({ loading, profile }: { loading: boolean; profile: Prof
     <div className="space-y-6">
       <PendingApprovalsCard />
       <NotificationCards />
+      {/* Task #327 — the viewer's Microsoft 365 meetings, also on Home. */}
+      <MyMeetingsCard />
       {/* Task #159 — the caller's own contract records (NDA, employment…).
           Uses the /me/contracts route: employee/contractor personas are
           server-gated to /me/*, so the generic list endpoint would 403. */}

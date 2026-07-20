@@ -28,6 +28,35 @@ import { CalendarClock, Video, MapPin, Unplug, ExternalLink } from "lucide-react
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
+// Redirect error codes from the OAuth callback → human guidance. The server
+// only ever emits these fixed codes (never raw AADSTS strings), but map
+// defensively so an unknown code still reads sensibly.
+const MS_ERROR_MESSAGES: Record<string, string> = {
+  "admin-consent":
+    "Your Microsoft 365 administrator needs to grant consent for the Atelier before you can connect. Please ask your admin to approve the Cognirise app in Microsoft Entra.",
+  "not-configured":
+    "Microsoft 365 sign-in isn't set up for this workspace yet. Ask an administrator to configure it.",
+  "state-mismatch":
+    "The sign-in attempt expired or didn't match this browser session. Please try connecting again.",
+  "no-refresh-token":
+    "Microsoft didn't return an offline-access token. Please try again and accept all requested permissions.",
+  "oauth-failed": "Microsoft sign-in failed. Please try again.",
+};
+
+function msErrorMessage(code: string): string {
+  return MS_ERROR_MESSAGES[code] ?? "Microsoft sign-in failed. Please try again.";
+}
+
+function fmtLastSynced(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function fmtTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -104,10 +133,12 @@ function windowIso(days: number) {
 export function ConnectedAccountsCard() {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);
   const { data: conn, isPending } = useAtelierGetMyMsConnection();
   const disconnect = useAtelierDisconnectMyMsConnection({
     mutation: {
       onSuccess: () => {
+        setConfirmingDisconnect(false);
         qc.invalidateQueries({ queryKey: getAtelierGetMyMsConnectionQueryKey() });
         toast({ title: "Microsoft 365 disconnected" });
       },
@@ -125,7 +156,7 @@ export function ConnectedAccountsCard() {
     } else if (params.get("ms_error")) {
       toast({
         title: "Microsoft 365 connection failed",
-        description: params.get("ms_error") ?? undefined,
+        description: msErrorMessage(params.get("ms_error") ?? ""),
         variant: "destructive",
       });
     }
@@ -156,22 +187,47 @@ export function ConnectedAccountsCard() {
               {conn.msDisplayName ? `${conn.msDisplayName} · ` : ""}
               {conn.msEmail}
             </div>
+            <div className="text-xs text-text-faint font-mono mt-0.5" data-testid="ms-last-synced">
+              {conn.lastSyncedAt
+                ? `Last synced ${fmtLastSynced(conn.lastSyncedAt)}`
+                : "Not synced yet"}
+            </div>
             {conn.lastError && (
               <div className="text-xs text-red-400 mt-1">
                 Connection needs attention: {conn.lastError}
               </div>
             )}
           </div>
-          <PillButton
-            variant="ghost"
-            className="shrink-0"
-            onClick={() => disconnect.mutate()}
-            disabled={disconnect.isPending}
-            data-testid="button-ms-disconnect"
-          >
-            <Unplug className="w-4 h-4 mr-1" />
-            {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
-          </PillButton>
+          {confirmingDisconnect ? (
+            <div className="shrink-0 flex items-center gap-2">
+              <span className="text-xs text-text-mute">Disconnect and delete stored tokens?</span>
+              <PillButton
+                variant="ghost"
+                onClick={() => setConfirmingDisconnect(false)}
+                disabled={disconnect.isPending}
+                data-testid="button-ms-disconnect-cancel"
+              >
+                Keep
+              </PillButton>
+              <PillButton
+                className="border-red-500/40 text-red-400"
+                onClick={() => disconnect.mutate()}
+                disabled={disconnect.isPending}
+                data-testid="button-ms-disconnect-confirm"
+              >
+                {disconnect.isPending ? "Disconnecting…" : "Disconnect"}
+              </PillButton>
+            </div>
+          ) : (
+            <PillButton
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => setConfirmingDisconnect(true)}
+              data-testid="button-ms-disconnect"
+            >
+              <Unplug className="w-4 h-4 mr-1" /> Disconnect
+            </PillButton>
+          )}
         </div>
       ) : (
         <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
