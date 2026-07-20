@@ -299,15 +299,12 @@ async function main(): Promise<void> {
       "print variant carries TrimBox + BleedBox",
       prnTxt.includes("/TrimBox") && prnTxt.includes("/BleedBox"),
     );
-    // Task #382 — print variant embeds a PDF/X-style ICC output intent
-    // (sRGB IEC61966-2.1) so print shops get predictable color; the
-    // standard variant stays untouched (no OutputIntents).
+    // Task #389 — BOTH variants must be untagged DeviceRGB like the user's
+    // original card PDF: a previously embedded sRGB OutputIntent made
+    // color-managed viewers render the navy duller than the original.
     check(
-      "print variant embeds ICC output intent (GTS_PDFX + sRGB profile)",
-      prnTxt.includes("/OutputIntents") &&
-        prnTxt.includes("/GTS_PDFX") &&
-        prnTxt.includes("/DestOutputProfile") &&
-        prnTxt.includes("sRGB IEC61966-2.1"),
+      "print variant has no ICC output intent (untagged like the original)",
+      !prnTxt.includes("/OutputIntents") && !prnTxt.includes("/GTS_PDFX"),
     );
     check(
       "standard variant has no output intent",

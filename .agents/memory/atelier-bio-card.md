@@ -10,7 +10,11 @@ description: Task-52 biography template/upload + generated business-card PDF inv
 - Card PDF has two variants: `?variant=print` adds 3mm bleed + 3mm slug with crop marks + TrimBox/BleedBox; trim layout must stay pixel-identical (verify: pdftoppm at 1270 DPI so the 6mm offset is exactly 300px, crop, RMSE — front should be 0, back only subpixel raster phase).
 - There is NO vector source for the back dotted-C art (PPTX SVG holds only the front logo lockup). Raster assets are regenerated deterministically by `api-server/scripts/regen-card-assets.ts` (needs `card-back-art-src.png` preserved); bleed art bakes a mirrored 3mm strip on the LEFT (only trim-touching edge).
 
-## Print-variant color intent (2026-07-20)
-The print card variant embeds a PDF/X-style ICC OutputIntent (sRGB IEC61966-2.1, loaded from pdfkit's own `js/data/sRGB_IEC61966_2_1.icc`) instead of converting content to CMYK.
-**Why:** content is authored in sRGB; a hand-rolled CMYK conversion without the print shop's press profile would add color error. The output intent gives the RIP an authoritative source profile.
-**How to apply:** any new print-oriented PDF surface should reuse `embedOutputIntent()` in atelier-business-card.ts; standard variant deliberately has NO OutputIntents (tests assert this).
+## Card PDFs must stay untagged DeviceRGB (2026-07-20)
+BOTH card variants are deliberately untagged DeviceRGB — the sRGB ICC OutputIntent briefly added to the print variant was REMOVED.
+**Why:** raw pixels were identical (#010538), but color-managed viewers on wide-gamut displays render tagged sRGB navy visibly duller than untagged device RGB; the user perceived it as a changed background color vs their original (untagged) card PDF.
+**How to apply:** never add ICC tagging/OutputIntents to the card PDFs without verifying on-screen side-by-side vs the original in a color-managed viewer; tests assert no `/OutputIntents` in either variant.
+
+## Front logo source (2026-07-20)
+`card-front-logo.png` is extracted from the user's ORIGINAL card PDF (`attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_*.pdf`, `pdfimages`: 1200×319 RGB + soft mask), NOT rendered from the PPTX "SVG" — that SVG just embeds a 1536×1024 raster, so rendering/upscaling it pixelates.
+**How to apply:** regen via `regen-card-assets.ts`, which pads the logo onto a transparent canvas with the old padding ratios so placed geometry is unchanged; don't ever upscale the logo raster.

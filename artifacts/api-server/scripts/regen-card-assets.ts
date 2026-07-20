@@ -5,9 +5,16 @@
  *   npx tsx artifacts/api-server/scripts/regen-card-assets.ts
  *
  * Produces, under artifacts/api-server/assets/atelier-templates/:
- *   - card-front-logo.png     4608×3072 render of the true vector logo
- *     (ppt/media/image1.svg inside cognirise-business-card.pptx). At the
- *     placed size (~1.83 in wide) that is ~2500 DPI effective.
+ *   - card-front-logo.png     Task #389 — the front logo image extracted
+ *     from the user's ORIGINAL card PDF
+ *     (attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_*.pdf),
+ *     1200×319 RGB + soft mask composited to RGBA. That is the sharpest
+ *     available source: the PPTX "SVG" logo is not real vector art (it
+ *     embeds a 1536×1024 raster), so rendering/upscaling it only bakes in
+ *     artifacts. The logo is embedded near-native (NO upscaling) on a
+ *     transparent canvas with the same padding ratios as the previous
+ *     asset, so the placed geometry in the PDF is unchanged (~793 DPI
+ *     effective at the placed content width, ≥ the original card's 654).
  *   - card-back-art-hires.png 6688×3764 re-render of the dotted-C artwork.
  *     There is NO vector source for the back art (the PPTX SVG holds only
  *     the logo lockup variants), so this is a clean 4× resample of the
@@ -55,23 +62,51 @@ const TEMPLATES = resolve(
 const ART_PLACED_PT = 2187078 / 12700; // ≈ 172.21 pt
 const BLEED_PT = (3 / 25.4) * 72; // 3 mm ≈ 8.504 pt
 
-async function main(): Promise<void> {
-  // 1. Extract the vector logo SVG from the card PPTX.
-  const work = mkdtempSync(join(tmpdir(), "card-assets-"));
-  execSync(
-    `unzip -o -q "${join(TEMPLATES, "cognirise-business-card.pptx")}" ppt/media/image1.svg -d "${work}"`,
-  );
-  const svg = readFileSync(join(work, "ppt/media/image1.svg"));
+/** The user's original card PDF — authoritative source of the front logo. */
+const ORIGINAL_CARD_PDF = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+  "attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_1784478685341.pdf",
+);
 
-  // 2. Front logo: straight high-res render of the SVG viewBox (1536×1024).
-  const logo = await sharp(svg, {
-    density: 72 * (4608 / 1536),
-    limitInputPixels: false,
-  })
+async function main(): Promise<void> {
+  // 1. Task #389 — extract the front logo from the ORIGINAL card PDF:
+  //    image 0 (1200×319 RGB) + image 1 (its soft mask) via pdfimages.
+  const work = mkdtempSync(join(tmpdir(), "card-assets-"));
+  execSync(`pdfimages -f 1 -l 1 -png "${ORIGINAL_CARD_PDF}" "${join(work, "orig")}"`);
+  const logoRgb = readFileSync(join(work, "orig-000.png"));
+  const logoMask = readFileSync(join(work, "orig-001.png"));
+
+  // 2. Composite RGB + soft mask to RGBA, then pad onto a transparent
+  //    canvas with the SAME content/padding ratios as the previous asset
+  //    (content 3808×1013 at +400+970 in 4608×3072) so the PDF's fit-box
+  //    placement renders the logo at exactly the same position and size.
+  //    No resampling of the logo pixels themselves.
+  const LW = 1200;
+  const LH = 319;
+  const r = LW / 3808;
+  const canvasW = Math.round(4608 * r); // 1452
+  const canvasH = Math.round(3072 * r); // 968
+  const offX = Math.round(400 * r); // 126
+  const offY = Math.round(970 * r); // 306
+  const rgbRaw = await sharp(logoRgb).removeAlpha().raw().toBuffer();
+  const maskRaw = await sharp(logoMask)
+    .toColorspace("b-w")
+    .raw()
+    .toBuffer();
+  const logo = await sharp(rgbRaw, { raw: { width: LW, height: LH, channels: 3 } })
+    .joinChannel(maskRaw, { raw: { width: LW, height: LH, channels: 1 } })
+    .extend({
+      left: offX,
+      top: offY,
+      right: canvasW - offX - LW,
+      bottom: canvasH - offY - LH,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    })
     .png({ compressionLevel: 9 })
     .toBuffer();
   writeFileSync(join(TEMPLATES, "card-front-logo.png"), logo);
-  console.log("card-front-logo.png", logo.length);
+  console.log("card-front-logo.png", logo.length, `${canvasW}x${canvasH}`);
 
   // 3. Back art: clean 4× resample with re-anti-aliased alpha edges.
   const SRC = join(TEMPLATES, "card-back-art-src.png");
