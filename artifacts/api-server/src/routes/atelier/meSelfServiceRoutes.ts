@@ -92,6 +92,7 @@ import {
   lookupMerchantMemory,
   learnMerchantMapping,
 } from "../../lib/atelier-expense-categorizer.js";
+import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
   ObjectStorageService,
@@ -1380,6 +1381,9 @@ function claimToWire(e: typeof atelierExpenses.$inferSelect) {
     id: e.id,
     expenseDate: e.expenseDate,
     merchant: e.merchant,
+    // Task #396 — layered merchant normalization output.
+    merchantNormalized: e.merchantNormalized,
+    merchantResolution: e.merchantResolution,
     description: e.description,
     category: e.category,
     amount: e.amount,
@@ -1850,276 +1854,22 @@ router.post("/me/expenses/receipt-upload", async (req, res, next) => {
 // and the deterministic Me-lens policy evaluator stamps findings.
 // Draft-only, self-scoped. Fail-loud: extraction errors surface as 422.
 // =====================================================================
-const RECEIPT_PARSE_MEDIA = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/gif",
-]);
-
-interface VisionReceiptExtraction {
-  merchant?: string;
-  date?: string;
-  total?: number;
-  tax?: number;
-  currency?: string;
-  country?: string;
-  category?: string;
-  rawText?: string;
-  confidence?: "green" | "amber" | "red";
-  unreadable?: boolean;
-}
-
-async function extractReceiptWithVision(
-  bytes: Buffer,
-  mediaType: string,
-): Promise<VisionReceiptExtraction> {
-  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
-  const ac = new AbortController();
-  const timer = setTimeout(
-    () => ac.abort(),
-    Number(process.env.ATELIER_AGENT_TIMEOUT_MS ?? 45000),
-  );
-  try {
-    const resp = await anthropic.messages.create(
-      {
-        model: "claude-haiku-4-5",
-        max_tokens: 2048,
-        system:
-          "You are an expense-receipt OCR extractor. Read the receipt image and reply with ONLY a single JSON object (no prose, no code fences) with fields: merchant (string), date (YYYY-MM-DD if visible), total (number, grand total), tax (number, 0 if none), currency (3-letter ISO code), country (short code like KSA/UAE/US if inferable), category (one of flight|hotel|meal|gift|software|mileage|per_diem|taxi|other), rawText (the visible text, condensed), confidence (green if crisp and unambiguous, amber if partly readable, red if barely readable), unreadable (true ONLY if this is not a receipt or nothing is readable).",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image",
-                source: {
-                  type: "base64",
-                  media_type: mediaType as "image/jpeg" | "image/png" | "image/webp" | "image/gif",
-                  data: bytes.toString("base64"),
-                },
-              },
-              { type: "text", text: "Extract this receipt." },
-            ],
-          },
-        ],
-      },
-      { signal: ac.signal },
-    );
-    const block = resp.content[0];
-    const text = block && block.type === "text" ? block.text.trim() : "";
-    const stripped = text
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```\s*$/i, "")
-      .trim();
-    const start = stripped.indexOf("{");
-    const end = stripped.lastIndexOf("}");
-    if (start === -1 || end <= start) {
-      throw new Error("vision-non-json");
-    }
-    return JSON.parse(stripped.slice(start, end + 1)) as VisionReceiptExtraction;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-// @cli-skip: self-scope mobile receipt parse; no CLI shape (Task #328)
+// @cli-skip: self-scope mobile receipt parse; no CLI shape (Task #328/#396)
 router.post("/me/expenses/:id/parse-receipt", async (req, res, next) => {
   try {
     const ctx = await requireOwnDraftExpense(req, res);
     if (!ctx) return;
     const { me, row } = ctx;
-    if (!row.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
-      res.status(400).json({
-        error: "no-receipt",
-        message: "Attach a receipt photo first, then parse it.",
-      });
+    const result = await parseReceiptForExpense({ row, me, via: "me-lens" });
+    if (!result.ok) {
+      res.status(result.status).json(result.body);
       return;
     }
-    // Stream the private receipt bytes (owner ACL already pinned at attach).
-    const svc = new ObjectStorageService();
-    let bytes: Buffer;
-    let mediaType: string;
-    try {
-      const file = await svc.getObjectEntityFile(row.receiptFileRef);
-      const dl = await svc.downloadObject(file, 60);
-      mediaType = (dl.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-      bytes = Buffer.from(await dl.arrayBuffer());
-    } catch (err) {
-      if (err instanceof ObjectNotFoundError) {
-        res.status(404).json({ error: "no-receipt" });
-        return;
-      }
-      throw err;
-    }
-    if (!RECEIPT_PARSE_MEDIA.has(mediaType)) {
-      res.status(422).json({
-        error: "unsupported-receipt-type",
-        message: "Receipt parsing supports photos (JPEG/PNG/WebP/GIF).",
-        mediaType,
-      });
-      return;
-    }
-    if (bytes.length > 8 * 1024 * 1024) {
-      res.status(422).json({
-        error: "receipt-too-large",
-        message: "Receipt image exceeds 8MB — retake at lower resolution.",
-      });
-      return;
-    }
-
-    let vision: VisionReceiptExtraction;
-    try {
-      vision = await extractReceiptWithVision(bytes, mediaType);
-    } catch (err) {
-      res.status(422).json({
-        error: "receipt-parse-failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      return;
-    }
-    if (vision.unreadable) {
-      res.status(422).json({
-        error: "receipt-unreadable",
-        message: "Could not read this image as a receipt — retake the photo.",
-      });
-      return;
-    }
-
-    // Vision fields become the OCR payload for the EXISTING Expense Auditor.
-    const amount =
-      Number.isFinite(Number(vision.total)) && Number(vision.total) > 0
-        ? Number(vision.total)
-        : row.amount;
-    const currency =
-      typeof vision.currency === "string" && /^[A-Za-z]{3}$/.test(vision.currency)
-        ? vision.currency.toUpperCase()
-        : row.currency;
-    const expenseDate = isIsoDate(vision.date) ? vision.date : row.expenseDate;
-    const ocr = {
-      merchant: vision.merchant || row.merchant || undefined,
-      date: expenseDate,
-      total: amount,
-      tax: Number.isFinite(Number(vision.tax)) ? Number(vision.tax) : 0,
-      currency,
-      country: vision.country || undefined,
-      category: vision.category || undefined,
-      rawText: vision.rawText || undefined,
-      confidence: vision.confidence ?? "amber",
-    };
-    const contractDigest = await buildContractDigest(row.engagementId ?? null);
-    let runId: string;
-    let proposal: ExpenseAuditorProposal;
-    try {
-      const out = await runExpenseAuditor({
-        expenseId: row.id,
-        triggeredByUserId: me.id,
-        ocr,
-        contractDigest,
-        draft: {
-          amount,
-          currency,
-          country: vision.country ?? undefined,
-          category: vision.category ?? row.category ?? undefined,
-          engagementId: row.engagementId ?? null,
-        },
-      });
-      runId = out.runId;
-      proposal = out.proposal;
-    } catch (err) {
-      res.status(502).json({
-        error: "auditor-failed",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      return;
-    }
-    if (proposal.refused) {
-      res.status(422).json({
-        error: "auditor-refused",
-        message: proposal.reason ?? "Auditor refused this receipt.",
-        runId,
-      });
-      return;
-    }
-
-    const fx = await convertToUsd(amount, currency, expenseDate);
-    const usdAmount = +fx.usdAmount.toFixed(2);
-    const policy = await evaluateExpense({
-      category: proposal.category,
-      usdAmount,
-      amount,
-      currency,
-      country: vision.country ?? null,
-      role: me.role,
-      flightClass:
-        proposal.category === "flight"
-          ? (ocr.rawText?.match(/\b(first|business|premium_economy|economy)\b/i)?.[1]?.toLowerCase() ?? null)
-          : null,
-    });
-
-    // Task #383 — resolve the two-axis pair: org-wide merchant memory wins
-    // over the AI category; otherwise map the auditor's legacy category
-    // onto the taxonomy tree.
-    const merchantForMemory = (ocr.merchant ?? row.merchant ?? "").trim();
-    let taxonomyPatch: Record<string, unknown> = {};
-    const memoryHit = merchantForMemory ? await lookupMerchantMemory(merchantForMemory, me.orgId) : null;
-    if (memoryHit) {
-      taxonomyPatch = {
-        categoryCode: memoryHit.categoryCode,
-        subCategoryCode: memoryHit.subCategoryCode,
-        categorySource: "merchant_memory",
-      };
-    } else {
-      const mapped = await mapLegacyCategory(proposal.category);
-      if (mapped) {
-        taxonomyPatch = {
-          categoryCode: mapped.categoryCode,
-          subCategoryCode: mapped.subCategoryCode,
-          categorySource: "ai",
-        };
-      }
-    }
-    const [updated] = await db
-      .update(atelierExpenses)
-      .set({
-        merchant: (ocr.merchant ?? row.merchant ?? "Unknown merchant").slice(0, 200),
-        ...taxonomyPatch,
-        expenseDate,
-        amount,
-        currency,
-        fxRate: fx.rate,
-        fxRateDate: fx.rateDate,
-        usdAmount,
-        category: proposal.category,
-        vatTreatment: proposal.vatTreatment,
-        vatAmount: proposal.vatAmount,
-        vatCurrency: currency,
-        vatCountry: vision.country ?? row.vatCountry,
-        clientBillable: proposal.clientBillable,
-        markupPct: proposal.markupPct,
-        auditorRunId: runId,
-        auditorProposal: proposal,
-        ocrPayload: ocr,
-        policyStatus: policy.status,
-        policyFindings: policy.findings,
-        summary: proposal.summary,
-        updatedAt: new Date(),
-      })
-      .where(eq(atelierExpenses.id, row.id))
-      .returning();
-    await audit({
-      entityType: "expense",
-      entityId: row.id,
-      actor: me,
-      action: "expense.audit",
-      payload: { runId, policyStatus: policy.status, via: "me-lens-mobile" },
-      summary: `Auditor parsed receipt for ${updated.merchant ?? row.id} → policy ${policy.status}`,
-    });
     res.json({
-      expense: claimToWire(updated),
-      runId,
-      proposal,
-      policyFindings: policy.findings,
+      expense: claimToWire(result.expense),
+      runId: result.runId,
+      proposal: result.proposal,
+      policyFindings: result.policyFindings,
     });
   } catch (err) {
     next(err);

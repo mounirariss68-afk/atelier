@@ -28,6 +28,8 @@ interface Claim {
   engagementId: string | null;
   internalProjectLabel: string | null;
   hasReceipt: boolean;
+  merchantNormalized?: string | null;
+  merchantResolution?: string | null;
   rejectedReason: string | null;
   reimbursedAt: string | null;
   createdAt: string;
@@ -345,6 +347,38 @@ export default function MeExpenses() {
       await load();
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Task #396 — parse the attached receipt (photo or PDF). Fail-loud: the
+  // server 4xxs on unreadable/unsupported files and we show the message.
+  const [parsingId, setParsingId] = React.useState<string | null>(null);
+  const [parseNote, setParseNote] = React.useState<{ id: string; text: string; ok: boolean } | null>(
+    null,
+  );
+  const parseReceipt = async (id: string) => {
+    setParsingId(id);
+    setParseNote(null);
+    try {
+      const r = await fetch(`${API}/expenses/${id}/parse-receipt`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || j.reason || j.error || `HTTP ${r.status}`);
+      const p = j.proposal ?? {};
+      setParseNote({
+        id,
+        ok: true,
+        text: `Parsed — ${p.category ? `category "${p.category}"` : "fields updated"}${
+          p.ocrConfidence ? ` (confidence: ${p.ocrConfidence})` : ""
+        }. Review and edit before submitting.`,
+      });
+      await load();
+    } catch (e) {
+      setParseNote({ id, ok: false, text: (e as Error).message });
+    } finally {
+      setParsingId(null);
     }
   };
 
@@ -732,12 +766,36 @@ export default function MeExpenses() {
                   <MonoChip>{c.contextType}</MonoChip>
                   <span className="text-xs text-text-faint">{c.expenseDate}</span>
                 </div>
+                {c.merchantNormalized && c.merchantNormalized !== c.merchant && (
+                  <p className="text-xs text-text-faint" data-testid={`exp-merchant-normalized-${c.id}`}>
+                    Recognized as <span className="text-text-mute">{c.merchantNormalized}</span>
+                    {c.merchantResolution ? ` · via ${c.merchantResolution.replace(/_/g, " ")}` : ""}
+                  </p>
+                )}
                 {c.hasReceipt && <ReceiptThumb src={`${API}/expenses/${c.id}/receipt`} id={c.id} />}
+                {parseNote?.id === c.id && (
+                  <p
+                    className={`text-xs ${parseNote.ok ? "text-emerald-300" : "text-red-300"}`}
+                    data-testid={`exp-parse-note-${c.id}`}
+                  >
+                    {parseNote.text}
+                  </p>
+                )}
                 {c.rejectedReason && (
                   <p className="text-xs text-red-300">Rejected: {c.rejectedReason}</p>
                 )}
                 {(c.status === "draft" || c.status === "rejected") && (
                   <div className="flex gap-3 pt-1">
+                    {c.hasReceipt && (
+                      <button
+                        className="font-mono text-[10px] uppercase tracking-wider text-gold hover:underline min-h-[44px]"
+                        onClick={() => parseReceipt(c.id)}
+                        disabled={busy || parsingId !== null}
+                        data-testid={`exp-parse-${c.id}`}
+                      >
+                        {parsingId === c.id ? "Parsing…" : "Parse receipt"}
+                      </button>
+                    )}
                     <button
                       className="font-mono text-[10px] uppercase tracking-wider text-gold hover:underline min-h-[44px]"
                       onClick={() => submit(c.id)}

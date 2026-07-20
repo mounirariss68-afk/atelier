@@ -57,6 +57,10 @@ import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
 import { runInvoiceComposer, expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
 // Task #76 — stream stored receipt images to approvers/finance.
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
+// Task #396 — shared receipt/invoice parse pipeline + merchant enrichment.
+import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
+import { runMerchantEnrichment } from "../../lib/atelier-merchant/enrichment.js";
+import { atelierUnmatchedMerchants } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -199,6 +203,9 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
     captureSource: e.captureSource,
     cardId: e.cardId,
     merchant: e.merchant,
+    // Task #396 — layered merchant normalization output.
+    merchantNormalized: e.merchantNormalized,
+    merchantResolution: e.merchantResolution,
     description: e.description,
     category: e.category,
     amount: e.amount,
@@ -754,6 +761,52 @@ router.post("/wallet/expenses/:id/audit", async (req, res) => {
     res.json({ expense: expenseToWire(expense, me), runId });
   } catch (err) {
     res.status(500).json({ error: "audit-failed", message: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Task #396 — full receipt/invoice re-parse (extraction + matcher), not just
+// the field-level audit. Owner or leadership; draft/submitted rows only so
+// approved financials are never rewritten by a re-parse.
+// @cli-skip: binary-driven parse; no CLI shape (Task #396)
+router.post("/wallet/expenses/:id/parse-receipt", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [existing] = await db
+    .select()
+    .from(atelierExpenses)
+    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "expense-not-found" });
+    return;
+  }
+  if (existing.personId !== me.id && !isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (existing.status !== "draft" && existing.status !== "submitted") {
+    res.status(409).json({
+      error: "not-reparsable",
+      message: `Only draft or submitted claims can be re-parsed (status: ${existing.status}).`,
+    });
+    return;
+  }
+  try {
+    const result = await parseReceiptForExpense({ row: existing, me, via: "wallet" });
+    if (!result.ok) {
+      res.status(result.status).json(result.body);
+      return;
+    }
+    res.json({
+      expense: expenseToWire(result.expense, me),
+      runId: result.runId,
+      proposal: result.proposal,
+      policyFindings: result.policyFindings,
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: "parse-failed",
+      message: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 
@@ -1732,6 +1785,109 @@ router.post("/wallet/retention/run", async (req, res) => {
     summary: `Retention sweep: redacted ${result.redacted}/${result.scanned} OCR payloads older than 90d.`,
   });
   res.json({ ok: true, ...result });
+});
+
+// =============================================================
+// Task #396 — Merchant enrichment (leadership-facing admin loop)
+// =============================================================
+// Unknown merchants logged by the matcher can be batch-classified by AI so
+// they match instantly next time. Long LLM batch → async launch + poll.
+
+// @cli-skip: leadership admin surface; no CLI shape (Task #396)
+router.get("/wallet/merchants/unmatched", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(atelierUnmatchedMerchants)
+    .orderBy(desc(atelierUnmatchedMerchants.count))
+    .limit(200);
+  res.json({
+    merchants: rows.map((r) => ({
+      id: r.id,
+      rawMerchantText: r.rawMerchantText,
+      normalizedText: r.normalizedMerchantText,
+      occurrenceCount: r.count,
+      status: r.status,
+      lastSeenAt: r.lastSeenAt ? new Date(r.lastSeenAt).toISOString() : null,
+    })),
+    pendingCount: rows.filter((r) => r.status === "pending").length,
+  });
+});
+
+interface EnrichmentRunState {
+  id: string;
+  status: "running" | "done" | "failed";
+  startedAt: string;
+  result?: { processed: number; classified: number; inserted: number; remainingPending: number };
+  error?: string;
+}
+const enrichmentRuns = new Map<string, EnrichmentRunState>();
+let enrichmentActive = false;
+
+// @cli-skip: leadership admin action; no CLI shape (Task #396)
+router.post("/wallet/merchants/enrich", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  if (enrichmentActive) {
+    res.status(409).json({ error: "enrichment-already-running" });
+    return;
+  }
+  const runId = rid("enr");
+  const state: EnrichmentRunState = {
+    id: runId,
+    status: "running",
+    startedAt: new Date().toISOString(),
+  };
+  enrichmentRuns.set(runId, state);
+  enrichmentActive = true;
+  // Return instantly; the LLM batch continues in the background (proxy
+  // 502s held requests — see the async-launch pattern).
+  void (async () => {
+    try {
+      const result = await runMerchantEnrichment();
+      state.status = "done";
+      state.result = result;
+      await audit({
+        entityType: "merchant_enrichment",
+        entityId: runId,
+        actor: me,
+        action: "wallet.merchants.enrich",
+        payload: { runId, ...result },
+        summary: `Merchant enrichment: ${result.inserted} merchants added (${result.processed} processed, ${result.remainingPending} still pending).`,
+      });
+    } catch (err) {
+      state.status = "failed";
+      state.error = err instanceof Error ? err.message : String(err);
+    } finally {
+      enrichmentActive = false;
+    }
+  })();
+  res.status(202).json({ runId, status: "running" });
+});
+
+// @cli-skip: poll endpoint; no CLI shape (Task #396)
+router.get("/wallet/merchants/enrich/:runId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isLeadership(me)) {
+    res.status(403).json({ error: "forbidden" });
+    return;
+  }
+  const state = enrichmentRuns.get(req.params.runId);
+  if (!state) {
+    res.status(404).json({ error: "run-not-found" });
+    return;
+  }
+  res.json(state);
 });
 
 // =============================================================

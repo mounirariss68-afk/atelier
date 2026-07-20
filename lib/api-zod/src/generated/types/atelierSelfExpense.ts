@@ -10,6 +10,8 @@ export interface AtelierSelfExpense {
   id: string;
   expenseDate: string;
   merchant?: string | null;
+  merchantNormalized?: string | null;
+  merchantResolution?: string | null;
   description?: string | null;
   category?: string | null;
   amount: number;

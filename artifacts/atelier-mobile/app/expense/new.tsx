@@ -7,6 +7,7 @@ import {
   useAtelierSuggestExpenseCategory,
 } from "@workspace/api-client-react";
 import type { AtelierSelfExpenseCreate } from "@workspace/api-client-react";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -149,6 +150,22 @@ export default function NewExpenseScreen() {
     },
     [t, feedback],
   );
+
+  // Task #396 — PDF invoice pickup. The server parses PDFs via text-layer
+  // extraction with an OCR fallback.
+  const pickPdf = useCallback(async () => {
+    const res = await DocumentPicker.getDocumentAsync({
+      type: "application/pdf",
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (res.canceled || !res.assets?.[0]) return;
+    const asset = res.assets[0];
+    setReceiptUri(asset.uri);
+    setReceiptMime(asset.mimeType ?? "application/pdf");
+  }, []);
+
+  const receiptIsPdf = receiptMime === "application/pdf";
 
   const buildFields = useCallback((): AtelierSelfExpenseCreate | null => {
     const amt = Number(amount);
@@ -300,7 +317,37 @@ export default function NewExpenseScreen() {
           contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
           keyboardShouldPersistTaps="handled"
         >
-          {receiptUri ? (
+          {receiptUri && receiptIsPdf ? (
+            <Pressable onPress={() => setSourceSheet(true)}>
+              <View
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 12,
+                  padding: 18,
+                  borderRadius: 18,
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  backgroundColor: c.tint08,
+                }}
+              >
+                <Feather name="file-text" size={24} color={c.primary} />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 14,
+                    textAlign: rtl.textAlign,
+                  }}
+                  numberOfLines={1}
+                >
+                  {t("exp.pdfAttached")}
+                </Text>
+                <Feather name="chevron-down" size={16} color={c.mutedForeground} />
+              </View>
+            </Pressable>
+          ) : receiptUri ? (
             <Pressable onPress={() => setSourceSheet(true)}>
               <Image
                 source={{ uri: receiptUri }}
@@ -560,6 +607,7 @@ export default function NewExpenseScreen() {
         options={[
           { label: t("exp.takePhoto"), icon: "camera", onPress: () => pick("camera") },
           { label: t("exp.gallery"), icon: "image", onPress: () => pick("library") },
+          { label: t("exp.pickPdf"), icon: "file-text", onPress: () => void pickPdf() },
         ]}
       />
     </View>

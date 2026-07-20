@@ -105,6 +105,14 @@ app.listen(port, (err) => {
         "Expense taxonomy install failed — category dropdowns will be empty",
       );
     });
+    // Task #396 — warm the merchant fuzzy-match token index so the first
+    // receipt parse doesn't pay the full-table scan.
+    await (async () => {
+      const { warmupMerchantIndex } = await import("./lib/atelier-merchant/matcher");
+      await warmupMerchantIndex();
+    })().catch((err) => {
+      logger.error({ err }, "Merchant index warmup failed — first parse will be slow");
+    });
     // Task #108 — regression tripwire: dummy/test data was permanently purged
     // (2026-07-17). Count accounts and scream if any row matching the old test
     // tag patterns ever reappears, so reintroduction is visible immediately.

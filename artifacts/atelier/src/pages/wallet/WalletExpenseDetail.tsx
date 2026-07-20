@@ -28,6 +28,8 @@ interface Expense {
   expenseDate: string;
   captureSource: string;
   merchant: string | null;
+  merchantNormalized?: string | null;
+  merchantResolution?: string | null;
   description: string | null;
   category: string;
   amount: number;
@@ -163,6 +165,12 @@ export default function WalletExpenseDetail() {
               <div><dt className="text-stone-500">Client billable</dt><dd>{expense.clientBillable ? `yes · markup ${expense.markupPct}%` : "no"}</dd></div>
               <div><dt className="text-stone-500">Status</dt><dd><MonoChip>{expense.status}</MonoChip> · policy <MonoChip>{expense.policyStatus}</MonoChip></dd></div>
             </dl>
+            {expense.merchantNormalized && expense.merchantNormalized !== expense.merchant ? (
+              <p className="mt-3 text-xs text-stone-500" data-testid="merchant-normalized">
+                Recognized as <span className="text-stone-700">{expense.merchantNormalized}</span>
+                {expense.merchantResolution ? ` · via ${expense.merchantResolution.replace(/_/g, " ")}` : ""}
+              </p>
+            ) : null}
             {expense.description ? <p className="mt-3 text-sm text-stone-700">{expense.description}</p> : null}
           </Card>
 
@@ -207,6 +215,17 @@ export default function WalletExpenseDetail() {
           ) : null}
 
           <div className="flex flex-wrap gap-2">
+            {(expense.status === "draft" || expense.status === "submitted") &&
+            expense.receiptFileRef ? (
+              <button
+                className="rounded bg-stone-700 px-4 py-2 text-sm text-white disabled:opacity-50"
+                disabled={busy}
+                onClick={() => action("parse-receipt")}
+                data-testid="btn-parse-receipt"
+              >
+                Parse receipt
+              </button>
+            ) : null}
             {expense.status === "draft" ? (
               <>
                 <button

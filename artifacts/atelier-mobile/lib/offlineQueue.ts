@@ -39,14 +39,17 @@ export async function isOnline(): Promise<boolean> {
 }
 
 /** Copy a captured receipt into app storage so it survives after the picker temp files vanish. */
-async function persistLocalCopy(uri: string): Promise<string> {
+async function persistLocalCopy(uri: string, mime?: string): Promise<string> {
   try {
     const FileSystem = await import("expo-file-system/legacy");
     const dir = FileSystem.documentDirectory;
     if (!dir) return uri;
+    // Task #396 — PDFs must keep their extension or the parse pipeline
+    // (and upload content-type) misidentifies them.
+    const ext = mime === "application/pdf" ? "pdf" : "jpg";
     const dest = `${dir}queued_${Date.now()}_${Math.random()
       .toString(36)
-      .slice(2, 8)}.jpg`;
+      .slice(2, 8)}.${ext}`;
     await FileSystem.copyAsync({ from: uri, to: dest });
     return dest;
   } catch {
@@ -59,7 +62,9 @@ export async function enqueueExpense(input: {
   mime?: string;
   fields: AtelierSelfExpenseCreate;
 }): Promise<void> {
-  const localUri = input.localUri ? await persistLocalCopy(input.localUri) : null;
+  const localUri = input.localUri
+    ? await persistLocalCopy(input.localUri, input.mime)
+    : null;
   const item: QueuedExpense = {
     id: `q_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     localUri,

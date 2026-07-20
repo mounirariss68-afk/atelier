@@ -8070,6 +8070,12 @@ components:
         merchant:
           type: string
           nullable: true
+        merchantNormalized:
+          type: string
+          nullable: true
+        merchantResolution:
+          type: string
+          nullable: true
         description:
           type: string
           nullable: true

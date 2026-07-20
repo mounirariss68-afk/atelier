@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.tesseract
     pkgs.libreoffice
     pkgs.chromium
     pkgs.xorg.libxkbfile

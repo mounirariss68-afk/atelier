@@ -23,6 +23,118 @@ interface Expense {
 }
 interface Me { id: string; name: string; role: string }
 
+// Task #396 — unmatched-merchant admin loop (leadership only).
+interface UnmatchedMerchant {
+  id: string;
+  rawMerchantText: string;
+  normalizedText: string;
+  occurrenceCount: number;
+  status: string;
+  lastSeenAt: string | null;
+}
+
+function MerchantAdminPanel() {
+  const [open, setOpen] = React.useState(false);
+  const [rows, setRows] = React.useState<UnmatchedMerchant[]>([]);
+  const [pendingCount, setPendingCount] = React.useState(0);
+  const [note, setNote] = React.useState<string | null>(null);
+  const [running, setRunning] = React.useState(false);
+
+  const load = React.useCallback(async () => {
+    const r = await fetch("/api/atelier/wallet/merchants/unmatched", { credentials: "include" });
+    if (!r.ok) return;
+    const j = await r.json();
+    setRows(j.merchants ?? []);
+    setPendingCount(j.pendingCount ?? 0);
+  }, []);
+
+  React.useEffect(() => {
+    if (open) void load();
+  }, [open, load]);
+
+  const enrich = async () => {
+    setRunning(true);
+    setNote(null);
+    try {
+      const r = await fetch("/api/atelier/wallet/merchants/enrich", {
+        method: "POST",
+        credentials: "include",
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 409) throw new Error("An enrichment run is already in progress.");
+      if (!r.ok) throw new Error(j.message || j.error || `HTTP ${r.status}`);
+      const runId: string = j.runId;
+      // Poll until done/failed.
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 3000));
+        const pr = await fetch(`/api/atelier/wallet/merchants/enrich/${runId}`, {
+          credentials: "include",
+        });
+        const pj = await pr.json().catch(() => ({}));
+        if (pj.status === "done") {
+          const res = pj.result ?? {};
+          setNote(
+            `Classified ${res.classified ?? 0} of ${res.processed ?? 0} unknown merchants (${res.inserted ?? 0} added, ${res.remainingPending ?? 0} still pending).`,
+          );
+          break;
+        }
+        if (pj.status === "failed") throw new Error(pj.error || "Enrichment failed.");
+      }
+      await load();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <Card className="p-4 space-y-3" data-testid="merchant-admin-panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          className="text-sm font-semibold text-text hover:text-gold"
+          onClick={() => setOpen((v) => !v)}
+          data-testid="btn-toggle-merchant-admin"
+        >
+          Unknown merchants {open ? "▾" : "▸"}
+        </button>
+        {open && (
+          <button
+            className="rounded bg-bg-elevate border border-border px-3 py-1.5 text-xs font-mono uppercase tracking-wider text-gold disabled:opacity-50"
+            onClick={enrich}
+            disabled={running || pendingCount === 0}
+            data-testid="btn-enrich-merchants"
+          >
+            {running ? "Classifying…" : `AI-classify ${pendingCount} pending`}
+          </button>
+        )}
+      </div>
+      {open && (
+        <>
+          {note && <p className="text-xs text-text-mute" data-testid="enrich-note">{note}</p>}
+          {rows.length === 0 ? (
+            <p className="text-sm text-text-mute">No unknown merchants logged.</p>
+          ) : (
+            <ul className="divide-y divide-border-soft text-sm">
+              {rows.slice(0, 30).map((m) => (
+                <li key={m.id} className="py-1.5 flex items-center justify-between gap-2">
+                  <span className="truncate">
+                    <span className="text-text">{m.normalizedText}</span>{" "}
+                    <span className="text-xs text-text-faint">({m.rawMerchantText})</span>
+                  </span>
+                  <span className="shrink-0 text-xs font-mono text-text-mute">
+                    ×{m.occurrenceCount} · {m.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 export default function WalletExpenses() {
   const [me, setMe] = React.useState<Me | null>(null);
   const [items, setItems] = React.useState<Expense[]>([]);
@@ -129,6 +241,8 @@ export default function WalletExpenses() {
           </select>
           <span className="text-text-mute">{filtered.length} expense{filtered.length === 1 ? "" : "s"}</span>
         </div>
+
+        {isLeader && <MerchantAdminPanel />}
 
         {loading && <div className="py-8 text-text-mute">Loading…</div>}
 

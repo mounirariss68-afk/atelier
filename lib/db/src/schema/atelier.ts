@@ -3288,6 +3288,10 @@ export const atelierExpenses = pgTable(
     captureSource: text("capture_source").notNull(), // card_feed | manual | mileage | per_diem
     cardId: text("card_id"), // FK-ish to atelierCorporateCards when card_feed
     merchant: text("merchant"),
+    // Task #396 — normalized merchant text + how the category was resolved
+    // (merchant_memory | exact_db | token | keyword | ai | manual).
+    merchantNormalized: text("merchant_normalized"),
+    merchantResolution: text("merchant_resolution"),
     description: text("description"),
     category: text("category").notNull().default("other"),
     amount: doublePrecision("amount").notNull().default(0),
