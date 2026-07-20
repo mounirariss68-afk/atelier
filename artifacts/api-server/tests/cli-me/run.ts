@@ -2,14 +2,15 @@
  * Task #405 — Identity-locked Me-lens CLI capabilities probe.
  *
  * Runs standalone (tsx ./tests/cli-me/run.ts) against an isolated
- * scratch database (no fallback to the live DB). Exercises the eight
+ * scratch database (no fallback to the live DB). Exercises the ten
  * self-service read tools registered in
- * src/lib/atelier-cli/me-capabilities.ts:
+ * src/lib/atelier-cli/me-capabilities.ts (Task #421 added expenses +
+ * timesheet history and fixed timesheet.current's keying):
  *
- *   1. Catalog surface: all 8 tools registered, read-only, with EMPTY
+ *   1. Catalog surface: all 10 tools registered, read-only, with EMPTY
  *      locked input schemas (additionalProperties:false) — the model
  *      has no argument through which to name another subject.
- *   2. Persona gating: employee + contractor personas see all 8;
+ *   2. Persona gating: employee + contractor personas see all 10;
  *      board_observer sees none (roster module is outside its
  *      meta/raid perimeter).
  *   3. Identity lock / prompt-injection: calling every tool with
@@ -85,6 +86,8 @@ async function main(): Promise<void> {
     atelierPerformanceGoals,
     atelierTrainingMaterials,
     atelierTrainingCompletions,
+    atelierExpenses,
+    atelierTimesheetWeeks,
   } = D as any;
 
   const catalog = await import(
@@ -102,6 +105,8 @@ async function main(): Promise<void> {
     "my_goals",
     "my_learning",
     "my_notifications",
+    "my_expenses",
+    "my_timesheets",
   ];
 
   const empPersona = { id: EMP_UID, name: "Me Emp", role: "employee", orgId: ORG };
@@ -298,6 +303,103 @@ async function main(): Promise<void> {
       userId: EMP_UID,
     });
 
+    // Task #421 — expenses key on the USER id; timesheets key on the
+    // ROSTER person id. Seed decoys with the WRONG key on each table to
+    // prove the tools respect the keying quirk.
+    await db.insert(atelierExpenses).values([
+      {
+        id: `exp_${TAG}_mine`,
+        orgId: ORG,
+        personId: EMP_UID, // user id — correct key
+        personType: "employee",
+        expenseDate: "2026-07-01",
+        captureSource: "manual",
+        merchant: `Cafe Mine ${TAG}`,
+        category: "meals",
+        amount: 42,
+        currency: "USD",
+        usdAmount: 42,
+        status: "reimbursed",
+        policyStatus: "green",
+        reimbursedAt: new Date(),
+      },
+      {
+        id: `exp_${TAG}_wrongkey`,
+        orgId: ORG,
+        personId: EMP_PERSON, // roster id — must NOT match the user-id keying
+        personType: "employee",
+        expenseDate: "2026-07-02",
+        captureSource: "manual",
+        merchant: `Decoy RosterKeyed ${TAG}`,
+        category: "meals",
+        amount: 10,
+        currency: "USD",
+        usdAmount: 10,
+        status: "draft",
+      },
+      {
+        id: `exp_${TAG}_other`,
+        orgId: ORG,
+        personId: OTHER_UID,
+        personType: "employee",
+        expenseDate: "2026-07-03",
+        captureSource: "manual",
+        merchant: `OTHER user's expense ${TAG}`,
+        category: "meals",
+        amount: 99,
+        currency: "USD",
+        usdAmount: 99,
+        status: "submitted",
+      },
+    ]);
+
+    await db.insert(atelierTimesheetWeeks).values([
+      {
+        id: `tsw_${TAG}_cur`,
+        orgId: ORG,
+        personId: EMP_PERSON, // roster id — correct key
+        personType: "employee",
+        weekIso: "2026-W29",
+        weekStartDate: "2026-07-13",
+        status: "draft",
+        totalHours: 32,
+        billableHours: 24,
+      },
+      {
+        id: `tsw_${TAG}_prev`,
+        orgId: ORG,
+        personId: EMP_PERSON,
+        personType: "employee",
+        weekIso: "2026-W28",
+        weekStartDate: "2026-07-06",
+        status: "partner_approved",
+        totalHours: 40,
+        billableHours: 36,
+      },
+      {
+        id: `tsw_${TAG}_wrongkey`,
+        orgId: ORG,
+        personId: EMP_UID, // user id — the legacy timesheet.current bug key
+        personType: "employee",
+        weekIso: "2026-W29",
+        weekStartDate: "2026-07-13",
+        status: "draft",
+        totalHours: 1,
+        billableHours: 1,
+      },
+      {
+        id: `tsw_${TAG}_other`,
+        orgId: ORG,
+        personId: OTHER_PERSON,
+        personType: "employee",
+        weekIso: "2026-W29",
+        weekStartDate: "2026-07-13",
+        status: "submitted",
+        totalHours: 40,
+        billableHours: 40,
+      },
+    ]);
+
     await db.insert(atelierSelfNotifications).values([
       { id: `sn_${TAG}_mine`, orgId: ORG, userId: EMP_UID, title: `Leave approved ${TAG}`, kind: "generic" },
       { id: `sn_${TAG}_read`, orgId: ORG, userId: EMP_UID, title: `Old dismissed ${TAG}`, kind: "generic", status: "dismissed" },
@@ -325,8 +427,8 @@ async function main(): Promise<void> {
     const empTools = new Set(capabilitiesForPersona(empPersona).map((e: any) => e.toolName));
     const conTools = new Set(capabilitiesForPersona(conPersona).map((e: any) => e.toolName));
     const boardTools = new Set(capabilitiesForPersona(boardPersona).map((e: any) => e.toolName));
-    check("employee sees all 8 me-tools", TOOLS.every((t) => empTools.has(t)));
-    check("contractor sees all 8 me-tools", TOOLS.every((t) => conTools.has(t)));
+    check("employee sees all 10 me-tools", TOOLS.every((t) => empTools.has(t)));
+    check("contractor sees all 10 me-tools", TOOLS.every((t) => conTools.has(t)));
     check("board_observer sees none of the me-tools", TOOLS.every((t) => !boardTools.has(t)));
 
     // ---------------- 3. identity lock (prompt injection) -------------
@@ -408,6 +510,74 @@ async function main(): Promise<void> {
     const nIds = ((notif as any).data?.items ?? []).map((i: any) => i.id);
     check("my_notifications: unread only (dismissed excluded)", nIds.includes(`sn_${TAG}_mine`) && !nIds.includes(`sn_${TAG}_read`));
 
+    // ---------------- 4b. expenses & timesheets (Task #421) -----------
+    group("Expenses & timesheets — keying quirks");
+    const exp = await runTool("my_expenses", empPersona, hostile);
+    const expItems = (exp as any).data?.items ?? [];
+    const expIds = expItems.map((i: any) => i.id);
+    check("my_expenses: ok", exp.ok === true);
+    check("my_expenses: own claim (user-id keyed) present", expIds.includes(`exp_${TAG}_mine`));
+    check(
+      "my_expenses: roster-id-keyed decoy NOT returned (personId IS the user id)",
+      !expIds.includes(`exp_${TAG}_wrongkey`),
+    );
+    check(
+      "my_expenses: injected userId ignored — no other user's claim",
+      !expIds.includes(`exp_${TAG}_other`),
+    );
+    const mineExp = expItems.find((i: any) => i.id === `exp_${TAG}_mine`);
+    check(
+      "my_expenses: status + policy + reimbursement surfaced",
+      mineExp?.status === "reimbursed" &&
+        mineExp?.policyStatus === "green" &&
+        typeof mineExp?.reimbursedAt === "string",
+      JSON.stringify(mineExp),
+    );
+
+    const tsw = await runTool("my_timesheets", empPersona, hostile);
+    const tswItems = (tsw as any).data?.items ?? [];
+    const tswIds = tswItems.map((i: any) => i.id);
+    check("my_timesheets: ok", tsw.ok === true);
+    check(
+      "my_timesheets: recent weeks (roster-person keyed), newest first",
+      tswIds[0] === `tsw_${TAG}_cur` && tswIds.includes(`tsw_${TAG}_prev`),
+      JSON.stringify(tswIds),
+    );
+    check(
+      "my_timesheets: user-id-keyed decoy NOT returned (weeks key on roster id)",
+      !tswIds.includes(`tsw_${TAG}_wrongkey`),
+    );
+    check(
+      "my_timesheets: injected personId ignored — no other person's week",
+      !tswIds.includes(`tsw_${TAG}_other`),
+    );
+    const prevWeek = tswItems.find((i: any) => i.id === `tsw_${TAG}_prev`);
+    check(
+      "my_timesheets: hours + status surfaced",
+      prevWeek?.totalHours === 40 && prevWeek?.billableHours === 36 && prevWeek?.status === "partner_approved",
+    );
+
+    // Legacy timesheet.current fix — must resolve the roster person, so
+    // it finds the seeded EMP_PERSON week, not the user-id decoy.
+    const tsCur = await runTool("timesheet_current", empPersona, hostile);
+    check(
+      "timesheet_current: fixed keying — resolves the caller's roster week",
+      tsCur.ok === true && (tsCur as any).data?.id === `tsw_${TAG}_cur`,
+      JSON.stringify((tsCur as any).data),
+    );
+
+    // Contractor with no timesheet/expense rows: friendly empties.
+    const conExp = await runTool("my_expenses", conPersona);
+    check(
+      "my_expenses (contractor, none): ok with empty list",
+      conExp.ok === true && ((conExp as any).data?.items ?? []).length === 0,
+    );
+    const conTsw = await runTool("my_timesheets", conPersona);
+    check(
+      "my_timesheets (contractor, none): ok with empty list",
+      conTsw.ok === true && ((conTsw as any).data?.items ?? []).length === 0,
+    );
+
     // ---------------- 5. contractor variants --------------------------
     group("Contractor variants");
     const conProfile = await runTool("my_profile", conPersona);
@@ -470,8 +640,12 @@ async function main(): Promise<void> {
       atelierPerformanceGoals: PG,
       atelierTrainingMaterials: TM,
       atelierTrainingCompletions: TC,
+      atelierExpenses: EX,
+      atelierTimesheetWeeks: TW,
     } = D2 as any;
     try {
+      await dbx.delete(TW).where(like(TW.id, `tsw_${TAG}%`));
+      await dbx.delete(EX).where(like(EX.id, `exp_${TAG}%`));
       await dbx.delete(TC).where(like(TC.id, `tc_${TAG}%`));
       await dbx.delete(TM).where(like(TM.id, `tm_${TAG}%`));
       await dbx.delete(PG).where(like(PG.id, `goal_${TAG}%`));

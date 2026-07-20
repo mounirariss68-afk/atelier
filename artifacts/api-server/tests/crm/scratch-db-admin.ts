@@ -44,6 +44,15 @@ if (phase === "create") {
   } finally {
     await admin.end().catch(() => {});
   }
+  // pgvector must exist BEFORE the drizzle push or the push aborts on the
+  // vector-typed embedding columns (Task #421 — fresh/stale scratch DBs).
+  const scratch = new pg.Client({ connectionString: scratchUrl });
+  await scratch.connect();
+  try {
+    await scratch.query("CREATE EXTENSION IF NOT EXISTS vector");
+  } finally {
+    await scratch.end().catch(() => {});
+  }
 } else if (phase === "rls") {
   const repoRoot = fileURLToPath(new URL("../../../..", import.meta.url));
   const rlsSql = readFileSync(

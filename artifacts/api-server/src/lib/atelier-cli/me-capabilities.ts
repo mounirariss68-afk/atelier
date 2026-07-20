@@ -41,6 +41,8 @@ import {
   atelierPerformanceGoals,
   atelierTrainingMaterials,
   atelierTrainingCompletions,
+  atelierExpenses,
+  atelierTimesheetWeeks,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -591,6 +593,149 @@ defineSelfCapability({
           href: "/me/learning",
         })),
         total: rows.length,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.expenses — ranked_list (Task #421)
+//
+// Keying quirk (see /me/expenses REST route): atelier_expenses.personId
+// stores the SUBMITTER'S USER ID (atelier_users.id), NOT the roster
+// person id. So this tool keys on subject.user.id and works even when
+// no roster row is linked.
+// ---------------------------------------------------------------------
+defineSelfCapability({
+  id: "me.expenses",
+  module: "roster",
+  toolName: "my_expenses",
+  description:
+    "The caller's own expense claims: merchant, amount, status (draft/submitted/approved/rejected/reimbursed), policy check result, rejection reason, and reimbursement date. Always self-scoped to the signed-in user.",
+  slashAliases: { en: ["/my-expenses", "/expenses"], fr: ["/mes-frais"] },
+  representativePrompts: {
+    en: ["Where's my expense claim?", "Show my expenses", "Has my expense been reimbursed?"],
+    ar: ["أين مطالبة المصاريف الخاصة بي؟"],
+    fr: ["Où en est ma note de frais ?"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "ranked_list",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: ["Where's my expense claim?"],
+    ar: ["أين مطالبة المصاريف الخاصة بي؟"],
+    fr: ["Où en est ma note de frais ?"],
+  },
+  async runSelf({ user }) {
+    // Expense personId IS the user id — mirror GET /me/expenses exactly.
+    const rows = await db
+      .select()
+      .from(atelierExpenses)
+      .where(and(eq(atelierExpenses.personId, user.id), isNull(atelierExpenses.deletedAt)))
+      .orderBy(desc(atelierExpenses.createdAt))
+      .limit(50);
+    return {
+      ok: true,
+      data: {
+        items: rows.map((e) => ({
+          id: e.id,
+          label: `${e.merchant ?? "Expense"} · ${e.currency} ${e.amount}`,
+          expenseDate: e.expenseDate,
+          merchant: e.merchant,
+          description: e.description,
+          category: e.category,
+          amount: e.amount,
+          currency: e.currency,
+          usdAmount: e.usdAmount,
+          status: e.status,
+          policyStatus: e.policyStatus,
+          policyFindings: (e.policyFindings ?? []).map((f) => ({
+            severity: f.severity,
+            message: f.message,
+          })),
+          submittedAt: e.submittedAt?.toISOString() ?? null,
+          approvedAt: e.approvedAt?.toISOString() ?? null,
+          rejectedAt: e.rejectedAt?.toISOString() ?? null,
+          rejectedReason: e.rejectedReason,
+          reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
+          hasReceipt: !!e.receiptFileRef,
+          href: "/me/expenses",
+        })),
+        total: rows.length,
+        href: "/me/expenses",
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.timesheets — ranked_list (Task #421)
+//
+// Keying quirk: timesheet weeks key on the ROSTER person id (employee/
+// contractor row), resolved via resolveSelfPerson — never ctx.persona.id
+// directly (that's the atelier_users id; the legacy timesheet.current
+// bug did exactly that and matched nothing).
+// ---------------------------------------------------------------------
+defineSelfCapability({
+  id: "me.timesheets",
+  module: "roster",
+  toolName: "my_timesheets",
+  description:
+    "The caller's own recent timesheet weeks (current + past): week, status, total and billable hours, rejection reason if any. Answers questions like 'what did I book last week?'. Always self-scoped.",
+  slashAliases: { en: ["/my-timesheets", "/my-timesheet"], fr: ["/mes-feuilles-de-temps"] },
+  representativePrompts: {
+    en: ["What did I book last week?", "Show my recent timesheets", "What's the status of my timesheet?"],
+    ar: ["ماذا سجلت الأسبوع الماضي؟"],
+    fr: ["Qu'ai-je saisi la semaine dernière ?"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "ranked_list",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: ["What did I book last week?"],
+    ar: ["ماذا سجلت الأسبوع الماضي؟"],
+    fr: ["Qu'ai-je saisi la semaine dernière ?"],
+  },
+  async runSelf({ person }) {
+    if (!person) {
+      return {
+        ok: true,
+        data: {
+          items: [],
+          total: 0,
+          note: "Your login is not linked to an employee or contractor record, so there are no timesheets to show.",
+        },
+      };
+    }
+    const rows = await db
+      .select()
+      .from(atelierTimesheetWeeks)
+      .where(
+        and(
+          eq(atelierTimesheetWeeks.personId, person.id),
+          isNull(atelierTimesheetWeeks.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierTimesheetWeeks.weekIso))
+      .limit(12);
+    return {
+      ok: true,
+      data: {
+        items: rows.map((w) => ({
+          id: w.id,
+          label: `Timesheet · ${w.weekIso}`,
+          weekIso: w.weekIso,
+          weekStartDate: w.weekStartDate,
+          status: w.status,
+          totalHours: w.totalHours,
+          billableHours: w.billableHours,
+          rejectionReason: w.rejectionReason ?? null,
+          submittedAt: w.submittedAt?.toISOString() ?? null,
+          flags: w.suspiciousFlags ?? [],
+          href: "/me/time",
+        })),
+        total: rows.length,
+        href: "/me/time",
       },
     };
   },

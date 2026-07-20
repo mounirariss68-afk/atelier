@@ -33,6 +33,7 @@ import {
   atelierExpenses,
   atelierAuditEvents,
   atelierComplianceRecords,
+  atelierUsers,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -49,6 +50,7 @@ import {
   isRestrictedPersona,
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
+import { resolveSelfPerson } from "../../routes/atelier/meRoutes.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -1445,6 +1447,28 @@ defineCapability({
     fr: ["Mon timesheet de cette semaine"],
   },
   async run(_input, ctx) {
+    // Task #421 fix: timesheet weeks key on the ROSTER person id, not
+    // ctx.persona.id (the atelier_users id — the legacy keying matched
+    // nothing). Resolve the caller's own roster row first.
+    const [user] = await db
+      .select()
+      .from(atelierUsers)
+      .where(
+        and(eq(atelierUsers.id, ctx.persona.id), eq(atelierUsers.orgId, ctx.persona.orgId)),
+      );
+    const person = user ? await resolveSelfPerson(user) : null;
+    if (!person) {
+      return {
+        ok: true,
+        data: {
+          id: null,
+          label: "No timesheet",
+          weekIso: null,
+          status: "none",
+          note: "Your login is not linked to an employee or contractor record.",
+        },
+      };
+    }
     const rows = await db
       .select({
         id: atelierTimesheetWeeks.id,
@@ -1458,7 +1482,7 @@ defineCapability({
       .where(
         and(
           eq(atelierTimesheetWeeks.orgId, ctx.persona.orgId),
-          eq(atelierTimesheetWeeks.personId, ctx.persona.id),
+          eq(atelierTimesheetWeeks.personId, person.id),
           isNull(atelierTimesheetWeeks.deletedAt),
         ),
       )
