@@ -566,13 +566,19 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {chat.turns.length === 0 ? (
-          <View style={{ flex: 1, justifyContent: "center" }}>
+          // Tapping the empty area outside the input dismisses the keyboard
+          // (the FlatList branch handles this via keyboardShouldPersistTaps).
+          <Pressable
+            style={{ flex: 1, justifyContent: "center" }}
+            onPress={() => Keyboard.dismiss()}
+            accessible={false}
+          >
             <EmptyState
               icon="message-circle"
               title={t("chat.empty")}
               body={t("chat.emptyBody")}
             />
-          </View>
+          </Pressable>
         ) : (
           <FlatList
             data={reversed}
