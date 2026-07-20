@@ -384,7 +384,8 @@ async function main(): Promise<void> {
       await db.delete(atelierEngagementAccess).where(inArray(atelierEngagementAccess.id, [GRANT]));
       await db.delete(atelierAccountActions).where(inArray(atelierAccountActions.id, [AXN_OPEN, AXN_DONE]));
       await db.delete(atelierActivities).where(inArray(atelierActivities.id, [ACT_OVERDUE, ACT_FUTURE, ACT_DONE]));
-      await db.delete(atelierOpportunities).where(inArray(atelierOpportunities.id, [OPP_OPEN, OPP_WON, OPP_DEL]));
+      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+      await hardDeleteOpportunities([OPP_OPEN, OPP_WON, OPP_DEL]);
       await db.delete(atelierEngagements).where(inArray(atelierEngagements.id, [ENG]));
       await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, [ACCT]));
       await db.delete(atelierUsers).where(inArray(atelierUsers.id, [FP_ID, CON_ID]));
