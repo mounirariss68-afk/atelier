@@ -1929,6 +1929,22 @@ defineCapability({
       });
     }
 
+    // Capacity signal (Task #450): totalAllocationPct is the sum of the
+    // person's active staffing allocations the CALLER can see; over 100%
+    // means overallocated, under 100% means spare capacity. Note: if some
+    // staffings were hidden by the caller's ACL, the visible total may
+    // understate real load — surface that via hiddenAccountCount.
+    const totalAllocationPct = staffingsOut.reduce(
+      (acc, s) => acc + (typeof s.allocationPct === "number" ? s.allocationPct : 0),
+      0,
+    );
+    const capacityStatus =
+      totalAllocationPct > 100
+        ? "overallocated"
+        : totalAllocationPct === 100
+          ? "fully_allocated"
+          : "available";
+
     return {
       ok: true,
       data: {
@@ -1941,10 +1957,9 @@ defineCapability({
         openOpportunities: oppsOut,
         openOpportunityCount: oppsOut.length,
         hiddenAccountCount: hiddenAccountIds.size,
-        totalAllocationPct: staffingsOut.reduce(
-          (acc, s) => acc + (typeof s.allocationPct === "number" ? s.allocationPct : 0),
-          0,
-        ),
+        totalAllocationPct,
+        capacityStatus,
+        availablePct: Math.max(0, 100 - totalAllocationPct),
       },
     };
   },

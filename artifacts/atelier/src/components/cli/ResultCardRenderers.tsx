@@ -2330,6 +2330,71 @@ function TimeSeries({ data, locale }: { data: Json; locale: CliLocale }) {
 
 /* ─────────────────────────── entity_card ─────────────────────────── */
 
+// Task #450 — prominent utilization signal for person_workload cards:
+// total allocation % + over/fully/under-allocated indicator with a bar.
+function CapacityBanner({
+  totalPct,
+  hiddenCount,
+  locale,
+}: {
+  totalPct: number;
+  hiddenCount: number;
+  locale: CliLocale;
+}) {
+  const over = totalPct > 100;
+  const full = totalPct === 100;
+  const availablePct = Math.max(0, 100 - totalPct);
+  const label = over
+    ? locale === "ar"
+      ? `محمّل زيادة بنسبة ${fmtNum(totalPct - 100)}٪`
+      : `Overallocated by ${fmtNum(totalPct - 100)}%`
+    : full
+      ? locale === "ar"
+        ? "مخصص بالكامل"
+        : "Fully allocated"
+      : locale === "ar"
+        ? `متاح بنسبة ${fmtNum(availablePct)}٪`
+        : `${fmtNum(availablePct)}% available`;
+  const tone = over ? "danger" : full ? "warning" : "success";
+  const toneText =
+    tone === "danger" ? "text-danger" : tone === "warning" ? "text-warning" : "text-success";
+  const toneBar =
+    tone === "danger" ? "bg-danger" : tone === "warning" ? "bg-warning" : "bg-success";
+  const toneBox =
+    tone === "danger"
+      ? "border-danger/30 bg-danger/10"
+      : tone === "warning"
+        ? "border-warning/30 bg-warning/10"
+        : "border-success/30 bg-success/10";
+  const barPct = Math.min(100, Math.max(0, totalPct));
+  return (
+    <div
+      data-testid="workload-capacity-banner"
+      className={`mt-2 rounded-lg border p-2.5 ${toneBox}`}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-lg font-semibold tabular-nums">
+          {fmtNum(totalPct)}%
+          <span className="ml-1 text-[11px] font-normal text-text-faint">
+            {locale === "ar" ? "إجمالي التخصيص" : "total allocation"}
+          </span>
+        </span>
+        <span className={`text-xs font-semibold ${toneText}`}>{label}</span>
+      </div>
+      <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-border-soft">
+        <div className={`h-full rounded-full ${toneBar}`} style={{ width: `${barPct}%` }} />
+      </div>
+      {hiddenCount > 0 && (
+        <div className="mt-1.5 text-[11px] text-text-faint">
+          {locale === "ar"
+            ? "قد يكون التخصيص الفعلي أعلى — بعض الحسابات خارج نطاق صلاحياتك."
+            : "Actual load may be higher — some accounts are outside your visibility."}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
   const name = asStr(data.name) || asStr(data.label) || asStr(data.id);
   const nav = asObj(data.navigateTo);
@@ -2349,6 +2414,17 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
     "currency",
   ]);
   const kind = asStr(data.kind);
+  // Task #450 — person_workload capacity signal. When the payload carries
+  // engagement staffings + a totalAllocationPct, surface utilization
+  // prominently as a banner + bar instead of burying it in the grid.
+  const totalAlloc = asNum(data.totalAllocationPct);
+  const showCapacity =
+    totalAlloc != null && Array.isArray(data.engagementStaffings) && data.linkedUser === true;
+  if (showCapacity) {
+    skip.add("totalAllocationPct");
+    skip.add("capacityStatus");
+    skip.add("availablePct");
+  }
   // Task #422 — nested plain objects (e.g. me.leave's `balance`) used to
   // string-coerce to "[object Object]". Flatten one level of scalar-valued
   // sub-objects into their own grid rows; skip anything deeper.
@@ -2397,6 +2473,13 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
         </div>
         {href && <OpenLink href={href} locale={locale} />}
       </div>
+      {showCapacity && totalAlloc != null && (
+        <CapacityBanner
+          totalPct={totalAlloc}
+          hiddenCount={asNum(data.hiddenAccountCount) ?? 0}
+          locale={locale}
+        />
+      )}
       {rows.length > 0 && (
         <div className="mt-2">
           <FieldGrid

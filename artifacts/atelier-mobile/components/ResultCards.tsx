@@ -418,6 +418,112 @@ function AuditTimeline({ data, lang }: { data: Json; lang: string }) {
   );
 }
 
+// Task #450 — person_workload capacity keys are rendered as a prominent
+// banner instead of ordinary grid rows.
+const CAPACITY_KEYS = new Set(["totalAllocationPct", "capacityStatus", "availablePct"]);
+
+function CapacityBanner({ totalPct, hiddenCount, lang }: { totalPct: number; hiddenCount: number; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const over = totalPct > 100;
+  const full = totalPct === 100;
+  const availablePct = Math.max(0, 100 - totalPct);
+  const tone = over ? c.destructive : full ? "#b8860b" : "#2e7d32";
+  const label = over
+    ? ar
+      ? `محمّل زيادة بنسبة ${Math.round(totalPct - 100)}٪`
+      : `Overallocated by ${Math.round(totalPct - 100)}%`
+    : full
+      ? ar
+        ? "مخصص بالكامل"
+        : "Fully allocated"
+      : ar
+        ? `متاح بنسبة ${Math.round(availablePct)}٪`
+        : `${Math.round(availablePct)}% available`;
+  const barPct = Math.min(100, Math.max(0, totalPct));
+  return (
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: tone + "55",
+        backgroundColor: tone + "14",
+        borderRadius: 8,
+        padding: 10,
+        gap: 6,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: rtl.row,
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          gap: 8,
+        }}
+      >
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_700Bold",
+            fontSize: 17,
+          }}
+        >
+          {Math.round(totalPct)}%{" "}
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_500Medium",
+              fontSize: 11,
+            }}
+          >
+            {ar ? "إجمالي التخصيص" : "total allocation"}
+          </Text>
+        </Text>
+        <Text
+          style={{
+            color: tone,
+            fontFamily: "PlusJakartaSans_700Bold",
+            fontSize: 12,
+          }}
+        >
+          {label}
+        </Text>
+      </View>
+      <View
+        style={{
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: c.border,
+          overflow: "hidden",
+        }}
+      >
+        <View
+          style={{
+            height: "100%",
+            width: `${barPct}%`,
+            borderRadius: 3,
+            backgroundColor: tone,
+          }}
+        />
+      </View>
+      {hiddenCount > 0 ? (
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 11,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {ar
+            ? "قد يكون التخصيص الفعلي أعلى — بعض الحسابات خارج نطاق صلاحياتك."
+            : "Actual load may be higher — some accounts are outside your visibility."}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function EntityBody({ data, lang }: { data: Json; lang: string }) {
   const c = useColors();
   const rtl = useRTL();
@@ -425,7 +531,14 @@ function EntityBody({ data, lang }: { data: Json; lang: string }) {
     asStr(data.name) || asStr(data.title) || asStr(data.label) || asStr(data.merchant);
   const status = asStr(data.status ?? data.decision ?? data.disposition);
   const currency = asStr(data.currency) || null;
-  const entries = displayEntries(data);
+  const totalAlloc = asNum(data.totalAllocationPct);
+  const showCapacity =
+    totalAlloc != null &&
+    Array.isArray(data.engagementStaffings) &&
+    data.linkedUser === true;
+  const entries = displayEntries(data).filter(
+    ([k]) => !(showCapacity && CAPACITY_KEYS.has(k)),
+  );
   return (
     <View style={{ gap: 4 }}>
       {name ? (
@@ -454,6 +567,13 @@ function EntityBody({ data, lang }: { data: Json; lang: string }) {
         >
           {humanLabel(status)}
         </Text>
+      ) : null}
+      {showCapacity && totalAlloc != null ? (
+        <CapacityBanner
+          totalPct={totalAlloc}
+          hiddenCount={asNum(data.hiddenAccountCount) ?? 0}
+          lang={lang}
+        />
       ) : null}
       <FieldGrid entries={entries} currency={currency} lang={lang} />
     </View>
