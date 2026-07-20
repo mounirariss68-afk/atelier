@@ -540,6 +540,115 @@ async function main() {
     }
   });
 
+  console.log("\n[10] Task #469 — cross-domain person fallback + metadata hygiene");
+  await test("contact_detail falls back to the internal roster on a CRM miss", async () => {
+    const { db, atelierEmployees } = await import("@workspace/db");
+    const { inArray } = await import("drizzle-orm");
+    const TAG = "__t469a";
+    const empId = `emp_${TAG}`;
+    const ctx = {
+      persona: { id: "p_mounir_ariss", orgId: "aico", role: "founding_partner", name: "Mounir" },
+    } as never;
+    const cap = findByToolName("contact_detail");
+    assert.ok(cap, "contact_detail capability registered");
+    try {
+      await db.insert(atelierEmployees).values({
+        id: empId,
+        orgId: "aico",
+        fullName: `Zqt469 InternalOnly`,
+        email: `internal.${TAG}@cognirise.test`,
+        role: "consultant",
+        status: "active",
+      } as never);
+      const r = (await cap!.run({ name: "Zqt469 InternalOnly" }, ctx)) as {
+        ok: boolean;
+        data?: { person?: { id: string; fullName?: string }; source?: string; note?: string };
+      };
+      assert.equal(r.ok, true, "roster-only name must not dead-end as not_found");
+      assert.equal(r.data?.source, "internal_directory");
+      assert.equal(r.data?.person?.id, empId);
+      assert.ok(r.data?.note, "fallback should explain the person is internal");
+    } finally {
+      await db.delete(atelierEmployees).where(inArray(atelierEmployees.id, [empId]));
+    }
+  });
+  await test("person_detail falls back to CRM contacts on a roster miss", async () => {
+    const { db, atelierAccounts, atelierContacts } = await import("@workspace/db");
+    const { inArray } = await import("drizzle-orm");
+    const TAG = "__t469b";
+    const accId = `acc_${TAG}`;
+    const ctId = `ct_${TAG}`;
+    const ctx = {
+      persona: { id: "p_mounir_ariss", orgId: "aico", role: "founding_partner", name: "Mounir" },
+    } as never;
+    const cap = findByToolName("person_detail");
+    assert.ok(cap, "person_detail capability registered");
+    try {
+      await db.insert(atelierAccounts).values({
+        id: accId,
+        orgId: "aico",
+        name: `Zqt469 ClientCo`,
+        country: "AE",
+        sector: "Probe",
+        createdByUserId: "p_mounir_ariss",
+      } as never);
+      await db.insert(atelierContacts).values({
+        id: ctId,
+        orgId: "aico",
+        accountId: accId,
+        fullName: `Zqt469 ContactOnly`,
+        email: `contact.${TAG}@client.test`,
+      } as never);
+      const r = (await cap!.run({ name: "Zqt469 ContactOnly" }, ctx)) as {
+        ok: boolean;
+        data?: {
+          contact?: { id: string };
+          account?: { id: string; name: string } | null;
+          source?: string;
+          note?: string;
+        };
+      };
+      assert.equal(r.ok, true, "CRM-only name must not dead-end as not_found");
+      assert.equal(r.data?.source, "client_contacts");
+      assert.equal(r.data?.contact?.id, ctId);
+      assert.equal(r.data?.account?.id, accId);
+      assert.ok(r.data?.note?.includes("client contact"), "fallback should explain the domain");
+    } finally {
+      await db.delete(atelierContacts).where(inArray(atelierContacts.id, [ctId]));
+      await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, [accId]));
+    }
+  });
+  await test("roster_list never emits a bare `scoped` boolean (metadata hygiene)", async () => {
+    const cap = findByToolName("roster_list");
+    assert.ok(cap, "roster_list capability registered");
+    const ctx = {
+      persona: { id: "p_mounir_ariss", orgId: "aico", role: "founding_partner", name: "Mounir" },
+    } as never;
+    const r = (await cap!.run({}, ctx)) as { ok: boolean; data?: Record<string, unknown> };
+    assert.equal(r.ok, true);
+    assert.ok(!("scoped" in (r.data ?? {})), "roster_list leaked internal `scoped` flag");
+  });
+  await test("not-found messages name both domains (contact_detail/person_detail)", async () => {
+    const ctx = {
+      persona: { id: "p_mounir_ariss", orgId: "aico", role: "founding_partner", name: "Mounir" },
+    } as never;
+    for (const tool of ["contact_detail", "person_detail"]) {
+      const cap = findByToolName(tool);
+      assert.ok(cap, `${tool} registered`);
+      const r = (await cap!.run({ name: "Zzz469 NobodyAnywhere" }, ctx)) as {
+        ok: boolean;
+        errorCode?: string;
+        errorMessage?: string;
+      };
+      assert.equal(r.ok, false);
+      assert.equal(r.errorCode, "not_found");
+      assert.ok(
+        /client contact/i.test(r.errorMessage ?? "") && /internal person/i.test(r.errorMessage ?? ""),
+        `${tool} not_found message must say both domains were checked: got "${r.errorMessage}"`,
+      );
+    }
+  });
+
   console.log(`\nResults: ${pass} passed, ${fail} failed`);
   if (fail > 0) process.exit(1);
 }

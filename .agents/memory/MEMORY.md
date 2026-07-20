@@ -91,6 +91,7 @@
 - [Receipt PDF parse pipeline](receipt-parse-pdf-pipeline.md) — pdfjs-dist must stay esbuild-external or text-layer PDFs silently fall back to OCR; auditor refusal rule needed precise wording.
 - [Atelier merchant recognition](atelier-merchant-recognition.md) — tiered matcher (org alias→memory→global fuzzy→keyword→AI); org aliases learned from manual corrections apply pre-memory; wallet parse/enrich routes stay out of openapi, raw fetch + 202/poll.
 - [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
+- [Chat person cross-domain fallback](atelier-person-crossdomain.md) — contact/person detail tools auto-fallback CRM↔roster (ACL-filter BEFORE capping candidates); narration "final:" markers stripped server-side; mobile cards: money opt-in by key, meta keys never render.
 - [Atelier async receipt parse](atelier-receipt-async-parse.md) — launch-map watchdog required; draftId reuse prevents dupes; offline+draft must not enqueue a create.
 - [Clarification resume across errors](atelier-clarification-resume.md) — asked-then-errored turns promote back to awaiting_clarification + relaxed rehydration; mobile chip/label rules; 2 pre-existing probe fails.
 - [Chat blocked for Me-lens personas](chat-me-lens-gate.md) — /cli/* is 403 for contractor/employee/pfr via the boundary gate; roster capability ACLs are the second layer (probe pins both).

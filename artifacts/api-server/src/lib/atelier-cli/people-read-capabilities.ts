@@ -210,6 +210,124 @@ async function scopedPersonMatches(me: MeRow, q: string): Promise<PersonWire[]> 
   );
 }
 
+/**
+ * Task #469 — cross-domain person fallback (CRM miss → internal roster).
+ * When a *contact* lookup finds nobody in the client-contact table, the
+ * person may be internal (e.g. "phone of Mounir" — a founder). Search
+ * the caller-SCOPED internal directory before declaring the person
+ * nonexistent. Returns null when the roster has no visible match either
+ * (so the caller can emit its own not_found).
+ */
+async function internalPersonFallback(
+  ctx: ToolContext,
+  q: string,
+): Promise<ToolResult | null> {
+  const me = await loadMe(ctx);
+  if (!me) return null;
+  const matches = await scopedPersonMatches(me, q);
+  if (matches.length === 0) return null;
+  if (matches.length > 1) {
+    const options = matches.slice(0, 5).map((p) => ({
+      id: p.id,
+      label: p.fullName,
+      secondary: p.title ?? p.workerType,
+    }));
+    return {
+      ok: true,
+      data: {
+        prompt: `"${q}" matched people in the internal directory. Which did you mean?`,
+        options,
+      },
+      disambiguation: { kind: "person", options },
+    };
+  }
+  const p = matches[0]!;
+  if (!(await canViewPersonViaRosterScope(me, p.id))) return null;
+  return {
+    ok: true,
+    data: {
+      person: toChatPersonCard(p),
+      source: "internal_directory",
+      note: `${p.fullName} is in the firm's internal directory (${p.workerType.replace(/_/g, " ")}), not a client contact.`,
+    },
+  };
+}
+
+/**
+ * Task #469 — cross-domain person fallback (roster miss → CRM contacts).
+ * When a *person* lookup finds nobody internal, the name may be a client
+ * contact. Only contacts on accounts the caller can see are considered,
+ * so restricted personas cannot discover out-of-scope people.
+ */
+async function crmContactFallback(
+  ctx: ToolContext,
+  q: string,
+): Promise<ToolResult | null> {
+  const rows = await db
+    .select({
+      id: atelierContacts.id,
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      email: atelierContacts.email,
+      phone: atelierContacts.phone,
+      accountId: atelierContacts.accountId,
+    })
+    .from(atelierContacts)
+    .where(
+      and(
+        or(ilike(atelierContacts.fullName, `%${q}%`), ilike(atelierContacts.email, `%${q}%`)),
+        eq(atelierContacts.orgId, ctx.persona.orgId),
+        isNull(atelierContacts.deletedAt),
+      ),
+    )
+    // Fetch a wider candidate set BEFORE the ACL filter so a restricted
+    // caller whose visible match sorts late isn't false-negatived.
+    .limit(25);
+  if (rows.length === 0) return null;
+  const me = { id: ctx.persona.id, role: ctx.persona.role };
+  const access = await engAclFor(ctx.persona);
+  const flags = await Promise.all(rows.map((r) => canSeeAccount(access, me, r.accountId)));
+  const visible = rows.filter((_, i) => flags[i]).slice(0, 6);
+  if (visible.length === 0) return null;
+  if (visible.length > 1) {
+    const options = visible.slice(0, 5).map((r) => ({
+      id: r.id,
+      label: r.fullName,
+      secondary: r.title ?? undefined,
+    }));
+    return {
+      ok: true,
+      data: {
+        prompt: `"${q}" matched client contacts. Which did you mean?`,
+        options,
+      },
+      disambiguation: { kind: "contact", options },
+    };
+  }
+  const r = visible[0]!;
+  const [acc] = await db
+    .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, r.accountId))
+    .limit(1);
+  return {
+    ok: true,
+    data: {
+      contact: {
+        id: r.id,
+        fullName: r.fullName,
+        title: r.title ?? null,
+        email: r.email ?? null,
+        phone: r.phone ?? null,
+      },
+      account: acc ? { id: acc.id, name: acc.name } : null,
+      source: "client_contacts",
+      note: `${r.fullName} is a client contact${acc ? ` at ${acc.name}` : ""}, not an internal employee.`,
+      href: `/accounts/${r.accountId}?tab=contacts`,
+    },
+  };
+}
+
 // ---------------------------------------------------------------------
 // roster.list — ranked_list
 // ---------------------------------------------------------------------
@@ -283,7 +401,12 @@ defineCapability({
           return { ...card, label: p.fullName };
         }),
         total: visible.length,
-        scoped: scope.kind !== "full",
+        // Task #469 — internal scope flag replaced by a human-readable
+        // note (emitted only when limited) so clients never render a
+        // bare "SCOPED false" metadata row.
+        ...(scope.kind !== "full"
+          ? { scopedNote: "Limited to people within your visibility scope." }
+          : {}),
       },
     };
   },
@@ -329,10 +452,18 @@ defineCapability({
       if (q.length < 2) {
         return { ok: false, errorCode: "invalid_input", errorMessage: "Provide personId or name." };
       }
-      const matches = (
-        await listPersons({ workerType: "all", q, includeComp: false })
-      ).filter((p) => p.status !== "inactive");
-      if (matches.length === 0) return notFound("person");
+      // Task #469 — SCOPED matching (no name leaks in disambiguation)
+      // plus cross-domain fallback into CRM contacts on a roster miss.
+      const matches = await scopedPersonMatches(me, q);
+      if (matches.length === 0) {
+        const fb = await crmContactFallback(ctx, q);
+        if (fb) return fb;
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `No internal person or client contact named "${q}" was found.`,
+        };
+      }
       if (matches.length > 1) {
         const options = matches.slice(0, 5).map((p) => ({
           id: p.id,
@@ -615,7 +746,16 @@ defineCapability({
         .from(atelierContacts)
         .where(where)
         .limit(6);
-      if (rows.length === 0) return notFound("contact");
+      if (rows.length === 0) {
+        // Task #469 — the person may be internal, not a client contact.
+        const fb = await internalPersonFallback(ctx, q);
+        if (fb) return fb;
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `No client contact or internal person named "${q}" was found.`,
+        };
+      }
       if (rows.length > 1) {
         const options = rows.slice(0, 5).map((r) => ({
           id: r.id,
@@ -641,7 +781,22 @@ defineCapability({
         ),
       )
       .limit(1);
-    if (!c) return notFound("contact");
+    if (!c) {
+      // Task #469 — the id may be a roster person id (e.g. the model
+      // re-called contact_detail with an id from an internal-directory
+      // disambiguation). Try the roster before failing.
+      const meRow = await loadMe(ctx);
+      if (meRow && (await canViewPersonViaRosterScope(meRow, contactId))) {
+        const p = await getPerson(contactId, false);
+        if (p) {
+          return {
+            ok: true,
+            data: { person: toChatPersonCard(p), source: "internal_directory" },
+          };
+        }
+      }
+      return notFound("contact");
+    }
     const me = { id: ctx.persona.id, role: ctx.persona.role };
     const access = await engAclFor(ctx.persona);
     const ok = await canSeeAccount(access, me, c.accountId);

@@ -1186,7 +1186,21 @@ const SYSTEM_PROMPT = [
   "   confirm — do not retry, do not re-call the tool.",
   "6. DISAMBIGUATION: when a tool returns disambiguation options, STOP and let the user",
   "   pick — do not guess.",
-  "Wrap up with a one-line `final` narration that summarises what happened.",
+  "Finish with one short closing sentence that summarises what happened. Write plain prose only —",
+  "NEVER prefix your reply with labels or markers like `final:`, `answer:`, or `narration:`.",
+  "",
+  // Task #469 — person questions must route to the right domain and
+  // cross-check the sibling domain before declaring anyone nonexistent.
+  "PERSON LOOKUP ROUTING:",
+  "- 'Who is the CEO/CFO/<title> of <company>' or any person-AT-a-company question: resolve the",
+  "  company as an ACCOUNT first, then answer from its client contacts (`contact_list` /",
+  "  `contact_detail` with accountName). NEVER pass a company name to roster/person tools.",
+  "- Bare person-name questions ('phone of Mounir') may be about an internal colleague OR a client",
+  "  contact. `contact_detail` and `person_detail` each auto-fall-back to the other domain, so one",
+  "  call is enough — but a `not_found` from a tool that did NOT cross-check both domains is never",
+  "  proof the person doesn't exist.",
+  "- When a person cannot be found in either domain, say so in plain words (no error jargon) and",
+  "  suggest checking the spelling or the account name.",
   "",
   // Task #426 — compound account questions resolve in ONE composed read.
   "COMPOUND ACCOUNT QUESTIONS (read-only):",
@@ -3291,7 +3305,15 @@ export async function runTurn(
       lastModel = claudeStep.model;
 
       if (claudeStep.text) {
-        record({ type: "narration", data: { text: claudeStep.text, step } });
+        // Task #469 — strip leaked internal markers ("final: …") from
+        // the prose before it streams to any client.
+        const cleanText = claudeStep.text.replace(
+          /^\s*(?:final|answer|narration)\s*[:\-–—]\s*/i,
+          "",
+        );
+        if (cleanText) {
+          record({ type: "narration", data: { text: cleanText, step } });
+        }
       }
       record({ type: "plan_step", data: { step, hasTool: !!claudeStep.toolCall } });
 

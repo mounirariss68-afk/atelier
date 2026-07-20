@@ -40,10 +40,15 @@ function humanLabel(key: string): string {
     .replace(/^./, (ch) => ch.toUpperCase());
 }
 
-const MONEY_KEY = /amount|dealsize|deal_size|value|total|price|cost|budget|fee/i;
+// Task #469 — money formatting must be OPT-IN by key: plain counts
+// ("total", "value" used as a generic score) were rendered as "$0".
+// Only keys that are unambiguously monetary get currency treatment.
+const MONEY_KEY =
+  /amount|dealsize|deal_size|valueusd|value_usd|weightedvalue|price|cost|budget|fee|revenue|spend/i;
 const PCT_KEY = /pct|percent|probability/i;
 
 function formatField(key: string, value: unknown, currency: string | null, lang: string): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   const n = asNum(value);
   if (n != null) {
     if (MONEY_KEY.test(key)) return formatCompactMoney(n, currency);
@@ -61,6 +66,8 @@ const SKIP_KEYS = new Set([
   "status", "decision", "disposition", "count", "createdCount", "ids",
   "attachmentIds", "preview", "missingFields", "dispatched", "currency",
   "entity", "options", "stage", "verb", "payload",
+  // Task #469 — internal/meta fields that must never render as card rows.
+  "total", "scoped", "scopedNote", "source", "note", "prompt", "empty",
 ]);
 
 /* ─────────────────────── shared chrome ─────────────────────── */
@@ -206,15 +213,18 @@ function KpiStrip({ data, lang }: { data: Json; lang: string }) {
   const stages = asArr(data.stages).map((s) => asObj(s));
   let items: { label: string; value: string }[] = [];
   if (stages.length > 0) {
-    items = stages.slice(0, 8).map((s) => ({
-      label: asStr(s.stage ?? s.label ?? s.name) || "—",
-      value: formatField(
-        "value",
-        s.totalValue ?? s.value ?? s.amount ?? s.count,
-        asStr(s.currency) || currency,
-        lang,
-      ),
-    }));
+    // Task #469 — only treat the row as monetary when a monetary field
+    // is actually present; bare counts must not render as "$N".
+    items = stages.slice(0, 8).map((s) => {
+      const money = s.totalValue ?? s.value ?? s.amount;
+      return {
+        label: asStr(s.stage ?? s.label ?? s.name) || "—",
+        value:
+          money != null
+            ? formatField("valueUsd", money, asStr(s.currency) || currency, lang)
+            : formatField("count", s.count, null, lang),
+      };
+    });
   } else {
     items = Object.entries(data)
       .filter(([k, v]) => !SKIP_KEYS.has(k) && asNum(v) != null)
@@ -278,14 +288,38 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
         ? asArr(data.rows)
         : asArr(data.results)
   ).map((r) => asObj(r));
-  if (rows.length === 0) return <FallbackGrid data={data} lang={lang} />;
+  if (rows.length === 0) {
+    // Task #469 — an explicitly-empty list renders a clear prose line
+    // instead of falling through to a metadata grid or a bare "✓" card.
+    const hasListKey =
+      Array.isArray(data.items) || Array.isArray(data.rows) || Array.isArray(data.results);
+    if (hasListKey) {
+      return (
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 13,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {lang === "ar" ? "لا توجد نتائج." : lang === "fr" ? "Aucun résultat." : "No results found."}
+        </Text>
+      );
+    }
+    return <FallbackGrid data={data} lang={lang} />;
+  }
   const currency = asStr(data.currency) || null;
   return (
     <View style={{ gap: 2 }}>
       {rows.slice(0, 8).map((r, i) => {
         const label =
           asStr(r.name) || asStr(r.title) || asStr(r.label) || asStr(r.account) || `#${i + 1}`;
-        const valueRaw = r.value ?? r.amount ?? r.totalValue ?? r.count ?? r.score;
+        // Task #469 — split monetary fields from plain counts/scores so
+        // "count: 3" never renders as "$3".
+        const moneyRaw = r.weightedValueUsd ?? r.value ?? r.amount ?? r.totalValue;
+        const valueRaw = moneyRaw ?? r.count ?? r.score;
+        const valueKey = moneyRaw != null ? "valueUsd" : "count";
         const sub = asStr(r.stage ?? r.status ?? r.owner ?? r.subtitle);
         return (
           <View
@@ -345,7 +379,7 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
                   fontVariant: ["tabular-nums"],
                 }}
               >
-                {formatField("value", valueRaw, asStr(r.currency) || currency, lang)}
+                {formatField(valueKey, valueRaw, asStr(r.currency) || currency, lang)}
               </Text>
             ) : null}
           </View>
@@ -664,12 +698,16 @@ export function ToolResultCards({
           return <WriteSuccess key={`${tr.tool}-${i}`} data={dataObj} lang={lang} />;
         }
 
+        // Task #469 — a not_found is an ordinary answer ("nobody by
+        // that name"), not a failure: render it as muted prose, not a
+        // red error card.
+        const softMiss = !tr.ok && tr.errorCode === "not_found";
         let body: React.ReactNode;
         if (!tr.ok) {
           body = (
             <Text
               style={{
-                color: c.destructive,
+                color: softMiss ? c.mutedForeground : c.destructive,
                 fontFamily: "PlusJakartaSans_500Medium",
                 fontSize: 13,
                 textAlign: rtl.textAlign,
@@ -724,7 +762,7 @@ export function ToolResultCards({
             <CardHeader
               icon={SHAPE_ICON[shape ?? ""] ?? "cpu"}
               title={humanLabel(tr.tool)}
-              ok={tr.ok}
+              ok={tr.ok || softMiss}
             />
             {body}
           </Card>
