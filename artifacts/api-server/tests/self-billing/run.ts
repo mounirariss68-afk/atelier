@@ -20,6 +20,12 @@
  *      hidden); foreign persona list empty + detail/pdf 404; owner PDF
  *      download 200 application/pdf; employee persona cannot touch
  *      finance payables surfaces (403).
+ *   5. Partner-firm path (Task #458): clerk composes an RCTI from
+ *      uploaded partner-firm hours, reconciled against the
+ *      atelier_partner_firm_invoices proposal row; the firm's resource
+ *      (scope via atelier_partner_firm_resources email) sees it at
+ *      /me/self-billing while foreign personas get empty list / 404;
+ *      mark-paid cascades `paid` to the partner-firm invoice rows.
  */
 
 // DB isolation bootstrap — MUST be the first import.
@@ -37,6 +43,14 @@ const PT3_ID = `p_test_pt3_${STAMP}`;       // partner — limited signatory
 const CT_USER = `p_test_ct_${STAMP}`;       // contractor persona (invoice owner)
 const CT2_USER = `p_test_ct2_${STAMP}`;     // second contractor persona
 const EMP_ID = `p_test_emp_${STAMP}`;       // employee — must not reach finance surfaces
+const PFR_ID = `p_test_pfr_${STAMP}`;       // partner-firm resource (invoice viewer)
+const PFR2_ID = `p_test_pfr2_${STAMP}`;     // resource of ANOTHER firm (foreign)
+const PF_ID = `pf_sbi_${STAMP}`;            // partner firm (supplier)
+const PF2_ID = `pf2_sbi_${STAMP}`;          // second firm (never invoiced)
+const PFR_ROW = `pfr_sbi_${STAMP}`;
+const PFR2_ROW = `pfr2_sbi_${STAMP}`;
+const PFH_ID = `pfh_sbi_${STAMP}`;
+const PFI_ID = `pfi_sbi_${STAMP}`;
 const CT_PERSON = `ct_sbi_${STAMP}`;
 const CT2_PERSON = `ct2_sbi_${STAMP}`;
 const ENG_ID = `eng_sbi_${STAMP}`;
@@ -88,6 +102,10 @@ async function main(): Promise<void> {
     atelierBankSignatories,
     atelierAuditEvents,
     atelierAgentRuns,
+    atelierPartnerFirms,
+    atelierPartnerFirmResources,
+    atelierPartnerFirmHours,
+    atelierPartnerFirmInvoices,
   } = D as any;
   const appMod = await import("../../src/app.js");
   const app = appMod.default;
@@ -132,6 +150,8 @@ async function main(): Promise<void> {
       { id: CT_USER, role: "contractor", label: "Contractor", name: "SBI Contractor" },
       { id: CT2_USER, role: "contractor", label: "Contractor", name: "Other Contractor" },
       { id: EMP_ID, role: "employee", label: "Employee", name: "Plain Employee" },
+      { id: PFR_ID, role: "partner_firm_resource", label: "Partner Firm Resource", name: "Firm Resource" },
+      { id: PFR2_ID, role: "partner_firm_resource", label: "Partner Firm Resource", name: "Other Firm Resource" },
     ];
     for (const p of personas) {
       await db.insert(atelierUsers).values({
@@ -376,6 +396,158 @@ async function main(): Promise<void> {
       ct2List.status === 200 && (ct2List.body?.items ?? []).every((i: any) => i.id !== inv2.id),
       JSON.stringify(ct2List.body?.items?.map((i: any) => [i.id, i.status])),
     );
+
+    // =====================================================================
+    group("partner firm \u00b7 clerk generation + me-lens scope + paid cascade");
+    // =====================================================================
+    // Fixtures seeded only NOW so the earlier full clerk reruns never saw
+    // them (keeps the contractor-path idempotency counts untouched).
+    await db.insert(atelierPartnerFirms).values({
+      id: PF_ID, orgId: ORG, name: "SBI Partner Firm",
+      contactEmail: `firm_${STAMP}@example.com`, defaultBillingCurrency: "USD",
+    });
+    await db.insert(atelierPartnerFirms).values({
+      id: PF2_ID, orgId: ORG, name: "Other Partner Firm",
+    });
+    // Me-lens scope resolves via the RESOURCE email == persona email.
+    await db.insert(atelierPartnerFirmResources).values({
+      id: PFR_ROW, orgId: ORG, partnerFirmId: PF_ID,
+      fullName: "Firm Resource", email: `${PFR_ID}@cognirise.ai`,
+    });
+    await db.insert(atelierPartnerFirmResources).values({
+      id: PFR2_ROW, orgId: ORG, partnerFirmId: PF2_ID,
+      fullName: "Other Firm Resource", email: `${PFR2_ID}@cognirise.ai`,
+    });
+    // Uploaded firm hours: 16h costing $2,400 on one engagement.
+    await db.insert(atelierPartnerFirmHours).values({
+      id: PFH_ID, orgId: ORG, engagementId: ENG_ID, partnerFirmId: PF_ID,
+      partnerFirmResourceId: PFR_ROW, resourceName: "Firm Resource",
+      weekIso, hours: 16, costAmount: 2400, costCurrency: "USD",
+    });
+    // Matching payment-proposal row the invoice must reconcile against
+    // and that mark-paid must cascade `paid` onto.
+    await db.insert(atelierPartnerFirmInvoices).values({
+      id: PFI_ID, orgId: ORG, partnerFirmId: PF_ID,
+      partnerFirmName: "SBI Partner Firm", engagementId: ENG_ID,
+      weekIso, hours: 16, costAmount: 2400, costCurrency: "USD",
+      fxRate: 1, usdAmount: 2400, status: "partner_approved",
+      evidenceFirmHourIds: [PFH_ID],
+    });
+
+    const pfRun = await call("POST", "/finance/payables/self-billing/run", FIN_ID, {
+      weeksIso: [weekIso], supplierType: "partner_firm",
+    });
+    check(
+      "partner_firm clerk run \u2192 200 with 1 invoice created",
+      pfRun.status === 200 && pfRun.body?.summary?.invoicesCreated === 1,
+      `status=${pfRun.status} body=${JSON.stringify(pfRun.body)?.slice(0, 300)}`,
+    );
+    const pfList = await call("GET", "/finance/payables/self-billing", FIN_ID);
+    const pfInv = (pfList.body?.items ?? []).find(
+      (i: any) => i.supplierType === "partner_firm" && i.supplierId === PF_ID,
+    );
+    if (pfInv) createdInvoiceIds.push(pfInv.id);
+    check(
+      "firm invoice drafted with cost-amount totals ($2,400) + firm name",
+      pfInv?.status === "draft" && pfInv?.subtotalAmount === 2400 &&
+        pfInv?.totalAmount === 2400 && pfInv?.supplierName === "SBI Partner Firm",
+      JSON.stringify(pfInv ?? {}).slice(0, 300),
+    );
+    const [pfInvRow] = pfInv
+      ? await db.select().from(atelierSelfBilledInvoices).where(eq(atelierSelfBilledInvoices.id, pfInv.id))
+      : [null];
+    check(
+      "invoice reconciled + linked to the partner-firm proposal row",
+      (pfInvRow?.partnerFirmInvoiceIds ?? []).includes(PFI_ID) &&
+        pfInvRow?.reconciliation?.status === "matched",
+      `ids=${JSON.stringify(pfInvRow?.partnerFirmInvoiceIds)} recon=${pfInvRow?.reconciliation?.status}`,
+    );
+
+    // Idempotency holds for the partner-firm path too.
+    const pfRun2 = await call("POST", "/finance/payables/self-billing/run", FIN_ID, {
+      weeksIso: [weekIso], supplierType: "partner_firm",
+    });
+    const pfS2 = pfRun2.body?.summary;
+    check(
+      "partner_firm rerun creates nothing new (refresh only)",
+      pfRun2.status === 200 && pfS2?.invoicesCreated === 0 && (pfS2?.invoicesUpdated ?? 0) === 1,
+      JSON.stringify(pfS2),
+    );
+
+    // Me-lens: the firm's resource sees it; foreign personas do not.
+    const pfrList = await call("GET", "/me/self-billing", PFR_ID);
+    check(
+      "firm resource sees exactly the firm's invoice at /me/self-billing",
+      pfrList.status === 200 && (pfrList.body?.items ?? []).length === 1 &&
+        pfrList.body.items[0].id === pfInv?.id &&
+        pfrList.body.items[0].supplierType === "partner_firm",
+      JSON.stringify(pfrList.body?.items?.map((i: any) => [i.id, i.supplierType])),
+    );
+    const pfr2List = await call("GET", "/me/self-billing", PFR2_ID);
+    check(
+      "resource of another firm gets an empty list",
+      pfr2List.status === 200 && (pfr2List.body?.items ?? []).length === 0,
+      JSON.stringify(pfr2List.body?.items),
+    );
+    const pfr2Detail = await call("GET", `/me/self-billing/${pfInv?.id}`, PFR2_ID);
+    check("foreign firm resource detail \u2192 404", pfr2Detail.status === 404, `status=${pfr2Detail.status}`);
+    const ctForeign = await call("GET", `/me/self-billing/${pfInv?.id}`, CT_USER);
+    check("contractor cannot read the firm invoice \u2192 404", ctForeign.status === 404, `status=${ctForeign.status}`);
+    const pfrForeignPdf = await fetch(`${API}/me/self-billing/${pfInv?.id}/pdf`, {
+      headers: { cookie: `atelier_persona=${PFR2_ID}` },
+    });
+    check("foreign firm resource pdf \u2192 404", pfrForeignPdf.status === 404, `status=${pfrForeignPdf.status}`);
+    const pfrPdf = await fetch(`${API}/me/self-billing/${pfInv?.id}/pdf`, {
+      headers: { cookie: `atelier_persona=${PFR_ID}` },
+    });
+    const pfrPdfBytes = Buffer.from(await pfrPdf.arrayBuffer());
+    check(
+      "firm resource pdf \u2192 200 application/pdf with %PDF magic",
+      pfrPdf.status === 200 &&
+        (pfrPdf.headers.get("content-type") ?? "").includes("application/pdf") &&
+        pfrPdfBytes.subarray(0, 4).toString() === "%PDF",
+      `status=${pfrPdf.status} ct=${pfrPdf.headers.get("content-type")}`,
+    );
+
+    // Approve → build → dual-sign → mark-paid; status must cascade to
+    // the atelier_partner_firm_invoices proposal row.
+    const pfAp = await call("POST", `/finance/payables/self-billing/${pfInv?.id}/approve`, FIN_ID, {});
+    check("approve firm invoice \u2192 200", pfAp.status === 200, `status=${pfAp.status}`);
+    const pfBuild = await call("POST", "/finance/payables/payment-runs/build", FIN_ID, {
+      bankAccountId: BANK_ID, invoiceIds: [pfInv?.id],
+    });
+    check(
+      "build run with the firm invoice \u2192 201, 1 item",
+      pfBuild.status === 201 && pfBuild.body?.run?.itemCount === 1,
+      `status=${pfBuild.status} itemCount=${pfBuild.body?.run?.itemCount}`,
+    );
+    const pfRunId: string = pfBuild.body?.run?.id;
+    if (pfRunId) createdRunIds.push(pfRunId);
+    const pfSign1 = await call("POST", `/finance/payables/payment-runs/${pfRunId}/sign`, FIN_ID, {});
+    const pfSign2 = await call("POST", `/finance/payables/payment-runs/${pfRunId}/sign`, PT_ID, {});
+    check(
+      "dual signature on the firm run \u2192 approved",
+      pfSign1.status === 200 && pfSign2.status === 200 && pfSign2.body?.approved === true,
+      `s1=${pfSign1.status} s2=${pfSign2.status} approved=${pfSign2.body?.approved}`,
+    );
+    const pfPaid = await call("POST", `/finance/payables/payment-runs/${pfRunId}/mark-paid`, FIN_ID, {
+      remittanceRef: `RMT-PF-${STAMP}`,
+    });
+    check("mark-paid firm run \u2192 200", pfPaid.status === 200 && pfPaid.body?.itemsPaid === 1, JSON.stringify(pfPaid.body));
+    const pfrFinal = await call("GET", `/me/self-billing/${pfInv?.id}`, PFR_ID);
+    check(
+      "firm resource sees paid invoice with remittance ref",
+      pfrFinal.status === 200 && pfrFinal.body?.invoice?.status === "paid" &&
+        pfrFinal.body?.invoice?.remittanceRef === `RMT-PF-${STAMP}`,
+      JSON.stringify(pfrFinal.body?.invoice ?? {}).slice(0, 200),
+    );
+    const [pfiRow] = await db.select().from(atelierPartnerFirmInvoices)
+      .where(eq(atelierPartnerFirmInvoices.id, PFI_ID));
+    check(
+      "mark-paid cascades `paid` to the partner-firm invoice row",
+      pfiRow?.status === "paid" && pfiRow?.paidAt != null && pfiRow?.paidByUserId === FIN_ID,
+      `status=${pfiRow?.status} paidBy=${pfiRow?.paidByUserId}`,
+    );
   } finally {
     try {
       await db.delete(atelierPaymentRunItems).where(
@@ -383,7 +555,11 @@ async function main(): Promise<void> {
       await db.delete(atelierPaymentRuns).where(
         createdRunIds.length ? inArray(atelierPaymentRuns.id, createdRunIds) : eq(atelierPaymentRuns.id, "none"));
       await db.delete(atelierSelfBilledInvoices).where(
-        inArray(atelierSelfBilledInvoices.supplierId, [CT_PERSON, CT2_PERSON]));
+        inArray(atelierSelfBilledInvoices.supplierId, [CT_PERSON, CT2_PERSON, PF_ID]));
+      await db.delete(atelierPartnerFirmInvoices).where(eq(atelierPartnerFirmInvoices.id, PFI_ID));
+      await db.delete(atelierPartnerFirmHours).where(eq(atelierPartnerFirmHours.id, PFH_ID));
+      await db.delete(atelierPartnerFirmResources).where(inArray(atelierPartnerFirmResources.id, [PFR_ROW, PFR2_ROW]));
+      await db.delete(atelierPartnerFirms).where(inArray(atelierPartnerFirms.id, [PF_ID, PF2_ID]));
       await db.delete(atelierBankSignatories).where(eq(atelierBankSignatories.bankAccountId, BANK_ID));
       await db.delete(atelierBankAccount).where(eq(atelierBankAccount.id, BANK_ID));
       await db.delete(atelierTimesheetEntries).where(inArray(atelierTimesheetEntries.weekId, [WEEK_ID, WEEK2_ID]));
@@ -392,7 +568,7 @@ async function main(): Promise<void> {
       await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityType, ["self_billed_invoice", "payment_run"]));
       await db.delete(atelierAgentRuns).where(eq(atelierAgentRuns.agentId, "ag_self_billing_clerk"));
       await db.delete(atelierSelfBillingSequences).where(like(atelierSelfBillingSequences.id, "%:aico"));
-      for (const id of [FIN_ID, PT_ID, PT2_ID, PT3_ID, CT_USER, CT2_USER, EMP_ID]) {
+      for (const id of [FIN_ID, PT_ID, PT2_ID, PT3_ID, CT_USER, CT2_USER, EMP_ID, PFR_ID, PFR2_ID]) {
         await db.delete(atelierUsers).where(eq(atelierUsers.id, id));
       }
     } catch (err) {
