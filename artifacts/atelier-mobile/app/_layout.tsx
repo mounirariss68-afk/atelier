@@ -52,7 +52,7 @@ const queryClient = new QueryClient({
 
 function ThemedStatusBar() {
   const scheme = useThemeScheme();
-  return <StatusBar style={scheme === "dark" ? "light" : "dark"} />;
+  return <StatusBar style={scheme === "dark" ? "light" : "dark"} translucent />;
 }
 
 function Gate() {
