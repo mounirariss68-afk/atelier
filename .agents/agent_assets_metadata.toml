@@ -191,3 +191,9 @@ id = "ayNC0QlBKRSI64-N04oTL"
 uri = "file://dist/report-covers.zip"
 type = "unspecified"
 title = "All 16 report cover images (Cognirise)"
+
+[[outputs]]
+id = "pGE8GACFV0co8tlne0emS"
+uri = "file://docs/microsoft365-admin-brief.md"
+type = "text"
+title = "Microsoft 365 Connection — IT Admin Brief"
