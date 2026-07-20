@@ -128,6 +128,7 @@ import type {
   AtelierGetActivityParams,
   AtelierGetMyCalendar502,
   AtelierGetMyCalendarParams,
+  AtelierGetMyReceiptUploadUrl200,
   AtelierGrantDocumentAccess201,
   AtelierGrantDocumentAccessBody,
   AtelierHireCandidate,
@@ -159,6 +160,9 @@ import type {
   AtelierListContractsParams,
   AtelierListDocuments200,
   AtelierListDocumentsParams,
+  AtelierListMyExpenseContexts200,
+  AtelierListMyExpenseContextsParams,
+  AtelierListMyExpenses200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
   AtelierListSignatureRequestsParams,
@@ -231,6 +235,11 @@ import type {
   AtelierSearchContractCounterpartiesParams,
   AtelierSelfDocumentList,
   AtelierSelfDocumentPatch,
+  AtelierSelfExpenseCreate,
+  AtelierSelfExpenseParseResponse,
+  AtelierSelfExpensePatch,
+  AtelierSelfExpensePolicyBlock,
+  AtelierSelfExpenseResponse,
   AtelierSelfGoal,
   AtelierSelfNotification,
   AtelierSelfProfile,
@@ -247,6 +256,7 @@ import type {
   AtelierStageTransitionInput,
   AtelierStartPovInput,
   AtelierSubmitMeetingInput,
+  AtelierSubmitMyExpenseBody,
   AtelierSyncAllSignatureRequests200,
   AtelierTrainingCompletionRow,
   AtelierTrainingMaterial,
@@ -273,6 +283,14 @@ import type {
   AtelierUpsertAccountGoalProgressInput,
   AtelierWhitespaceCanvas,
   AuditEvent,
+  AuthAppMeta,
+  AuthChangePassword200,
+  AuthChangePasswordRequest,
+  AuthErrorResponse,
+  AuthLoginRequest,
+  AuthLoginResponse,
+  AuthLogout200,
+  AuthSessionResponse,
   ChatError,
   ChatRequest,
   Engagement,
@@ -455,6 +473,410 @@ export const useChat = <
 > => {
   return useMutation(getChatMutationOptions(options));
 };
+
+/**
+ * @summary Sign in with Atelier credentials (mobile clients get a bearer token)
+ */
+export const getAuthLoginUrl = () => {
+  return `/api/auth/login`;
+};
+
+export const authLogin = async (
+  authLoginRequest: AuthLoginRequest,
+  options?: RequestInit,
+): Promise<AuthLoginResponse> => {
+  return customFetch<AuthLoginResponse>(getAuthLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(authLoginRequest),
+  });
+};
+
+export const getAuthLoginMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authLogin>>,
+    TError,
+    { data: BodyType<AuthLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authLogin>>,
+  TError,
+  { data: BodyType<AuthLoginRequest> },
+  TContext
+> => {
+  const mutationKey = ["authLogin"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authLogin>>,
+    { data: BodyType<AuthLoginRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return authLogin(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthLoginMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authLogin>>
+>;
+export type AuthLoginMutationBody = BodyType<AuthLoginRequest>;
+export type AuthLoginMutationError = ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Sign in with Atelier credentials (mobile clients get a bearer token)
+ */
+export const useAuthLogin = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authLogin>>,
+    TError,
+    { data: BodyType<AuthLoginRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof authLogin>>,
+  TError,
+  { data: BodyType<AuthLoginRequest> },
+  TContext
+> => {
+  return useMutation(getAuthLoginMutationOptions(options));
+};
+
+/**
+ * @summary Sign out (destroys the session behind the cookie or bearer token)
+ */
+export const getAuthLogoutUrl = () => {
+  return `/api/auth/logout`;
+};
+
+export const authLogout = async (
+  options?: RequestInit,
+): Promise<AuthLogout200> => {
+  return customFetch<AuthLogout200>(getAuthLogoutUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAuthLogoutMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["authLogout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authLogout>>,
+    void
+  > = () => {
+    return authLogout(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthLogoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authLogout>>
+>;
+
+export type AuthLogoutMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Sign out (destroys the session behind the cookie or bearer token)
+ */
+export const useAuthLogout = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authLogout>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof authLogout>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getAuthLogoutMutationOptions(options));
+};
+
+/**
+ * @summary Current auth session (cookie or bearer token)
+ */
+export const getAuthGetSessionUrl = () => {
+  return `/api/auth/session`;
+};
+
+export const authGetSession = async (
+  options?: RequestInit,
+): Promise<AuthSessionResponse> => {
+  return customFetch<AuthSessionResponse>(getAuthGetSessionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAuthGetSessionQueryKey = () => {
+  return [`/api/auth/session`] as const;
+};
+
+export const getAuthGetSessionQueryOptions = <
+  TData = Awaited<ReturnType<typeof authGetSession>>,
+  TError = ErrorType<AuthErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof authGetSession>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAuthGetSessionQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authGetSession>>> = ({
+    signal,
+  }) => authGetSession({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authGetSession>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AuthGetSessionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof authGetSession>>
+>;
+export type AuthGetSessionQueryError = ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Current auth session (cookie or bearer token)
+ */
+
+export function useAuthGetSession<
+  TData = Awaited<ReturnType<typeof authGetSession>>,
+  TError = ErrorType<AuthErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof authGetSession>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAuthGetSessionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Change own password (also satisfies a forced change)
+ */
+export const getAuthChangePasswordUrl = () => {
+  return `/api/auth/change-password`;
+};
+
+export const authChangePassword = async (
+  authChangePasswordRequest: AuthChangePasswordRequest,
+  options?: RequestInit,
+): Promise<AuthChangePassword200> => {
+  return customFetch<AuthChangePassword200>(getAuthChangePasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(authChangePasswordRequest),
+  });
+};
+
+export const getAuthChangePasswordMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authChangePassword>>,
+    TError,
+    { data: BodyType<AuthChangePasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authChangePassword>>,
+  TError,
+  { data: BodyType<AuthChangePasswordRequest> },
+  TContext
+> => {
+  const mutationKey = ["authChangePassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authChangePassword>>,
+    { data: BodyType<AuthChangePasswordRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return authChangePassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthChangePasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof authChangePassword>>
+>;
+export type AuthChangePasswordMutationBody =
+  BodyType<AuthChangePasswordRequest>;
+export type AuthChangePasswordMutationError = ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Change own password (also satisfies a forced change)
+ */
+export const useAuthChangePassword = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authChangePassword>>,
+    TError,
+    { data: BodyType<AuthChangePasswordRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof authChangePassword>>,
+  TError,
+  { data: BodyType<AuthChangePasswordRequest> },
+  TContext
+> => {
+  return useMutation(getAuthChangePasswordMutationOptions(options));
+};
+
+/**
+ * @summary Public launch-gate metadata for the mobile app (no auth required)
+ */
+export const getAuthGetAppMetaUrl = () => {
+  return `/api/auth/app-meta`;
+};
+
+export const authGetAppMeta = async (
+  options?: RequestInit,
+): Promise<AuthAppMeta> => {
+  return customFetch<AuthAppMeta>(getAuthGetAppMetaUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAuthGetAppMetaQueryKey = () => {
+  return [`/api/auth/app-meta`] as const;
+};
+
+export const getAuthGetAppMetaQueryOptions = <
+  TData = Awaited<ReturnType<typeof authGetAppMeta>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof authGetAppMeta>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAuthGetAppMetaQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authGetAppMeta>>> = ({
+    signal,
+  }) => authGetAppMeta({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authGetAppMeta>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AuthGetAppMetaQueryResult = NonNullable<
+  Awaited<ReturnType<typeof authGetAppMeta>>
+>;
+export type AuthGetAppMetaQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Public launch-gate metadata for the mobile app (no auth required)
+ */
+
+export function useAuthGetAppMeta<
+  TData = Awaited<ReturnType<typeof authGetAppMeta>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof authGetAppMeta>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAuthGetAppMetaQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Current persona for The Atelier session
@@ -1506,6 +1928,719 @@ export function useAtelierDownloadMyDocument<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAtelierDownloadMyDocumentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — the caller's own expense claims (self-scope)
+ */
+export const getAtelierListMyExpensesUrl = () => {
+  return `/api/atelier/me/expenses`;
+};
+
+export const atelierListMyExpenses = async (
+  options?: RequestInit,
+): Promise<AtelierListMyExpenses200> => {
+  return customFetch<AtelierListMyExpenses200>(getAtelierListMyExpensesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListMyExpensesQueryKey = () => {
+  return [`/api/atelier/me/expenses`] as const;
+};
+
+export const getAtelierListMyExpensesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyExpenses>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyExpenses>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAtelierListMyExpensesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyExpenses>>
+  > = ({ signal }) => atelierListMyExpenses({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyExpenses>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyExpensesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyExpenses>>
+>;
+export type AtelierListMyExpensesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — the caller's own expense claims (self-scope)
+ */
+
+export function useAtelierListMyExpenses<
+  TData = Awaited<ReturnType<typeof atelierListMyExpenses>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyExpenses>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyExpensesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Me lens — create a draft expense claim
+ */
+export const getAtelierCreateMyExpenseUrl = () => {
+  return `/api/atelier/me/expenses`;
+};
+
+export const atelierCreateMyExpense = async (
+  atelierSelfExpenseCreate: AtelierSelfExpenseCreate,
+  options?: RequestInit,
+): Promise<AtelierSelfExpenseResponse> => {
+  return customFetch<AtelierSelfExpenseResponse>(
+    getAtelierCreateMyExpenseUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSelfExpenseCreate),
+    },
+  );
+};
+
+export const getAtelierCreateMyExpenseMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyExpense>>,
+    TError,
+    { data: BodyType<AtelierSelfExpenseCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateMyExpense>>,
+  TError,
+  { data: BodyType<AtelierSelfExpenseCreate> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateMyExpense"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateMyExpense>>,
+    { data: BodyType<AtelierSelfExpenseCreate> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateMyExpense(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateMyExpenseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateMyExpense>>
+>;
+export type AtelierCreateMyExpenseMutationBody =
+  BodyType<AtelierSelfExpenseCreate>;
+export type AtelierCreateMyExpenseMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — create a draft expense claim
+ */
+export const useAtelierCreateMyExpense = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateMyExpense>>,
+    TError,
+    { data: BodyType<AtelierSelfExpenseCreate> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateMyExpense>>,
+  TError,
+  { data: BodyType<AtelierSelfExpenseCreate> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateMyExpenseMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — edit one of the caller's own draft/rejected claims
+ */
+export const getAtelierUpdateMyExpenseUrl = (id: string) => {
+  return `/api/atelier/me/expenses/${id}`;
+};
+
+export const atelierUpdateMyExpense = async (
+  id: string,
+  atelierSelfExpensePatch: AtelierSelfExpensePatch,
+  options?: RequestInit,
+): Promise<AtelierSelfExpenseResponse> => {
+  return customFetch<AtelierSelfExpenseResponse>(
+    getAtelierUpdateMyExpenseUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSelfExpensePatch),
+    },
+  );
+};
+
+export const getAtelierUpdateMyExpenseMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyExpense>>,
+    TError,
+    { id: string; data: BodyType<AtelierSelfExpensePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyExpense>>,
+  TError,
+  { id: string; data: BodyType<AtelierSelfExpensePatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyExpense"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyExpense>>,
+    { id: string; data: BodyType<AtelierSelfExpensePatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateMyExpense(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyExpenseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyExpense>>
+>;
+export type AtelierUpdateMyExpenseMutationBody =
+  BodyType<AtelierSelfExpensePatch>;
+export type AtelierUpdateMyExpenseMutationError = ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Me lens — edit one of the caller's own draft/rejected claims
+ */
+export const useAtelierUpdateMyExpense = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyExpense>>,
+    TError,
+    { id: string; data: BodyType<AtelierSelfExpensePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyExpense>>,
+  TError,
+  { id: string; data: BodyType<AtelierSelfExpensePatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyExpenseMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — delete one of the caller's own draft claims
+ */
+export const getAtelierDeleteMyExpenseUrl = (id: string) => {
+  return `/api/atelier/me/expenses/${id}`;
+};
+
+export const atelierDeleteMyExpense = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierDeleteMyExpenseUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAtelierDeleteMyExpenseMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyExpense>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierDeleteMyExpense>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierDeleteMyExpense"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierDeleteMyExpense>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierDeleteMyExpense(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierDeleteMyExpenseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierDeleteMyExpense>>
+>;
+
+export type AtelierDeleteMyExpenseMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — delete one of the caller's own draft claims
+ */
+export const useAtelierDeleteMyExpense = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierDeleteMyExpense>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierDeleteMyExpense>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierDeleteMyExpenseMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — submit a claim (deterministic policy evaluation)
+ */
+export const getAtelierSubmitMyExpenseUrl = (id: string) => {
+  return `/api/atelier/me/expenses/${id}/submit`;
+};
+
+export const atelierSubmitMyExpense = async (
+  id: string,
+  atelierSubmitMyExpenseBody?: AtelierSubmitMyExpenseBody,
+  options?: RequestInit,
+): Promise<AtelierSelfExpenseResponse> => {
+  return customFetch<AtelierSelfExpenseResponse>(
+    getAtelierSubmitMyExpenseUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSubmitMyExpenseBody),
+    },
+  );
+};
+
+export const getAtelierSubmitMyExpenseMutationOptions = <
+  TError = ErrorType<AtelierSelfExpensePolicyBlock>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitMyExpense>>,
+    TError,
+    { id: string; data: BodyType<AtelierSubmitMyExpenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSubmitMyExpense>>,
+  TError,
+  { id: string; data: BodyType<AtelierSubmitMyExpenseBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierSubmitMyExpense"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSubmitMyExpense>>,
+    { id: string; data: BodyType<AtelierSubmitMyExpenseBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierSubmitMyExpense(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSubmitMyExpenseMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSubmitMyExpense>>
+>;
+export type AtelierSubmitMyExpenseMutationBody =
+  BodyType<AtelierSubmitMyExpenseBody>;
+export type AtelierSubmitMyExpenseMutationError =
+  ErrorType<AtelierSelfExpensePolicyBlock>;
+
+/**
+ * @summary Me lens — submit a claim (deterministic policy evaluation)
+ */
+export const useAtelierSubmitMyExpense = <
+  TError = ErrorType<AtelierSelfExpensePolicyBlock>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSubmitMyExpense>>,
+    TError,
+    { id: string; data: BodyType<AtelierSubmitMyExpenseBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSubmitMyExpense>>,
+  TError,
+  { id: string; data: BodyType<AtelierSubmitMyExpenseBody> },
+  TContext
+> => {
+  return useMutation(getAtelierSubmitMyExpenseMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — vision-parse the attached receipt photo via the Expense Auditor
+ */
+export const getAtelierParseMyExpenseReceiptUrl = (id: string) => {
+  return `/api/atelier/me/expenses/${id}/parse-receipt`;
+};
+
+export const atelierParseMyExpenseReceipt = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierSelfExpenseParseResponse> => {
+  return customFetch<AtelierSelfExpenseParseResponse>(
+    getAtelierParseMyExpenseReceiptUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierParseMyExpenseReceiptMutationOptions = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierParseMyExpenseReceipt"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierParseMyExpenseReceipt(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierParseMyExpenseReceiptMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>
+>;
+
+export type AtelierParseMyExpenseReceiptMutationError =
+  ErrorType<AuthErrorResponse>;
+
+/**
+ * @summary Me lens — vision-parse the attached receipt photo via the Expense Auditor
+ */
+export const useAtelierParseMyExpenseReceipt = <
+  TError = ErrorType<AuthErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierParseMyExpenseReceipt>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierParseMyExpenseReceiptMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — signed upload URL for a receipt photo (private bucket)
+ */
+export const getAtelierGetMyReceiptUploadUrlUrl = () => {
+  return `/api/atelier/me/expenses/receipt-upload`;
+};
+
+export const atelierGetMyReceiptUploadUrl = async (
+  options?: RequestInit,
+): Promise<AtelierGetMyReceiptUploadUrl200> => {
+  return customFetch<AtelierGetMyReceiptUploadUrl200>(
+    getAtelierGetMyReceiptUploadUrlUrl(),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierGetMyReceiptUploadUrlMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["atelierGetMyReceiptUploadUrl"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>,
+    void
+  > = () => {
+    return atelierGetMyReceiptUploadUrl(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierGetMyReceiptUploadUrlMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>
+>;
+
+export type AtelierGetMyReceiptUploadUrlMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — signed upload URL for a receipt photo (private bucket)
+ */
+export const useAtelierGetMyReceiptUploadUrl = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierGetMyReceiptUploadUrl>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getAtelierGetMyReceiptUploadUrlMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — minimal account/engagement tags for the claim context picker
+ */
+export const getAtelierListMyExpenseContextsUrl = (
+  params?: AtelierListMyExpenseContextsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/me/expense-contexts?${stringifiedParams}`
+    : `/api/atelier/me/expense-contexts`;
+};
+
+export const atelierListMyExpenseContexts = async (
+  params?: AtelierListMyExpenseContextsParams,
+  options?: RequestInit,
+): Promise<AtelierListMyExpenseContexts200> => {
+  return customFetch<AtelierListMyExpenseContexts200>(
+    getAtelierListMyExpenseContextsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListMyExpenseContextsQueryKey = (
+  params?: AtelierListMyExpenseContextsParams,
+) => {
+  return [
+    `/api/atelier/me/expense-contexts`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListMyExpenseContextsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListMyExpenseContexts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListMyExpenseContextsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListMyExpenseContexts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListMyExpenseContextsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListMyExpenseContexts>>
+  > = ({ signal }) =>
+    atelierListMyExpenseContexts(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListMyExpenseContexts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListMyExpenseContextsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListMyExpenseContexts>>
+>;
+export type AtelierListMyExpenseContextsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — minimal account/engagement tags for the claim context picker
+ */
+
+export function useAtelierListMyExpenseContexts<
+  TData = Awaited<ReturnType<typeof atelierListMyExpenseContexts>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListMyExpenseContextsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListMyExpenseContexts>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListMyExpenseContextsQueryOptions(
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

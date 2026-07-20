@@ -14,4 +14,6 @@ export type {
   AtelierUploadCandidateDocumentBody,
   AtelierListDocumentsParams,
   AtelierDownloadDocumentParams,
+  AtelierSubmitMyExpenseBody,
+  AuthLoginResponse,
 } from "./generated/types";

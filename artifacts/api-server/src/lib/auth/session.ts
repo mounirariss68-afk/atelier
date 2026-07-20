@@ -29,6 +29,22 @@ declare global {
   }
 }
 
+/**
+ * Task #328 — mobile clients authenticate with `Authorization: Bearer <token>`
+ * (the same opaque session token the web client keeps in the httpOnly
+ * cookie). Cookie wins when both are present (web semantics unchanged).
+ */
+export function sessionTokenFromRequest(req: Request): string | undefined {
+  const cookieToken = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  if (cookieToken) return cookieToken;
+  const header = req.headers.authorization;
+  if (typeof header === "string" && header.startsWith("Bearer ")) {
+    const t = header.slice("Bearer ".length).trim();
+    if (t) return t;
+  }
+  return undefined;
+}
+
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -181,13 +197,21 @@ export async function requireAuthSession(
 ): Promise<void> {
   try {
     if (isTestAuthBypass()) {
+      // Task #328 — even under the test bypass, resolve a presented token so
+      // downstream persona resolution (attachPersona) sees the real identity,
+      // matching production bearer-token behavior for mobile clients.
+      const bypassToken = sessionTokenFromRequest(req);
+      if (bypassToken) {
+        const bypassSession = await lookupSession(bypassToken);
+        if (bypassSession) req.authSession = bypassSession;
+      }
       next();
       return;
     }
-    const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+    const token = sessionTokenFromRequest(req);
     const session = token ? await lookupSession(token) : null;
     if (!session) {
-      if (token) clearSessionCookie(res);
+      if (req.cookies?.[AUTH_SESSION_COOKIE]) clearSessionCookie(res);
       res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
       return;
     }

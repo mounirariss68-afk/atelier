@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/mobile/"
+title = "Atelier Mobile"
+version = "1.0.0"
+id = "artifacts/atelier-mobile"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/mobile/" ]
+localPort = 20039
+
+[services.development]
+run = "pnpm --filter @workspace/atelier-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/atelier-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/atelier-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "20039"
+BASE_PATH = "/mobile/"

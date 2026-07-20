@@ -3002,6 +3002,172 @@ export interface AtelierOkResponse {
   ok: boolean;
 }
 
+export interface AuthErrorResponse {
+  error: string;
+  message?: string;
+}
+
+/**
+ * When "mobile", the response includes the bearer token.
+ */
+export type AuthLoginRequestClient =
+  (typeof AuthLoginRequestClient)[keyof typeof AuthLoginRequestClient];
+
+export const AuthLoginRequestClient = {
+  mobile: "mobile",
+} as const;
+
+export interface AuthLoginRequest {
+  email: string;
+  password: string;
+  /** When "mobile", the response includes the bearer token. */
+  client?: AuthLoginRequestClient;
+}
+
+export interface AuthLoginResponse {
+  user: AtelierPersona;
+  mustChangePassword: boolean;
+  mustChangeReason?: string | null;
+  /** Bearer session token (mobile clients only) */
+  token?: string;
+  expiresAt?: string;
+}
+
+export interface AuthSessionResponse {
+  user: AtelierPersona;
+  expiresAt: string;
+  mustChangePassword: boolean;
+  mustChangeReason?: string | null;
+}
+
+export interface AuthChangePasswordRequest {
+  currentPassword: string;
+  /**
+   * @minLength 10
+   * @maxLength 200
+   */
+  newPassword: string;
+}
+
+export interface AuthAppMeta {
+  minSupportedAppVersion: string;
+  serverTime: string;
+}
+
+export interface AtelierIdName {
+  id: string;
+  name: string;
+}
+
+export interface AtelierSelfExpense {
+  id: string;
+  expenseDate: string;
+  merchant?: string | null;
+  description?: string | null;
+  category?: string | null;
+  amount: number;
+  currency: string;
+  usdAmount?: number | null;
+  status: string;
+  policyStatus: string;
+  policyFindings?: unknown;
+  contextType: string;
+  accountId?: string | null;
+  engagementId?: string | null;
+  internalProjectLabel?: string | null;
+  receiptFileRef?: string | null;
+  hasReceipt: boolean;
+  submittedAt?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectedReason?: string | null;
+  reimbursedAt?: string | null;
+  createdAt: string;
+}
+
+export type AtelierSelfExpenseCreateContextType =
+  (typeof AtelierSelfExpenseCreateContextType)[keyof typeof AtelierSelfExpenseCreateContextType];
+
+export const AtelierSelfExpenseCreateContextType = {
+  bd: "bd",
+  account: "account",
+  engagement: "engagement",
+  internal: "internal",
+} as const;
+
+export interface AtelierSelfExpenseCreate {
+  amount: number;
+  /** @maxLength 3 */
+  currency?: string;
+  /** @maxLength 200 */
+  merchant: string;
+  /** @maxLength 2000 */
+  description?: string;
+  category?: string;
+  expenseDate?: string;
+  contextType?: AtelierSelfExpenseCreateContextType;
+  accountId?: string;
+  engagementId?: string;
+  /** @maxLength 200 */
+  internalProjectLabel?: string;
+  receiptPath?: string;
+}
+
+export type AtelierSelfExpensePatchContextType =
+  (typeof AtelierSelfExpensePatchContextType)[keyof typeof AtelierSelfExpensePatchContextType];
+
+export const AtelierSelfExpensePatchContextType = {
+  bd: "bd",
+  account: "account",
+  engagement: "engagement",
+  internal: "internal",
+} as const;
+
+export interface AtelierSelfExpensePatch {
+  amount?: number;
+  /** @maxLength 3 */
+  currency?: string;
+  /** @maxLength 200 */
+  merchant?: string;
+  /** @maxLength 2000 */
+  description?: string;
+  category?: string;
+  expenseDate?: string;
+  contextType?: AtelierSelfExpensePatchContextType;
+  accountId?: string;
+  engagementId?: string;
+  /** @maxLength 200 */
+  internalProjectLabel?: string;
+  receiptPath?: string;
+}
+
+export interface AtelierSelfExpenseResponse {
+  expense: AtelierSelfExpense;
+}
+
+export interface AtelierSelfExpensePolicyBlock {
+  error: string;
+  message?: string;
+  findings?: unknown;
+}
+
+export type AtelierSelfExpenseParseResponseProposal = {
+  category: string;
+  vatTreatment?: string;
+  vatAmount?: number;
+  clientBillable?: boolean;
+  markupPct?: number;
+  summary: string;
+  ocrConfidence: string;
+};
+
+export interface AtelierSelfExpenseParseResponse {
+  expense: AtelierSelfExpense;
+  runId: string;
+  proposal: AtelierSelfExpenseParseResponseProposal;
+  policyFindings?: unknown;
+}
+
 export interface AtelierSelfProfile {
   user: AtelierPersona;
   person?: AtelierSelfPerson | null;
@@ -6738,6 +6904,14 @@ export interface AtelierContractPrepareError {
   fields?: AtelierContractTemplateField[];
 }
 
+export type AuthLogout200 = {
+  ok: boolean;
+};
+
+export type AuthChangePassword200 = {
+  ok: boolean;
+};
+
 export type AtelierDisconnectMyMsConnection200 = {
   ok: boolean;
   disconnected: boolean;
@@ -6802,6 +6976,28 @@ export type AtelierReplaceMyDocumentScanBody = {
 
 export type AtelierReplaceMyDocumentScan200 = {
   document: AtelierSelfDocument;
+};
+
+export type AtelierListMyExpenses200 = {
+  expenses: AtelierSelfExpense[];
+};
+
+export type AtelierSubmitMyExpenseBody = {
+  /** @maxLength 2000 */
+  overrideRationale?: string;
+};
+
+export type AtelierGetMyReceiptUploadUrl200 = {
+  uploadURL: string;
+};
+
+export type AtelierListMyExpenseContextsParams = {
+  q?: string;
+};
+
+export type AtelierListMyExpenseContexts200 = {
+  accounts: AtelierIdName[];
+  engagements: AtelierIdName[];
 };
 
 export type AtelierListDocumentsParams = {

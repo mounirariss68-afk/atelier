@@ -63,6 +63,114 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChatError"
 
+  /auth/login:
+    post:
+      operationId: authLogin
+      tags: [atelier]
+      summary: Sign in with Atelier credentials (mobile clients get a bearer token)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: Signed in (cookie set; token returned when client=mobile)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthLoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [atelier]
+      summary: Sign out (destroys the session behind the cookie or bearer token)
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+  /auth/session:
+    get:
+      operationId: authGetSession
+      tags: [atelier]
+      summary: Current auth session (cookie or bearer token)
+      responses:
+        "200":
+          description: Active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "401":
+          description: No active session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /auth/change-password:
+    post:
+      operationId: authChangePassword
+      tags: [atelier]
+      summary: Change own password (also satisfies a forced change)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Invalid body / weak password / same password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "403":
+          description: Current password incorrect
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /auth/app-meta:
+    get:
+      operationId: authGetAppMeta
+      tags: [atelier]
+      summary: Public launch-gate metadata for the mobile app (no auth required)
+      responses:
+        "200":
+          description: App metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthAppMeta"
   /atelier/me:
     get:
       operationId: atelierGetMe
@@ -298,6 +406,185 @@ paths:
           content:
             application/octet-stream:
               schema: { type: string, format: binary }
+  /atelier/me/expenses:
+    get:
+      operationId: atelierListMyExpenses
+      tags: [atelier]
+      summary: Me lens — the caller's own expense claims (self-scope)
+      responses:
+        "200":
+          description: Own claims, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [expenses]
+                properties:
+                  expenses:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierSelfExpense" }
+    post:
+      operationId: atelierCreateMyExpense
+      tags: [atelier]
+      summary: Me lens — create a draft expense claim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSelfExpenseCreate"
+      responses:
+        "201":
+          description: Draft claim created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfExpenseResponse"
+  /atelier/me/expenses/{id}:
+    patch:
+      operationId: atelierUpdateMyExpense
+      tags: [atelier]
+      summary: Me lens — edit one of the caller's own draft/rejected claims
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierSelfExpensePatch"
+      responses:
+        "200":
+          description: Updated claim
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfExpenseResponse"
+        "409":
+          description: Not editable in its current status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+    delete:
+      operationId: atelierDeleteMyExpense
+      tags: [atelier]
+      summary: Me lens — delete one of the caller's own draft claims
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/me/expenses/{id}/submit:
+    post:
+      operationId: atelierSubmitMyExpense
+      tags: [atelier]
+      summary: Me lens — submit a claim (deterministic policy evaluation)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                overrideRationale: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfExpenseResponse"
+        "409":
+          description: Policy amber (needs rationale) or red (blocked)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfExpensePolicyBlock"
+  /atelier/me/expenses/{id}/parse-receipt:
+    post:
+      operationId: atelierParseMyExpenseReceipt
+      tags: [atelier]
+      summary: Me lens — vision-parse the attached receipt photo via the Expense Auditor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Draft updated with Auditor proposal + policy findings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierSelfExpenseParseResponse"
+        "400":
+          description: No receipt attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "422":
+          description: Unreadable / unsupported / parse failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+  /atelier/me/expenses/receipt-upload:
+    post:
+      operationId: atelierGetMyReceiptUploadUrl
+      tags: [atelier]
+      summary: Me lens — signed upload URL for a receipt photo (private bucket)
+      responses:
+        "200":
+          description: One-time signed PUT URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [uploadURL]
+                properties:
+                  uploadURL: { type: string }
+  /atelier/me/expense-contexts:
+    get:
+      operationId: atelierListMyExpenseContexts
+      tags: [atelier]
+      summary: Me lens — minimal account/engagement tags for the claim context picker
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching accounts + engagements (id + name only)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accounts, engagements]
+                properties:
+                  accounts:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierIdName" }
+                  engagements:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierIdName" }
   /atelier/documents:
     get:
       operationId: atelierListDocuments
@@ -7426,6 +7713,181 @@ components:
       required: [ok]
       properties:
         ok: { type: boolean }
+
+    AuthErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        message: { type: string }
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+        client:
+          type: string
+          enum: [mobile]
+          description: When "mobile", the response includes the bearer token.
+    AuthLoginResponse:
+      type: object
+      required: [user, mustChangePassword]
+      properties:
+        user: { $ref: "#/components/schemas/AtelierPersona" }
+        mustChangePassword: { type: boolean }
+        mustChangeReason:
+          type: string
+          nullable: true
+        token:
+          type: string
+          description: Bearer session token (mobile clients only)
+        expiresAt: { type: string, format: date-time }
+    AuthSessionResponse:
+      type: object
+      required: [user, expiresAt, mustChangePassword]
+      properties:
+        user: { $ref: "#/components/schemas/AtelierPersona" }
+        expiresAt: { type: string, format: date-time }
+        mustChangePassword: { type: boolean }
+        mustChangeReason:
+          type: string
+          nullable: true
+    AuthChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string, minLength: 10, maxLength: 200 }
+    AuthAppMeta:
+      type: object
+      required: [minSupportedAppVersion, serverTime]
+      properties:
+        minSupportedAppVersion: { type: string }
+        serverTime: { type: string, format: date-time }
+
+    AtelierIdName:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    AtelierSelfExpense:
+      type: object
+      required: [id, expenseDate, amount, currency, status, policyStatus, contextType, hasReceipt, createdAt]
+      properties:
+        id: { type: string }
+        expenseDate: { type: string }
+        merchant:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        amount: { type: number }
+        currency: { type: string }
+        usdAmount:
+          type: number
+          nullable: true
+        status: { type: string }
+        policyStatus: { type: string }
+        policyFindings: {}
+        contextType: { type: string }
+        accountId:
+          type: string
+          nullable: true
+        engagementId:
+          type: string
+          nullable: true
+        internalProjectLabel:
+          type: string
+          nullable: true
+        receiptFileRef:
+          type: string
+          nullable: true
+        hasReceipt: { type: boolean }
+        submittedAt:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          nullable: true
+        rejectedAt:
+          type: string
+          nullable: true
+        rejectedReason:
+          type: string
+          nullable: true
+        reimbursedAt:
+          type: string
+          nullable: true
+        createdAt: { type: string }
+    AtelierSelfExpenseCreate:
+      type: object
+      required: [amount, merchant]
+      properties:
+        amount: { type: number }
+        currency: { type: string, maxLength: 3 }
+        merchant: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string }
+        expenseDate: { type: string }
+        contextType:
+          type: string
+          enum: [bd, account, engagement, internal]
+        accountId: { type: string }
+        engagementId: { type: string }
+        internalProjectLabel: { type: string, maxLength: 200 }
+        receiptPath: { type: string }
+    AtelierSelfExpensePatch:
+      type: object
+      properties:
+        amount: { type: number }
+        currency: { type: string, maxLength: 3 }
+        merchant: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        category: { type: string }
+        expenseDate: { type: string }
+        contextType:
+          type: string
+          enum: [bd, account, engagement, internal]
+        accountId: { type: string }
+        engagementId: { type: string }
+        internalProjectLabel: { type: string, maxLength: 200 }
+        receiptPath: { type: string }
+    AtelierSelfExpenseResponse:
+      type: object
+      required: [expense]
+      properties:
+        expense: { $ref: "#/components/schemas/AtelierSelfExpense" }
+    AtelierSelfExpensePolicyBlock:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+        message: { type: string }
+        findings: {}
+    AtelierSelfExpenseParseResponse:
+      type: object
+      required: [expense, runId, proposal]
+      properties:
+        expense: { $ref: "#/components/schemas/AtelierSelfExpense" }
+        runId: { type: string }
+        proposal:
+          type: object
+          required: [category, summary, ocrConfidence]
+          properties:
+            category: { type: string }
+            vatTreatment: { type: string }
+            vatAmount: { type: number }
+            clientBillable: { type: boolean }
+            markupPct: { type: number }
+            summary: { type: string }
+            ocrConfidence: { type: string }
+        policyFindings: {}
 
     AtelierSelfProfile:
       type: object

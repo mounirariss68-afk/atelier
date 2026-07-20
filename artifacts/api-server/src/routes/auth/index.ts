@@ -5,6 +5,7 @@ import { randomUUID, randomBytes } from "node:crypto";
 import { verifyPassword, hashPassword } from "../../lib/auth/passwords";
 import {
   AUTH_SESSION_COOKIE,
+  sessionTokenFromRequest,
   createSession,
   destroySession,
   lookupSession,
@@ -153,17 +154,31 @@ router.post("/login", async (req: Request, res: Response) => {
   });
   setSessionCookie(res, token, expiresAt);
   await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
+  // Task #328 — the mobile app cannot use httpOnly cookies; it asks for the
+  // session token in the response body and sends it back as a Bearer header.
+  const isMobileClient = String(req.body?.client ?? "") === "mobile";
   res.json({
     user: personaToWire(persona),
     mustChangePassword: cred.mustChangePassword,
     // Task #59 — "joiner" (first-ever login) vs "reset" (partner reset);
     // drives the copy on the forced-change interstitial.
     mustChangeReason: cred.mustChangePassword ? (cred.mustChangeReason ?? "reset") : null,
+    ...(isMobileClient ? { token, expiresAt: expiresAt.toISOString() } : {}),
+  });
+});
+
+// Task #328 — public launch-gate metadata for the mobile app. Mounted in
+// front of the global auth gate on purpose: the app must be able to check
+// the minimum supported version before anyone signs in.
+router.get("/app-meta", (_req: Request, res: Response) => {
+  res.json({
+    minSupportedAppVersion: process.env.ATELIER_MIN_APP_VERSION ?? "1.0.0",
+    serverTime: new Date().toISOString(),
   });
 });
 
 router.post("/logout", async (req: Request, res: Response) => {
-  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const token = sessionTokenFromRequest(req);
   if (token) {
     const session = await lookupSession(token);
     await destroySession(token);
@@ -188,7 +203,7 @@ router.post("/logout", async (req: Request, res: Response) => {
 // with the same per-IP window as login.
 router.post("/change-password", async (req: Request, res: Response) => {
   const ip = req.ip ?? "unknown";
-  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const token = sessionTokenFromRequest(req);
   const session = token ? await lookupSession(token) : null;
   if (!session) {
     res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
@@ -266,7 +281,7 @@ router.post("/change-password", async (req: Request, res: Response) => {
 });
 
 router.get("/session", async (req: Request, res: Response) => {
-  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const token = sessionTokenFromRequest(req);
   const session = token ? await lookupSession(token) : null;
   if (!session) {
     res.status(401).json({ error: "unauthenticated" });
@@ -310,7 +325,7 @@ async function requireFoundingPartner(
   req: Request,
   res: Response,
 ): Promise<{ userId: string; email: string; name: string } | null> {
-  const token = req.cookies?.[AUTH_SESSION_COOKIE] as string | undefined;
+  const token = sessionTokenFromRequest(req);
   const session = token ? await lookupSession(token) : null;
   if (!session) {
     res.status(401).json({ error: "unauthenticated", message: "Sign in required." });

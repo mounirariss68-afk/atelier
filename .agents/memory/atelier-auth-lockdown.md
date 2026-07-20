@@ -10,3 +10,5 @@ description: How real login/session gating works and its test/prod escape hatche
 - Credential seed (`atelier-seed-auth`) is boot-time and data-only — no runtime DDL; prod tables arrive via the Publish schema diff. If a password-change feature lands, the seed must stop overwriting user-set hashes.
 - Passwords: node scrypt (no bcrypt dep), timing-safe compare, dummy verify on unknown email for anti-enumeration.
 - Partner-initiated reset: `must_change_password` lives on BOTH credential and session rows — copied at login, enforced by the global gate (403 `password-change-required`), cleared by change-password. Reset sets `user_managed=true` so the boot seed never resurrects the old password; all target sessions are revoked.
+
+**Mobile bearer (Task-era update, 2026-07-19):** mobile clients send `Authorization: Bearer <token>` (same opaque session token; cookie wins if both). Under the NODE_ENV=test bypass, `requireAuthSession` now still resolves a presented token and attaches `req.authSession`, so persona resolution matches production — probe: `pnpm --filter @workspace/api-server test:mobile-auth`.

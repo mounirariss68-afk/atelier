@@ -42,6 +42,116 @@ export const ChatBody = zod.object({
 });
 
 /**
+ * @summary Sign in with Atelier credentials (mobile clients get a bearer token)
+ */
+export const AuthLoginBody = zod.object({
+  email: zod.string(),
+  password: zod.string(),
+  client: zod
+    .enum(["mobile"])
+    .optional()
+    .describe('When \"mobile\", the response includes the bearer token.'),
+});
+
+export const AuthLoginResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "contractor",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer",
+      "employee",
+    ]),
+    roleLabel: zod.string(),
+    title: zod.string(),
+    initials: zod.string(),
+    avatarUrl: zod.string().nullish(),
+  }),
+  mustChangePassword: zod.boolean(),
+  mustChangeReason: zod.string().nullish(),
+  token: zod
+    .string()
+    .optional()
+    .describe("Bearer session token (mobile clients only)"),
+  expiresAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Sign out (destroys the session behind the cookie or bearer token)
+ */
+export const AuthLogoutResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Current auth session (cookie or bearer token)
+ */
+export const AuthGetSessionResponse = zod.object({
+  user: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    email: zod.string(),
+    role: zod.enum([
+      "founding_partner",
+      "partner",
+      "finance",
+      "hr",
+      "senior_manager",
+      "consultant",
+      "contractor",
+      "partner_firm_resource",
+      "board_observer",
+      "recruiter",
+      "compliance_officer",
+      "employee",
+    ]),
+    roleLabel: zod.string(),
+    title: zod.string(),
+    initials: zod.string(),
+    avatarUrl: zod.string().nullish(),
+  }),
+  expiresAt: zod.coerce.date(),
+  mustChangePassword: zod.boolean(),
+  mustChangeReason: zod.string().nullish(),
+});
+
+/**
+ * @summary Change own password (also satisfies a forced change)
+ */
+export const authChangePasswordBodyNewPasswordMin = 10;
+export const authChangePasswordBodyNewPasswordMax = 200;
+
+export const AuthChangePasswordBody = zod.object({
+  currentPassword: zod.string(),
+  newPassword: zod
+    .string()
+    .min(authChangePasswordBodyNewPasswordMin)
+    .max(authChangePasswordBodyNewPasswordMax),
+});
+
+export const AuthChangePasswordResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Public launch-gate metadata for the mobile app (no auth required)
+ */
+export const AuthGetAppMetaResponse = zod.object({
+  minSupportedAppVersion: zod.string(),
+  serverTime: zod.coerce.date(),
+});
+
+/**
  * @summary Current persona for The Atelier session
  */
 export const AtelierGetMeResponse = zod.object({
@@ -500,6 +610,263 @@ export const AtelierReplaceMyDocumentScanResponse = zod.object({
  */
 export const AtelierDownloadMyDocumentParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * @summary Me lens — the caller's own expense claims (self-scope)
+ */
+export const AtelierListMyExpensesResponse = zod.object({
+  expenses: zod.array(
+    zod.object({
+      id: zod.string(),
+      expenseDate: zod.string(),
+      merchant: zod.string().nullish(),
+      description: zod.string().nullish(),
+      category: zod.string().nullish(),
+      amount: zod.number(),
+      currency: zod.string(),
+      usdAmount: zod.number().nullish(),
+      status: zod.string(),
+      policyStatus: zod.string(),
+      policyFindings: zod.unknown().optional(),
+      contextType: zod.string(),
+      accountId: zod.string().nullish(),
+      engagementId: zod.string().nullish(),
+      internalProjectLabel: zod.string().nullish(),
+      receiptFileRef: zod.string().nullish(),
+      hasReceipt: zod.boolean(),
+      submittedAt: zod.string().nullish(),
+      approvedAt: zod.string().nullish(),
+      rejectedAt: zod.string().nullish(),
+      rejectedReason: zod.string().nullish(),
+      reimbursedAt: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Me lens — create a draft expense claim
+ */
+export const atelierCreateMyExpenseBodyCurrencyMax = 3;
+
+export const atelierCreateMyExpenseBodyMerchantMax = 200;
+
+export const atelierCreateMyExpenseBodyDescriptionMax = 2000;
+
+export const atelierCreateMyExpenseBodyInternalProjectLabelMax = 200;
+
+export const AtelierCreateMyExpenseBody = zod.object({
+  amount: zod.number(),
+  currency: zod.string().max(atelierCreateMyExpenseBodyCurrencyMax).optional(),
+  merchant: zod.string().max(atelierCreateMyExpenseBodyMerchantMax),
+  description: zod
+    .string()
+    .max(atelierCreateMyExpenseBodyDescriptionMax)
+    .optional(),
+  category: zod.string().optional(),
+  expenseDate: zod.string().optional(),
+  contextType: zod.enum(["bd", "account", "engagement", "internal"]).optional(),
+  accountId: zod.string().optional(),
+  engagementId: zod.string().optional(),
+  internalProjectLabel: zod
+    .string()
+    .max(atelierCreateMyExpenseBodyInternalProjectLabelMax)
+    .optional(),
+  receiptPath: zod.string().optional(),
+});
+
+/**
+ * @summary Me lens — edit one of the caller's own draft/rejected claims
+ */
+export const AtelierUpdateMyExpenseParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierUpdateMyExpenseBodyCurrencyMax = 3;
+
+export const atelierUpdateMyExpenseBodyMerchantMax = 200;
+
+export const atelierUpdateMyExpenseBodyDescriptionMax = 2000;
+
+export const atelierUpdateMyExpenseBodyInternalProjectLabelMax = 200;
+
+export const AtelierUpdateMyExpenseBody = zod.object({
+  amount: zod.number().optional(),
+  currency: zod.string().max(atelierUpdateMyExpenseBodyCurrencyMax).optional(),
+  merchant: zod.string().max(atelierUpdateMyExpenseBodyMerchantMax).optional(),
+  description: zod
+    .string()
+    .max(atelierUpdateMyExpenseBodyDescriptionMax)
+    .optional(),
+  category: zod.string().optional(),
+  expenseDate: zod.string().optional(),
+  contextType: zod.enum(["bd", "account", "engagement", "internal"]).optional(),
+  accountId: zod.string().optional(),
+  engagementId: zod.string().optional(),
+  internalProjectLabel: zod
+    .string()
+    .max(atelierUpdateMyExpenseBodyInternalProjectLabelMax)
+    .optional(),
+  receiptPath: zod.string().optional(),
+});
+
+export const AtelierUpdateMyExpenseResponse = zod.object({
+  expense: zod.object({
+    id: zod.string(),
+    expenseDate: zod.string(),
+    merchant: zod.string().nullish(),
+    description: zod.string().nullish(),
+    category: zod.string().nullish(),
+    amount: zod.number(),
+    currency: zod.string(),
+    usdAmount: zod.number().nullish(),
+    status: zod.string(),
+    policyStatus: zod.string(),
+    policyFindings: zod.unknown().optional(),
+    contextType: zod.string(),
+    accountId: zod.string().nullish(),
+    engagementId: zod.string().nullish(),
+    internalProjectLabel: zod.string().nullish(),
+    receiptFileRef: zod.string().nullish(),
+    hasReceipt: zod.boolean(),
+    submittedAt: zod.string().nullish(),
+    approvedAt: zod.string().nullish(),
+    rejectedAt: zod.string().nullish(),
+    rejectedReason: zod.string().nullish(),
+    reimbursedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+  }),
+});
+
+/**
+ * @summary Me lens — delete one of the caller's own draft claims
+ */
+export const AtelierDeleteMyExpenseParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierDeleteMyExpenseResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Me lens — submit a claim (deterministic policy evaluation)
+ */
+export const AtelierSubmitMyExpenseParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierSubmitMyExpenseBodyOverrideRationaleMax = 2000;
+
+export const AtelierSubmitMyExpenseBody = zod.object({
+  overrideRationale: zod
+    .string()
+    .max(atelierSubmitMyExpenseBodyOverrideRationaleMax)
+    .optional(),
+});
+
+export const AtelierSubmitMyExpenseResponse = zod.object({
+  expense: zod.object({
+    id: zod.string(),
+    expenseDate: zod.string(),
+    merchant: zod.string().nullish(),
+    description: zod.string().nullish(),
+    category: zod.string().nullish(),
+    amount: zod.number(),
+    currency: zod.string(),
+    usdAmount: zod.number().nullish(),
+    status: zod.string(),
+    policyStatus: zod.string(),
+    policyFindings: zod.unknown().optional(),
+    contextType: zod.string(),
+    accountId: zod.string().nullish(),
+    engagementId: zod.string().nullish(),
+    internalProjectLabel: zod.string().nullish(),
+    receiptFileRef: zod.string().nullish(),
+    hasReceipt: zod.boolean(),
+    submittedAt: zod.string().nullish(),
+    approvedAt: zod.string().nullish(),
+    rejectedAt: zod.string().nullish(),
+    rejectedReason: zod.string().nullish(),
+    reimbursedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+  }),
+});
+
+/**
+ * @summary Me lens — vision-parse the attached receipt photo via the Expense Auditor
+ */
+export const AtelierParseMyExpenseReceiptParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierParseMyExpenseReceiptResponse = zod.object({
+  expense: zod.object({
+    id: zod.string(),
+    expenseDate: zod.string(),
+    merchant: zod.string().nullish(),
+    description: zod.string().nullish(),
+    category: zod.string().nullish(),
+    amount: zod.number(),
+    currency: zod.string(),
+    usdAmount: zod.number().nullish(),
+    status: zod.string(),
+    policyStatus: zod.string(),
+    policyFindings: zod.unknown().optional(),
+    contextType: zod.string(),
+    accountId: zod.string().nullish(),
+    engagementId: zod.string().nullish(),
+    internalProjectLabel: zod.string().nullish(),
+    receiptFileRef: zod.string().nullish(),
+    hasReceipt: zod.boolean(),
+    submittedAt: zod.string().nullish(),
+    approvedAt: zod.string().nullish(),
+    rejectedAt: zod.string().nullish(),
+    rejectedReason: zod.string().nullish(),
+    reimbursedAt: zod.string().nullish(),
+    createdAt: zod.string(),
+  }),
+  runId: zod.string(),
+  proposal: zod.object({
+    category: zod.string(),
+    vatTreatment: zod.string().optional(),
+    vatAmount: zod.number().optional(),
+    clientBillable: zod.boolean().optional(),
+    markupPct: zod.number().optional(),
+    summary: zod.string(),
+    ocrConfidence: zod.string(),
+  }),
+  policyFindings: zod.unknown().optional(),
+});
+
+/**
+ * @summary Me lens — signed upload URL for a receipt photo (private bucket)
+ */
+export const AtelierGetMyReceiptUploadUrlResponse = zod.object({
+  uploadURL: zod.string(),
+});
+
+/**
+ * @summary Me lens — minimal account/engagement tags for the claim context picker
+ */
+export const AtelierListMyExpenseContextsQueryParams = zod.object({
+  q: zod.coerce.string().optional(),
+});
+
+export const AtelierListMyExpenseContextsResponse = zod.object({
+  accounts: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+    }),
+  ),
+  engagements: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+    }),
+  ),
 });
 
 /**
