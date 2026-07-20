@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-client-react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect } from "react";
 import { ActivityIndicator, Image, View } from "react-native";
@@ -25,7 +26,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FeedbackProvider } from "@/components/feedback";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { I18nProvider } from "@/contexts/I18nContext";
-import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ThemeProvider, useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
@@ -48,6 +49,11 @@ const queryClient = new QueryClient({
     },
   }),
 });
+
+function ThemedStatusBar() {
+  const scheme = useThemeScheme();
+  return <StatusBar style={scheme === "dark" ? "light" : "dark"} />;
+}
 
 function Gate() {
   const { ready, token, mustChangePassword } = useAuth();
@@ -138,6 +144,7 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider>
+            <ThemedStatusBar />
             <I18nProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
                 <KeyboardProvider>

@@ -25,7 +25,6 @@
       "softwareKeyboardLayoutMode": "pan"
     },
     "androidStatusBar": {
-      "barStyle": "dark-content",
       "backgroundColor": "#00000000",
       "translucent": true
     },
