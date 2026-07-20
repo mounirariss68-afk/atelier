@@ -305,6 +305,15 @@ export async function applyStageTransition(
     const hook = await ensureEngagementForContract(updated, actor);
     firedCharter = hook.firedCharter;
     engagementHookError = hook.error;
+    // Task #434 — capture the immutable sold-position snapshot at first
+    // contract entry. Best-effort: a failure never blocks the stage move
+    // (the backfill route can capture it later), but it is logged.
+    try {
+      const { captureSoldPositionSnapshot } = await import("../atelier-margin-reporting.js");
+      await captureSoldPositionSnapshot(updated, { id: actor.id, name: actor.name }, "contract_stage");
+    } catch (err) {
+      console.warn("[atelier] sold-position snapshot capture failed (non-blocking)", err);
+    }
   }
 
   // Closed-deal Win/Loss debrief enqueue (contract is the working "won").

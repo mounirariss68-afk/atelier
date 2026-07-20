@@ -23,7 +23,7 @@ const SECTIONS: SectionTile[] = [
   { id: "payables", label: "Pay", href: "/finance/payables", blurb: "Vendors, PO / non-PO, expenses, VAT / WHT, payment runs." },
   { id: "close", label: "Close", href: "/finance/close", blurb: "Period close checklist, reconciliations, adjusting entries, sign-offs." },
   { id: "plan", label: "Plan (FP&A)", href: "/finance/plan", blurb: "Budget, re-forecasts, 13-week cash, renewals, scenarios, long-range." },
-  { id: "reports", label: "Report", href: "/finance/reports", blurb: "P&L · BS · CF, firm/engagement economics, board pack, scheduled exports." },
+  { id: "reports", label: "Report", href: "/finance/reports", blurb: "P&L · BS · CF, firm/engagement economics, margin & realization, board pack." },
   { id: "comply", label: "Comply", href: "/finance/comply", blurb: "Tax filings calendar, statutory accounts, transfer pricing, controls." },
 ];
 

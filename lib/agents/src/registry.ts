@@ -575,6 +575,40 @@ export const BurnSentinel = defineAgent({
   ],
 });
 
+export const MarginSentinel = defineAgent({
+  id: "ag_margin_sentinel",
+  name: "Margin Sentinel",
+  group: "Deliver",
+  stage: "Deliver",
+  purpose:
+    "Daily sweep comparing delivered economics against the immutable sold-position baseline; writes Pane A alerts to the Partner Owner when realization drops below 85%/70% or leakage crosses 15% of sold price.",
+  model: "claude-haiku-4-5",
+  starred: false,
+  status: "mvp",
+  systemPromptRef: "prompts/margin_sentinel/v1.md",
+  inputSchema: z.object({
+    force: z.boolean().optional(),
+  }),
+  outputSchema: z.object({
+    alertsWritten: z.number().int().nonnegative(),
+    engagementsScanned: z.number().int().nonnegative(),
+  }),
+  tools: ["knowledge.search"],
+  guardrails: [
+    "Each (engagement, band) fires at most once",
+    "Requires a sold-position snapshot and delivered hours ≥ 25% of sold hours",
+    "Margin alerts always flow through Pane A, never email-only",
+  ],
+  humanCheckpoints: [leadCheck("Partner Owner acknowledges margin alert")],
+  evals: [
+    {
+      id: "ev_dedupe",
+      description: "Re-running the tick produces zero new alerts when state is unchanged",
+      threshold: 1,
+    },
+  ],
+});
+
 export const UtilizationAnalyst = defineAgent({
   id: "ag_utilization_analyst",
   name: "Utilization Analyst",
@@ -1801,6 +1835,7 @@ export const ATELIER_AGENTS: Agent[] = [
   SynthesisCritic,
   // Reconciled post-MVP — runner + prompt + UI exist
   BurnSentinel,
+  MarginSentinel,
   UtilizationAnalyst,
   ExpenseAuditor,
   PricingStrategist,

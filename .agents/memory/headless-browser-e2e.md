@@ -15,3 +15,5 @@ The app sits behind the global login gate, so screenshot tools can't exercise it
 **Expo mobile web variant:** react-native-web Pressables ignore synthetic MouseEvent dispatch — don't script the login form. Instead pre-seed `localStorage.atelier_session_token` via `evaluateOnNewDocument` and stub ALL `/api/*` responses with puppeteer request interception (answer OPTIONS preflights with full CORS headers or cross-origin fetches silently fail). This renders any auth-gated mobile screen with fixture data, no DB or server auth needed.
 
 **Auth without a password:** mint a session directly — random hex token, insert its sha256 into `atelier_auth_sessions` (token_hash/user_id/email/expires_at) via psql, set cookie `atelier_auth_session=<token>` on localhost in puppeteer. Delete the row after. Note: puppeteer scripts must live inside the workspace (not /tmp) to resolve node_modules; className checks for active tabs must exact-match `text-gold` (hover:text-gold false-positives).
+
+- Vite dev server (e.g. :24797) does NOT proxy /api — drive the browser at the shared proxy `http://localhost:80/<path>` or auth/session calls miss and login screen shows.

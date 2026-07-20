@@ -18,6 +18,7 @@ import {
 } from "@workspace/db";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { runTimeSteward, startRun, completeRun } from "./runner.js";
+import { runMarginSentinelTick } from "./marginSentinel.js";
 
 type NudgeKind = "submit_due" | "approve_due";
 
@@ -190,6 +191,11 @@ export function startLedgerNudgeJob(): void {
     });
     void runBurnSentinelTick().catch((err) => {
       console.warn("[ledger.burn] sentinel tick failed:", err);
+    });
+    // Task #434: Margin Sentinel — realization/leakage sweep (daily gate
+    // inside the function, 06:00 GST).
+    void runMarginSentinelTick().catch((err) => {
+      console.warn("[finance.margin] sentinel tick failed:", err);
     });
   }, TICK_MS);
   // Don't keep the process alive for this background ticker.
