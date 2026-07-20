@@ -16,5 +16,5 @@ BOTH card variants are deliberately untagged DeviceRGB — the sRGB ICC OutputIn
 **How to apply:** never add ICC tagging/OutputIntents to the card PDFs without verifying on-screen side-by-side vs the original in a color-managed viewer; tests assert no `/OutputIntents` in either variant.
 
 ## Front logo source (2026-07-20)
-`card-front-logo.png` is extracted from the user's ORIGINAL card PDF (`attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_*.pdf`, `pdfimages`: 1200×319 RGB + soft mask), NOT rendered from the PPTX "SVG" — that SVG just embeds a 1536×1024 raster, so rendering/upscaling it pixelates.
+`card-front-logo.png` is sourced from the committed `card-front-logo-src.png` (1200×319 RGBA, pre-composited RGB+soft-mask), with a legacy fallback to re-extracting from the user's ORIGINAL card PDF in attached_assets (`pdfimages`) — NOT rendered from the PPTX "SVG", which just embeds a 1536×1024 raster, so rendering/upscaling it pixelates. Both regen paths are byte-identical; attached_assets can be cleaned up, so never remove the committed src asset.
 **How to apply:** regen via `regen-card-assets.ts`, which pads the logo onto a transparent canvas with the old padding ratios so placed geometry is unchanged; don't ever upscale the logo raster.

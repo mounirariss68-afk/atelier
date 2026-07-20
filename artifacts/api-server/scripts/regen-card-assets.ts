@@ -5,10 +5,12 @@
  *   npx tsx artifacts/api-server/scripts/regen-card-assets.ts
  *
  * Produces, under artifacts/api-server/assets/atelier-templates/:
- *   - card-front-logo.png     Task #389 — the front logo image extracted
- *     from the user's ORIGINAL card PDF
- *     (attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_*.pdf),
- *     1200×319 RGB + soft mask composited to RGBA. That is the sharpest
+ *   - card-front-logo.png     the front logo, sourced from the committed
+ *     card-front-logo-src.png (1200×319 RGBA, extracted once from the
+ *     user's ORIGINAL card PDF: RGB image + soft mask composited), with a
+ *     fallback to re-extracting from
+ *     attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_*.pdf if the
+ *     source asset is missing. That is the sharpest
  *     available source: the PPTX "SVG" logo is not real vector art (it
  *     embeds a 1536×1024 raster), so rendering/upscaling it only bakes in
  *     artifacts. The logo is embedded near-native (NO upscaling) on a
@@ -29,7 +31,7 @@
  * asset in place. Deterministic — safe to re-run.
  */
 import { execSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -62,40 +64,76 @@ const TEMPLATES = resolve(
 const ART_PLACED_PT = 2187078 / 12700; // ≈ 172.21 pt
 const BLEED_PT = (3 / 25.4) * 72; // 3 mm ≈ 8.504 pt
 
-/** The user's original card PDF — authoritative source of the front logo. */
+/**
+ * Committed 1200×319 RGBA logo source (RGB + soft mask pre-composited),
+ * extracted once from the user's original card PDF. Preferred source —
+ * survives attached_assets cleanup.
+ */
+const FRONT_LOGO_SRC = join(TEMPLATES, "card-front-logo-src.png");
+
+/**
+ * The user's original card PDF — legacy fallback source of the front logo,
+ * used only if the committed source asset above is missing.
+ */
 const ORIGINAL_CARD_PDF = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../..",
   "attached_assets/Mounir_Ariss_Cognirise_Business_Card-4_1784478685341.pdf",
 );
 
-async function main(): Promise<void> {
-  // 1. Task #389 — extract the front logo from the ORIGINAL card PDF:
-  //    image 0 (1200×319 RGB) + image 1 (its soft mask) via pdfimages.
+const LW = 1200;
+const LH = 319;
+
+/** Load the 1200×319 RGBA logo pixels from the best available source. */
+async function loadLogoRgba(): Promise<Buffer> {
+  if (existsSync(FRONT_LOGO_SRC)) {
+    const meta = await sharp(FRONT_LOGO_SRC).metadata();
+    if (meta.width !== LW || meta.height !== LH) {
+      throw new Error(
+        `card-front-logo-src.png is ${meta.width}x${meta.height}, expected ${LW}x${LH}`,
+      );
+    }
+    return sharp(FRONT_LOGO_SRC).ensureAlpha().raw().toBuffer();
+  }
+  if (!existsSync(ORIGINAL_CARD_PDF)) {
+    throw new Error(
+      `Neither ${FRONT_LOGO_SRC} nor ${ORIGINAL_CARD_PDF} exists — no logo source available`,
+    );
+  }
+  // Legacy path: extract image 0 (1200×319 RGB) + image 1 (its soft mask)
+  // from the original card PDF via pdfimages, composite to RGBA.
   const work = mkdtempSync(join(tmpdir(), "card-assets-"));
   execSync(`pdfimages -f 1 -l 1 -png "${ORIGINAL_CARD_PDF}" "${join(work, "orig")}"`);
-  const logoRgb = readFileSync(join(work, "orig-000.png"));
-  const logoMask = readFileSync(join(work, "orig-001.png"));
+  const rgbRaw = await sharp(readFileSync(join(work, "orig-000.png")))
+    .removeAlpha()
+    .raw()
+    .toBuffer();
+  const maskRaw = await sharp(readFileSync(join(work, "orig-001.png")))
+    .toColorspace("b-w")
+    .raw()
+    .toBuffer();
+  return sharp(rgbRaw, { raw: { width: LW, height: LH, channels: 3 } })
+    .joinChannel(maskRaw, { raw: { width: LW, height: LH, channels: 1 } })
+    .raw()
+    .toBuffer();
+}
 
-  // 2. Composite RGB + soft mask to RGBA, then pad onto a transparent
-  //    canvas with the SAME content/padding ratios as the previous asset
-  //    (content 3808×1013 at +400+970 in 4608×3072) so the PDF's fit-box
-  //    placement renders the logo at exactly the same position and size.
-  //    No resampling of the logo pixels themselves.
-  const LW = 1200;
-  const LH = 319;
+async function main(): Promise<void> {
+  // 1. Task #389/#395 — load the front logo (1200×319 RGBA): prefer the
+  //    committed card-front-logo-src.png, fall back to extracting from the
+  //    user's original card PDF in attached_assets.
+  const logoRgba = await loadLogoRgba();
+
+  // 2. Pad the logo onto a transparent canvas with the SAME content/padding
+  //    ratios as the previous asset (content 3808×1013 at +400+970 in
+  //    4608×3072) so the PDF's fit-box placement renders the logo at exactly
+  //    the same position and size. No resampling of the logo pixels.
   const r = LW / 3808;
   const canvasW = Math.round(4608 * r); // 1452
   const canvasH = Math.round(3072 * r); // 968
   const offX = Math.round(400 * r); // 126
   const offY = Math.round(970 * r); // 306
-  const rgbRaw = await sharp(logoRgb).removeAlpha().raw().toBuffer();
-  const maskRaw = await sharp(logoMask)
-    .toColorspace("b-w")
-    .raw()
-    .toBuffer();
-  const logo = await sharp(rgbRaw, { raw: { width: LW, height: LH, channels: 3 } })
-    .joinChannel(maskRaw, { raw: { width: LW, height: LH, channels: 1 } })
+  const logo = await sharp(logoRgba, { raw: { width: LW, height: LH, channels: 4 } })
     .extend({
       left: offX,
       top: offY,
