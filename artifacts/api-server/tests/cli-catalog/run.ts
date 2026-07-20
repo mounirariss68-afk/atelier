@@ -343,16 +343,22 @@ async function main() {
   });
   await test("restricted personas keep roster tools but board_observer does not", () => {
     // Catalog gate: board_observer only sees meta+raid, so roster/account
-    // reads are stripped. Restricted personas (contractor etc.) still see
-    // the tools — the run() handlers deny/scoped-filter at call time.
+    // reads are stripped.
     const obs = { id: "p_obs", name: "Obs", role: "board_observer", orgId: "aico" };
     const obsTools = capabilitiesForPersona(obs).map((c) => c.toolName);
     for (const t of ["roster_list", "person_detail", "contact_list", "document_list"]) {
       assert.ok(!obsTools.includes(t), `board_observer leaked ${t}`);
     }
+    // Task #422 — contractor is a SELF_ONLY_CHAT_ROLE: its chat surface is
+    // exactly the identity-locked me.* read tools (mirrors the /me REST
+    // lens). It keeps its self-scoped expense read via `my_expenses` and
+    // must NOT see any org-wide roster/account tool.
     const ctr = { id: "p_ctr", name: "Ctr", role: "contractor", orgId: "aico" };
     const ctrTools = capabilitiesForPersona(ctr).map((c) => c.toolName);
-    assert.ok(ctrTools.includes("expense_list"), "contractor lost self-scoped expense_list");
+    assert.ok(ctrTools.includes("my_expenses"), "contractor lost self-scoped my_expenses");
+    for (const t of ["expense_list", "roster_list", "person_detail", "person_workload", "account_list"]) {
+      assert.ok(!ctrTools.includes(t), `contractor leaked org-wide ${t}`);
+    }
   });
   await test("chat person projection hard-excludes comp/bank/HR fields", async () => {
     const { toChatPersonCard, CHAT_PERSON_FORBIDDEN_FIELDS } = await import(
@@ -416,6 +422,85 @@ async function main() {
         `or extend the allow-list with justification.\n${head}` +
         (violations.length > 5 ? `\n  ... and ${violations.length - 5} more` : ""),
       );
+    }
+  });
+
+  console.log("\n[9] Task #443 — person_workload roster-scoped resolution (no leak)");
+  await test("scoped caller never sees out-of-scope people via person_workload name lookup", async () => {
+    const { db, atelierUsers, atelierEmployees } = await import("@workspace/db");
+    const { inArray } = await import("drizzle-orm");
+    const { listCapabilities: listCaps } = await import(
+      "../../src/lib/atelier-cli/capability-catalog.js"
+    );
+    const cap = listCaps().find((c) => c.id === "person.workload");
+    assert.ok(cap, "person.workload capability is registered");
+    const TAG = "__t443wl";
+    const orgId = "aico";
+    const now = new Date();
+    const callerUserId = `u_${TAG}_caller`;
+    const callerEmpId = `emp_${TAG}_caller`;
+    const outsiderEmpId = `emp_${TAG}_outsider`;
+    // Unique needle both names share, so a scoped search would surface the
+    // outsider IF (and only if) scope filtering is broken.
+    const needle = "Zzt443wl";
+    try {
+      await db.insert(atelierUsers).values({
+        id: callerUserId,
+        orgId,
+        name: `${needle} Caller`,
+        email: `caller.${TAG}@example.test`,
+        role: "engagement_lead",
+        initials: "ZC",
+        roleLabel: "Engagement Lead",
+        title: "Engagement Lead",
+        permissions: [],
+        createdAt: now,
+        updatedAt: now,
+      } as never);
+      await db.insert(atelierEmployees).values([
+        {
+          id: callerEmpId,
+          orgId,
+          userId: callerUserId,
+          fullName: `${needle} Caller`,
+          email: `caller.${TAG}@example.test`,
+          role: "engagement_lead",
+          status: "active",
+        },
+        {
+          id: outsiderEmpId,
+          orgId,
+          userId: null,
+          fullName: `${needle} Outsider`,
+          email: `outsider.${TAG}@example.test`,
+          role: "consultant",
+          status: "active",
+        },
+      ] as never);
+      const ctx = {
+        persona: { id: callerUserId, orgId, role: "engagement_lead", name: `${needle} Caller` },
+      } as never;
+      // 1) Searching the outsider by full name must NOT reveal them.
+      const r1 = (await cap!.run({ name: `${needle} Outsider` }, ctx)) as {
+        ok: boolean;
+        errorCode?: string;
+      };
+      assert.equal(r1.ok, false);
+      assert.equal(r1.errorCode, "not_found");
+      // 2) An ambiguous needle matching both must resolve to ONLY the
+      //    caller (self) — no disambiguation option may leak the outsider.
+      const r2 = (await cap!.run({ name: needle }, ctx)) as {
+        ok: boolean;
+        data?: { person?: { id: string }; options?: Array<{ id: string }> };
+        disambiguation?: { options: Array<{ id: string }> };
+      };
+      assert.equal(r2.ok, true);
+      const leaked = JSON.stringify(r2).includes(outsiderEmpId);
+      assert.equal(leaked, false, "outsider must not appear anywhere in the result");
+      assert.equal(r2.data?.person?.id, callerEmpId, "resolves to the caller's own person");
+    } finally {
+      await db.delete(atelierEmployees).where(inArray(atelierEmployees.id, [callerEmpId, outsiderEmpId]));
+      await db.delete(atelierUsers).where(inArray(atelierUsers.id, [callerUserId]));
     }
   });
 

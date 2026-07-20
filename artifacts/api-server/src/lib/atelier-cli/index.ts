@@ -1198,6 +1198,16 @@ const SYSTEM_PROMPT = [
   "- If the question is about only ONE of those facets, keep using the focused single-",
   "  entity read tool instead.",
   "",
+  // Task #443 — compound person questions resolve in ONE composed read.
+  "COMPOUND PERSON QUESTIONS (read-only):",
+  "- When the user asks what one PERSON is working on / staffed on — their accounts,",
+  "  engagements, allocations, or the deals they own, together — call `person_workload`",
+  "  ONCE with the person's name. It returns their account-team roles, active engagement",
+  "  staffings with allocation %, and open opportunities they own or lead. Do NOT chain",
+  "  separate roster/engagement/opportunity reads for this.",
+  "- If the question is about only ONE facet (e.g. just their profile or just one",
+  "  engagement), keep using the focused single-entity read tool instead.",
+  "",
   // Task #406 — Chat Orchestrator policy. When the user's prompt is a
   // create | update | link | transition verb, follow this loop:
   //   1) resolve_entity (fuzzy → id; STOP on disambiguation)

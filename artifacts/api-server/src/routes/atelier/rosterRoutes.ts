@@ -602,7 +602,7 @@ export async function getPerson(
  * against atelier_users.email (the v3 access grants for non-employee
  * personas write to atelier_users with role='contractor'|'partner_firm_resource').
  */
-async function resolveLinkedUserId(
+export async function resolveLinkedUserId(
   person: PersonWire,
 ): Promise<string | null> {
   if (person.workerType === "employee") {

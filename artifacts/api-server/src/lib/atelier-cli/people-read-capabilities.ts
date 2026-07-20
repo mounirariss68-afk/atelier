@@ -49,6 +49,7 @@ import {
   toBusinessWire,
   sanitizeForViewer,
   canViewPersonViaRosterScope,
+  resolveLinkedUserId,
   type PersonWire,
 } from "../../routes/atelier/rosterRoutes.js";
 import { isRestrictedPersona } from "../../routes/atelier/personaRoles.js";
@@ -187,6 +188,26 @@ async function resolveAccountRef(
 
 function isToolResult(v: unknown): v is ToolResult {
   return typeof v === "object" && v !== null && "ok" in (v as Record<string, unknown>);
+}
+
+/**
+ * Task #443 — SCOPED person-by-name matcher. `listPersons` itself is not
+ * viewer-scoped, so any tool that surfaces name-match candidates (even
+ * just in a disambiguation prompt) MUST filter through the caller's
+ * roster scope first, or it leaks names/titles of people outside the
+ * caller's perimeter. Returns only active people the caller may see.
+ */
+async function scopedPersonMatches(me: MeRow, q: string): Promise<PersonWire[]> {
+  const scope = await resolveRosterScope(me);
+  const matches = (
+    await listPersons({ workerType: "all", q, includeComp: false })
+  ).filter((p) => p.status !== "inactive");
+  if (scope.kind === "full") return matches;
+  return matches.filter(
+    (p) =>
+      scope.personIds.has(p.id) ||
+      (scope.selfPersonId !== null && scope.selfPersonId === p.id),
+  );
 }
 
 // ---------------------------------------------------------------------
@@ -1589,6 +1610,341 @@ defineCapability({
         })),
         activeEngagementCount: activeEngs.length,
         recentMeetings,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// person.workload — entity_card (Task #443 — composed person-centric read)
+//
+// The inverse of account.who_works: "what is Sarah working on right
+// now?" in ONE tool call. Resolves a roster person (same roster scope
+// predicate as person_detail — callers only see people in their
+// perimeter), maps them to their atelier_users login (the row that
+// account teams / engagement staffing / opportunity ownership key on),
+// then returns:
+//   - accounts where they hold an account-team role or are partner owner,
+//   - active engagement staffings with role + allocation %,
+//   - open opportunities they own (partner owner) or lead.
+// Account/engagement rows the CALLER may not see are filtered out via
+// the same canSeeAccount / engagement ACL used by the single-entity
+// reads, and a hidden count is reported so the answer is honest.
+// No compensation / HR / bank fields ever appear (business projection).
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "person.workload",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "roster",
+  toolName: "person_workload",
+  description:
+    "One-shot compound answer for a person: which accounts they're on the team for (with role), which active engagements they're staffed on (role + allocation %), and which open opportunities they own or lead. Use for questions like 'what is X working on?' or 'what is X staffed on across accounts and deals?'. Accepts a roster person id or a name. Never returns compensation or HR data.",
+  slashAliases: { en: ["/workload", "/working-on"], fr: ["/charge"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      personId: { type: "string", description: "Roster person id (employee/contractor/partner resource)." },
+      name: { type: "string", description: "Person name to look up when the id is unknown." },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["roster", "home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: [
+      "What is Sarah working on right now?",
+      "Which accounts and deals is Karim staffed on?",
+      "Show me everything on Gökhan's plate",
+    ],
+    ar: ["على ماذا تعمل سارة الآن؟"],
+    fr: ["Sur quoi travaille Sarah en ce moment ?"],
+  },
+  async run(input, ctx) {
+    if (isRestrictedPersona(ctx.persona.role)) {
+      return denyForbidden(
+        "Workload lookups are not available to your role. You can ask about your own profile instead.",
+      );
+    }
+    const me = await loadMe(ctx);
+    if (!me) return denyForbidden("No active persona.");
+
+    // ---- resolve the person (same pattern + roster scope as person_detail) ----
+    let personId = typeof input.personId === "string" ? input.personId.trim() : "";
+    if (!personId) {
+      const q = typeof input.name === "string" ? input.name.trim() : "";
+      if (q.length < 2) {
+        return { ok: false, errorCode: "invalid_input", errorMessage: "Provide personId or name." };
+      }
+      // Roster-scoped match: never surface out-of-perimeter people, even
+      // as disambiguation options.
+      const matches = await scopedPersonMatches(me, q);
+      if (matches.length === 0) return notFound("person");
+      if (matches.length > 1) {
+        const options = matches.slice(0, 5).map((p) => ({
+          id: p.id,
+          label: p.fullName,
+          secondary: p.title ?? p.workerType,
+        }));
+        return {
+          ok: true,
+          data: { prompt: `Which person did you mean by "${q}"?`, options },
+          disambiguation: { kind: "contact", options },
+        };
+      }
+      personId = matches[0]!.id;
+    }
+    const allowed = await canViewPersonViaRosterScope(me, personId);
+    if (!allowed) {
+      return denyForbidden(
+        "You may only view your own profile and people in your reports tree.",
+      );
+    }
+    const person = await getPerson(personId, false);
+    if (!person) return notFound("person");
+    const personCard = {
+      id: person.id,
+      fullName: person.fullName,
+      title: person.title ?? null,
+      workerType: person.workerType,
+      status: person.status,
+      href: `/people/${person.id}`,
+    };
+
+    // ---- map the roster person to their atelier_users login row ----
+    const linkedUserId = await resolveLinkedUserId(person);
+    if (!linkedUserId) {
+      return {
+        ok: true,
+        data: {
+          person: personCard,
+          linkedUser: false,
+          note: "This person has no linked login, so no account-team, staffing, or opportunity records exist for them.",
+          accountRoles: [],
+          engagementStaffings: [],
+          openOpportunities: [],
+          hiddenAccountCount: 0,
+        },
+      };
+    }
+
+    // Caller's own account/engagement visibility (same ACL as single reads).
+    const callerMe = { id: ctx.persona.id, role: ctx.persona.role };
+    const access = await engAclFor(ctx.persona);
+    const seenAccountCache = new Map<string, boolean>();
+    const callerCanSee = async (accountId: string) => {
+      const hit = seenAccountCache.get(accountId);
+      if (hit !== undefined) return hit;
+      const ok = await canSeeAccount(access, callerMe, accountId);
+      seenAccountCache.set(accountId, ok);
+      return ok;
+    };
+    // Unique accounts (not rows) the caller may not see.
+    const hiddenAccountIds = new Set<string>();
+
+    // ---- account-team roles + partner-owned accounts ----
+    const [teamRows, ownedAccounts] = await Promise.all([
+      db
+        .select({
+          accountId: atelierAccountTeamMembers.accountId,
+          roleOnAccount: atelierAccountTeamMembers.roleOnAccount,
+        })
+        .from(atelierAccountTeamMembers)
+        .where(
+          and(
+            eq(atelierAccountTeamMembers.userId, linkedUserId),
+            eq(atelierAccountTeamMembers.orgId, ctx.persona.orgId),
+            isNull(atelierAccountTeamMembers.deletedAt),
+          ),
+        ),
+      db
+        .select({ id: atelierAccounts.id })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.partnerOwnerId, linkedUserId),
+            eq(atelierAccounts.orgId, ctx.persona.orgId),
+            isNull(atelierAccounts.deletedAt),
+          ),
+        ),
+    ]);
+    const rolesByAccount = new Map<string, Set<string>>();
+    const addRole = (accountId: string, role: string) => {
+      let set = rolesByAccount.get(accountId);
+      if (!set) {
+        set = new Set();
+        rolesByAccount.set(accountId, set);
+      }
+      set.add(role);
+    };
+    for (const a of ownedAccounts) addRole(a.id, "partner_owner");
+    for (const t of teamRows) addRole(t.accountId, t.roleOnAccount);
+
+    // ---- active engagement staffings (role + allocation) ----
+    const grants = await db
+      .select({
+        engagementId: atelierEngagementAccess.engagementId,
+        roleOnEngagement: atelierEngagementAccess.roleOnEngagement,
+        allocationPct: atelierEngagementAccess.allocationPct,
+      })
+      .from(atelierEngagementAccess)
+      .where(
+        and(
+          eq(atelierEngagementAccess.userId, linkedUserId),
+          eq(atelierEngagementAccess.status, "active"),
+          isNull(atelierEngagementAccess.deletedAt),
+        ),
+      );
+    const grantEngIds = grants.map((g) => g.engagementId);
+    const engRows = grantEngIds.length
+      ? await db
+          .select({
+            id: atelierEngagements.id,
+            name: atelierEngagements.name,
+            plmStage: atelierEngagements.plmStage,
+            accountId: atelierEngagements.accountId,
+          })
+          .from(atelierEngagements)
+          .where(
+            and(
+              inArray(atelierEngagements.id, grantEngIds),
+              eq(atelierEngagements.orgId, ctx.persona.orgId),
+              isNull(atelierEngagements.deletedAt),
+            ),
+          )
+      : [];
+    const engById = new Map(engRows.map((e) => [e.id, e]));
+
+    // ---- open opportunities owned/led by the person ----
+    const oppRows = await db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        accountId: atelierOpportunities.accountId,
+        partnerOwnerId: atelierOpportunities.partnerOwnerId,
+        engagementLeadId: atelierOpportunities.engagementLeadId,
+        nextMilestone: atelierOpportunities.nextMilestone,
+      })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.orgId, ctx.persona.orgId),
+          isNull(atelierOpportunities.deletedAt),
+          or(
+            eq(atelierOpportunities.partnerOwnerId, linkedUserId),
+            eq(atelierOpportunities.engagementLeadId, linkedUserId),
+          ),
+        ),
+      );
+    const TERMINAL = new Set(["contract", "lost", "no_decision", "withdrawn"]);
+    const openOppRows = oppRows.filter(
+      (o) => !TERMINAL.has(resolveSalesStage(o.salesStage)),
+    );
+
+    // ---- account names for everything we might surface ----
+    const accountIds = new Set<string>([
+      ...rolesByAccount.keys(),
+      ...engRows.map((e) => e.accountId),
+      ...openOppRows.map((o) => o.accountId),
+    ]);
+    const accountRows = accountIds.size
+      ? await db
+          .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+          .from(atelierAccounts)
+          .where(
+            and(
+              inArray(atelierAccounts.id, Array.from(accountIds)),
+              eq(atelierAccounts.orgId, ctx.persona.orgId),
+              isNull(atelierAccounts.deletedAt),
+            ),
+          )
+      : [];
+    const accountNameById = new Map(accountRows.map((a) => [a.id, a.name]));
+
+    // ---- caller-visibility filter (same ACL as the single-entity reads) ----
+    const accountRolesOut: Array<{
+      accountId: string;
+      accountName: string;
+      roles: string[];
+      href: string;
+    }> = [];
+    for (const [accountId, roles] of rolesByAccount) {
+      if (!accountNameById.has(accountId)) continue;
+      if (!(await callerCanSee(accountId))) {
+        hiddenAccountIds.add(accountId);
+        continue;
+      }
+      accountRolesOut.push({
+        accountId,
+        accountName: accountNameById.get(accountId)!,
+        roles: Array.from(roles).sort(),
+        href: `/accounts/${accountId}`,
+      });
+    }
+    accountRolesOut.sort((a, b) => a.accountName.localeCompare(b.accountName));
+
+    const staffingsOut: Array<Record<string, unknown>> = [];
+    for (const g of grants) {
+      const eng = engById.get(g.engagementId);
+      if (!eng || eng.plmStage === "closed") continue;
+      const engVisible =
+        access.all || access.ids.has(eng.id) || (await callerCanSee(eng.accountId));
+      if (!engVisible) {
+        hiddenAccountIds.add(eng.accountId);
+        continue;
+      }
+      staffingsOut.push({
+        engagementId: eng.id,
+        engagementName: eng.name,
+        plmStage: eng.plmStage,
+        role: g.roleOnEngagement,
+        allocationPct: g.allocationPct,
+        accountId: eng.accountId,
+        accountName: accountNameById.get(eng.accountId) ?? null,
+        href: `/engagements/${eng.id}`,
+      });
+    }
+
+    const oppsOut: Array<Record<string, unknown>> = [];
+    for (const o of openOppRows) {
+      if (!(await callerCanSee(o.accountId))) {
+        hiddenAccountIds.add(o.accountId);
+        continue;
+      }
+      oppsOut.push({
+        id: o.id,
+        name: o.name,
+        stage: resolveSalesStage(o.salesStage),
+        relationship:
+          o.partnerOwnerId === linkedUserId ? "owner" : "engagement_lead",
+        nextMilestone: o.nextMilestone ?? null,
+        accountId: o.accountId,
+        accountName: accountNameById.get(o.accountId) ?? null,
+        href: `/opportunities/${o.id}`,
+      });
+    }
+
+    return {
+      ok: true,
+      data: {
+        person: personCard,
+        linkedUser: true,
+        accountRoles: accountRolesOut,
+        accountRoleCount: accountRolesOut.length,
+        engagementStaffings: staffingsOut,
+        engagementStaffingCount: staffingsOut.length,
+        openOpportunities: oppsOut,
+        openOpportunityCount: oppsOut.length,
+        hiddenAccountCount: hiddenAccountIds.size,
+        totalAllocationPct: staffingsOut.reduce(
+          (acc, s) => acc + (typeof s.allocationPct === "number" ? s.allocationPct : 0),
+          0,
+        ),
       },
     };
   },
