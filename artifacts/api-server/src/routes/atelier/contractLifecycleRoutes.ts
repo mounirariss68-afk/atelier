@@ -30,7 +30,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import multer from "multer";
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, or } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -242,6 +242,14 @@ function contractShape(c: ContractRow, documents?: ContractDocRow[]) {
 async function canSeeContract(me: Me, c: ContractRow): Promise<boolean> {
   if (canApproveAsPartner(me.role)) return true;
   if (c.ownerUserId === me.id) return true;
+  // Task #346 — an authorised signatory of the contract's signing entity can
+  // read the contract while their firm signature is being requested, even if
+  // they aren't partner-tier; otherwise the "awaiting your signature" home
+  // card and notification would link to a 403.
+  if (c.firmSignatureRequestedAt && c.signingEntityId) {
+    const signatories = await listEntitySignatories(me.orgId, c.signingEntityId);
+    if (signatories.some((s) => s.userId === me.id)) return true;
+  }
   if (c.personId) {
     const [emp] = await db
       .select({ userId: atelierEmployees.userId })
@@ -927,6 +935,62 @@ router.get("/contracts", async (req, res) => {
     if (await canSeeContract(me, c)) visible.push(c);
   }
   res.json({ contracts: visible.map((c) => contractShape(c)) });
+});
+
+// Task #346 — contracts where a firm signatory has been requested and the
+// viewer is authorised to sign (or any partner-tier manager when the entity
+// has no restriction configured). Powers the "Contracts awaiting your
+// signature" home-page card. NOTE: must be registered before GET
+// /contracts/:id or Express would treat "awaiting-my-signature" as an :id.
+// @cli-skip: contract lifecycle is UI-driven (Task #346)
+router.get("/contracts/awaiting-my-signature", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const rows = await db
+    .select()
+    .from(atelierContractRecords)
+    .where(
+      and(
+        eq(atelierContractRecords.orgId, me.orgId),
+        isNotNull(atelierContractRecords.firmSignatureRequestedAt),
+      ),
+    )
+    .orderBy(desc(atelierContractRecords.firmSignatureRequestedAt));
+  // sendContract clears firmSignatureRequestedAt, but guard against terminal
+  // statuses anyway so a cancelled/expired contract never lingers here.
+  const live = rows.filter((c) => !TERMINAL_CONTRACT_STATUSES.has(c.status));
+  const signatoryCache = new Map<string, Array<{ userId: string }>>();
+  const mine: ContractRow[] = [];
+  for (const c of live) {
+    if (!c.signingEntityId) {
+      // No signing entity: legacy record — any partner-tier manager may sign.
+      if (canApproveAsPartner(me.role)) mine.push(c);
+      continue;
+    }
+    let signatories = signatoryCache.get(c.signingEntityId);
+    if (!signatories) {
+      signatories = await listEntitySignatories(me.orgId, c.signingEntityId);
+      signatoryCache.set(c.signingEntityId, signatories);
+    }
+    if (signatories.length === 0) {
+      // Empty list = no restriction configured; any partner-tier manager.
+      if (canApproveAsPartner(me.role)) mine.push(c);
+    } else if (signatories.some((s) => s.userId === me.id)) {
+      mine.push(c);
+    }
+  }
+  res.json({
+    contracts: mine.map((c) => ({
+      id: c.id,
+      title: c.title,
+      contractType: c.contractType,
+      status: c.status,
+      counterpartyLabel: c.counterpartyLabel,
+      signingEntityLabel: c.signingEntityLabel,
+      requestedAt: c.firmSignatureRequestedAt,
+      requestedByLabel: c.firmSignatureRequestedByLabel,
+    })),
+  });
 });
 
 // Task #313 — typeahead search over team members, contacts and accounts so

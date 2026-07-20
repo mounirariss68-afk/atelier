@@ -3,7 +3,7 @@ import { useAtelierGetHome, useAtelierGetMe, useAtelierGetMyOpenTasks } from "@w
 import { SectionHead, PageHero, Card, MonoChip, PillButton, SectionLabel, HeroStat } from "@/components/ui/primitives";
 import { Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, ClipboardList, Sparkles, MessageSquare, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
+import { AlertCircle, Clock, FileText, ArrowRight, Download, ChevronDown, ChevronUp, Check, X, Users, Wallet, PenLine, ClipboardList, Sparkles, MessageSquare, Store, ListTodo, CheckSquare, Phone, Mail, CalendarClock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CliContext } from "@/components/cli/cli-context";
 import { s as cliS } from "@/components/cli/locale";
@@ -52,6 +52,83 @@ function nextStageFor(role: string | undefined): { stage: "submitted" | "lead_ap
     return { stage: "lead_approved", role: "partner", label: "Partner approve" };
   }
   return null;
+}
+
+interface AwaitingSignatureContract {
+  id: string;
+  title: string;
+  contractType: string;
+  status: string;
+  counterpartyLabel: string | null;
+  signingEntityLabel: string | null;
+  requestedAt: string | null;
+  requestedByLabel: string | null;
+}
+
+// Task #346 — contracts where the viewer is an authorised firm signatory and
+// a colleague has requested their signature. Surfaces the request on Home so
+// it can't sit unnoticed in a notification list nobody visits.
+function PendingSignaturesCard() {
+  const [contracts, setContracts] = React.useState<AwaitingSignatureContract[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [, setLocation] = useLocation();
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/atelier/contracts/awaiting-my-signature", { credentials: "include" });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data: { contracts?: AwaitingSignatureContract[] } = await r.json();
+        if (!cancelled) setContracts(data.contracts ?? []);
+      } catch {
+        if (!cancelled) setContracts([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading || contracts.length === 0) return null;
+
+  return (
+    <Card className="p-5 space-y-4 border-gold/40" data-testid="pending-signatures-card">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <PenLine className="w-4 h-4 text-gold" />
+          <h4 className="font-semibold text-lg text-text">Contracts awaiting your signature</h4>
+        </div>
+        <MonoChip tone="gold">{contracts.length}</MonoChip>
+      </div>
+      <div className="space-y-3">
+        {contracts.map((c) => (
+          <div
+            key={c.id}
+            className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between border-t border-border-soft pt-3 first:border-t-0 first:pt-0"
+            data-testid={`pending-signature-${c.id}`}
+          >
+            <div className="min-w-0 space-y-1">
+              <div className="text-sm font-medium text-text truncate">{c.title}</div>
+              <div className="text-xs text-text-mute">
+                {c.requestedByLabel ? `${c.requestedByLabel} asked you to sign` : "Signature requested"}
+                {c.counterpartyLabel ? ` · ${c.counterpartyLabel}` : ""}
+                {c.signingEntityLabel ? ` · ${c.signingEntityLabel}` : ""}
+                {c.requestedAt ? ` · ${new Date(c.requestedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ""}
+              </div>
+            </div>
+            <PillButton
+              variant="ghost"
+              className="shrink-0 w-full sm:w-auto"
+              onClick={() => setLocation(`/contracts/${c.id}`)}
+            >
+              Review & sign <ArrowRight className="w-4 h-4 ml-1" />
+            </PillButton>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
 }
 
 function TimesheetApprovalsCard({ role }: { role: string }) {
@@ -753,6 +830,8 @@ export default function Home() {
           <div className="space-y-4">
             {/* Task #631 — per-owner open/overdue task roll-up. */}
             <MyOpenTasksCard />
+            {/* Task #346 — contracts awaiting the viewer's firm signature. */}
+            <PendingSignaturesCard />
             {/* Task #271 — pending timesheet approvals surface here as a single
                 rolled-up actionable item with inline approve/reject. */}
             {me?.role && <TimesheetApprovalsCard role={me.role} />}
