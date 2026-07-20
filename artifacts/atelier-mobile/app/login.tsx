@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import React, { useEffect, useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Field, hapticError } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
+import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { apiJson } from "@/lib/api";
 
@@ -28,8 +30,12 @@ function cmpSemver(a: string, b: string): number {
 
 const APP_VERSION = Constants.expoConfig?.version ?? "1.0.0";
 
+const logoLight = require("@/assets/images/cognirise-logo-light.png");
+const logoDark = require("@/assets/images/cognirise-logo-dark-bg.png");
+
 export default function LoginScreen() {
   const c = useColors();
+  const scheme = useThemeScheme();
   const { t } = useI18n();
   const { login } = useAuth();
   const insets = useSafeAreaInsets();
@@ -116,19 +122,16 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={{ alignItems: "center", marginBottom: 36 }}>
-          <View
+          <Image
+            source={scheme === "dark" ? logoDark : logoLight}
             style={{
-              width: 72,
-              height: 72,
-              borderRadius: 20,
-              backgroundColor: c.primary,
-              alignItems: "center",
-              justifyContent: "center",
+              width: 232,
+              height: 62,
               marginBottom: 20,
             }}
-          >
-            <Feather name="feather" size={34} color={c.primaryForeground} />
-          </View>
+            resizeMode="contain"
+            accessibilityLabel="Cognirise"
+          />
           <Text
             style={{
               color: c.foreground,
