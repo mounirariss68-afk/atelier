@@ -44,6 +44,8 @@ import {
   loadPersonDocBytes,
   PERSON_DOC_PREFIX,
 } from "../../lib/personDocStorage.js";
+// Task #381 — roster-scoped business-card PDF download for HR/partners.
+import { generateBusinessCardPdf } from "../../lib/atelier-business-card.js";
 
 const router: IRouter = Router();
 
@@ -1948,6 +1950,56 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       placeholder: true,
       doc: { id: doc.id, kind: doc.kind, title: doc.title, fileRef: doc.fileRef },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #381 — print-ready business-card download for OTHER people's roster
+// pages (HR / partners ordering cards for the whole firm). Gated on the same
+// roster visibility predicate as the dossier itself (ensureRosterViewAccess:
+// full viewers see everyone, managers their reports tree + self), and audited
+// exactly like the self-scope /me/business-card.pdf route. Only public,
+// card-safe fields feed the generator.
+// @cli-skip: roster-scope generated PDF download; no CLI shape (Task #381)
+router.get("/roster/people/:id/business-card.pdf", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const rawVariant = String(req.query.variant ?? "standard");
+    if (rawVariant !== "standard" && rawVariant !== "print") {
+      res.status(400).json({ error: "invalid-variant", allowed: ["standard", "print"] });
+      return;
+    }
+    const variant = rawVariant;
+    const person = await ensureRosterViewAccess(me, req.params.id, res);
+    if (!person) return;
+    const { pdf, filename } = await generateBusinessCardPdf(
+      {
+        fullName: person.fullName,
+        title: person.workerType === "employee" ? (person.title ?? null) : null,
+        email: person.email ?? null,
+        cellPhones: (person.cellPhones ?? []) as Array<{ country: string; number: string }>,
+        officeAddress: person.officeAddress ?? null,
+      },
+      variant,
+    );
+    assertAuditAction("document.downloaded");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: person.workerType,
+      entityId: person.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "document.downloaded",
+      payload: { personId: person.id, kind: "business_card_pdf", self: false, variant },
+      payloadSummary: `${me.name} generated ${person.fullName}'s business-card PDF (${variant})`,
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(pdf);
   } catch (err) {
     next(err);
   }

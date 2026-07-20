@@ -103,11 +103,16 @@ export function BusinessCardQR({
   };
 
   // Task #52 — the printable card PDF is generated server-side from the
-  // caller's own profile (self-scoped endpoint), so the button only shows
-  // when the viewed person IS the signed-in person.
+  // caller's own profile (self-scoped endpoint) when viewing yourself.
+  // Task #381 — for OTHER people's pages, a roster-scoped endpoint (gated on
+  // the same visibility predicate that let the viewer open this page) serves
+  // the same standard/print variants, so HR or a founding partner can order
+  // cards for the whole firm without asking each person to download theirs.
   const { data: myProfile } = useAtelierGetMyProfile();
   const isSelf = myProfile?.person?.id === person.id;
-  const cardPdfHref = `${import.meta.env.BASE_URL}api/atelier/me/business-card.pdf`;
+  const cardPdfHref = isSelf
+    ? `${import.meta.env.BASE_URL}api/atelier/me/business-card.pdf`
+    : `${import.meta.env.BASE_URL}api/atelier/roster/people/${person.id}/business-card.pdf`;
 
   const hasContact = cells.length > 0;
 
@@ -152,27 +157,23 @@ export function BusinessCardQR({
               <DownloadBtn onClick={downloadVcf} testid="qr-download-vcf">
                 .vcf
               </DownloadBtn>
-              {isSelf && (
-                <>
-                  <a
-                    href={cardPdfHref}
-                    download
-                    data-testid="qr-download-card-pdf"
-                    className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
-                  >
-                    Card · PDF
-                  </a>
-                  <a
-                    href={`${cardPdfHref}?variant=print`}
-                    download
-                    data-testid="qr-download-card-pdf-print"
-                    title="3 mm bleed + crop marks for professional printing"
-                    className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
-                  >
-                    Card · Print PDF
-                  </a>
-                </>
-              )}
+              <a
+                href={cardPdfHref}
+                download
+                data-testid="qr-download-card-pdf"
+                className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
+              >
+                Card · PDF
+              </a>
+              <a
+                href={`${cardPdfHref}?variant=print`}
+                download
+                data-testid="qr-download-card-pdf-print"
+                title="3 mm bleed + crop marks for professional printing"
+                className="text-[10px] font-mono uppercase tracking-widest border border-line rounded px-2 py-1 hover:border-gold hover:text-gold"
+              >
+                Card · Print PDF
+              </a>
             </div>
           </div>
 
