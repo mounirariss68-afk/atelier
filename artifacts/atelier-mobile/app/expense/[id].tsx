@@ -103,7 +103,7 @@ export default function ExpenseDetailScreen() {
   const feedback = useFeedback();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, parsed } = useLocalSearchParams<{ id: string; parsed?: string }>();
 
   const list = useAtelierListMyExpenses();
   const contexts = useAtelierListMyExpenseContexts();
@@ -334,6 +334,25 @@ export default function ExpenseDetailScreen() {
                 <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
                   {expense.rejectedReason}
                 </Text>
+              </Card>
+            ) : null}
+
+            {parsed === "1" && editable ? (
+              <Card style={{ borderColor: c.accent, backgroundColor: c.tint08, gap: 8 }}>
+                <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+                  <Feather name="zap" size={16} color={c.accent} />
+                  <Text
+                    style={{
+                      flex: 1,
+                      color: c.foreground,
+                      fontFamily: "PlusJakartaSans_500Medium",
+                      fontSize: 13,
+                      textAlign: rtl.textAlign,
+                    }}
+                  >
+                    {t("exp.autoReview")}
+                  </Text>
+                </View>
               </Card>
             ) : null}
 

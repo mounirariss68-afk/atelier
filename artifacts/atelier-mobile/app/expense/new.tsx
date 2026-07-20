@@ -3,7 +3,6 @@ import {
   useAtelierCreateMyExpense,
   useAtelierGetExpenseTaxonomy,
   useAtelierGetMyReceiptUploadUrl,
-  useAtelierParseMyExpenseReceipt,
   useAtelierSuggestExpenseCategory,
 } from "@workspace/api-client-react";
 import type { AtelierSelfExpenseCreate } from "@workspace/api-client-react";
@@ -38,7 +37,7 @@ import {
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
-import { putFileToSignedUrl } from "@/lib/api";
+import { apiJson, putFileToSignedUrl } from "@/lib/api";
 import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -100,7 +99,6 @@ export default function NewExpenseScreen() {
 
   const uploadUrl = useAtelierGetMyReceiptUploadUrl();
   const create = useAtelierCreateMyExpense();
-  const parse = useAtelierParseMyExpenseReceipt();
   // Task #383 — taxonomy-as-data categories + merchant-memory/AI suggestion.
   const taxonomyQuery = useAtelierGetExpenseTaxonomy();
   const suggestMut = useAtelierSuggestExpenseCategory();
@@ -127,10 +125,23 @@ export default function NewExpenseScreen() {
   const [busyLabel, setBusyLabel] = useState("");
   // Set when the receipt was uploaded but AI parsing failed — offers a retry.
   const [parseFailedId, setParseFailedId] = useState<string | null>(null);
+  const [parseErrorText, setParseErrorText] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  // Task #411 — the auto pipeline creates the draft as soon as a receipt is
+  // attached; re-attaching or saving reuses this id (no duplicate records).
+  const [draftId, setDraftId] = useState<string | null>(null);
+
+  // Task #411 — the source sheet is a RN Modal; launching a native picker
+  // while that modal is still dismissing silently fails on iOS (this is why
+  // the PDF picker "did nothing"). Wait for the dismissal animation first.
+  const afterSheetDismissed = useCallback(async () => {
+    if (Platform.OS === "web") return;
+    await new Promise((r) => setTimeout(r, Platform.OS === "ios" ? 550 : 250));
+  }, []);
 
   const pick = useCallback(
     async (mode: "camera" | "library") => {
+      await afterSheetDismissed();
       const perm =
         mode === "camera"
           ? await ImagePicker.requestCameraPermissionsAsync()
@@ -145,15 +156,16 @@ export default function NewExpenseScreen() {
           : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
       if (res.canceled || !res.assets[0]) return;
       const asset = res.assets[0];
-      setReceiptUri(asset.uri);
-      setReceiptMime(asset.mimeType ?? "image/jpeg");
+      void autoProcess(asset.uri, asset.mimeType ?? "image/jpeg");
     },
-    [t, feedback],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, feedback, afterSheetDismissed],
   );
 
   // Task #396 — PDF invoice pickup. The server parses PDFs via text-layer
   // extraction with an OCR fallback.
   const pickPdf = useCallback(async () => {
+    await afterSheetDismissed();
     const res = await DocumentPicker.getDocumentAsync({
       type: "application/pdf",
       copyToCacheDirectory: true,
@@ -161,9 +173,9 @@ export default function NewExpenseScreen() {
     });
     if (res.canceled || !res.assets?.[0]) return;
     const asset = res.assets[0];
-    setReceiptUri(asset.uri);
-    setReceiptMime(asset.mimeType ?? "application/pdf");
-  }, []);
+    void autoProcess(asset.uri, asset.mimeType ?? "application/pdf");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [afterSheetDismissed]);
 
   const receiptIsPdf = receiptMime === "application/pdf";
 
@@ -224,18 +236,138 @@ export default function NewExpenseScreen() {
     }
   }, [merchant, description, amount, currency, suggestMut, t]);
 
+  // Task #411 — map server parse error codes onto translated messages.
+  const parseErrorMessage = useCallback(
+    (code: string | undefined): string => {
+      if (code === "receipt-too-large") return t("exp.errTooLarge");
+      if (code === "receipt-unreadable") return t("exp.errUnreadable");
+      if (code === "auditor-refused") return t("exp.errRefused");
+      return t("exp.parseFailed");
+    },
+    [t],
+  );
+
+  // Task #411 — launch the parse in the background and poll: the parse is
+  // LLM-heavy (vision + auditor) and a held request would be 502'd by the
+  // proxy. Staged progress labels while we wait.
+  const runParse = useCallback(
+    async (id: string): Promise<void> => {
+      await apiJson(`/api/atelier/me/expenses/${id}/parse-receipt-async`, { method: "POST" });
+      const started = Date.now();
+      for (;;) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const elapsed = Date.now() - started;
+        setBusyLabel(
+          elapsed > 24000
+            ? t("exp.categorizing")
+            : elapsed > 10000
+              ? t("exp.identifying")
+              : t("exp.reading"),
+        );
+        const s = await apiJson<{
+          status: "running" | "done" | "failed" | "none";
+          error?: { body?: { error?: string } };
+        }>(`/api/atelier/me/expenses/${id}/parse-receipt-status`, {});
+        if (s.status === "done") return;
+        if (s.status === "failed" || s.status === "none") {
+          throw new Error(s.error?.body?.error ?? "parse-failed");
+        }
+        if (elapsed > 180000) throw new Error("parse-timeout");
+      }
+    },
+    [t],
+  );
+
+  // Task #411 — fully automatic pipeline: attach → upload → draft create
+  // (or reuse) → parse → review screen. Offline just stages the file; the
+  // queue uploads + parses on drain.
+  const autoProcess = useCallback(
+    async (uri: string, mime: string) => {
+      setReceiptUri(uri);
+      setReceiptMime(mime);
+      setParseFailedId(null);
+      setParseErrorText(null);
+      if (!(await isOnline())) return;
+      setBusy(true);
+      let id = draftId;
+      try {
+        setBusyLabel(t("exp.uploading"));
+        const { uploadURL } = await uploadUrl.mutateAsync();
+        await putFileToSignedUrl(uploadURL, uri, mime);
+        if (id) {
+          // Re-attach: swap the receipt on the existing draft, no duplicate.
+          await apiJson(`/api/atelier/me/expenses/${id}`, {
+            method: "PATCH",
+            body: { receiptPath: uploadURL },
+          });
+        } else {
+          setBusyLabel(t("exp.creating"));
+          const amt = Number(amount);
+          const created = await create.mutateAsync({
+            data: {
+              amount: Number.isFinite(amt) && amt > 0 ? amt : 0.01,
+              currency: currency.trim().toUpperCase().slice(0, 3) || "USD",
+              merchant: merchant.trim() || "Receipt",
+              expenseDate: date || today(),
+              receiptPath: uploadURL,
+            },
+          });
+          id = created.expense.id;
+          setDraftId(id);
+        }
+        setBusyLabel(t("exp.reading"));
+        await runParse(id);
+        hapticSuccess();
+        router.replace(`/expense/${id}?parsed=1`);
+      } catch (err) {
+        hapticError();
+        if (id) {
+          setParseFailedId(id);
+          setParseErrorText(
+            parseErrorMessage(err instanceof Error ? err.message : undefined),
+          );
+        } else {
+          feedback.toast(t("common.error"), "error");
+        }
+      } finally {
+        setBusy(false);
+        setBusyLabel("");
+      }
+    },
+    [draftId, amount, currency, merchant, date, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
+  );
+
   const save = useCallback(async () => {
     const fields = buildFields();
     if (!fields) return;
     setBusy(true);
     try {
       const online = await isOnline();
-      if (!online) {
+      if (!online && !draftId) {
         setBusyLabel(t("exp.saving"));
         await enqueueExpense({ localUri: receiptUri, mime: receiptMime, fields });
         hapticSuccess();
         feedback.toast(t("exp.offlineBody"), "success");
         router.back();
+        return;
+      }
+      if (!online && draftId) {
+        // The draft already exists on the server — queuing a create would
+        // duplicate it. Be honest: edits need a connection.
+        hapticError();
+        feedback.toast(t("exp.offlineDraftEdit"), "error");
+        return;
+      }
+
+      if (draftId) {
+        // The auto pipeline already created the draft — just save the edits.
+        setBusyLabel(t("exp.saving"));
+        await apiJson(`/api/atelier/me/expenses/${draftId}`, {
+          method: "PATCH",
+          body: fields,
+        });
+        hapticSuccess();
+        router.replace(`/expense/${draftId}`);
         return;
       }
 
@@ -256,12 +388,15 @@ export default function NewExpenseScreen() {
       if (receiptPath) {
         setBusyLabel(t("exp.reading"));
         try {
-          await parse.mutateAsync({ id });
-        } catch {
+          await runParse(id);
+        } catch (err) {
           // Parse failure is non-fatal but must be surfaced — the user
           // can retry or continue and fill the details manually.
           hapticError();
           setParseFailedId(id);
+          setParseErrorText(
+            parseErrorMessage(err instanceof Error ? err.message : undefined),
+          );
           return;
         }
       }
@@ -274,22 +409,25 @@ export default function NewExpenseScreen() {
       setBusy(false);
       setBusyLabel("");
     }
-  }, [buildFields, receiptUri, receiptMime, uploadUrl, create, parse, router, t, feedback]);
+  }, [buildFields, draftId, receiptUri, receiptMime, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback]);
 
   const retryParse = useCallback(async () => {
     if (!parseFailedId) return;
     setRetrying(true);
     try {
-      await parse.mutateAsync({ id: parseFailedId });
+      await runParse(parseFailedId);
       hapticSuccess();
-      router.replace(`/expense/${parseFailedId}`);
-    } catch {
+      router.replace(`/expense/${parseFailedId}?parsed=1`);
+    } catch (err) {
       hapticError();
-      feedback.toast(t("exp.parseFailed"), "error");
+      feedback.toast(
+        parseErrorMessage(err instanceof Error ? err.message : undefined),
+        "error",
+      );
     } finally {
       setRetrying(false);
     }
-  }, [parseFailedId, parse, router, t, feedback]);
+  }, [parseFailedId, runParse, parseErrorMessage, router, feedback]);
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
 
@@ -508,7 +646,7 @@ export default function NewExpenseScreen() {
                     textAlign: rtl.textAlign,
                   }}
                 >
-                  {t("exp.parseFailed")}
+                  {parseErrorText ?? t("exp.parseFailed")}
                 </Text>
               </View>
               {retrying ? (

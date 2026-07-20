@@ -57,6 +57,7 @@ interface Taxonomy {
   costCenters: string[];
   fundingSources: string[];
   entities: ContextOption[];
+  bankAccounts?: { id: string; label: string }[];
 }
 interface Suggestion {
   categoryCode: string;
@@ -155,6 +156,11 @@ export default function MeExpenses() {
   const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
   const [suggestBusy, setSuggestBusy] = React.useState(false);
   const [suggestError, setSuggestError] = React.useState<string | null>(null);
+  // Task #411 — automatic receipt pipeline: selecting a file uploads it,
+  // creates (or reuses) a draft, parses, and prefills the form for review.
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [autoBusyText, setAutoBusyText] = React.useState<string | null>(null);
+  const [autoNote, setAutoNote] = React.useState<{ text: string; ok: boolean } | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -228,8 +234,9 @@ export default function MeExpenses() {
 
   const selectedCat = taxonomy?.categories.find((c) => c.code === form.categoryCode) ?? null;
 
-  const uploadReceipt = async (): Promise<string | null> => {
-    if (!receiptFile) return null;
+  const uploadReceipt = async (fileOverride?: File): Promise<string | null> => {
+    const file = fileOverride ?? receiptFile;
+    if (!file) return null;
     const r = await fetch(`${API}/expenses/receipt-upload`, {
       method: "POST",
       credentials: "include",
@@ -238,11 +245,130 @@ export default function MeExpenses() {
     if (!r.ok || !j.uploadURL) throw new Error(j.error || "Receipt upload unavailable.");
     const put = await fetch(j.uploadURL, {
       method: "PUT",
-      body: receiptFile,
-      headers: { "Content-Type": receiptFile.type || "application/octet-stream" },
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
     });
     if (!put.ok) throw new Error("Receipt upload failed.");
     return j.uploadURL.split("?")[0];
+  };
+
+  // Task #411 — launch the parse in the background and poll: the LLM-heavy
+  // parse can outlive a held request (proxy 502s), so 202 + poll instead.
+  const runAsyncParse = async (id: string): Promise<Record<string, unknown> | null> => {
+    const launch = await fetch(`${API}/expenses/${id}/parse-receipt-async`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!launch.ok) {
+      const j = await launch.json().catch(() => ({}));
+      throw new Error(j.message || j.error || `HTTP ${launch.status}`);
+    }
+    const started = Date.now();
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const elapsed = Date.now() - started;
+      setAutoBusyText(
+        elapsed > 24000
+          ? "Categorizing…"
+          : elapsed > 10000
+            ? "Identifying merchant…"
+            : "Reading receipt…",
+      );
+      const sr = await fetch(`${API}/expenses/${id}/parse-receipt-status`, {
+        credentials: "include",
+      });
+      if (!sr.ok) {
+        const j = await sr.json().catch(() => ({}));
+        throw new Error(j.message || j.error || `HTTP ${sr.status}`);
+      }
+      const s = await sr.json().catch(() => ({}));
+      if (s.status === "done") return (s.result?.expense as Record<string, unknown>) ?? null;
+      if (s.status === "failed" || s.status === "none") {
+        throw new Error(parseFailureText(s.error?.body));
+      }
+      if (elapsed > 180000) throw new Error("Parsing timed out — try again.");
+    }
+  };
+
+  const parseFailureText = (body?: { error?: string; message?: string }): string => {
+    if (body?.error === "receipt-too-large")
+      return "The receipt file is too large (max 8MB photo / 15MB PDF).";
+    if (body?.error === "receipt-unreadable")
+      return "This receipt couldn't be read — try a clearer file or fill the form manually.";
+    if (body?.error === "auditor-refused")
+      return "The AI auditor declined this receipt — fill the details manually.";
+    return body?.message || "Couldn't read the receipt — fill the details manually.";
+  };
+
+  // Task #411 — the automatic pipeline: file selected → upload → draft
+  // create/reuse → parse → prefill the form for review. The form stays
+  // usable for manual entry on any failure.
+  const autoProcess = async (file: File) => {
+    setReceiptFile(file);
+    setAutoNote(null);
+    setError(null);
+    setAutoBusyText("Uploading receipt…");
+    let id = editingId;
+    try {
+      const receiptPath = await uploadReceipt(file);
+      if (id) {
+        // Re-attach: swap the receipt on the existing draft — no duplicate.
+        const r = await fetch(`${API}/expenses/${id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ receiptPath }),
+        });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({}));
+          throw new Error(j.reason || j.error || `HTTP ${r.status}`);
+        }
+      } else {
+        setAutoBusyText("Creating draft…");
+        const amt = Number(form.amount);
+        const r = await fetch(`${API}/expenses`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            merchant: form.merchant.trim() || "Receipt",
+            amount: Number.isFinite(amt) && amt > 0 ? amt : 0.01,
+            currency: form.currency || "USD",
+            expenseDate: form.expenseDate,
+            contextType: form.contextType,
+            receiptPath: receiptPath ?? undefined,
+          }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.reason || j.error || `HTTP ${r.status}`);
+        id = j.expense.id as string;
+        setEditingId(id);
+      }
+      setAutoBusyText("Reading receipt…");
+      const parsed = await runAsyncParse(id);
+      if (parsed) {
+        setForm((f) => ({
+          ...f,
+          merchant: (parsed.merchant as string) ?? f.merchant,
+          amount: parsed.amount != null ? String(parsed.amount) : f.amount,
+          currency: (parsed.currency as string) ?? f.currency,
+          expenseDate: (parsed.expenseDate as string) ?? f.expenseDate,
+          category: (parsed.category as string) ?? f.category,
+          categoryCode: (parsed.categoryCode as string) ?? f.categoryCode,
+          subCategoryCode: (parsed.subCategoryCode as string) ?? f.subCategoryCode,
+          description: (parsed.description as string) ?? f.description,
+        }));
+      }
+      setAutoNote({
+        ok: true,
+        text: "Auto-filled from your receipt — review, correct, then save and submit.",
+      });
+      await load();
+    } catch (e) {
+      setAutoNote({ ok: false, text: (e as Error).message });
+    } finally {
+      setAutoBusyText(null);
+    }
   };
 
   const create = async () => {
@@ -253,9 +379,11 @@ export default function MeExpenses() {
     setBusy(true);
     setError(null);
     try {
-      const receiptPath = await uploadReceipt();
-      const r = await fetch(`${API}/expenses`, {
-        method: "POST",
+      // Task #411 — when the auto pipeline already created a draft, save the
+      // corrections onto it instead of creating a duplicate record.
+      const receiptPath = editingId ? null : await uploadReceipt();
+      const r = await fetch(editingId ? `${API}/expenses/${editingId}` : `${API}/expenses`, {
+        method: editingId ? "PATCH" : "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -288,6 +416,8 @@ export default function MeExpenses() {
       if (!r.ok) throw new Error(j.reason || j.error || `HTTP ${r.status}`);
       setForm({ ...emptyForm });
       setReceiptFile(null);
+      setEditingId(null);
+      setAutoNote(null);
       setShowForm(false);
       await load();
     } catch (e) {
@@ -360,18 +490,14 @@ export default function MeExpenses() {
     setParsingId(id);
     setParseNote(null);
     try {
-      const r = await fetch(`${API}/expenses/${id}/parse-receipt`, {
-        method: "POST",
-        credentials: "include",
-      });
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.message || j.reason || j.error || `HTTP ${r.status}`);
-      const p = j.proposal ?? {};
+      // Task #411 — retry fallback now uses the async launch + poll pattern
+      // so a slow parse can't be 502'd by the proxy.
+      const parsed = await runAsyncParse(id);
       setParseNote({
         id,
         ok: true,
-        text: `Parsed — ${p.category ? `category "${p.category}"` : "fields updated"}${
-          p.ocrConfidence ? ` (confidence: ${p.ocrConfidence})` : ""
+        text: `Parsed — ${
+          parsed?.category ? `category "${parsed.category as string}"` : "fields updated"
         }. Review and edit before submitting.`,
       });
       await load();
@@ -379,6 +505,7 @@ export default function MeExpenses() {
       setParseNote({ id, ok: false, text: (e as Error).message });
     } finally {
       setParsingId(null);
+      setAutoBusyText(null);
     }
   };
 
@@ -386,7 +513,21 @@ export default function MeExpenses() {
     <div className="space-y-4" data-testid="me-expenses">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-text">Expense claims</h3>
-        <PillButton onClick={() => setShowForm((v) => !v)} className="min-h-[44px]">
+        <PillButton
+          onClick={() => {
+            setShowForm((v) => {
+              if (v) {
+                // Closing the form ends the current auto-pipeline session.
+                setEditingId(null);
+                setAutoNote(null);
+                setReceiptFile(null);
+                setForm({ ...emptyForm });
+              }
+              return !v;
+            });
+          }}
+          className="min-h-[44px]"
+        >
           {showForm ? "Close" : "New claim"}
         </PillButton>
       </div>
@@ -735,13 +876,40 @@ export default function MeExpenses() {
               accept="image/*,application/pdf"
               capture="environment"
               className="block w-full text-sm text-text-mute file:mr-3 file:rounded-md file:border file:border-border file:bg-bg file:px-3 file:py-2 file:text-sm file:text-text min-h-[44px]"
-              onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                if (f) void autoProcess(f);
+                else setReceiptFile(null);
+              }}
+              disabled={autoBusyText !== null}
               data-testid="exp-receipt"
             />
             {receiptFile && <span className="text-xs text-text-faint">{receiptFile.name}</span>}
+            {autoBusyText && (
+              <span
+                className="flex items-center gap-2 text-xs text-gold"
+                data-testid="exp-auto-progress"
+              >
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border border-gold border-t-transparent" />
+                {autoBusyText}
+              </span>
+            )}
+            {autoNote && (
+              <span
+                className={`block text-xs ${autoNote.ok ? "text-emerald-300" : "text-amber-300"}`}
+                data-testid="exp-auto-note"
+              >
+                {autoNote.text}
+              </span>
+            )}
           </label>
-          <PillButton onClick={create} disabled={busy} className="min-h-[44px]" data-testid="exp-save">
-            {busy ? "Saving…" : "Save draft"}
+          <PillButton
+            onClick={create}
+            disabled={busy || autoBusyText !== null}
+            className="min-h-[44px]"
+            data-testid="exp-save"
+          >
+            {busy ? "Saving…" : editingId ? "Save changes" : "Save draft"}
           </PillButton>
         </Card>
       )}

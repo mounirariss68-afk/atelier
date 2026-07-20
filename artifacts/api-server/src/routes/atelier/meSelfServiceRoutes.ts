@@ -1876,6 +1876,134 @@ router.post("/me/expenses/:id/parse-receipt", async (req, res, next) => {
   }
 });
 
+// =====================================================================
+// Task #411 — automatic receipt pipeline: the parse is LLM-heavy (vision
+// extraction + Expense Auditor) and can run for minutes. A held request
+// gets 502'd by the proxy, so clients launch here and poll below.
+// In-memory launch map keyed by expense id (same pattern as the wallet
+// merchant-enrichment runs).
+// =====================================================================
+interface ParseLaunchState {
+  status: "running" | "done" | "failed";
+  startedAt: number;
+  result?: Record<string, unknown>;
+  error?: { status: number; body: Record<string, unknown> };
+}
+const parseLaunches = new Map<string, ParseLaunchState>();
+
+// Watchdog: a launch that has been "running" longer than this is considered
+// wedged — reported as failed and eligible for relaunch (the abandoned
+// promise can no longer write into the map because we swap the entry out).
+const PARSE_LAUNCH_STALE_MS = 10 * 60 * 1000;
+
+function launchIsStaleRunning(state: ParseLaunchState): boolean {
+  return state.status === "running" && Date.now() - state.startedAt > PARSE_LAUNCH_STALE_MS;
+}
+
+function sweepParseLaunches() {
+  const cutoff = Date.now() - 15 * 60 * 1000;
+  for (const [key, state] of parseLaunches) {
+    if (state.startedAt < cutoff && (state.status !== "running" || launchIsStaleRunning(state))) {
+      parseLaunches.delete(key);
+    }
+  }
+}
+
+// @cli-skip: self-scope async receipt parse launch; no CLI shape (Task #411)
+router.post("/me/expenses/:id/parse-receipt-async", async (req, res, next) => {
+  try {
+    const ctx = await requireOwnDraftExpense(req, res);
+    if (!ctx) return;
+    const { me, row } = ctx;
+    if (!row.receiptFileRef || !row.receiptFileRef.startsWith("/objects/")) {
+      res.status(400).json({ error: "no-receipt", message: "Attach a receipt first, then parse it." });
+      return;
+    }
+    sweepParseLaunches();
+    const existing = parseLaunches.get(row.id);
+    if (existing?.status === "running" && !launchIsStaleRunning(existing)) {
+      res.status(202).json({ status: "running" });
+      return;
+    }
+    const launch: ParseLaunchState = { status: "running", startedAt: Date.now() };
+    parseLaunches.set(row.id, launch);
+    void parseReceiptForExpense({ row, me, via: "me-lens-auto" })
+      .then((result) => {
+        if (result.ok) {
+          launch.status = "done";
+          launch.result = {
+            expense: claimToWire(result.expense),
+            runId: result.runId,
+            proposal: result.proposal,
+            policyFindings: result.policyFindings,
+          };
+        } else {
+          launch.status = "failed";
+          launch.error = { status: result.status, body: result.body };
+        }
+      })
+      .catch((err) => {
+        launch.status = "failed";
+        launch.error = {
+          status: 502,
+          body: {
+            error: "parse-crashed",
+            message: err instanceof Error ? err.message : String(err),
+          },
+        };
+      });
+    res.status(202).json({ status: "running" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope async receipt parse poll; no CLI shape (Task #411)
+router.get("/me/expenses/:id/parse-receipt-status", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const [row] = await db
+      .select({ id: atelierExpenses.id })
+      .from(atelierExpenses)
+      .where(
+        and(
+          eq(atelierExpenses.id, req.params.id),
+          eq(atelierExpenses.personId, me.id),
+          isNull(atelierExpenses.deletedAt),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "expense-not-found" });
+      return;
+    }
+    const launch = parseLaunches.get(row.id);
+    if (!launch) {
+      res.json({ status: "none" });
+      return;
+    }
+    if (launchIsStaleRunning(launch)) {
+      // Watchdog: report a wedged run as failed so the client can offer a
+      // retry; the relaunch path above swaps the entry out.
+      res.json({
+        status: "failed",
+        error: {
+          status: 504,
+          body: { error: "parse-timeout", message: "Parsing took too long — try again." },
+        },
+      });
+      return;
+    }
+    res.json({
+      status: launch.status,
+      ...(launch.result ? { result: launch.result } : {}),
+      ...(launch.error ? { error: launch.error } : {}),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // @cli-skip: self-scope receipt stream; no CLI shape (Task #53)
 router.get("/me/expenses/:id/receipt", async (req, res, next) => {
   try {
