@@ -44,8 +44,9 @@ if (phase === "create") {
   } finally {
     await admin.end().catch(() => {});
   }
-  // pgvector must exist BEFORE the drizzle push or the push aborts on the
-  // vector-typed embedding columns (fresh/stale scratch DBs).
+  // pgvector must exist BEFORE drizzle push or the push dies with
+  // `type "vector" does not exist`, silently leaving the (reused) scratch
+  // schema stale relative to current code.
   const scratch = new pg.Client({ connectionString: scratchUrl });
   await scratch.connect();
   try {

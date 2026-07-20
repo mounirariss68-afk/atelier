@@ -23,20 +23,24 @@ import {
   usePayablesPos,
   usePayablesInvoices,
   usePayablesRuns,
+  usePayablesSelfBilling,
+  usePayablesBankAccounts,
   useWhtRegister,
   useSubcontractors,
   usePayablesAudit,
   postJson,
+  API_BASE,
   type VendorRow2,
   type PoRow,
   type VendorInvoiceRow,
   type PaymentRunRow,
+  type SelfBilledInvoiceRow,
 } from "@/lib/v5-hooks";
 
 function useInvalidatePayables() {
   const qc = useQueryClient();
   return React.useCallback(() => {
-    for (const k of ["pay-vendors", "pay-pos", "pay-invoices", "pay-runs", "pay-wht", "pay-subs", "pay-disb", "pay-stalled", "pay-audit"]) {
+    for (const k of ["pay-vendors", "pay-pos", "pay-invoices", "pay-runs", "pay-selfbilling", "pay-bankaccounts", "pay-wht", "pay-subs", "pay-disb", "pay-stalled", "pay-audit"]) {
       qc.invalidateQueries({ queryKey: ["atelier-v5", k] });
     }
   }, [qc]);
@@ -55,9 +59,10 @@ function useMutate() {
 }
 
 const TABS = [
+  { id: "self-billing", label: "Self-billing", href: "/finance/payables/self-billing" },
+  { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
   { id: "vendors", label: "Vendors", href: "/finance/payables/vendors" },
   { id: "po", label: "Purchase orders", href: "/finance/payables/po" },
-  { id: "payment-runs", label: "Payment runs", href: "/finance/payables/payment-runs" },
   { id: "wht", label: "WHT register", href: "/finance/payables/wht" },
   { id: "subcontractors", label: "Subcontractors", href: "/finance/payables/subcontractors" },
 ];
@@ -385,43 +390,206 @@ function InvoiceMatchRow({ inv }: { inv: VendorInvoiceRow }) {
 }
 
 // ============================================================
-// Payment runs (maker-checker + dual signatories)
+// Self-billed invoices (RCTI) — Task #430
+// ============================================================
+function sbTone(s: SelfBilledInvoiceRow["status"]): "default" | "amber" | "green" | "red" {
+  if (s === "paid" || s === "approved") return "green";
+  if (s === "disputed" || s === "rejected") return "red";
+  if (s === "draft" || s === "scheduled") return "amber";
+  return "default";
+}
+
+export function FinancePayablesSelfBilling() {
+  const invoices = usePayablesSelfBilling();
+  const { busy, error, run } = useMutate();
+  const [info, setInfo] = React.useState<string | null>(null);
+  const onRunClerk = () =>
+    run("clerk", async () => {
+      const r = await postJson<{ summary: { invoicesCreated: number; invoicesUpdated: number; invoicesSkipped: number; reconciliationMismatches: number } }>(
+        "/finance/payables/self-billing/run",
+        {},
+      );
+      setInfo(
+        `Clerk finished: ${r.summary.invoicesCreated} created · ${r.summary.invoicesUpdated} refreshed · ${r.summary.invoicesSkipped} skipped · ${r.summary.reconciliationMismatches} mismatch(es).`,
+      );
+    });
+  const drafts = invoices.filter((i) => i.status === "draft");
+  const disputed = invoices.filter((i) => i.status === "disputed");
+  return (
+    <PayablesShell
+      eyebrow="Manage · Finance · Pay · Self-billing"
+      headline="Self-billed invoices (RCTI)"
+      lede="The Self-Billing Clerk drafts one invoice per contractor / partner firm per approved week from logged hours, reconciles each draft against the payment proposals, and holds everything at a partner checkpoint. Approve a draft to make it payable; disputed invoices stay out of payment runs."
+    >
+      <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+        <MonoChip>{invoices.length} invoice(s)</MonoChip>
+        <MonoChip tone={drafts.length > 0 ? "amber" : "default"}>{drafts.length} awaiting review</MonoChip>
+        <MonoChip tone={disputed.length > 0 ? "red" : "default"}>{disputed.length} disputed</MonoChip>
+        <div className="ml-auto flex items-center gap-2">
+          {info && <span className="text-text-mute normal-case font-sans text-xs">{info}</span>}
+          <Button size="sm" onClick={onRunClerk} disabled={!!busy} data-testid="btn-run-clerk">
+            {busy === "clerk" ? "Running clerk…" : "Run Self-Billing Clerk"}
+          </Button>
+        </div>
+      </div>
+      {error && <div className="text-xs text-danger">⚠ {error}</div>}
+      <div className="grid gap-3" data-testid="selfbilling-list">
+        {invoices.length === 0 && (
+          <EmptyCard testId="selfbilling-empty">
+            No self-billed invoices yet. Run the Self-Billing Clerk to draft invoices from approved contractor and partner-firm hours.
+          </EmptyCard>
+        )}
+        {invoices.map((inv) => (
+          <SelfBilledInvoiceCard key={inv.id} inv={inv} />
+        ))}
+      </div>
+    </PayablesShell>
+  );
+}
+
+function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
+  const { busy, error, run } = useMutate();
+  const onApprove = () => run(`ap:${inv.id}`, () => postJson(`/finance/payables/self-billing/${inv.id}/approve`, {}));
+  const onReject = () => {
+    const reason = window.prompt(`Reject ${inv.invoiceNumber}. Reason?`);
+    if (reason === null) return;
+    run(`rj:${inv.id}`, () => postJson(`/finance/payables/self-billing/${inv.id}/reject`, { reason }));
+  };
+  const onResolve = () => {
+    const note = window.prompt(`Resolve dispute on ${inv.invoiceNumber}. Resolution note?`);
+    if (note === null) return;
+    run(`rs:${inv.id}`, () => postJson(`/finance/payables/self-billing/${inv.id}/resolve-dispute`, { note }));
+  };
+  const recon = inv.reconciliation;
+  return (
+    <Card className="p-4" data-testid={`sbi-${inv.id}`}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <Eyebrow>{inv.invoiceNumber} · {inv.weekIso}</Eyebrow>
+          <div className="text-base font-medium mt-1">
+            {inv.supplierName}
+            {inv.supplierType === "partner_firm" && <span className="text-xs text-text-mute ml-2">partner firm</span>}
+          </div>
+          <div className="text-xs text-text-mute mt-1">
+            {inv.currency} {inv.subtotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })} + VAT{" "}
+            {inv.vat?.ratePct ? `${inv.vat.ratePct}%` : inv.vat?.treatment ?? "n/a"} ={" "}
+            <span className="text-text font-mono">{inv.currency} {inv.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            {" "}· {fmtUsd(inv.totalUsd)}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <MonoChip tone={sbTone(inv.status)} data-testid={`sbi-status-${inv.id}`}>{inv.status}</MonoChip>
+          {recon && (
+            <MonoChip tone={recon.status === "matched" ? "green" : recon.status === "mismatch" ? "red" : "amber"}>
+              reconcile: {recon.status.replace(/_/g, " ")}
+            </MonoChip>
+          )}
+        </div>
+      </div>
+      <div className="mt-3 text-xs">
+        <table className="w-full">
+          <thead className="text-text-faint">
+            <tr><th className="text-left py-1">Engagement</th><th className="text-right">Hours</th><th className="text-right">Rate</th><th className="text-right">Amount</th></tr>
+          </thead>
+          <tbody>
+            {(inv.lines ?? []).map((l, i) => (
+              <tr key={`${l.engagementId}-${i}`} className="border-t border-border-soft">
+                <td className="py-1.5">{l.engagementName ?? l.engagementId}</td>
+                <td className="text-right font-mono">{l.hours.toFixed(1)}</td>
+                <td className="text-right font-mono">{l.ratePerHour.toFixed(2)}</td>
+                <td className="text-right font-mono">{l.amount.toFixed(2)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {recon?.detail && recon.status !== "matched" && (
+        <div className="mt-2 text-xs text-amber-600">{recon.detail}</div>
+      )}
+      {inv.status === "disputed" && (
+        <div className="mt-2 border border-danger/40 bg-danger/5 rounded p-2 text-xs">
+          <span className="text-danger font-medium">Disputed:</span>{" "}
+          <span className="text-text-mute">{inv.disputeReason}</span>
+        </div>
+      )}
+      {inv.status === "paid" && (
+        <div className="mt-2 text-xs text-text-mute">
+          Paid {inv.paidAt?.slice(0, 10)}{inv.remittanceRef ? ` · remittance ${inv.remittanceRef}` : ""}
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-2">
+        {inv.status === "draft" && (
+          <>
+            <Button size="sm" onClick={onApprove} disabled={!!busy} data-testid={`btn-sbi-approve-${inv.id}`}>
+              {busy === `ap:${inv.id}` ? "…" : "Approve"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={onReject} disabled={!!busy} data-testid={`btn-sbi-reject-${inv.id}`}>Reject</Button>
+          </>
+        )}
+        {inv.status === "disputed" && (
+          <Button size="sm" variant="outline" onClick={onResolve} disabled={!!busy} data-testid={`btn-sbi-resolve-${inv.id}`}>
+            {busy === `rs:${inv.id}` ? "…" : "Resolve dispute"}
+          </Button>
+        )}
+        {inv.status === "approved" && !inv.paymentRunId && (
+          <Button size="sm" variant="outline" onClick={onReject} disabled={!!busy} data-testid={`btn-sbi-reject-${inv.id}`}>Reject</Button>
+        )}
+      </div>
+      {error && <div className="text-xs text-danger mt-2">⚠ {error}</div>}
+    </Card>
+  );
+}
+
+// ============================================================
+// Payment runs (dual bank signatories) — Task #430
 // ============================================================
 function runStatusTone(s: PaymentRunRow["status"]): "default" | "amber" | "green" | "red" {
-  if (s === "paid" || s === "exported") return "green";
-  if (s === "rejected") return "red";
-  if (s === "draft" || s === "pending_checker" || s === "pending_signatories" || s === "approved") return "amber";
+  if (s === "paid" || s === "exported" || s === "approved") return "green";
+  if (s === "cancelled") return "red";
+  if (s === "draft" || s === "pending_signatures") return "amber";
   return "default";
 }
 
 export function FinancePayablesPaymentRuns() {
   const runs = usePayablesRuns();
+  const bankAccounts = usePayablesBankAccounts();
   const { busy, error, run } = useMutate();
   const [info, setInfo] = React.useState<string | null>(null);
-  const onBuild = async () => {
-    setInfo(null);
-    await run("build", async () => {
-      const r = await postJson<{ run: { number: string; invoiceCount: number; totalUsd: number }; eligibleCount: number; excluded: Array<{ invoiceId: string; reason: string }> }>(
-        "/finance/payables/payment-runs/build",
-        {},
-      );
-      setInfo(`Built ${r.run.number} — ${r.run.invoiceCount} invoice(s) · $${r.run.totalUsd.toLocaleString()} (excluded ${r.excluded.length}).`);
+  const [bankAccountId, setBankAccountId] = React.useState("");
+  React.useEffect(() => {
+    if (!bankAccountId && bankAccounts.length > 0) setBankAccountId(bankAccounts[0].id);
+  }, [bankAccounts, bankAccountId]);
+  const onBuild = () =>
+    run("build", async () => {
+      setInfo(null);
+      const r = await postJson<{ run: PaymentRunRow }>("/finance/payables/payment-runs/build", { bankAccountId });
+      setInfo(`Built ${r.run.runNumber} — ${r.run.itemCount} item(s) · ${fmtUsd(r.run.totalUsd)}. Awaiting two signatures.`);
     });
-  };
   return (
     <PayablesShell
       eyebrow="Manage · Finance · Pay · Payment runs"
       headline="Payment runs"
-      lede="Maker proposes the run; an independent checker (Finance leader, not the maker) approves it; then each required bank signatory signs in turn before a bank-file is generated for export."
+      lede="A run gathers approved self-billed invoices and approved unreimbursed expense claims. Two distinct, active bank signatories must sign before the bank file can be exported and the run marked paid; remittance references cascade to every invoice and reimbursement."
     >
       <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
         <MonoChip>{runs.length} run(s)</MonoChip>
-        <MonoChip tone={runs.some((r) => r.status === "pending_signatories") ? "amber" : "default"}>
-          {runs.filter((r) => r.status === "pending_signatories").length} awaiting signatures
+        <MonoChip tone={runs.some((r) => r.status === "pending_signatures") ? "amber" : "default"}>
+          {runs.filter((r) => r.status === "pending_signatures").length} awaiting signatures
         </MonoChip>
         <div className="ml-auto flex items-center gap-2">
           {info && <span className="text-text-mute normal-case font-sans text-xs">{info}</span>}
-          <Button size="sm" onClick={onBuild} disabled={!!busy} data-testid="btn-build-run">
+          <select
+            className="border border-border-soft rounded bg-surface px-2 py-1.5 text-xs"
+            value={bankAccountId}
+            onChange={(e) => setBankAccountId(e.target.value)}
+            data-testid="select-bank-account"
+          >
+            {bankAccounts.length === 0 && <option value="">No active bank accounts</option>}
+            {bankAccounts.map((b) => (
+              <option key={b.id} value={b.id}>{b.label} ({b.currency})</option>
+            ))}
+          </select>
+          <Button size="sm" onClick={onBuild} disabled={!!busy || !bankAccountId} data-testid="btn-build-run">
             {busy === "build" ? "Building…" : "Build new run"}
           </Button>
         </div>
@@ -429,90 +597,128 @@ export function FinancePayablesPaymentRuns() {
       {error && <div className="text-xs text-danger">⚠ {error}</div>}
       <div className="grid gap-3" data-testid="runs-list">
         {runs.length === 0 && (
-          <EmptyCard testId="runs-empty">No payment runs yet. Build a run once there are approved invoices to pay.</EmptyCard>
+          <EmptyCard testId="runs-empty">No payment runs yet. Approve self-billed invoices, then build a run.</EmptyCard>
         )}
-        {runs.map((run) => (
-          <Card key={run.id} className="p-4" data-testid={`run-${run.id}`}>
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <Eyebrow>{run.number}</Eyebrow>
-                <div className="text-base font-medium mt-1">Scheduled {run.scheduledFor} · {run.invoiceCount} invoice(s)</div>
-                <div className="text-xs text-text-mute mt-1">{run.notes}</div>
-              </div>
-              <div className="flex flex-col items-end gap-1.5">
-                <MonoChip tone={runStatusTone(run.status)}>{run.status.replace(/_/g, " ")}</MonoChip>
-                <span className="font-mono text-sm">{fmtUsd(run.totalUsd)}</span>
-              </div>
-            </div>
-            <div className="grid sm:grid-cols-2 gap-4 mt-4 text-xs">
-              <div>
-                <Eyebrow>Maker / Checker</Eyebrow>
-                <div className="mt-1.5 space-y-0.5 text-text-mute">
-                  <div>Maker: <span className="text-text">{run.makerName}</span> · {run.createdAt}</div>
-                  <div>
-                    Checker:{" "}
-                    {run.checkerName ? (
-                      <span className="text-text">{run.checkerName}</span>
-                    ) : (
-                      <span className="text-amber-500">awaiting checker</span>
-                    )}
-                    {run.checkedAt && ` · ${run.checkedAt}`}
-                  </div>
-                  {run.makerName === run.checkerName && run.checkerName && (
-                    <div className="text-danger">⚠ maker = checker (segregation breach)</div>
-                  )}
-                </div>
-              </div>
-              <div>
-                <Eyebrow>Required signatories ({run.requiredSignatures.filter((s) => s.signedAt).length}/{run.requiredSignatures.length})</Eyebrow>
-                <ul className="mt-1.5 space-y-0.5">
-                  {run.requiredSignatures.map((s) => (
-                    <li key={s.signatoryId} className="text-text-mute">
-                      <span className="text-text">{s.signatoryName}</span>
-                      <MonoChip className="ml-1.5">authority {s.authorityLevel}</MonoChip>
-                      {s.signedAt ? (
-                        <MonoChip tone="green" className="ml-1">signed {s.signedAt}</MonoChip>
-                      ) : (
-                        <MonoChip tone="amber" className="ml-1">pending</MonoChip>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="mt-4 text-xs">
-              <Eyebrow>Batches (entity · bank · currency)</Eyebrow>
-              <table className="w-full mt-1.5">
-                <thead className="text-text-faint">
-                  <tr><th className="text-left py-1">Batch</th><th className="text-left">Entity</th><th className="text-left">Bank account</th><th className="text-left">Ccy</th><th className="text-right">Count</th><th className="text-right">Total USD</th></tr>
-                </thead>
-                <tbody>
-                  {run.batches.map((b) => (
-                    <tr key={b.id} className="border-t border-border-soft">
-                      <td className="py-1.5 font-mono">{b.id}</td>
-                      <td>{b.entityId}</td>
-                      <td className="font-mono">{b.bankAccountId}</td>
-                      <td>{b.currency}</td>
-                      <td className="text-right font-mono">{b.count}</td>
-                      <td className="text-right font-mono">{fmtUsd(b.totalUsd)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {run.bankFile && (
-              <div className="mt-3 text-xs">
-                <Eyebrow>Bank file</Eyebrow>
-                <div className="mt-1 font-mono text-text-mute">
-                  {run.bankFile.filename} · {run.bankFile.format} · {run.bankFile.lines} lines
-                </div>
-                <pre className="mt-1 p-2 bg-surface-2 rounded font-mono text-[10px] text-text-mute overflow-x-auto">{run.bankFile.previewBytes}</pre>
-              </div>
-            )}
-          </Card>
+        {runs.map((r) => (
+          <PaymentRunCard key={r.id} runRow={r} />
         ))}
       </div>
     </PayablesShell>
+  );
+}
+
+function PaymentRunCard({ runRow }: { runRow: PaymentRunRow }) {
+  const { busy, error, run } = useMutate();
+  const [detail, setDetail] = React.useState<PaymentRunRow | null>(null);
+  const loadDetail = React.useCallback(async () => {
+    const res = await fetch(`${API_BASE}/finance/payables/payment-runs/${runRow.id}`, { credentials: "include" });
+    if (res.ok) {
+      const j = (await res.json()) as { run: PaymentRunRow };
+      setDetail(j.run);
+    }
+  }, [runRow.id]);
+  React.useEffect(() => { void loadDetail(); }, [loadDetail, runRow.status]);
+  const items = detail?.items ?? [];
+  const onSign = () => run(`sg:${runRow.id}`, () => postJson(`/finance/payables/payment-runs/${runRow.id}/sign`, {}));
+  const onMarkPaid = () => {
+    const ref = window.prompt(`Mark ${runRow.runNumber} paid. Remittance reference?`, runRow.runNumber);
+    if (ref === null) return;
+    run(`mp:${runRow.id}`, () => postJson(`/finance/payables/payment-runs/${runRow.id}/mark-paid`, { remittanceRef: ref }));
+  };
+  const onCancel = () => {
+    const reason = window.prompt(`Cancel ${runRow.runNumber}. Reason?`);
+    if (reason === null) return;
+    run(`cx:${runRow.id}`, () => postJson(`/finance/payables/payment-runs/${runRow.id}/cancel`, { reason }));
+  };
+  const onExport = async () => {
+    const res = await fetch(`${API_BASE}/finance/payables/payment-runs/${runRow.id}/export`, {
+      method: "POST", credentials: "include",
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${runRow.runNumber}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  };
+  return (
+    <Card className="p-4" data-testid={`run-${runRow.id}`}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <Eyebrow>{runRow.runNumber}</Eyebrow>
+          <div className="text-base font-medium mt-1">{runRow.itemCount} item(s) · {runRow.bankAccountLabel}</div>
+          <div className="text-xs text-text-mute mt-1">
+            Maker: {runRow.makerName} · {runRow.createdAt.slice(0, 10)}
+            {runRow.cancelReason && <span className="text-danger ml-2">cancelled: {runRow.cancelReason}</span>}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1.5">
+          <MonoChip tone={runStatusTone(runRow.status)} data-testid={`run-status-${runRow.id}`}>{runRow.status.replace(/_/g, " ")}</MonoChip>
+          <span className="font-mono text-sm">{fmtUsd(runRow.totalUsd)}</span>
+        </div>
+      </div>
+      <div className="mt-3 text-xs">
+        <Eyebrow>Signatures ({(runRow.signatures ?? []).length}/2 required)</Eyebrow>
+        <ul className="mt-1.5 space-y-0.5">
+          {(runRow.signatures ?? []).length === 0 && <li className="text-amber-500">No signatures yet.</li>}
+          {(runRow.signatures ?? []).map((s) => (
+            <li key={s.userId} className="text-text-mute">
+              <span className="text-text">{s.name}</span>
+              <MonoChip className="ml-1.5">{s.authority.replace(/_/g, " ")}</MonoChip>
+              <MonoChip tone="green" className="ml-1">signed {s.signedAt.slice(0, 10)}</MonoChip>
+            </li>
+          ))}
+        </ul>
+      </div>
+      {items.length > 0 && (
+        <div className="mt-3 text-xs">
+          <Eyebrow>Items</Eyebrow>
+          <table className="w-full mt-1.5">
+            <thead className="text-text-faint">
+              <tr><th className="text-left py-1">Payee</th><th className="text-left">Detail</th><th className="text-left">Type</th><th className="text-right">Amount</th><th className="text-left">Status</th></tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id} className="border-t border-border-soft">
+                  <td className="py-1.5">{it.payeeName}</td>
+                  <td className="text-text-mute">{it.description}</td>
+                  <td className="font-mono">{it.itemType === "self_billed_invoice" ? "invoice" : "reimbursement"}</td>
+                  <td className="text-right font-mono">{it.currency} {it.amount.toFixed(2)}</td>
+                  <td>
+                    <MonoChip tone={it.status === "paid" ? "green" : it.status === "removed" ? "red" : "amber"}>
+                      {it.status}{it.remittanceRef ? ` · ${it.remittanceRef}` : ""}
+                    </MonoChip>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-2 flex-wrap">
+        {runRow.status === "pending_signatures" && (
+          <>
+            <Button size="sm" onClick={onSign} disabled={!!busy} data-testid={`btn-sign-${runRow.id}`}>
+              {busy === `sg:${runRow.id}` ? "…" : "Sign"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={onCancel} disabled={!!busy} data-testid={`btn-cancel-${runRow.id}`}>Cancel run</Button>
+          </>
+        )}
+        {(runRow.status === "approved" || runRow.status === "exported") && (
+          <>
+            <Button size="sm" variant="outline" onClick={onExport} disabled={!!busy} data-testid={`btn-export-${runRow.id}`}>Export bank file</Button>
+            <Button size="sm" onClick={onMarkPaid} disabled={!!busy} data-testid={`btn-markpaid-${runRow.id}`}>
+              {busy === `mp:${runRow.id}` ? "…" : "Mark paid"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={onCancel} disabled={!!busy} data-testid={`btn-cancel-${runRow.id}`}>Cancel run</Button>
+          </>
+        )}
+      </div>
+      {error && <div className="text-xs text-danger mt-2">⚠ {error}</div>}
+    </Card>
   );
 }
 

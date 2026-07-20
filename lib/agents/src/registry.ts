@@ -1736,6 +1736,55 @@ export const Bookkeeper = defineAgent({
   evals: [],
 });
 
+// ====================== TASK #430 — SELF-BILLING CLERK ======================
+// Rule-based like the Bookkeeper: deterministic generation of RCTI
+// (self-billed) invoices per supplier + ISO week from lead-approved
+// hours, with reconciliation vs the payment-proposal rows.
+
+export const SelfBillingClerk = defineAgent({
+  id: "ag_self_billing_clerk",
+  name: "Self-Billing Clerk",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Rule-based RCTI engine: composes self-billed subcontractor invoices per supplier and week from lead-approved timesheet hours / partner-firm hours at the contracted day rate, snapshots rates and VAT per issuing legal entity, and reconciles every invoice against the payment-proposal rows before finance approval.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/self_billing_clerk.v1.md",
+  inputSchema: z.object({
+    weeksIso: z.array(z.string().regex(/^\d{4}-W\d{2}$/)).optional(),
+    supplierType: z.enum(["contractor", "partner_firm"]).optional(),
+  }),
+  outputSchema: z.object({
+    weeksScanned: z.array(z.string()),
+    invoicesCreated: z.number(),
+    invoicesUpdated: z.number(),
+    invoicesSkipped: z.number(),
+    reconciliationMismatches: z.number(),
+    exceptions: z.array(
+      z.object({
+        code: z.string(),
+        supplierId: z.string(),
+        weekIso: z.string(),
+        message: z.string(),
+      }),
+    ),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Deterministic and idempotent per (supplier, week) — reruns refresh drafts only, never touch approved/disputed/paid invoices.",
+    "Rates are snapshotted on the invoice; later rate edits never mutate an issued invoice.",
+    "VAT derives from the issuing legal entity + supplier VAT treatment; unknown inputs become 0-VAT with an explicit note, never a guess.",
+    "Every invoice is reconciled against the payment-proposal rows; mismatches are flagged, never silently overwritten.",
+  ],
+  humanCheckpoints: [
+    partnerCheck("Finance approves each self-billed invoice before it can enter a payment run"),
+  ],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1794,6 +1843,8 @@ export const ATELIER_AGENTS: Agent[] = [
   CashFlowForecaster,
   // Finance GL (Task #428)
   Bookkeeper,
+  // Finance self-billing / RCTI (Task #430)
+  SelfBillingClerk,
   // Account-management agents — propose-then-approve
   NextBestAction,
   RelationshipHealth,

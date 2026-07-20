@@ -24,6 +24,7 @@ import {
   atelierExpenseGlMappings,
   atelierContractorPayments,
   atelierPartnerFirmInvoices,
+  atelierSelfBilledInvoices,
   atelierBankTransaction,
   atelierBankAccount,
   atelierRevenuePeriodPosting,
@@ -508,11 +509,56 @@ async function executeBookkeeper(
 
   // ── 4. Contractor payments + partner-firm invoices paid ──
   await progress(70, "Posting paid contractor & partner-firm costs");
+  // Task #430 — proposals covered by a paid self-billed invoice are
+  // posted via the invoice (source self_billed_invoice), not here, to
+  // avoid double posting the same subcontractor cost.
+  const sbisAll = await db.select().from(atelierSelfBilledInvoices).where(and(
+    eq(atelierSelfBilledInvoices.orgId, orgId),
+    isNull(atelierSelfBilledInvoices.deletedAt),
+  ));
+  const coveredProposalIds = new Set<string>();
+  for (const inv of sbisAll) {
+    for (const pid of inv.contractorPaymentIds ?? []) coveredProposalIds.add(pid);
+    for (const pid of inv.partnerFirmInvoiceIds ?? []) coveredProposalIds.add(pid);
+  }
+  const paidSbis = sbisAll.filter((inv) => inv.status === "paid" && tsInPeriod(inv.paidAt, from, to));
+  for (const inv of paidSbis) {
+    sourcesScanned++;
+    const ent = await resolveEntity(inv.legalEntityId, async (eid) => {
+      await db.update(atelierSelfBilledInvoices).set({ legalEntityId: eid, updatedAt: new Date() })
+        .where(eq(atelierSelfBilledInvoices.id, inv.id));
+    });
+    const label = `${inv.invoiceNumber} · ${inv.supplierName} · ${inv.weekIso}`;
+    if (!ent) {
+      exceptions.push({
+        code: "untagged_entity", sourceKind: "self_billed_invoice", sourceRef: inv.id,
+        message: `Self-billed invoice (${label}) has no legal entity tag and no single-entity default applies.`,
+        sourceLabel: label,
+      });
+      continue;
+    }
+    if (inv.totalUsd <= 0) continue;
+    const vatUsd = round2(inv.vatAmount * (inv.fxRate || 1));
+    const netUsd = round2(inv.totalUsd - vatUsd);
+    const firstEng = (inv.lines ?? [])[0]?.engagementId ?? null;
+    await postEntry({
+      legalEntityId: ent, sourceKind: "self_billed_invoice", sourceRef: inv.id,
+      sourceLabel: label,
+      entryDate: inv.paidAt!.toISOString().slice(0, 10),
+      memo: `Self-billed invoice ${label}`,
+      currency: "USD",
+      lines: [
+        { code: "5000", debit: netUsd, engagementId: firstEng, memo: label },
+        ...(vatUsd > 0 ? [{ code: "1400", debit: vatUsd, memo: "Recoverable VAT (RCTI)" }] : []),
+        { code: "1000", credit: inv.totalUsd, memo: "Cash out" },
+      ],
+    });
+  }
   const cps = (await db.select().from(atelierContractorPayments).where(and(
     eq(atelierContractorPayments.orgId, orgId),
     eq(atelierContractorPayments.status, "paid"),
     isNull(atelierContractorPayments.deletedAt),
-  ))).filter((p) => tsInPeriod(p.paidAt, from, to));
+  ))).filter((p) => tsInPeriod(p.paidAt, from, to) && !coveredProposalIds.has(p.id));
   for (const p of cps) {
     sourcesScanned++;
     const ent = await resolveEntity(p.legalEntityId, async (eid) => {
@@ -545,7 +591,7 @@ async function executeBookkeeper(
     eq(atelierPartnerFirmInvoices.orgId, orgId),
     eq(atelierPartnerFirmInvoices.status, "paid"),
     isNull(atelierPartnerFirmInvoices.deletedAt),
-  ))).filter((p) => tsInPeriod(p.paidAt, from, to));
+  ))).filter((p) => tsInPeriod(p.paidAt, from, to) && !coveredProposalIds.has(p.id));
   for (const p of pfis) {
     sourcesScanned++;
     const ent = await resolveEntity(p.legalEntityId, async (eid) => {

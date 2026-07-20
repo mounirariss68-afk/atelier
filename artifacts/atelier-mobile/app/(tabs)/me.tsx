@@ -43,6 +43,204 @@ import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
+import { TextInput } from "react-native";
+
+// ============================================================
+// Task #430 — self-billed (RCTI) invoices for contractors and
+// partner-firm resources. Bespoke /me/self-billing routes are not in
+// the openapi spec, so this section uses raw fetch.
+// ============================================================
+interface MySelfBilledInvoice {
+  id: string;
+  invoiceNumber: string;
+  weekIso: string;
+  currency: string;
+  totalAmount: number;
+  status: "draft" | "approved" | "disputed" | "scheduled" | "paid";
+  disputeReason: string | null;
+  paidAt: string | null;
+  remittanceRef: string | null;
+}
+
+function useMySelfBilling() {
+  const [items, setItems] = useState<MySelfBilledInvoice[] | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/atelier/me/self-billing`, {
+        headers: { ...authHeader(), Accept: "application/json" },
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const j = (await res.json()) as { items: MySelfBilledInvoice[] };
+      setItems(j.items);
+    } catch {
+      setItems([]);
+    }
+  }, []);
+  React.useEffect(() => { void load(); }, [load]);
+  return { items, reload: load };
+}
+
+function SelfBillingSection() {
+  const c = useColors();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const { items, reload } = useMySelfBilling();
+  const [disputeFor, setDisputeFor] = useState<MySelfBilledInvoice | null>(null);
+  const [disputeText, setDisputeText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
+
+  const openPdf = useCallback(async (inv: MySelfBilledInvoice) => {
+    const url = `${API_BASE}/api/atelier/me/self-billing/${inv.id}/pdf`;
+    if (Platform.OS === "web") {
+      Linking.openURL(url);
+      return;
+    }
+    setDownloading(inv.id);
+    try {
+      const FileSystem = await import("expo-file-system/legacy");
+      const Sharing = await import("expo-sharing");
+      const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+      const dest = `${dir}${Date.now()}_${inv.invoiceNumber.replace(/[^\w.\-]+/g, "_")}.pdf`;
+      const result = await FileSystem.downloadAsync(url, dest, { headers: authHeader() });
+      if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri);
+      hapticSuccess();
+    } catch {
+      hapticError();
+      feedback.toast("Download failed", "error");
+    } finally {
+      setDownloading(null);
+    }
+  }, [feedback]);
+
+  const submitDispute = useCallback(async () => {
+    if (!disputeFor || !disputeText.trim()) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/atelier/me/self-billing/${disputeFor.id}/dispute`, {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ reason: disputeText.trim() }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+        throw new Error(j?.message ?? j?.error ?? `${res.status}`);
+      }
+      hapticSuccess();
+      setDisputeFor(null);
+      setDisputeText("");
+      await reload();
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }, [disputeFor, disputeText, reload, feedback]);
+
+  if (!items || items.length === 0) return null;
+
+  const tone = (s: MySelfBilledInvoice["status"]) =>
+    s === "paid" ? "#2E9E62" : s === "disputed" ? c.destructive : c.mutedForeground;
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Text
+        style={{
+          color: c.foreground,
+          fontFamily: "PlusJakartaSans_800ExtraBold",
+          fontSize: 17,
+          letterSpacing: -0.2,
+          textAlign: rtl.textAlign,
+          marginTop: 4,
+        }}
+      >
+        Self-billed invoices
+      </Text>
+      {items.map((inv) => (
+        <Card key={inv.id} style={{ gap: 8 }}>
+          <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 14 }}>
+              {inv.invoiceNumber}
+            </Text>
+            <Chip label={inv.status} color={tone(inv.status)} />
+          </View>
+          <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}>
+            Week {inv.weekIso} · {inv.currency} {inv.totalAmount.toFixed(2)}
+            {inv.status === "paid" && inv.remittanceRef ? ` · remittance ${inv.remittanceRef}` : ""}
+          </Text>
+          {inv.status === "disputed" && inv.disputeReason ? (
+            <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
+              Disputed: {inv.disputeReason}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: rtl.row, gap: 10 }}>
+            <PressScale onPress={() => openPdf(inv)}>
+              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                {downloading === inv.id ? (
+                  <ActivityIndicator size="small" color={c.primary} />
+                ) : (
+                  <Feather name="download" size={15} color={c.primary} />
+                )}
+                <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>PDF</Text>
+              </View>
+            </PressScale>
+            {(inv.status === "draft" || inv.status === "approved") && (
+              <PressScale onPress={() => { setDisputeFor(inv); setDisputeText(""); }}>
+                <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                  <Feather name="alert-circle" size={15} color={c.destructive} />
+                  <Text style={{ color: c.destructive, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>Dispute</Text>
+                </View>
+              </PressScale>
+            )}
+          </View>
+        </Card>
+      ))}
+      <Modal visible={!!disputeFor} animationType="slide" transparent onRequestClose={() => setDisputeFor(null)}>
+        <Pressable onPress={() => setDisputeFor(null)} style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "center", padding: 24 }}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={[{ backgroundColor: c.card, borderRadius: 24, padding: 20, gap: 12 }, softShadow(c.shadow)]}>
+              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16 }}>
+                Dispute {disputeFor?.invoiceNumber}
+              </Text>
+              <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13 }}>
+                Tell finance what looks wrong. The invoice is held out of payment runs until it is resolved.
+              </Text>
+              <TextInput
+                value={disputeText}
+                onChangeText={setDisputeText}
+                placeholder="e.g. hours for Engagement X are overstated"
+                placeholderTextColor={c.mutedForeground}
+                multiline
+                style={{
+                  minHeight: 80,
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  borderRadius: 14,
+                  padding: 12,
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 14,
+                  textAlignVertical: "top",
+                }}
+              />
+              <View style={{ flexDirection: rtl.row, gap: 10, justifyContent: "flex-end" }}>
+                <Button label="Cancel" variant="secondary" onPress={() => setDisputeFor(null)} />
+                <Button
+                  label={busy ? "Sending…" : "Submit dispute"}
+                  onPress={submitDispute}
+                  disabled={busy || !disputeText.trim()}
+                />
+              </View>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
 
 function docIcon(kind: string): React.ComponentProps<typeof Feather>["name"] {
   const k = kind.toLowerCase();
@@ -394,6 +592,8 @@ export default function MeScreen() {
             ))}
           </View>
         )}
+
+        <SelfBillingSection />
       </ScrollView>
 
       <Modal visible={qrOpen} animationType="slide" transparent onRequestClose={() => setQrOpen(false)}>

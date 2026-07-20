@@ -12,7 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 // Atelier proxy mounts the api-server at /api/*; using a vite-base-prefixed URL
 // (e.g. /atelier/api/atelier/...) gets swallowed by the SPA fallback, so target
 // the API directly.
-const API_BASE = "/api/atelier";
+export const API_BASE = "/api/atelier";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -1810,24 +1810,84 @@ export interface VendorInvoiceRow {
 }
 export const usePayablesInvoices = listHook<VendorInvoiceRow>("pay-invoices", "/finance/payables/invoices");
 
+// Task #430 — real payment runs over atelier_payment_runs.
+export interface PaymentRunItemRow {
+  id: string;
+  itemType: "self_billed_invoice" | "expense_reimbursement";
+  refId: string;
+  payeeName: string;
+  description: string;
+  amount: number;
+  currency: string;
+  amountUsd: number;
+  status: "pending" | "paid" | "removed";
+  remittanceRef: string | null;
+  paidAt: string | null;
+}
 export interface PaymentRunRow {
   id: string;
-  number: string;
-  scheduledFor: string;
-  status: "draft" | "pending_checker" | "pending_signatories" | "approved" | "exported" | "paid" | "rejected";
-  createdBy: string;
-  createdAt: string;
-  makerName: string;
-  checkerName: string | null;
-  checkedAt: string | null;
-  requiredSignatures: Array<{ signatoryId: string; signatoryName: string; authorityLevel: "A" | "B" | "C"; signedAt: string | null }>;
-  batches: Array<{ id: string; entityId: string; bankAccountId: string; currency: string; invoiceIds: string[]; totalUsd: number; count: number }>;
+  runNumber: string;
+  bankAccountId: string;
+  bankAccountLabel: string;
+  currency: string;
+  status: "draft" | "pending_signatures" | "approved" | "exported" | "paid" | "cancelled";
+  itemCount: number;
   totalUsd: number;
-  invoiceCount: number;
-  bankFile: { filename: string; format: string; lines: number; previewBytes: string } | null;
-  notes: string;
+  makerUserId: string;
+  makerName: string;
+  signatures: Array<{ signatoryId: string; userId: string; name: string; authority: string; signedAt: string }>;
+  approvedAt: string | null;
+  exportedAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  notes: string | null;
+  createdAt: string;
+  items?: PaymentRunItemRow[];
 }
 export const usePayablesRuns = listHook<PaymentRunRow>("pay-runs", "/finance/payables/payment-runs");
+
+// Task #430 — self-billed (RCTI) invoices.
+export interface SelfBilledInvoiceRow {
+  id: string;
+  invoiceNumber: string;
+  supplierType: "contractor" | "partner_firm";
+  supplierId: string;
+  supplierName: string;
+  supplierEmail: string | null;
+  weekIso: string;
+  currency: string;
+  lines: Array<{ engagementId: string; engagementName: string | null; hours: number; ratePerHour: number; amount: number }>;
+  rateSnapshot: unknown;
+  subtotalAmount: number;
+  vat: { treatment: string; ratePct: number; note: string | null } | null;
+  vatAmount: number;
+  totalAmount: number;
+  totalUsd: number;
+  status: "draft" | "approved" | "disputed" | "scheduled" | "paid" | "rejected";
+  reconciliation: { status: "matched" | "mismatch" | "no_proposal"; detail?: string | null } | null;
+  contractorPaymentIds: string[] | null;
+  partnerFirmInvoiceIds: string[] | null;
+  disputeReason: string | null;
+  disputedAt: string | null;
+  disputeResolutionNote: string | null;
+  disputeResolvedAt: string | null;
+  rejectedReason: string | null;
+  paymentRunId: string | null;
+  paidAt: string | null;
+  remittanceRef: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export const usePayablesSelfBilling = listHook<SelfBilledInvoiceRow>("pay-selfbilling", "/finance/payables/self-billing");
+
+export interface PayablesBankAccountRow {
+  id: string;
+  label: string;
+  currency: string;
+}
+export const usePayablesBankAccounts = listHook<PayablesBankAccountRow>("pay-bankaccounts", "/finance/payables/bank-accounts");
 
 export interface WhtCertRow {
   id: string;

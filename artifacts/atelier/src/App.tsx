@@ -102,6 +102,7 @@ import {
   FinancePayablesVendors,
   FinancePayablesPo,
   FinancePayablesPaymentRuns,
+  FinancePayablesSelfBilling,
   FinancePayablesWht,
   FinancePayablesSubcontractors,
 } from "@/pages/finance/FinancePayables";
@@ -671,6 +672,7 @@ function Router() {
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
         <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
+        <Route path="/finance/payables/self-billing" component={FinancePayablesSelfBilling} />
         <Route path="/finance/payables/vendors" component={FinancePayablesVendors} />
         <Route path="/finance/payables/po" component={FinancePayablesPo} />
         <Route path="/finance/payables/payment-runs" component={FinancePayablesPaymentRuns} />

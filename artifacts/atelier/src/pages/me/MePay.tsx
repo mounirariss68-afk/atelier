@@ -73,7 +73,145 @@ export default function MePay() {
         {isContractor ? <ContractorNoteCard /> : <InsuranceCard data={data} />}
       </div>
       {!isContractor && <BankCard data={data} />}
+      <SelfBilledInvoicesCard />
     </div>
+  );
+}
+
+// ============================================================
+// Self-billed (RCTI) invoices — Task #430. Bespoke /me/self-billing
+// routes are not in the openapi spec, so this card uses raw fetch.
+// ============================================================
+interface MySelfBilledInvoice {
+  id: string;
+  invoiceNumber: string;
+  supplierName: string;
+  weekIso: string;
+  currency: string;
+  subtotalAmount: number;
+  vatAmount: number;
+  totalAmount: number;
+  status: "draft" | "approved" | "disputed" | "scheduled" | "paid";
+  disputeReason: string | null;
+  disputeResolutionNote: string | null;
+  paidAt: string | null;
+  remittanceRef: string | null;
+}
+
+function sbiTone(s: MySelfBilledInvoice["status"]): "default" | "amber" | "green" | "red" {
+  if (s === "paid") return "green";
+  if (s === "disputed") return "red";
+  return "amber";
+}
+
+export function SelfBilledInvoicesCard() {
+  const [items, setItems] = React.useState<MySelfBilledInvoice[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const load = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/atelier/me/self-billing", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      const j = (await res.json()) as { items: MySelfBilledInvoice[] };
+      setItems(j.items);
+    } catch {
+      setItems([]);
+    }
+  }, []);
+  React.useEffect(() => { void load(); }, [load]);
+
+  const act = async (key: string, path: string, body: unknown) => {
+    setBusy(key); setError(null);
+    try {
+      const res = await fetch(`/api/atelier${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body ?? {}),
+      });
+      const j = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+      if (!res.ok) throw new Error(j?.message ?? j?.error ?? `${res.status}`);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (items === null || items.length === 0) return null;
+
+  return (
+    <Card className="p-5" data-testid="me-selfbilling">
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-sm font-medium">Self-billed invoices</h3>
+        <span className="text-[10px] font-mono uppercase tracking-wider text-text-faint">RCTI · raised on your behalf</span>
+      </div>
+      <p className="text-xs text-text-mute mt-1">
+        Cognirise raises these invoices for your approved hours under a self-billing agreement. Download the PDF for your records, or dispute an invoice before it is paid.
+      </p>
+      {error && <div className="text-xs text-danger mt-2">⚠ {error}</div>}
+      <div className="mt-3 space-y-2">
+        {items.map((inv) => (
+          <div key={inv.id} className="border border-border-soft rounded p-3 text-xs" data-testid={`me-sbi-${inv.id}`}>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono">{inv.invoiceNumber}</span>
+                <span className="text-text-mute">{inv.weekIso}</span>
+                <MonoChip tone={sbiTone(inv.status)} data-testid={`me-sbi-status-${inv.id}`}>{inv.status}</MonoChip>
+              </div>
+              <span className="font-mono">{inv.currency} {inv.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+            </div>
+            {inv.status === "paid" && (
+              <div className="text-text-mute mt-1">
+                Paid {inv.paidAt?.slice(0, 10)}{inv.remittanceRef ? ` · remittance ${inv.remittanceRef}` : ""}
+              </div>
+            )}
+            {inv.status === "disputed" && (
+              <div className="text-danger mt-1">Disputed: {inv.disputeReason}</div>
+            )}
+            {inv.disputeResolutionNote && inv.status !== "disputed" && (
+              <div className="text-text-mute mt-1">Dispute resolved: {inv.disputeResolutionNote}</div>
+            )}
+            <div className="mt-2 flex items-center gap-3">
+              <a
+                href={`/api/atelier/me/self-billing/${inv.id}/pdf`}
+                className="text-gold hover:underline"
+                data-testid={`me-sbi-pdf-${inv.id}`}
+              >
+                Download PDF
+              </a>
+              {(inv.status === "draft" || inv.status === "approved") && (
+                <button
+                  type="button"
+                  className="text-danger hover:underline disabled:opacity-50"
+                  disabled={!!busy}
+                  data-testid={`me-sbi-dispute-${inv.id}`}
+                  onClick={() => {
+                    const reason = window.prompt(`Dispute ${inv.invoiceNumber}. What looks wrong?`);
+                    if (!reason) return;
+                    void act(`d:${inv.id}`, `/me/self-billing/${inv.id}/dispute`, { reason });
+                  }}
+                >
+                  {busy === `d:${inv.id}` ? "…" : "Dispute"}
+                </button>
+              )}
+              {inv.status === "disputed" && (
+                <button
+                  type="button"
+                  className="text-text-mute hover:underline disabled:opacity-50"
+                  disabled={!!busy}
+                  data-testid={`me-sbi-withdraw-${inv.id}`}
+                  onClick={() => void act(`w:${inv.id}`, `/me/self-billing/${inv.id}/withdraw-dispute`, {})}
+                >
+                  {busy === `w:${inv.id}` ? "…" : "Withdraw dispute"}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 
