@@ -11,8 +11,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { LinearGradient } from "expo-linear-gradient";
+
 import {
-  BrandGradient,
   Button,
   Card,
   FadeInView,
@@ -147,7 +148,11 @@ export default function LoginScreen() {
               overflow: "hidden",
             }}
           >
-            <BrandGradient
+            {/* Hero-only gradient glow — retired 4-color branding, intentionally
+                kept for this one spot. Do not reuse elsewhere. */}
+            <LinearGradient
+              colors={["#5B7CFF", "#8A5BD6", "#C45BB8", "#FF7B5A"]}
+              locations={[0, 0.35, 0.65, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{

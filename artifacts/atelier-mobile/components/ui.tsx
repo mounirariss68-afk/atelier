@@ -20,7 +20,6 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { COG_GRADIENT, COG_GRADIENT_LOCATIONS } from "@/constants/colors";
 import { useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
@@ -199,31 +198,6 @@ export function Glass({
     <BlurView intensity={intensity + 40} tint={scheme === "dark" ? "dark" : "light"} style={[frame, { backgroundColor: c.glass }, style]}>
       {children}
     </BlurView>
-  );
-}
-
-/** Signature Cognirise gradient surface. */
-export function BrandGradient({
-  children,
-  style,
-  start = { x: 0, y: 0 },
-  end = { x: 1, y: 1 },
-}: {
-  children?: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
-  start?: { x: number; y: number };
-  end?: { x: number; y: number };
-}) {
-  return (
-    <LinearGradient
-      colors={[...COG_GRADIENT]}
-      locations={[...COG_GRADIENT_LOCATIONS]}
-      start={start}
-      end={end}
-      style={style}
-    >
-      {children}
-    </LinearGradient>
   );
 }
 

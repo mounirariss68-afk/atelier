@@ -2,14 +2,14 @@
  * Semantic design tokens for the Atelier mobile app.
  *
  * Fully synced from the Atelier web artifact's index.css (Cognirise brand):
- * deep navy surfaces, magenta accent, cool near-white text, the signature
- * blue→purple→magenta→coral gradient, accent tints and the brand easing.
- * Dark is the brand-default theme; light mirrors the web light theme.
+ * deep navy surfaces, magenta accent, cool near-white text, accent tints and
+ * the brand easing. Dark is the brand-default theme; light mirrors the web
+ * light theme.
+ *
+ * Note: the retired 4-color gradient (blue→purple→magenta→coral) is no longer
+ * exported. The only two intentional gradient spots (login hero glow, splash
+ * loader) inline it locally in app/login.tsx and app/_layout.tsx.
  */
-
-/** Cognirise signature gradient (blue→purple→magenta→coral). */
-export const COG_GRADIENT = ["#5B7CFF", "#8A5BD6", "#C45BB8", "#FF7B5A"] as const;
-export const COG_GRADIENT_LOCATIONS = [0, 0.35, 0.65, 1] as const;
 
 /** Brand-standard easing curve (matches the web's --ease). */
 export const EASE = [0.22, 1, 0.36, 1] as const;
