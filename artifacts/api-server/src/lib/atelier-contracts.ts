@@ -266,7 +266,7 @@ Rules:
 - "options": include ONLY when the document explicitly restricts the value to a fixed list (e.g. "Relationship Type: Client / Supplier / Partner", "choose one of ..."). Copy the option texts exactly. Omit otherwise.
 - "role":
   - "second_party" for the counterparty's/receiving party's SIGNATURE-BLOCK fields (their signature date, "Signed by ... Date: ____" on their side). These are completed when the counterparty signs, never when the contract is prepared.
-  - "reference" for auto-generated document reference numbers (e.g. "AGR-2026-003", "Ref No: NDA-2025-014") — a code containing a 4-digit year plus a running series number. The CRM assigns the next number automatically.
+  - "reference" for auto-generated document reference numbers — a code containing a 4-digit year plus a running series number, either literal (e.g. "AGR-2026-003", "Ref No: NDA-2025-014") or token-style (e.g. "[CGNR-NDA-U-[YEAR]-[###]]", "REF-[YYYY]-[NNN]"). The CRM assigns the next number automatically.
   - "standard" (or omit) for everything else, INCLUDING the firm's own signature-block fields.
 - "defaultHint": "today" for the FIRM-side signature date (the date our own signatory signs) — it defaults to today. Omit otherwise.`;
 
@@ -360,6 +360,17 @@ export async function detectTemplateFields(templateText: string): Promise<Detect
 
 /** Reference-number shape: something ending in a 4-digit year + 3-digit series. */
 const REFERENCE_PLACEHOLDER_RE = /(19|20)\d{2}[-_/.]\d{3}(?!\d)/;
+/**
+ * Token-style reference markers: a bracketed year token ([YEAR]/[YYYY])
+ * combined with a bracketed series token ([###]/[NNN]/[No.]) in the same
+ * placeholder, e.g. "[CGNR-NDA-U-[YEAR]-[###]]". Deliberately requires
+ * BOTH tokens so ordinary date fields ("[YYYY]") are never misclassified.
+ */
+const REFERENCE_YEAR_TOKEN_RE = /\[(?:YEAR|YYYY)\]/i;
+const REFERENCE_SERIES_TOKEN_RE = /\[(?:#+|N{2,}|No\.?)\]/i;
+export function isTokenStyleReferencePlaceholder(placeholder: string): boolean {
+  return REFERENCE_YEAR_TOKEN_RE.test(placeholder) && REFERENCE_SERIES_TOKEN_RE.test(placeholder);
+}
 const REFERENCE_TEXT_RE = /\b(ref(erence)?\s*(no|number|#)?|document\s+number)\b/i;
 const SIGN_RE = /\bsign(ature|ed|s|ing)?\b|\bdate\s+signed\b/i;
 const SECOND_PARTY_RE =
@@ -378,7 +389,11 @@ export function classifyFieldRole(
   const text = `${f.key} ${f.label}`;
   if (
     REFERENCE_PLACEHOLDER_RE.test(f.placeholder) ||
-    (REFERENCE_TEXT_RE.test(text) && REFERENCE_PLACEHOLDER_RE.test(text))
+    (REFERENCE_TEXT_RE.test(text) && REFERENCE_PLACEHOLDER_RE.test(text)) ||
+    // Token-style placeholders ("[CGNR-NDA-U-[YEAR]-[###]]") carry no
+    // literal year+series, so additionally require reference-like
+    // key/label text to stay conservative.
+    (REFERENCE_TEXT_RE.test(text) && isTokenStyleReferencePlaceholder(f.placeholder))
   ) {
     return { role: "reference" };
   }

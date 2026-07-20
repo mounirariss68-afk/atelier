@@ -84,6 +84,8 @@ import {
   buildFieldValues,
   prepareContract,
   sendContract,
+  allocateReferenceSeries,
+  formatReferenceValue,
   type Counterparty,
 } from "../../lib/atelier-contract-service.js";
 
@@ -1240,6 +1242,23 @@ router.post("/contracts/:id/regenerate", async (req, res) => {
       fields: schemaForRegen,
     });
     return;
+  }
+  // Task #330 — drafts prepared before their template's reference field
+  // was classified never got a number (the raw placeholder shipped
+  // verbatim). Allocate one on regenerate when the value is absent or
+  // still equals the placeholder; otherwise the assigned number carries
+  // over unchanged.
+  for (const f of schemaForRegen.filter((x) => x.role === "reference")) {
+    const cur = values[f.key];
+    if ((cur == null || cur === "" || cur === f.placeholder) && contract.templateId) {
+      const year = new Date().getFullYear();
+      const series = await allocateReferenceSeries({
+        orgId: me.orgId,
+        templateId: contract.templateId,
+        year,
+      });
+      values[f.key] = formatReferenceValue(f.placeholder, year, series);
+    }
   }
   const templateBytes = await loadContractBytes(version.blobRef);
   if (!templateBytes) {

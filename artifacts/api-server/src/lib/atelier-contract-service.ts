@@ -36,6 +36,7 @@ import {
   addContractDocument,
   auditContractEntity,
   normalizeFieldSchema,
+  isTokenStyleReferencePlaceholder,
   rid,
 } from "./atelier-contracts.js";
 import { createDocument } from "./atelier-documents.js";
@@ -381,6 +382,16 @@ export function formatReferenceValue(placeholder: string, year: number, series: 
   const padded = String(series).padStart(3, "0");
   const m = placeholder.match(/^(.*?)(19|20)\d{2}([-_/.])\d{3}(?!\d)/);
   if (m) return `${m[1]}${year}${m[3]}${padded}`;
+  // Token-style placeholders, e.g. "[CGNR-NDA-U-[YEAR]-[###]]" →
+  // "CGNR-NDA-U-2026-001": substitute the year/series tokens, then strip
+  // one wrapping bracket pair when the whole placeholder is bracketed.
+  if (isTokenStyleReferencePlaceholder(placeholder)) {
+    let out = placeholder
+      .replace(/\[(?:YEAR|YYYY)\]/gi, String(year))
+      .replace(/\[(?:#+|N{2,}|No\.?)\]/gi, padded);
+    if (out.startsWith("[") && out.endsWith("]")) out = out.slice(1, -1);
+    return out.trim();
+  }
   return `${year}-${padded}`;
 }
 

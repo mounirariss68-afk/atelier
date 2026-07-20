@@ -83,6 +83,17 @@ const DETECTED_FIELDS = {
       required: false,
       role: "second_party",
     },
+    // Task #330 — token-style reference placeholder WITHOUT an explicit
+    // role: normalizeFieldSchema/classifyFieldRole must classify it as
+    // "reference" and prepare must allocate + format a real number.
+    {
+      key: "reference_number",
+      label: "Reference Number",
+      placeholder: "[CGNR-NDA-U-[YEAR]-[###]]",
+      dataType: "text",
+      autoFill: "none",
+      required: false,
+    },
   ],
   warnings: ["probe warning"],
 };
@@ -262,6 +273,69 @@ async function main() {
   let contractId: string | null = null;
   let sigRequestId: string | null = null;
 
+  // ---- Task #330 unit checks: classification + formatting ----
+  {
+    const { classifyFieldRole } = await import("../../src/lib/atelier-contracts.js");
+    const { formatReferenceValue, buildFieldValues } = await import(
+      "../../src/lib/atelier-contract-service.js"
+    );
+    const base = { dataType: "text", autoFill: "none", required: false } as any;
+    check(
+      "classify: token-style [YEAR]/[###] + reference label -> reference",
+      classifyFieldRole({ ...base, key: "reference_number", label: "Reference Number", placeholder: "[CGNR-NDA-U-[YEAR]-[###]]" }).role === "reference",
+    );
+    check(
+      "classify: token-style [YYYY]/[NNN] variant -> reference",
+      classifyFieldRole({ ...base, key: "ref_no", label: "Ref No.", placeholder: "REF-[YYYY]-[NNN]" }).role === "reference",
+    );
+    check(
+      "classify: literal year+series still -> reference",
+      classifyFieldRole({ ...base, key: "agreement_ref", label: "Agreement ref", placeholder: "AGR-2026-003" }).role === "reference",
+    );
+    check(
+      "classify: [YYYY] alone (date field) stays standard",
+      classifyFieldRole({ ...base, key: "start_date", label: "Start date", dataType: "date", placeholder: "[DD Month YYYY]" }).role === "standard",
+    );
+    check(
+      "classify: token placeholder WITHOUT reference-like text stays standard",
+      classifyFieldRole({ ...base, key: "misc_code", label: "Misc code", placeholder: "[X-[YEAR]-[###]]" }).role === "standard",
+    );
+    check(
+      "format: token-style renders with wrapping brackets stripped",
+      formatReferenceValue("[CGNR-NDA-U-[YEAR]-[###]]", 2026, 1) === "CGNR-NDA-U-2026-001",
+      formatReferenceValue("[CGNR-NDA-U-[YEAR]-[###]]", 2026, 1),
+    );
+    check(
+      "format: unwrapped token-style renders in place",
+      formatReferenceValue("REF-[YYYY]-[NNN]", 2026, 12) === "REF-2026-012",
+      formatReferenceValue("REF-[YYYY]-[NNN]", 2026, 12),
+    );
+    check(
+      "format: literal style unchanged",
+      formatReferenceValue("AGR-2026-003", 2027, 4) === "AGR-2027-004",
+      formatReferenceValue("AGR-2026-003", 2027, 4),
+    );
+    check(
+      "format: unknown shape falls back to YYYY-NNN",
+      formatReferenceValue("______", 2026, 7) === "2026-007",
+    );
+    const bfv = buildFieldValues({
+      fields: [
+        { ...base, key: "reference_number", label: "Reference Number", placeholder: "[CGNR-NDA-U-[YEAR]-[###]]" },
+        { ...base, key: "cp_sign_date", label: "Counterparty date signed", dataType: "date", role: "second_party", placeholder: "Date" },
+        { ...base, key: "name", label: "Name", autoFill: "counterparty_name", placeholder: "[NAME]" },
+      ],
+      counterparty: { kind: "person", id: "x", label: "X", accountId: null, autoFill: { counterparty_name: "X Y" } } as any,
+      firm: {},
+      explicit: { reference_number: "FAKE", cp_sign_date: "2020-01-01" },
+    });
+    check(
+      "buildFieldValues skips reference + second_party (explicit ignored)",
+      bfv.values.reference_number === undefined && bfv.values.cp_sign_date === undefined && bfv.values.name === "X Y",
+      bfv,
+    );
+  }
+
   try {
     // ---- personas ----
     await db.insert(atelierUsers).values({
@@ -297,6 +371,7 @@ async function main() {
     // ---- 1. template upload + LLM detection (stubbed) ----
     const tplDocx = await makeDocx([
       "INDIVIDUAL NON-DISCLOSURE AGREEMENT",
+      "Reference No.: [CGNR-NDA-U-[YEAR]-[###]]",
       "This NDA is entered into by [COUNTERPARTY_NAME] effective [EFFECTIVE_DATE].",
       "The engagement fee is [FEE_AMOUNT].",
       "Signed by the recipient: date [CP_SIGN_DATE], title [CP_TITLE].",
@@ -309,7 +384,11 @@ async function main() {
     check("template upload -> 201", tplUp.status === 201, tplUp);
     templateId = tplUp.body?.template?.id ?? null;
     const tplV = tplUp.body?.template?.currentVersion;
-    check("fields detected from stub LLM", tplV?.fieldStatus === "detected" && tplV?.fieldSchema?.length === 5, tplV);
+    check("fields detected from stub LLM", tplV?.fieldStatus === "detected" && tplV?.fieldSchema?.length === 6, tplV);
+    // Task #330 — the token-style reference placeholder came back from the
+    // stub WITHOUT a role; deterministic classification must stamp it.
+    const detectedRef = (tplV?.fieldSchema ?? []).find((f: any) => f.key === "reference_number");
+    check("token-style reference auto-classified", detectedRef?.role === "reference", detectedRef);
     check("template starts draft", tplUp.body?.template?.status === "draft", tplUp.body?.template?.status);
     if (!templateId) throw new Error("no template id — aborting");
 
@@ -355,7 +434,9 @@ async function main() {
       templateId,
       counterparty: { kind: "person", id: empId },
       signingEntityId: entityId,
-      values: { fee: "AED 25,000" },
+      // reference_number is explicitly supplied here and MUST be ignored
+      // (reference fields are never user-supplied at creation).
+      values: { fee: "AED 25,000", reference_number: "FAKE-9999-999" },
       effectiveDate: "2026-07-18",
     });
     check("contract create -> 201", created.status === 201, created);
@@ -369,6 +450,16 @@ async function main() {
       c0?.fieldValues,
     );
     check("effective_date auto-filled", String(c0?.fieldValues?.effective_date ?? "").includes("2026"), c0?.fieldValues);
+    // Task #330 — token-style reference: auto-assigned in the template's
+    // own style, never the explicit (fake) value, never the raw placeholder.
+    const refYear = new Date().getFullYear();
+    const assignedRef = String(c0?.fieldValues?.reference_number ?? "");
+    check(
+      "token-style reference auto-assigned at prepare",
+      new RegExp(`^CGNR-NDA-U-${refYear}-\\d{3}$`).test(assignedRef),
+      c0?.fieldValues,
+    );
+    check("explicit reference value ignored", assignedRef !== "FAKE-9999-999", assignedRef);
     const draftDocs = (c0?.documents ?? []).filter((d: any) => d.kind === "generated_draft");
     check("draft .docx generated on chain", draftDocs.length === 1, c0?.documents);
     if (!contractId) throw new Error("no contract id — aborting");
@@ -383,6 +474,11 @@ async function main() {
     const draftText = await extractDocxText(draftBytes);
     check("draft text has filled name (no placeholder left)", draftText.includes("Nadia Probe") && !draftText.includes("[COUNTERPARTY_NAME]"), draftText.slice(0, 200));
     check("draft text has fee value", draftText.includes("AED 25,000"), draftText.slice(0, 200));
+    check(
+      "draft text shows assigned reference (raw placeholder gone)",
+      draftText.includes(assignedRef) && !draftText.includes("[CGNR-NDA-U-["),
+      draftText.slice(0, 300),
+    );
 
     // ---- 4. regenerate with edited values ----
     const regen = await api("POST", `/contracts/${contractId}/regenerate`, {
@@ -390,6 +486,11 @@ async function main() {
     });
     check("regenerate -> 201", regen.status === 201, regen);
     check("regenerated values merged", regen.body?.contract?.fieldValues?.fee === "AED 30,000", regen.body?.contract?.fieldValues);
+    check(
+      "assigned reference carries over on regenerate (not reallocated)",
+      regen.body?.contract?.fieldValues?.reference_number === assignedRef,
+      regen.body?.contract?.fieldValues,
+    );
     const afterRegen = await api("GET", `/contracts/${contractId}`);
     const regenDrafts = (afterRegen.body?.contract?.documents ?? []).filter(
       (d: any) => d.kind === "generated_draft",
@@ -557,6 +658,9 @@ async function main() {
       if (templateId) {
         await db.delete(atelierContractTemplateVersions).where(eq(atelierContractTemplateVersions.templateId, templateId));
         await db.delete(atelierContractTemplates).where(eq(atelierContractTemplates.id, templateId));
+        await db
+          .delete((D as any).atelierContractReferenceSequences)
+          .where(eq((D as any).atelierContractReferenceSequences.templateId, templateId));
       }
       await db.delete(atelierDocuments).where(like(atelierDocuments.title, `%${runTag}%`));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, empId));
