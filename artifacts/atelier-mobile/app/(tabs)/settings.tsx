@@ -1,8 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
-import React from "react";
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  Alert,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
@@ -11,6 +21,13 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
 import { useColors } from "@/hooks/useColors";
+import {
+  ensureNotificationPermission,
+  loadRemindersEnabled,
+  remindersSupported,
+  setRemindersEnabled,
+  subscribeRemindersEnabled,
+} from "@/lib/meetingReminders";
 
 function SectionTitle({ children }: { children: string }) {
   const c = useColors();
@@ -133,6 +150,49 @@ export default function SettingsScreen() {
       ?.expoClient?.version ??
     "—";
 
+  const [reminders, setReminders] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    loadRemindersEnabled().then((v) => {
+      if (alive) setReminders(v);
+    });
+    const unsub = subscribeRemindersEnabled(setReminders);
+    return () => {
+      alive = false;
+      unsub();
+    };
+  }, []);
+
+  const toggleReminders = async (next: boolean) => {
+    hapticLight();
+    if (!next) {
+      await setRemindersEnabled(false);
+      return;
+    }
+    const perm = await ensureNotificationPermission();
+    if (perm === "granted") {
+      await setRemindersEnabled(true);
+      return;
+    }
+    if (perm === "blocked") {
+      Alert.alert(t("set.meetingReminders"), t("set.notifBlocked"), [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("set.openSettings"),
+          onPress: () => {
+            if (Platform.OS !== "web") {
+              try {
+                Linking.openSettings();
+              } catch {
+                // best effort
+              }
+            }
+          },
+        },
+      ]);
+    }
+  };
+
   const doLogout = () => {
     Alert.alert(t("set.title"), t("set.logoutConfirm"), [
       { text: t("common.cancel"), style: "cancel" },
@@ -185,6 +245,56 @@ export default function SettingsScreen() {
             </View>
           ))}
         </Card>
+
+        {remindersSupported() ? (
+          <>
+            <SectionTitle>{t("set.notifications")}</SectionTitle>
+            <Card style={{ paddingVertical: 4 }}>
+              <View
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: 10,
+                  paddingHorizontal: 4,
+                  gap: 12,
+                }}
+              >
+                <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 12, flex: 1 }}>
+                  <Feather name="bell" size={18} color={c.foreground} />
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={{
+                        color: c.foreground,
+                        fontFamily: "Inter_500Medium",
+                        fontSize: 16,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t("set.meetingReminders")}
+                    </Text>
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "Inter_400Regular",
+                        fontSize: 13,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t("set.meetingRemindersBody")}
+                    </Text>
+                  </View>
+                </View>
+                <Switch
+                  value={reminders}
+                  onValueChange={toggleReminders}
+                  trackColor={{ true: c.primary }}
+                  testID="meeting-reminders-toggle"
+                />
+              </View>
+            </Card>
+          </>
+        ) : null}
 
         <SectionTitle>{t("set.account")}</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>

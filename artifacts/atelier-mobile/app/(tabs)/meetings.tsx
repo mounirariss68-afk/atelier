@@ -14,6 +14,7 @@ import {
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
 import * as ExpoLinking from "expo-linking";
+import { useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -278,7 +279,13 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
   );
 }
 
-function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
+function MeetingRow({
+  m,
+  initialBriefAccountId,
+}: {
+  m: AtelierCalendarMeeting;
+  initialBriefAccountId?: string | null;
+}) {
   const c = useColors();
   const rtl = useRTL();
   const { t } = useI18n();
@@ -294,7 +301,12 @@ function MeetingRow({ m }: { m: AtelierCalendarMeeting }) {
       accountName,
     }));
   }, [m.matches]);
-  const [briefAccountId, setBriefAccountId] = useState<string | null>(null);
+  const [briefAccountId, setBriefAccountId] = useState<string | null>(
+    initialBriefAccountId &&
+      m.matches.some((match) => match.accountId === initialBriefAccountId)
+      ? initialBriefAccountId
+      : null,
+  );
 
   return (
     <Card style={{ gap: 8 }}>
@@ -447,6 +459,12 @@ export default function MeetingsScreen() {
   const rtl = useRTL();
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
+  // Set when arriving from a meeting-reminder notification tap: auto-open the
+  // brief for the matched account on that meeting.
+  const { focusMeetingId, focusAccountId } = useLocalSearchParams<{
+    focusMeetingId?: string;
+    focusAccountId?: string;
+  }>();
 
   const conn = useAtelierGetMyMsConnection();
   const [connecting, setConnecting] = useState(false);
@@ -632,7 +650,15 @@ export default function MeetingsScreen() {
         ) : meetings.length === 0 ? (
           <EmptyState icon="calendar" title={t("mtg.empty")} body={t("mtg.emptyBody")} />
         ) : (
-          meetings.map((m) => <MeetingRow key={m.id} m={m} />)
+          meetings.map((m) => (
+            <MeetingRow
+              key={
+                m.id === focusMeetingId ? `${m.id}-focus-${focusAccountId ?? ""}` : m.id
+              }
+              m={m}
+              initialBriefAccountId={m.id === focusMeetingId ? focusAccountId : null}
+            />
+          ))
         )}
       </ScrollView>
     </View>

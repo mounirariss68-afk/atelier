@@ -118,6 +118,11 @@ const en: Dict = {
   "set.logoutConfirm": "Log out of Atelier?",
   "set.version": "Version",
   "set.about": "About",
+  "set.notifications": "Notifications",
+  "set.meetingReminders": "Meeting reminders",
+  "set.meetingRemindersBody": "Alert 15 minutes before CRM-matched meetings",
+  "set.notifBlocked": "Notifications are turned off for The Atelier in your device settings.",
+  "set.openSettings": "Open settings",
   "set.title": "Settings",
   // extra common
   "common.back": "Back",
@@ -200,6 +205,7 @@ const en: Dict = {
   "mtg.noTasks": "Nothing outstanding.",
   "mtg.overdue": "Overdue",
   "mtg.due": "Due {d}",
+  "mtg.reminderBody": "Starts in {mins} min · Tap for your {name} brief",
 };
 
 const tr: Dict = {
@@ -303,6 +309,11 @@ const tr: Dict = {
   "set.logoutConfirm": "Atelier'den çıkış yapılsın mı?",
   "set.version": "Sürüm",
   "set.about": "Hakkında",
+  "set.notifications": "Bildirimler",
+  "set.meetingReminders": "Toplantı hatırlatıcıları",
+  "set.meetingRemindersBody": "CRM eşleşmeli toplantılardan 15 dakika önce uyarı",
+  "set.notifBlocked": "Cihaz ayarlarınızda The Atelier için bildirimler kapalı.",
+  "set.openSettings": "Ayarları aç",
   "set.title": "Ayarlar",
   "common.back": "Geri",
   "common.na": "—",
@@ -379,6 +390,7 @@ const tr: Dict = {
   "mtg.noTasks": "Bekleyen bir şey yok.",
   "mtg.overdue": "Gecikmiş",
   "mtg.due": "Son tarih {d}",
+  "mtg.reminderBody": "{mins} dk sonra başlıyor · {name} brifingi için dokunun",
 };
 
 const ar: Dict = {
@@ -482,6 +494,11 @@ const ar: Dict = {
   "set.logoutConfirm": "تسجيل الخروج من أتيليه؟",
   "set.version": "الإصدار",
   "set.about": "حول",
+  "set.notifications": "الإشعارات",
+  "set.meetingReminders": "تذكيرات الاجتماعات",
+  "set.meetingRemindersBody": "تنبيه قبل 15 دقيقة من الاجتماعات المطابقة في CRM",
+  "set.notifBlocked": "الإشعارات معطّلة لتطبيق The Atelier في إعدادات جهازك.",
+  "set.openSettings": "فتح الإعدادات",
   "set.title": "الإعدادات",
   "common.back": "رجوع",
   "common.na": "—",
@@ -558,6 +575,7 @@ const ar: Dict = {
   "mtg.noTasks": "لا يوجد شيء معلّق.",
   "mtg.overdue": "متأخر",
   "mtg.due": "الاستحقاق {d}",
+  "mtg.reminderBody": "يبدأ خلال {mins} دقيقة · اضغط لعرض موجز {name}",
 };
 
 export const translations: Record<Lang, Dict> = { en, tr, ar };

@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Animated, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { MeetingReminders } from "@/components/MeetingReminders";
 import {
   BRAND_EASING,
   BrandGradient,
@@ -189,15 +190,18 @@ function AnimatedLabel({
 export default function TabLayout() {
   const { t } = useI18n();
   return (
-    <Tabs
-      tabBar={(props) => <FloatingPillTabBar {...(props as unknown as TabBarProps)} />}
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" } }}
-    >
-      <Tabs.Screen name="index" options={{ title: t("tab.chat") }} />
-      <Tabs.Screen name="expenses" options={{ title: t("tab.expenses") }} />
-      <Tabs.Screen name="meetings" options={{ title: t("tab.meetings") }} />
-      <Tabs.Screen name="me" options={{ title: t("tab.me") }} />
-      <Tabs.Screen name="settings" options={{ title: t("tab.settings") }} />
-    </Tabs>
+    <>
+      <MeetingReminders />
+      <Tabs
+        tabBar={(props) => <FloatingPillTabBar {...(props as unknown as TabBarProps)} />}
+        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: "transparent" } }}
+      >
+        <Tabs.Screen name="index" options={{ title: t("tab.chat") }} />
+        <Tabs.Screen name="expenses" options={{ title: t("tab.expenses") }} />
+        <Tabs.Screen name="meetings" options={{ title: t("tab.meetings") }} />
+        <Tabs.Screen name="me" options={{ title: t("tab.me") }} />
+        <Tabs.Screen name="settings" options={{ title: t("tab.settings") }} />
+      </Tabs>
+    </>
   );
 }
