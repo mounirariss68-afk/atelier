@@ -45,7 +45,12 @@ import {
   PERSON_DOC_PREFIX,
 } from "../../lib/personDocStorage.js";
 // Task #381 — roster-scoped business-card PDF download for HR/partners.
-import { generateBusinessCardPdf } from "../../lib/atelier-business-card.js";
+import {
+  generateBusinessCardPdf,
+  cardFilenameStem,
+} from "../../lib/atelier-business-card.js";
+// Task #387 — one-click zip of all active employees' print-ready cards.
+import JSZip from "jszip";
 
 const router: IRouter = Router();
 
@@ -2000,6 +2005,109 @@ router.get("/roster/people/:id/business-card.pdf", async (req, res, next) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Cache-Control", "private, no-store");
     res.send(pdf);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #387 — one-click "download all business cards" bundle for HR /
+// founding partners ordering cards for the whole firm. Full-roster viewers
+// only (founding_partner | hr | finance — same predicate as the directory
+// itself). Bundles PRINT-variant PDFs (bleed + crop marks, what a printer
+// needs) for every ACTIVE employee who has at least one card contact field
+// (email or a cell number). Skipped people (no contact fields) are listed
+// in the audit payload so HR can chase missing data. Single audited event.
+// @cli-skip: bulk generated-file download; no CLI shape (Task #387)
+router.get("/roster/business-cards.zip", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!hasFullRosterView(me.role)) {
+      res.status(403).json({ error: "full-roster-forbidden" });
+      return;
+    }
+    const rows = await db
+      .select()
+      .from(atelierEmployees)
+      .where(
+        and(
+          eq(atelierEmployees.orgId, me.orgId),
+          eq(atelierEmployees.status, "active"),
+          isNull(atelierEmployees.deletedAt),
+        ),
+      );
+    const hasCardContact = (r: typeof atelierEmployees.$inferSelect) =>
+      Boolean(r.email?.trim()) ||
+      (r.cellPhones ?? []).some((c) => c.number.trim());
+    const included = rows
+      .filter(hasCardContact)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+    const skipped = rows
+      .filter((r) => !hasCardContact(r))
+      .map((r) => ({ personId: r.id, fullName: r.fullName }));
+    if (included.length === 0) {
+      res.status(404).json({
+        error: "no-cardable-employees",
+        message:
+          "No active employees have business-card contact fields on file.",
+        skipped,
+      });
+      return;
+    }
+    const zip = new JSZip();
+    const usedNames = new Set<string>();
+    for (const r of included) {
+      const { pdf, filename } = await generateBusinessCardPdf(
+        {
+          fullName: r.fullName,
+          title: r.title ?? null,
+          email: r.email ?? null,
+          cellPhones: (r.cellPhones ?? []) as Array<{
+            country: string;
+            number: string;
+          }>,
+          officeAddress: r.officeAddress ?? null,
+        },
+        "print",
+      );
+      // Two "John Smith"s must not overwrite each other inside the zip.
+      let entryName = filename;
+      if (usedNames.has(entryName)) {
+        entryName = `${cardFilenameStem(r.fullName)}_${r.id.slice(-6)}.pdf`;
+      }
+      usedNames.add(entryName);
+      zip.file(entryName, pdf);
+    }
+    const zipBuf = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+    });
+    assertAuditAction("document.downloaded");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "employee",
+      entityId: "roster_bulk",
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "document.downloaded",
+      payload: {
+        kind: "business_card_zip",
+        variant: "print",
+        count: included.length,
+        personIds: included.map((r) => r.id),
+        skipped,
+      },
+      payloadSummary: `${me.name} downloaded the business-card bundle (${included.length} print PDFs${skipped.length ? `, ${skipped.length} skipped` : ""})`,
+    });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="Cognirise_business_cards_${stamp}.zip"`,
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(zipBuf);
   } catch (err) {
     next(err);
   }

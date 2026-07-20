@@ -159,13 +159,28 @@ export default function RosterPeople() {
             </button>
           ),
         )}
-        <div className="ml-auto w-72">
-          <Input
-            placeholder="Search name, email, role…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            data-testid="roster-search"
-          />
+        <div className="ml-auto flex items-center gap-3">
+          {viewerScope === "full" && (
+            // Task #387 — one-click print-ready card bundle (zip of PRINT-
+            // variant PDFs for all active employees with card contact
+            // fields). Server gates on full-roster view and audits.
+            <a
+              href="/api/atelier/roster/business-cards.zip"
+              className="whitespace-nowrap px-3 py-1.5 rounded text-xs font-mono uppercase tracking-widest border border-border text-text-mute hover:text-text hover:border-gold transition-colors"
+              data-testid="download-all-business-cards"
+              title="Zip of print-ready business-card PDFs for all active employees"
+            >
+              Download all cards ↓
+            </a>
+          )}
+          <div className="w-72">
+            <Input
+              placeholder="Search name, email, role…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              data-testid="roster-search"
+            />
+          </div>
         </div>
       </div>
 
