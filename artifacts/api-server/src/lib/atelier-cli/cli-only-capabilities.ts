@@ -137,7 +137,14 @@ defineCapability({
         disambiguation: { kind: "account", options: result.options },
       };
     }
-    return { ok: false, errorCode: "not_found", errorMessage: "no account matched" };
+    // Task #390 — point the model (and the user) at the list tool instead
+    // of dead-ending.
+    return {
+      ok: false,
+      errorCode: "not_found",
+      errorMessage:
+        "no account matched — use the account_list tool to browse all visible accounts/clients",
+    };
   },
 });
 

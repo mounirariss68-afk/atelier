@@ -1695,6 +1695,24 @@ export function routePromptToCapability(promptRaw: string): RoutedCapability | n
     };
   }
 
+  // Task #390 — account / client roster. "Show me the list of clients",
+  // "list all accounts", "who are our clients". Matched BEFORE the
+  // engagement fallback so client/account phrasing never routes to
+  // engagement_list_active.
+  if (
+    // Plural only, so "show me the Acme account" (single lookup) is not
+    // hijacked; "list of clients", "our clients", "all accounts" match.
+    /\b(list|show|display|see|view|who\s+are)\b.*\b(clients|accounts|customers)\b/i.test(promptRaw) ||
+    /\b(clients?|accounts?|customers?)\s+list\b/i.test(promptRaw)
+  ) {
+    const archived = /\barchived\b/i.test(promptRaw);
+    return {
+      toolName: "account_list",
+      confidence: "high",
+      input: { status: archived ? "archived" : "active" },
+    };
+  }
+
   // Active engagements.
   if (/\b(list|show)\s+(?:the\s+)?(active|in[- ]flight|current)\s+engagements?\b/i.test(promptRaw) || /\bengagements?\s+in\s+flight\b/i.test(promptRaw)) {
     return { toolName: "engagement_list_active", confidence: "high", input: {} };

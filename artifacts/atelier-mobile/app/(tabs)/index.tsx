@@ -367,7 +367,12 @@ function TurnBlock({
 
       {turn.text ? (
         <View style={{ alignItems: rtl.isRTL ? "flex-end" : "flex-start" }}>
-          <View style={{ maxWidth: "92%" }}>
+          {/* width (not maxWidth) — with alignItems:flex-start the parent
+              shrink-wraps its child, and the flex:1 Text rows inside
+              MarkdownText then collapse to ~0 width mid-stream, wrapping
+              one character per line. A fixed 92% keeps the text bounded
+              AND stretched. */}
+          <View style={{ width: "92%" }}>
             <MarkdownText text={turn.text} color={c.foreground} />
           </View>
         </View>

@@ -44,6 +44,7 @@ import {
 } from "../atelier-agents/pipeline.js";
 import { resolveAccount, resolveEngagement } from "./resolvers/index.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
+import { canSeeAccount } from "../../routes/atelier/accountRoutes.js";
 import {
   isRestrictedPersona,
   isBoardObserver,
@@ -271,6 +272,96 @@ defineCapability({
           plannedEndDate: r.plannedEndDate,
           deliverablesDueThisWeek: r.deliverablesDueThisWeek,
           href: `/engagements/${r.id}`,
+        })),
+        total: visible.length,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// account.list — ranked_list (Task #390)
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "account.list",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_list",
+  description:
+    "List the firm's accounts (clients). Use this whenever the user asks for the list of clients, customers, or accounts. Returns name, status, tier, sector and country per account, scoped to what the caller may see.",
+  slashAliases: { en: ["/accounts", "/clients"], fr: ["/comptes", "/clients"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      status: {
+        type: "string",
+        description:
+          "Optional filter: 'active' (default, hides archived), 'archived', or 'all'.",
+      },
+    },
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["global", "account_workspace", "home"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "ranked_list",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: ["Show me the list of clients", "List all accounts", "Who are our clients?"],
+    ar: ["اعرض قائمة العملاء", "اعرض جميع الحسابات"],
+    fr: ["Affiche la liste des clients", "Liste tous les comptes"],
+  },
+  async run(input, ctx) {
+    const statusFilter = String(input.status ?? "active").toLowerCase();
+    const rows = await db
+      .select({
+        id: atelierAccounts.id,
+        name: atelierAccounts.name,
+        status: atelierAccounts.status,
+        tier: atelierAccounts.tier,
+        sector: atelierAccounts.sector,
+        country: atelierAccounts.country,
+        partnerOwnerId: atelierAccounts.partnerOwnerId,
+      })
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      );
+    // Same default as the REST /accounts list: archived accounts are
+    // hidden unless explicitly requested.
+    let filtered = rows;
+    if (statusFilter === "archived") {
+      filtered = filtered.filter((r) => (r.status ?? "active") === "archived");
+    } else if (statusFilter !== "all") {
+      filtered = filtered.filter((r) => (r.status ?? "active") !== "archived");
+    }
+    // Account-level visibility — mirrors the REST list route: partners see
+    // everything; others need an engagement grant on the account or to be
+    // its partner owner.
+    const me = { id: ctx.persona.id, role: ctx.persona.role };
+    const access = await accessibleEngagementIds(
+      me as Parameters<typeof accessibleEngagementIds>[0],
+    );
+    const visibleFlags = await Promise.all(
+      filtered.map((r) => canSeeAccount(access, me, r.id)),
+    );
+    const visible = filtered.filter((_, i) => visibleFlags[i]);
+    visible.sort((a, b) => a.name.localeCompare(b.name));
+    return {
+      ok: true,
+      data: {
+        items: visible.map((r) => ({
+          id: r.id,
+          label: r.name,
+          status: r.status ?? "active",
+          tier: r.tier ?? null,
+          sector: r.sector ?? null,
+          country: r.country ?? null,
+          href: `/accounts/${r.id}`,
         })),
         total: visible.length,
       },
