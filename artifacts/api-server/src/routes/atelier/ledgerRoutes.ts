@@ -58,6 +58,8 @@ import { gte, sql } from "drizzle-orm";
 import { assertAuditAction } from "./auditContract.js";
 // Task #53 — Me-home notification cards on timesheet decisions.
 import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
+// Task #383 — opt-in expense auto-approval when countersigning a timesheet.
+import { autoApproveTimesheetExpenses } from "./walletRoutes";
 import { canViewPersonViaRosterScope } from "./rosterRoutes";
 
 const router: IRouter = Router();
@@ -980,7 +982,14 @@ router.post("/ledger/approvals/:weekId/approve", async (req, res) => {
       href: "/me",
     });
   }
-  res.json({ ok: true, entriesAdvanced: updated.length });
+
+  // Task #383 — per-approver OPT-IN: auto-approve linked, policy-green,
+  // project expenses that reference this timesheet week.
+  let expenseAutoApprove: { approved: number; skipped: number } | null = null;
+  if (req.body?.autoApproveExpenses === true) {
+    expenseAutoApprove = await autoApproveTimesheetExpenses(week.id, me);
+  }
+  res.json({ ok: true, entriesAdvanced: updated.length, expenseAutoApprove });
 });
 
 // =====================================================================

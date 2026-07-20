@@ -29,5 +29,15 @@ export interface AtelierSelfExpense {
   rejectedAt?: string | null;
   rejectedReason?: string | null;
   reimbursedAt?: string | null;
+  categoryCode?: string | null;
+  subCategoryCode?: string | null;
+  categorySource?: string | null;
+  bdIndustry?: string | null;
+  entityId?: string | null;
+  costCenter?: string | null;
+  fundingSource?: string | null;
+  fundingBankAccountId?: string | null;
+  timesheetWeekId?: string | null;
+  approvalRoute?: string | null;
   createdAt: string;
 }

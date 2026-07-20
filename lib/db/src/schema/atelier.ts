@@ -3343,6 +3343,18 @@ export const atelierExpenses = pgTable(
     contextType: text("context_type").notNull().default("bd"), // bd | account | engagement | internal
     accountId: text("account_id"), // when contextType='account'
     internalProjectLabel: text("internal_project_label"), // when contextType='internal'
+    // Task #383 — two-axis taxonomy + attribution + funding source.
+    // `category` (above) stays the flat POLICY key; these are the new tree.
+    categoryCode: text("category_code"), // atelier_expense_categories.code (top-level)
+    subCategoryCode: text("sub_category_code"), // atelier_expense_categories.code (child)
+    categorySource: text("category_source"), // merchant_memory | ai | manual
+    bdIndustry: text("bd_industry"), // BD context: account industry (defaulted, overridable)
+    entityId: text("entity_id"), // internal context: atelier_legal_entities.id
+    costCenter: text("cost_center"), // internal context: management | operations | marketing
+    fundingSource: text("funding_source").notNull().default("personal_claim"), // personal_claim | partner_paid | company_account
+    fundingBankAccountId: text("funding_bank_account_id"), // atelier_bank_account.id when company_account
+    timesheetWeekId: text("timesheet_week_id"), // optional link to a ledger week (auto-approve opt-in)
+    approvalRoute: text("approval_route"), // engagement_lead | line_manager | hr | leadership (stamped at first approval)
     reimbursedAt: timestamp("reimbursed_at"),
     reimbursedByUserId: text("reimbursed_by_user_id"),
     createdByUserId: text("created_by_user_id"),
@@ -3509,6 +3521,10 @@ export interface InvoiceLineDraftLine {
   unitPriceUsd: number;
   amountUsd: number;
   markupPct?: number; // expenses only
+  // Task #383 — taxonomy categorization of invoice lines (same tree as expenses).
+  categoryCode?: string | null;
+  subCategoryCode?: string | null;
+  categorySource?: "merchant_memory" | "ai" | "manual" | null;
   meta?: Record<string, unknown>;
 }
 export const atelierInvoiceLineDrafts = pgTable(

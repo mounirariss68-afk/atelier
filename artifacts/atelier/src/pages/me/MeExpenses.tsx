@@ -38,6 +38,38 @@ interface ContextOption {
   name: string;
 }
 
+// Task #383 — taxonomy-as-data: categories come from the server, not a
+// hard-coded list. The legacy flat list stays only as an offline fallback.
+interface TaxonomySub {
+  code: string;
+  label: string;
+  policyKey: string;
+}
+interface TaxonomyCat {
+  code: string;
+  label: string;
+  subCategories: TaxonomySub[];
+}
+interface Taxonomy {
+  categories: TaxonomyCat[];
+  costCenters: string[];
+  fundingSources: string[];
+  entities: ContextOption[];
+}
+interface Suggestion {
+  categoryCode: string;
+  subCategoryCode: string;
+  source: "merchant_memory" | "ai";
+  confidence: "green" | "amber" | "red";
+  rationale?: string;
+}
+
+const FUNDING_LABELS: Record<string, string> = {
+  personal_claim: "Personal (reimburse me)",
+  partner_paid: "Partner paid",
+  company_account: "Company account (no reimbursement)",
+};
+
 const CATEGORIES = ["travel", "meals", "accommodation", "software", "equipment", "other"];
 const CONTEXTS = [
   { value: "bd", label: "Business development" },
@@ -89,6 +121,13 @@ const emptyForm = {
   merchant: "",
   description: "",
   category: "other",
+  categoryCode: "",
+  subCategoryCode: "",
+  bdIndustry: "",
+  entityId: "",
+  costCenter: "",
+  fundingSource: "personal_claim",
+  fundingBankAccountId: "",
   amount: "",
   currency: "USD",
   expenseDate: new Date().toISOString().slice(0, 10),
@@ -110,6 +149,10 @@ export default function MeExpenses() {
   const [receiptFile, setReceiptFile] = React.useState<File | null>(null);
   const [amberFor, setAmberFor] = React.useState<{ id: string; findings: string[] } | null>(null);
   const [rationale, setRationale] = React.useState("");
+  const [taxonomy, setTaxonomy] = React.useState<Taxonomy | null>(null);
+  const [suggestion, setSuggestion] = React.useState<Suggestion | null>(null);
+  const [suggestBusy, setSuggestBusy] = React.useState(false);
+  const [suggestError, setSuggestError] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -137,7 +180,51 @@ export default function MeExpenses() {
         setEngagements(j.engagements ?? []);
       })
       .catch(() => undefined);
+    void fetch("/api/atelier/wallet/expense-taxonomy", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setTaxonomy(j))
+      .catch(() => setTaxonomy(null));
   }, [load]);
+
+  // Task #383 — merchant-memory → AI category suggestion. Fail-loud: an AI
+  // error is shown, never silently guessed around.
+  const suggest = async () => {
+    if (!form.merchant.trim() && !form.description.trim()) return;
+    setSuggestBusy(true);
+    setSuggestError(null);
+    try {
+      const r = await fetch("/api/atelier/wallet/expense-categorize/suggest", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          merchant: form.merchant || undefined,
+          description: form.description || undefined,
+          amount: form.amount ? Number(form.amount) : undefined,
+          currency: form.currency,
+          contextType: form.contextType,
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || j.error || `HTTP ${r.status}`);
+      setSuggestion(j.suggestion ?? null);
+      if (j.aiError) setSuggestError(j.aiError);
+      else if (!j.suggestion) setSuggestError("No confident suggestion — pick a category manually.");
+      if (j.suggestion) {
+        setForm((f) => ({
+          ...f,
+          categoryCode: j.suggestion.categoryCode,
+          subCategoryCode: j.suggestion.subCategoryCode,
+        }));
+      }
+    } catch (e) {
+      setSuggestError((e as Error).message);
+    } finally {
+      setSuggestBusy(false);
+    }
+  };
+
+  const selectedCat = taxonomy?.categories.find((c) => c.code === form.categoryCode) ?? null;
 
   const uploadReceipt = async (): Promise<string | null> => {
     if (!receiptFile) return null;
@@ -173,6 +260,17 @@ export default function MeExpenses() {
           merchant: form.merchant,
           description: form.description || undefined,
           category: form.category,
+          categoryCode: form.categoryCode || undefined,
+          subCategoryCode: form.subCategoryCode || undefined,
+          fundingSource: form.fundingSource || undefined,
+          fundingBankAccountId:
+            form.fundingSource === "company_account" && form.fundingBankAccountId
+              ? form.fundingBankAccountId
+              : undefined,
+          bdIndustry: form.contextType === "bd" && form.bdIndustry ? form.bdIndustry : undefined,
+          entityId: form.contextType === "internal" && form.entityId ? form.entityId : undefined,
+          costCenter:
+            form.contextType === "internal" && form.costCenter ? form.costCenter : undefined,
           amount: Number(form.amount),
           currency: form.currency,
           expenseDate: form.expenseDate,
@@ -208,6 +306,11 @@ export default function MeExpenses() {
         body: JSON.stringify(overrideRationale ? { overrideRationale } : {}),
       });
       const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && j.error === "attribution-incomplete") {
+        throw new Error(
+          j.message || "Internal expenses need a legal entity and a cost center before submitting.",
+        );
+      }
       if (r.status === 409 && j.error === "amber-requires-rationale") {
         setAmberFor({
           id,
@@ -337,18 +440,127 @@ export default function MeExpenses() {
                 ))}
               </select>
             </label>
+            {taxonomy ? (
+              <>
+                <label className="text-xs text-text-mute space-y-1">
+                  <span className="font-mono uppercase tracking-wider text-[10px]">Category</span>
+                  <select
+                    className={inputCls}
+                    value={form.categoryCode}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, categoryCode: e.target.value, subCategoryCode: "" }))
+                    }
+                    data-testid="exp-category-code"
+                  >
+                    <option value="">Choose a category…</option>
+                    {taxonomy.categories.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-text-mute space-y-1">
+                  <span className="font-mono uppercase tracking-wider text-[10px]">
+                    Sub-category
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={form.subCategoryCode}
+                    onChange={(e) => setForm((f) => ({ ...f, subCategoryCode: e.target.value }))}
+                    disabled={!selectedCat}
+                    data-testid="exp-subcategory-code"
+                  >
+                    <option value="">
+                      {selectedCat ? "Choose a sub-category…" : "Pick a category first"}
+                    </option>
+                    {(selectedCat?.subCategories ?? []).map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="text-xs text-text-mute space-y-1 sm:col-span-2">
+                  <div className="flex items-center gap-2">
+                    <PillButton
+                      variant="ghost"
+                      onClick={suggest}
+                      disabled={suggestBusy || (!form.merchant.trim() && !form.description.trim())}
+                      className="min-h-[36px]"
+                      data-testid="exp-suggest"
+                    >
+                      {suggestBusy ? "Suggesting…" : "Suggest category"}
+                    </PillButton>
+                    {suggestion && (
+                      <span className="text-[10px] font-mono text-text-faint">
+                        via {suggestion.source === "merchant_memory" ? "merchant memory" : "AI"} ·{" "}
+                        {suggestion.confidence}
+                      </span>
+                    )}
+                  </div>
+                  {suggestError && <p className="text-xs text-amber-300">{suggestError}</p>}
+                </div>
+              </>
+            ) : (
+              <label className="text-xs text-text-mute space-y-1">
+                <span className="font-mono uppercase tracking-wider text-[10px]">Category</span>
+                <select
+                  className={inputCls}
+                  value={form.category}
+                  onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="text-xs text-text-mute space-y-1">
-              <span className="font-mono uppercase tracking-wider text-[10px]">Category</span>
+              <span className="font-mono uppercase tracking-wider text-[10px]">Funding source</span>
               <select
                 className={inputCls}
-                value={form.category}
-                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                value={form.fundingSource}
+                onChange={(e) => setForm((f) => ({ ...f, fundingSource: e.target.value }))}
+                data-testid="exp-funding-source"
               >
-                {CATEGORIES.map((c) => (
-                  <option key={c}>{c}</option>
+                {(taxonomy?.fundingSources ?? Object.keys(FUNDING_LABELS)).map((fs) => (
+                  <option key={fs} value={fs}>
+                    {FUNDING_LABELS[fs] ?? fs}
+                  </option>
                 ))}
               </select>
+              {form.fundingSource === "company_account" && (
+                <span className="block text-[10px] text-text-faint">
+                  Paid from a company account — no reimbursement will be created.
+                </span>
+              )}
             </label>
+            {form.fundingSource === "company_account" && (
+              <label className="text-xs text-text-mute space-y-1">
+                <span className="font-mono uppercase tracking-wider text-[10px]">
+                  Paying bank account
+                </span>
+                <select
+                  className={inputCls}
+                  value={form.fundingBankAccountId}
+                  onChange={(e) => setForm((f) => ({ ...f, fundingBankAccountId: e.target.value }))}
+                  data-testid="exp-funding-bank-account"
+                >
+                  <option value="">Select account…</option>
+                  {(taxonomy?.bankAccounts ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label}
+                    </option>
+                  ))}
+                </select>
+                {(taxonomy?.bankAccounts ?? []).length === 0 && (
+                  <span className="block text-[10px] text-text-faint">
+                    No active company bank accounts are registered yet.
+                  </span>
+                )}
+              </label>
+            )}
             <label className="text-xs text-text-mute space-y-1">
               <span className="font-mono uppercase tracking-wider text-[10px]">Context</span>
               <select
@@ -400,22 +612,75 @@ export default function MeExpenses() {
                 </select>
               </label>
             )}
-            {form.contextType === "internal" && (
+            {form.contextType === "bd" && (
               <label className="text-xs text-text-mute space-y-1 sm:col-span-2">
                 <span className="font-mono uppercase tracking-wider text-[10px]">
-                  Internal project
+                  Target industry (BD attribution)
                 </span>
                 <input
                   type="text"
                   className={inputCls}
-                  placeholder="e.g. Offsite 2026"
-                  value={form.internalProjectLabel}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, internalProjectLabel: e.target.value }))
-                  }
-                  data-testid="exp-internal-label"
+                  placeholder="e.g. Banking, Energy, Public sector"
+                  value={form.bdIndustry}
+                  onChange={(e) => setForm((f) => ({ ...f, bdIndustry: e.target.value }))}
+                  data-testid="exp-bd-industry"
                 />
               </label>
+            )}
+            {form.contextType === "internal" && (
+              <>
+                <label className="text-xs text-text-mute space-y-1 sm:col-span-2">
+                  <span className="font-mono uppercase tracking-wider text-[10px]">
+                    Internal project
+                  </span>
+                  <input
+                    type="text"
+                    className={inputCls}
+                    placeholder="e.g. Offsite 2026"
+                    value={form.internalProjectLabel}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, internalProjectLabel: e.target.value }))
+                    }
+                    data-testid="exp-internal-label"
+                  />
+                </label>
+                <label className="text-xs text-text-mute space-y-1">
+                  <span className="font-mono uppercase tracking-wider text-[10px]">
+                    Legal entity *
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={form.entityId}
+                    onChange={(e) => setForm((f) => ({ ...f, entityId: e.target.value }))}
+                    data-testid="exp-entity"
+                  >
+                    <option value="">Choose an entity…</option>
+                    {(taxonomy?.entities ?? []).map((en) => (
+                      <option key={en.id} value={en.id}>
+                        {en.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-text-mute space-y-1">
+                  <span className="font-mono uppercase tracking-wider text-[10px]">
+                    Cost center *
+                  </span>
+                  <select
+                    className={inputCls}
+                    value={form.costCenter}
+                    onChange={(e) => setForm((f) => ({ ...f, costCenter: e.target.value }))}
+                    data-testid="exp-cost-center"
+                  >
+                    <option value="">Choose a cost center…</option>
+                    {(taxonomy?.costCenters ?? []).map((cc) => (
+                      <option key={cc} value={cc}>
+                        {cc}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
             )}
           </div>
           <label className="block text-xs text-text-mute space-y-1">

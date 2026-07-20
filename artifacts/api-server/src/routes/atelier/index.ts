@@ -91,6 +91,7 @@ import contractLifecycleRoutes from "./contractLifecycleRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
+import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
 import financePlanRoutes from "./financePlanRoutes";
@@ -142,6 +143,14 @@ router.use(attachRls);
 // partner-firm resources may ONLY hit engagement-scoped routes plus
 // identity (me / personas) and their own roster dossier surfaces.
 // Per-route `rejectNonEmployeePersona` calls remain as defense-in-depth.
+// Task #383 — expense taxonomy reference data + the categorize-suggest
+// helper are safe for every submitter persona (they only expose the shared
+// category tree, cost centers, funding sources, entity id+name, and a
+// per-request AI suggestion). The Me-lens expense UI needs them.
+function isExpenseTaxonomyHelper(p: string): boolean {
+  return p === "/wallet/expense-taxonomy" || p === "/wallet/expense-categorize/suggest";
+}
+
 router.use((req, res, next) => {
   const me = req.atelierPersona;
   if (!me) return next();
@@ -160,6 +169,7 @@ router.use((req, res, next) => {
       return next();
     // Task #51 — profile photos are org-visible (roster views, bio flow).
     if (rp.startsWith("/people-photos/")) return next();
+    if (isExpenseTaxonomyHelper(rp)) return next();
     if (rp.startsWith("/studio/")) return next();
     res.status(403).json({
       error: "recruiter-scope",
@@ -177,6 +187,7 @@ router.use((req, res, next) => {
       return next();
     // Task #51 — profile photos are org-visible (roster views, bio flow).
     if (p.startsWith("/people-photos/")) return next();
+    if (isExpenseTaxonomyHelper(p)) return next();
     res.status(403).json({
       error: "employee-self-scope",
       message: "Employee persona may only access /me and /personas.",
@@ -193,6 +204,7 @@ router.use((req, res, next) => {
       return next();
     // Task #51 — profile photos are org-visible (roster views, bio flow).
     if (p.startsWith("/people-photos/")) return next();
+    if (isExpenseTaxonomyHelper(p)) return next();
     res.status(403).json({
       error: "contractor-self-scope",
       message: "Contractor persona may only access /me and /personas.",
@@ -207,6 +219,7 @@ router.use((req, res, next) => {
     return next();
   // Task #51 — profile photos are org-visible (roster views, bio flow).
   if (p.startsWith("/people-photos/")) return next();
+  if (isExpenseTaxonomyHelper(p)) return next();
   if (p === "/engagements" || p.startsWith("/engagements/")) return next();
   // Partner-firm resources never appear in the ledger UI but DO upload
   // their firm's hours via the partner-firm CSV endpoint and may read
@@ -315,6 +328,9 @@ router.use(cliAdminRoutes);
 // Guardhouse / IP catalog) backed by Postgres.
 router.use(v5Routes);
 router.use(financeEntitiesRoutes);
+// Task #383 — expense taxonomy, categorization suggestions, GL/VAT
+// mappings, bank signatory register, client-ready exports.
+router.use(expenseTaxonomyRoutes);
 // Task #418 — Finance Payables (P2P) hardening: vendor master, POs +
 // 3-way match, payment runs (maker-checker + dual signatories), WHT
 // register, subcontractor pay-when-paid. Seed-only data.

@@ -45,6 +45,12 @@ export const atelierBankAccount = pgTable(
     currency: text("currency").notNull().default("USD"),
     openingBalance: doublePrecision("opening_balance").notNull().default(0),
     isActive: boolean("is_active").notNull().default(true),
+    // Task #383 — entity-register bank account definition extensions.
+    iban: text("iban"),
+    purpose: text("purpose"), // operating | payroll | tax | savings | client_money | other
+    debitCards: jsonb("debit_cards").notNull().default([]).$type<
+      Array<{ id: string; holderName: string; last4: string; label: string | null; active: boolean }>
+    >(),
     ...COMMON,
   },
   (t) => [

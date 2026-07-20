@@ -78,18 +78,87 @@ router.post("/accounts", async (req, res) => {
   if (denyAll(req, res)) return;
   const me = ensure(req, res); if (!me) return;
   if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
-  const b = req.body as { bankName?: string; accountLabel?: string; accountNumberLast4?: string; currency?: string; openingBalance?: number; legalEntityId?: string };
+  const b = req.body as { bankName?: string; accountLabel?: string; accountNumberLast4?: string; currency?: string; openingBalance?: number; legalEntityId?: string; iban?: string; purpose?: string; debitCards?: unknown };
   if (!b.bankName || !b.accountLabel || !b.accountNumberLast4) return res.status(400).json({ error: "invalid_input" });
+  // Task #383 — entity-register extensions.
+  const purposeCheck = normalizePurpose(b.purpose);
+  if (purposeCheck.error) return res.status(400).json({ error: "invalid_purpose" });
+  const cardsCheck = normalizeDebitCards(b.debitCards);
+  if (cardsCheck.error) return res.status(400).json({ error: "invalid_debit_cards" });
   const id = rid("bank");
   await db.insert(atelierBankAccount).values({
     id, orgId: me.orgId, legalEntityId: b.legalEntityId ?? null,
     bankName: b.bankName, accountLabel: b.accountLabel, accountNumberLast4: b.accountNumberLast4,
     currency: b.currency ?? "USD", openingBalance: b.openingBalance ?? 0,
+    iban: typeof b.iban === "string" ? b.iban.replace(/\s+/g, "").toUpperCase().slice(0, 40) : null,
+    purpose: purposeCheck.value,
+    debitCards: cardsCheck.value ?? [],
     createdByUserId: me.id,
   });
   await audit({ entityType: "bank_account", entityId: id, actor: me, action: "bank_account.create",
     payload: { bankName: b.bankName, label: b.accountLabel }, summary: `Created bank account ${b.accountLabel}` });
   return res.json({ ok: true, data: { id } });
+});
+
+// ─────────────────── Task #383 — account definition update ───────────────────
+const ACCOUNT_PURPOSES = new Set(["operating", "payroll", "tax", "savings", "client_money", "other"]);
+function normalizePurpose(v: unknown): { value: string | null; error?: boolean } {
+  if (v === undefined || v === null || v === "") return { value: null };
+  if (typeof v !== "string" || !ACCOUNT_PURPOSES.has(v)) return { value: null, error: true };
+  return { value: v };
+}
+function normalizeDebitCards(v: unknown): {
+  value: Array<{ id: string; holderName: string; last4: string; label: string | null; active: boolean }> | null;
+  error?: boolean;
+} {
+  if (v === undefined) return { value: null };
+  if (!Array.isArray(v)) return { value: null, error: true };
+  const out: Array<{ id: string; holderName: string; last4: string; label: string | null; active: boolean }> = [];
+  for (const raw of v as Array<Record<string, unknown>>) {
+    const holderName = typeof raw?.holderName === "string" ? raw.holderName.trim().slice(0, 200) : "";
+    const last4 = typeof raw?.last4 === "string" ? raw.last4.trim() : "";
+    if (!holderName || !/^\d{4}$/.test(last4)) return { value: null, error: true };
+    out.push({
+      id: typeof raw?.id === "string" && raw.id ? raw.id : rid("card"),
+      holderName,
+      last4,
+      label: typeof raw?.label === "string" ? raw.label.slice(0, 100) : null,
+      active: raw?.active !== false,
+    });
+  }
+  return { value: out };
+}
+
+// @cli-skip: UI-workflow write; entity-register maintenance (Task #383)
+router.patch("/accounts/:id", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const [row] = await db.select().from(atelierBankAccount)
+    .where(and(eq(atelierBankAccount.id, req.params.id), eq(atelierBankAccount.orgId, me.orgId), isNull(atelierBankAccount.deletedAt)));
+  if (!row) return res.status(404).json({ error: "bank-account-not-found" });
+  const b = req.body as { bankName?: string; accountLabel?: string; legalEntityId?: string | null; iban?: string | null; purpose?: string | null; debitCards?: unknown; isActive?: boolean };
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (typeof b.bankName === "string" && b.bankName) patch.bankName = b.bankName.slice(0, 200);
+  if (typeof b.accountLabel === "string" && b.accountLabel) patch.accountLabel = b.accountLabel.slice(0, 200);
+  if (b.legalEntityId !== undefined) patch.legalEntityId = b.legalEntityId || null;
+  if (b.iban !== undefined) patch.iban = typeof b.iban === "string" && b.iban ? b.iban.replace(/\s+/g, "").toUpperCase().slice(0, 40) : null;
+  if (b.purpose !== undefined) {
+    const p = normalizePurpose(b.purpose);
+    if (p.error) return res.status(400).json({ error: "invalid_purpose" });
+    patch.purpose = p.value;
+  }
+  if (b.debitCards !== undefined) {
+    const c = normalizeDebitCards(b.debitCards);
+    if (c.error) return res.status(400).json({ error: "invalid_debit_cards" });
+    patch.debitCards = c.value ?? [];
+  }
+  if (typeof b.isActive === "boolean") patch.isActive = b.isActive;
+  await db.update(atelierBankAccount).set(patch).where(eq(atelierBankAccount.id, row.id));
+  const [updated] = await db.select().from(atelierBankAccount).where(eq(atelierBankAccount.id, row.id));
+  await audit({ entityType: "bank_account", entityId: row.id, actor: me, action: "bank_account.update",
+    payload: { fields: Object.keys(patch).filter((k) => k !== "updatedAt") }, summary: `Updated bank account ${row.accountLabel}` });
+  return res.json({ ok: true, data: updated });
 });
 
 // ─────────────────────── statement import ───────────────────────

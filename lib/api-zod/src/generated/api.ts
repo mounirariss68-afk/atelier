@@ -640,6 +640,16 @@ export const AtelierListMyExpensesResponse = zod.object({
       rejectedAt: zod.string().nullish(),
       rejectedReason: zod.string().nullish(),
       reimbursedAt: zod.string().nullish(),
+      categoryCode: zod.string().nullish(),
+      subCategoryCode: zod.string().nullish(),
+      categorySource: zod.string().nullish(),
+      bdIndustry: zod.string().nullish(),
+      entityId: zod.string().nullish(),
+      costCenter: zod.string().nullish(),
+      fundingSource: zod.string().nullish(),
+      fundingBankAccountId: zod.string().nullish(),
+      timesheetWeekId: zod.string().nullish(),
+      approvalRoute: zod.string().nullish(),
       createdAt: zod.string(),
     }),
   ),
@@ -654,6 +664,8 @@ export const atelierCreateMyExpenseBodyMerchantMax = 200;
 
 export const atelierCreateMyExpenseBodyDescriptionMax = 2000;
 
+export const atelierCreateMyExpenseBodyBdIndustryMax = 100;
+
 export const atelierCreateMyExpenseBodyInternalProjectLabelMax = 200;
 
 export const AtelierCreateMyExpenseBody = zod.object({
@@ -665,6 +677,19 @@ export const AtelierCreateMyExpenseBody = zod.object({
     .max(atelierCreateMyExpenseBodyDescriptionMax)
     .optional(),
   category: zod.string().optional(),
+  categoryCode: zod.string().optional(),
+  subCategoryCode: zod.string().optional(),
+  bdIndustry: zod
+    .string()
+    .max(atelierCreateMyExpenseBodyBdIndustryMax)
+    .optional(),
+  entityId: zod.string().optional(),
+  costCenter: zod.string().optional(),
+  fundingSource: zod
+    .enum(["personal_claim", "partner_paid", "company_account"])
+    .optional(),
+  fundingBankAccountId: zod.string().optional(),
+  timesheetWeekId: zod.string().optional(),
   expenseDate: zod.string().optional(),
   contextType: zod.enum(["bd", "account", "engagement", "internal"]).optional(),
   accountId: zod.string().optional(),
@@ -689,6 +714,8 @@ export const atelierUpdateMyExpenseBodyMerchantMax = 200;
 
 export const atelierUpdateMyExpenseBodyDescriptionMax = 2000;
 
+export const atelierUpdateMyExpenseBodyBdIndustryMax = 100;
+
 export const atelierUpdateMyExpenseBodyInternalProjectLabelMax = 200;
 
 export const AtelierUpdateMyExpenseBody = zod.object({
@@ -700,6 +727,19 @@ export const AtelierUpdateMyExpenseBody = zod.object({
     .max(atelierUpdateMyExpenseBodyDescriptionMax)
     .optional(),
   category: zod.string().optional(),
+  categoryCode: zod.string().nullish(),
+  subCategoryCode: zod.string().nullish(),
+  bdIndustry: zod
+    .string()
+    .max(atelierUpdateMyExpenseBodyBdIndustryMax)
+    .nullish(),
+  entityId: zod.string().nullish(),
+  costCenter: zod.string().nullish(),
+  fundingSource: zod
+    .enum(["personal_claim", "partner_paid", "company_account"])
+    .optional(),
+  fundingBankAccountId: zod.string().nullish(),
+  timesheetWeekId: zod.string().nullish(),
   expenseDate: zod.string().optional(),
   contextType: zod.enum(["bd", "account", "engagement", "internal"]).optional(),
   accountId: zod.string().optional(),
@@ -735,6 +775,16 @@ export const AtelierUpdateMyExpenseResponse = zod.object({
     rejectedAt: zod.string().nullish(),
     rejectedReason: zod.string().nullish(),
     reimbursedAt: zod.string().nullish(),
+    categoryCode: zod.string().nullish(),
+    subCategoryCode: zod.string().nullish(),
+    categorySource: zod.string().nullish(),
+    bdIndustry: zod.string().nullish(),
+    entityId: zod.string().nullish(),
+    costCenter: zod.string().nullish(),
+    fundingSource: zod.string().nullish(),
+    fundingBankAccountId: zod.string().nullish(),
+    timesheetWeekId: zod.string().nullish(),
+    approvalRoute: zod.string().nullish(),
     createdAt: zod.string(),
   }),
 });
@@ -790,6 +840,16 @@ export const AtelierSubmitMyExpenseResponse = zod.object({
     rejectedAt: zod.string().nullish(),
     rejectedReason: zod.string().nullish(),
     reimbursedAt: zod.string().nullish(),
+    categoryCode: zod.string().nullish(),
+    subCategoryCode: zod.string().nullish(),
+    categorySource: zod.string().nullish(),
+    bdIndustry: zod.string().nullish(),
+    entityId: zod.string().nullish(),
+    costCenter: zod.string().nullish(),
+    fundingSource: zod.string().nullish(),
+    fundingBankAccountId: zod.string().nullish(),
+    timesheetWeekId: zod.string().nullish(),
+    approvalRoute: zod.string().nullish(),
     createdAt: zod.string(),
   }),
 });
@@ -825,6 +885,16 @@ export const AtelierParseMyExpenseReceiptResponse = zod.object({
     rejectedAt: zod.string().nullish(),
     rejectedReason: zod.string().nullish(),
     reimbursedAt: zod.string().nullish(),
+    categoryCode: zod.string().nullish(),
+    subCategoryCode: zod.string().nullish(),
+    categorySource: zod.string().nullish(),
+    bdIndustry: zod.string().nullish(),
+    entityId: zod.string().nullish(),
+    costCenter: zod.string().nullish(),
+    fundingSource: zod.string().nullish(),
+    fundingBankAccountId: zod.string().nullish(),
+    timesheetWeekId: zod.string().nullish(),
+    approvalRoute: zod.string().nullish(),
     createdAt: zod.string(),
   }),
   runId: zod.string(),
@@ -845,6 +915,257 @@ export const AtelierParseMyExpenseReceiptResponse = zod.object({
  */
 export const AtelierGetMyReceiptUploadUrlResponse = zod.object({
   uploadURL: zod.string(),
+});
+
+/**
+ * @summary Expense category tree + cost centers + funding sources (Task 383)
+ */
+export const AtelierGetExpenseTaxonomyResponse = zod.object({
+  categories: zod.array(
+    zod.object({
+      code: zod.string(),
+      label: zod.string(),
+      description: zod.string().nullish(),
+      subCategories: zod.array(
+        zod.object({
+          code: zod.string(),
+          label: zod.string(),
+          description: zod.string().nullish(),
+          policyKey: zod.string(),
+        }),
+      ),
+    }),
+  ),
+  costCenters: zod.array(zod.string()),
+  fundingSources: zod.array(zod.string()),
+  entities: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+      }),
+    )
+    .optional(),
+  bankAccounts: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        label: zod.string(),
+      }),
+    )
+    .optional()
+    .describe("Active company bank accounts for company_account funding"),
+});
+
+/**
+ * @summary Merchant-memory / AI category suggestion (fail-loud, never guesses)
+ */
+export const atelierSuggestExpenseCategoryBodyMerchantMax = 200;
+
+export const atelierSuggestExpenseCategoryBodyDescriptionMax = 2000;
+
+export const atelierSuggestExpenseCategoryBodyOcrTextMax = 8000;
+
+export const atelierSuggestExpenseCategoryBodyCurrencyMax = 3;
+
+export const AtelierSuggestExpenseCategoryBody = zod.object({
+  merchant: zod
+    .string()
+    .max(atelierSuggestExpenseCategoryBodyMerchantMax)
+    .optional(),
+  description: zod
+    .string()
+    .max(atelierSuggestExpenseCategoryBodyDescriptionMax)
+    .optional(),
+  ocrText: zod
+    .string()
+    .max(atelierSuggestExpenseCategoryBodyOcrTextMax)
+    .optional(),
+  amount: zod.number().optional(),
+  currency: zod
+    .string()
+    .max(atelierSuggestExpenseCategoryBodyCurrencyMax)
+    .optional(),
+  contextType: zod.string().optional(),
+});
+
+export const AtelierSuggestExpenseCategoryResponse = zod.object({
+  suggestion: zod
+    .object({
+      categoryCode: zod.string(),
+      subCategoryCode: zod.string(),
+      source: zod.enum(["merchant_memory", "ai"]),
+      confidence: zod.enum(["green", "amber", "red"]),
+      rationale: zod.string().optional(),
+    })
+    .nullish(),
+  aiError: zod.string().nullish(),
+});
+
+/**
+ * @summary Per-entity GL code + VAT treatment mapping (finance/partner only)
+ */
+export const AtelierGetExpenseGlMappingsParams = zod.object({
+  entityId: zod.coerce.string(),
+});
+
+export const AtelierGetExpenseGlMappingsResponse = zod.object({
+  mappings: zod.array(
+    zod.object({
+      id: zod.string(),
+      entityId: zod.string(),
+      subCategoryCode: zod.string(),
+      glCode: zod.string(),
+      vatTreatment: zod.enum([
+        "recoverable",
+        "non_recoverable",
+        "zero_rated",
+        "out_of_scope",
+      ]),
+      notes: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Replace the full GL/VAT mapping set for an entity (finance/partner only)
+ */
+export const AtelierReplaceExpenseGlMappingsParams = zod.object({
+  entityId: zod.coerce.string(),
+});
+
+export const atelierReplaceExpenseGlMappingsBodyMappingsItemGlCodeMax = 60;
+
+export const atelierReplaceExpenseGlMappingsBodyMappingsItemNotesMax = 500;
+
+export const AtelierReplaceExpenseGlMappingsBody = zod.object({
+  mappings: zod.array(
+    zod.object({
+      subCategoryCode: zod.string(),
+      glCode: zod
+        .string()
+        .max(atelierReplaceExpenseGlMappingsBodyMappingsItemGlCodeMax),
+      vatTreatment: zod.enum([
+        "recoverable",
+        "non_recoverable",
+        "zero_rated",
+        "out_of_scope",
+      ]),
+      notes: zod
+        .string()
+        .max(atelierReplaceExpenseGlMappingsBodyMappingsItemNotesMax)
+        .optional(),
+    }),
+  ),
+});
+
+export const AtelierReplaceExpenseGlMappingsResponse = zod.object({
+  ok: zod.boolean(),
+  count: zod.number(),
+});
+
+/**
+ * @summary Signatory-authority register for a bank account (finance/partner only)
+ */
+export const AtelierGetBankSignatoriesParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const AtelierGetBankSignatoriesResponse = zod.object({
+  signatories: zod.array(
+    zod.object({
+      id: zod.string(),
+      userId: zod.string(),
+      personName: zod.string(),
+      authority: zod.enum(["sole", "joint", "view_only"]),
+      monetaryLimitAmount: zod.number().nullish(),
+      limitCurrency: zod.string().nullish(),
+      geography: zod.string().nullish(),
+      effectiveFrom: zod.string().nullish(),
+      expiresOn: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Replace the signatory register (founding partners only)
+ */
+export const AtelierReplaceBankSignatoriesParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const atelierReplaceBankSignatoriesBodySignatoriesItemPersonNameMax = 200;
+
+export const atelierReplaceBankSignatoriesBodySignatoriesItemLimitCurrencyMax = 3;
+
+export const atelierReplaceBankSignatoriesBodySignatoriesItemGeographyMax = 100;
+
+export const atelierReplaceBankSignatoriesBodySignatoriesItemNotesMax = 500;
+
+export const AtelierReplaceBankSignatoriesBody = zod.object({
+  signatories: zod.array(
+    zod.object({
+      userId: zod.string(),
+      personName: zod
+        .string()
+        .max(atelierReplaceBankSignatoriesBodySignatoriesItemPersonNameMax)
+        .optional(),
+      authority: zod.enum(["sole", "joint", "view_only"]),
+      monetaryLimitAmount: zod.number().optional(),
+      limitCurrency: zod
+        .string()
+        .max(atelierReplaceBankSignatoriesBodySignatoriesItemLimitCurrencyMax)
+        .optional(),
+      geography: zod
+        .string()
+        .max(atelierReplaceBankSignatoriesBodySignatoriesItemGeographyMax)
+        .optional(),
+      effectiveFrom: zod.string().optional(),
+      expiresOn: zod.string().optional(),
+      notes: zod
+        .string()
+        .max(atelierReplaceBankSignatoriesBodySignatoriesItemNotesMax)
+        .optional(),
+    }),
+  ),
+});
+
+export const AtelierReplaceBankSignatoriesResponse = zod.object({
+  ok: zod.boolean(),
+  count: zod.number(),
+});
+
+/**
+ * @summary Set the rechargeable-expense markup percentage (finance/partner only)
+ */
+export const AtelierSetEngagementExpenseMarkupParams = zod.object({
+  engagementId: zod.coerce.string(),
+});
+
+export const atelierSetEngagementExpenseMarkupBodyExpenseMarkupPctMin = 0;
+export const atelierSetEngagementExpenseMarkupBodyExpenseMarkupPctMax = 100;
+
+export const AtelierSetEngagementExpenseMarkupBody = zod.object({
+  expenseMarkupPct: zod
+    .number()
+    .min(atelierSetEngagementExpenseMarkupBodyExpenseMarkupPctMin)
+    .max(atelierSetEngagementExpenseMarkupBodyExpenseMarkupPctMax),
+});
+
+export const AtelierSetEngagementExpenseMarkupResponse = zod.object({
+  ok: zod.boolean(),
+  expenseMarkupPct: zod.number(),
+});
+
+/**
+ * @summary Client-ready billable expense export (CSV or PDF with receipt appendix)
+ */
+export const AtelierExportEngagementExpensesQueryParams = zod.object({
+  engagementId: zod.coerce.string(),
+  format: zod.enum(["csv", "pdf"]).optional(),
+  from: zod.coerce.string().optional(),
+  to: zod.coerce.string().optional(),
 });
 
 /**

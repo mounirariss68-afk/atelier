@@ -3114,8 +3114,27 @@ export interface AtelierSelfExpense {
   rejectedAt?: string | null;
   rejectedReason?: string | null;
   reimbursedAt?: string | null;
+  categoryCode?: string | null;
+  subCategoryCode?: string | null;
+  categorySource?: string | null;
+  bdIndustry?: string | null;
+  entityId?: string | null;
+  costCenter?: string | null;
+  fundingSource?: string | null;
+  fundingBankAccountId?: string | null;
+  timesheetWeekId?: string | null;
+  approvalRoute?: string | null;
   createdAt: string;
 }
+
+export type AtelierSelfExpenseCreateFundingSource =
+  (typeof AtelierSelfExpenseCreateFundingSource)[keyof typeof AtelierSelfExpenseCreateFundingSource];
+
+export const AtelierSelfExpenseCreateFundingSource = {
+  personal_claim: "personal_claim",
+  partner_paid: "partner_paid",
+  company_account: "company_account",
+} as const;
 
 export type AtelierSelfExpenseCreateContextType =
   (typeof AtelierSelfExpenseCreateContextType)[keyof typeof AtelierSelfExpenseCreateContextType];
@@ -3136,6 +3155,15 @@ export interface AtelierSelfExpenseCreate {
   /** @maxLength 2000 */
   description?: string;
   category?: string;
+  categoryCode?: string;
+  subCategoryCode?: string;
+  /** @maxLength 100 */
+  bdIndustry?: string;
+  entityId?: string;
+  costCenter?: string;
+  fundingSource?: AtelierSelfExpenseCreateFundingSource;
+  fundingBankAccountId?: string;
+  timesheetWeekId?: string;
   expenseDate?: string;
   contextType?: AtelierSelfExpenseCreateContextType;
   accountId?: string;
@@ -3144,6 +3172,15 @@ export interface AtelierSelfExpenseCreate {
   internalProjectLabel?: string;
   receiptPath?: string;
 }
+
+export type AtelierSelfExpensePatchFundingSource =
+  (typeof AtelierSelfExpensePatchFundingSource)[keyof typeof AtelierSelfExpensePatchFundingSource];
+
+export const AtelierSelfExpensePatchFundingSource = {
+  personal_claim: "personal_claim",
+  partner_paid: "partner_paid",
+  company_account: "company_account",
+} as const;
 
 export type AtelierSelfExpensePatchContextType =
   (typeof AtelierSelfExpensePatchContextType)[keyof typeof AtelierSelfExpensePatchContextType];
@@ -3164,6 +3201,15 @@ export interface AtelierSelfExpensePatch {
   /** @maxLength 2000 */
   description?: string;
   category?: string;
+  categoryCode?: string | null;
+  subCategoryCode?: string | null;
+  /** @maxLength 100 */
+  bdIndustry?: string | null;
+  entityId?: string | null;
+  costCenter?: string | null;
+  fundingSource?: AtelierSelfExpensePatchFundingSource;
+  fundingBankAccountId?: string | null;
+  timesheetWeekId?: string | null;
   expenseDate?: string;
   contextType?: AtelierSelfExpensePatchContextType;
   accountId?: string;
@@ -3171,6 +3217,118 @@ export interface AtelierSelfExpensePatch {
   /** @maxLength 200 */
   internalProjectLabel?: string;
   receiptPath?: string;
+}
+
+export type AtelierExpenseTaxonomyResponseCategoriesItemSubCategoriesItem = {
+  code: string;
+  label: string;
+  description?: string | null;
+  policyKey: string;
+};
+
+export type AtelierExpenseTaxonomyResponseCategoriesItem = {
+  code: string;
+  label: string;
+  description?: string | null;
+  subCategories: AtelierExpenseTaxonomyResponseCategoriesItemSubCategoriesItem[];
+};
+
+export type AtelierExpenseTaxonomyResponseBankAccountsItem = {
+  id: string;
+  label: string;
+};
+
+export interface AtelierExpenseTaxonomyResponse {
+  categories: AtelierExpenseTaxonomyResponseCategoriesItem[];
+  costCenters: string[];
+  fundingSources: string[];
+  entities?: AtelierIdName[];
+  /** Active company bank accounts for company_account funding */
+  bankAccounts?: AtelierExpenseTaxonomyResponseBankAccountsItem[];
+}
+
+export type AtelierExpenseGlMappingVatTreatment =
+  (typeof AtelierExpenseGlMappingVatTreatment)[keyof typeof AtelierExpenseGlMappingVatTreatment];
+
+export const AtelierExpenseGlMappingVatTreatment = {
+  recoverable: "recoverable",
+  non_recoverable: "non_recoverable",
+  zero_rated: "zero_rated",
+  out_of_scope: "out_of_scope",
+} as const;
+
+export interface AtelierExpenseGlMapping {
+  id: string;
+  entityId: string;
+  subCategoryCode: string;
+  glCode: string;
+  vatTreatment: AtelierExpenseGlMappingVatTreatment;
+  notes?: string | null;
+}
+
+export type AtelierBankSignatoryAuthority =
+  (typeof AtelierBankSignatoryAuthority)[keyof typeof AtelierBankSignatoryAuthority];
+
+export const AtelierBankSignatoryAuthority = {
+  sole: "sole",
+  joint: "joint",
+  view_only: "view_only",
+} as const;
+
+export interface AtelierBankSignatory {
+  id: string;
+  userId: string;
+  personName: string;
+  authority: AtelierBankSignatoryAuthority;
+  monetaryLimitAmount?: number | null;
+  limitCurrency?: string | null;
+  geography?: string | null;
+  effectiveFrom?: string | null;
+  expiresOn?: string | null;
+  notes?: string | null;
+}
+
+export interface AtelierExpenseSuggestRequest {
+  /** @maxLength 200 */
+  merchant?: string;
+  /** @maxLength 2000 */
+  description?: string;
+  /** @maxLength 8000 */
+  ocrText?: string;
+  amount?: number;
+  /** @maxLength 3 */
+  currency?: string;
+  contextType?: string;
+}
+
+export type AtelierExpenseSuggestResponseSuggestionSource =
+  (typeof AtelierExpenseSuggestResponseSuggestionSource)[keyof typeof AtelierExpenseSuggestResponseSuggestionSource];
+
+export const AtelierExpenseSuggestResponseSuggestionSource = {
+  merchant_memory: "merchant_memory",
+  ai: "ai",
+} as const;
+
+export type AtelierExpenseSuggestResponseSuggestionConfidence =
+  (typeof AtelierExpenseSuggestResponseSuggestionConfidence)[keyof typeof AtelierExpenseSuggestResponseSuggestionConfidence];
+
+export const AtelierExpenseSuggestResponseSuggestionConfidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export type AtelierExpenseSuggestResponseSuggestion = {
+  categoryCode: string;
+  subCategoryCode: string;
+  source: AtelierExpenseSuggestResponseSuggestionSource;
+  confidence: AtelierExpenseSuggestResponseSuggestionConfidence;
+  rationale?: string;
+} | null;
+
+export interface AtelierExpenseSuggestResponse {
+  suggestion?: AtelierExpenseSuggestResponseSuggestion;
+  aiError?: string | null;
 }
 
 export interface AtelierSelfExpenseResponse {
@@ -7055,6 +7213,104 @@ export type AtelierSubmitMyExpenseBody = {
 export type AtelierGetMyReceiptUploadUrl200 = {
   uploadURL: string;
 };
+
+export type AtelierGetExpenseGlMappings200 = {
+  mappings: AtelierExpenseGlMapping[];
+};
+
+export type AtelierReplaceExpenseGlMappingsBodyMappingsItemVatTreatment =
+  (typeof AtelierReplaceExpenseGlMappingsBodyMappingsItemVatTreatment)[keyof typeof AtelierReplaceExpenseGlMappingsBodyMappingsItemVatTreatment];
+
+export const AtelierReplaceExpenseGlMappingsBodyMappingsItemVatTreatment = {
+  recoverable: "recoverable",
+  non_recoverable: "non_recoverable",
+  zero_rated: "zero_rated",
+  out_of_scope: "out_of_scope",
+} as const;
+
+export type AtelierReplaceExpenseGlMappingsBodyMappingsItem = {
+  subCategoryCode: string;
+  /** @maxLength 60 */
+  glCode: string;
+  vatTreatment: AtelierReplaceExpenseGlMappingsBodyMappingsItemVatTreatment;
+  /** @maxLength 500 */
+  notes?: string;
+};
+
+export type AtelierReplaceExpenseGlMappingsBody = {
+  mappings: AtelierReplaceExpenseGlMappingsBodyMappingsItem[];
+};
+
+export type AtelierReplaceExpenseGlMappings200 = {
+  ok: boolean;
+  count: number;
+};
+
+export type AtelierGetBankSignatories200 = {
+  signatories: AtelierBankSignatory[];
+};
+
+export type AtelierReplaceBankSignatoriesBodySignatoriesItemAuthority =
+  (typeof AtelierReplaceBankSignatoriesBodySignatoriesItemAuthority)[keyof typeof AtelierReplaceBankSignatoriesBodySignatoriesItemAuthority];
+
+export const AtelierReplaceBankSignatoriesBodySignatoriesItemAuthority = {
+  sole: "sole",
+  joint: "joint",
+  view_only: "view_only",
+} as const;
+
+export type AtelierReplaceBankSignatoriesBodySignatoriesItem = {
+  userId: string;
+  /** @maxLength 200 */
+  personName?: string;
+  authority: AtelierReplaceBankSignatoriesBodySignatoriesItemAuthority;
+  monetaryLimitAmount?: number;
+  /** @maxLength 3 */
+  limitCurrency?: string;
+  /** @maxLength 100 */
+  geography?: string;
+  effectiveFrom?: string;
+  expiresOn?: string;
+  /** @maxLength 500 */
+  notes?: string;
+};
+
+export type AtelierReplaceBankSignatoriesBody = {
+  signatories: AtelierReplaceBankSignatoriesBodySignatoriesItem[];
+};
+
+export type AtelierReplaceBankSignatories200 = {
+  ok: boolean;
+  count: number;
+};
+
+export type AtelierSetEngagementExpenseMarkupBody = {
+  /**
+   * @minimum 0
+   * @maximum 100
+   */
+  expenseMarkupPct: number;
+};
+
+export type AtelierSetEngagementExpenseMarkup200 = {
+  ok: boolean;
+  expenseMarkupPct: number;
+};
+
+export type AtelierExportEngagementExpensesParams = {
+  engagementId: string;
+  format?: AtelierExportEngagementExpensesFormat;
+  from?: string;
+  to?: string;
+};
+
+export type AtelierExportEngagementExpensesFormat =
+  (typeof AtelierExportEngagementExpensesFormat)[keyof typeof AtelierExportEngagementExpensesFormat];
+
+export const AtelierExportEngagementExpensesFormat = {
+  csv: "csv",
+  pdf: "pdf",
+} as const;
 
 export type AtelierListMyExpenseContextsParams = {
   q?: string;

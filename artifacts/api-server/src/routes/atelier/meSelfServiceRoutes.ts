@@ -81,6 +81,17 @@ import {
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
 import { convertToUsd } from "../../lib/atelier-fx.js";
 import { evaluateExpense } from "../../lib/atelier-expense-policy.js";
+// Task #383 — taxonomy + attribution + funding + merchant-memory learning.
+import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
+import {
+  resolveCategoryPair,
+  policyKeyFor,
+  mapLegacyCategory,
+} from "../../lib/atelier-expense-taxonomy.js";
+import {
+  lookupMerchantMemory,
+  learnMerchantMapping,
+} from "../../lib/atelier-expense-categorizer.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
   ObjectStorageService,
@@ -1381,6 +1392,19 @@ function claimToWire(e: typeof atelierExpenses.$inferSelect) {
     accountId: e.accountId,
     engagementId: e.engagementId,
     internalProjectLabel: e.internalProjectLabel,
+    // Task #383 — taxonomy + attribution + funding.
+    categoryCode: e.categoryCode,
+    subCategoryCode: e.subCategoryCode,
+    categorySource: e.categorySource,
+    bdIndustry: e.bdIndustry,
+    entityId: e.entityId,
+    costCenter: e.costCenter,
+    fundingSource: e.fundingSource,
+    fundingBankAccountId: e.fundingBankAccountId,
+    timesheetWeekId: e.timesheetWeekId,
+    approvalRoute: e.approvalRoute,
+    clientBillable: e.clientBillable,
+    markupPct: e.markupPct,
     receiptFileRef: e.receiptFileRef,
     hasReceipt: !!e.receiptFileRef,
     submittedAt: e.submittedAt?.toISOString() ?? null,
@@ -1494,6 +1518,28 @@ router.post("/me/expenses", async (req, res, next) => {
     const fx = await convertToUsd(amount, currency, dateStr);
     const receiptPath = await normalizeReceipt(res, me, b.receiptPath);
     if (receiptPath === undefined) return; // error already written
+    // Task #383 — taxonomy + attribution + funding validation.
+    const extras = await resolveExpenseExtras(res, me.orgId, b, {
+      contextType: ctxTag.contextType,
+      accountId: ctxTag.accountId,
+    });
+    if (!extras) return;
+    // No explicit category pair → try org-wide merchant memory (instant,
+    // deterministic). AI proposals are fetched by the UI via the suggest
+    // endpoint so create never blocks on a model call.
+    let suggestion: import("../../lib/atelier-expense-categorizer").CategorySuggestion | null = null;
+    if (!extras.subCategoryCode) {
+      suggestion = await lookupMerchantMemory(merchant, me.orgId);
+      if (suggestion) {
+        const pair = await resolveCategoryPair(suggestion.categoryCode, suggestion.subCategoryCode);
+        if (pair) {
+          extras.categoryCode = pair.category.code;
+          extras.subCategoryCode = pair.sub.code;
+          extras.category = policyKeyFor(pair.sub);
+          extras.categorySource = "merchant_memory";
+        }
+      }
+    }
     const id = rid("exp");
     await db.insert(atelierExpenses).values({
       id,
@@ -1504,7 +1550,10 @@ router.post("/me/expenses", async (req, res, next) => {
       captureSource: "manual",
       merchant,
       description: typeof b.description === "string" ? b.description.slice(0, 2000) : null,
-      category: typeof b.category === "string" && b.category ? String(b.category) : "other",
+      ...extras,
+      category:
+        extras.category ??
+        (typeof b.category === "string" && b.category ? String(b.category) : "other"),
       amount,
       currency,
       fxRate: fx.rate,
@@ -1649,6 +1698,16 @@ router.patch("/me/expenses/:id", async (req, res, next) => {
       patch.receiptFileRef = receiptPath;
       patch.receiptEncryptedAtRest = !!receiptPath;
     }
+    // Task #383 — taxonomy + attribution + funding (patch semantics).
+    {
+      const effCtx = {
+        contextType: (patch.contextType as string) ?? row.contextType,
+        accountId: (patch.accountId as string | null) ?? row.accountId,
+      };
+      const extras = await resolveExpenseExtras(res, me.orgId, b, effCtx);
+      if (!extras) return;
+      Object.assign(patch, extras);
+    }
     const [updated] = await db
       .update(atelierExpenses)
       .set(patch)
@@ -1681,6 +1740,15 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
     const ctx = await requireOwnDraftExpense(req, res);
     if (!ctx) return;
     const { me, row } = ctx;
+    // Task #383 — internal spend must carry entity + cost center before it
+    // can enter the approval flow (attribution completeness).
+    if (row.contextType === "internal" && (!row.entityId || !row.costCenter)) {
+      res.status(409).json({
+        error: "attribution-incomplete",
+        message: "Internal expenses need a legal entity and a cost center before submitting.",
+      });
+      return;
+    }
     // Deterministic policy evaluation (no LLM auditor on the Me lens —
     // claims here are simple reimbursables; the wallet's Expense Auditor
     // remains available on the finance side).
@@ -1737,6 +1805,17 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       payload: { policyStatus: policy.status, via: "me-lens", override: !!overrideRationale },
       summary: `${me.name} submitted claim ${row.merchant ?? row.id} from Me lens`,
     });
+    // Task #383 — a submitted category pair is a CONFIRMED choice: feed the
+    // org-wide merchant memory (corrections restart the counter).
+    if (row.merchant && updated.categoryCode && updated.subCategoryCode) {
+      await learnMerchantMapping({
+        merchant: row.merchant,
+        categoryCode: updated.categoryCode,
+        subCategoryCode: updated.subCategoryCode,
+        userId: me.id,
+        orgId: me.orgId,
+      });
+    }
     await emitSelfNotification({
       orgId: me.orgId,
       userId: me.id,
@@ -1978,10 +2057,33 @@ router.post("/me/expenses/:id/parse-receipt", async (req, res, next) => {
           : null,
     });
 
+    // Task #383 — resolve the two-axis pair: org-wide merchant memory wins
+    // over the AI category; otherwise map the auditor's legacy category
+    // onto the taxonomy tree.
+    const merchantForMemory = (ocr.merchant ?? row.merchant ?? "").trim();
+    let taxonomyPatch: Record<string, unknown> = {};
+    const memoryHit = merchantForMemory ? await lookupMerchantMemory(merchantForMemory, me.orgId) : null;
+    if (memoryHit) {
+      taxonomyPatch = {
+        categoryCode: memoryHit.categoryCode,
+        subCategoryCode: memoryHit.subCategoryCode,
+        categorySource: "merchant_memory",
+      };
+    } else {
+      const mapped = await mapLegacyCategory(proposal.category);
+      if (mapped) {
+        taxonomyPatch = {
+          categoryCode: mapped.categoryCode,
+          subCategoryCode: mapped.subCategoryCode,
+          categorySource: "ai",
+        };
+      }
+    }
     const [updated] = await db
       .update(atelierExpenses)
       .set({
         merchant: (ocr.merchant ?? row.merchant ?? "Unknown merchant").slice(0, 200),
+        ...taxonomyPatch,
         expenseDate,
         amount,
         currency,

@@ -124,9 +124,15 @@ import type {
   AtelierEmergencyContactList,
   AtelierError,
   AtelierEsignUpstreamError,
+  AtelierExpenseSuggestRequest,
+  AtelierExpenseSuggestResponse,
+  AtelierExpenseTaxonomyResponse,
+  AtelierExportEngagementExpensesParams,
   AtelierForgePrototypeInput,
   AtelierForgePrototypeResponse,
   AtelierGetActivityParams,
+  AtelierGetBankSignatories200,
+  AtelierGetExpenseGlMappings200,
   AtelierGetMyCalendar502,
   AtelierGetMyCalendarParams,
   AtelierGetMyReceiptUploadUrl200,
@@ -224,6 +230,10 @@ import type {
   AtelierRateCardRowInput,
   AtelierRejectProposalSectionInput,
   AtelierRemindSignatureRequest200,
+  AtelierReplaceBankSignatories200,
+  AtelierReplaceBankSignatoriesBody,
+  AtelierReplaceExpenseGlMappings200,
+  AtelierReplaceExpenseGlMappingsBody,
   AtelierReplaceMyDocumentScan200,
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
@@ -249,6 +259,8 @@ import type {
   AtelierSelfReview,
   AtelierSelfTrainingMaterial,
   AtelierSendDeliverableInput,
+  AtelierSetEngagementExpenseMarkup200,
+  AtelierSetEngagementExpenseMarkupBody,
   AtelierSignatureRequestCreate,
   AtelierSignatureRequestEnvelope,
   AtelierSignatureRequestList,
@@ -2540,6 +2552,775 @@ export const useAtelierGetMyReceiptUploadUrl = <
 > => {
   return useMutation(getAtelierGetMyReceiptUploadUrlMutationOptions(options));
 };
+
+/**
+ * @summary Expense category tree + cost centers + funding sources (Task 383)
+ */
+export const getAtelierGetExpenseTaxonomyUrl = () => {
+  return `/api/atelier/wallet/expense-taxonomy`;
+};
+
+export const atelierGetExpenseTaxonomy = async (
+  options?: RequestInit,
+): Promise<AtelierExpenseTaxonomyResponse> => {
+  return customFetch<AtelierExpenseTaxonomyResponse>(
+    getAtelierGetExpenseTaxonomyUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetExpenseTaxonomyQueryKey = () => {
+  return [`/api/atelier/wallet/expense-taxonomy`] as const;
+};
+
+export const getAtelierGetExpenseTaxonomyQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetExpenseTaxonomyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>
+  > = ({ signal }) => atelierGetExpenseTaxonomy({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetExpenseTaxonomyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>
+>;
+export type AtelierGetExpenseTaxonomyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Expense category tree + cost centers + funding sources (Task 383)
+ */
+
+export function useAtelierGetExpenseTaxonomy<
+  TData = Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetExpenseTaxonomy>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetExpenseTaxonomyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Merchant-memory / AI category suggestion (fail-loud, never guesses)
+ */
+export const getAtelierSuggestExpenseCategoryUrl = () => {
+  return `/api/atelier/wallet/expense-categorize/suggest`;
+};
+
+export const atelierSuggestExpenseCategory = async (
+  atelierExpenseSuggestRequest: AtelierExpenseSuggestRequest,
+  options?: RequestInit,
+): Promise<AtelierExpenseSuggestResponse> => {
+  return customFetch<AtelierExpenseSuggestResponse>(
+    getAtelierSuggestExpenseCategoryUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierExpenseSuggestRequest),
+    },
+  );
+};
+
+export const getAtelierSuggestExpenseCategoryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>,
+    TError,
+    { data: BodyType<AtelierExpenseSuggestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>,
+  TError,
+  { data: BodyType<AtelierExpenseSuggestRequest> },
+  TContext
+> => {
+  const mutationKey = ["atelierSuggestExpenseCategory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>,
+    { data: BodyType<AtelierExpenseSuggestRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierSuggestExpenseCategory(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSuggestExpenseCategoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>
+>;
+export type AtelierSuggestExpenseCategoryMutationBody =
+  BodyType<AtelierExpenseSuggestRequest>;
+export type AtelierSuggestExpenseCategoryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Merchant-memory / AI category suggestion (fail-loud, never guesses)
+ */
+export const useAtelierSuggestExpenseCategory = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>,
+    TError,
+    { data: BodyType<AtelierExpenseSuggestRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSuggestExpenseCategory>>,
+  TError,
+  { data: BodyType<AtelierExpenseSuggestRequest> },
+  TContext
+> => {
+  return useMutation(getAtelierSuggestExpenseCategoryMutationOptions(options));
+};
+
+/**
+ * @summary Per-entity GL code + VAT treatment mapping (finance/partner only)
+ */
+export const getAtelierGetExpenseGlMappingsUrl = (entityId: string) => {
+  return `/api/atelier/wallet/expense-gl-mappings/${entityId}`;
+};
+
+export const atelierGetExpenseGlMappings = async (
+  entityId: string,
+  options?: RequestInit,
+): Promise<AtelierGetExpenseGlMappings200> => {
+  return customFetch<AtelierGetExpenseGlMappings200>(
+    getAtelierGetExpenseGlMappingsUrl(entityId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetExpenseGlMappingsQueryKey = (entityId: string) => {
+  return [`/api/atelier/wallet/expense-gl-mappings/${entityId}`] as const;
+};
+
+export const getAtelierGetExpenseGlMappingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>,
+  TError = ErrorType<unknown>,
+>(
+  entityId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetExpenseGlMappingsQueryKey(entityId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>
+  > = ({ signal }) =>
+    atelierGetExpenseGlMappings(entityId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!entityId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetExpenseGlMappingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>
+>;
+export type AtelierGetExpenseGlMappingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Per-entity GL code + VAT treatment mapping (finance/partner only)
+ */
+
+export function useAtelierGetExpenseGlMappings<
+  TData = Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>,
+  TError = ErrorType<unknown>,
+>(
+  entityId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetExpenseGlMappings>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetExpenseGlMappingsQueryOptions(
+    entityId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Replace the full GL/VAT mapping set for an entity (finance/partner only)
+ */
+export const getAtelierReplaceExpenseGlMappingsUrl = (entityId: string) => {
+  return `/api/atelier/wallet/expense-gl-mappings/${entityId}`;
+};
+
+export const atelierReplaceExpenseGlMappings = async (
+  entityId: string,
+  atelierReplaceExpenseGlMappingsBody: AtelierReplaceExpenseGlMappingsBody,
+  options?: RequestInit,
+): Promise<AtelierReplaceExpenseGlMappings200> => {
+  return customFetch<AtelierReplaceExpenseGlMappings200>(
+    getAtelierReplaceExpenseGlMappingsUrl(entityId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierReplaceExpenseGlMappingsBody),
+    },
+  );
+};
+
+export const getAtelierReplaceExpenseGlMappingsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>,
+    TError,
+    { entityId: string; data: BodyType<AtelierReplaceExpenseGlMappingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>,
+  TError,
+  { entityId: string; data: BodyType<AtelierReplaceExpenseGlMappingsBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierReplaceExpenseGlMappings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>,
+    { entityId: string; data: BodyType<AtelierReplaceExpenseGlMappingsBody> }
+  > = (props) => {
+    const { entityId, data } = props ?? {};
+
+    return atelierReplaceExpenseGlMappings(entityId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReplaceExpenseGlMappingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>
+>;
+export type AtelierReplaceExpenseGlMappingsMutationBody =
+  BodyType<AtelierReplaceExpenseGlMappingsBody>;
+export type AtelierReplaceExpenseGlMappingsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace the full GL/VAT mapping set for an entity (finance/partner only)
+ */
+export const useAtelierReplaceExpenseGlMappings = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>,
+    TError,
+    { entityId: string; data: BodyType<AtelierReplaceExpenseGlMappingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReplaceExpenseGlMappings>>,
+  TError,
+  { entityId: string; data: BodyType<AtelierReplaceExpenseGlMappingsBody> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierReplaceExpenseGlMappingsMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Signatory-authority register for a bank account (finance/partner only)
+ */
+export const getAtelierGetBankSignatoriesUrl = (accountId: string) => {
+  return `/api/atelier/wallet/bank/accounts/${accountId}/signatories`;
+};
+
+export const atelierGetBankSignatories = async (
+  accountId: string,
+  options?: RequestInit,
+): Promise<AtelierGetBankSignatories200> => {
+  return customFetch<AtelierGetBankSignatories200>(
+    getAtelierGetBankSignatoriesUrl(accountId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetBankSignatoriesQueryKey = (accountId: string) => {
+  return [
+    `/api/atelier/wallet/bank/accounts/${accountId}/signatories`,
+  ] as const;
+};
+
+export const getAtelierGetBankSignatoriesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetBankSignatories>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetBankSignatories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetBankSignatoriesQueryKey(accountId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetBankSignatories>>
+  > = ({ signal }) =>
+    atelierGetBankSignatories(accountId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!accountId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetBankSignatories>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetBankSignatoriesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetBankSignatories>>
+>;
+export type AtelierGetBankSignatoriesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Signatory-authority register for a bank account (finance/partner only)
+ */
+
+export function useAtelierGetBankSignatories<
+  TData = Awaited<ReturnType<typeof atelierGetBankSignatories>>,
+  TError = ErrorType<unknown>,
+>(
+  accountId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetBankSignatories>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetBankSignatoriesQueryOptions(
+    accountId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Replace the signatory register (founding partners only)
+ */
+export const getAtelierReplaceBankSignatoriesUrl = (accountId: string) => {
+  return `/api/atelier/wallet/bank/accounts/${accountId}/signatories`;
+};
+
+export const atelierReplaceBankSignatories = async (
+  accountId: string,
+  atelierReplaceBankSignatoriesBody: AtelierReplaceBankSignatoriesBody,
+  options?: RequestInit,
+): Promise<AtelierReplaceBankSignatories200> => {
+  return customFetch<AtelierReplaceBankSignatories200>(
+    getAtelierReplaceBankSignatoriesUrl(accountId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierReplaceBankSignatoriesBody),
+    },
+  );
+};
+
+export const getAtelierReplaceBankSignatoriesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceBankSignatories>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierReplaceBankSignatoriesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierReplaceBankSignatories>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierReplaceBankSignatoriesBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierReplaceBankSignatories"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierReplaceBankSignatories>>,
+    { accountId: string; data: BodyType<AtelierReplaceBankSignatoriesBody> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierReplaceBankSignatories(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierReplaceBankSignatoriesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierReplaceBankSignatories>>
+>;
+export type AtelierReplaceBankSignatoriesMutationBody =
+  BodyType<AtelierReplaceBankSignatoriesBody>;
+export type AtelierReplaceBankSignatoriesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Replace the signatory register (founding partners only)
+ */
+export const useAtelierReplaceBankSignatories = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierReplaceBankSignatories>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierReplaceBankSignatoriesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierReplaceBankSignatories>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierReplaceBankSignatoriesBody> },
+  TContext
+> => {
+  return useMutation(getAtelierReplaceBankSignatoriesMutationOptions(options));
+};
+
+/**
+ * @summary Set the rechargeable-expense markup percentage (finance/partner only)
+ */
+export const getAtelierSetEngagementExpenseMarkupUrl = (
+  engagementId: string,
+) => {
+  return `/api/atelier/wallet/engagements/${engagementId}/expense-markup`;
+};
+
+export const atelierSetEngagementExpenseMarkup = async (
+  engagementId: string,
+  atelierSetEngagementExpenseMarkupBody: AtelierSetEngagementExpenseMarkupBody,
+  options?: RequestInit,
+): Promise<AtelierSetEngagementExpenseMarkup200> => {
+  return customFetch<AtelierSetEngagementExpenseMarkup200>(
+    getAtelierSetEngagementExpenseMarkupUrl(engagementId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierSetEngagementExpenseMarkupBody),
+    },
+  );
+};
+
+export const getAtelierSetEngagementExpenseMarkupMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>,
+    TError,
+    {
+      engagementId: string;
+      data: BodyType<AtelierSetEngagementExpenseMarkupBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>,
+  TError,
+  {
+    engagementId: string;
+    data: BodyType<AtelierSetEngagementExpenseMarkupBody>;
+  },
+  TContext
+> => {
+  const mutationKey = ["atelierSetEngagementExpenseMarkup"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>,
+    {
+      engagementId: string;
+      data: BodyType<AtelierSetEngagementExpenseMarkupBody>;
+    }
+  > = (props) => {
+    const { engagementId, data } = props ?? {};
+
+    return atelierSetEngagementExpenseMarkup(
+      engagementId,
+      data,
+      requestOptions,
+    );
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSetEngagementExpenseMarkupMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>
+>;
+export type AtelierSetEngagementExpenseMarkupMutationBody =
+  BodyType<AtelierSetEngagementExpenseMarkupBody>;
+export type AtelierSetEngagementExpenseMarkupMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set the rechargeable-expense markup percentage (finance/partner only)
+ */
+export const useAtelierSetEngagementExpenseMarkup = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>,
+    TError,
+    {
+      engagementId: string;
+      data: BodyType<AtelierSetEngagementExpenseMarkupBody>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSetEngagementExpenseMarkup>>,
+  TError,
+  {
+    engagementId: string;
+    data: BodyType<AtelierSetEngagementExpenseMarkupBody>;
+  },
+  TContext
+> => {
+  return useMutation(
+    getAtelierSetEngagementExpenseMarkupMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Client-ready billable expense export (CSV or PDF with receipt appendix)
+ */
+export const getAtelierExportEngagementExpensesUrl = (
+  params: AtelierExportEngagementExpensesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/wallet/expenses/export?${stringifiedParams}`
+    : `/api/atelier/wallet/expenses/export`;
+};
+
+export const atelierExportEngagementExpenses = async (
+  params: AtelierExportEngagementExpensesParams,
+  options?: RequestInit,
+): Promise<string | Blob> => {
+  return customFetch<string | Blob>(
+    getAtelierExportEngagementExpensesUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierExportEngagementExpensesQueryKey = (
+  params?: AtelierExportEngagementExpensesParams,
+) => {
+  return [
+    `/api/atelier/wallet/expenses/export`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierExportEngagementExpensesQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierExportEngagementExpenses>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AtelierExportEngagementExpensesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierExportEngagementExpenses>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAtelierExportEngagementExpensesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierExportEngagementExpenses>>
+  > = ({ signal }) =>
+    atelierExportEngagementExpenses(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierExportEngagementExpenses>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierExportEngagementExpensesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierExportEngagementExpenses>>
+>;
+export type AtelierExportEngagementExpensesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Client-ready billable expense export (CSV or PDF with receipt appendix)
+ */
+
+export function useAtelierExportEngagementExpenses<
+  TData = Awaited<ReturnType<typeof atelierExportEngagementExpenses>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AtelierExportEngagementExpensesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierExportEngagementExpenses>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierExportEngagementExpensesQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Me lens — minimal account/engagement tags for the claim context picker

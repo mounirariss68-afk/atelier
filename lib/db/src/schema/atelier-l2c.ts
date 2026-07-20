@@ -447,6 +447,9 @@ export const atelierEngagementBudget = pgTable(
     budgetLabourHours: doublePrecision("budget_labour_hours").notNull().default(0),
     budgetLabourCostUsd: doublePrecision("budget_labour_cost_usd").notNull().default(0),
     budgetExpensesUsd: doublePrecision("budget_expenses_usd").notNull().default(0),
+    // Task #383 — per-engagement markup % applied to rechargeable expense
+    // totals in reports/exports (contract cap still enforced at submit).
+    expenseMarkupPct: doublePrecision("expense_markup_pct").notNull().default(0),
     budgetSubsUsd: doublePrecision("budget_subs_usd").notNull().default(0),
     budgetAtCompletionUsd: doublePrecision("budget_at_completion_usd").notNull().default(0),
     baselinedAt: text("baselined_at").notNull().default(""),

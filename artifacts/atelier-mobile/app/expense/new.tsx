@@ -1,8 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import {
   useAtelierCreateMyExpense,
+  useAtelierGetExpenseTaxonomy,
   useAtelierGetMyReceiptUploadUrl,
   useAtelierParseMyExpenseReceipt,
+  useAtelierSuggestExpenseCategory,
 } from "@workspace/api-client-react";
 import type { AtelierSelfExpenseCreate } from "@workspace/api-client-react";
 import * as ImagePicker from "expo-image-picker";
@@ -40,6 +42,53 @@ import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+// Task #383 — compact tappable row that opens a picker sheet.
+function PickerRow({
+  label,
+  value,
+  onPress,
+  testID,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  return (
+    <Pressable
+      onPress={onPress}
+      testID={testID}
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: c.tint25,
+        backgroundColor: c.tint08,
+        gap: 10,
+      }}
+    >
+      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, flexShrink: 1 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, flexShrink: 1 }}
+        >
+          {value}
+        </Text>
+        <Feather name="chevron-down" size={14} color={c.mutedForeground} />
+      </View>
+    </Pressable>
+  );
+}
+
 export default function NewExpenseScreen() {
   const c = useColors();
   const { t } = useI18n();
@@ -51,8 +100,20 @@ export default function NewExpenseScreen() {
   const uploadUrl = useAtelierGetMyReceiptUploadUrl();
   const create = useAtelierCreateMyExpense();
   const parse = useAtelierParseMyExpenseReceipt();
+  // Task #383 — taxonomy-as-data categories + merchant-memory/AI suggestion.
+  const taxonomyQuery = useAtelierGetExpenseTaxonomy();
+  const suggestMut = useAtelierSuggestExpenseCategory();
 
   const [sourceSheet, setSourceSheet] = useState(false);
+  const [catSheet, setCatSheet] = useState(false);
+  const [subSheet, setSubSheet] = useState(false);
+  const [fundingSheet, setFundingSheet] = useState(false);
+  const [bankSheet, setBankSheet] = useState(false);
+  const [fundingBankAccountId, setFundingBankAccountId] = useState("");
+  const [categoryCode, setCategoryCode] = useState("");
+  const [subCategoryCode, setSubCategoryCode] = useState("");
+  const [fundingSource, setFundingSource] = useState("personal_claim");
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [receiptMime, setReceiptMime] = useState<string>("image/jpeg");
   const [merchant, setMerchant] = useState("");
@@ -106,9 +167,45 @@ export default function NewExpenseScreen() {
       expenseDate: date || today(),
     };
     if (category.trim()) fields.category = category.trim();
+    if (categoryCode) fields.categoryCode = categoryCode;
+    if (subCategoryCode) fields.subCategoryCode = subCategoryCode;
+    if (fundingSource) fields.fundingSource = fundingSource as AtelierSelfExpenseCreate["fundingSource"];
+    if (fundingSource === "company_account" && fundingBankAccountId) {
+      fields.fundingBankAccountId = fundingBankAccountId;
+    }
     if (description.trim()) fields.description = description.trim();
     return fields;
-  }, [amount, merchant, currency, date, category, description, receiptUri, t, feedback]);
+  }, [amount, merchant, currency, date, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, description, receiptUri, t, feedback]);
+
+  const taxonomy = taxonomyQuery.data ?? null;
+  const selectedCat = taxonomy?.categories.find((cc) => cc.code === categoryCode) ?? null;
+  const selectedSub = selectedCat?.subCategories?.find((s) => s.code === subCategoryCode) ?? null;
+
+  const runSuggest = useCallback(async () => {
+    if (!merchant.trim() && !description.trim()) return;
+    setSuggestNote(null);
+    try {
+      const r = await suggestMut.mutateAsync({
+        data: {
+          merchant: merchant.trim() || undefined,
+          description: description.trim() || undefined,
+          amount: Number(amount) > 0 ? Number(amount) : undefined,
+          currency: currency || undefined,
+        },
+      });
+      if (r.suggestion) {
+        setCategoryCode(r.suggestion.categoryCode);
+        setSubCategoryCode(r.suggestion.subCategoryCode);
+        setSuggestNote(
+          r.suggestion.source === "merchant_memory" ? t("exp.suggestMemory") : t("exp.suggestAi"),
+        );
+      } else {
+        setSuggestNote(r.aiError ? t("exp.suggestFailed") : t("exp.suggestNone"));
+      }
+    } catch {
+      setSuggestNote(t("exp.suggestFailed"));
+    }
+  }, [merchant, description, amount, currency, suggestMut, t]);
 
   const save = useCallback(async () => {
     const fields = buildFields();
@@ -282,12 +379,65 @@ export default function NewExpenseScreen() {
             </View>
           </View>
           <Field label={t("exp.date")} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
-          <Field
-            label={t("exp.category")}
-            value={category}
-            onChangeText={setCategory}
-            placeholder={t("exp.categoryPlaceholder")}
-          />
+          {taxonomy ? (
+            <View style={{ gap: 10 }}>
+              <PickerRow
+                label={t("exp.category")}
+                value={selectedCat?.label ?? t("exp.pickCategory")}
+                onPress={() => setCatSheet(true)}
+                testID="exp-category-picker"
+              />
+              <PickerRow
+                label={t("exp.subcategory")}
+                value={selectedSub?.label ?? (selectedCat ? t("exp.pickSubcategory") : "—")}
+                onPress={() => selectedCat && setSubSheet(true)}
+                testID="exp-subcategory-picker"
+              />
+              <Pressable
+                onPress={runSuggest}
+                disabled={suggestMut.isPending || (!merchant.trim() && !description.trim())}
+                style={{ flexDirection: rtl.row, alignItems: "center", gap: 8, opacity: suggestMut.isPending ? 0.6 : 1 }}
+              >
+                {suggestMut.isPending ? (
+                  <ActivityIndicator size="small" color={c.primary} />
+                ) : (
+                  <Feather name="zap" size={14} color={c.primary} />
+                )}
+                <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                  {t("exp.suggest")}
+                </Text>
+              </Pressable>
+              {suggestNote ? (
+                <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 12 }}>
+                  {suggestNote}
+                </Text>
+              ) : null}
+              <PickerRow
+                label={t("exp.funding")}
+                value={t(`exp.funding.${fundingSource}`)}
+                onPress={() => setFundingSheet(true)}
+                testID="exp-funding-picker"
+              />
+              {fundingSource === "company_account" ? (
+                <PickerRow
+                  label={t("exp.fundingBank")}
+                  value={
+                    (taxonomy?.bankAccounts ?? []).find((b) => b.id === fundingBankAccountId)
+                      ?.label ?? t("exp.fundingBank.select")
+                  }
+                  onPress={() => setBankSheet(true)}
+                  testID="exp-funding-bank-picker"
+                />
+              ) : null}
+            </View>
+          ) : (
+            <Field
+              label={t("exp.category")}
+              value={category}
+              onChangeText={setCategory}
+              placeholder={t("exp.categoryPlaceholder")}
+            />
+          )}
           <Field
             label={t("exp.description")}
             value={description}
@@ -349,6 +499,59 @@ export default function NewExpenseScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      <Sheet
+        visible={catSheet}
+        title={t("exp.pickCategory")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setCatSheet(false)}
+        options={(taxonomy?.categories ?? []).map((cat) => ({
+          label: cat.label,
+          icon: "tag" as const,
+          onPress: () => {
+            setCategoryCode(cat.code);
+            setSubCategoryCode("");
+          },
+        }))}
+      />
+      <Sheet
+        visible={subSheet}
+        title={t("exp.pickSubcategory")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setSubSheet(false)}
+        options={(selectedCat?.subCategories ?? []).map((s) => ({
+          label: s.label,
+          icon: "tag" as const,
+          onPress: () => setSubCategoryCode(s.code),
+        }))}
+      />
+      <Sheet
+        visible={fundingSheet}
+        title={t("exp.funding")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setFundingSheet(false)}
+        options={(taxonomy?.fundingSources ?? ["personal_claim", "partner_paid", "company_account"]).map(
+          (fs) => ({
+            label: t(`exp.funding.${fs}`),
+            icon: "credit-card" as const,
+            onPress: () => setFundingSource(fs),
+          }),
+        )}
+      />
+      <Sheet
+        visible={bankSheet}
+        title={t("exp.fundingBank")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setBankSheet(false)}
+        options={
+          (taxonomy?.bankAccounts ?? []).length > 0
+            ? (taxonomy?.bankAccounts ?? []).map((b) => ({
+                label: b.label,
+                icon: "credit-card" as const,
+                onPress: () => setFundingBankAccountId(b.id),
+              }))
+            : [{ label: t("exp.fundingBank.none"), icon: "credit-card" as const, onPress: () => {} }]
+        }
+      />
       <Sheet
         visible={sourceSheet}
         title={t("exp.chooseSource")}

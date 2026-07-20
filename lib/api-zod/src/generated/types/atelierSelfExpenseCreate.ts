@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierSelfExpenseCreateContextType } from "./atelierSelfExpenseCreateContextType";
+import type { AtelierSelfExpenseCreateFundingSource } from "./atelierSelfExpenseCreateFundingSource";
 
 export interface AtelierSelfExpenseCreate {
   amount: number;
@@ -16,6 +17,15 @@ export interface AtelierSelfExpenseCreate {
   /** @maxLength 2000 */
   description?: string;
   category?: string;
+  categoryCode?: string;
+  subCategoryCode?: string;
+  /** @maxLength 100 */
+  bdIndustry?: string;
+  entityId?: string;
+  costCenter?: string;
+  fundingSource?: AtelierSelfExpenseCreateFundingSource;
+  fundingBankAccountId?: string;
+  timesheetWeekId?: string;
   expenseDate?: string;
   contextType?: AtelierSelfExpenseCreateContextType;
   accountId?: string;

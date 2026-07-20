@@ -38,7 +38,14 @@ import {
   atelierTimesheetEntries,
   atelierInvoiceLineDrafts,
   atelierPaneAItems,
+  atelierEmployees,
+  atelierRosterReportsTo,
+  atelierEngagementBudget,
+  atelierEngagementExpenseAlerts,
 } from "@workspace/db";
+// Task #383 — taxonomy + merchant memory.
+import { learnMerchantMapping } from "../../lib/atelier-expense-categorizer.js";
+import { resolveCategoryPair, policyKeyFor } from "../../lib/atelier-expense-taxonomy.js";
 import { convertToUsd, seedFxRates } from "../../lib/atelier-fx.js";
 import { evaluateExpense, DEFAULT_POLICIES } from "../../lib/atelier-expense-policy.js";
 import { assertAuditAction } from "./auditContract.js";
@@ -223,9 +230,172 @@ function expenseToWire(e: typeof atelierExpenses.$inferSelect, who?: typeof atel
     contextType: e.contextType,
     accountId: e.accountId,
     internalProjectLabel: e.internalProjectLabel,
+    // Task #383 — taxonomy + attribution + funding.
+    categoryCode: e.categoryCode,
+    subCategoryCode: e.subCategoryCode,
+    categorySource: e.categorySource,
+    bdIndustry: e.bdIndustry,
+    entityId: e.entityId,
+    costCenter: e.costCenter,
+    fundingSource: e.fundingSource,
+    fundingBankAccountId: e.fundingBankAccountId,
+    timesheetWeekId: e.timesheetWeekId,
+    approvalRoute: e.approvalRoute,
     reimbursedAt: e.reimbursedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),
   };
+}
+
+// =============================================================
+// Task #383 — dual-route approval helpers
+// =============================================================
+
+/** Resolve a user id to their roster person id (userId link, then email). */
+async function personIdForUser(userId: string): Promise<string | null> {
+  const [byUser] = await db
+    .select({ id: atelierEmployees.id })
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.userId, userId), isNull(atelierEmployees.deletedAt)))
+    .limit(1);
+  if (byUser) return byUser.id;
+  const [u] = await db.select({ email: atelierUsers.email, orgId: atelierUsers.orgId })
+    .from(atelierUsers).where(eq(atelierUsers.id, userId));
+  if (!u?.email) return null;
+  const [byEmail] = await db
+    .select({ id: atelierEmployees.id })
+    .from(atelierEmployees)
+    .where(and(eq(atelierEmployees.email, u.email), eq(atelierEmployees.orgId, u.orgId), isNull(atelierEmployees.deletedAt)))
+    .limit(1);
+  return byEmail?.id ?? null;
+}
+
+/** True when `approver` transitively manages the submitter (BFS over ALL
+ *  reports_to edges — multi-manager possible, cycle-safe, org-scoped). */
+async function lineManages(
+  approver: typeof atelierUsers.$inferSelect,
+  submitterUserId: string,
+): Promise<boolean> {
+  const [approverPerson, submitterPerson] = await Promise.all([
+    personIdForUser(approver.id),
+    personIdForUser(submitterUserId),
+  ]);
+  if (!approverPerson || !submitterPerson) return false;
+  const edges = await db
+    .select({
+      personId: atelierRosterReportsTo.personId,
+      managerPersonId: atelierRosterReportsTo.managerPersonId,
+    })
+    .from(atelierRosterReportsTo)
+    .where(eq(atelierRosterReportsTo.orgId, approver.orgId));
+  const byManager = new Map<string, string[]>();
+  for (const e of edges) {
+    const arr = byManager.get(e.managerPersonId) ?? [];
+    arr.push(e.personId);
+    byManager.set(e.managerPersonId, arr);
+  }
+  const queue = [approverPerson];
+  const visited = new Set<string>([approverPerson]);
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    for (const child of byManager.get(cur) ?? []) {
+      if (child === submitterPerson) return true;
+      if (visited.has(child)) continue;
+      visited.add(child);
+      queue.push(child);
+    }
+  }
+  return false;
+}
+
+/**
+ * Dual-route approval authority. Project-linked (engagementId) expenses
+ * route to the ENGAGEMENT LEAD; internal/non-project ones to the LINE
+ * MANAGER (BFS scope) or HR. Partner-tier + finance may approve anything.
+ * Returns the approval route stamp, or null (+403 written) when the
+ * caller has no authority over this expense.
+ */
+async function resolveApprovalAuthority(
+  res: Response,
+  me: typeof atelierUsers.$inferSelect,
+  expense: typeof atelierExpenses.$inferSelect,
+): Promise<string | null> {
+  if (expense.engagementId) {
+    const [eng] = await db
+      .select({ leadId: atelierEngagements.engagementLeadId })
+      .from(atelierEngagements)
+      .where(eq(atelierEngagements.id, expense.engagementId));
+    if (eng?.leadId === me.id) return "engagement_lead";
+    if (isLeadership(me)) return "leadership";
+    res.status(403).json({
+      error: "not-your-engagement",
+      message: "Project-linked expenses are approved by the engagement lead (or leadership).",
+    });
+    return null;
+  }
+  if (me.role === "hr") return "hr";
+  if (isLeadership(me)) return "leadership";
+  if (await lineManages(me, expense.personId)) return "line_manager";
+  res.status(403).json({
+    error: "forbidden",
+    message: "Internal expenses are approved by the claimant's line manager, HR, or leadership.",
+  });
+  return null;
+}
+
+/**
+ * Task #383 — after an approval, check the engagement's expense budget and
+ * notify the engagement lead once per 80%/100% crossing (dedupe ledger;
+ * re-arms when the budget is raised because the row keys on threshold and
+ * we only insert when the crossing is real at current budget).
+ */
+export async function checkEngagementExpenseBudget(engagementId: string): Promise<void> {
+  const [budget] = await db
+    .select()
+    .from(atelierEngagementBudget)
+    .where(eq(atelierEngagementBudget.engagementId, engagementId));
+  const cap = budget?.budgetExpensesUsd ?? 0;
+  if (!budget || cap <= 0) return;
+  const spentRows = await db
+    .select({ usd: atelierExpenses.usdAmount })
+    .from(atelierExpenses)
+    .where(
+      and(
+        eq(atelierExpenses.engagementId, engagementId),
+        inArray(atelierExpenses.status, ["approved", "reimbursed"]),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    );
+  const spent = spentRows.reduce((s, r) => s + (r.usd ?? 0), 0);
+  const pct = (spent / cap) * 100;
+  const [eng] = await db
+    .select({ leadId: atelierEngagements.engagementLeadId, name: atelierEngagements.name, orgId: atelierEngagements.orgId })
+    .from(atelierEngagements)
+    .where(eq(atelierEngagements.id, engagementId));
+  for (const threshold of [80, 100]) {
+    if (pct < threshold) continue;
+    const inserted = await db
+      .insert(atelierEngagementExpenseAlerts)
+      .values({
+        id: rid("engexpal"),
+        engagementId,
+        threshold,
+        budgetUsdAtNotify: cap,
+        spentUsdAtNotify: +spent.toFixed(2),
+        notifiedUserId: eng?.leadId ?? null,
+      })
+      .onConflictDoNothing()
+      .returning({ id: atelierEngagementExpenseAlerts.id });
+    if (inserted.length > 0 && eng?.leadId) {
+      await emitSelfNotification({
+        orgId: eng.orgId,
+        userId: eng.leadId,
+        kind: "engagement_expense_budget",
+        title: `Expense budget ${threshold >= 100 ? "reached" : "at 80%"}: ${eng.name}`,
+        body: `Approved expenses $${spent.toFixed(0)} of $${cap.toFixed(0)} budget (${pct.toFixed(0)}%).`,
+        href: "/wallet",
+      });
+    }
+  }
 }
 
 // @cli-skip: pending Task #340 read-parity migration
@@ -591,6 +761,9 @@ interface SubmitBody {
   overrideRationale?: string;
   patch?: Partial<{
     category: string;
+    // Task #383 — two-axis taxonomy pair (validated; flat category derived).
+    categoryCode: string;
+    subCategoryCode: string;
     clientBillable: boolean;
     markupPct: number;
     description: string;
@@ -624,11 +797,30 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
   // Re-apply user-edited patch on top of auditor proposal so the user
   // remains authoritative on category / billable / markup / VAT fields.
   const patch = body.patch ?? {};
-  if (Object.keys(patch).length > 0) {
+  // Task #383 — user-picked taxonomy pair overrides the flat category too.
+  let taxonomyPatch: Record<string, unknown> = {};
+  if (patch.categoryCode !== undefined || patch.subCategoryCode !== undefined) {
+    const pair =
+      patch.categoryCode && patch.subCategoryCode
+        ? await resolveCategoryPair(patch.categoryCode, patch.subCategoryCode)
+        : null;
+    if (!pair) {
+      res.status(400).json({ error: "invalid-category-pair" });
+      return;
+    }
+    taxonomyPatch = {
+      categoryCode: pair.category.code,
+      subCategoryCode: pair.sub.code,
+      category: policyKeyFor(pair.sub),
+      categorySource: "manual",
+    };
+  }
+  if (Object.keys(patch).length > 0 || Object.keys(taxonomyPatch).length > 0) {
     await db
       .update(atelierExpenses)
       .set({
         ...(patch.category !== undefined ? { category: patch.category } : {}),
+        ...taxonomyPatch,
         ...(patch.clientBillable !== undefined ? { clientBillable: patch.clientBillable } : {}),
         ...(patch.markupPct !== undefined ? { markupPct: patch.markupPct } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
@@ -837,22 +1029,136 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
     summary: `Submitted expense ${expense.merchant ?? expense.id} (policy ${expense.policyStatus}${body.overrideRationale ? " · override" : ""})`,
   });
 
+  // Task #383 — submitted pair is a confirmed choice; feed merchant memory.
+  if (expense.merchant && expense.categoryCode && expense.subCategoryCode) {
+    await learnMerchantMapping({
+      merchant: expense.merchant,
+      categoryCode: expense.categoryCode,
+      subCategoryCode: expense.subCategoryCode,
+      userId: me.id,
+      orgId: me.orgId,
+    });
+  }
+
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, expense.id));
   res.json({ expense: expenseToWire(final, me) });
 });
+
+/**
+ * Task #383 — timesheet-linked auto-approval (per-approver opt-in).
+ * Approves every SUBMITTED, policy-GREEN, engagement-linked expense that
+ * references the given timesheet week. Anything amber/red or non-project
+ * stays in the queue for a human decision. Writes the same VAT register
+ * row + audit trail as a manual approval.
+ */
+export async function autoApproveTimesheetExpenses(
+  weekId: string,
+  approver: typeof atelierUsers.$inferSelect,
+): Promise<{ approved: number; skipped: number }> {
+  const rows = await db
+    .select()
+    .from(atelierExpenses)
+    .where(
+      and(
+        eq(atelierExpenses.timesheetWeekId, weekId),
+        // Week ids are deterministic (tsw_<person>_<week>), so tenant scoping
+        // here is load-bearing: never approve another org's expenses.
+        eq(atelierExpenses.orgId, approver.orgId),
+        eq(atelierExpenses.status, "submitted"),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    );
+  let approved = 0;
+  let skipped = 0;
+  const touchedEngagements = new Set<string>();
+  for (const existing of rows) {
+    if (existing.policyStatus !== "green" || !existing.engagementId) {
+      skipped += 1;
+      continue;
+    }
+    await db
+      .update(atelierExpenses)
+      .set({
+        status: "approved",
+        approvalRoute: "timesheet_auto",
+        approvedAt: new Date(),
+        approvedByUserId: approver.id,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierExpenses.id, existing.id),
+          eq(atelierExpenses.orgId, approver.orgId),
+          eq(atelierExpenses.status, "submitted"),
+        ),
+      );
+    const treatmentRate =
+      existing.vatTreatment === "ksa_15" ? 0.15 : existing.vatTreatment === "uae_5" ? 0.05 : 0;
+    const net = existing.amount - existing.vatAmount;
+    const usdNet = +(existing.usdAmount * (net / Math.max(existing.amount, 0.0001))).toFixed(2);
+    const usdVat = +(existing.usdAmount - usdNet).toFixed(2);
+    await db.insert(atelierVatRegister).values({
+      id: rid("vat"),
+      orgId: existing.orgId,
+      expenseId: existing.id,
+      expenseDate: existing.expenseDate,
+      country: existing.vatCountry ?? "UNK",
+      treatment: existing.vatTreatment,
+      rate: treatmentRate,
+      netAmount: +net.toFixed(2),
+      vatAmount: existing.vatAmount,
+      grossAmount: existing.amount,
+      currency: existing.currency,
+      usdNet,
+      usdVat,
+      usdGross: existing.usdAmount,
+      merchant: existing.merchant,
+      summary: existing.summary,
+    });
+    await audit({
+      entityType: "expense",
+      entityId: existing.id,
+      actor: approver,
+      action: "expense.approve",
+      payload: {
+        vatTreatment: existing.vatTreatment,
+        usdGross: existing.usdAmount,
+        approvalRoute: "timesheet_auto",
+        timesheetWeekId: weekId,
+      },
+      summary: `Auto-approved ${existing.merchant ?? existing.id} ($${existing.usdAmount.toFixed(2)}) with timesheet week approval.`,
+    });
+    await emitSelfNotification({
+      orgId: approver.orgId,
+      userId: existing.personId,
+      kind: "expense_approved",
+      title: "Expense claim approved",
+      body: `${existing.merchant ?? "Expense"} approved automatically with your timesheet.`,
+      href: "/me",
+    });
+    touchedEngagements.add(existing.engagementId);
+    approved += 1;
+  }
+  for (const engId of touchedEngagements) {
+    await checkEngagementExpenseBudget(engId);
+  }
+  return { approved, skipped };
+}
 
 // @cli-skip: pending Task #340 read-parity migration
 router.post("/wallet/expenses/:id/approve", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!isPartnerOrOps(me) && me.role !== "senior_manager") { // Task #292
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
   const [existing] = await db
     .select()
     .from(atelierExpenses)
-    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+    .where(
+      and(
+        eq(atelierExpenses.id, req.params.id),
+        eq(atelierExpenses.orgId, me.orgId),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "expense-not-found" });
     return;
@@ -861,31 +1167,56 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     res.status(409).json({ error: "not-submitted" });
     return;
   }
-  // engagement_lead may only approve expenses bound to engagements they lead.
-  if (!isPartnerOrOps(me)) {
-    if (!existing.engagementId) {
-      res.status(403).json({ error: "lead-cannot-approve-firm-overhead" });
+  // Task #383 — dual-route authority: engagement lead for project-linked,
+  // line manager (BFS) / HR for internal, leadership always.
+  const approvalRoute = await resolveApprovalAuthority(res, me, existing);
+  if (!approvalRoute) return;
+
+  // Task #383 — approver corrections: category pair and billable flag may
+  // be overridden at approval time; corrections feed the merchant memory.
+  const b = (req.body ?? {}) as {
+    categoryCode?: string;
+    subCategoryCode?: string;
+    clientBillable?: boolean;
+  };
+  const correction: Record<string, unknown> = {};
+  if (b.categoryCode !== undefined || b.subCategoryCode !== undefined) {
+    const pair =
+      b.categoryCode && b.subCategoryCode
+        ? await resolveCategoryPair(b.categoryCode, b.subCategoryCode)
+        : null;
+    if (!pair) {
+      res.status(400).json({ error: "invalid-category-pair" });
       return;
     }
-    const [eng] = await db
-      .select()
-      .from(atelierEngagements)
-      .where(eq(atelierEngagements.id, existing.engagementId));
-    if (!eng || eng.engagementLeadId !== me.id) {
-      res.status(403).json({ error: "not-your-engagement" });
-      return;
-    }
+    correction.categoryCode = pair.category.code;
+    correction.subCategoryCode = pair.sub.code;
+    correction.category = policyKeyFor(pair.sub);
+    correction.categorySource = "manual";
   }
+  if (typeof b.clientBillable === "boolean") correction.clientBillable = b.clientBillable;
 
   await db
     .update(atelierExpenses)
     .set({
+      ...correction,
       status: "approved",
+      approvalRoute,
       approvedAt: new Date(),
       approvedByUserId: me.id,
       updatedAt: new Date(),
     })
     .where(eq(atelierExpenses.id, existing.id));
+
+  if (existing.merchant && (correction.subCategoryCode || existing.subCategoryCode)) {
+    await learnMerchantMapping({
+      merchant: existing.merchant,
+      categoryCode: (correction.categoryCode as string) ?? existing.categoryCode!,
+      subCategoryCode: (correction.subCategoryCode as string) ?? existing.subCategoryCode!,
+      userId: me.id,
+      orgId: me.orgId,
+    });
+  }
 
   // Materialise the VAT register row.
   const treatmentRate =
@@ -921,9 +1252,14 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
     entityId: existing.id,
     actor: me,
     action: "expense.approve",
-    payload: { vatTreatment: existing.vatTreatment, usdGross: existing.usdAmount },
-    summary: `Approved ${existing.merchant ?? existing.id} ($${existing.usdAmount.toFixed(2)}); VAT register row written.`,
+    payload: { vatTreatment: existing.vatTreatment, usdGross: existing.usdAmount, approvalRoute },
+    summary: `Approved ${existing.merchant ?? existing.id} ($${existing.usdAmount.toFixed(2)}) via ${approvalRoute}; VAT register row written.`,
   });
+
+  // Task #383 — engagement expense-budget alerts (80% / 100%, deduped).
+  if (existing.engagementId) {
+    await checkEngagementExpenseBudget(existing.engagementId);
+  }
 
   // Task #53 — expense personId IS the atelier_users id; notify directly.
   await emitSelfNotification({
@@ -943,15 +1279,17 @@ router.post("/wallet/expenses/:id/approve", async (req, res) => {
 router.post("/wallet/expenses/:id/reject", async (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
-  if (!isPartnerOrOps(me) && me.role !== "senior_manager") { // Task #292
-    res.status(403).json({ error: "forbidden" });
-    return;
-  }
   const reason = (req.body?.reason as string) || "rejected";
   const [existing] = await db
     .select()
     .from(atelierExpenses)
-    .where(and(eq(atelierExpenses.id, req.params.id), isNull(atelierExpenses.deletedAt)));
+    .where(
+      and(
+        eq(atelierExpenses.id, req.params.id),
+        eq(atelierExpenses.orgId, me.orgId),
+        isNull(atelierExpenses.deletedAt),
+      ),
+    );
   if (!existing) {
     res.status(404).json({ error: "expense-not-found" });
     return;
@@ -960,21 +1298,9 @@ router.post("/wallet/expenses/:id/reject", async (req, res) => {
     res.status(409).json({ error: "not-submitted" });
     return;
   }
-  // engagement_lead may only reject expenses bound to engagements they lead.
-  if (!isPartnerOrOps(me)) {
-    if (!existing.engagementId) {
-      res.status(403).json({ error: "lead-cannot-reject-firm-overhead" });
-      return;
-    }
-    const [eng] = await db
-      .select()
-      .from(atelierEngagements)
-      .where(eq(atelierEngagements.id, existing.engagementId));
-    if (!eng || eng.engagementLeadId !== me.id) {
-      res.status(403).json({ error: "not-your-engagement" });
-      return;
-    }
-  }
+  // Task #383 — same dual-route authority as approve.
+  const approvalRoute = await resolveApprovalAuthority(res, me, existing);
+  if (!approvalRoute) return;
   await db
     .update(atelierExpenses)
     .set({
@@ -1034,6 +1360,16 @@ router.post("/wallet/expenses/:id/reimburse", async (req, res) => {
   }
   if (existing.status !== "approved") {
     res.status(409).json({ error: "not-approved", status: existing.status });
+    return;
+  }
+  // Task #383 — company-account spend has NO reimbursement leg: the firm
+  // already paid from its own bank account. Refuse instead of silently
+  // creating a payout obligation.
+  if (existing.fundingSource === "company_account") {
+    res.status(409).json({
+      error: "company-account-no-reimbursement",
+      message: "This expense was paid from a company bank account — there is nothing to reimburse.",
+    });
     return;
   }
   await db

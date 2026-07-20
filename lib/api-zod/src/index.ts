@@ -15,5 +15,8 @@ export type {
   AtelierListDocumentsParams,
   AtelierDownloadDocumentParams,
   AtelierSubmitMyExpenseBody,
+  AtelierReplaceBankSignatoriesBody,
+  AtelierReplaceExpenseGlMappingsBody,
+  AtelierSetEngagementExpenseMarkupBody,
   AuthLoginResponse,
 } from "./generated/types";

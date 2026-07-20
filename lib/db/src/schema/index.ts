@@ -14,5 +14,6 @@ export * from "./atelier-cli-rag";
 export * from "./atelier-documents";
 export * from "./atelier-esign";
 export * from "./atelier-entities";
+export * from "./atelier-expense-taxonomy";
 export * from "./atelier-contract-lifecycle";
 export * from "./atelier-ms";

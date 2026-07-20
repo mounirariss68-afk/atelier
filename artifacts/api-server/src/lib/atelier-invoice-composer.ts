@@ -230,6 +230,11 @@ export async function runInvoiceComposer(args: RunArgs): Promise<InvoiceComposer
       unitPriceUsd: amount,
       amountUsd: amount,
       markupPct,
+      // Task #383 — carry the taxonomy pair onto the invoice line so the
+      // accountant handoff is categorized without re-keying.
+      categoryCode: ex.categoryCode ?? null,
+      subCategoryCode: ex.subCategoryCode ?? null,
+      categorySource: (ex.categorySource as "merchant_memory" | "ai" | "manual" | null) ?? null,
       meta: {
         merchant: ex.merchant,
         category: ex.category,

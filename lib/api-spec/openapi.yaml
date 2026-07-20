@@ -560,6 +560,225 @@ paths:
                 required: [uploadURL]
                 properties:
                   uploadURL: { type: string }
+  /atelier/wallet/expense-taxonomy:
+    get:
+      operationId: atelierGetExpenseTaxonomy
+      tags: [atelier]
+      summary: Expense category tree + cost centers + funding sources (Task 383)
+      responses:
+        "200":
+          description: Taxonomy reference data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierExpenseTaxonomyResponse"
+  /atelier/wallet/expense-categorize/suggest:
+    post:
+      operationId: atelierSuggestExpenseCategory
+      tags: [atelier]
+      summary: Merchant-memory / AI category suggestion (fail-loud, never guesses)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierExpenseSuggestRequest"
+      responses:
+        "200":
+          description: Suggestion (or null with aiError when the model failed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierExpenseSuggestResponse"
+  /atelier/wallet/expense-gl-mappings/{entityId}:
+    get:
+      operationId: atelierGetExpenseGlMappings
+      tags: [atelier]
+      summary: Per-entity GL code + VAT treatment mapping (finance/partner only)
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Mapping rows for the entity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mappings]
+                properties:
+                  mappings:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierExpenseGlMapping" }
+    put:
+      operationId: atelierReplaceExpenseGlMappings
+      tags: [atelier]
+      summary: Replace the full GL/VAT mapping set for an entity (finance/partner only)
+      parameters:
+        - name: entityId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mappings]
+              properties:
+                mappings:
+                  type: array
+                  items:
+                    type: object
+                    required: [subCategoryCode, glCode, vatTreatment]
+                    properties:
+                      subCategoryCode: { type: string }
+                      glCode: { type: string, maxLength: 60 }
+                      vatTreatment:
+                        type: string
+                        enum: [recoverable, non_recoverable, zero_rated, out_of_scope]
+                      notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, count]
+                properties:
+                  ok: { type: boolean }
+                  count: { type: number }
+  /atelier/wallet/bank/accounts/{accountId}/signatories:
+    get:
+      operationId: atelierGetBankSignatories
+      tags: [atelier]
+      summary: Signatory-authority register for a bank account (finance/partner only)
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Signatory register
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [signatories]
+                properties:
+                  signatories:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierBankSignatory" }
+    put:
+      operationId: atelierReplaceBankSignatories
+      tags: [atelier]
+      summary: Replace the signatory register (founding partners only)
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signatories]
+              properties:
+                signatories:
+                  type: array
+                  items:
+                    type: object
+                    required: [userId, authority]
+                    properties:
+                      userId: { type: string }
+                      personName: { type: string, maxLength: 200 }
+                      authority:
+                        type: string
+                        enum: [sole, joint, view_only]
+                      monetaryLimitAmount: { type: number }
+                      limitCurrency: { type: string, maxLength: 3 }
+                      geography: { type: string, maxLength: 100 }
+                      effectiveFrom: { type: string }
+                      expiresOn: { type: string }
+                      notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, count]
+                properties:
+                  ok: { type: boolean }
+                  count: { type: number }
+  /atelier/wallet/engagements/{engagementId}/expense-markup:
+    patch:
+      operationId: atelierSetEngagementExpenseMarkup
+      tags: [atelier]
+      summary: Set the rechargeable-expense markup percentage (finance/partner only)
+      parameters:
+        - name: engagementId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expenseMarkupPct]
+              properties:
+                expenseMarkupPct: { type: number, minimum: 0, maximum: 100 }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, expenseMarkupPct]
+                properties:
+                  ok: { type: boolean }
+                  expenseMarkupPct: { type: number }
+  /atelier/wallet/expenses/export:
+    get:
+      operationId: atelierExportEngagementExpenses
+      tags: [atelier]
+      summary: Client-ready billable expense export (CSV or PDF with receipt appendix)
+      parameters:
+        - name: engagementId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: format
+          in: query
+          required: false
+          schema: { type: string, enum: [csv, pdf] }
+        - name: from
+          in: query
+          required: false
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: CSV text or PDF binary
+          content:
+            text/csv:
+              schema: { type: string }
+            application/pdf:
+              schema: { type: string, format: binary }
   /atelier/me/expense-contexts:
     get:
       operationId: atelierListMyExpenseContexts
@@ -7894,6 +8113,36 @@ components:
         reimbursedAt:
           type: string
           nullable: true
+        categoryCode:
+          type: string
+          nullable: true
+        subCategoryCode:
+          type: string
+          nullable: true
+        categorySource:
+          type: string
+          nullable: true
+        bdIndustry:
+          type: string
+          nullable: true
+        entityId:
+          type: string
+          nullable: true
+        costCenter:
+          type: string
+          nullable: true
+        fundingSource:
+          type: string
+          nullable: true
+        fundingBankAccountId:
+          type: string
+          nullable: true
+        timesheetWeekId:
+          type: string
+          nullable: true
+        approvalRoute:
+          type: string
+          nullable: true
         createdAt: { type: string }
     AtelierSelfExpenseCreate:
       type: object
@@ -7904,6 +8153,16 @@ components:
         merchant: { type: string, maxLength: 200 }
         description: { type: string, maxLength: 2000 }
         category: { type: string }
+        categoryCode: { type: string }
+        subCategoryCode: { type: string }
+        bdIndustry: { type: string, maxLength: 100 }
+        entityId: { type: string }
+        costCenter: { type: string }
+        fundingSource:
+          type: string
+          enum: [personal_claim, partner_paid, company_account]
+        fundingBankAccountId: { type: string }
+        timesheetWeekId: { type: string }
         expenseDate: { type: string }
         contextType:
           type: string
@@ -7920,6 +8179,16 @@ components:
         merchant: { type: string, maxLength: 200 }
         description: { type: string, maxLength: 2000 }
         category: { type: string }
+        categoryCode: { type: string, nullable: true }
+        subCategoryCode: { type: string, nullable: true }
+        bdIndustry: { type: string, maxLength: 100, nullable: true }
+        entityId: { type: string, nullable: true }
+        costCenter: { type: string, nullable: true }
+        fundingSource:
+          type: string
+          enum: [personal_claim, partner_paid, company_account]
+        fundingBankAccountId: { type: string, nullable: true }
+        timesheetWeekId: { type: string, nullable: true }
         expenseDate: { type: string }
         contextType:
           type: string
@@ -7928,6 +8197,118 @@ components:
         engagementId: { type: string }
         internalProjectLabel: { type: string, maxLength: 200 }
         receiptPath: { type: string }
+    AtelierExpenseTaxonomyResponse:
+      type: object
+      required: [categories, costCenters, fundingSources]
+      properties:
+        categories:
+          type: array
+          items:
+            type: object
+            required: [code, label, subCategories]
+            properties:
+              code: { type: string }
+              label: { type: string }
+              description:
+                type: string
+                nullable: true
+              subCategories:
+                type: array
+                items:
+                  type: object
+                  required: [code, label, policyKey]
+                  properties:
+                    code: { type: string }
+                    label: { type: string }
+                    description:
+                      type: string
+                      nullable: true
+                    policyKey: { type: string }
+        costCenters:
+          type: array
+          items: { type: string }
+        fundingSources:
+          type: array
+          items: { type: string }
+        entities:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierIdName" }
+        bankAccounts:
+          type: array
+          description: Active company bank accounts for company_account funding
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+    AtelierExpenseGlMapping:
+      type: object
+      required: [id, entityId, subCategoryCode, glCode, vatTreatment]
+      properties:
+        id: { type: string }
+        entityId: { type: string }
+        subCategoryCode: { type: string }
+        glCode: { type: string }
+        vatTreatment:
+          type: string
+          enum: [recoverable, non_recoverable, zero_rated, out_of_scope]
+        notes:
+          type: string
+          nullable: true
+    AtelierBankSignatory:
+      type: object
+      required: [id, userId, personName, authority]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        personName: { type: string }
+        authority:
+          type: string
+          enum: [sole, joint, view_only]
+        monetaryLimitAmount:
+          type: number
+          nullable: true
+        limitCurrency:
+          type: string
+          nullable: true
+        geography:
+          type: string
+          nullable: true
+        effectiveFrom:
+          type: string
+          nullable: true
+        expiresOn:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+    AtelierExpenseSuggestRequest:
+      type: object
+      properties:
+        merchant: { type: string, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+        ocrText: { type: string, maxLength: 8000 }
+        amount: { type: number }
+        currency: { type: string, maxLength: 3 }
+        contextType: { type: string }
+    AtelierExpenseSuggestResponse:
+      type: object
+      properties:
+        suggestion:
+          type: object
+          nullable: true
+          required: [categoryCode, subCategoryCode, source, confidence]
+          properties:
+            categoryCode: { type: string }
+            subCategoryCode: { type: string }
+            source: { type: string, enum: [merchant_memory, ai] }
+            confidence: { type: string, enum: [green, amber, red] }
+            rationale: { type: string }
+        aiError:
+          type: string
+          nullable: true
     AtelierSelfExpenseResponse:
       type: object
       required: [expense]

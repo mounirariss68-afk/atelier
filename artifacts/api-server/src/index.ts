@@ -89,6 +89,22 @@ app.listen(port, (err) => {
         "Pricing seed failed — Pricing module has no active rate card",
       );
     });
+    // Task #383 — expense taxonomy is configuration (like reference data):
+    // install missing category rows idempotently, then backfill the two-axis
+    // codes onto legacy expense rows (only touches rows with NULL codes).
+    await (async () => {
+      const { ensureExpenseTaxonomy, migrateLegacyExpenseRows } = await import(
+        "./lib/atelier-expense-taxonomy"
+      );
+      await ensureExpenseTaxonomy();
+      const migrated = await migrateLegacyExpenseRows();
+      if (migrated > 0) logger.info({ migrated }, "Expense rows migrated to taxonomy");
+    })().catch((err) => {
+      logger.error(
+        { err },
+        "Expense taxonomy install failed — category dropdowns will be empty",
+      );
+    });
     // Task #108 — regression tripwire: dummy/test data was permanently purged
     // (2026-07-17). Count accounts and scream if any row matching the old test
     // tag patterns ever reappears, so reintroduction is visible immediately.
