@@ -29,6 +29,7 @@ import {
 } from "@workspace/db";
 import { runSelfBillingClerk } from "../../lib/atelier-agents/selfBillingClerk.js";
 import { nextRunNumber } from "../../lib/atelier-agents/selfBillingClerk.js";
+import { notifySupplierOfInvoice } from "../../lib/selfBilledInvoiceEmail.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -194,6 +195,7 @@ function invoiceWire(inv: typeof atelierSelfBilledInvoices.$inferSelect) {
     totalUsd: inv.totalUsd,
     status: inv.status,
     reconciliation: inv.reconciliation,
+    emailDelivery: inv.emailDelivery ?? [],
     contractorPaymentIds: inv.contractorPaymentIds,
     partnerFirmInvoiceIds: inv.partnerFirmInvoiceIds,
     disputeReason: inv.disputeReason,
@@ -281,7 +283,10 @@ router.post("/finance/payables/self-billing/:id/approve", async (req, res, next)
       payload: { invoiceNumber: inv.invoiceNumber, totalUsd: inv.totalUsd },
       summary: `Approved self-billed invoice ${inv.invoiceNumber} ($${inv.totalUsd.toFixed(2)}).`,
     });
-    res.json({ ok: true });
+    // Notify the supplier with the invoice PDF attached. Never blocks
+    // the approval — the outcome is recorded on the invoice row.
+    const email = await notifySupplierOfInvoice(inv.id, "approval");
+    res.json({ ok: true, email });
   } catch (err) { next(err); }
 });
 
@@ -671,6 +676,7 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
     const items = await db.select().from(atelierPaymentRunItems)
       .where(and(eq(atelierPaymentRunItems.runId, run.id), eq(atelierPaymentRunItems.status, "pending")));
     const now = new Date();
+    const paidInvoiceIds: string[] = [];
     for (const it of items) {
       const ref = refMap[it.id] ?? refMap[it.refId] ?? defaultRef;
       await db.update(atelierPaymentRunItems).set({
@@ -693,6 +699,7 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
               status: "paid", paidAt: now, paidByUserId: me.id, updatedAt: now,
             }).where(inArray(atelierPartnerFirmInvoices.id, inv.partnerFirmInvoiceIds));
           }
+          paidInvoiceIds.push(inv.id);
         }
       } else if (it.itemType === "expense_reimbursement") {
         await db.update(atelierExpenses).set({
@@ -708,7 +715,13 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
       payload: { runNumber: run.runNumber, itemCount: items.length, totalUsd: run.totalUsd },
       summary: `Marked payment run ${run.runNumber} paid: ${items.length} item(s), $${run.totalUsd.toFixed(2)}; remittance recorded.`,
     });
-    res.json({ ok: true, itemsPaid: items.length });
+    // Remittance advice to each supplier (PDF attached, status recorded
+    // per invoice). Sequential — runs are small; failures never block.
+    const emails = [];
+    for (const invId of paidInvoiceIds) {
+      emails.push(await notifySupplierOfInvoice(invId, "remittance"));
+    }
+    res.json({ ok: true, itemsPaid: items.length, emails });
   } catch (err) { next(err); }
 });
 

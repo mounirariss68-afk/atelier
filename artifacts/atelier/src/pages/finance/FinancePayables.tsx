@@ -447,6 +447,14 @@ export function FinancePayablesSelfBilling() {
   );
 }
 
+function emailChip(e: NonNullable<SelfBilledInvoiceRow["emailDelivery"]>[number]) {
+  const label = e.kind === "approval" ? "invoice email" : "remittance email";
+  if (e.status === "sent") return { tone: "green" as const, text: `${label}: sent` };
+  if (e.status === "no_email") return { tone: "red" as const, text: `${label}: no supplier email` };
+  if (e.status === "failed") return { tone: "red" as const, text: `${label}: failed` };
+  return { tone: "amber" as const, text: `${label}: not delivered (email not configured)` };
+}
+
 function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
   const { busy, error, run } = useMutate();
   const onApprove = () => run(`ap:${inv.id}`, () => postJson(`/finance/payables/self-billing/${inv.id}/approve`, {}));
@@ -484,6 +492,19 @@ function SelfBilledInvoiceCard({ inv }: { inv: SelfBilledInvoiceRow }) {
               reconcile: {recon.status.replace(/_/g, " ")}
             </MonoChip>
           )}
+          {(() => {
+            // Latest attempt per kind, newest last in the log.
+            const latest = new Map<string, NonNullable<SelfBilledInvoiceRow["emailDelivery"]>[number]>();
+            for (const e of inv.emailDelivery ?? []) latest.set(e.kind, e);
+            return [...latest.values()].map((e) => {
+              const c = emailChip(e);
+              return (
+                <MonoChip key={e.kind} tone={c.tone} data-testid={`sbi-email-${e.kind}-${inv.id}`}>
+                  {c.text}
+                </MonoChip>
+              );
+            });
+          })()}
         </div>
       </div>
       <div className="mt-3 text-xs">

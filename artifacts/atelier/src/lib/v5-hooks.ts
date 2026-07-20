@@ -1866,6 +1866,13 @@ export interface SelfBilledInvoiceRow {
   totalUsd: number;
   status: "draft" | "approved" | "disputed" | "scheduled" | "paid" | "rejected";
   reconciliation: { status: "matched" | "mismatch" | "no_proposal"; detail?: string | null } | null;
+  emailDelivery: Array<{
+    kind: "approval" | "remittance";
+    to: string | null;
+    status: "sent" | "not_configured" | "failed" | "no_email";
+    via: string;
+    at: string;
+  }>;
   contractorPaymentIds: string[] | null;
   partnerFirmInvoiceIds: string[] | null;
   disputeReason: string | null;

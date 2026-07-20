@@ -73,6 +73,20 @@ export interface SelfBilledVat {
   note: string | null;
 }
 
+/**
+ * One recorded email delivery attempt to the supplier (approval or
+ * remittance). status semantics: only "sent" means Resend accepted the
+ * message; "not_configured" = log-only mode (NOT delivered); "failed" =
+ * provider rejected; "no_email" = supplier has no email on file.
+ */
+export interface SelfBilledEmailEvent {
+  kind: "approval" | "remittance";
+  to: string | null;
+  status: "sent" | "not_configured" | "failed" | "no_email";
+  via: string;
+  at: string; // ISO timestamp
+}
+
 /** Reconciliation vs the payment-proposal rows for the same supplier/week. */
 export interface SelfBilledReconciliation {
   /** matched | mismatch | no_proposal */
@@ -114,6 +128,8 @@ export const atelierSelfBilledInvoices = pgTable(
     contractorPaymentIds: jsonb("contractor_payment_ids").$type<string[]>().notNull().default([]),
     partnerFirmInvoiceIds: jsonb("partner_firm_invoice_ids").$type<string[]>().notNull().default([]),
     reconciliation: jsonb("reconciliation").$type<SelfBilledReconciliation | null>(),
+    /** Supplier email notifications (approval + remittance), newest last. */
+    emailDelivery: jsonb("email_delivery").$type<SelfBilledEmailEvent[]>().notNull().default([]),
     agentRunId: text("agent_run_id"),
     approvedByUserId: text("approved_by_user_id"),
     approvedAt: timestamp("approved_at"),
