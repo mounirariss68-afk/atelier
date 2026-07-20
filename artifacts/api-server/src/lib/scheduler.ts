@@ -8,6 +8,7 @@ import { runWalletRetentionSweep } from "../routes/atelier/walletRoutes";
 import { runPaymentProposer } from "./atelier-payment-proposer";
 import { runWinLossOverdueScan } from "../routes/atelier/winLossRoutes";
 import { cleanupExpiredSessions } from "./auth/session";
+import { runMsMeetingAutolog } from "./msMeetingAutolog";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -18,6 +19,9 @@ const WALLET_PAYMENT_PROPOSER_CRON = process.env.WALLET_PAYMENT_PROPOSER_CRON ??
 const WINLOSS_SLA_CRON = process.env.WINLOSS_SLA_CRON ?? "0 5 * * *";
 // Daily 02:00 UTC — delete expired auth session rows (Task #4).
 const SESSION_CLEANUP_CRON = process.env.SESSION_CLEANUP_CRON ?? "0 2 * * *";
+// Every 30 min — auto-log ended Microsoft 365 meetings as CRM activities
+// (Task #336). Cheap no-op when MS is unconfigured or nobody is connected.
+const MS_AUTOLOG_CRON = process.env.MS_AUTOLOG_CRON ?? "*/30 * * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
@@ -25,6 +29,7 @@ let walletRetentionTask: ScheduledTask | null = null;
 let walletPaymentProposerTask: ScheduledTask | null = null;
 let winLossSlaTask: ScheduledTask | null = null;
 let sessionCleanupTask: ScheduledTask | null = null;
+let msAutologTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -204,6 +209,32 @@ export function startScheduler(): void {
       "Invalid SESSION_CLEANUP_CRON expression, session cleanup not scheduled",
     );
   }
+
+  // Microsoft 365 meeting auto-log (Task #336) — every 30 minutes, scan
+  // each connected user's recent calendar for ended meetings with known
+  // client contacts and create CRM activity entries.
+  if (cron.validate(MS_AUTOLOG_CRON)) {
+    msAutologTask = cron.schedule(
+      MS_AUTOLOG_CRON,
+      async () => {
+        try {
+          const out = await runMsMeetingAutolog();
+          if (out.connectionsScanned > 0) {
+            logger.info(out, "MS meeting auto-log finished");
+          }
+        } catch (err) {
+          logger.error({ err }, "MS meeting auto-log encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: MS_AUTOLOG_CRON }, "MS meeting auto-log scheduler started");
+  } else {
+    logger.error(
+      { cron: MS_AUTOLOG_CRON },
+      "Invalid MS_AUTOLOG_CRON expression, MS meeting auto-log not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -236,6 +267,11 @@ export function stopScheduler(): void {
     sessionCleanupTask.stop();
     sessionCleanupTask = null;
     logger.info("Auth session cleanup scheduler stopped");
+  }
+  if (msAutologTask) {
+    msAutologTask.stop();
+    msAutologTask = null;
+    logger.info("MS meeting auto-log scheduler stopped");
   }
 }
 

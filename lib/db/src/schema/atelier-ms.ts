@@ -20,6 +20,56 @@ import {
 
 const ORG = (name: string) => text(name).notNull().default("aico");
 
+/**
+ * Task #336 — Auto-logged Microsoft 365 meetings.
+ *
+ * One row per (user, Graph event, matched account) that the auto-log job
+ * has processed. The row is the dedupe ledger: once an event/account pair
+ * is here, the job never logs it again — even after the employee removes
+ * the CRM entry (status flips to "removed" and the activity is
+ * soft-deleted, but the ledger row stays so the meeting doesn't reappear).
+ */
+export const atelierMsMeetingLogs = pgTable(
+  "atelier_ms_meeting_logs",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    /** FK → atelier_users.id (whose calendar produced the entry). */
+    userId: text("user_id").notNull(),
+    /** Microsoft Graph event id (per-user id space). */
+    msEventId: text("ms_event_id").notNull(),
+    /** CRM account the meeting was matched to. */
+    accountId: text("account_id").notNull(),
+    /** The atelier_activities row created for this meeting. */
+    activityId: text("activity_id").notNull(),
+    subject: text("subject").notNull(),
+    meetingStart: timestamp("meeting_start").notNull(),
+    meetingEnd: timestamp("meeting_end").notNull(),
+    /** Matched CRM contacts at log time: [{contactId, contactName}] */
+    matchedContacts: jsonb("matched_contacts")
+      .notNull()
+      .$type<Array<{ contactId: string; contactName: string }>>()
+      .default([]),
+    /** "ai" when an AI summary was included, else "metadata". */
+    summarySource: text("summary_source").notNull().default("metadata"),
+    /** logged | removed */
+    status: text("status").notNull().default("logged"),
+    removedAt: timestamp("removed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_ms_meeting_logs_event").on(
+      t.orgId,
+      t.userId,
+      t.msEventId,
+      t.accountId,
+    ),
+    index("idx_atelier_ms_meeting_logs_user").on(t.orgId, t.userId),
+    index("idx_atelier_ms_meeting_logs_account").on(t.accountId),
+  ],
+);
+
 export const atelierMsConnections = pgTable(
   "atelier_ms_connections",
   {

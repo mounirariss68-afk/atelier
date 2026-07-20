@@ -14,6 +14,9 @@ export const V3_AUDIT_ACTIONS = {
   // Microsoft 365 connection (Task #327) ----------------------------------
   MS_CONNECTION_CONNECTED: "ms.connection.connected",
   MS_CONNECTION_DISCONNECTED: "ms.connection.disconnected",
+  // Microsoft 365 meeting auto-log (Task #336) ----------------------------
+  MS_MEETING_AUTOLOGGED: "ms.meeting.autologged",
+  MS_MEETING_AUTOLOG_REMOVED: "ms.meeting.autolog_removed",
   // Roster ----------------------------------------------------------------
   ROSTER_PERSON_CREATED: "roster.person.created",
   ROSTER_PERSON_UPDATED: "roster.person.updated",

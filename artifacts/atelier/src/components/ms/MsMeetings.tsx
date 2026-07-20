@@ -21,10 +21,11 @@ import {
   getAtelierGetMyCalendarQueryKey,
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, SectionLabel, PillButton, MonoChip } from "@/components/ui/primitives";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Video, MapPin, Unplug, ExternalLink } from "lucide-react";
+import { CalendarClock, Video, MapPin, Unplug, ExternalLink, RefreshCw, Trash2, Sparkles } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -300,6 +301,166 @@ export function MyMeetingsCard() {
         )}
       </Card>
     </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Task #336 — auto-logged meetings (Me lens). Bespoke /me/calendar/autolog
+// routes are not in the OpenAPI spec, so this card uses raw fetch —
+// consistent with other personal, non-codegen surfaces.
+// ------------------------------------------------------------------
+interface AutologEntry {
+  id: string;
+  subject: string;
+  accountId: string;
+  accountName: string;
+  meetingStart: string;
+  meetingEnd: string;
+  matchedContacts: Array<{ contactId: string; contactName: string }>;
+  summarySource: string;
+  loggedAt: string;
+}
+
+async function fetchAutologEntries(): Promise<{ entries: AutologEntry[] }> {
+  const r = await fetch(`${API_BASE}/me/calendar/autolog`, { credentials: "include" });
+  if (!r.ok) throw new Error(`autolog-list-failed:${r.status}`);
+  return r.json();
+}
+
+/** Me lens — what the auto-logger has recorded from my calendar. */
+export function AutoLoggedMeetingsCard() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const { data: conn } = useAtelierGetMyMsConnection();
+  const enabled = Boolean(conn?.configured && conn?.connected);
+  const { data, isPending } = useQuery({
+    queryKey: ["ms-autolog-entries"],
+    queryFn: fetchAutologEntries,
+    enabled,
+    retry: false,
+  });
+
+  const runNow = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API_BASE}/me/calendar/autolog/run`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error(`autolog-run-failed:${r.status}`);
+      return r.json() as Promise<{ entriesCreated: number; meetingsExamined: number }>;
+    },
+    onSuccess: (out) => {
+      qc.invalidateQueries({ queryKey: ["ms-autolog-entries"] });
+      toast({
+        title:
+          out.entriesCreated > 0
+            ? `Logged ${out.entriesCreated} meeting${out.entriesCreated === 1 ? "" : "s"} to the CRM`
+            : "No new client meetings to log",
+      });
+    },
+    onError: () =>
+      toast({
+        title: "Couldn't check your calendar",
+        description: "Microsoft 365 may be unreachable. Try again shortly.",
+        variant: "destructive",
+      }),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (logId: string) => {
+      const r = await fetch(`${API_BASE}/me/calendar/autolog/${logId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error(`autolog-remove-failed:${r.status}`);
+      return r.json();
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ms-autolog-entries"] });
+      toast({ title: "Removed from the account timeline" });
+    },
+    onError: () => toast({ title: "Couldn't remove the entry", variant: "destructive" }),
+  });
+
+  if (!enabled) return null;
+  const entries = data?.entries ?? [];
+
+  return (
+    <Card className="p-4" data-testid="me-autologged-meetings-card">
+      <div className="flex items-center justify-between gap-3">
+        <SectionLabel>Auto-logged meetings</SectionLabel>
+        <PillButton
+          variant="ghost"
+          className="shrink-0"
+          onClick={() => runNow.mutate()}
+          disabled={runNow.isPending}
+          data-testid="button-autolog-run"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${runNow.isPending ? "animate-spin" : ""}`} />
+          {runNow.isPending ? "Checking…" : "Check now"}
+        </PillButton>
+      </div>
+      <p className="text-xs text-text-mute mt-1">
+        Meetings with known client contacts are logged to the account timeline automatically
+        after they end. Remove anything you don't want kept.
+      </p>
+      {isPending ? (
+        <Skeleton className="h-16 mt-3 bg-bg-elevate" />
+      ) : entries.length === 0 ? (
+        <p className="text-sm text-text-mute font-mono mt-3" data-testid="autolog-empty">
+          Nothing has been auto-logged yet.
+        </p>
+      ) : (
+        <div className="mt-2">
+          {entries.map((e) => (
+            <div
+              key={e.id}
+              className="flex items-start gap-3 py-3 border-b border-border-soft last:border-b-0"
+              data-testid={`autolog-row-${e.id}`}
+            >
+              <div className="shrink-0 w-24 text-xs font-mono text-text-faint pt-0.5">
+                <div>{fmtDay(e.meetingEnd)}</div>
+                <div>{fmtTime(e.meetingEnd)}</div>
+              </div>
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-text font-medium truncate">{e.subject}</span>
+                  {e.summarySource === "ai" && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wide text-gold"
+                      title="Includes an AI summary"
+                    >
+                      <Sparkles className="w-3 h-3" /> AI note
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Link href={`/clients/accounts/${e.accountId}`} className="no-underline">
+                    <MonoChip tone="gold" className="cursor-pointer">
+                      {e.accountName || "Account"}
+                    </MonoChip>
+                  </Link>
+                  {e.matchedContacts.map((c) => (
+                    <span key={c.contactId} className="text-xs text-text-mute">
+                      {c.contactName}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <PillButton
+                variant="ghost"
+                className="shrink-0 text-red-400"
+                onClick={() => remove.mutate(e.id)}
+                disabled={remove.isPending}
+                data-testid={`button-autolog-remove-${e.id}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </PillButton>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }
 

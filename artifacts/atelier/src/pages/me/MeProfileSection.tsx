@@ -34,7 +34,7 @@ import {
   type AtelierSelfDocument,
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
-import { ConnectedAccountsCard } from "@/components/ms/MsMeetings";
+import { ConnectedAccountsCard, AutoLoggedMeetingsCard } from "@/components/ms/MsMeetings";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -75,6 +75,8 @@ export default function MeProfileSection({
       <BioAndCardCard />
       {/* Task #327 — Microsoft 365 connect/disconnect. */}
       <ConnectedAccountsCard />
+      {/* Task #336 — meetings the auto-logger recorded to the CRM. */}
+      <AutoLoggedMeetingsCard />
       <DocumentsCard />
       <div className="grid gap-4 md:grid-cols-2">
         <DependentsCard />

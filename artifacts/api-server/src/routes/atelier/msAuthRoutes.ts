@@ -23,6 +23,8 @@ import {
   db,
   atelierUsers,
   atelierMsConnections,
+  atelierMsMeetingLogs,
+  atelierActivities,
   atelierContacts,
   atelierAccounts,
   atelierAuditEvents,
@@ -43,6 +45,7 @@ import {
   verifyState,
   type MsCalendarEvent,
 } from "../../lib/msGraph.js";
+import { runMsMeetingAutolog } from "../../lib/msMeetingAutolog.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { assertAuditAction } from "./auditContract";
@@ -125,6 +128,7 @@ async function loadConnection(me: typeof atelierUsers.$inferSelect) {
 // ------------------------------------------------------------------
 // GET /me/msauth/start — kick off the Microsoft sign-in
 // ------------------------------------------------------------------
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
 router.get("/me/msauth/start", (req, res) => {
   const me = ensurePersona(req, res);
   if (!me) return;
@@ -158,6 +162,7 @@ router.get("/me/msauth/start", (req, res) => {
 // ------------------------------------------------------------------
 // GET /me/msauth/callback — exchange code, store encrypted tokens
 // ------------------------------------------------------------------
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
 router.get("/me/msauth/callback", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -286,6 +291,7 @@ router.get("/me/msauth/callback", async (req, res, next) => {
 // ------------------------------------------------------------------
 // GET /me/msconnection — status (no tokens, ever)
 // ------------------------------------------------------------------
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
 router.get("/me/msconnection", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -308,6 +314,7 @@ router.get("/me/msconnection", async (req, res, next) => {
 // ------------------------------------------------------------------
 // DELETE /me/msconnection — disconnect (delete row + tokens)
 // ------------------------------------------------------------------
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
 router.delete("/me/msconnection", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -358,6 +365,7 @@ interface WireMeeting {
   }>;
 }
 
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
 router.get("/me/calendar", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -552,6 +560,153 @@ router.get("/me/calendar", async (req, res, next) => {
       .where(eq(atelierMsConnections.id, row.id));
 
     res.json({ configured: true, connected: true, meetings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------
+// Task #336 — auto-logged meetings (self-scope: only the caller's own
+// entries are visible / removable).
+// ------------------------------------------------------------------
+
+// GET /me/calendar/autolog — my auto-logged CRM entries (newest first).
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+router.get("/me/calendar/autolog", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const rows = await db
+      .select()
+      .from(atelierMsMeetingLogs)
+      .where(
+        and(
+          eq(atelierMsMeetingLogs.orgId, me.orgId),
+          eq(atelierMsMeetingLogs.userId, me.id),
+          eq(atelierMsMeetingLogs.status, "logged"),
+        ),
+      );
+    rows.sort((a, b) => b.meetingEnd.getTime() - a.meetingEnd.getTime());
+    const accIds = [...new Set(rows.map((r) => r.accountId))];
+    const names = new Map<string, string>();
+    if (accIds.length > 0) {
+      const accounts = await db
+        .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.orgId, me.orgId),
+            inArray(atelierAccounts.id, accIds),
+          ),
+        );
+      for (const a of accounts) names.set(a.id, a.name);
+    }
+    res.json({
+      entries: rows.slice(0, 100).map((r) => ({
+        id: r.id,
+        subject: r.subject,
+        accountId: r.accountId,
+        accountName: names.get(r.accountId) ?? "",
+        meetingStart: r.meetingStart.toISOString(),
+        meetingEnd: r.meetingEnd.toISOString(),
+        matchedContacts: r.matchedContacts,
+        summarySource: r.summarySource,
+        loggedAt: r.createdAt.toISOString(),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /me/calendar/autolog/run — check my calendar for ended meetings now.
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+router.post("/me/calendar/autolog/run", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!msConfigured()) {
+      res.status(400).json({ error: "not-configured" });
+      return;
+    }
+    const row = await loadConnection(me);
+    if (!row) {
+      res.status(400).json({ error: "not-connected" });
+      return;
+    }
+    const out = await runMsMeetingAutolog({ userId: me.id });
+    if (out.errors > 0) {
+      res.status(502).json({
+        error: "graph-unavailable",
+        reason:
+          "Microsoft 365 could not be reached. Check your connection and try again.",
+      });
+      return;
+    }
+    res.json({
+      ok: true,
+      meetingsExamined: out.meetingsExamined,
+      entriesCreated: out.entriesCreated,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /me/calendar/autolog/:logId — remove what was logged for me.
+// Soft-deletes the CRM activity and marks the ledger row removed so the
+// meeting never gets re-logged.
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+router.delete("/me/calendar/autolog/:logId", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const [row] = await db
+      .select()
+      .from(atelierMsMeetingLogs)
+      .where(
+        and(
+          eq(atelierMsMeetingLogs.id, req.params.logId),
+          eq(atelierMsMeetingLogs.orgId, me.orgId),
+          eq(atelierMsMeetingLogs.userId, me.id),
+        ),
+      );
+    if (!row) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    if (row.status === "removed") {
+      res.json({ ok: true, removed: false });
+      return;
+    }
+    const now = new Date();
+    await db
+      .update(atelierActivities)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(atelierActivities.id, row.activityId),
+          eq(atelierActivities.orgId, me.orgId),
+          isNull(atelierActivities.deletedAt),
+        ),
+      );
+    await db
+      .update(atelierMsMeetingLogs)
+      .set({ status: "removed", removedAt: now, updatedAt: now })
+      .where(eq(atelierMsMeetingLogs.id, row.id));
+    await audit({
+      me,
+      action: "ms.meeting.autolog_removed",
+      entityId: row.activityId,
+      payload: {
+        logId: row.id,
+        msEventId: row.msEventId,
+        accountId: row.accountId,
+        subject: row.subject,
+      },
+      summary: `${me.name} removed auto-logged meeting "${row.subject}"`,
+    });
+    res.json({ ok: true, removed: true });
   } catch (err) {
     next(err);
   }
