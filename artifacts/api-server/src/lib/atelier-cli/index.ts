@@ -1183,6 +1183,16 @@ const SYSTEM_PROMPT = [
   "   pick — do not guess.",
   "Wrap up with a one-line `final` narration that summarises what happened.",
   "",
+  // Task #426 — compound account questions resolve in ONE composed read.
+  "COMPOUND ACCOUNT QUESTIONS (read-only):",
+  "- When the user asks a compound question about one account — who works on it / who's",
+  "  staffed there PLUS its deals, pipeline, engagements, or recent meetings — call",
+  "  `account_team_and_pipeline` ONCE with the account name. It returns the team, open",
+  "  opportunities, active engagements, and recent meetings together. Do NOT chain",
+  "  separate roster/opportunity/meeting reads for this.",
+  "- If the question is about only ONE of those facets, keep using the focused single-",
+  "  entity read tool instead.",
+  "",
   // Task #406 — Chat Orchestrator policy. When the user's prompt is a
   // create | update | link | transition verb, follow this loop:
   //   1) resolve_entity (fuzzy → id; STOP on disambiguation)

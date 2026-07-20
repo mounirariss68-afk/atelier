@@ -31,6 +31,8 @@ import {
   atelierRaidItems,
   atelierBriefs,
   atelierRosterReportsTo,
+  atelierAccountTeamMembers,
+  atelierEngagementAccess,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -1309,6 +1311,285 @@ defineCapability({
     return {
       ok: true,
       data: { items, total: filtered.length, totalUsd },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// account.who_works — entity_card (Task #426 — composed cross-entity read)
+//
+// Answers compound "who works on account X and what's happening there?"
+// questions in ONE tool call: staffed team (partner owner + account team
+// + engagement-staffed people), open opportunities, active engagements,
+// and recent meetings. Strictly read-only; reuses the SAME ACLs the
+// individual reads enforce (canSeeAccount gate for the whole card,
+// meeting-parent ACL per meeting row). Team members come from
+// atelier_users, which carries no compensation/HR fields, so the
+// projection is name/title/role-on-account only.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "account.who_works",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_team_and_pipeline",
+  description:
+    "One-shot compound answer for an account: who works on it (partner owner, account team roles, people staffed on its engagements), its open opportunities with stages, active engagements, and the most recent meetings. Use for questions that combine team + pipeline + activity on one account.",
+  slashAliases: { en: ["/who-works", "/account-team"], fr: ["/equipe-compte"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: { type: "string" },
+      accountName: { type: "string", description: "Account name to resolve when the id is unknown." },
+      meetingLimit: { type: "integer", minimum: 1, maximum: 20 },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["account_workspace", "home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: [
+      "Who works on the Aldrees account and what's the open pipeline there?",
+      "Who from our team is staffed on DEWA?",
+      "Show me the team, deals and recent meetings for NEOM",
+    ],
+    ar: ["من يعمل على حساب الدريس وما هي الفرص المفتوحة؟"],
+    fr: ["Qui travaille sur le compte Aldrees et quel est le pipeline ouvert ?"],
+  },
+  async run(input, ctx) {
+    const acc = await resolveAccountRef(input, ctx.persona);
+    if (isToolResult(acc)) return acc;
+    const me = { id: ctx.persona.id, role: ctx.persona.role };
+    const access = await engAclFor(ctx.persona);
+    if (!(await canSeeAccount(access, me, acc.id))) {
+      return denyForbidden(`You don't have access to the account "${acc.label}".`);
+    }
+    const [accountRow] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.id, acc.id),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!accountRow) return notFound("account");
+
+    // ---- engagements on the account (drives both the engagement block
+    //      and the engagement-staffing part of the team) ----
+    const engs = await db
+      .select({
+        id: atelierEngagements.id,
+        name: atelierEngagements.name,
+        plmStage: atelierEngagements.plmStage,
+      })
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.accountId, acc.id),
+          eq(atelierEngagements.orgId, ctx.persona.orgId),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      );
+    const activeEngs = engs.filter((e) => e.plmStage !== "closed");
+    const engById = new Map(engs.map((e) => [e.id, e]));
+
+    // ---- team: account-level roles + engagement staffing grants ----
+    const [teamRows, grants] = await Promise.all([
+      db
+        .select({
+          userId: atelierAccountTeamMembers.userId,
+          roleOnAccount: atelierAccountTeamMembers.roleOnAccount,
+        })
+        .from(atelierAccountTeamMembers)
+        .where(
+          and(
+            eq(atelierAccountTeamMembers.accountId, acc.id),
+            isNull(atelierAccountTeamMembers.deletedAt),
+          ),
+        ),
+      activeEngs.length
+        ? db
+            .select({
+              userId: atelierEngagementAccess.userId,
+              engagementId: atelierEngagementAccess.engagementId,
+              roleOnEngagement: atelierEngagementAccess.roleOnEngagement,
+            })
+            .from(atelierEngagementAccess)
+            .where(
+              and(
+                inArray(
+                  atelierEngagementAccess.engagementId,
+                  activeEngs.map((e) => e.id),
+                ),
+                eq(atelierEngagementAccess.status, "active"),
+                isNull(atelierEngagementAccess.deletedAt),
+              ),
+            )
+        : Promise.resolve([] as Array<{ userId: string; engagementId: string; roleOnEngagement: string }>),
+    ]);
+
+    // Aggregate per person: account-level role(s) + engagement staffings.
+    const byUser = new Map<
+      string,
+      { accountRoles: Set<string>; staffedOn: Array<{ engagementId: string; engagementName: string; role: string }> }
+    >();
+    const ensure = (userId: string) => {
+      let entry = byUser.get(userId);
+      if (!entry) {
+        entry = { accountRoles: new Set(), staffedOn: [] };
+        byUser.set(userId, entry);
+      }
+      return entry;
+    };
+    if (accountRow.partnerOwnerId) ensure(accountRow.partnerOwnerId).accountRoles.add("partner_owner");
+    for (const t of teamRows) ensure(t.userId).accountRoles.add(t.roleOnAccount);
+    for (const g of grants) {
+      const eng = engById.get(g.engagementId);
+      if (!eng) continue;
+      ensure(g.userId).staffedOn.push({
+        engagementId: g.engagementId,
+        engagementName: eng.name,
+        role: g.roleOnEngagement,
+      });
+    }
+    const userIds = Array.from(byUser.keys());
+    const users = userIds.length
+      ? await db
+          .select({
+            id: atelierUsers.id,
+            name: atelierUsers.name,
+            title: atelierUsers.title,
+            roleLabel: atelierUsers.roleLabel,
+          })
+          .from(atelierUsers)
+          .where(
+            and(
+              inArray(atelierUsers.id, userIds),
+              eq(atelierUsers.orgId, ctx.persona.orgId),
+              isNull(atelierUsers.deletedAt),
+            ),
+          )
+      : [];
+    const userById = new Map(users.map((u) => [u.id, u]));
+    // Only surface live users; roles sorted so partner_owner leads.
+    const ROLE_ORDER = ["partner_owner", "account_manager", "delivery_lead", "partner", "contributor"];
+    const team = userIds
+      .filter((id) => userById.has(id))
+      .map((id) => {
+        const u = userById.get(id)!;
+        const agg = byUser.get(id)!;
+        const roleRank = (r: string) => {
+          const i = ROLE_ORDER.indexOf(r);
+          return i === -1 ? 99 : i;
+        };
+        const accountRoles = Array.from(agg.accountRoles).sort(
+          (a, b) => roleRank(a) - roleRank(b),
+        );
+        return {
+          id: u.id,
+          name: u.name,
+          title: u.title,
+          roleLabel: u.roleLabel,
+          accountRoles,
+          staffedOn: agg.staffedOn,
+        };
+      })
+      .sort((a, b) => {
+        const ra = a.accountRoles.length ? ROLE_ORDER.indexOf(a.accountRoles[0]!) : 99;
+        const rb = b.accountRoles.length ? ROLE_ORDER.indexOf(b.accountRoles[0]!) : 99;
+        return (ra === -1 ? 98 : ra) - (rb === -1 ? 98 : rb) || a.name.localeCompare(b.name);
+      });
+
+    // ---- open opportunities (same terminal-stage filter as the dossier) ----
+    const TERMINAL = new Set(["contract", "lost", "no_decision", "withdrawn"]);
+    const opps = await db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        daysInStage: atelierOpportunities.daysInStage,
+        nextMilestone: atelierOpportunities.nextMilestone,
+      })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.accountId, acc.id),
+          eq(atelierOpportunities.orgId, ctx.persona.orgId),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      );
+    const openOpps = opps
+      .filter((o) => !TERMINAL.has(resolveSalesStage(o.salesStage)))
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        stage: resolveSalesStage(o.salesStage),
+        daysInStage: o.daysInStage,
+        nextMilestone: o.nextMilestone ?? null,
+        href: `/opportunities/${o.id}`,
+      }));
+
+    // ---- recent meetings (same live-parent + parent-ACL filter as
+    //      meeting.list, scoped to this account) ----
+    const meetingLimit = Math.max(1, Math.min(20, Number(input.meetingLimit ?? 5)));
+    const meetingRows = await db
+      .select()
+      .from(atelierMeetings)
+      .where(
+        and(
+          eq(atelierMeetings.orgId, ctx.persona.orgId),
+          isNull(atelierMeetings.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierMeetings.date))
+      .limit(200);
+    const recentMeetings: Array<Record<string, unknown>> = [];
+    for (const m of meetingRows) {
+      if (recentMeetings.length >= meetingLimit) break;
+      const parent = await liveMeetingParent(m.parentType, m.parentId, ctx.persona.orgId);
+      if (!parent || parent.accountId !== acc.id) continue;
+      if (!(await canSeeMeetingParent(ctx.persona, parent))) continue;
+      recentMeetings.push({
+        id: m.id,
+        title: m.title,
+        date: m.date,
+        kind: m.kind,
+        parentType: parent.kind,
+        parentName: parent.name,
+        href: parent.kind === "engagement" ? `/engagements/${parent.id}` : `/opportunities/${parent.id}`,
+      });
+    }
+
+    return {
+      ok: true,
+      data: {
+        account: {
+          id: accountRow.id,
+          name: accountRow.name,
+          country: accountRow.country,
+          sector: accountRow.sector,
+          href: `/accounts/${accountRow.id}`,
+        },
+        team,
+        teamCount: team.length,
+        openOpportunities: openOpps,
+        openOpportunityCount: openOpps.length,
+        activeEngagements: activeEngs.map((e) => ({
+          id: e.id,
+          name: e.name,
+          plmStage: e.plmStage,
+          href: `/engagements/${e.id}`,
+        })),
+        activeEngagementCount: activeEngs.length,
+        recentMeetings,
+      },
     };
   },
 });
