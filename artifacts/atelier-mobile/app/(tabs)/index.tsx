@@ -19,7 +19,6 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  BrandGradient,
   Button,
   Card,
   Chip,
@@ -66,8 +65,8 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
                 style={{
                   color,
                   fontFamily: "PlusJakartaSans_400Regular",
-                  fontSize: 15,
-                  lineHeight: 22,
+                  fontSize: 14,
+                  lineHeight: 20,
                 }}
               >
                 {numbered ? `${line.match(/^\s*(\d+)\./)?.[1]}.` : "•"}
@@ -77,8 +76,8 @@ function MarkdownText({ text, color }: { text: string; color: string }) {
               style={{
                 color,
                 fontFamily: "PlusJakartaSans_400Regular",
-                fontSize: 15,
-                lineHeight: 22,
+                fontSize: 14,
+                lineHeight: 20,
                 flex: 1,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
@@ -307,15 +306,14 @@ function TurnBlock({
     <View style={{ gap: 8, paddingVertical: 8 }}>
       {turn.prompt ? (
         <View style={{ alignItems: rtl.isRTL ? "flex-start" : "flex-end" }}>
-          <BrandGradient
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+          <View
             style={{
+              backgroundColor: c.primary,
               borderRadius: 20,
               borderBottomRightRadius: rtl.isRTL ? 20 : 6,
               borderBottomLeftRadius: rtl.isRTL ? 6 : 20,
-              paddingHorizontal: 15,
-              paddingVertical: 11,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
               maxWidth: "85%",
             }}
           >
@@ -323,15 +321,15 @@ function TurnBlock({
               style={{
                 color: "#FFFFFF",
                 fontFamily: "PlusJakartaSans_500Medium",
-                fontSize: 15,
-                lineHeight: 21,
+                fontSize: 14,
+                lineHeight: 20,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
               }}
             >
               {turn.prompt}
             </Text>
-          </BrandGradient>
+          </View>
           {turn.attachments && turn.attachments.length > 0 ? (
             <View
               style={{
@@ -558,11 +556,7 @@ export default function ChatScreen() {
         </Text>
         <IconButton icon="edit" onPress={() => chat.newChat()} filled />
       </View>
-      <BrandGradient
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={{ height: 2, opacity: 0.85 }}
-      />
+      <View style={{ height: 2, backgroundColor: c.primary, opacity: 0.85 }} />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         {chat.turns.length === 0 ? (
@@ -678,7 +672,7 @@ export default function ChatScreen() {
                 paddingBottom: 11,
                 color: c.foreground,
                 fontFamily: "PlusJakartaSans_500Medium",
-                fontSize: 15,
+                fontSize: 14,
                 textAlign: rtl.textAlign,
                 writingDirection: rtl.writingDirection,
               }}
@@ -687,12 +681,13 @@ export default function ChatScreen() {
               <IconButton icon="square" color={c.destructive} onPress={chat.stop} filled />
             ) : (
               <PressScale onPress={send} scaleTo={0.88}>
-                <BrandGradient
+                <View
                   style={[
                     {
                       width: 42,
                       height: 42,
                       borderRadius: 21,
+                      backgroundColor: c.primary,
                       alignItems: "center",
                       justifyContent: "center",
                     },
@@ -700,7 +695,7 @@ export default function ChatScreen() {
                   ]}
                 >
                   <Feather name="arrow-up" size={20} color="#FFFFFF" />
-                </BrandGradient>
+                </View>
               </PressScale>
             )}
           </View>

@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  BrandGradient,
   Card,
   Chip,
   EmptyState,
@@ -219,10 +218,16 @@ export default function ExpensesScreen() {
           overflow: "hidden",
         }}
       >
-        <BrandGradient
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 }}
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 3,
+            backgroundColor: c.primary,
+            opacity: 0.9,
+          }}
         />
         <Text
           style={{
@@ -304,7 +309,7 @@ export default function ExpensesScreen() {
               refreshing={query.isRefetching}
               onRefresh={onRefresh}
               tintColor={c.primary}
-              colors={["#C45BB8", "#8A5BD6", "#FF7B5A"]}
+              colors={[c.primary]}
               progressBackgroundColor={c.card}
             />
           }
@@ -324,12 +329,13 @@ export default function ExpensesScreen() {
         style={{ position: "absolute", bottom: fabBottom, [rtl.isRTL ? "left" : "right"]: 20 }}
       >
         <PressScale onPress={() => router.push("/expense/new")} scaleTo={0.9}>
-          <BrandGradient
+          <View
             style={[
               {
                 width: 58,
                 height: 58,
                 borderRadius: 29,
+                backgroundColor: c.primary,
                 alignItems: "center",
                 justifyContent: "center",
               },
@@ -337,7 +343,7 @@ export default function ExpensesScreen() {
             ]}
           >
             <Feather name="plus" size={26} color="#FFFFFF" />
-          </BrandGradient>
+          </View>
         </PressScale>
       </View>
     </View>

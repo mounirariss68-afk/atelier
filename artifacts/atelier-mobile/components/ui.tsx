@@ -259,25 +259,25 @@ export function Button({
   const inner = (
     <View
       style={{
-        paddingVertical: 15,
-        paddingHorizontal: 18,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
         flexDirection: rtl.row,
         alignItems: "center",
         justifyContent: "center",
         gap: 8,
-        minHeight: 50,
+        minHeight: 44,
       }}
     >
       {loading ? (
         <ActivityIndicator color={fg} />
       ) : (
         <>
-          {icon ? <Feather name={icon} size={18} color={fg} /> : null}
+          {icon ? <Feather name={icon} size={17} color={fg} /> : null}
           <Text
             style={{
               color: fg,
               fontFamily: "PlusJakartaSans_700Bold",
-              fontSize: 15,
+              fontSize: 14,
               letterSpacing: 0.2,
             }}
           >
@@ -295,13 +295,14 @@ export function Button({
       style={[{ opacity: isDisabled ? 0.55 : 1 }, style ?? {}]}
     >
       {variant === "primary" ? (
-        <BrandGradient
-          style={[{ borderRadius: 16, overflow: "hidden" }, softShadow(c.tint45)]}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
+        <View
+          style={[
+            { backgroundColor: c.primary, borderRadius: 16, overflow: "hidden" },
+            softShadow(c.tint45),
+          ]}
         >
           {inner}
-        </BrandGradient>
+        </View>
       ) : (
         <View
           style={{
@@ -388,9 +389,9 @@ export function Field({
           borderWidth: 1.5,
           borderColor: error ? c.destructive : focused ? c.primary : c.borderSoft,
           paddingHorizontal: 14,
-          paddingTop: label ? 22 : 12,
-          paddingBottom: 10,
-          minHeight: label ? 58 : 46,
+          paddingTop: label ? 18 : 11,
+          paddingBottom: 8,
+          minHeight: label ? 48 : 42,
         }}
       >
         {label ? (
@@ -399,8 +400,8 @@ export function Field({
             style={{
               position: "absolute",
               [rtl.isRTL ? "right" : "left"]: 14,
-              top: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 8] }),
-              fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [15, 11.5] }),
+              top: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 6] }),
+              fontSize: anim.interpolate({ inputRange: [0, 1], outputRange: [14, 11] }),
               color: focused ? c.primary : c.mutedForeground,
               fontFamily: "PlusJakartaSans_600SemiBold",
               letterSpacing: 0.2,
@@ -427,7 +428,7 @@ export function Field({
             {
               color: c.foreground,
               fontFamily: "PlusJakartaSans_500Medium",
-              fontSize: 15,
+              fontSize: 14,
               padding: 0,
               textAlign: rtl.textAlign,
               writingDirection: rtl.writingDirection,

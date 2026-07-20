@@ -24,7 +24,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import QRCode from "react-native-qrcode-svg";
 
 import {
-  BrandGradient,
   Button,
   Card,
   Chip,
@@ -209,13 +208,19 @@ export default function MeScreen() {
               overflow: "hidden",
             }, softShadow(c.shadow)]}
           >
-            <BrandGradient
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, opacity: 0.9 }}
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                backgroundColor: c.primary,
+                opacity: 0.9,
+              }}
             />
             <Pressable onPress={changePhoto} style={{ alignItems: "center" }}>
-              <BrandGradient style={{ width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center" }}>
+              <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: c.primary, alignItems: "center", justifyContent: "center" }}>
               {avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -237,7 +242,7 @@ export default function MeScreen() {
                   </Text>
                 </View>
               )}
-              </BrandGradient>
+              </View>
               <View
                 style={{
                   position: "absolute",
@@ -398,10 +403,15 @@ export default function MeScreen() {
         >
           <Pressable onPress={(e) => e.stopPropagation()}>
             <View style={[{ backgroundColor: c.card, borderRadius: 28, padding: 24, alignItems: "center", gap: 14, overflow: "hidden" }, softShadow(c.shadow)]}>
-              <BrandGradient
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4 }}
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 4,
+                  backgroundColor: c.primary,
+                }}
               />
               <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 18 }}>
                 {t("me.qrTitle")}

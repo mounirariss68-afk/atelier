@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { Link, Stack } from "expo-router";
 import { Text, View } from "react-native";
 
-import { BrandGradient, FadeInView } from "@/components/ui";
+import { FadeInView } from "@/components/ui";
 import { useColors } from "@/hooks/useColors";
 
 export default function NotFoundScreen() {
@@ -48,25 +48,24 @@ export default function NotFoundScreen() {
             This screen doesn&apos;t exist.
           </Text>
           <Link href="/" asChild>
-            <BrandGradient
+            <View
               style={{
                 borderRadius: 16,
                 paddingHorizontal: 22,
-                paddingVertical: 14,
+                paddingVertical: 13,
+                backgroundColor: c.primary,
               }}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
             >
               <Text
                 style={{
                   color: "#FFFFFF",
                   fontFamily: "PlusJakartaSans_700Bold",
-                  fontSize: 15,
+                  fontSize: 14,
                 }}
               >
                 Go to home screen
               </Text>
-            </BrandGradient>
+            </View>
           </Link>
         </FadeInView>
       </View>

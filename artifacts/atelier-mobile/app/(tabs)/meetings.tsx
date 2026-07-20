@@ -33,7 +33,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { apiJson } from "@/lib/api";
 
 import {
-  BrandGradient,
   Card,
   Chip,
   EmptyState,
@@ -529,10 +528,16 @@ export default function MeetingsScreen() {
           gap: 2,
         }}
       >
-        <BrandGradient
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, opacity: 0.9 }}
+        <View
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 3,
+            backgroundColor: c.primary,
+            opacity: 0.9,
+          }}
         />
         <Text
           style={{

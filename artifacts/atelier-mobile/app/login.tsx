@@ -88,17 +88,18 @@ export default function LoginScreen() {
           gap: 18,
         }}
       >
-        <BrandGradient
+        <View
           style={{
             width: 84,
             height: 84,
             borderRadius: 28,
+            backgroundColor: c.primary,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
           <Feather name="download-cloud" size={38} color="#FFFFFF" />
-        </BrandGradient>
+        </View>
         <Text
           style={{
             color: "#EEF1FA",

@@ -12,9 +12,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { LinearGradient } from "expo-linear-gradient";
-
-import { COG_GRADIENT } from "@/constants/colors";
 import { useColors } from "@/hooks/useColors";
 
 export type ErrorFallbackProps = {
@@ -91,16 +88,11 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             },
           ]}
         >
-          <LinearGradient
-            colors={COG_GRADIENT}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.button}
-          >
+          <View style={[styles.button, { backgroundColor: colors.primary }]}>
             <Text style={[styles.buttonText, { color: "#FFFFFF" }]}>
               Try Again
             </Text>
-          </LinearGradient>
+          </View>
         </Pressable>
       </View>
 

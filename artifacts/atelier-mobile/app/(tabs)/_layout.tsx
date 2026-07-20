@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MeetingReminders } from "@/components/MeetingReminders";
 import {
   BRAND_EASING,
-  BrandGradient,
   Glass,
   hapticLight,
   softShadow,
@@ -101,10 +100,13 @@ function FloatingPillTabBar({ state, descriptors, navigation }: TabBarProps) {
                 transform: [{ translateX: pillX }],
               }}
             >
-              <BrandGradient
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={{ flex: 1, borderRadius: (BAR_HEIGHT - 16) / 2, opacity: 0.92 }}
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: (BAR_HEIGHT - 16) / 2,
+                  backgroundColor: c.primary,
+                  opacity: 0.95,
+                }}
               />
             </Animated.View>
           ) : null}

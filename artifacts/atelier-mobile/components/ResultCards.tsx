@@ -177,7 +177,7 @@ function WriteSuccess({ data, lang }: { data: Json; lang: string }) {
   const currency = asStr(data.currency) || null;
   const entries = displayEntries(data, 6);
   return (
-    <Card style={{ gap: 8, borderColor: c.tint25 }}>
+    <Card style={{ gap: 8, borderRadius: 8, padding: 12, borderColor: c.border }}>
       <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
         <Feather name="check-circle" size={16} color={c.success} />
         <Text
@@ -592,7 +592,10 @@ export function ToolResultCards({
         }
 
         return (
-          <Card key={`${tr.tool}-${i}`} style={{ gap: 10 }}>
+          <Card
+            key={`${tr.tool}-${i}`}
+            style={{ gap: 10, borderRadius: 8, padding: 12, borderColor: c.border }}
+          >
             <CardHeader
               icon={SHAPE_ICON[shape ?? ""] ?? "cpu"}
               title={humanLabel(tr.tool)}
