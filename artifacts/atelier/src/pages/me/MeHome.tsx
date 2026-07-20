@@ -41,6 +41,9 @@ import MeProfileSection from "./MeProfileSection";
 // Task #159 — self-scope contract records panel.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 import { MyMeetingsCard } from "@/components/ms/MsMeetings";
+// Task #386 — EA delegation: partner "My delegates" + EA "Assist" tabs.
+import MeDelegates from "./MeDelegates";
+import MeAssist from "./MeAssist";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -50,6 +53,8 @@ const SECTIONS = [
   { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
   { id: "performance", label: "Performance", href: "/me/performance" },
   { id: "learning", label: "Learning", href: "/me/learning" },
+  { id: "delegates", label: "Delegates", href: "/me/delegates" },
+  { id: "assist", label: "Assist", href: "/me/assist" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -65,7 +70,19 @@ export default function MeHome() {
   const isContractor =
     profile?.person?.workerType === "contractor" ||
     profile?.user?.role === "contractor";
-  const sections = SECTIONS.filter((s) => !(isContractor && s.id === "performance"));
+  // Task #386 — Delegates is a partner-only surface (partners grant scoped
+  // delegations to EAs); Assist is the EA workspace, shown to the self-only
+  // personas (employees/contractors — the page explains itself when the
+  // caller isn't a designated EA).
+  const role = profile?.user?.role;
+  const isPartnerRole = role === "partner" || role === "founding_partner";
+  const isSelfOnlyRole = role === "employee" || role === "contractor";
+  const sections = SECTIONS.filter((s) => {
+    if (isContractor && s.id === "performance") return false;
+    if (s.id === "delegates") return isPartnerRole;
+    if (s.id === "assist") return isSelfOnlyRole;
+    return true;
+  });
 
   // Time tab: ONE header. The Timesheet grid reports its loaded week up
   // here so the page hero reads "Timesheet — 2026-W29" (instead of the
@@ -111,6 +128,16 @@ export default function MeHome() {
           headline: "Learning",
           lede: "Assigned training and your completion record.",
         };
+      case "delegates":
+        return {
+          headline: "My delegates",
+          lede: "Delegate timesheets, expenses and meeting notes to an Executive Assistant — and review what they entered on your behalf.",
+        };
+      case "assist":
+        return {
+          headline: "Assist",
+          lede: "Enter timesheets, expenses and meeting notes on behalf of the partners who delegated to you.",
+        };
       default:
         return {
           headline: firstName ? `Your workspace, ${firstName}` : "Your workspace",
@@ -150,6 +177,8 @@ export default function MeHome() {
               <PerformanceSection />
             ))}
           {section === "learning" && <LearningSection />}
+          {section === "delegates" && <MeDelegates />}
+          {section === "assist" && <MeAssist />}
         </div>
       </div>
     </div>

@@ -67,6 +67,7 @@ import meRoutes from "./meRoutes";
 import payRoutes from "./payRoutes";
 // Task #53 — Me lens self-service: timesheets, leave, expense claims.
 import meSelfServiceRoutes from "./meSelfServiceRoutes";
+import delegationRoutes from "./delegationRoutes";
 // Task #55 — performance reviews/goals + training library.
 import performanceRoutes from "./performanceRoutes";
 import meProfileRoutes from "./meProfileRoutes";
@@ -252,6 +253,10 @@ router.use(payRoutes);
 // surfaces under /roster/leave-*). Mounted with meRoutes so /me/* wins
 // before broader router patterns.
 router.use(meSelfServiceRoutes);
+// Task #386 — EA delegation: partner /me/delegates/* + EA /me/assist/*.
+// Mounted with the other /me routers so the self-only-persona boundary
+// (and the /cli/* block) already covers EA personas.
+router.use(delegationRoutes);
 // Task #55 — performance reviews/goals + training library.
 router.use(performanceRoutes);
 router.use(meProfileRoutes);

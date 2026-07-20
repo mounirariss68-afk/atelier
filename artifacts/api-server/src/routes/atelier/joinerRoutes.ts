@@ -47,6 +47,7 @@ import { revokeAllSessions } from "../../lib/auth/session";
 import { personaToWire } from "./personaCookie";
 import { isFoundingPartner, isHr } from "./personaRoles";
 import { emitSelfNotification } from "./meRoutes";
+import { autoRevokeDelegationsForUser } from "./delegationRoutes";
 
 const router: IRouter = Router();
 
@@ -201,6 +202,8 @@ router.post("/roster/joiners", async (req, res, next) => {
       parsed.data.title?.trim() ||
       (workerType === "employee" ? "Employee" : "Contractor");
     const startDate = parsed.data.startDate?.trim() || null;
+    // Task #386 — EA designation on the roster record.
+    const isExecutiveAssistant = parsed.data.isExecutiveAssistant === true;
     if (!fullName || !email.includes("@")) {
       res.status(400).json({ error: "invalid-body", message: "A full name and a valid email are required." });
       return;
@@ -259,6 +262,7 @@ router.post("/roster/joiners", async (req, res, next) => {
           role,
           title,
           startDate,
+          isExecutiveAssistant,
         });
       } else {
         personId = rid("ct");
@@ -268,6 +272,7 @@ router.post("/roster/joiners", async (req, res, next) => {
           fullName,
           email,
           contractStart: startDate,
+          isExecutiveAssistant,
         });
       }
 
@@ -292,7 +297,7 @@ router.post("/roster/joiners", async (req, res, next) => {
         actorId: me.id,
         actorLabel: me.name,
         action: "joiner_added",
-        payload: { email, workerType, personId, title },
+        payload: { email, workerType, personId, title, isExecutiveAssistant },
         payloadSummary: `${me.name} added ${workerType} ${fullName} (${email}) with a temporary login`,
       });
 
@@ -616,9 +621,19 @@ async function setDisabled(
     .update(atelierAuthCredentials)
     .set({ disabled, updatedAt: new Date() })
     .where(eq(atelierAuthCredentials.email, cred.email));
+  let delegationsRevoked = 0;
   if (disabled) {
     // Kill every live session immediately — a leaver's open tab dies now.
     await revokeAllSessions(userId);
+    // Task #386 — dangling EA delegations are an audit hazard: deactivating
+    // either party (partner or EA) auto-revokes every active grant they are
+    // on. Reactivation does NOT restore them — the partner must re-grant.
+    delegationsRevoked = await autoRevokeDelegationsForUser({
+      orgId: me.orgId,
+      userId,
+      actor: me,
+      targetName: user.name,
+    });
   }
 
   let rosterPrior: Record<string, unknown> | null = null;
@@ -700,6 +715,7 @@ async function setDisabled(
     payload: {
       email: cred.email,
       disabled,
+      ...(delegationsRevoked > 0 ? { eaDelegationsRevoked: delegationsRevoked } : {}),
       ...(rosterPrior ? { rosterPrior, rosterMarked } : {}),
       ...(rosterRestored ? { rosterRestored } : {}),
     },

@@ -8142,6 +8142,9 @@ components:
         workerType: { type: string, enum: [employee, contractor] }
         title: { type: string, maxLength: 200 }
         startDate: { type: string, maxLength: 10 }
+        isExecutiveAssistant:
+          type: boolean
+          description: Task #386 — mark the joiner as an Executive Assistant (delegable by partners).
 
     AtelierAddJoinerResponse:
       type: object

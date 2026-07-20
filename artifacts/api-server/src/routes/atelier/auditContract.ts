@@ -101,6 +101,18 @@ export const V3_AUDIT_ACTIONS = {
   // Task #335 — feedback + undo audit actions.
   CLI_FEEDBACK: "cli.feedback",
   CLI_UNDO: "cli.undo",
+
+  // EA delegation — Task #386 (partner ↔ Executive Assistant grants +
+  // delegated pending items; every row carries dual attribution:
+  // actor = the person acting, payload.onBehalfOf = the principal).
+  EA_DELEGATION_CREATED: "ea.delegation.created",
+  EA_DELEGATION_UPDATED: "ea.delegation.updated",
+  EA_DELEGATION_REVOKED: "ea.delegation.revoked",
+  EA_ITEM_SUBMITTED: "ea.item.submitted",
+  EA_ITEM_UPDATED: "ea.item.updated",
+  EA_ITEM_RESUBMITTED: "ea.item.resubmitted",
+  EA_ITEM_APPROVED: "ea.item.approved",
+  EA_ITEM_REJECTED: "ea.item.rejected",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

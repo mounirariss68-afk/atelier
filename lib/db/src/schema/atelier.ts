@@ -2180,6 +2180,10 @@ export const atelierEmployees = pgTable(
     homeAddress: text("home_address"),
     bio: text("bio"),
     notes: text("notes"),
+    // Task #386 — Executive Assistant designation. EAs can be delegated
+    // partner admin work (timesheets/expenses/meetings) via
+    // atelier_ea_delegations.
+    isExecutiveAssistant: boolean("is_executive_assistant").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -2244,6 +2248,9 @@ export const atelierContractors = pgTable(
     homeAddress: text("home_address"),
     bio: text("bio"),
     notes: text("notes"),
+    // Task #386 — Executive Assistant designation (fractional EAs are
+    // contractors; they keep the normal contractor weekly timesheet).
+    isExecutiveAssistant: boolean("is_executive_assistant").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
@@ -4319,5 +4326,74 @@ export const atelierFinanceComplianceEntries = pgTable(
   (t) => [
     index("idx_atelier_fin_comp_org").on(t.orgId),
     index("idx_atelier_fin_comp_register").on(t.register),
+  ],
+);
+
+/* ============================================================
+   EA delegation (Task #386) — partners delegate admin work
+   (timesheets, expenses, meetings/tasks) to Executive
+   Assistants. Grants are explicit, scoped, many-to-many and
+   revocable; delegated entries land as pending items the
+   partner must approve/reject before they enter the normal
+   downstream approval ladders.
+   ============================================================ */
+export const atelierEaDelegations = pgTable(
+  "atelier_ea_delegations",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // atelier_users.id of the delegating partner (principal).
+    partnerUserId: text("partner_user_id").notNull(),
+    // atelier_users.id of the Executive Assistant (delegate).
+    eaUserId: text("ea_user_id").notNull(),
+    // Delegated task areas: subset of timesheets | expenses | meetings_tasks.
+    scopes: jsonb("scopes").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("active"), // active | revoked
+    revokedAt: timestamp("revoked_at"),
+    revokedByUserId: text("revoked_by_user_id"),
+    // manual | partner_deactivated | ea_deactivated
+    revokedReason: text("revoked_reason"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_atelier_ea_deleg_partner").on(t.partnerUserId),
+    index("idx_atelier_ea_deleg_ea").on(t.eaUserId),
+    index("idx_atelier_ea_deleg_org").on(t.orgId),
+  ],
+);
+
+export const atelierEaPendingItems = pgTable(
+  "atelier_ea_pending_items",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    delegationId: text("delegation_id").notNull(),
+    partnerUserId: text("partner_user_id").notNull(),
+    eaUserId: text("ea_user_id").notNull(),
+    // timesheet_entry | expense | meeting_task
+    kind: text("kind").notNull(),
+    // The proposed artifact, validated at the route layer per kind.
+    payload: jsonb("payload").notNull().$type<Record<string, unknown>>(),
+    // EA-uploaded receipt (expense kind) — private object path owned by
+    // the EA; the download route additionally admits partner + HR.
+    receiptFileRef: text("receipt_file_ref"),
+    status: text("status").notNull().default("pending"), // pending | approved | rejected
+    rejectionReason: text("rejection_reason"),
+    decidedAt: timestamp("decided_at"),
+    decidedByUserId: text("decided_by_user_id"),
+    // Id of the artifact created at approval (timesheet entry id /
+    // expense id / self-notification id) — the idempotency token.
+    appliedRef: text("applied_ref"),
+    resubmittedAt: timestamp("resubmitted_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_ea_pending_partner").on(t.partnerUserId, t.status),
+    index("idx_atelier_ea_pending_ea").on(t.eaUserId, t.status),
+    index("idx_atelier_ea_pending_org").on(t.orgId),
   ],
 );

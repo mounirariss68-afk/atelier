@@ -198,6 +198,10 @@ export const LENSES: readonly LensDef[] = [
       { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
       { id: "performance", label: "Performance", href: "/me/performance" },
       { id: "learning", label: "Learning", href: "/me/learning" },
+      // Task #386 — role-gated in LensSectionTabs: Delegates is
+      // partner-tier only; Assist is the EA workspace (self-only roles).
+      { id: "delegates", label: "Delegates", href: "/me/delegates" },
+      { id: "assist", label: "Assist", href: "/me/assist" },
     ],
   },
 ] as const;

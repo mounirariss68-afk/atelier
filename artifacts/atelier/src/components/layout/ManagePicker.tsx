@@ -40,9 +40,17 @@ export function LensSectionTabs({ userId, role }: ManagePickerProps) {
   // Task #50/#242 — contractors have no Performance section on the Me
   // lens (reviews & goals are employee-only; the server 403s them too),
   // so the top-bar menu must not offer it either.
+  // Task #386 — on the Me lens, "Delegates" is partner-tier only and
+  // "Assist" (the EA workspace) shows only for the self-only personas.
+  const isPartnerTier = role === "partner" || role === "founding_partner";
   const sections =
-    lens.id === "me" && role === "contractor"
-      ? lens.sections.filter((s) => s.id !== "performance")
+    lens.id === "me"
+      ? lens.sections.filter((s) => {
+          if (role === "contractor" && s.id === "performance") return false;
+          if (s.id === "delegates") return isPartnerTier;
+          if (s.id === "assist") return role === "employee" || role === "contractor";
+          return true;
+        })
       : lens.sections;
   const more = lens.more ?? [];
   // A section is active on an exact match, or a prefix match when no

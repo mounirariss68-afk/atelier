@@ -23,4 +23,6 @@ export interface AtelierAddJoinerInput {
   title?: string;
   /** @maxLength 10 */
   startDate?: string;
+  /** Task */
+  isExecutiveAssistant?: boolean;
 }

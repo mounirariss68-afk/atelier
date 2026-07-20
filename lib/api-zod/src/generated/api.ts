@@ -5269,6 +5269,7 @@ export const AtelierAddJoinerBody = zod.object({
   workerType: zod.enum(["employee", "contractor"]),
   title: zod.string().max(atelierAddJoinerBodyTitleMax).optional(),
   startDate: zod.string().max(atelierAddJoinerBodyStartDateMax).optional(),
+  isExecutiveAssistant: zod.boolean().optional().describe("Task"),
 });
 
 /**

@@ -87,3 +87,4 @@
 - [Mobile store icon pipeline](atelier-mobile-store-icons.md) — iOS icon must stay alpha-free; adaptive foreground ≤313px radius (now 96%); verify via temp-copy `expo prebuild`, never in-repo.
 - [Mobile meeting reminders](atelier-mobile-meeting-reminders.md) — device-local expo-notifications, opt-in OFF default; sync cancels stale "mtgbrief-" ids; tap deep-links via focusMeetingId/focusAccountId params.
 - [RN shrink-wrap flex text collapse](rn-shrinkwrap-flex-text.md) — alignItems parents shrink-wrap children; flex:1 Text rows collapse to ~0 width (one char/line); use width, not maxWidth, on the bubble.
+- [Atelier EA delegation](atelier-ea-delegation.md) — EA acting-for: pending items apply on partner approve with dual attribution; revoke re-checked per edit; receipt gate is the only ACL widening.
