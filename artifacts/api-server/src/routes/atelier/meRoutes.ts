@@ -250,7 +250,7 @@ function notifToWire(n: typeof atelierSelfNotifications.$inferSelect) {
   };
 }
 
-// @cli-skip: self-scope identity read; no CLI shape (Task #50)
+// @cli-skip: covered by CLI capability me.profile (Task #405)
 router.get("/me/profile", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -267,7 +267,7 @@ router.get("/me/profile", async (req, res, next) => {
   }
 });
 
-// @cli-skip: self-scope notification read; no CLI shape (Task #50)
+// @cli-skip: covered by CLI capability me.notifications (Task #405)
 router.get("/me/notifications", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -340,7 +340,7 @@ async function resolvePerformanceSubject(
   return { employeeId: person?.workerType === "employee" ? person.id : null };
 }
 
-// @cli-skip: self-scope performance read; no CLI shape (Task #55)
+// @cli-skip: covered by CLI capability me.reviews (Task #405)
 router.get("/me/reviews", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -385,7 +385,7 @@ router.get("/me/reviews", async (req, res, next) => {
   }
 });
 
-// @cli-skip: self-scope goals read; no CLI shape (Task #55)
+// @cli-skip: covered by CLI capability me.goals (Task #405)
 router.get("/me/goals", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -485,8 +485,7 @@ async function loadMyMaterial(
   return m ?? null;
 }
 
-// @cli-skip: self-scope learning read; no CLI shape (Task #55)
-// @cli-skip: self-scope performance read; no CLI shape (Task #58)
+// @cli-skip: self-scope performance stats read; no CLI shape (Task #58)
 router.get("/me/performance", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -550,7 +549,7 @@ router.get("/me/performance", async (req, res, next) => {
   }
 });
 
-// @cli-skip: self-scope learning read; no CLI shape (Task #55)
+// @cli-skip: covered by CLI capability me.learning (Task #405)
 router.get("/me/learning", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

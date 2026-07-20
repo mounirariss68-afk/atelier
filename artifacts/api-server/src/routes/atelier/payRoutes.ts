@@ -316,7 +316,7 @@ function insuranceToWire(row: typeof atelierPersonInsurance.$inferSelect) {
 // Self-scope: /me/pay
 // ------------------------------------------------------------------
 
-// @cli-skip: self-scope pay bundle read; no CLI shape (Task #54)
+// @cli-skip: covered by CLI capability me.pay_documents (Task #405)
 router.get("/me/pay", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);

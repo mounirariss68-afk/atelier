@@ -627,7 +627,7 @@ async function canDecideLeaveFor(
   return mgrUserIds.has(me.id);
 }
 
-async function computeLeaveBalance(orgId: string, personId: string, year: number) {
+export async function computeLeaveBalance(orgId: string, personId: string, year: number) {
   const ent = await getEntitlement(orgId, personId, year);
   const rows = await db
     .select()
@@ -662,7 +662,7 @@ async function computeLeaveBalance(orgId: string, personId: string, year: number
   };
 }
 
-// @cli-skip: self-scope leave read; no CLI shape (Task #53)
+// @cli-skip: covered by CLI capability me.leave (Task #405)
 router.get("/me/leave", async (req, res, next) => {
   try {
     const ctx = await requireSelfPerson(req, res);

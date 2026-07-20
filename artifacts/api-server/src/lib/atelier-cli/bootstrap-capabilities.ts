@@ -53,6 +53,11 @@ import "./orchestrator-capabilities.js";
 import "./coverage-capabilities.js";
 // Task #159 — contract lifecycle (prepare / send-for-signature / status).
 import "./contract-capabilities.js";
+// Task #405 — Me-lens self-service reads (leave, payslips, contract,
+// reviews/goals, learning, notifications, profile). Every entry is
+// identity-locked: empty input schema + subject always resolved from
+// the session persona, never from model-supplied arguments.
+import "./me-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
