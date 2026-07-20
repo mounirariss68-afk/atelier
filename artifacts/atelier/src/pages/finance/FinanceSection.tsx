@@ -53,6 +53,7 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     lede:
       "Rate cards, e-invoice clearance, AR aging & dunning, cash application and credit notes, revenue recognition (POC, milestone, subscription).",
     subPages: [
+      { label: "Billing worklist", href: "/finance/billing/worklist", blurb: "Billing Orchestrator drafts from engagement billing rules; partner approval issues.", status: "live" },
       { label: "Rate cards & margin policy", href: "/finance/billing/rate-cards", blurb: "Day-rates by seniority and the AMBER/RED margin gates.", status: "live" },
       { label: "Invoices", href: "/wallet/invoices", blurb: "Invoice register and clearance status (ZATCA / FTA).", status: "live" },
       { label: "AR aging", href: "/wallet/ar", blurb: "Open balances by age bucket and account.", status: "live" },

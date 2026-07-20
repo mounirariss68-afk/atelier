@@ -113,6 +113,15 @@ export const V3_AUDIT_ACTIONS = {
   EA_ITEM_RESUBMITTED: "ea.item.resubmitted",
   EA_ITEM_APPROVED: "ea.item.approved",
   EA_ITEM_REJECTED: "ea.item.rejected",
+
+  // Automated billing — Task #429 (billing rules, triggers, orchestrator)
+  BILLING_RULE_CREATED: "billing.rule.created",
+  BILLING_RULE_UPDATED: "billing.rule.updated",
+  BILLING_TRIGGER_DRAFTED: "billing.trigger.drafted",
+  BILLING_TRIGGER_HELD: "billing.trigger.held",
+  BILLING_TRIGGER_RELEASED: "billing.trigger.released",
+  BILLING_TRIGGER_SKIPPED: "billing.trigger.skipped",
+  BILLING_TRIGGER_APPROVED: "billing.trigger.approved",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

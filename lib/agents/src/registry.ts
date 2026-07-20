@@ -1819,6 +1819,60 @@ export const SelfBillingClerk = defineAgent({
   evals: [],
 });
 
+// ============================================================
+// BILLING ORCHESTRATOR — Task #429 (automated billing engine)
+// ============================================================
+// Rule-based like the Bookkeeper: deterministic trigger scan +
+// invoice drafting for auditability. Drafts only — issuing is a
+// blocking partner checkpoint via the billing worklist.
+
+export const BillingOrchestrator = defineAgent({
+  id: "ag_billing_orchestrator",
+  name: "Billing Orchestrator",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Watches engagement billing rules (milestone, periodic T&M, fixed-fee installments, retainer) and materialises due billing triggers with idempotency keys, then drafts the corresponding client invoices with correct lines, currency, payment terms and issuing legal entity. Never issues — every draft waits for partner approval in the billing worklist.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/billing-orchestrator.v1.md",
+  inputSchema: z.object({
+    asOf: z.string().optional(), // ISO date; defaults to now
+    engagementId: z.string().optional(), // omit ⇒ all engagements
+    source: z.enum(["cron", "manual", "milestone_event"]).optional(),
+  }),
+  outputSchema: z.object({
+    rulesScanned: z.number(),
+    candidatesFound: z.number(),
+    triggersCreated: z.number(),
+    invoicesDrafted: z.number(),
+    triggersSkipped: z.number(),
+    drafts: z.array(
+      z.object({
+        triggerId: z.string(),
+        triggerType: z.string(),
+        engagementId: z.string(),
+        invoiceId: z.string().nullable(),
+        total: z.number(),
+        rationale: z.string(),
+      }),
+    ),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Deterministic and idempotent — a trigger's idempotency key can never bill twice.",
+    "Drafts only; never issues an invoice. Issuing requires a partner decision.",
+    "Held triggers are never drafted until a human releases them.",
+    "T&M periods with nothing unbilled are skipped visibly, not silently.",
+  ],
+  humanCheckpoints: [
+    { id: "cp_partner_issue", label: "Partner approves draft → invoice issues", decider: "partner", blocking: true },
+  ],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1880,6 +1934,8 @@ export const ATELIER_AGENTS: Agent[] = [
   Bookkeeper,
   // Finance self-billing / RCTI (Task #430)
   SelfBillingClerk,
+  // Automated billing (Task #429)
+  BillingOrchestrator,
   // Account-management agents — propose-then-approve
   NextBestAction,
   RelationshipHealth,

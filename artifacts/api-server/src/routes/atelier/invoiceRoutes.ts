@@ -449,17 +449,24 @@ router.post("/wallet/invoices/:id/lines", async (req, res) => {
 });
 
 // =============================================================== issue (mint number + e-invoice)
-// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/wallet/invoices/:id/issue", async (req, res) => {
-  if (denyRestricted(req, res)) return;
-  if (denyBoardObserver(req, res)) return;
-  const me = ensurePersona(req, res);
-  if (!me) return;
-  if (!isPartnerTier(me)) {
-    res.status(403).json({ error: "forbidden", message: "Partner-tier required to issue invoices." });
-    return;
-  }
-  const invoiceId = req.params.id;
+
+/**
+ * Shared issue path (Task #429): mint a gap-free invoice number in a
+ * SELECT FOR UPDATE transaction, flip draft → issued, submit the
+ * e-invoice stub and write the issue audit. Used by both the direct
+ * `POST /wallet/invoices/:id/issue` route and the billing-worklist
+ * approve endpoint (billingRoutes.ts) so the two can never drift.
+ * The caller is responsible for the partner-tier authorization check.
+ */
+export async function issueInvoiceCore(args: {
+  invoiceId: string;
+  actor: typeof atelierUsers.$inferSelect;
+}): Promise<
+  | { ok: true; invoice: Awaited<ReturnType<typeof loadFull>>; invoiceNumber: string }
+  | { ok: false; httpStatus: number; error: string; message?: string }
+> {
+  const me = args.actor;
+  const invoiceId = args.invoiceId;
 
   const result = await db.transaction(async (tx) => {
     const [inv] = await tx
@@ -531,12 +538,10 @@ router.post("/wallet/invoices/:id/issue", async (req, res) => {
 
   if ("error" in result && result.error) {
     const status = result.error === "not_found" ? 404 : result.error === "zatca_vrn_required" ? 422 : 400;
-    res.status(status).json({ error: result.error, message: (result as { msg?: string }).msg });
-    return;
+    return { ok: false, httpStatus: status, error: result.error, message: (result as { msg?: string }).msg };
   }
   if (!("ok" in result) || !result.ok) {
-    res.status(500).json({ error: "issue_failed" });
-    return;
+    return { ok: false, httpStatus: 500, error: "issue_failed" };
   }
 
   // Outside the tx: e-invoice channel submission (stub).
@@ -572,7 +577,29 @@ router.post("/wallet/invoices/:id/issue", async (req, res) => {
     payload: { invoiceNumber: result.invoiceNumber, total: result.inv.total },
     summary: `Issued ${result.invoiceNumber} ($${result.inv.total})`,
   });
-  res.json(await loadFull(me.orgId, result.inv.id));
+  return {
+    ok: true,
+    invoice: await loadFull(me.orgId, result.inv.id),
+    invoiceNumber: result.invoiceNumber,
+  };
+}
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/wallet/invoices/:id/issue", async (req, res) => {
+  if (denyRestricted(req, res)) return;
+  if (denyBoardObserver(req, res)) return;
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isPartnerTier(me)) {
+    res.status(403).json({ error: "forbidden", message: "Partner-tier required to issue invoices." });
+    return;
+  }
+  const out = await issueInvoiceCore({ invoiceId: req.params.id, actor: me });
+  if (!out.ok) {
+    res.status(out.httpStatus).json({ error: out.error, message: out.message });
+    return;
+  }
+  res.json(out.invoice);
 });
 
 // =============================================================== void (irreversible)

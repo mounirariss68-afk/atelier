@@ -17,6 +17,7 @@ import { Link, useLocation } from "wouter";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { Card, MonoChip, PillButton, SectionHead } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
+import { BillingRulesCard } from "@/components/tabs/BillingRulesCard";
 
 const API = "/api/atelier";
 
@@ -492,6 +493,9 @@ export function FinancialsTab({ engId }: { engId: string }) {
           </table>
         )}
       </Card>
+
+      {/* Billing rules — Task #429 automated invoicing setup */}
+      <BillingRulesCard engId={engId} />
 
       {/* Collections */}
       <Card className="p-5" data-testid="collections">

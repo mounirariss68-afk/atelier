@@ -80,6 +80,7 @@ import skillGraphRoutes from "./skillGraphRoutes";
 import ledgerRoutes from "./ledgerRoutes";
 import walletRoutes from "./walletRoutes";
 import invoiceRoutes from "./invoiceRoutes";
+import billingRoutes from "./billingRoutes";
 import referenceRoutes from "./referenceRoutes";
 import principleOverrideRoutes from "./principleOverrideRoutes";
 import firmProfileRoutes from "./firmProfileRoutes";
@@ -322,6 +323,8 @@ router.use(ledgerRoutes);
 // Task #259 — v3 Wallet: Expenses + Auditor + Policy + FX + VAT.
 router.use(walletRoutes);
 router.use(invoiceRoutes);
+// Task #429 — Automated billing: rules, triggers, orchestrator worklist.
+router.use(billingRoutes);
 router.use("/wallet/bank", bankRoutes);
 router.use("/wallet/cash", cashRoutes);
 router.use("/crm/renewals", renewalRoutes);

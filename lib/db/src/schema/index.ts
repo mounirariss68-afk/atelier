@@ -21,3 +21,4 @@ export * from "./atelier-contract-lifecycle";
 export * from "./atelier-ms";
 export * from "./atelier-gl";
 export * from "./atelier-selfbilling";
+export * from "./atelier-billing";

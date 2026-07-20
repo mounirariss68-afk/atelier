@@ -22,6 +22,10 @@ const SESSION_CLEANUP_CRON = process.env.SESSION_CLEANUP_CRON ?? "0 2 * * *";
 // Every 30 min — auto-log ended Microsoft 365 meetings as CRM activities
 // (Task #336). Cheap no-op when MS is unconfigured or nobody is connected.
 const MS_AUTOLOG_CRON = process.env.MS_AUTOLOG_CRON ?? "*/30 * * * *";
+// Daily 04:30 UTC — Billing Orchestrator (Task #429): scan engagement
+// billing rules, materialise due triggers, draft invoices for partner
+// approval. Deterministic + idempotent, so a re-run is always safe.
+const BILLING_ORCHESTRATOR_CRON = process.env.BILLING_ORCHESTRATOR_CRON ?? "30 4 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
@@ -30,6 +34,7 @@ let walletPaymentProposerTask: ScheduledTask | null = null;
 let winLossSlaTask: ScheduledTask | null = null;
 let sessionCleanupTask: ScheduledTask | null = null;
 let msAutologTask: ScheduledTask | null = null;
+let billingOrchestratorTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -235,6 +240,34 @@ export function startScheduler(): void {
       "Invalid MS_AUTOLOG_CRON expression, MS meeting auto-log not scheduled",
     );
   }
+
+  // Billing Orchestrator (Task #429) — daily scan of engagement billing
+  // rules → due triggers → draft invoices awaiting partner approval.
+  if (cron.validate(BILLING_ORCHESTRATOR_CRON)) {
+    billingOrchestratorTask = cron.schedule(
+      BILLING_ORCHESTRATOR_CRON,
+      async () => {
+        try {
+          const { runBillingOrchestrator } = await import("./atelier-agents/billing-orchestrator.js");
+          const out = await runBillingOrchestrator({
+            orgId: "aico",
+            input: { source: "cron" },
+            triggeredByUserId: null,
+          });
+          logger.info(out.output, "Billing Orchestrator scheduled run finished");
+        } catch (err) {
+          logger.error({ err }, "Billing Orchestrator scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: BILLING_ORCHESTRATOR_CRON }, "Billing Orchestrator scheduler started");
+  } else {
+    logger.error(
+      { cron: BILLING_ORCHESTRATOR_CRON },
+      "Invalid BILLING_ORCHESTRATOR_CRON expression, Billing Orchestrator not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -272,6 +305,11 @@ export function stopScheduler(): void {
     msAutologTask.stop();
     msAutologTask = null;
     logger.info("MS meeting auto-log scheduler stopped");
+  }
+  if (billingOrchestratorTask) {
+    billingOrchestratorTask.stop();
+    billingOrchestratorTask = null;
+    logger.info("Billing Orchestrator scheduler stopped");
   }
 }
 

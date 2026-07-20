@@ -126,6 +126,7 @@ import FinanceReportsBoardPack from "@/pages/finance/FinanceReportsBoardPack";
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
 import EngagementHealth from "@/pages/finance/EngagementHealth";
 import EngagementPnl from "@/pages/finance/EngagementPnl";
+import BillingWorklist from "@/pages/finance/BillingWorklist";
 import FinanceClose from "@/pages/finance/FinanceClose";
 import LedgerPage from "@/pages/finance/LedgerPage";
 // Task #420 — Wave 8: FP&A driver-based plan surfaces. Renewals/Scenarios
@@ -704,6 +705,7 @@ function Router() {
         <Route path="/finance" component={FinanceHome} />
         <Route path="/finance/entities" component={FinanceEntities} />
         <Route path="/finance/entities/:id" component={FinanceEntityDetail} />
+        <Route path="/finance/billing/worklist" component={BillingWorklist} />
         <Route path="/finance/billing">{() => <FinanceSection sectionId="billing" />}</Route>
         <Route path="/finance/payables">{() => <FinanceSection sectionId="payables" />}</Route>
         <Route path="/finance/payables/self-billing" component={FinancePayablesSelfBilling} />

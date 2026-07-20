@@ -436,18 +436,45 @@ router.post("/revrec/milestones/:id/earn", (req, res) => {
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
-router.post("/revrec/milestones/:id/mark-invoiceable", (req, res) => {
+router.post("/revrec/milestones/:id/mark-invoiceable", async (req, res) => {
   if (!canWriteFinance(req.atelierPersona?.role)) {
     res.status(403).json({ error: "finance-required" });
     return;
   }
-  return transitionMilestone(
+  await transitionMilestone(
     req,
     res,
     "invoiceable",
     { invoiceableAt: new Date() },
     ["earned"],
   );
+  // Task #429 — milestone-event billing run: when a milestone becomes
+  // invoiceable, fire the Billing Orchestrator for that engagement
+  // (fire-and-forget; the transition response is already sent). The
+  // engine's idempotency keys make a duplicate run harmless.
+  if (res.statusCode < 300) {
+    try {
+      const [ms] = await db
+        .select({ engagementId: atelierRevenueMilestone.engagementId, orgId: atelierRevenueMilestone.orgId })
+        .from(atelierRevenueMilestone)
+        .where(eq(atelierRevenueMilestone.id, req.params.id));
+      if (ms) {
+        void import("../../lib/atelier-agents/billing-orchestrator.js")
+          .then(({ runBillingOrchestrator }) =>
+            runBillingOrchestrator({
+              orgId: ms.orgId,
+              input: { engagementId: ms.engagementId, source: "milestone_event" },
+              triggeredByUserId: req.atelierPersona?.id ?? null,
+            }),
+          )
+          .catch((err) => {
+            console.error("[billing-orchestrator] milestone-event run failed", err);
+          });
+      }
+    } catch (err) {
+      console.error("[billing-orchestrator] milestone-event hook failed", err);
+    }
+  }
 });
 
 // ===========================================================================
