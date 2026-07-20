@@ -743,13 +743,39 @@ router.get("/finance/reports/periods", (req, res) => {
   res.json({ periods: PERIODS, current: CURRENT_PERIOD });
 });
 
+// Task #296 — presentation currency is user-selectable; USD is the default.
+const PRESENTATION_CCYS = new Set(["USD", "GBP", "EUR", "AED", "SAR"]);
+
+function parsePresentationCurrency(req: Request): string {
+  const raw = ((req.query.currency as string) ?? "USD").toUpperCase();
+  return PRESENTATION_CCYS.has(raw) ? raw : "USD";
+}
+
 function parseQuery(req: Request) {
   const periodId = (req.query.period as string) ?? CURRENT_PERIOD.id;
   const scope = ((req.query.scope as string) ?? "ytd") as Scope;
   const entity = (req.query.entity as string) || null; // null = consolidated
-  const currency = ((req.query.currency as string) ?? "GBP").toUpperCase();
+  const currency = parsePresentationCurrency(req);
   const period = periodById(periodId) ?? CURRENT_PERIOD;
   return { period, scope: ["mtd", "qtd", "ytd", "r12"].includes(scope) ? scope : "ytd" as Scope, entity, currency };
+}
+
+// Eliminations are computed on the internal GBP pivot; convert them to the
+// requested presentation currency so client chips never hardcode GBP.
+// NOTE: field names keep the historical "Gbp" suffix for wire compatibility —
+// values are in the response's presentation currency.
+function convertElims(e: Eliminations, target: string, period: Period): Eliminations {
+  if (target === "GBP") return e;
+  // rateToGbp(X) = GBP per 1 unit of X, so GBP -> target divides by the rate.
+  const avg = averageRateToGbp(target, period);
+  const close = closingRateToGbp(target, period);
+  return {
+    intercoRevenueGbp: round(e.intercoRevenueGbp / avg),
+    intercoCostGbp: round(e.intercoCostGbp / avg),
+    intercoArGbp: round(e.intercoArGbp / close),
+    intercoApGbp: round(e.intercoApGbp / close),
+    intercoLoanGbp: round(e.intercoLoanGbp / close),
+  };
 }
 
 function entitiesIn(scope: string | null): { id: string; baseCurrency: string; shortName: string }[] {
@@ -845,13 +871,14 @@ router.get("/finance/reports/pnl", async (req, res) => {
 
   res.json({
     period: period.id, scope, currency, entity: entity ?? null, periodsCovered: periods.map((p) => p.id),
-    perEntity, consolidated: consolidatedRow, eliminations: elims,
+    perEntity, consolidated: consolidatedRow, eliminations: elims ? convertElims(elims, currency, period) : null,
     variance: v, commentary,
   });
 });
 
 function convertPnl(p: PnlLines, target: string, period: Period): PnlLines {
-  const r = target === "GBP" ? 1 : 1 / averageRateToGbp(target, period);
+  // rateToGbp(X) = GBP per 1 unit of X, so GBP -> target divides by the rate.
+  const r = target === "GBP" ? 1 : averageRateToGbp(target, period);
   const f = (n: number) => round(n / r);
   return {
     grossRevenue: f(p.grossRevenue), intercoRevenue: f(p.intercoRevenue), netRevenue: f(p.netRevenue),
@@ -944,7 +971,7 @@ router.get("/finance/reports/bs", async (req, res) => {
     consolidatedRow = currency !== "GBP" ? convertBs(cons, currency, period) : cons;
   }
 
-  res.json({ period: period.id, currency, entity: entity ?? null, perEntity, consolidated: consolidatedRow, eliminations: elims });
+  res.json({ period: period.id, currency, entity: entity ?? null, perEntity, consolidated: consolidatedRow, eliminations: elims ? convertElims(elims, currency, period) : null });
 });
 
 function sumBs(rows: BsLines[]): BsLines {
@@ -964,7 +991,8 @@ function sumBs(rows: BsLines[]): BsLines {
 }
 
 function convertBs(b: BsLines, target: string, period: Period): BsLines {
-  const r = target === "GBP" ? 1 : 1 / closingRateToGbp(target, period);
+  // rateToGbp(X) = GBP per 1 unit of X, so GBP -> target divides by the rate.
+  const r = target === "GBP" ? 1 : closingRateToGbp(target, period);
   const f = (n: number) => round(n / r);
   return {
     cash: f(b.cash), ar: f(b.ar), intercoAr: f(b.intercoAr), wip: f(b.wip),
@@ -1023,7 +1051,8 @@ function aggregateCf(rows: CfLines[]): CfLines {
 }
 
 function convertCf(c: CfLines, target: string, period: Period): CfLines {
-  const r = target === "GBP" ? 1 : 1 / averageRateToGbp(target, period);
+  // rateToGbp(X) = GBP per 1 unit of X, so GBP -> target divides by the rate.
+  const r = target === "GBP" ? 1 : averageRateToGbp(target, period);
   const f = (n: number) => round(n / r);
   return {
     netIncome: f(c.netIncome), depreciation: f(c.depreciation),
@@ -1041,9 +1070,9 @@ router.get("/finance/reports/profitability", async (req, res) => {
   const me = ensurePersona(req, res); if (!me) return;
   if (denyRecruiter(me, res)) return;
   await ensureFacts(me.orgId);
-  const { period, scope } = parseQuery(req);
+  const { period, scope, currency } = parseQuery(req);
   const periods = periodsForScope(scope, period);
-  const cube = buildCube(periods);
+  const cube = convertCubeRows(buildCube(periods), currency, period);
   // Pre-aggregated rollups by dimension.
   const rollup = (key: keyof CubeRow) => {
     const m = new Map<string, { dim: string; revenueGbp: number; directCostGbp: number; grossMarginGbp: number; engagementCount: number }>();
@@ -1059,7 +1088,7 @@ router.get("/finance/reports/profitability", async (req, res) => {
     return Array.from(m.values()).map((x) => ({ ...x, grossMarginPct: pct(x.grossMarginGbp, x.revenueGbp) })).sort((a, b) => b.revenueGbp - a.revenueGbp);
   };
   res.json({
-    period: period.id, scope, periodsCovered: periods.map((p) => p.id),
+    period: period.id, scope, currency, periodsCovered: periods.map((p) => p.id),
     rows: cube,
     byClient: rollup("client"),
     byPartner: rollup("partner"),
@@ -1067,6 +1096,16 @@ router.get("/finance/reports/profitability", async (req, res) => {
     byEngagementType: rollup("engagementType"),
   });
 });
+
+// Cube values are built on the GBP pivot; convert to the presentation
+// currency (field names keep the "Gbp" suffix for wire compatibility).
+function convertCubeRows(rows: CubeRow[], target: string, period: Period): CubeRow[] {
+  if (target === "GBP") return rows;
+  // rateToGbp(X) = GBP per 1 unit of X, so GBP -> target divides by the rate.
+  const r = averageRateToGbp(target, period);
+  const f = (n: number) => round(n / r);
+  return rows.map((x) => ({ ...x, revenueGbp: f(x.revenueGbp), directCostGbp: f(x.directCostGbp), grossMarginGbp: f(x.grossMarginGbp) }));
+}
 
 // ----- Board pack assembly
 // @cli-skip: pending Task #340 read-parity migration
@@ -1076,6 +1115,7 @@ router.get("/finance/reports/board-pack", async (req, res) => {
   await ensureFacts(me.orgId);
   const periodId = (req.query.period as string) ?? CURRENT_PERIOD.id;
   const period = periodById(periodId) ?? CURRENT_PERIOD;
+  const currency = parsePresentationCurrency(req);
   const ytdPeriods = periodsForScope("ytd", period);
   const pyPeriods = priorYearScope("ytd", period);
 
@@ -1097,7 +1137,13 @@ router.get("/finance/reports/board-pack", async (req, res) => {
     const s = aggregatePnl(ytdPerEntity.map((x) => x[key]));
     return { ...s, intercoRevenue: 0, intercoCost: 0, netRevenue: s.netRevenue - elimsPnl.intercoRevenueGbp };
   };
-  const consPnl = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
+  const consPnlGbp = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
+  const consPnl = currency === "GBP" ? consPnlGbp : {
+    actual: convertPnl(consPnlGbp.actual, currency, period),
+    budget: convertPnl(consPnlGbp.budget, currency, period),
+    forecast: convertPnl(consPnlGbp.forecast, currency, period),
+    priorYear: convertPnl(consPnlGbp.priorYear, currency, period),
+  };
   const v = buildPnlVariance(consPnl.actual, consPnl.budget, consPnl.forecast, consPnl.priorYear);
   const noData = pnlAllZero(consPnl);
   const commentary = noData ? [NO_FINANCIAL_DATA_NOTE] : buildPnlCommentary(v);
@@ -1114,6 +1160,7 @@ router.get("/finance/reports/board-pack", async (req, res) => {
     totalLiabilitiesAndEquity: 0,
   };
   consBs.totalLiabilitiesAndEquity = consBs.totalLiabilities + consBs.totalEquity;
+  const consBsOut = currency === "GBP" ? consBs : convertBs(consBs, currency, period);
 
   // CF YTD
   const cfPerEntity = entitiesIn(null).map((e) => {
@@ -1123,32 +1170,33 @@ router.get("/finance/reports/board-pack", async (req, res) => {
     const adj: CfLines = { ...agg, openingCash: startBs.cash - agg.netChangeInCash, closingCash: endBs.cash };
     return translateCfToGbp(adj, e.baseCurrency, period);
   });
-  const consCf = aggregateCf(cfPerEntity);
+  const consCfGbp = aggregateCf(cfPerEntity);
+  const consCf = currency === "GBP" ? consCfGbp : convertCf(consCfGbp, currency, period);
 
   // Profitability highlights
-  const cube = buildCube(ytdPeriods);
+  const cube = convertCubeRows(buildCube(ytdPeriods), currency, period);
   const top5Revenue = cube.slice().sort((a, b) => b.revenueGbp - a.revenueGbp).slice(0, 5);
   const bottom5Margin = cube.slice().sort((a, b) => a.grossMarginPct - b.grossMarginPct).slice(0, 5);
 
   res.json({
     period: period.id, periodLabel: period.label,
-    presentationCurrency: "GBP",
+    presentationCurrency: currency,
     sections: [
       { id: "exec_summary", title: "Executive summary", commentary },
-      { id: "pnl", title: "Consolidated P&L (YTD)", consolidated: consPnl, variance: v, eliminations: elimsPnl },
-      { id: "bs", title: "Consolidated Balance Sheet", consolidated: consBs, eliminations: elimsBs },
+      { id: "pnl", title: "Consolidated P&L (YTD)", consolidated: consPnl, variance: v, eliminations: convertElims(elimsPnl, currency, period) },
+      { id: "bs", title: "Consolidated Balance Sheet", consolidated: consBsOut, eliminations: convertElims(elimsBs, currency, period) },
       { id: "cf", title: "Consolidated Cash Flow (YTD)", consolidated: consCf },
       { id: "profitability", title: "Profitability cube — highlights", topRevenue: top5Revenue, bottomMargin: bottom5Margin },
-      { id: "outlook", title: "Outlook & key risks", risks: deriveRisks(v, consBs) },
+      { id: "outlook", title: "Outlook & key risks", risks: deriveRisks(v, consBsOut, currency) },
     ],
   });
 });
 
-function deriveRisks(v: PnlVariance, bs: BsLines): string[] {
+function deriveRisks(v: PnlVariance, bs: BsLines, currency: string): string[] {
   const out: string[] = [];
   if (v.ebitda.vsBudgetPct < -0.05) out.push(`EBITDA running ${signed(v.ebitda.vsBudgetPct)}% vs budget — review delivery margin and utilisation.`);
   if (v.netRevenue.vsForecastPct < -0.03) out.push(`Revenue trailing forecast by ${signed(v.netRevenue.vsForecastPct)}% — refresh pipeline conversion.`);
-  if (bs.fctr < 0 && Math.abs(bs.fctr) / Math.max(1, bs.totalEquity) > 0.05) out.push(`FX translation reserve at ${bs.fctr.toLocaleString()} GBP — potential hedge review on AED/SAR exposure.`);
+  if (bs.fctr < 0 && Math.abs(bs.fctr) / Math.max(1, bs.totalEquity) > 0.05) out.push(`FX translation reserve at ${bs.fctr.toLocaleString()} ${currency} — potential hedge review on AED/SAR exposure.`);
   if (bs.cash < bs.ap + bs.accruals) out.push("Cash below current operating obligations — monitor 13-week forecast.");
   if (out.length === 0) out.push("No material risks flagged this period.");
   return out;
@@ -1162,6 +1210,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   await ensureFacts(me.orgId);
   const periodId = (req.query.period as string) ?? CURRENT_PERIOD.id;
   const period = periodById(periodId) ?? CURRENT_PERIOD;
+  const currency = parsePresentationCurrency(req);
   // Reuse the JSON assembly inline.
   const ytdPeriods = periodsForScope("ytd", period);
   const pyPeriods = priorYearScope("ytd", period);
@@ -1177,7 +1226,13 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     const s = aggregatePnl(ytdPerEntity.map((x) => x[key]));
     return { ...s, intercoRevenue: 0, intercoCost: 0, netRevenue: s.netRevenue - elimsPnl.intercoRevenueGbp };
   };
-  const consPnl = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
+  const consPnlGbp = { actual: sumK("actual"), budget: sumK("budget"), forecast: sumK("forecast"), priorYear: sumK("priorYear") };
+  const consPnl = currency === "GBP" ? consPnlGbp : {
+    actual: convertPnl(consPnlGbp.actual, currency, period),
+    budget: convertPnl(consPnlGbp.budget, currency, period),
+    forecast: convertPnl(consPnlGbp.forecast, currency, period),
+    priorYear: convertPnl(consPnlGbp.priorYear, currency, period),
+  };
   const v = buildPnlVariance(consPnl.actual, consPnl.budget, consPnl.forecast, consPnl.priorYear);
   const noData = pnlAllZero(consPnl);
   const commentary = noData ? [NO_FINANCIAL_DATA_NOTE] : buildPnlCommentary(v);
@@ -1192,6 +1247,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     totalLiabilitiesAndEquity: 0,
   };
   consBs.totalLiabilitiesAndEquity = consBs.totalLiabilities + consBs.totalEquity;
+  const consBsOut = currency === "GBP" ? consBs : convertBs(consBs, currency, period);
   const cfPerEntity = entitiesIn(null).map((e) => {
     const agg = aggregateCf(ytdPeriods.map((p) => cfLocal(e.id, p)));
     const startBs = bsLocal(e.id, ytdPeriods[0]);
@@ -1199,18 +1255,25 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     const adj: CfLines = { ...agg, openingCash: startBs.cash - agg.netChangeInCash, closingCash: endBs.cash };
     return translateCfToGbp(adj, e.baseCurrency, period);
   });
-  const consCf = aggregateCf(cfPerEntity);
-  const cube = buildCube(ytdPeriods);
+  const consCfGbp = aggregateCf(cfPerEntity);
+  const consCf = currency === "GBP" ? consCfGbp : convertCf(consCfGbp, currency, period);
+  const cube = convertCubeRows(buildCube(ytdPeriods), currency, period);
   const top5Revenue = cube.slice().sort((a, b) => b.revenueGbp - a.revenueGbp).slice(0, 5);
   const bottom5Margin = cube.slice().sort((a, b) => a.grossMarginPct - b.grossMarginPct).slice(0, 5);
-  const risks = deriveRisks(v, consBs);
+  const risks = deriveRisks(v, consBsOut, currency);
+  const elimsPnlOut = convertElims(elimsPnl, currency, period);
+  const elimsBsOut = convertElims(elimsBs, currency, period);
 
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="board-pack-${period.id}.pdf"`);
   const doc = new PDFDocument({ size: "A4", margin: 56 });
   doc.pipe(res);
 
-  const fmt = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+  const CCY_SYMBOL: Record<string, string> = { USD: "$", GBP: "£", EUR: "€" };
+  const sym = CCY_SYMBOL[currency];
+  const fmt = (n: number) => sym
+    ? `${sym}${Math.round(n).toLocaleString("en-GB")}`
+    : `${currency} ${Math.round(n).toLocaleString("en-GB")}`;
   const fmtPct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
   if (BOARD_PACK_LOGO) {
@@ -1218,7 +1281,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
     doc.moveDown(0.8);
   }
   doc.fillColor("#000").fontSize(20).text("Cognirise Group — Board Pack", { align: "left" });
-  doc.fontSize(12).fillColor("#666").text(`Period: ${period.label} · Presentation currency: GBP`);
+  doc.fontSize(12).fillColor("#666").text(`Period: ${period.label} · Presentation currency: ${currency}`);
   doc.moveDown(0.5);
   doc.fillColor("#000").fontSize(11).text(`Generated ${new Date().toISOString().slice(0, 10)} for ${me.name} (${me.role})`);
   doc.moveDown(1.5);
@@ -1229,7 +1292,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   for (const c of commentary) { doc.text(`• ${c}`); }
   doc.moveDown(1);
 
-  doc.fontSize(14).text("2. Consolidated P&L (YTD, GBP)");
+  doc.fontSize(14).text(`2. Consolidated P&L (YTD, ${currency})`);
   doc.moveDown(0.3);
   doc.fontSize(9);
   const pnlRows: Array<[string, number, number, number, number]> = [
@@ -1245,35 +1308,35 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   ];
   drawTable(doc, ["Line", "Actual", "Budget", "Forecast", "PY"], pnlRows.map((r) => [r[0], fmt(r[1]), fmt(r[2]), fmt(r[3]), fmt(r[4])]));
   doc.moveDown(0.3);
-  doc.fontSize(9).fillColor("#666").text(`Eliminations: IC revenue ${fmt(elimsPnl.intercoRevenueGbp)} netted against IC cost (zero net P&L impact).`);
+  doc.fontSize(9).fillColor("#666").text(`Eliminations: IC revenue ${fmt(elimsPnlOut.intercoRevenueGbp)} netted against IC cost (zero net P&L impact).`);
   doc.fillColor("#000");
 
   doc.addPage();
-  doc.fontSize(14).text("3. Consolidated Balance Sheet (period close, GBP)");
+  doc.fontSize(14).text(`3. Consolidated Balance Sheet (period close, ${currency})`);
   doc.moveDown(0.3);
   drawTable(doc, ["Line", "Amount"], [
-    ["Cash", fmt(consBs.cash)],
-    ["AR", fmt(consBs.ar)],
-    ["WIP", fmt(consBs.wip)],
-    ["PP&E", fmt(consBs.ppe)],
-    ["Intangible", fmt(consBs.intangible)],
-    ["Total assets", fmt(consBs.totalAssets)],
-    ["AP", fmt(consBs.ap)],
-    ["Accruals", fmt(consBs.accruals)],
-    ["Debt", fmt(consBs.debt)],
-    ["Total liabilities", fmt(consBs.totalLiabilities)],
-    ["Share capital", fmt(consBs.shareCapital)],
-    ["Retained earnings", fmt(consBs.retainedEarnings)],
-    ["FX translation reserve", fmt(consBs.fctr)],
-    ["Total equity", fmt(consBs.totalEquity)],
-    ["Total L&E", fmt(consBs.totalLiabilitiesAndEquity)],
+    ["Cash", fmt(consBsOut.cash)],
+    ["AR", fmt(consBsOut.ar)],
+    ["WIP", fmt(consBsOut.wip)],
+    ["PP&E", fmt(consBsOut.ppe)],
+    ["Intangible", fmt(consBsOut.intangible)],
+    ["Total assets", fmt(consBsOut.totalAssets)],
+    ["AP", fmt(consBsOut.ap)],
+    ["Accruals", fmt(consBsOut.accruals)],
+    ["Debt", fmt(consBsOut.debt)],
+    ["Total liabilities", fmt(consBsOut.totalLiabilities)],
+    ["Share capital", fmt(consBsOut.shareCapital)],
+    ["Retained earnings", fmt(consBsOut.retainedEarnings)],
+    ["FX translation reserve", fmt(consBsOut.fctr)],
+    ["Total equity", fmt(consBsOut.totalEquity)],
+    ["Total L&E", fmt(consBsOut.totalLiabilitiesAndEquity)],
   ]);
   doc.moveDown(0.3);
-  doc.fontSize(9).fillColor("#666").text(`IC eliminations: AR/AP ${fmt(elimsBs.intercoArGbp)} · IC loans ${fmt(elimsBs.intercoLoanGbp)}.`);
+  doc.fontSize(9).fillColor("#666").text(`IC eliminations: AR/AP ${fmt(elimsBsOut.intercoArGbp)} · IC loans ${fmt(elimsBsOut.intercoLoanGbp)}.`);
   doc.fillColor("#000");
 
   doc.moveDown(1);
-  doc.fontSize(14).text("4. Consolidated Cash Flow (YTD, GBP)");
+  doc.fontSize(14).text(`4. Consolidated Cash Flow (YTD, ${currency})`);
   doc.moveDown(0.3);
   drawTable(doc, ["Line", "Amount"], [
     ["Net income", fmt(consCf.netIncome)],

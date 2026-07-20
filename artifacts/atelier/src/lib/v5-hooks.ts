@@ -1072,18 +1072,18 @@ export function useFinanceReportsCf(period: string | null, scope: string, entity
     enabled: !!period,
   });
 }
-export function useFinanceReportsProfitability(period: string | null, scope: string) {
+export function useFinanceReportsProfitability(period: string | null, scope: string, currency = "USD") {
   return useQuery<CubeResp>({
-    queryKey: ["atelier-v5", "finance-reports-cube", period, scope],
-    queryFn: () => get<CubeResp>(`/finance/reports/profitability?period=${period ?? ""}&scope=${scope}`),
+    queryKey: ["atelier-v5", "finance-reports-cube", period, scope, currency],
+    queryFn: () => get<CubeResp>(`/finance/reports/profitability?period=${period ?? ""}&scope=${scope}&currency=${currency}`),
     staleTime: 30_000,
     enabled: !!period,
   });
 }
-export function useFinanceReportsBoardPack(period: string | null) {
+export function useFinanceReportsBoardPack(period: string | null, currency = "USD") {
   return useQuery<BoardPackResp>({
-    queryKey: ["atelier-v5", "finance-reports-board-pack", period],
-    queryFn: () => get<BoardPackResp>(`/finance/reports/board-pack?period=${period ?? ""}`),
+    queryKey: ["atelier-v5", "finance-reports-board-pack", period, currency],
+    queryFn: () => get<BoardPackResp>(`/finance/reports/board-pack?period=${period ?? ""}&currency=${currency}`),
     staleTime: 30_000,
     enabled: !!period,
   });

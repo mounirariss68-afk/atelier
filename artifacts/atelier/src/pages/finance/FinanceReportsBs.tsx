@@ -83,8 +83,8 @@ export default function FinanceReportsBs() {
               <SectionHead headline={data?.entity ? "Entity Balance Sheet" : "Consolidated Balance Sheet"} />
               {data?.eliminations && (
                 <div className="flex gap-2">
-                  <MonoChip tone="amber">IC AR/AP: {fmtMoney(data.eliminations.intercoArGbp, "GBP")}</MonoChip>
-                  <MonoChip tone="amber">IC loans: {fmtMoney(data.eliminations.intercoLoanGbp, "GBP")}</MonoChip>
+                  <MonoChip tone="amber">IC AR/AP: {fmtMoney(data.eliminations.intercoArGbp, filters.currency)}</MonoChip>
+                  <MonoChip tone="amber">IC loans: {fmtMoney(data.eliminations.intercoLoanGbp, filters.currency)}</MonoChip>
                 </div>
               )}
             </div>

@@ -6,8 +6,8 @@ import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { useFpaBonus, usePlanEntities } from "@/lib/v5-hooks";
+import { PRESENTATION_CURRENCIES, usePresentationCurrency } from "@/lib/presentationCurrency";
 
-const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
 function fmt(n: number, currency: string): string {
   const abs = Math.abs(n);
@@ -19,7 +19,7 @@ function pct(n: number): string { return `${(n * 100).toFixed(1)}%`; }
 
 export default function FinancePlanBonus() {
   const entities = usePlanEntities();
-  const [presentation, setPresentation] = React.useState("USD");
+  const [presentation, setPresentation] = usePresentationCurrency();
   const [entityFilter, setEntityFilter] = React.useState<string | null>(null);
   const [scenarioId, setScenarioId] = React.useState("base");
   const { data } = useFpaBonus(scenarioId, presentation, entityFilter);

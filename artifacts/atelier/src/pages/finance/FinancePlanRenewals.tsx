@@ -7,8 +7,8 @@ import { Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { useFpaRenewals, usePlanEntities } from "@/lib/v5-hooks";
+import { PRESENTATION_CURRENCIES, usePresentationCurrency } from "@/lib/presentationCurrency";
 
-const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
 function fmt(n: number, currency: string): string {
   const abs = Math.abs(n);
@@ -27,7 +27,7 @@ const RISK_TONE: Record<string, "green" | "amber" | "red"> = {
 
 export default function FinancePlanRenewals() {
   const entities = usePlanEntities();
-  const [presentation, setPresentation] = React.useState("USD");
+  const [presentation, setPresentation] = usePresentationCurrency();
   const [entityFilter, setEntityFilter] = React.useState<string | null>(null);
   const { data } = useFpaRenewals(presentation, entityFilter);
 

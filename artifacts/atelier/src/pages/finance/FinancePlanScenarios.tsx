@@ -7,8 +7,8 @@ import { Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { useCommitFpaScenario, useFpaCommittedScenario, useFpaScenarios, usePlanEntities, useUncommitFpaScenario } from "@/lib/v5-hooks";
+import { PRESENTATION_CURRENCIES, usePresentationCurrency } from "@/lib/presentationCurrency";
 
-const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
 function fmt(n: number, currency: string): string {
   const abs = Math.abs(n);
@@ -26,7 +26,7 @@ const TONE: Record<string, "default" | "green" | "amber" | "red" | "gold"> = {
 
 export default function FinancePlanScenarios() {
   const entities = usePlanEntities();
-  const [presentation, setPresentation] = React.useState("USD");
+  const [presentation, setPresentation] = usePresentationCurrency();
   const [entityFilter, setEntityFilter] = React.useState<string | null>(null);
   const { data } = useFpaScenarios(presentation, entityFilter);
   const commitsQ = useFpaCommittedScenario();

@@ -16,8 +16,9 @@
  *   - As-of:   shifts the cash-forecast window (weeks earlier than as-of
  *              are dropped) and is the anchor date for the 90-day
  *              compliance calendar in Row 5.
- *   - Ccy:     "GBP" presentation, "Local" entity-local (resolved from
- *              the single selected entity), "Side-by-side" shows £ and
+ *   - Ccy:     "Presentation" (user-selected code, USD default, persists
+ *              per user), "Local" entity-local (resolved from the single
+ *              selected entity), "Side-by-side" shows presentation and
  *              local together.
  *
  * Wave-N placeholders
@@ -58,6 +59,7 @@ import {
 } from "./cfoData";
 import { useFpaBudget, useFpaHeadcount, useFpaRenewals } from "@/lib/v5-hooks";
 import FinanceSectionRibbon from "./FinanceSectionRibbon";
+import { fmtPresentationMoney } from "@/lib/presentationCurrency";
 import {
   useExpectedDisbursements,
   useStalledApprovals,
@@ -119,7 +121,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
 }) {
   const { filters, localCode, daysInPeriod } = ctx;
   const ccy = filters.currency;
-  const fmtOpts = { localCode };
+  const fmtOpts = { localCode, presCcy: filters.presCcy };
 
   // Cash on hand & days-of-cash from the 13-week forecast (from as-of week onward)
   const weeksFromAsOf = (cash?.weeks ?? []).filter((w) => new Date(w.weekStart).getTime() >= ctx.asOfMs - 7 * 86_400_000);
@@ -136,7 +138,10 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
   const currentPeriod = periodsResp.data?.current?.id ?? null;
   const reportScope: "mtd" | "qtd" | "ytd" | "r12" =
     filters.period === "mtd" ? "mtd" : filters.period === "qtd" ? "qtd" : filters.period === "ytd" ? "ytd" : "r12";
-  const reportsPnl = useFinanceReportsPnl(currentPeriod, reportScope, null, "GBP");
+  // Fetched in the user-selected presentation currency: the reports engine
+  // owns FX (average rate for flows), so these numbers arrive pre-converted
+  // and are formatted as-is below — no client-side re-conversion.
+  const reportsPnl = useFinanceReportsPnl(currentPeriod, reportScope, null, filters.presCcy);
   const headPnl = reportsPnl.data?.consolidated ?? null;
   const v = reportsPnl.data?.variance ?? null;
   const rev = headPnl?.actual.netRevenue ?? null;
@@ -191,6 +196,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-net-cash"
@@ -208,41 +214,46 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-revenue"
         label="Revenue vs plan"
-        value={rev != null ? formatMoney(rev, ccy, fmtOpts) : "—"}
+        value={rev != null ? fmtPresentationMoney(rev, filters.presCcy) : "—"}
         rag={revRag}
         vsPlan={rev != null ? { delta: revDelta, kind: "money", tone: revRag } : undefined}
+        vsPlanLabel={rev != null ? `${revDelta > 0 ? "+" : ""}${fmtPresentationMoney(revDelta, filters.presCcy)} vs plan` : undefined}
         href="/finance/reports/pnl"
         scopeNote={firmScope}
         info={{
-          definition: "Net revenue (after IC eliminations) for the selected scope, all entities, in GBP.",
+          definition: "Net revenue (after IC eliminations) for the selected scope, all entities, in the presentation currency.",
           formula: "Σ netRevenue (consolidated P&L) − IC revenue",
           source: "Reports engine · /finance/reports/pnl",
           freshness: reportsPnl.data ? "live" : "loading",
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-ebitda"
         label="EBITDA vs plan"
-        value={ebitda != null ? formatMoney(ebitda, ccy, fmtOpts) : "—"}
+        value={ebitda != null ? fmtPresentationMoney(ebitda, filters.presCcy) : "—"}
         unit={marginPct != null ? `· ${formatPct(marginPct)}` : undefined}
         rag={ebitdaRag}
         vsPlan={ebitda != null ? { delta: ebitdaDelta, kind: "money", tone: ebitdaRag } : undefined}
+        vsPlanLabel={ebitda != null ? `${ebitdaDelta > 0 ? "+" : ""}${fmtPresentationMoney(ebitdaDelta, filters.presCcy)} vs plan` : undefined}
         href="/finance/reports/pnl"
         scopeNote={firmScope}
         info={{
-          definition: "Consolidated EBITDA for the selected scope, in GBP.",
+          definition: "Consolidated EBITDA for the selected scope, in the presentation currency.",
           formula: "grossProfit − payroll − opex (consolidated P&L)",
           source: "Reports engine · /finance/reports/pnl",
           freshness: reportsPnl.data ? "live" : "loading",
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-lockup"
@@ -260,6 +271,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-utilisation"
@@ -278,6 +290,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-backlog"
@@ -287,6 +300,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         rag="neutral"
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
       <MetricTile
         testId="cfo-tile-realisation"
@@ -303,6 +317,7 @@ function HeroStrip({ ctx, ar, wip, margin, cash, util }: {
         }}
         ccy={ccy}
         localCode={localCode}
+        presCcy={filters.presCcy}
       />
     </div>
   );
@@ -322,7 +337,7 @@ function CashAndRevenue({ ctx, cash, ar, wip, margin }: {
   const { data: forecast } = useAtelierGetPipelineForecast();
   const { filters, localCode } = ctx;
   const ccy = filters.currency;
-  const fmtOpts = { localCode };
+  const fmtOpts = { localCode, presCcy: filters.presCcy };
 
   // Cash chart bars — only weeks at/after as-of
   const weeks: CashForecastWeek[] = (cash?.weeks ?? []).filter((w) => new Date(w.weekStart).getTime() >= ctx.asOfMs - 7 * 86_400_000);
@@ -600,7 +615,7 @@ function PeopleAndWorkingCapital({ ctx, util, ar, wip, margin }: {
 }) {
   const { filters, localCode, daysInPeriod } = ctx;
   const ccy = filters.currency;
-  const fmtOpts = { localCode };
+  const fmtOpts = { localCode, presCcy: filters.presCcy };
 
   const arBuckets = ar?.buckets ?? [];
   const totalAr = ar?.totalOutstandingUsd ?? 0;
@@ -921,9 +936,9 @@ export default function FinanceHome() {
     { name: "pipeline", ageMin: 25, status: "live" },
   ];
 
-  const ccyCode = resolvePrimaryCode(filters.currency, ctx.localCode);
+  const ccyCode = resolvePrimaryCode(filters.currency, ctx.localCode, filters.presCcy);
   const ccyChip = filters.currency === "side"
-    ? `presentation · GBP / ${ctx.localCode ?? "USD"}`
+    ? `presentation · ${filters.presCcy} / ${ctx.localCode ?? (filters.presCcy === "USD" ? "GBP" : "USD")}`
     : `presentation · ${ccyCode}`;
 
   return (
@@ -939,7 +954,7 @@ export default function FinanceHome() {
           <MonoChip>{ccyChip}</MonoChip>
           <MonoChip>{filters.period.toUpperCase()} · {ctx.daysInPeriod}d</MonoChip>
           {!ctx.isAllEntities && filters.currency === "local" && !ctx.localCode && (
-            <MonoChip tone="amber">local needs single-entity selection — using GBP</MonoChip>
+            <MonoChip tone="amber">local needs single-entity selection — using {filters.presCcy}</MonoChip>
           )}
           <MonoChip tone={inbox.length > 0 ? "amber" : "green"}>
             {inbox.length} item{inbox.length === 1 ? "" : "s"} need attention
@@ -980,7 +995,7 @@ export default function FinanceHome() {
               <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-revenue-plan">
                 <Eyebrow>Revenue (FY plan)</Eyebrow>
                 <div className="text-2xl font-light mt-1 text-success">
-                  {fpaBudget ? formatMoney(fpaBudget.totals.revenue, "GBP", { localCode: "USD" }) : "—"}
+                  {fpaBudget ? formatMoney(fpaBudget.totals.revenue, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy }) : "—"}
                 </div>
                 <div className="text-[10px] font-mono text-text-mute mt-1">
                   {fpaBudget ? `${fpaBudget.fyLabel} · ${fpaBudget.scenarioLabel}` : "loading…"}
@@ -1000,12 +1015,12 @@ export default function FinanceHome() {
               >
                 <Eyebrow>Revenue YTD · actual vs plan</Eyebrow>
                 <div className="text-2xl font-light mt-1 text-success">
-                  {fpaBudget ? formatMoney(fpaBudget.ytdActual.revenueActual, "GBP", { localCode: "USD" }) : "—"}
+                  {fpaBudget ? formatMoney(fpaBudget.ytdActual.revenueActual, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy }) : "—"}
                 </div>
                 <div className="text-[10px] font-mono text-text-mute mt-1">
                   {fpaBudget ? (
                     <>
-                      Plan {formatMoney(fpaBudget.ytdActual.revenuePlanProrated, "GBP", { localCode: "USD" })}
+                      Plan {formatMoney(fpaBudget.ytdActual.revenuePlanProrated, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy })}
                       {" · "}
                       <span
                         className={
@@ -1033,7 +1048,7 @@ export default function FinanceHome() {
               <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${fpaBudget && fpaBudget.totals.ebitda < 0 ? "border-danger/40 bg-danger/5" : ""}`} data-testid="kpi-tile-ebitda-plan">
                 <Eyebrow>EBITDA (FY plan)</Eyebrow>
                 <div className={`text-2xl font-light mt-1 ${fpaBudget && fpaBudget.totals.ebitda >= 0 ? "text-success" : "text-danger"}`}>
-                  {fpaBudget ? formatMoney(fpaBudget.totals.ebitda, "GBP", { localCode: "USD" }) : "—"}
+                  {fpaBudget ? formatMoney(fpaBudget.totals.ebitda, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy }) : "—"}
                 </div>
                 <div className="text-[10px] font-mono text-text-mute mt-1">
                   Margin {fpaBudget ? formatPct(fpaBudget.totals.ebitdaMarginPct) : "—"}
@@ -1053,10 +1068,10 @@ export default function FinanceHome() {
               <Card className={`p-4 cursor-pointer hover:border-gold/40 transition-colors h-full ${fpaRenewals && fpaRenewals.totalsArr.highRiskUsd > 0 ? "border-amber-500/40 bg-amber-500/5" : ""}`} data-testid="kpi-tile-renewals">
                 <Eyebrow>ARR up for renewal</Eyebrow>
                 <div className="text-2xl font-light mt-1">
-                  {fpaRenewals ? formatMoney(fpaRenewals.totalsArr.totalUsd, "GBP", { localCode: "USD" }) : "—"}
+                  {fpaRenewals ? formatMoney(fpaRenewals.totalsArr.totalUsd, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy }) : "—"}
                 </div>
                 <div className="text-[10px] font-mono text-text-mute mt-1">
-                  {fpaRenewals ? `${formatMoney(fpaRenewals.totalsArr.highRiskUsd, "GBP", { localCode: "USD" })} high-risk` : "loading…"}
+                  {fpaRenewals ? `${formatMoney(fpaRenewals.totalsArr.highRiskUsd, filters.currency, { localCode: ctx.localCode, presCcy: filters.presCcy })} high-risk` : "loading…"}
                 </div>
               </Card>
             </Link>

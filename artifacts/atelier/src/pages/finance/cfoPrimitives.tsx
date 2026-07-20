@@ -6,7 +6,8 @@
  *   copy chip with same dimensions as the live tiles). Sparkline is only
  *   shown when real history is supplied — synthetic series are not used.
  * - CfoFilterBar: Entity multi-select / Period (MTD QTD YTD R12) / Currency
- *   (GBP presentation / Local-by-entity / Side-by-side) / as-of date with
+ *   (Presentation / Local-by-entity / Side-by-side, with a presentation
+ *   currency select — USD default, Task #296) / as-of date with
  *   per-source freshness chips. Persists to URL query so a CFO can
  *   bookmark "their" view.
  * - useCfoFilters: small hook that reads/writes the filter state into the
@@ -14,13 +15,14 @@
  * - formatMoney / formatDelta / RagDot: shared helpers used by every tile.
  *
  * Currency semantics
- *   "GBP"   → presentation currency, all values in £
- *   "local" → entity-local currency. Resolved per dashboard render: when
- *             the entity filter selects exactly one entity, that entity's
- *             baseCurrency is used; otherwise the dashboard falls back to
- *             GBP and surfaces a chip explaining the fallback.
- *   "side"  → side-by-side: presentation £ alongside the resolved local
- *             currency. Tiles render "£X · LOC Y" so the CFO can compare.
+ *   "present" → user-selected presentation currency (USD default; persists
+ *               via localStorage across pages and sessions).
+ *   "local"   → entity-local currency. Resolved per dashboard render: when
+ *               the entity filter selects exactly one entity, that entity's
+ *               baseCurrency is used; otherwise the dashboard falls back to
+ *               the presentation currency and surfaces a chip explaining it.
+ *   "side"    → side-by-side: presentation currency alongside the resolved
+ *               local currency so the CFO can compare.
  */
 
 import * as React from "react";
@@ -28,6 +30,12 @@ import { Link } from "wouter";
 import { ArrowRight, Info, Check } from "lucide-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import {
+  PRESENTATION_CURRENCIES,
+  getStoredPresentationCurrency,
+  setStoredPresentationCurrency,
+  isPresentationCurrency,
+} from "@/lib/presentationCurrency";
 
 /* ============================================================
    Filter types + URL persistence
@@ -40,12 +48,14 @@ import { cn } from "@/lib/utils";
  */
 export type CfoEntityId = string;
 export type CfoPeriod = "mtd" | "qtd" | "ytd" | "r12";
-export type CfoCurrency = "GBP" | "local" | "side";
+export type CfoCurrency = "present" | "local" | "side";
 
 export interface CfoFilters {
   entities: CfoEntityId[];
   period: CfoPeriod;
   currency: CfoCurrency;
+  /** Presentation currency code (USD default, persisted per user). */
+  presCcy: string;
   asOf: string;
 }
 
@@ -81,7 +91,7 @@ export const PERIOD_DAYS: Record<CfoPeriod, number> = {
 };
 
 const CURRENCY_LABEL: Record<CfoCurrency, string> = {
-  GBP: "GBP (presentation)",
+  present: "Presentation",
   local: "Local",
   side: "Side-by-side",
 };
@@ -89,7 +99,8 @@ const CURRENCY_LABEL: Record<CfoCurrency, string> = {
 const DEFAULTS: CfoFilters = {
   entities: ["all"],
   period: "ytd",
-  currency: "GBP",
+  currency: "present",
+  presCcy: "USD",
   asOf: new Date().toISOString().slice(0, 10),
 };
 
@@ -98,13 +109,17 @@ function readUrl(): CfoFilters {
   const q = new URLSearchParams(window.location.search);
   const ents = (q.get("ent") ?? "all").split(",").filter(Boolean) as CfoEntityId[];
   const period = (q.get("p") ?? "ytd") as CfoPeriod;
-  const ccyRaw = q.get("ccy") ?? "GBP";
-  const currency: CfoCurrency = ccyRaw === "local" ? "local" : ccyRaw === "side" ? "side" : "GBP";
+  // Legacy bookmarks may carry ccy=GBP — treat any non-mode value as "present".
+  const ccyRaw = q.get("ccy") ?? "present";
+  const currency: CfoCurrency = ccyRaw === "local" ? "local" : ccyRaw === "side" ? "side" : "present";
+  const pccyRaw = q.get("pccy");
+  const presCcy = isPresentationCurrency(pccyRaw) ? pccyRaw : getStoredPresentationCurrency();
   const asOf = q.get("asof") ?? DEFAULTS.asOf;
   return {
     entities: ents.length > 0 ? ents : ["all"],
     period: ["mtd", "qtd", "ytd", "r12"].includes(period) ? period : "ytd",
     currency,
+    presCcy,
     asOf,
   };
 }
@@ -115,6 +130,7 @@ function writeUrl(f: CfoFilters) {
   url.searchParams.set("ent", f.entities.join(","));
   url.searchParams.set("p", f.period);
   url.searchParams.set("ccy", f.currency);
+  url.searchParams.set("pccy", f.presCcy);
   url.searchParams.set("asof", f.asOf);
   window.history.replaceState(null, "", url.toString());
 }
@@ -124,6 +140,7 @@ export function useCfoFilters(): [CfoFilters, (next: Partial<CfoFilters>) => voi
   const update = React.useCallback((next: Partial<CfoFilters>) => {
     setState((prev) => {
       const merged = { ...prev, ...next };
+      if (next.presCcy) setStoredPresentationCurrency(next.presCcy);
       writeUrl(merged);
       return merged;
     });
@@ -160,31 +177,33 @@ function compactNumber(value: number, symbol: string): string {
   return `${sign}${symbol}${abs.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-export interface CcyOpts { localCode?: string; compact?: boolean }
+export interface CcyOpts { localCode?: string; compact?: boolean; presCcy?: string }
 
 /** Resolve the "primary" code shown for a tile given the user's currency mode. */
-export function resolvePrimaryCode(ccy: CfoCurrency, localCode?: string): string {
-  if (ccy === "GBP") return "GBP";
-  if (ccy === "local") return localCode ?? "GBP";
-  return "GBP";
+export function resolvePrimaryCode(ccy: CfoCurrency, localCode?: string, presCcy = "USD"): string {
+  if (ccy === "local") return localCode ?? presCcy;
+  return presCcy;
 }
 
 export function toCurrency(valueUsd: number, ccy: CfoCurrency, opts?: CcyOpts): { value: number; symbol: string; code: string } {
-  const code = resolvePrimaryCode(ccy, opts?.localCode);
+  const code = resolvePrimaryCode(ccy, opts?.localCode, opts?.presCcy);
   return { value: convert(valueUsd, code), symbol: symbolFor(code), code };
 }
 
 export function formatMoney(valueUsd: number, ccy: CfoCurrency, opts?: CcyOpts): string {
   const compact = opts?.compact !== false;
-  const primaryCode = resolvePrimaryCode(ccy, opts?.localCode);
+  const presCcy = opts?.presCcy ?? "USD";
+  const primaryCode = resolvePrimaryCode(ccy, opts?.localCode, presCcy);
   const primary = compact
     ? compactNumber(convert(valueUsd, primaryCode), symbolFor(primaryCode))
     : `${symbolFor(primaryCode)}${convert(valueUsd, primaryCode).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
   if (ccy !== "side") return primary;
 
-  // Side-by-side: presentation GBP + local. Falls back to USD if local==GBP.
-  const secondCode = opts?.localCode && opts.localCode !== "GBP" ? opts.localCode : "USD";
+  // Side-by-side: presentation ccy + local. Falls back when local==presentation.
+  const secondCode = opts?.localCode && opts.localCode !== presCcy
+    ? opts.localCode
+    : presCcy === "USD" ? "GBP" : "USD";
   const secondary = compact
     ? compactNumber(convert(valueUsd, secondCode), symbolFor(secondCode))
     : `${symbolFor(secondCode)}${convert(valueUsd, secondCode).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -195,11 +214,11 @@ export function formatPct(n: number, digits = 0): string {
   return `${(n * 100).toFixed(digits)}%`;
 }
 
-export function formatDelta(deltaUsd: number, kind: "money" | "pct" | "abs" = "money", ccy: CfoCurrency = "GBP", opts?: CcyOpts): string {
+export function formatDelta(deltaUsd: number, kind: "money" | "pct" | "abs" = "money", ccy: CfoCurrency = "present", opts?: CcyOpts): string {
   const sign = deltaUsd > 0 ? "+" : deltaUsd < 0 ? "" : "";
   if (kind === "pct") return `${sign}${(deltaUsd * 100).toFixed(1)} pts`;
   if (kind === "abs") return `${sign}${deltaUsd.toLocaleString("en-US", { maximumFractionDigits: 1 })}`;
-  return `${sign}${formatMoney(deltaUsd, ccy === "side" ? "GBP" : ccy, opts)}`;
+  return `${sign}${formatMoney(deltaUsd, ccy === "side" ? "present" : ccy, opts)}`;
 }
 
 /* ============================================================
@@ -268,10 +287,13 @@ export interface MetricTileProps {
   scopeNote?: string;
   ccy?: CfoCurrency;
   localCode?: string;
+  presCcy?: string;
+  /** Pre-formatted "vs plan" label — overrides formatDelta when the value is already in presentation currency. */
+  vsPlanLabel?: string;
 }
 
 export function MetricTile(props: MetricTileProps) {
-  const { testId, label, value, unit, vsPlan, rag = "neutral", spark, href, info, wave, scopeNote, ccy = "GBP", localCode } = props;
+  const { testId, label, value, unit, vsPlan, rag = "neutral", spark, href, info, wave, scopeNote, ccy = "present", localCode, presCcy, vsPlanLabel } = props;
   const [showInfo, setShowInfo] = React.useState(false);
   const isPlaceholder = !!wave;
 
@@ -318,7 +340,7 @@ export function MetricTile(props: MetricTileProps) {
       <div className="text-[10px] font-mono text-text-mute flex flex-wrap gap-x-2 gap-y-0.5">
         {!isPlaceholder && vsPlan && (
           <span className={cn(vsPlan.tone === "red" && "text-danger", vsPlan.tone === "green" && "text-success", vsPlan.tone === "amber" && "text-warn")}>
-            {formatDelta(vsPlan.delta, vsPlan.kind ?? "money", ccy, { localCode })} vs plan
+            {vsPlanLabel ?? `${formatDelta(vsPlan.delta, vsPlan.kind ?? "money", ccy, { localCode, presCcy })} vs plan`}
           </span>
         )}
         {!isPlaceholder && scopeNote && <span className="text-text-faint italic">{scopeNote}</span>}
@@ -470,6 +492,15 @@ export function CfoFilterBar({
               {CURRENCY_LABEL[c]}
             </button>
           ))}
+          <select
+            value={filters.presCcy}
+            onChange={(e) => setFilters({ presCcy: e.target.value })}
+            className="bg-bg-elevate border border-border rounded px-2 py-0.5 text-[11px] font-mono text-text"
+            data-testid="cfo-filter-pccy"
+            aria-label="Presentation currency"
+          >
+            {PRESENTATION_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
         </div>
 
         {/* As-of */}

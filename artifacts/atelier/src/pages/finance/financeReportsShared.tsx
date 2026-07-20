@@ -8,23 +8,22 @@
 import * as React from "react";
 import { useFinanceEntities } from "@/lib/v5-hooks";
 import { MonoChip } from "@/components/ui/primitives";
+import {
+  PRESENTATION_CURRENCIES as SHARED_PRESENTATION_CURRENCIES,
+  getStoredPresentationCurrency,
+  setStoredPresentationCurrency,
+  fmtPresentationMoney,
+} from "@/lib/presentationCurrency";
 
 export type Scope = "mtd" | "qtd" | "ytd" | "r12";
 export const SCOPES: { id: Scope; label: string }[] = [
   { id: "mtd", label: "MTD" }, { id: "qtd", label: "QTD" },
   { id: "ytd", label: "YTD" }, { id: "r12", label: "R12" },
 ];
-export const PRESENTATION_CURRENCIES = ["GBP", "USD", "AED", "SAR", "EUR"];
+// USD-first list; selection persists per user (Task #296).
+export const PRESENTATION_CURRENCIES: string[] = [...SHARED_PRESENTATION_CURRENCIES];
 
-export function fmtMoney(n: number | null | undefined, currency: string): string {
-  if (n == null || !Number.isFinite(n)) return "—";
-  const abs = Math.abs(n);
-  const sign = n < 0 ? "-" : "";
-  const sym = currency === "GBP" ? "£" : currency === "USD" ? "$" : currency === "EUR" ? "€" : `${currency} `;
-  if (abs >= 1_000_000) return `${sign}${sym}${(abs / 1_000_000).toFixed(2)}m`;
-  if (abs >= 1_000) return `${sign}${sym}${(abs / 1_000).toFixed(0)}k`;
-  return `${sign}${sym}${abs.toFixed(0)}`;
-}
+export const fmtMoney = fmtPresentationMoney;
 export function fmtPct(n: number | null | undefined, digits = 1): string {
   if (n == null || !Number.isFinite(n)) return "—";
   return `${(n * 100).toFixed(digits)}%`;
@@ -47,12 +46,15 @@ export function useReportFilters(defaultPeriod: string | null): [ReportFilters, 
     period: defaultPeriod ?? "",
     scope: "ytd",
     entity: null,
-    currency: "GBP",
+    currency: getStoredPresentationCurrency(),
   });
   React.useEffect(() => {
     if (defaultPeriod && !state.period) setState((s) => ({ ...s, period: defaultPeriod }));
   }, [defaultPeriod, state.period]);
-  const update = (next: Partial<ReportFilters>) => setState((s) => ({ ...s, ...next }));
+  const update = (next: Partial<ReportFilters>) => {
+    if (next.currency) setStoredPresentationCurrency(next.currency);
+    setState((s) => ({ ...s, ...next }));
+  };
   return [state, update];
 }
 

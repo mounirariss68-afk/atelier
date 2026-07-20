@@ -17,10 +17,10 @@ import {
   type CashLineRow,
   type CashWeekRow,
 } from "@/lib/v5-hooks";
+import { PRESENTATION_CURRENCIES, usePresentationCurrency } from "@/lib/presentationCurrency";
 
 const API_BASE = "/api/atelier";
 
-const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
 function fmt(n: number, currency: string): string {
   const abs = Math.abs(n);
@@ -47,7 +47,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 export default function FinancePlanCash13w() {
   const entities = usePlanEntities();
-  const [presentation, setPresentation] = React.useState("USD");
+  const [presentation, setPresentation] = usePresentationCurrency();
   const [entityFilter, setEntityFilter] = React.useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = React.useState<number | null>(null);
   const [overrideLine, setOverrideLine] = React.useState<CashLineRow | null>(null);

@@ -6,8 +6,8 @@ import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { useBacklogCoverage, usePlanEntities } from "@/lib/v5-hooks";
+import { PRESENTATION_CURRENCIES, usePresentationCurrency } from "@/lib/presentationCurrency";
 
-const PRESENTATION_CURRENCIES = ["USD", "GBP", "AED", "SAR", "EUR"];
 
 function fmt(n: number, currency: string): string {
   const abs = Math.abs(n);
@@ -27,7 +27,7 @@ const STAGE_TONE: Record<string, "default" | "gold" | "green" | "amber" | "red">
 
 export default function FinancePlanBacklog() {
   const entities = usePlanEntities();
-  const [presentation, setPresentation] = React.useState("USD");
+  const [presentation, setPresentation] = usePresentationCurrency();
   const [entityFilter, setEntityFilter] = React.useState<string | null>(null);
   const { data } = useBacklogCoverage(presentation, entityFilter);
 

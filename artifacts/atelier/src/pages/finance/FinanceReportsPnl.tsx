@@ -72,7 +72,7 @@ export default function FinanceReportsPnl() {
             <div className="flex items-center justify-between mb-3">
               <SectionHead headline={data?.entity ? "Entity P&L" : "Consolidated P&L"} />
               {data?.eliminations && (
-                <MonoChip tone="amber">IC eliminations: {fmtMoney(data.eliminations.intercoRevenueGbp, "GBP")}</MonoChip>
+                <MonoChip tone="amber">IC eliminations: {fmtMoney(data.eliminations.intercoRevenueGbp, filters.currency)}</MonoChip>
               )}
             </div>
             <table className="w-full text-sm">

@@ -15,7 +15,7 @@ const DIMS: { id: DimKey; label: string }[] = [
   { id: "byEngagementType", label: "Type" },
 ];
 
-function RollupTable({ rows }: { rows: CubeRollupRow[] }) {
+function RollupTable({ rows, currency }: { rows: CubeRollupRow[]; currency: string }) {
   return (
     <table className="w-full text-sm">
       <thead className="text-xs text-text-faint font-mono uppercase tracking-widest">
@@ -33,9 +33,9 @@ function RollupTable({ rows }: { rows: CubeRollupRow[] }) {
           <tr key={r.dim} className="border-b border-border-soft/40">
             <td className="py-1.5">{r.dim}</td>
             <td className="py-1.5 text-right tabular-nums text-text-mute">{r.engagementCount}</td>
-            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.revenueGbp, "GBP")}</td>
-            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.directCostGbp, "GBP")}</td>
-            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.grossMarginGbp, "GBP")}</td>
+            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.revenueGbp, currency)}</td>
+            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.directCostGbp, currency)}</td>
+            <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.grossMarginGbp, currency)}</td>
             <td className="py-1.5 text-right tabular-nums">
               <span className={r.grossMarginPct >= 0.45 ? "text-emerald-400" : r.grossMarginPct >= 0.30 ? "text-text" : "text-amber-400"}>
                 {fmtPct(r.grossMarginPct)}
@@ -54,7 +54,7 @@ export default function FinanceReportsCube() {
   const current = periodsData?.current?.id ?? null;
   const [filters, setFilters] = useReportFilters(current);
   const [dim, setDim] = React.useState<DimKey>("byClient");
-  const { data } = useFinanceReportsProfitability(filters.period || current, filters.scope);
+  const { data } = useFinanceReportsProfitability(filters.period || current, filters.scope, filters.currency);
 
   const sortedDetail: CubeRow[] = React.useMemo(() => {
     if (!data?.rows) return [];
@@ -67,10 +67,10 @@ export default function FinanceReportsCube() {
         <SectionHead
           eyebrow="Manage · Finance · Report"
           headline="Profitability cube"
-          lede="Engagement-level revenue and gross margin rolled up by client, partner, sector and engagement type. All values in GBP."
+          lede="Engagement-level revenue and gross margin rolled up by client, partner, sector and engagement type. All values in the selected presentation currency."
         />
         <div className="mt-6">
-          <ReportFilterBar filters={filters} periods={periods.map((p) => ({ id: p.id, label: p.label }))} onChange={(n) => setFilters({ ...n, currency: "GBP", entity: null })} />
+          <ReportFilterBar filters={filters} periods={periods.map((p) => ({ id: p.id, label: p.label }))} onChange={(n) => setFilters({ ...n, entity: null })} />
         </div>
       </PageHero>
 
@@ -91,7 +91,7 @@ export default function FinanceReportsCube() {
               ))}
             </div>
           </div>
-          {data && <RollupTable rows={data[dim]} />}
+          {data && <RollupTable rows={data[dim]} currency={filters.currency} />}
         </Card>
 
         <Card className="p-4 overflow-x-auto" data-testid="cube-detail">
@@ -120,8 +120,8 @@ export default function FinanceReportsCube() {
                   <td className="py-1.5">{r.partner}</td>
                   <td className="py-1.5">{r.sector}</td>
                   <td className="py-1.5 text-text-mute font-mono text-xs">{r.engagementType}</td>
-                  <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.revenueGbp, "GBP")}</td>
-                  <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.grossMarginGbp, "GBP")}</td>
+                  <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.revenueGbp, filters.currency)}</td>
+                  <td className="py-1.5 text-right tabular-nums">{fmtMoney(r.grossMarginGbp, filters.currency)}</td>
                   <td className="py-1.5 text-right tabular-nums">
                     <span className={r.grossMarginPct >= 0.45 ? "text-emerald-400" : r.grossMarginPct >= 0.30 ? "text-text" : "text-amber-400"}>
                       {fmtPct(r.grossMarginPct)}
