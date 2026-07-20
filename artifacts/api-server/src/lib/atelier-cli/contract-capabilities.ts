@@ -33,6 +33,7 @@ import { and, desc, eq, ilike, or } from "drizzle-orm";
 import {
   db,
   atelierEmployees,
+  atelierUsers,
   atelierContractTemplates,
   atelierContractTemplateVersions,
   atelierContractRecords,
@@ -565,12 +566,21 @@ defineCapability({
       };
     }
 
+    // Task #345 — pass the caller identity so the shared service can
+    // enforce the authorised-signatory gate when the caller is a signer
+    // (implicit firm-side "sign first"); the CLI must not bypass the
+    // 403 the REST route enforces.
+    const [callerRow] = await db
+      .select({ email: atelierUsers.email })
+      .from(atelierUsers)
+      .where(and(eq(atelierUsers.id, ctx.persona.id), eq(atelierUsers.orgId, orgId)));
     const result = await sendContract({
       orgId,
       actor: { id: ctx.persona.id, name: ctx.persona.name },
       contractId: target.id,
       signers,
       message: input.message ? String(input.message) : null,
+      caller: { userId: ctx.persona.id, email: callerRow?.email ?? null },
     });
     if (!result.ok) {
       return { ok: false, errorCode: result.code.replace(/-/g, "_"), errorMessage: result.message };

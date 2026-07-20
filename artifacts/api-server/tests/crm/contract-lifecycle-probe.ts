@@ -604,6 +604,76 @@ async function main() {
       fpWrongFirst.body,
     );
 
+    // ---- Task #345 — alternate surfaces can't bypass the signatory gate ----
+    // 1. CLI/chat capability contract_send_signature calls sendContract
+    //    directly; a non-signatory partner listing THEMSELVES as a signer
+    //    (implicit sign-first) must be denied by the shared service gate.
+    await import("../../src/lib/atelier-cli/contract-capabilities.js");
+    const { findByToolName } = await import("../../src/lib/atelier-cli/capability-catalog.js");
+    const sendCap = findByToolName("contract_send_signature");
+    check("contract_send_signature capability registered", !!sendCap);
+    if (sendCap) {
+      const p2Ctx = {
+        persona: { id: p2Id, name: "Probe335 Partner2", role: "partner", orgId: "aico" },
+      } as any;
+      const cliSelfSend = await sendCap.run(
+        {
+          contract: contractId,
+          signers: [
+            { name: "Probe335 Partner2", email: `${runTag}_p2@example.test` },
+            { name: "Nadia Probe", email: "p159_signer@example.test" },
+          ],
+          confirm: true,
+        },
+        p2Ctx,
+      );
+      check(
+        "CLI self-send by non-signatory denied",
+        cliSelfSend.ok === false && (cliSelfSend as any).errorCode === "not_authorised_signatory",
+        cliSelfSend,
+      );
+    }
+    // 2. Direct service call with explicit signFirst by a non-signatory
+    //    is denied inside sendContract itself (gate lives in the service).
+    const { sendContract: sendContractSvc } = await import(
+      "../../src/lib/atelier-contract-service.js"
+    );
+    const svcSignFirst = await sendContractSvc({
+      orgId: "aico",
+      actor: { id: p2Id, name: "Probe335 Partner2" },
+      contractId,
+      signers: [{ name: "Probe335 Partner2", email: `${runTag}_p2@example.test` }],
+      caller: { userId: p2Id, email: `${runTag}_p2@example.test` },
+      signFirst: true,
+    });
+    check(
+      "service-level signFirst by non-signatory denied",
+      svcSignFirst.ok === false && svcSignFirst.code === "not-authorised-signatory",
+      svcSignFirst,
+    );
+    // 3. Explicit signFirst without the caller as first signer is denied
+    //    at the service level too.
+    const svcWrongFirst = await sendContractSvc({
+      orgId: "aico",
+      actor: { id: fpId, name: "Probe159 Partner" },
+      contractId,
+      signers: [{ name: "Someone Else", email: "someone_else@example.test" }],
+      caller: { userId: fpId, email: `${runTag}_fp@example.test` },
+      signFirst: true,
+    });
+    check(
+      "service-level sign-first-not-caller denied",
+      svcWrongFirst.ok === false && svcWrongFirst.code === "sign-first-not-caller",
+      svcWrongFirst,
+    );
+    // The denials must not have moved the contract out of its sendable state.
+    const afterDenials = await api("GET", `/contracts/${contractId}`);
+    check(
+      "contract untouched after denied sends",
+      afterDenials.body?.contract?.status !== "out_for_signature",
+      afterDenials.body?.contract?.status,
+    );
+
     // Non-signatory "Send for signature" (internal request) -> awaiting + notify.
     const reqSig = await api("POST", `/contracts/${contractId}/request-signature`, {}, p2Id);
     check("request-signature -> 200", reqSig.status === 200, reqSig);

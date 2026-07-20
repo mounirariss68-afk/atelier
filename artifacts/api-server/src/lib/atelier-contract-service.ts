@@ -639,6 +639,8 @@ export type SendContractError = {
     | "not-found"
     | "invalid-status"
     | "duplicate-signers"
+    | "not-authorised-signatory"
+    | "sign-first-not-caller"
     | "no-document"
     | "document-missing"
     | "blob-missing"
@@ -696,6 +698,17 @@ export async function sendContract(args: {
   title?: string | null;
   message?: string | null;
   expiresAt?: Date | null;
+  /**
+   * Task #345 — the authorised-signatory gate lives HERE (shared service)
+   * so every surface (REST route, chat/CLI capability, agents) enforces it.
+   * `caller` identifies the human triggering the send; whenever the caller
+   * is themselves a signer — an implicit firm-side "sign first" — or
+   * `signFirst` is explicitly set, the caller must be an authorised
+   * signatory of the contract's signing entity (when the entity has a
+   * configured list; empty list = legacy: any contract manager).
+   */
+  caller?: { userId: string; email: string | null };
+  signFirst?: boolean;
 }): Promise<SendContractResult> {
   if (!docusealConfigured()) {
     return {
@@ -719,9 +732,38 @@ export async function sendContract(args: {
       message: `Cannot send a ${contract.status} contract for signature.`,
     };
   }
-  const emails = args.signers.map((s) => s.email.toLowerCase());
+  const emails = args.signers.map((s) => s.email.trim().toLowerCase());
   if (new Set(emails).size !== emails.length) {
     return { ok: false, code: "duplicate-signers", message: "Signer emails must be unique." };
+  }
+
+  // Task #345 — shared authorised-signatory gate (moved out of the REST
+  // route so chat/CLI/agent surfaces cannot bypass it). Enforced when the
+  // send is firm-side: explicit signFirst OR the caller is among the
+  // signers (implicit "I sign this myself").
+  const callerEmail = args.caller?.email?.trim().toLowerCase() ?? null;
+  const callerIsSigner = callerEmail !== null && emails.includes(callerEmail);
+  if (args.signFirst || callerIsSigner) {
+    if (args.signFirst && (!callerEmail || emails[0] !== callerEmail)) {
+      return {
+        ok: false,
+        code: "sign-first-not-caller",
+        message: "With Sign & send, the first signer must be you.",
+      };
+    }
+    const signatories = contract.signingEntityId
+      ? await listEntitySignatories(contract.orgId, contract.signingEntityId)
+      : [];
+    if (
+      signatories.length > 0 &&
+      (!args.caller || !signatories.some((s) => s.userId === args.caller!.userId))
+    ) {
+      return {
+        ok: false,
+        code: "not-authorised-signatory",
+        message: `Only an authorised signatory of ${contract.signingEntityLabel ?? "the signing entity"} may sign on behalf of the firm. Use "Send for signature" to request one.`,
+      };
+    }
   }
   if (!contract.currentDocumentId) {
     return { ok: false, code: "no-document", message: "The contract has no document yet." };

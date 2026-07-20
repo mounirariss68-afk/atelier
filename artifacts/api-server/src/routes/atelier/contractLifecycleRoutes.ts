@@ -1389,35 +1389,10 @@ router.post("/contracts/:id/send-for-signature", async (req, res) => {
     res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
     return;
   }
-  // Task #335 — server-side signatory enforcement for the firm-side
-  // signing step. Crafted signFirst requests from non-signatories → 403.
-  if (parsed.data.signFirst) {
-    const target = await loadContract(me.orgId, String(req.params.id));
-    if (!target) {
-      res.status(404).json({ error: "not-found" });
-      return;
-    }
-    const signatories = target.signingEntityId
-      ? await listEntitySignatories(me.orgId, target.signingEntityId)
-      : [];
-    if (signatories.length > 0 && !signatories.some((s) => s.userId === me.id)) {
-      res.status(403).json({
-        error: "not-authorised-signatory",
-        message: `Only an authorised signatory of ${target.signingEntityLabel ?? "the signing entity"} may sign on behalf of the firm. Use "Send for signature" to request one.`,
-      });
-      return;
-    }
-    // The first signer must be the caller — signFirst means "I sign now",
-    // not "route the firm signature to an arbitrary inbox".
-    const first = parsed.data.signers[0];
-    if (first.email.trim().toLowerCase() !== me.email.trim().toLowerCase()) {
-      res.status(403).json({
-        error: "sign-first-not-caller",
-        message: "With Sign & send, the first signer must be you.",
-      });
-      return;
-    }
-  }
+  // Task #335/#345 — the authorised-signatory gate for the firm-side
+  // signing step lives inside sendContract (shared service) so no
+  // surface (REST, chat/CLI, agents) can bypass it. The route only
+  // passes the caller identity + intent through.
   const result = await sendContract({
     orgId: me.orgId,
     actor: { id: me.id, name: me.name },
@@ -1426,6 +1401,8 @@ router.post("/contracts/:id/send-for-signature", async (req, res) => {
     title: parsed.data.title ?? null,
     message: parsed.data.message ?? null,
     expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+    caller: { userId: me.id, email: me.email ?? null },
+    signFirst: parsed.data.signFirst,
   });
   if (!result.ok) {
     const status =
@@ -1437,9 +1414,12 @@ router.post("/contracts/:id/send-for-signature", async (req, res) => {
             ? 409
             : result.code === "duplicate-signers"
               ? 400
-              : result.code === "document-missing" || result.code === "blob-missing"
-                ? 410
-                : 502;
+              : result.code === "not-authorised-signatory" ||
+                  result.code === "sign-first-not-caller"
+                ? 403
+                : result.code === "document-missing" || result.code === "blob-missing"
+                  ? 410
+                  : 502;
     res.status(status).json({ error: result.code, message: result.message });
     return;
   }
