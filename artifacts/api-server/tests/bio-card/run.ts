@@ -299,6 +299,20 @@ async function main(): Promise<void> {
       "print variant carries TrimBox + BleedBox",
       prnTxt.includes("/TrimBox") && prnTxt.includes("/BleedBox"),
     );
+    // Task #382 — print variant embeds a PDF/X-style ICC output intent
+    // (sRGB IEC61966-2.1) so print shops get predictable color; the
+    // standard variant stays untouched (no OutputIntents).
+    check(
+      "print variant embeds ICC output intent (GTS_PDFX + sRGB profile)",
+      prnTxt.includes("/OutputIntents") &&
+        prnTxt.includes("/GTS_PDFX") &&
+        prnTxt.includes("/DestOutputProfile") &&
+        prnTxt.includes("sRGB IEC61966-2.1"),
+    );
+    check(
+      "standard variant has no output intent",
+      !stdBuf.toString("latin1").includes("/OutputIntents"),
+    );
     check(
       "standard variant has no TrimBox and is smaller page",
       !stdBuf.toString("latin1").includes("/TrimBox") &&

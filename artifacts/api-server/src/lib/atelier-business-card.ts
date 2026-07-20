@@ -21,6 +21,7 @@
  * packaging bug, not something to paper over with a blank card.
  */
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import PDFDocument from "pdfkit";
@@ -298,9 +299,59 @@ export interface BusinessCardPdfResult {
  *             back artwork extended into the bleed via a pre-baked mirrored
  *             strip) plus a 3 mm slug margin carrying corner crop marks that
  *             mark the 90×50 mm trim. TrimBox/BleedBox metadata is set on
- *             both pages. Colors remain RGB (no CMYK/ICC conversion).
+ *             both pages.
+ *
+ * Task #382 — print color intent: the print variant embeds a PDF/X-style
+ * ICC OutputIntent (sRGB IEC61966-2.1, the actual working space of every
+ * fill and image in the file) so a print shop's RIP has an authoritative
+ * source profile to convert from — deep navy and gradient magentas convert
+ * predictably instead of being guessed at as "DeviceRGB". Content stays in
+ * (calibrated) RGB on purpose: a hand-rolled CMYK conversion without the
+ * shop's press profile would bake in MORE color error, not less. The
+ * standard variant is untouched.
  */
 export type CardVariant = "standard" | "print";
+
+const require_ = createRequire(import.meta.url);
+
+/** Load the sRGB IEC61966-2.1 ICC profile shipped inside pdfkit itself
+ *  (used by pdfkit for its own PDF/A output intents). Fail loud — a
+ *  missing profile is a packaging bug. */
+function loadSrgbIccProfile(): Buffer {
+  return readFileSync(
+    require_.resolve("pdfkit/js/data/sRGB_IEC61966_2_1.icc"),
+  );
+}
+
+/**
+ * Task #382 — attach a PDF/X-style ICC OutputIntent to the document so
+ * print-shop RIPs convert the RGB content through a known profile instead
+ * of guessing. Must be called before doc.end().
+ */
+function embedOutputIntent(doc: PDFKit.PDFDocument): void {
+  const icc = loadSrgbIccProfile();
+  const d = doc as unknown as {
+    ref: (data?: Record<string, unknown>) => {
+      write: (buf: Buffer) => void;
+      end: (buf?: Buffer) => void;
+      data: Record<string, unknown>;
+    };
+    _root: { data: Record<string, unknown> };
+  };
+  const profileRef = d.ref({ N: 3, Length: icc.length });
+  profileRef.write(icc);
+  profileRef.end();
+  const intentRef = d.ref({
+    Type: "OutputIntent",
+    S: "GTS_PDFX",
+    OutputConditionIdentifier: new String("sRGB IEC61966-2.1"),
+    Info: new String("sRGB IEC61966-2.1"),
+    RegistryName: new String("http://www.color.org"),
+    DestOutputProfile: profileRef,
+  });
+  intentRef.end();
+  d._root.data.OutputIntents = [intentRef];
+}
 
 const MM = (v: number): number => (v / 25.4) * 72;
 const BLEED = MM(3);
@@ -481,6 +532,7 @@ export async function generateBusinessCardPdf(
     .lineWidth(frame.lineWidth)
     .stroke(frameGrad);
 
+  if (variant === "print") embedOutputIntent(doc);
   doc.end();
   const pdf = await done;
   const suffix = variant === "print" ? "_Print" : "";
