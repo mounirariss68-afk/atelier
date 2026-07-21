@@ -1,6 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { useFeedback } from "@/components/feedback";
+import { runExclusivePick } from "@/lib/pickerGuard";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -451,6 +453,7 @@ export default function ChatScreen() {
   const { t } = useI18n();
   const rtl = useRTL();
   const insets = useSafeAreaInsets();
+  const feedback = useFeedback();
   const chat = useChat();
   const scheme = useThemeScheme();
   const [input, setInput] = useState("");
@@ -495,10 +498,20 @@ export default function ChatScreen() {
   const pickImage = useCallback(async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
+    const out = await runExclusivePick(() =>
+      ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      }),
+    );
+    if (!out.ok) {
+      if (out.reason === "failed") {
+        hapticError();
+        feedback.toast(t("picker.failed"), "error");
+      }
+      return;
+    }
+    const res = out.value;
     if (res.canceled || !res.assets[0]) return;
     const asset = res.assets[0];
     if (asset.fileSize && asset.fileSize > MAX_ATTACHMENT_BYTES) {
@@ -518,10 +531,20 @@ export default function ChatScreen() {
     } finally {
       setUploading(false);
     }
-  }, [chat]);
+  }, [chat, feedback, t]);
 
   const pickDocument = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    const out = await runExclusivePick(() =>
+      DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true }),
+    );
+    if (!out.ok) {
+      if (out.reason === "failed") {
+        hapticError();
+        feedback.toast(t("picker.failed"), "error");
+      }
+      return;
+    }
+    const res = out.value;
     if (res.canceled || !res.assets[0]) return;
     const asset = res.assets[0];
     if (asset.size && asset.size > MAX_ATTACHMENT_BYTES) {
@@ -541,7 +564,7 @@ export default function ChatScreen() {
     } finally {
       setUploading(false);
     }
-  }, [chat]);
+  }, [chat, feedback, t]);
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
 
@@ -723,8 +746,8 @@ export default function ChatScreen() {
         cancelLabel={t("common.cancel")}
         onClose={() => setAttachSheet(false)}
         options={[
-          { label: t("chat.attachImage"), icon: "image", onPress: pickImage },
-          { label: t("chat.attachFile"), icon: "file", onPress: pickDocument },
+          { label: t("chat.attachImage"), icon: "image", defer: true, onPress: () => void pickImage() },
+          { label: t("chat.attachFile"), icon: "file", defer: true, onPress: () => void pickDocument() },
         ]}
       />
 

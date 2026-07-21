@@ -193,6 +193,7 @@ const en: Dict = {
   "exp.fundingBank.select": "Select account…",
   "exp.fundingBank.none": "No active company bank accounts",
   // permissions
+  "picker.failed": "Couldn't open the file picker. Please try again.",
   "perm.camera": "Camera access is needed to scan receipts.",
   "perm.photos": "Photo library access is needed.",
   // me extras
@@ -411,6 +412,7 @@ const tr: Dict = {
   "exp.fundingBank": "Ödeme yapan banka hesabı",
   "exp.fundingBank.select": "Hesap seçin…",
   "exp.fundingBank.none": "Aktif şirket banka hesabı yok",
+  "picker.failed": "Dosya seçici açılamadı. Lütfen tekrar deneyin.",
   "perm.camera": "Fişleri taramak için kamera erişimi gerekli.",
   "perm.photos": "Fotoğraf kitaplığı erişimi gerekli.",
   "me.profile": "Profil",
@@ -627,6 +629,7 @@ const ar: Dict = {
   "exp.fundingBank": "الحساب البنكي الدافع",
   "exp.fundingBank.select": "اختر الحساب…",
   "exp.fundingBank.none": "لا توجد حسابات بنكية نشطة للشركة",
+  "picker.failed": "تعذّر فتح منتقي الملفات. يرجى المحاولة مرة أخرى.",
   "perm.camera": "الوصول إلى الكاميرا مطلوب لمسح الإيصالات.",
   "perm.photos": "الوصول إلى مكتبة الصور مطلوب.",
   "me.profile": "الملف الشخصي",

@@ -625,6 +625,15 @@ export interface SheetOption {
   icon?: FeatherName;
   onPress: () => void;
   destructive?: boolean;
+  /**
+   * Task #477 — defer the action until the sheet's Modal has FULLY dismissed.
+   * Launching a native picker (document/camera/library) while the modal is
+   * still animating away silently fails on iOS and can leave the native
+   * module stuck "in progress". iOS runs the action from Modal onDismiss
+   * (fires post-dismissal); Android falls back to a short delay; web runs
+   * immediately.
+   */
+  defer?: boolean;
 }
 
 /** Bottom sheet: glass panel over a dimmed scrim, grab handle, soft radius. */
@@ -643,8 +652,38 @@ export function Sheet({
 }) {
   const c = useColors();
   const rtl = useRTL();
+  const pendingRef = useRef<(() => void) | null>(null);
+  const runPending = () => {
+    const fn = pendingRef.current;
+    pendingRef.current = null;
+    if (fn) fn();
+  };
+  // Drop any stale deferred action if the sheet unmounts before it ran.
+  useEffect(() => () => {
+    pendingRef.current = null;
+  }, []);
+  const handleOption = (o: SheetOption) => {
+    hapticLight();
+    if (o.defer && Platform.OS !== "web") {
+      pendingRef.current = o.onPress;
+      onClose();
+      if (Platform.OS !== "ios") {
+        // Android Modal has no onDismiss; small delay is enough there.
+        setTimeout(runPending, 300);
+      }
+      return;
+    }
+    onClose();
+    o.onPress();
+  };
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onDismiss={Platform.OS === "ios" ? runPending : undefined}
+    >
       <Pressable
         onPress={onClose}
         style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "flex-end", padding: 10 }}
@@ -682,11 +721,7 @@ export function Sheet({
             {options.map((o, i) => (
               <Pressable
                 key={i}
-                onPress={() => {
-                  hapticLight();
-                  onClose();
-                  o.onPress();
-                }}
+                onPress={() => handleOption(o)}
                 style={({ pressed }) => ({
                   flexDirection: rtl.row,
                   alignItems: "center",

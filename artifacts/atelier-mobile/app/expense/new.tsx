@@ -39,6 +39,7 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { apiJson, putFileToSignedUrl } from "@/lib/api";
 import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
+import { runExclusivePick } from "@/lib/pickerGuard";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -131,13 +132,10 @@ export default function NewExpenseScreen() {
   // attached; re-attaching or saving reuses this id (no duplicate records).
   const [draftId, setDraftId] = useState<string | null>(null);
 
-  // Task #411 — the source sheet is a RN Modal; launching a native picker
-  // while that modal is still dismissing silently fails on iOS (this is why
-  // the PDF picker "did nothing"). Wait for the dismissal animation first.
-  const afterSheetDismissed = useCallback(async () => {
-    if (Platform.OS === "web") return;
-    await new Promise((r) => setTimeout(r, Platform.OS === "ios" ? 550 : 250));
-  }, []);
+  // Task #477 — pickers launch via the Sheet's `defer` option (runs after the
+  // modal has FULLY dismissed — iOS Modal onDismiss), replacing the old fixed
+  // 550ms timer that raced the dismissal animation and could leave the native
+  // document picker permanently stuck "in progress".
 
   // Task #411 — pick/pickPdf are memoized, so calling autoProcess directly
   // would freeze the first render's closure (draftId=null) and re-attaching
@@ -148,7 +146,6 @@ export default function NewExpenseScreen() {
 
   const pick = useCallback(
     async (mode: "camera" | "library") => {
-      await afterSheetDismissed();
       const perm =
         mode === "camera"
           ? await ImagePicker.requestCameraPermissionsAsync()
@@ -157,30 +154,42 @@ export default function NewExpenseScreen() {
         feedback.toast(t(mode === "camera" ? "perm.camera" : "perm.photos"), "error");
         return;
       }
-      const res =
+      const out = await runExclusivePick(() =>
         mode === "camera"
-          ? await ImagePicker.launchCameraAsync({ quality: 0.7 })
-          : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 });
+          ? ImagePicker.launchCameraAsync({ quality: 0.7 })
+          : ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7 }),
+      );
+      if (!out.ok) {
+        if (out.reason === "failed") feedback.toast(t("picker.failed"), "error");
+        return;
+      }
+      const res = out.value;
       if (res.canceled || !res.assets[0]) return;
       const asset = res.assets[0];
       void autoProcessRef.current(asset.uri, asset.mimeType ?? "image/jpeg");
     },
-    [t, feedback, afterSheetDismissed],
+    [t, feedback],
   );
 
   // Task #396 — PDF invoice pickup. The server parses PDFs via text-layer
   // extraction with an OCR fallback.
   const pickPdf = useCallback(async () => {
-    await afterSheetDismissed();
-    const res = await DocumentPicker.getDocumentAsync({
-      type: "application/pdf",
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
+    const out = await runExclusivePick(() =>
+      DocumentPicker.getDocumentAsync({
+        type: "application/pdf",
+        copyToCacheDirectory: true,
+        multiple: false,
+      }),
+    );
+    if (!out.ok) {
+      if (out.reason === "failed") feedback.toast(t("picker.failed"), "error");
+      return;
+    }
+    const res = out.value;
     if (res.canceled || !res.assets?.[0]) return;
     const asset = res.assets[0];
     void autoProcessRef.current(asset.uri, asset.mimeType ?? "application/pdf");
-  }, [afterSheetDismissed]);
+  }, [t, feedback]);
 
   const receiptIsPdf = receiptMime === "application/pdf";
 
@@ -749,9 +758,9 @@ export default function NewExpenseScreen() {
         cancelLabel={t("common.cancel")}
         onClose={() => setSourceSheet(false)}
         options={[
-          { label: t("exp.takePhoto"), icon: "camera", onPress: () => pick("camera") },
-          { label: t("exp.gallery"), icon: "image", onPress: () => pick("library") },
-          { label: t("exp.pickPdf"), icon: "file-text", onPress: () => void pickPdf() },
+          { label: t("exp.takePhoto"), icon: "camera", defer: true, onPress: () => void pick("camera") },
+          { label: t("exp.gallery"), icon: "image", defer: true, onPress: () => void pick("library") },
+          { label: t("exp.pickPdf"), icon: "file-text", defer: true, onPress: () => void pickPdf() },
         ]}
       />
     </View>
