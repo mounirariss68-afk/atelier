@@ -158,6 +158,12 @@ export interface UseCliReturn {
    * transcript so deep-links like /cli?session=…&turn=… can land
    * directly on a result card. Idempotent on serverTurnId. */
   injectHistoricalTurn: (turn: CliTurn) => void;
+  /** Task #484 — adopt an existing server session so the next
+   * submit() continues it (same sessionId on POST /cli/turn) instead
+   * of starting a fresh conversation. Clears the transcript like
+   * reset() so the caller can re-inject the picked session's turns.
+   * The server still applies its 30-minute inactivity rollover. */
+  adoptSession: (sessionId: string) => void;
 }
 
 /** Parse one fully-buffered SSE message block into a `CliFrame`. */
@@ -682,9 +688,12 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             buffer = buffer.slice(sep + 2);
             const frame = parseFrame(block);
             if (!frame) continue;
-            // Pull sessionId from any frame that carries it.
+            // Pull sessionId from any frame that carries it. Task #484:
+            // also track a *changed* id — when the server rolls a stale
+            // adopted session over (30-min inactivity), later turns must
+            // continue the rolled-over session, not re-send the old id.
             const sid = (frame.data as { sessionId?: string }).sessionId;
-            if (sid && !sessionId) setSessionId(sid);
+            if (sid && sid !== sessionId) setSessionId(sid);
             const prevNavPath = live.navigatedTo ?? null;
             live = applyFrame(live, frame);
             // Task #495 — fire the consumer's auto-navigation
@@ -1011,6 +1020,15 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     setCurrent(null);
   }, []);
 
+  // Task #484 — like reset(), but pin the picked session's id so the
+  // next submit() continues that conversation (mirrors mobile).
+  const adoptSession = useCallback((id: string) => {
+    abortRef.current?.abort();
+    setSessionId(id);
+    setTurns([]);
+    setCurrent(null);
+  }, []);
+
   return {
     sessionId,
     turns,
@@ -1029,5 +1047,6 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     capabilitiesError,
     catalogSchemaVersion,
     injectHistoricalTurn,
+    adoptSession,
   };
 }

@@ -286,6 +286,9 @@ export function CommandBar(props: CommandBarProps) {
       requestAnimationFrame(() => composerRef.current?.focus());
     }
     if (req.sessionId) {
+      // Task #484 — deep-links (/cli?session=…) also continue the
+      // loaded conversation rather than starting a new session.
+      cli.adoptSession(req.sessionId);
       void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(req.sessionId)}`, {
         credentials: "include",
       })
@@ -771,7 +774,9 @@ export function CommandBar(props: CommandBarProps) {
               locale={locale}
               onPick={(id) => {
                 setHistoryOpen(false);
-                cli.reset();
+                // Task #484 — adopt the picked session so the next
+                // message continues it instead of starting fresh.
+                cli.adoptSession(id);
                 void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
                   credentials: "include",
                 })
