@@ -7,6 +7,7 @@ import {
   authHeader,
   type CliSessionMeta,
   listCliSessions,
+  renameCliSession,
   uploadCliAttachment,
 } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
@@ -108,6 +109,21 @@ export function useChat() {
       setSessions(await listCliSessions());
     } catch {
       // best-effort session list
+    }
+  }, []);
+
+  // Task #485 — manual rename: optimistic list update, then PATCH; the
+  // auto-title job can never overwrite it (guarded on title IS NULL).
+  const renameSession = useCallback(async (id: string, title: string) => {
+    const clean = title.trim().replace(/\s+/g, " ").slice(0, 60);
+    if (!clean) return;
+    setSessions((list) =>
+      list.map((s) => (s.id === id ? { ...s, title: clean } : s)),
+    );
+    try {
+      await renameCliSession(id, clean);
+    } catch {
+      // best-effort; the list refreshes on next open
     }
   }, []);
 
@@ -357,6 +373,7 @@ export function useChat() {
     busy,
     sessions,
     refreshSessions,
+    renameSession,
     uploadAttachment,
     submit,
     answerClarification,

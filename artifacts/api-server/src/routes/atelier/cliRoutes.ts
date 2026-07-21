@@ -13,6 +13,7 @@
  *   POST  /cli/turn/:id/cancel          JSON — discards the pending write.
  *   GET   /cli/sessions                 JSON — recent sessions for the persona.
  *   GET   /cli/sessions/:id             JSON — session + last 50 turns.
+ *   PATCH /cli/sessions/:id             JSON — rename a session (Task #485).
  *
  * SSE framing follows the orchestrator's `CliFrame` shape:
  *   event: <type>
@@ -21,7 +22,14 @@
 
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, desc, eq, gt, gte, isNull, lte, ne, sql } from "drizzle-orm";
-import { db, atelierCliSessions, atelierCliTurns, atelierUsers } from "@workspace/db";
+import {
+  db,
+  atelierCliSessions,
+  atelierCliTurns,
+  atelierUsers,
+  atelierAuditEvents,
+} from "@workspace/db";
+import { assertAuditAction, V3_AUDIT_ACTIONS } from "./auditContract.js";
 import {
   runTurn,
   confirmPendingWrite,
@@ -291,6 +299,66 @@ router.get("/cli/sessions", async (req, res) => {
       spentCentsToday: s.spentCentsToday,
     })),
   });
+});
+
+/**
+ * Task #485 — rename a chat session. Scoped to the owning user + org;
+ * validates the title length (1–60 chars after trimming). A manual
+ * rename can never be overwritten by the auto-title job because that
+ * UPDATE is guarded on `title IS NULL`. The change is audited.
+ */
+// @cli-skip: session housekeeping, not a capability
+router.patch("/cli/sessions/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const raw = (req.body as { title?: unknown } | undefined)?.title;
+  if (typeof raw !== "string") {
+    res.status(400).json({ error: "title-required" });
+    return;
+  }
+  const title = raw.trim().replace(/\s+/g, " ");
+  if (title.length === 0) {
+    res.status(400).json({ error: "title-empty" });
+    return;
+  }
+  if (title.length > 60) {
+    res.status(400).json({ error: "title-too-long", maxLength: 60 });
+    return;
+  }
+  const [session] = await db
+    .select({ id: atelierCliSessions.id, title: atelierCliSessions.title })
+    .from(atelierCliSessions)
+    .where(
+      and(
+        eq(atelierCliSessions.id, req.params.id),
+        eq(atelierCliSessions.userId, me.id),
+        eq(atelierCliSessions.orgId, me.orgId),
+        isNull(atelierCliSessions.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!session) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  await db
+    .update(atelierCliSessions)
+    .set({ title, updatedAt: new Date() })
+    .where(eq(atelierCliSessions.id, session.id));
+  assertAuditAction(V3_AUDIT_ACTIONS.CLI_SESSION_RENAMED);
+  await db.insert(atelierAuditEvents).values({
+    id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    orgId: me.orgId,
+    entityType: "cli_session",
+    entityId: session.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: V3_AUDIT_ACTIONS.CLI_SESSION_RENAMED,
+    payload: { from: session.title, to: title },
+    payloadSummary: `Chat renamed to "${title}"`,
+  });
+  res.json({ ok: true, session: { id: session.id, title } });
 });
 
 /**

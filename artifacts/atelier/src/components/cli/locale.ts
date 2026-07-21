@@ -88,6 +88,9 @@ export const STRINGS = {
     ar: "لا توجد محادثات بعد.",
   },
   historyNewChat: { en: "New chat", ar: "محادثة جديدة" },
+  // Task #485 — manual chat rename.
+  historyRename: { en: "Rename chat", ar: "إعادة تسمية المحادثة" },
+  historyRenamePlaceholder: { en: "Chat title…", ar: "عنوان المحادثة…" },
   localeLabel: { en: "Language", ar: "اللغة" },
   asyncBadge: { en: "ASYNC", ar: "غير متزامن" },
   errorBadge: { en: "ERROR", ar: "خطأ" },

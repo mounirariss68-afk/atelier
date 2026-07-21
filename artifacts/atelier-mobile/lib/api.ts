@@ -127,6 +127,14 @@ export async function listCliSessions(): Promise<CliSessionMeta[]> {
   return j.sessions ?? [];
 }
 
+/** Task #485 — rename a chat session (title ≤ 60 chars, server-validated). */
+export async function renameCliSession(id: string, title: string): Promise<void> {
+  await apiJson(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: { title },
+  });
+}
+
 /** PUT raw bytes of a local file URI to a signed upload URL. */
 export async function putFileToSignedUrl(
   uploadURL: string,

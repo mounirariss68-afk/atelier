@@ -478,13 +478,26 @@ export default function ChatScreen() {
   const [uploading, setUploading] = useState(false);
   const [attachSheet, setAttachSheet] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Task #485 — inline rename state for the history sheet.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
 
   const reversed = useMemo(() => [...chat.turns].reverse(), [chat.turns]);
 
   const openHistory = useCallback(() => {
     setHistoryOpen(true);
+    setRenamingId(null);
     chat.refreshSessions();
   }, [chat]);
+
+  const commitRename = useCallback(
+    (id: string) => {
+      setRenamingId((cur) => (cur === id ? null : cur));
+      const title = renameDraft.trim();
+      if (title) void chat.renameSession(id, title);
+    },
+    [chat, renameDraft],
+  );
 
   const send = useCallback(() => {
     const prompt = input.trim();
@@ -794,34 +807,91 @@ export default function ChatScreen() {
             <EmptyState icon="clock" title={t("chat.noSessions")} />
           ) : (
             <ScrollView contentContainerStyle={{ paddingHorizontal: 16 }}>
-              {chat.sessions.map((s) => (
-                <Pressable
-                  key={s.id}
-                  onPress={() => {
-                    hapticLight();
-                    chat.loadSession(s.id);
-                    setHistoryOpen(false);
-                  }}
-                  style={({ pressed }) => ({
-                    paddingVertical: 14,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: c.border,
-                    opacity: pressed ? 0.6 : 1,
-                  })}
-                >
-                  <Text
+              {chat.sessions.map((s) =>
+                renamingId === s.id ? (
+                  <View
+                    key={s.id}
                     style={{
-                      color: c.foreground,
-                      fontFamily: "PlusJakartaSans_500Medium",
-                      fontSize: 15,
-                      textAlign: rtl.textAlign,
+                      paddingVertical: 8,
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: c.border,
                     }}
-                    numberOfLines={1}
                   >
-                    {s.title ?? t("chat.newChat")}
-                  </Text>
-                </Pressable>
-              ))}
+                    <TextInput
+                      autoFocus
+                      value={renameDraft}
+                      onChangeText={setRenameDraft}
+                      maxLength={60}
+                      placeholder={t("chat.renamePlaceholder")}
+                      placeholderTextColor={c.mutedForeground}
+                      onSubmitEditing={() => commitRename(s.id)}
+                      onBlur={() => commitRename(s.id)}
+                      returnKeyType="done"
+                      style={{
+                        color: c.foreground,
+                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontSize: 15,
+                        textAlign: rtl.textAlign,
+                        borderWidth: 1,
+                        borderColor: c.primary,
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 8,
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <View
+                    key={s.id}
+                    style={{
+                      flexDirection: rtl.row,
+                      alignItems: "center",
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: c.border,
+                    }}
+                  >
+                    <Pressable
+                      onPress={() => {
+                        hapticLight();
+                        chat.loadSession(s.id);
+                        setHistoryOpen(false);
+                      }}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 14,
+                        opacity: pressed ? 0.6 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          color: c.foreground,
+                          fontFamily: "PlusJakartaSans_500Medium",
+                          fontSize: 15,
+                          textAlign: rtl.textAlign,
+                        }}
+                        numberOfLines={1}
+                      >
+                        {s.title ?? t("chat.newChat")}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityLabel={t("chat.rename")}
+                      hitSlop={8}
+                      onPress={() => {
+                        hapticLight();
+                        setRenameDraft(s.title ?? "");
+                        setRenamingId(s.id);
+                      }}
+                      style={({ pressed }) => ({
+                        padding: 10,
+                        opacity: pressed ? 0.5 : 1,
+                      })}
+                    >
+                      <Feather name="edit-2" size={16} color={c.mutedForeground} />
+                    </Pressable>
+                  </View>
+                ),
+              )}
             </ScrollView>
           )}
         </View>

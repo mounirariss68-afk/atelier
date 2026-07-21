@@ -772,6 +772,19 @@ export function CommandBar(props: CommandBarProps) {
             <HistoryPanel
               sessions={historySessions}
               locale={locale}
+              onRename={(id, title) => {
+                setHistorySessions((prev) =>
+                  prev.map((sess) => (sess.id === id ? { ...sess, title } : sess)),
+                );
+                void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
+                  method: "PATCH",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ title }),
+                }).catch(() => {
+                  /* optimistic; list refreshes on next open */
+                });
+              }}
               onPick={(id) => {
                 setHistoryOpen(false);
                 // Task #484 — adopt the picked session so the next
@@ -2765,6 +2778,7 @@ function HistoryPanel({
   sessions,
   locale,
   onPick,
+  onRename,
 }: {
   sessions: Array<{
     id: string;
@@ -2774,7 +2788,17 @@ function HistoryPanel({
   }>;
   locale: CliLocale;
   onPick: (id: string) => void;
+  onRename: (id: string, title: string) => void;
 }) {
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [draft, setDraft] = React.useState("");
+
+  const commit = (id: string) => {
+    const title = draft.trim().replace(/\s+/g, " ").slice(0, 60);
+    setEditingId(null);
+    if (title.length > 0) onRename(id, title);
+  };
+
   return (
     <div className="p-4 space-y-3" data-testid="cli-history">
       <div className="text-xs font-semibold">{s("historyTitle", locale)}</div>
@@ -2783,28 +2807,83 @@ function HistoryPanel({
       ) : (
         <div className="space-y-1.5">
           {sessions.map((sess) => (
-            <button
+            <div
               key={sess.id}
-              type="button"
-              onClick={() => onPick(sess.id)}
-              className="w-full text-left bg-bg-elevate border border-border rounded p-2.5 text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
+              className="group relative w-full bg-bg-elevate border border-border rounded text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
               data-testid="cli-history-row"
             >
-              <div className="font-medium leading-snug truncate">
-                {sess.title ?? s("historyNewChat", locale)}
-              </div>
-              <div className="text-[11px] font-mono text-text-faint mt-0.5">
-                {sess.turnCount} {locale === "ar" ? "دورة" : sess.turnCount === 1 ? "turn" : "turns"}
-                {sess.lastTurnAt
-                  ? ` · ${new Date(sess.lastTurnAt).toLocaleString(locale === "ar" ? "ar" : "en", {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}`
-                  : ""}
-              </div>
-            </button>
+              {editingId === sess.id ? (
+                <div className="p-2.5">
+                  <input
+                    autoFocus
+                    value={draft}
+                    maxLength={60}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commit(sess.id);
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    onBlur={() => commit(sess.id)}
+                    className="w-full bg-bg border border-gold/50 rounded px-2 py-1 text-xs outline-none"
+                    placeholder={s("historyRenamePlaceholder", locale)}
+                    aria-label={s("historyRename", locale)}
+                    data-testid="cli-history-rename-input"
+                  />
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onPick(sess.id)}
+                    className="w-full text-left p-2.5 pe-9"
+                  >
+                    <div className="font-medium leading-snug truncate">
+                      {sess.title ?? s("historyNewChat", locale)}
+                    </div>
+                    <div className="text-[11px] font-mono text-text-faint mt-0.5">
+                      {sess.turnCount}{" "}
+                      {locale === "ar" ? "دورة" : sess.turnCount === 1 ? "turn" : "turns"}
+                      {sess.lastTurnAt
+                        ? ` · ${new Date(sess.lastTurnAt).toLocaleString(
+                            locale === "ar" ? "ar" : "en",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}`
+                        : ""}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDraft(sess.title ?? "");
+                      setEditingId(sess.id);
+                    }}
+                    className="absolute top-2 end-2 p-1 rounded text-text-faint opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-gold hover:bg-bg transition-opacity"
+                    title={s("historyRename", locale)}
+                    aria-label={s("historyRename", locale)}
+                    data-testid="cli-history-rename"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
           ))}
         </div>
       )}

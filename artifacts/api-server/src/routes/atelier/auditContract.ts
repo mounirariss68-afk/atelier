@@ -101,6 +101,8 @@ export const V3_AUDIT_ACTIONS = {
   // Task #335 — feedback + undo audit actions.
   CLI_FEEDBACK: "cli.feedback",
   CLI_UNDO: "cli.undo",
+  // Task #485 — manual chat rename (auto-title only fires on title IS NULL).
+  CLI_SESSION_RENAMED: "cli.session.renamed",
 
   // EA delegation — Task #386 (partner ↔ Executive Assistant grants +
   // delegated pending items; every row carries dual attribution:
