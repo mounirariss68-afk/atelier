@@ -13,7 +13,12 @@
  *   6. PDF text-quality gate (assessTextQuality)
  *   7. Parse-endpoint media/caps constants
  *   8. Seed alias maps (EU/NA label → taxonomy pair)
+ *   9. Task #500 enrichment sanitize + description composition
+ *  10. Task #506 stub-Anthropic probe: blurry/partial receipt texts must
+ *      never gain invented details (details absent, summary unchanged)
  */
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import {
   normalizeMerchant,
   extractCoreMerchant,
@@ -271,6 +276,120 @@ async function main() {
   );
   check("compose empty base → detail only", composeEnrichedSummary("", covers) === "4 covers");
   check("compose both empty", composeEnrichedSummary(null, undefined) === "");
+
+  // 10. Task #506 — stub-Anthropic probe: blurry/partial receipt texts must
+  // never end up with invented enrichment details. The stub serves the canned
+  // extraction the prompt demands for low-quality input (no `details` key, or
+  // a malformed hallucinated one that sanitizeReceiptDetails must drop), and
+  // we assert the final proposal-side values: details === undefined and the
+  // composed summary is byte-identical to the base summary.
+  const { extractReceiptFromText } = await import(
+    "../../src/lib/atelier-receipt-parse.js"
+  );
+
+  const cannedQueue: Array<Record<string, unknown>> = [];
+  const stub = createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      const canned = cannedQueue.shift() ?? { unreadable: true };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({
+          id: "msg_stub",
+          type: "message",
+          role: "assistant",
+          model: "claude-haiku-4-5",
+          stop_reason: "end_turn",
+          content: [{ type: "text", text: JSON.stringify(canned) }],
+          usage: { input_tokens: 10, output_tokens: 10 },
+        }),
+      );
+    });
+  });
+  await new Promise<void>((r) => stub.listen(0, "127.0.0.1", r));
+  const stubPort = (stub.address() as AddressInfo).port;
+  // The anthropic client reads env at (lazy) import time inside
+  // extractReceiptFromText — set it before the first call.
+  process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL = `http://127.0.0.1:${stubPort}`;
+  process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY = "stub-key";
+
+  try {
+    // (a) Blurry taxi receipt: model follows the prompt and omits `details`.
+    cannedQueue.push({
+      merchant: "Careem",
+      total: 48.5,
+      currency: "AED",
+      category: "taxi",
+      rawText: "C▌reem ... 48.5▌ AED [rest illegible]",
+      confidence: "red",
+    });
+    const blurry = await extractReceiptFromText("C▌reem 48.5▌ [smudged]");
+    check("blurry: model omits details", blurry.details === undefined);
+    const blurryDetails = sanitizeReceiptDetails(blurry.details);
+    check("blurry: sanitized details stay absent", blurryDetails === undefined);
+    const blurryBase = "Taxi ride, amount partially readable.";
+    check(
+      "blurry: summary unchanged",
+      composeEnrichedSummary(blurryBase, blurryDetails) === blurryBase,
+    );
+
+    // (b) Partial hotel receipt: model hallucinates a malformed details
+    // object (non-ISO dates, blank city, zero nights) — sanitizer drops it all.
+    cannedQueue.push({
+      merchant: "Hilton",
+      total: 900,
+      currency: "SAR",
+      category: "hotel",
+      rawText: "HILTON ... TOTAL 900 [torn edge]",
+      confidence: "amber",
+      details: {
+        stay: { checkIn: "early July", checkOut: "sometime", nights: 0, city: "  " },
+        trip: "n/a",
+        covers: -1,
+        madeUpKey: { foo: "bar" },
+      },
+    });
+    const partial = await extractReceiptFromText("HILTON TOTAL 900 [torn]");
+    const partialDetails = sanitizeReceiptDetails(partial.details);
+    check(
+      "partial: hallucinated malformed details dropped",
+      partialDetails === undefined,
+      JSON.stringify(partialDetails),
+    );
+    const partialBase = "Hotel stay, receipt partially torn.";
+    check(
+      "partial: summary unchanged",
+      composeEnrichedSummary(partialBase, partialDetails) === partialBase,
+    );
+
+    // (c) Unreadable scrap: model flags unreadable, no details anywhere.
+    cannedQueue.push({ unreadable: true, confidence: "red", rawText: "" });
+    const scrap = await extractReceiptFromText("▌▌▌▌");
+    check("scrap: unreadable flagged", scrap.unreadable === true);
+    check(
+      "scrap: no details, summary unchanged",
+      sanitizeReceiptDetails(scrap.details) === undefined &&
+        composeEnrichedSummary("Unreadable receipt.", sanitizeReceiptDetails(scrap.details)) ===
+          "Unreadable receipt.",
+    );
+
+    // Guardrail in the prompt itself: the no-fabrication instruction must
+    // stay in the extraction guidance that both vision & text paths share.
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(
+        new URL("../../src/lib/atelier-receipt-parse.ts", import.meta.url),
+        "utf8",
+      ),
+    );
+    check(
+      "prompt keeps no-fabrication rule",
+      src.includes("NEVER infer, guess, or fabricate") &&
+        src.includes('Omit "details" entirely'),
+    );
+  } finally {
+    stub.close();
+  }
 
   // ---- report ----
   if (failures.length) {
