@@ -1482,7 +1482,7 @@ export const CashApplicationMatcher = defineAgent({
   purpose: "Proposes which open invoice(s) a bank receipt should clear, with rationale.",
   model: "claude-haiku-4-5",
   starred: false,
-  status: "registered",
+  status: "mvp",
   systemPromptRef: "prompts/atelier/cash-application-matcher.v1.md",
   inputSchema: z.object({
     receiptId: z.string(),
@@ -1513,7 +1513,7 @@ export const CashFlowForecaster = defineAgent({
   purpose: "Produces a 13-week direct-method cash forecast snapshot with confidence bands and cash-gap weeks.",
   model: "claude-sonnet-4-6",
   starred: true,
-  status: "registered",
+  status: "mvp",
   systemPromptRef: "prompts/atelier/cash-flow-forecaster.v1.md",
   inputSchema: z.object({ asOf: z.string(), currency: z.string() }),
   outputSchema: z.object({

@@ -606,6 +606,45 @@ function computeForecast(presentation: string, entityFilter: string | null): For
 }
 
 // ──────────────────────────────────────────────────────────────
+// Task #431 — exported deterministic forecast composition for the
+// Cash Flow Forecaster agent (scheduled snapshot writer). Hydrates
+// real plan facts then computes the consolidated + per-entity
+// 13-week forecasts in USD.
+// ──────────────────────────────────────────────────────────────
+export type PlanForecastResp = ForecastResp;
+export interface OrgCashForecast {
+  asOf: string;
+  consolidated: ForecastResp;
+  entities: Array<{
+    id: string;
+    shortName: string;
+    baseCurrency: string;
+    forecast: ForecastResp;
+  }>;
+  receiptLineCount: number;
+  disbursementLineCount: number;
+}
+export async function computeCashForecastForOrg(orgId: string): Promise<OrgCashForecast> {
+  await hydratePlanFacts(orgId);
+  const consolidated = computeForecast("USD", null);
+  const entities = ENTITIES
+    .filter((e) => e.id !== FIRM_ENTITY_ID)
+    .map((e) => ({
+      id: e.id,
+      shortName: e.shortName,
+      baseCurrency: e.baseCurrency,
+      forecast: computeForecast("USD", e.id),
+    }));
+  return {
+    asOf: AS_OF_MONDAY,
+    consolidated,
+    entities,
+    receiptLineCount: RECEIPTS.length,
+    disbursementLineCount: DISBURSEMENTS.length,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────
 // Backlog & pipeline
 // ──────────────────────────────────────────────────────────────
 interface BacklogContract {

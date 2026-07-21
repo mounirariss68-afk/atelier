@@ -89,7 +89,7 @@ export const atelierBankStatementImport = pgTable(
 // ============================================================
 // BANK TRANSACTION
 // kind:          receipt | payment | fee | fx | other
-// matchedState:  unmatched | proposed | matched
+// matchedState:  unmatched | proposed | matched | parked | journaled
 // ============================================================
 export const atelierBankTransaction = pgTable(
   "atelier_bank_transaction",
@@ -109,6 +109,14 @@ export const atelierBankTransaction = pgTable(
     kind: text("kind").notNull().default("receipt"),
     matchedState: text("matched_state").notNull().default("unmatched"),
     matchRunId: text("match_run_id"),
+    // Task #431 — persisted matcher proposal (inflow invoice candidates or
+    // outflow source candidates), triage outcomes and GL linkage.
+    matchProposal: jsonb("match_proposal").$type<Record<string, unknown>>(),
+    matchedRefKind: text("matched_ref_kind"), // invoice_application | contractor_payment | partner_firm_invoice | expense | manual_journal | other
+    matchedRefId: text("matched_ref_id"),
+    parkedReason: text("parked_reason"),
+    parkedByUserId: text("parked_by_user_id"),
+    glJournalEntryId: text("gl_journal_entry_id"),
     notes: text("notes"),
     ...COMMON,
   },

@@ -22,7 +22,19 @@ import {
   atelierAuditEvents,
 } from "@workspace/db";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
-import { runCashApplicationMatcher } from "../../lib/atelier-agents/runner.js";
+import { runCashApplicationMatcher, runCashFlowForecaster } from "../../lib/atelier-agents/runner.js";
+import { runBookkeeper } from "../../lib/atelier-agents/bookkeeper.js";
+import { proposeOutflowCandidates, entityCompatible } from "../../lib/atelier-cash-ops.js";
+import {
+  atelierBankAccount,
+  atelierCashForecastSnapshot,
+  atelierGlAccount,
+  atelierGlJournalEntry,
+  atelierGlJournalLine,
+  atelierContractorPayments,
+  atelierPartnerFirmInvoices,
+  atelierExpenses,
+} from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -46,6 +58,13 @@ function isFinanceLeadership(me: typeof atelierUsers.$inferSelect): boolean {
   return me.role === "founding_partner" || me.role === "partner" || me.role === "finance";
 }
 function round2(n: number): number { return Math.round(n * 100) / 100; }
+/** Resolve a bank txn's legal entity, falling back to its bank account tag. */
+async function resolveTxnEntity(txn: { legalEntityId: string | null; bankAccountId: string }): Promise<string | null> {
+  if (txn.legalEntityId) return txn.legalEntityId;
+  const [acct] = await db.select({ legalEntityId: atelierBankAccount.legalEntityId })
+    .from(atelierBankAccount).where(eq(atelierBankAccount.id, txn.bankAccountId));
+  return acct?.legalEntityId ?? null;
+}
 async function audit(args: {
   entityType: string; entityId: string; actor: typeof atelierUsers.$inferSelect;
   action: string; payload: Record<string, unknown>; summary: string;
@@ -229,6 +248,401 @@ router.post("/apply/:id/reverse", async (req, res) => {
     payload: { reversesId: orig.id, amount: orig.appliedAmount, reason },
     summary: `Reversed cash application ${orig.id} (${reason})` });
   return res.json({ ok: true, data: { reversalId: revId } });
+});
+
+// ════════════════════════ Task #431 — live cash ops ════════════════════════
+
+// ─────────────────────── triage queue ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/triage", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  const stateFilter = String(req.query.state ?? "");
+  const states = stateFilter
+    ? stateFilter.split(",").filter((s) => ["unmatched", "proposed", "matched", "parked", "journaled"].includes(s))
+    : ["unmatched", "proposed", "parked"];
+  const rows = await db.select().from(atelierBankTransaction).where(and(
+    eq(atelierBankTransaction.orgId, me.orgId),
+    isNull(atelierBankTransaction.deletedAt),
+    inArray(atelierBankTransaction.matchedState, states.length > 0 ? states : ["proposed"]),
+  )).orderBy(desc(atelierBankTransaction.postedDate)).limit(300);
+  return res.json({ ok: true, data: { rows } });
+});
+
+// Re-run matching for a single txn (after correcting counterparty data etc).
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/rematch", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  if (txn.amount >= 0) return res.status(400).json({ error: "invalid_input", message: "Rematch is for outflows; inflows use /wallet/cash/match." });
+  const candidates = await proposeOutflowCandidates({
+    orgId: me.orgId, counterpartyNameRaw: txn.counterpartyNameRaw, amountAbs: Math.abs(txn.amount),
+    entityId: await resolveTxnEntity(txn),
+  });
+  await db.update(atelierBankTransaction).set({
+    matchProposal: { type: "outflow", candidates, proposedAt: new Date().toISOString() },
+    matchedState: candidates.length > 0 ? "proposed" : "unmatched",
+    parkedReason: null, parkedByUserId: null,
+    updatedAt: new Date(),
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  return res.json({ ok: true, data: { candidates } });
+});
+
+// ─────────────────────── inflow confirm (AR update + GL via Bookkeeper) ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/confirm", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = req.body as { invoiceId?: string; appliedAmount?: number; rationale?: string };
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  if (txn.amount <= 0) return res.status(400).json({ error: "invalid_input", message: "Confirm is for inflows; use outflow-confirm or journal for outflows." });
+  const proposal = txn.matchProposal as {
+    cashReceiptId?: string;
+    recommended?: string | { invoiceId: string | null };
+    candidates?: Array<{ invoiceId?: string | null }>;
+  } | null;
+  const recommendedInvoiceId =
+    (typeof proposal?.recommended === "object" && proposal.recommended?.invoiceId)
+      ? proposal.recommended.invoiceId
+      : (proposal?.candidates?.[0]?.invoiceId ?? null);
+  // Correction UX: an explicit invoiceId in the body overrides the proposal.
+  const invoiceId = b.invoiceId ?? recommendedInvoiceId ?? null;
+  if (!invoiceId) return res.status(400).json({ error: "invalid_input", message: "No invoiceId (no proposal recommendation and none supplied)." });
+  // Resolve (or create) the receipt row.
+  let receiptId = proposal?.cashReceiptId ?? null;
+  if (!receiptId) {
+    const existing = await db.select({ id: atelierCashReceipt.id }).from(atelierCashReceipt)
+      .where(and(eq(atelierCashReceipt.orgId, me.orgId), eq(atelierCashReceipt.bankTransactionId, txn.id)));
+    if (existing.length > 0) receiptId = existing[0].id;
+    else {
+      receiptId = rid("rcpt");
+      await db.insert(atelierCashReceipt).values({
+        id: receiptId, orgId: me.orgId, bankTransactionId: txn.id,
+        totalAmount: txn.amount, appliedAmount: 0, currency: txn.currency,
+        receivedAt: txn.postedDate, createdByUserId: me.id,
+      });
+    }
+  }
+  const [receipt] = await db.select().from(atelierCashReceipt)
+    .where(and(eq(atelierCashReceipt.id, receiptId), eq(atelierCashReceipt.orgId, me.orgId)));
+  if (!receipt) return res.status(404).json({ error: "receipt_not_found" });
+  const [inv] = await db.select().from(atelierInvoice)
+    .where(and(eq(atelierInvoice.id, invoiceId), eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt)));
+  if (!inv) return res.status(404).json({ error: "invoice_not_found" });
+  const txnEntity = await resolveTxnEntity(txn);
+  if (!entityCompatible(txnEntity, inv.legalEntityId))
+    return res.status(400).json({ error: "entity_mismatch", message: "Invoice belongs to a different legal entity than this bank transaction." });
+  const outstanding = round2(inv.total - inv.amountPaid);
+  const remaining = round2(receipt.totalAmount - receipt.appliedAmount);
+  const applied = round2(Math.min(b.appliedAmount ?? remaining, remaining, outstanding));
+  if (applied <= 0) return res.status(400).json({ error: "nothing_to_apply", remaining, outstanding });
+  const appId = rid("capp");
+  await db.insert(atelierCashApplication).values({
+    id: appId, orgId: me.orgId, cashReceiptId: receipt.id, invoiceId: inv.id,
+    appliedAmount: applied, currency: receipt.currency,
+    appliedByUserId: me.id,
+    rationaleText: b.rationale ?? (b.invoiceId && b.invoiceId !== recommendedInvoiceId
+      ? "Manual correction of matcher proposal" : "Confirmed matcher proposal"),
+    createdByUserId: me.id,
+  });
+  const newPaid = round2(inv.amountPaid + applied);
+  await db.update(atelierInvoice).set({
+    amountPaid: newPaid,
+    status: newPaid >= inv.total - 0.01 ? "paid" : inv.status,
+    paidAt: newPaid >= inv.total - 0.01 ? new Date() : inv.paidAt,
+    updatedAt: new Date(),
+  }).where(eq(atelierInvoice.id, inv.id));
+  await db.update(atelierCashReceipt).set({
+    appliedAmount: round2(receipt.appliedAmount + applied), updatedAt: new Date(),
+  }).where(eq(atelierCashReceipt.id, receipt.id));
+  await db.update(atelierBankTransaction).set({
+    matchedState: "matched", matchedRefKind: "invoice_application", matchedRefId: appId,
+    parkedReason: null, parkedByUserId: null, updatedAt: new Date(),
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "cash_triage.confirm_inflow",
+    payload: { receiptId: receipt.id, invoiceId: inv.id, applied, applicationId: appId },
+    summary: `Confirmed receipt ${receipt.currency} ${applied} → invoice ${inv.invoiceNumber ?? inv.id}` });
+  // GL via Bookkeeper: deterministic + idempotent per source row, so a
+  // failed posting can safely be retried from the GL screen.
+  let glPosting: { status: "posted" | "failed"; message?: string } = { status: "posted" };
+  try {
+    const entityId = txn.legalEntityId ?? undefined;
+    await runBookkeeper({
+      orgId: me.orgId,
+      input: { periodLabel: txn.postedDate.slice(0, 7), entityId },
+      triggeredByUserId: me.id,
+    });
+  } catch (err) {
+    glPosting = { status: "failed", message: err instanceof Error ? err.message : String(err) };
+  }
+  return res.json({ ok: true, data: { applicationId: appId, applied, invoiceStatus: newPaid >= inv.total - 0.01 ? "paid" : inv.status, glPosting } });
+});
+
+// ─────────────────────── outflow confirm (match to source) ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/outflow-confirm", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = req.body as { refKind?: string; refId?: string };
+  if (!b.refKind || !b.refId || !["contractor_payment", "partner_firm_invoice", "expense"].includes(b.refKind))
+    return res.status(400).json({ error: "invalid_input", message: "refKind (contractor_payment|partner_firm_invoice|expense) + refId required" });
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  if (txn.amount >= 0) return res.status(400).json({ error: "invalid_input", message: "Outflow-confirm is for negative rows." });
+  const txnEntity = await resolveTxnEntity(txn);
+  const entityMismatch = () => res.status(400).json({ error: "entity_mismatch", message: "Source row belongs to a different legal entity than this bank transaction." });
+  // Validate the source row exists (org-scoped) and is entity-compatible.
+  let label = "";
+  if (b.refKind === "contractor_payment") {
+    const [r] = await db.select().from(atelierContractorPayments)
+      .where(and(eq(atelierContractorPayments.id, b.refId), eq(atelierContractorPayments.orgId, me.orgId), isNull(atelierContractorPayments.deletedAt)));
+    if (!r) return res.status(404).json({ error: "source_not_found" });
+    if (!entityCompatible(txnEntity, r.legalEntityId)) return entityMismatch();
+    label = `${r.payeeName} ${r.weekIso}`;
+    if (r.status !== "paid") {
+      await db.update(atelierContractorPayments).set({ status: "paid", paidAt: new Date(), paidByUserId: me.id, updatedAt: new Date() })
+        .where(eq(atelierContractorPayments.id, r.id));
+    }
+  } else if (b.refKind === "partner_firm_invoice") {
+    const [r] = await db.select().from(atelierPartnerFirmInvoices)
+      .where(and(eq(atelierPartnerFirmInvoices.id, b.refId), eq(atelierPartnerFirmInvoices.orgId, me.orgId), isNull(atelierPartnerFirmInvoices.deletedAt)));
+    if (!r) return res.status(404).json({ error: "source_not_found" });
+    if (!entityCompatible(txnEntity, r.legalEntityId)) return entityMismatch();
+    label = `${r.partnerFirmName} ${r.weekIso}`;
+    if (r.status !== "paid") {
+      await db.update(atelierPartnerFirmInvoices).set({ status: "paid", paidAt: new Date(), paidByUserId: me.id, updatedAt: new Date() })
+        .where(eq(atelierPartnerFirmInvoices.id, r.id));
+    }
+  } else {
+    const [r] = await db.select().from(atelierExpenses)
+      .where(and(eq(atelierExpenses.id, b.refId), eq(atelierExpenses.orgId, me.orgId), isNull(atelierExpenses.deletedAt)));
+    if (!r) return res.status(404).json({ error: "source_not_found" });
+    label = `${r.merchant ?? "expense"} ${r.expenseDate}`;
+  }
+  await db.update(atelierBankTransaction).set({
+    matchedState: "matched", matchedRefKind: b.refKind, matchedRefId: b.refId,
+    parkedReason: null, parkedByUserId: null, updatedAt: new Date(),
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "cash_triage.confirm_outflow",
+    payload: { refKind: b.refKind, refId: b.refId, amount: txn.amount },
+    summary: `Matched outflow ${txn.currency} ${Math.abs(txn.amount)} to ${b.refKind} (${label})` });
+  // GL posting for the source row (Bookkeeper is idempotent per source).
+  let glPosting: { status: "posted" | "failed"; message?: string } = { status: "posted" };
+  try {
+    await runBookkeeper({
+      orgId: me.orgId,
+      input: { periodLabel: txn.postedDate.slice(0, 7), entityId: txn.legalEntityId ?? undefined },
+      triggeredByUserId: me.id,
+    });
+  } catch (err) {
+    glPosting = { status: "failed", message: err instanceof Error ? err.message : String(err) };
+  }
+  return res.json({ ok: true, data: { matchedRefKind: b.refKind, matchedRefId: b.refId, glPosting } });
+});
+
+// ─────────────────────── outflow manual journal ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/journal", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const b = req.body as { expenseAccountCode?: string; memo?: string };
+  if (!b.expenseAccountCode) return res.status(400).json({ error: "invalid_input", message: "expenseAccountCode required" });
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  if (txn.amount >= 0) return res.status(400).json({ error: "invalid_input", message: "Journal is for outflows." });
+  let entityId = txn.legalEntityId;
+  if (!entityId) {
+    const [acct] = await db.select().from(atelierBankAccount).where(eq(atelierBankAccount.id, txn.bankAccountId));
+    entityId = acct?.legalEntityId ?? null;
+  }
+  if (!entityId) return res.status(400).json({ error: "no_entity", message: "Bank account has no legal entity; tag the account first." });
+  const accounts = await db.select().from(atelierGlAccount).where(and(
+    eq(atelierGlAccount.orgId, me.orgId),
+    eq(atelierGlAccount.legalEntityId, entityId),
+    eq(atelierGlAccount.active, true),
+    isNull(atelierGlAccount.deletedAt),
+    inArray(atelierGlAccount.code, [b.expenseAccountCode, "1000"]),
+  ));
+  const expAcct = accounts.find((a) => a.code === b.expenseAccountCode);
+  const cashAcct = accounts.find((a) => a.code === "1000");
+  if (!expAcct) return res.status(400).json({ error: "missing_account", accountCode: b.expenseAccountCode });
+  if (!cashAcct) return res.status(400).json({ error: "missing_account", accountCode: "1000", message: "Seed the chart of accounts first." });
+  const amt = round2(Math.abs(txn.amount));
+  const memo = b.memo ?? `Bank outflow: ${txn.counterpartyNameRaw ?? txn.referenceRaw ?? txn.id}`;
+  const entryId = rid("gljrn");
+  await db.transaction(async (tx) => {
+    await tx.insert(atelierGlJournalEntry).values({
+      id: entryId, orgId: me.orgId, legalEntityId: entityId!,
+      periodLabel: txn.postedDate.slice(0, 7), entryDate: txn.postedDate, kind: "manual",
+      sourceKind: "bank_transaction", sourceRef: txn.id, memo,
+      currency: "USD", totalDebit: amt, totalCredit: amt, createdByUserId: me.id,
+    });
+    await tx.insert(atelierGlJournalLine).values({
+      id: rid("gljl"), orgId: me.orgId, journalEntryId: entryId,
+      accountId: expAcct.id, accountCode: expAcct.code, accountName: expAcct.name,
+      debit: amt, credit: 0, memo,
+    });
+    await tx.insert(atelierGlJournalLine).values({
+      id: rid("gljl"), orgId: me.orgId, journalEntryId: entryId,
+      accountId: cashAcct.id, accountCode: cashAcct.code, accountName: cashAcct.name,
+      debit: 0, credit: amt, memo: "Cash out",
+    });
+    await tx.update(atelierBankTransaction).set({
+      matchedState: "journaled", glJournalEntryId: entryId,
+      parkedReason: null, parkedByUserId: null, updatedAt: new Date(),
+    }).where(eq(atelierBankTransaction.id, txn.id));
+  });
+  await audit({ entityType: "gl_journal_entry", entityId: entryId, actor: me,
+    action: "cash_triage.journal",
+    payload: { bankTransactionId: txn.id, expenseAccountCode: b.expenseAccountCode, amount: amt },
+    summary: `Journaled bank outflow $${amt} → ${expAcct.code} ${expAcct.name}` });
+  return res.status(201).json({ ok: true, data: { journalEntryId: entryId } });
+});
+
+// ─────────────────────── park ───────────────────────
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/triage/:id/park", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const reason = (req.body as { reason?: string }).reason;
+  if (!reason || reason.trim().length < 4) return res.status(400).json({ error: "invalid_input", message: "Reason required (≥4 chars)." });
+  const [txn] = await db.select().from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.id, req.params.id), eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)));
+  if (!txn) return res.status(404).json({ error: "not_found" });
+  if (txn.matchedState === "matched" || txn.matchedState === "journaled")
+    return res.status(409).json({ error: "already_resolved", state: txn.matchedState });
+  await db.update(atelierBankTransaction).set({
+    matchedState: "parked", parkedReason: reason.trim(), parkedByUserId: me.id, updatedAt: new Date(),
+  }).where(eq(atelierBankTransaction.id, txn.id));
+  await audit({ entityType: "bank_transaction", entityId: txn.id, actor: me,
+    action: "cash_triage.park",
+    payload: { reason: reason.trim(), amount: txn.amount },
+    summary: `Parked bank txn ${txn.currency} ${txn.amount}: ${reason.trim()}` });
+  return res.json({ ok: true });
+});
+
+// ─────────────────────── forecast ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/forecast/latest", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  const [latest] = await db.select({ snapshotId: atelierCashForecastSnapshot.snapshotId, snapshotAt: atelierCashForecastSnapshot.snapshotAt })
+    .from(atelierCashForecastSnapshot)
+    .where(eq(atelierCashForecastSnapshot.orgId, me.orgId))
+    .orderBy(desc(atelierCashForecastSnapshot.snapshotAt)).limit(1);
+  if (!latest) return res.json({ ok: true, data: { snapshotId: null, weeks: [] } });
+  const weeks = await db.select().from(atelierCashForecastSnapshot).where(and(
+    eq(atelierCashForecastSnapshot.orgId, me.orgId),
+    eq(atelierCashForecastSnapshot.snapshotId, latest.snapshotId),
+  )).orderBy(atelierCashForecastSnapshot.weekIndex);
+  return res.json({ ok: true, data: { snapshotId: latest.snapshotId, snapshotAt: latest.snapshotAt, weeks } });
+});
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/forecast/run", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  if (!isFinanceLeadership(me)) return res.status(403).json({ error: "forbidden", message: "finance/partner only" });
+  const out = await runCashFlowForecaster({
+    asOf: new Date().toISOString().slice(0, 10),
+    currency: "USD", openingBalance: 0, orgId: me.orgId,
+    triggeredByUserId: me.id, actorLabel: me.name,
+  });
+  return res.json({ ok: true, data: out.output, runId: out.runId });
+});
+
+// ─────────────────────── working capital ───────────────────────
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/working-capital", async (req, res) => {
+  if (denyAll(req, res)) return;
+  const me = ensure(req, res); if (!me) return;
+  // Cash position = per-account opening balance + posted txn sum.
+  const accts = await db.select().from(atelierBankAccount).where(and(
+    eq(atelierBankAccount.orgId, me.orgId), isNull(atelierBankAccount.deletedAt), eq(atelierBankAccount.isActive, true),
+  ));
+  const txnSums = await db.select({
+    bankAccountId: atelierBankTransaction.bankAccountId,
+    total: sql<number>`coalesce(sum(${atelierBankTransaction.amount}), 0)`,
+  }).from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)))
+    .groupBy(atelierBankTransaction.bankAccountId);
+  const sumByAcct = new Map(txnSums.map((t) => [t.bankAccountId, Number(t.total)]));
+  const cashByAccount = accts.map((a) => ({
+    id: a.id, label: `${a.bankName} ${a.accountLabel}`, legalEntityId: a.legalEntityId,
+    currency: a.currency, balance: round2(a.openingBalance + (sumByAcct.get(a.id) ?? 0)),
+  }));
+  const cashTotal = round2(cashByAccount.reduce((s, a) => s + a.balance, 0));
+  // AR = open invoices.
+  const invoices = (await db.select().from(atelierInvoice)
+    .where(and(eq(atelierInvoice.orgId, me.orgId), isNull(atelierInvoice.deletedAt))))
+    .filter((i) => i.status !== "draft" && i.status !== "void" && i.total - i.amountPaid > 0.01);
+  const today = new Date().toISOString().slice(0, 10);
+  const arOpen = round2(invoices.reduce((s, i) => s + (i.total - i.amountPaid), 0));
+  const arOverdue = round2(invoices.filter((i) => i.dueDate && i.dueDate < today)
+    .reduce((s, i) => s + (i.total - i.amountPaid), 0));
+  // Unapplied receipts.
+  const receipts = await db.select().from(atelierCashReceipt)
+    .where(and(eq(atelierCashReceipt.orgId, me.orgId), isNull(atelierCashReceipt.deletedAt)));
+  const unapplied = round2(receipts.reduce((s, r) => s + Math.max(0, r.totalAmount - r.appliedAmount), 0));
+  // AP-like: approved-but-unpaid outflows.
+  const cps = await db.select().from(atelierContractorPayments).where(and(
+    eq(atelierContractorPayments.orgId, me.orgId), isNull(atelierContractorPayments.deletedAt),
+    eq(atelierContractorPayments.status, "partner_approved"),
+  ));
+  const pfis = await db.select().from(atelierPartnerFirmInvoices).where(and(
+    eq(atelierPartnerFirmInvoices.orgId, me.orgId), isNull(atelierPartnerFirmInvoices.deletedAt),
+    eq(atelierPartnerFirmInvoices.status, "partner_approved"),
+  ));
+  const exps = await db.select().from(atelierExpenses).where(and(
+    eq(atelierExpenses.orgId, me.orgId), isNull(atelierExpenses.deletedAt),
+    eq(atelierExpenses.status, "approved"),
+  ));
+  const apContractor = round2(cps.reduce((s, r) => s + r.usdAmount, 0));
+  const apPartnerFirm = round2(pfis.reduce((s, r) => s + r.usdAmount, 0));
+  const apExpenses = round2(exps.filter((e) => e.fundingSource === "personal_claim").reduce((s, r) => s + r.usdAmount, 0));
+  const apTotal = round2(apContractor + apPartnerFirm + apExpenses);
+  // Triage queue counts.
+  const triage = await db.select({
+    state: atelierBankTransaction.matchedState,
+    n: sql<number>`count(*)`,
+  }).from(atelierBankTransaction)
+    .where(and(eq(atelierBankTransaction.orgId, me.orgId), isNull(atelierBankTransaction.deletedAt)))
+    .groupBy(atelierBankTransaction.matchedState);
+  const triageCounts = Object.fromEntries(triage.map((t) => [t.state, Number(t.n)]));
+  return res.json({
+    ok: true,
+    data: {
+      asOf: today,
+      cash: { total: cashTotal, byAccount: cashByAccount },
+      ar: { open: arOpen, overdue: arOverdue, invoiceCount: invoices.length },
+      unappliedReceipts: unapplied,
+      ap: { total: apTotal, contractorPayments: apContractor, partnerFirmInvoices: apPartnerFirm, reimbursableExpenses: apExpenses },
+      netWorkingCapital: round2(cashTotal + arOpen - apTotal),
+      triageCounts,
+    },
+  });
 });
 
 export default router;

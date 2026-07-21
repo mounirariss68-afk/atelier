@@ -351,23 +351,13 @@ defineCapability({
     const i = input as { compute?: boolean };
     if (i.compute && !isFinanceLeadership(ctx.persona)) return denyForbidden("finance/partner only for compute=true");
     if (i.compute) {
+      // Task #431 — the runner now persists the snapshot rows + raises
+      // cash-gap Pane A alerts itself; no double-insert here.
       const out = await runCashFlowForecaster({
         asOf: new Date().toISOString().slice(0, 10),
-        currency: "USD", openingBalance: 0,
+        currency: "USD", openingBalance: 0, orgId: ctx.persona.orgId,
         triggeredByUserId: ctx.persona.id, actorLabel: ctx.persona.name,
       });
-      // Persist 13 rows
-      const snapshotId = out.output.snapshotId;
-      await db.insert(atelierCashForecastSnapshot).values(out.output.weeks.map((w) => ({
-        id: rid("cfc"), orgId: ctx.persona.orgId, snapshotId,
-        weekIndex: w.weekIndex, weekStart: w.weekStart,
-        expectedIn: w.expectedIn, expectedOut: w.expectedOut,
-        openingBalance: w.openingBalance, closingBalance: w.closingBalance,
-        confidenceLow: w.confidenceLow, confidenceHigh: w.confidenceHigh,
-        isCashGap: w.isCashGap, currency: out.output.currency,
-        inputEvidenceRef: snapshotId, computedByAgentRunId: out.runId,
-        createdByUserId: ctx.persona.id,
-      })));
       return { ok: true, data: out.output, resultCardHint: "cash_forecast_strip" };
     }
     // Read latest snapshot.

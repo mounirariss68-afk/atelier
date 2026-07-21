@@ -6746,11 +6746,11 @@ export async function runCashApplicationMatcher(
     actorLabel: input.actorLabel,
   });
   try {
-    const { value, costUsd } = await callClaudeJson<CashApplicationMatcherOutput>(
-      "claude-haiku-4-5",
-      "You are the Cash Application Matcher. Return a ranked list of invoice candidates for the receipt.",
-      JSON.stringify(input),
-    );
+    // Task #431 — deterministic rule-based matching (reference / name /
+    // amount heuristics). No LLM call: proposals must be reproducible and
+    // auditable, and the matcher auto-runs on every statement import.
+    const value = ruleBasedCashMatch(input);
+    const costUsd = 0;
     const conf: "green" | "amber" | "red" =
       value.candidates[0]?.confidence >= 0.85 ? "green" :
       value.candidates[0]?.confidence >= 0.5 ? "amber" : "red";
@@ -6801,53 +6801,16 @@ export interface CashFlowForecasterOutput {
   rationaleSummary: string;
 }
 
-function isoMondayOnOrAfter(d: Date): Date {
-  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const dow = x.getUTCDay(); // 0=Sun
-  const offset = dow === 1 ? 0 : (dow === 0 ? 1 : 8 - dow);
-  x.setUTCDate(x.getUTCDate() + offset);
-  return x;
-}
-
-async function ruleBasedForecast(
-  input: CashFlowForecasterInput,
-  rows: Array<{ outstanding: number; dueDate: string | null }>,
-): Promise<CashFlowForecasterOutput> {
-  const start = isoMondayOnOrAfter(new Date(input.asOf));
-  const weeks: CashFlowForecasterWeek[] = [];
-  let opening = input.openingBalance;
-  for (let i = 0; i < 13; i++) {
-    const wkStart = new Date(start.getTime() + i * 7 * 86400_000);
-    const wkEnd = new Date(wkStart.getTime() + 7 * 86400_000);
-    const expectedIn = rows
-      .filter((r) => r.dueDate && new Date(r.dueDate).getTime() >= wkStart.getTime() && new Date(r.dueDate).getTime() < wkEnd.getTime())
-      .reduce((s, r) => s + r.outstanding, 0);
-    // Synthetic recurring outflow (payroll-like) every 2nd week (mock).
-    const expectedOut = (i % 2 === 0) ? Math.round(input.openingBalance * 0.05 * 100) / 100 : 0;
-    const closing = Math.round((opening + expectedIn - expectedOut) * 100) / 100;
-    weeks.push({
-      weekIndex: i, weekStart: wkStart.toISOString().slice(0, 10),
-      expectedIn: Math.round(expectedIn * 100) / 100, expectedOut,
-      openingBalance: Math.round(opening * 100) / 100, closingBalance: closing,
-      confidenceLow: Math.round(closing * 0.85 * 100) / 100,
-      confidenceHigh: Math.round(closing * 1.15 * 100) / 100,
-      isCashGap: closing < 0,
-    });
-    opening = closing;
-  }
-  const snapshotId = `snap_${Date.now().toString(36)}`;
-  return {
-    snapshotId, asOf: input.asOf, currency: input.currency,
-    openingBalance: input.openingBalance, weeks,
-    cashGapWeeks: weeks.filter((w) => w.isCashGap).map((w) => w.weekIndex),
-    rationaleSummary: `13-week direct-method forecast from ${weeks[0].weekStart} based on ${rows.length} open AR rows.`,
-  };
-}
-
+// Task #431 — deterministic 13-week forecast composed from real plan
+// facts (open AR, milestones, payroll, contractor payments, expenses,
+// registry tax lines) via the finance plan engine, persisted as an
+// atelier_cash_forecast_snapshot and raising Pane A cash-gap alerts
+// against each entity's cashPolicy floors.
 export async function runCashFlowForecaster(
-  input: CashFlowForecasterInput,
+  input: CashFlowForecasterInput & { orgId?: string },
 ): Promise<{ runId: string; output: CashFlowForecasterOutput; costUsd: number }> {
   const t0 = Date.now();
+  const orgId = input.orgId ?? "aico";
   const runId = await startRun({
     agentId: "ag_cash_flow_forecaster",
     triggeredByUserId: input.triggeredByUserId,
@@ -6858,26 +6821,101 @@ export async function runCashFlowForecaster(
     actorLabel: input.actorLabel,
   });
   try {
-    // Pull open AR rows so the model has grounded source data.
-    const { db: dbRef, atelierInvoice: invTbl } = await import("@workspace/db");
-    const { isNull: isN } = await import("drizzle-orm");
-    const rows = (await dbRef.select().from(invTbl).where(isN(invTbl.deletedAt)))
-      .filter((i) => i.total - i.amountPaid > 0.01)
-      .map((i) => ({ outstanding: i.total - i.amountPaid, dueDate: i.dueDate }));
-    const { value, costUsd } = await callClaudeJson<CashFlowForecasterOutput>(
-      "claude-sonnet-4-6",
-      "You are the Cash Flow Forecaster. Produce a 13-week direct-method forecast.",
-      JSON.stringify({ ...input, openInvoices: rows }),
+    const { computeCashForecastForOrg } = await import(
+      "../../routes/atelier/financePlanRoutes.js"
     );
+    const fc = await computeCashForecastForOrg(orgId);
+    const cons = fc.consolidated;
+    const weeks: CashFlowForecasterWeek[] = cons.weeks.map((w) => ({
+      weekIndex: w.weekIndex,
+      weekStart: w.weekStart,
+      expectedIn: Math.round(w.expectedIn * 100) / 100,
+      expectedOut: Math.round(w.expectedOut * 100) / 100,
+      openingBalance: Math.round(w.openingBalance * 100) / 100,
+      closingBalance: Math.round(w.closingBalance * 100) / 100,
+      confidenceLow: Math.round(w.closingBalance * 0.85 * 100) / 100,
+      confidenceHigh: Math.round(w.closingBalance * 1.15 * 100) / 100,
+      isCashGap: w.belowMinCash || w.belowCovenant || w.closingBalance < 0,
+    }));
+    const snapshotId = `snap_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const evidenceRef = `cash13w:${fc.asOf}:receipts=${fc.receiptLineCount}:disbursements=${fc.disbursementLineCount}`;
+    const value: CashFlowForecasterOutput = {
+      snapshotId,
+      asOf: fc.asOf,
+      currency: "USD",
+      openingBalance: Math.round(cons.openingBalance * 100) / 100,
+      weeks,
+      cashGapWeeks: weeks.filter((w) => w.isCashGap).map((w) => w.weekIndex),
+      rationaleSummary: `13-week direct-method forecast from ${fc.asOf}: ${fc.receiptLineCount} receipt lines, ${fc.disbursementLineCount} disbursement lines, min-cash line $${Math.round(cons.minCashLine)}.`,
+    };
+    // Persist the snapshot (13 rows, org-wide).
+    const { atelierCashForecastSnapshot } = await import("@workspace/db");
+    await db.insert(atelierCashForecastSnapshot).values(weeks.map((w) => ({
+      id: `cfc_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      orgId, snapshotId,
+      weekIndex: w.weekIndex, weekStart: w.weekStart,
+      expectedIn: w.expectedIn, expectedOut: w.expectedOut,
+      openingBalance: w.openingBalance, closingBalance: w.closingBalance,
+      confidenceLow: w.confidenceLow, confidenceHigh: w.confidenceHigh,
+      isCashGap: w.isCashGap, currency: "USD",
+      inputEvidenceRef: evidenceRef, computedByAgentRunId: runId,
+      createdByUserId: input.triggeredByUserId,
+    })));
+    // Cash-gap alerts: per entity, compare weekly closings against the
+    // entity's own min-cash / covenant floors and surface a Pane A item
+    // for finance leadership. IDs are idempotent per (entity, weekStart)
+    // so a persisting breach doesn't re-alert daily.
+    const alertsRaised: Array<{ entityId: string; weekIndex: number; kind: string; gapAmount: number }> = [];
+    const { atelierUsers: usersTbl } = await import("@workspace/db");
+    const { or: orOp } = await import("drizzle-orm");
+    const leadership = await db.select({ id: usersTbl.id }).from(usersTbl)
+      .where(and(eq(usersTbl.orgId, orgId), orOp(
+        eq(usersTbl.role, "founding_partner"),
+        eq(usersTbl.role, "partner"),
+        eq(usersTbl.role, "finance"),
+      )));
+    for (const ent of fc.entities) {
+      const floored = ent.forecast.minCashLine > 0 || ent.forecast.covenantLine != null;
+      if (!floored) continue;
+      for (const br of ent.forecast.breaches) {
+        const wk = ent.forecast.weeks[br.weekIndex];
+        alertsRaised.push({ entityId: ent.id, weekIndex: br.weekIndex, kind: br.kind, gapAmount: Math.round(br.gapAmount) });
+        for (const u of leadership) {
+          await db.insert(atelierPaneAItems).values({
+            id: `panea_cashgap_${ent.id}_${wk.weekStart}_${br.kind}_${u.id}`,
+            userId: u.id,
+            title: `Cash gap: ${ent.shortName} week of ${wk.weekStart}`,
+            summary: `Cash Flow Forecaster · projected closing $${Math.round(wk.closingBalance)} breaches the ${br.kind === "covenant" ? "covenant floor" : "min-cash policy"} by $${Math.round(br.gapAmount)}.`,
+            priority: br.kind === "covenant" || br.weekIndex < 4 ? "high" : "medium",
+            hrefKind: "atelier",
+            hrefTargetId: "wallet-treasury",
+            dueLabel: wk.weekStart,
+            sortKey: br.weekIndex,
+            createdByUserId: input.triggeredByUserId,
+          }).onConflictDoNothing({ target: atelierPaneAItems.id });
+        }
+      }
+    }
+    if (alertsRaised.length > 0) {
+      await db.insert(atelierAuditEvents).values({
+        id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+        entityType: "cash_forecast", entityId: snapshotId,
+        actorType: "agent", actorId: "ag_cash_flow_forecaster",
+        actorLabel: "Cash Flow Forecaster",
+        action: "cash_forecast.gap_alerts",
+        payload: { snapshotId, alerts: alertsRaised },
+        payloadSummary: `Cash Flow Forecaster raised ${alertsRaised.length} cash-gap alert(s) across ${new Set(alertsRaised.map((a) => a.entityId)).size} entity(ies).`,
+      });
+    }
     const conf: "green" | "amber" | "red" =
       value.cashGapWeeks.length === 0 ? "green" : value.cashGapWeeks.some((w) => w < 4) ? "red" : "amber";
     await completeRun({
-      runId, output: value as unknown, confidence: conf, costUsd,
-      durationMs: Date.now() - t0, sourcesCount: value.weeks.length,
+      runId, output: { ...value, alertsRaised } as unknown, confidence: conf, costUsd: 0,
+      durationMs: Date.now() - t0, sourcesCount: fc.receiptLineCount + fc.disbursementLineCount,
       actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_",
       targetLabel: "13-week cash forecast",
     });
-    return { runId, output: value, costUsd };
+    return { runId, output: value, costUsd: 0 };
   } catch (err) {
     await failRun(runId, err, { actorLabel: input.actorLabel, targetType: "cash_forecast", targetId: "_firm_" });
     throw err;

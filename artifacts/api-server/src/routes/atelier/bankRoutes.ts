@@ -26,6 +26,7 @@ import {
   atelierPeriodCloseLock,
 } from "@workspace/db";
 import { parseBankStatement } from "../../lib/bank-parsers/index.js";
+import { autoMatchImport } from "../../lib/atelier-cash-ops.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 
 const router: IRouter = Router();
@@ -199,7 +200,23 @@ router.post("/import", async (req, res) => {
     action: "bank_import.create",
     payload: { bankAccountId: b.bankAccountId, rowsCount: parsed.rows.length, errors: parsed.errors.length },
     summary: `Imported ${parsed.rows.length} bank rows (${parsed.errors.length} errors)` });
-  return res.json({ ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors } });
+  // Task #431 — Cash Application Matcher auto-runs after every import:
+  // inflows get cash-receipt rows + invoice proposals, outflows get
+  // triage source candidates. Fail-soft: a matcher error never fails
+  // the import itself, and is reported in the response.
+  let matcher: { status: "ok" | "failed"; summary?: unknown; message?: string } = { status: "ok" };
+  if (parsed.rows.length > 0) {
+    try {
+      const s = await autoMatchImport({
+        orgId: me.orgId, statementImportId: importId,
+        triggeredByUserId: me.id, actorLabel: me.name,
+      });
+      matcher = { status: s.errors.length > 0 ? "failed" : "ok", summary: s };
+    } catch (err) {
+      matcher = { status: "failed", message: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  return res.json({ ok: true, data: { importId, rowsImported: parsed.rows.length, errors: parsed.errors, matcher } });
 });
 
 // @cli-skip: pending Task #340 read-parity migration

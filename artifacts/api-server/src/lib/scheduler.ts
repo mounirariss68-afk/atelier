@@ -26,6 +26,9 @@ const MS_AUTOLOG_CRON = process.env.MS_AUTOLOG_CRON ?? "*/30 * * * *";
 // billing rules, materialise due triggers, draft invoices for partner
 // approval. Deterministic + idempotent, so a re-run is always safe.
 const BILLING_ORCHESTRATOR_CRON = process.env.BILLING_ORCHESTRATOR_CRON ?? "30 4 * * *";
+// Task #431 — Cash Flow Forecaster writes a fresh 13-week snapshot +
+// raises cash-gap Pane A alerts every Monday 05:00 UTC by default.
+const CASH_FORECASTER_CRON = process.env.CASH_FORECASTER_CRON ?? "0 5 * * 1";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
@@ -35,6 +38,7 @@ let winLossSlaTask: ScheduledTask | null = null;
 let sessionCleanupTask: ScheduledTask | null = null;
 let msAutologTask: ScheduledTask | null = null;
 let billingOrchestratorTask: ScheduledTask | null = null;
+let cashForecasterTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -268,6 +272,35 @@ export function startScheduler(): void {
       "Invalid BILLING_ORCHESTRATOR_CRON expression, Billing Orchestrator not scheduled",
     );
   }
+
+  if (cron.validate(CASH_FORECASTER_CRON)) {
+    cashForecasterTask = cron.schedule(
+      CASH_FORECASTER_CRON,
+      async () => {
+        try {
+          const { runCashFlowForecaster } = await import("./atelier-agents/runner.js");
+          const out = await runCashFlowForecaster({
+            asOf: new Date().toISOString().slice(0, 10),
+            currency: "USD", openingBalance: 0, orgId: "aico",
+            triggeredByUserId: null, actorLabel: "Scheduler",
+          });
+          logger.info(
+            { snapshotId: out.output.snapshotId, cashGapWeeks: out.output.cashGapWeeks },
+            "Cash Flow Forecaster scheduled run finished",
+          );
+        } catch (err) {
+          logger.error({ err }, "Cash Flow Forecaster scheduled run encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: CASH_FORECASTER_CRON }, "Cash Flow Forecaster scheduler started");
+  } else {
+    logger.error(
+      { cron: CASH_FORECASTER_CRON },
+      "Invalid CASH_FORECASTER_CRON expression, Cash Flow Forecaster not scheduled",
+    );
+  }
 }
 
 export function stopScheduler(): void {
@@ -310,6 +343,11 @@ export function stopScheduler(): void {
     billingOrchestratorTask.stop();
     billingOrchestratorTask = null;
     logger.info("Billing Orchestrator scheduler stopped");
+  }
+  if (cashForecasterTask) {
+    cashForecasterTask.stop();
+    cashForecasterTask = null;
+    logger.info("Cash Flow Forecaster scheduler stopped");
   }
 }
 

@@ -26,19 +26,107 @@ interface MatchResp {
   rationaleSummary: string;
 }
 
+interface OutflowCandidate {
+  refKind: string;
+  refId: string;
+  label: string;
+  amount: number;
+  confidence: number;
+  rationale: string;
+}
+
+interface TriageTxn {
+  id: string;
+  postedDate: string;
+  amount: number;
+  currency: string;
+  kind: string;
+  counterpartyNameRaw: string | null;
+  referenceRaw: string | null;
+  matchedState: string;
+  parkedReason: string | null;
+  matchProposal: {
+    type?: "inflow" | "outflow";
+    cashReceiptId?: string;
+    recommended?: string | { invoiceId: string | null; invoiceNumber?: string | null; appliedAmount?: number };
+    candidates?: Array<MatchCandidate & OutflowCandidate>;
+    rationaleSummary?: string;
+  } | null;
+}
+
+const stateTone: Record<string, "green" | "gold" | "red" | "default"> = {
+  proposed: "gold", unmatched: "default", parked: "red", matched: "green", journaled: "green",
+};
+
 export default function WalletCash() {
+  const [txns, setTxns] = React.useState<TriageTxn[]>([]);
   const [receipts, setReceipts] = React.useState<CashReceipt[]>([]);
   const [selected, setSelected] = React.useState<string | null>(null);
   const [matches, setMatches] = React.useState<MatchResp | null>(null);
   const [matching, setMatching] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState<string | null>(null);
+  const [journalFor, setJournalFor] = React.useState<string | null>(null);
+  const [journalAcct, setJournalAcct] = React.useState("6000");
+  const [parkFor, setParkFor] = React.useState<string | null>(null);
+  const [parkReason, setParkReason] = React.useState("");
 
   const load = React.useCallback(async () => {
-    const r = await fetch("/api/atelier/wallet/cash/receipts", { credentials: "include" });
-    const j = await r.json();
-    setReceipts(j?.data?.rows ?? []);
+    const [tr, rr] = await Promise.all([
+      fetch("/api/atelier/wallet/cash/triage", { credentials: "include" }),
+      fetch("/api/atelier/wallet/cash/receipts", { credentials: "include" }),
+    ]);
+    const tj = await tr.json();
+    const rj = await rr.json();
+    setTxns(tj?.data?.rows ?? []);
+    setReceipts(rj?.data?.rows ?? []);
   }, []);
   React.useEffect(() => { void load(); }, [load]);
+
+  const act = async (label: string, fn: () => Promise<Response>) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await fn();
+      const j = await r.json().catch(() => null);
+      if (!r.ok) {
+        setNote(`${label} failed: ${j?.message ?? j?.error ?? r.status}`);
+      } else {
+        const gl = j?.data?.glPosting;
+        setNote(gl?.status === "failed" ? `${label} done — GL posting failed: ${gl.message}` : `${label} done.`);
+        setJournalFor(null); setParkFor(null); setParkReason("");
+        await load();
+      }
+    } finally { setBusy(false); }
+  };
+
+  const confirmInflow = (t: TriageTxn, invoiceId?: string) =>
+    act("Confirm", () => fetch(`/api/atelier/wallet/cash/triage/${t.id}/confirm`, {
+      method: "POST", credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(invoiceId ? { invoiceId } : {}),
+    }));
+
+  const confirmOutflow = (t: TriageTxn, c: OutflowCandidate) =>
+    act("Match", () => fetch(`/api/atelier/wallet/cash/triage/${t.id}/outflow-confirm`, {
+      method: "POST", credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ refKind: c.refKind, refId: c.refId }),
+    }));
+
+  const journal = (t: TriageTxn) =>
+    act("Journal", () => fetch(`/api/atelier/wallet/cash/triage/${t.id}/journal`, {
+      method: "POST", credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ expenseAccountCode: journalAcct.trim() }),
+    }));
+
+  const park = (t: TriageTxn) =>
+    act("Park", () => fetch(`/api/atelier/wallet/cash/triage/${t.id}/park`, {
+      method: "POST", credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ reason: parkReason.trim() }),
+    }));
 
   const runMatch = async (cashReceiptId: string) => {
     setMatching(true);
@@ -74,7 +162,7 @@ export default function WalletCash() {
         <SectionHead
           eyebrow="Firm · Wallet"
           headline="Cash application"
-          lede="Receipts from bank statements matched and applied to open invoices."
+          lede="Bank rows auto-matched on import. Confirm proposals, correct them, journal one-offs, or park items for later."
         />
       </PageHero>
       <SubSectionTabs
@@ -86,7 +174,137 @@ export default function WalletCash() {
       ]}
       />
       <div className="px-6 py-4 max-w-7xl mx-auto space-y-4">
+        {note && (
+          <div className="text-xs font-mono text-gold" data-testid="cash-action-note">{note}</div>
+        )}
+
         <Card className="overflow-hidden">
+          <div className="px-3 pt-3 font-mono text-xs text-text-faint uppercase" data-testid="triage-head">
+            Triage queue · {txns.length} open item{txns.length === 1 ? "" : "s"}
+          </div>
+          <table className="w-full text-sm" data-testid="cash-triage">
+            <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
+              <tr><th className="text-left px-3 py-2">Date</th><th className="text-left px-3 py-2">Counterparty</th><th className="text-right px-3 py-2">Amount</th><th className="text-left px-3 py-2">State</th><th className="text-left px-3 py-2">Proposal</th><th></th></tr>
+            </thead>
+            <tbody>
+              {txns.length === 0 && (
+                <tr><td colSpan={6} className="px-3 py-8 text-center text-text-mute">Queue is clear. Import a bank statement to triage new rows.</td></tr>
+              )}
+              {txns.map((t) => {
+                const p = t.matchProposal;
+                const isInflow = t.amount > 0;
+                const recObj = typeof p?.recommended === "object" ? p.recommended : null;
+                const rec = recObj?.invoiceId
+                  ? recObj
+                  : (p?.candidates?.[0]?.invoiceId
+                      ? { invoiceId: p.candidates[0].invoiceId, invoiceNumber: p.candidates[0].invoiceNumber }
+                      : null);
+                const cands = (p?.candidates ?? []) as Array<MatchCandidate & OutflowCandidate>;
+                return (
+                  <React.Fragment key={t.id}>
+                    <tr className="border-t border-border-soft" data-testid={`triage-row-${t.id}`}>
+                      <td className="px-3 py-2 font-mono text-xs">{t.postedDate}</td>
+                      <td className="px-3 py-2 text-xs">
+                        <div>{t.counterpartyNameRaw ?? "—"}</div>
+                        {t.referenceRaw && <div className="text-text-faint font-mono">{t.referenceRaw}</div>}
+                        {t.matchedState === "parked" && t.parkedReason && (
+                          <div className="text-danger text-[11px]">parked: {t.parkedReason}</div>
+                        )}
+                      </td>
+                      <td className={`px-3 py-2 text-right font-mono ${isInflow ? "text-gold" : ""}`}>
+                        {t.currency} {t.amount.toFixed(2)}
+                      </td>
+                      <td className="px-3 py-2"><MonoChip tone={stateTone[t.matchedState] ?? "default"}>{t.matchedState}</MonoChip></td>
+                      <td className="px-3 py-2 text-xs text-text-mute max-w-[260px]">
+                        {isInflow
+                          ? (rec?.invoiceId ? `→ ${rec.invoiceNumber ?? rec.invoiceId}` : p?.rationaleSummary ?? "no proposal")
+                          : (cands[0] ? `→ ${cands[0].label}` : "no candidate")}
+                      </td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap space-x-1">
+                        {isInflow && rec?.invoiceId && (
+                          <PillButton variant="primary" disabled={busy} data-testid={`btn-confirm-${t.id}`} onClick={() => confirmInflow(t)}>
+                            Confirm
+                          </PillButton>
+                        )}
+                        {!isInflow && cands[0] && (
+                          <PillButton variant="primary" disabled={busy} data-testid={`btn-outflow-confirm-${t.id}`} onClick={() => confirmOutflow(t, cands[0])}>
+                            Match
+                          </PillButton>
+                        )}
+                        {!isInflow && (
+                          <PillButton variant="ghost" disabled={busy} data-testid={`btn-journal-${t.id}`} onClick={() => { setJournalFor(journalFor === t.id ? null : t.id); setParkFor(null); }}>
+                            Journal
+                          </PillButton>
+                        )}
+                        {t.matchedState !== "parked" && (
+                          <PillButton variant="ghost" disabled={busy} data-testid={`btn-park-${t.id}`} onClick={() => { setParkFor(parkFor === t.id ? null : t.id); setJournalFor(null); }}>
+                            Park
+                          </PillButton>
+                        )}
+                      </td>
+                    </tr>
+                    {(cands.length > 1 || (isInflow && cands.length > 0)) && (
+                      <tr className="border-t border-border-soft/50 bg-bg-elevate/40">
+                        <td colSpan={6} className="px-3 py-2">
+                          <div className="text-[11px] font-mono text-text-faint uppercase mb-1">Candidates</div>
+                          <ul className="space-y-1">
+                            {cands.map((c, i) => (
+                              <li key={i} className="flex items-center justify-between text-xs font-mono">
+                                <span className="text-text-mute">{isInflow ? (c.invoiceNumber ?? c.invoiceId) : c.label} · {c.rationale}</span>
+                                <span className="flex items-center gap-2">
+                                  <span className="text-text-faint">{(c.confidence * 100).toFixed(0)}%</span>
+                                  <PillButton variant="ghost" disabled={busy}
+                                    data-testid={`btn-pick-${t.id}-${i}`}
+                                    onClick={() => isInflow ? confirmInflow(t, c.invoiceId) : confirmOutflow(t, c)}>
+                                    Use this
+                                  </PillButton>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </td>
+                      </tr>
+                    )}
+                    {journalFor === t.id && (
+                      <tr className="bg-bg-elevate/40">
+                        <td colSpan={6} className="px-3 py-2">
+                          <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="text-text-mute">Dr account code</span>
+                            <input className="bg-bg border border-border-soft rounded px-2 py-1 w-24 text-text"
+                              value={journalAcct} onChange={(e) => setJournalAcct(e.target.value)}
+                              data-testid={`input-journal-acct-${t.id}`} />
+                            <span className="text-text-faint">/ Cr 1000 cash · ${Math.abs(t.amount).toFixed(2)}</span>
+                            <PillButton variant="primary" disabled={busy || !journalAcct.trim()} data-testid={`btn-journal-go-${t.id}`} onClick={() => journal(t)}>
+                              Post journal
+                            </PillButton>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    {parkFor === t.id && (
+                      <tr className="bg-bg-elevate/40">
+                        <td colSpan={6} className="px-3 py-2">
+                          <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className="text-text-mute">Reason</span>
+                            <input className="bg-bg border border-border-soft rounded px-2 py-1 flex-1 text-text"
+                              value={parkReason} onChange={(e) => setParkReason(e.target.value)}
+                              placeholder="Why is this row parked?" data-testid={`input-park-reason-${t.id}`} />
+                            <PillButton variant="primary" disabled={busy || parkReason.trim().length < 4} data-testid={`btn-park-go-${t.id}`} onClick={() => park(t)}>
+                              Park item
+                            </PillButton>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </Card>
+
+        <Card className="overflow-hidden">
+          <div className="px-3 pt-3 font-mono text-xs text-text-faint uppercase">Receipts</div>
           <table className="w-full text-sm" data-testid="cash-receipts">
             <thead className="bg-bg-elevate text-[11px] font-mono uppercase text-text-faint">
               <tr><th className="text-left px-3 py-2">Receipt</th><th className="text-left px-3 py-2">Date</th><th className="text-right px-3 py-2">Total</th><th className="text-right px-3 py-2">Applied</th><th className="text-right px-3 py-2">Remaining</th><th></th></tr>
