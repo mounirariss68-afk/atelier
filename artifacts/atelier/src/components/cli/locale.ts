@@ -81,6 +81,13 @@ export const STRINGS = {
     en: "Capability catalog has changed since this prompt was saved.",
     ar: "تغيّرت قائمة القدرات منذ حفظ هذه المطالبة.",
   },
+  // Task #416 — chat history drawer.
+  historyTitle: { en: "Chat history", ar: "سجلّ المحادثات" },
+  historyEmpty: {
+    en: "No conversations yet.",
+    ar: "لا توجد محادثات بعد.",
+  },
+  historyNewChat: { en: "New chat", ar: "محادثة جديدة" },
   localeLabel: { en: "Language", ar: "اللغة" },
   asyncBadge: { en: "ASYNC", ar: "غير متزامن" },
   errorBadge: { en: "ERROR", ar: "خطأ" },

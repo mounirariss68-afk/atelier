@@ -1423,6 +1423,91 @@ async function modelStep(args: {
 }
 
 // =====================================================================
+// Task #416 — Auto-generated session titles.
+//
+// After a session's first completed turn we fire a tiny Haiku call that
+// summarizes the user's prompt into a 3–6 word title and saves it onto
+// the session row. Strictly fire-and-forget: any error, timeout, or
+// garbage output is swallowed and the session simply stays untitled.
+// The UPDATE is guarded on `title IS NULL` so a concurrent turn (or a
+// stale in-memory session row) can never overwrite an existing title.
+// =====================================================================
+
+const SESSION_TITLE_MAX_CHARS = 60;
+
+/** Trim/strip model output down to a clean one-line title, or null. */
+export function sanitizeSessionTitle(raw: string): string | null {
+  let t = (raw ?? "").trim().split("\n")[0]?.trim() ?? "";
+  // Strip wrapping quotes and trailing sentence punctuation.
+  t = t
+    .replace(/^["'“”‘’`]+/, "")
+    .replace(/["'“”‘’`]+$/, "")
+    .replace(/[.!?\s]+$/g, "")
+    .trim();
+  if (!t) return null;
+  if (t.length > SESSION_TITLE_MAX_CHARS) {
+    t = t.slice(0, SESSION_TITLE_MAX_CHARS).trimEnd();
+  }
+  return t || null;
+}
+
+export async function generateAndSaveSessionTitle(
+  sessionId: string,
+  prompt: string,
+): Promise<void> {
+  try {
+    const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+    const ac = new AbortController();
+    const timer = setTimeout(
+      () => ac.abort(),
+      Number(process.env.ATELIER_CLI_TITLE_TIMEOUT_MS ?? 10_000),
+    );
+    let resp;
+    try {
+      resp = await anthropic.messages.create(
+        {
+          model: HAIKU_CLASSIFIER_MODEL,
+          max_tokens: 40,
+          system:
+            "You title chat conversations. Reply with ONLY a short title of 3-6 plain words capturing the user's intent (e.g. \"Log timesheet for Acme\"). No quotes, no trailing punctuation, no explanation.",
+          messages: [
+            {
+              role: "user",
+              content: redactText(prompt).text.slice(0, 500) || "(empty prompt)",
+            },
+          ],
+        },
+        { signal: ac.signal },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+    let text = "";
+    for (const block of resp.content) {
+      if (block.type === "text") text += block.text;
+    }
+    const title = sanitizeSessionTitle(text);
+    if (!title) return;
+    await db
+      .update(atelierCliSessions)
+      .set({ title, updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierCliSessions.id, sessionId),
+          isNull(atelierCliSessions.title),
+        ),
+      );
+  } catch (err) {
+    // Fire-and-forget by contract — a failed title must never surface.
+    console.warn(
+      "[atelier-cli] session title generation failed",
+      sessionId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+// =====================================================================
 // Task #338 — Natural-language → catalog routing.
 //
 // `routePromptToCapability` is a pure heuristic that maps an unstructured
@@ -3830,6 +3915,18 @@ export async function runTurn(
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[atelier-cli] session bookkeeping failed", session.id, msg);
         persistErrors.push(`session:${msg}`);
+      }
+
+      // Task #416 — auto-title the session after its first completed
+      // turn (also covers pre-existing untitled sessions on their next
+      // turn). Fire-and-forget: it runs after the SSE response is done
+      // and can never fail or delay the turn itself.
+      if (!session.title) {
+        const titleSessionId = session.id;
+        const titlePrompt = input.prompt;
+        setImmediate(() => {
+          void generateAndSaveSessionTitle(titleSessionId, titlePrompt);
+        });
       }
 
       if (costCents > 0) {

@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   Loader2,
   Clock,
+  History,
   Copy,
   ExternalLink,
   XCircle,
@@ -314,6 +315,36 @@ export function CommandBar(props: CommandBarProps) {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [savedOpen, setSavedOpen] = React.useState(false);
   const [savedPrompts, setSavedPrompts] = React.useState<SavedPrompt[]>([]);
+  // Task #416 — chat history drawer: sessions listed from the server,
+  // titled by the auto-title job (fallback "New chat").
+  const [historyOpen, setHistoryOpen] = React.useState(false);
+  const [historySessions, setHistorySessions] = React.useState<
+    Array<{ id: string; title: string | null; turnCount: number; lastTurnAt: string | null }>
+  >([]);
+  React.useEffect(() => {
+    if (!historyOpen) return;
+    let alive = true;
+    void fetch("/api/atelier/cli/sessions", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(
+        (j: {
+          sessions?: Array<{
+            id: string;
+            title: string | null;
+            turnCount: number;
+            lastTurnAt: string | null;
+          }>;
+        } | null) => {
+          if (alive && j?.sessions) setHistorySessions(j.sessions);
+        },
+      )
+      .catch(() => {
+        /* best-effort list */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [historyOpen]);
   const [typedName, setTypedName] = React.useState("");
   const [showAllSteps, setShowAllSteps] = React.useState(false);
   const [editingPlanRow, setEditingPlanRow] = React.useState<number | null>(null);
@@ -709,10 +740,17 @@ export function CommandBar(props: CommandBarProps) {
         onHelp={() => {
           setHelpOpen((v) => !v);
           setSavedOpen(false);
+          setHistoryOpen(false);
         }}
         onSaved={() => {
           setSavedOpen((v) => !v);
           setHelpOpen(false);
+          setHistoryOpen(false);
+        }}
+        onHistory={() => {
+          setHistoryOpen((v) => !v);
+          setHelpOpen(false);
+          setSavedOpen(false);
         }}
         surface={pageCtx.surface}
         status={status}
@@ -726,6 +764,28 @@ export function CommandBar(props: CommandBarProps) {
               capabilities={cli.capabilities}
               error={cli.capabilitiesError}
               locale={locale}
+            />
+          ) : historyOpen ? (
+            <HistoryPanel
+              sessions={historySessions}
+              locale={locale}
+              onPick={(id) => {
+                setHistoryOpen(false);
+                cli.reset();
+                void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
+                  credentials: "include",
+                })
+                  .then((r) => (r.ok ? r.json() : null))
+                  .then((j: { turns?: Array<Record<string, unknown>> } | null) => {
+                    if (!j?.turns) return;
+                    for (const row of j.turns.slice(0, 5).reverse()) {
+                      cli.injectHistoricalTurn(rowToHistoricalTurn(row));
+                    }
+                  })
+                  .catch(() => {
+                    /* silent */
+                  });
+              }}
             />
           ) : savedOpen ? (
             <SavedPanel
@@ -851,6 +911,7 @@ function Header({
   onClose,
   onHelp,
   onSaved,
+  onHistory,
   surface,
   status,
   hideClose = false,
@@ -860,6 +921,7 @@ function Header({
   onClose: () => void;
   onHelp: () => void;
   onSaved: () => void;
+  onHistory: () => void;
   surface: string;
   status: string;
   /** Task #501 — hide the X close button when the bar is embedded in
@@ -884,6 +946,15 @@ function Header({
       >
         <Languages className="w-3.5 h-3.5" />
         {locale.toUpperCase()}
+      </button>
+      <button
+        type="button"
+        onClick={onHistory}
+        className="text-text-mute hover:text-gold p-1.5 rounded hover:bg-bg-elevate-2 transition-colors"
+        title={s("historyTitle", locale)}
+        data-testid="cli-history-toggle"
+      >
+        <History className="w-4 h-4" />
       </button>
       <button
         type="button"
@@ -2672,6 +2743,64 @@ function SavedPanel({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────── History panel ─────────────────────────── */
+
+/**
+ * Task #416 — chat history drawer. Lists the persona's recent sessions
+ * (server-titled by the auto-title job; "New chat" when untitled) and
+ * loads a picked session's recent turns into the transcript.
+ */
+function HistoryPanel({
+  sessions,
+  locale,
+  onPick,
+}: {
+  sessions: Array<{
+    id: string;
+    title: string | null;
+    turnCount: number;
+    lastTurnAt: string | null;
+  }>;
+  locale: CliLocale;
+  onPick: (id: string) => void;
+}) {
+  return (
+    <div className="p-4 space-y-3" data-testid="cli-history">
+      <div className="text-xs font-semibold">{s("historyTitle", locale)}</div>
+      {sessions.length === 0 ? (
+        <div className="text-xs text-text-faint italic">{s("historyEmpty", locale)}</div>
+      ) : (
+        <div className="space-y-1.5">
+          {sessions.map((sess) => (
+            <button
+              key={sess.id}
+              type="button"
+              onClick={() => onPick(sess.id)}
+              className="w-full text-left bg-bg-elevate border border-border rounded p-2.5 text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
+              data-testid="cli-history-row"
+            >
+              <div className="font-medium leading-snug truncate">
+                {sess.title ?? s("historyNewChat", locale)}
+              </div>
+              <div className="text-[11px] font-mono text-text-faint mt-0.5">
+                {sess.turnCount} {locale === "ar" ? "دورة" : sess.turnCount === 1 ? "turn" : "turns"}
+                {sess.lastTurnAt
+                  ? ` · ${new Date(sess.lastTurnAt).toLocaleString(locale === "ar" ? "ar" : "en", {
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : ""}
+              </div>
+            </button>
+          ))}
         </div>
       )}
     </div>
