@@ -57,6 +57,13 @@ import {
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
+import {
+  resolvePersonForCaller,
+  ensureWeekShell,
+  isoWeekOf,
+  recomputeWeekTotals,
+  type PersonRow,
+} from "../../routes/atelier/ledgerRoutes.js";
 
 /**
  * Task — chat person writes must land on the right roster. Maps an
@@ -310,28 +317,75 @@ defineCapability({
 // 3. timesheet_entry
 // ---------------------------------------------------------------------
 
+const TIMESHEET_ACTIVITY_CODES = new Set([
+  "billable",
+  "internal",
+  "training",
+  "bench",
+  "leave",
+  "partner_firm",
+]);
+
+/**
+ * Task #415 — the model must never supply identity/week keys here.
+ * Resolve the caller's own roster person (employee via user_id link,
+ * contractor via email — the same rule the typed /ledger routes use)
+ * and get-or-create the ISO-week row for the work date ourselves.
+ * Returns a typed error instead of inserting garbage when identity
+ * cannot be resolved.
+ */
+async function resolveTimesheetCaller(ctx: {
+  persona: { id: string; orgId: string };
+}): Promise<
+  | { ok: true; person: PersonRow }
+  | { ok: false; errorCode: string; errorMessage: string }
+> {
+  const [me] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, ctx.persona.id), eq(atelierUsers.orgId, ctx.persona.orgId)));
+  if (!me) {
+    return {
+      ok: false,
+      errorCode: "identity_unresolved",
+      errorMessage: "Could not resolve your user record — hours were NOT logged.",
+    };
+  }
+  const person = await resolvePersonForCaller(me);
+  if (!person) {
+    return {
+      ok: false,
+      errorCode: "no_roster_person",
+      errorMessage:
+        "Your login is not linked to an employee or contractor roster record, so hours cannot be logged. Ask HR to link your login to your roster profile.",
+    };
+  }
+  return { ok: true, person };
+}
+
 defineCapability({
   id: "coverage.timesheet_entry_create",
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "ledger",
   toolName: "timesheet_entry_create",
-  description: "Create a draft timesheet entry for a user/day. Submit + approve flows remain on the typed routes.",
+  description:
+    "Log hours for the CALLER on a work day. The server resolves the caller's roster person and the correct ISO week itself — do not pass ids. Submit + approve flows remain on the typed routes.",
   slashAliases: { en: ["/log-time"] },
-  representativePrompts: { en: ["Log 4 hours yesterday on eng_alpha — interview prep."] },
+  representativePrompts: { en: ["Log 4 hours yesterday on eng_alpha — interview prep.", "Log 4 hours on the bench today."] },
   inputSchema: {
     type: "object",
     properties: {
       ...COMMON_INPUT_PROPS,
-      weekId: { type: "string", minLength: 3 },
-      personId: { type: "string", minLength: 3 },
-      personType: { type: "string", enum: ["user", "contractor", "partner_resource"] },
-      workDate: { type: "string", description: "ISO date" },
+      workDate: { type: "string", description: "ISO date (YYYY-MM-DD). Defaults to today." },
       engagementId: { type: "string" },
-      activityCode: { type: "string" },
+      activityCode: {
+        type: "string",
+        enum: ["billable", "internal", "training", "bench", "leave", "partner_firm"],
+      },
       hours: { type: "number", minimum: 0, maximum: 24 },
       narrative: { type: "string" },
     },
-    required: ["weekId", "personId", "personType", "workDate", "hours"],
+    required: ["hours"],
     additionalProperties: false,
   },
   isWrite: true,
@@ -345,23 +399,96 @@ defineCapability({
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "timesheet_entry_create requires confirm:true." };
     }
+    const caller = await resolveTimesheetCaller(ctx);
+    if (!caller.ok) return { ok: false, errorCode: caller.errorCode, errorMessage: caller.errorMessage };
+    const person = caller.person;
+
+    const hours = Number(input.hours);
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+      return { ok: false, errorCode: "invalid_hours", errorMessage: "hours must be a number between 0 and 24 — nothing was logged." };
+    }
+    const workDate = input.workDate != null && String(input.workDate).trim() !== ""
+      ? String(input.workDate).trim()
+      : new Date().toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(workDate) || Number.isNaN(Date.parse(`${workDate}T00:00:00Z`))) {
+      return { ok: false, errorCode: "invalid_work_date", errorMessage: `workDate must be an ISO date (YYYY-MM-DD); got "${workDate}". Nothing was logged.` };
+    }
+    const engagementId =
+      input.engagementId && String(input.engagementId).trim() !== "" && String(input.engagementId) !== "undefined"
+        ? String(input.engagementId)
+        : null;
+    let activityCode =
+      input.activityCode && String(input.activityCode).trim() !== ""
+        ? String(input.activityCode)
+        : engagementId
+          ? "billable"
+          : "internal";
+    if (!TIMESHEET_ACTIVITY_CODES.has(activityCode)) {
+      return {
+        ok: false,
+        errorCode: "invalid_activity_code",
+        errorMessage: `activityCode must be one of ${[...TIMESHEET_ACTIVITY_CODES].join(", ")}; got "${activityCode}". Nothing was logged.`,
+      };
+    }
+    if (engagementId) {
+      const [eng] = await db
+        .select({ id: atelierEngagements.id })
+        .from(atelierEngagements)
+        .where(and(eq(atelierEngagements.id, engagementId), eq(atelierEngagements.orgId, ctx.persona.orgId), isNull(atelierEngagements.deletedAt)));
+      if (!eng) {
+        return { ok: false, errorCode: "engagement_not_found", errorMessage: `Engagement ${engagementId} not found — nothing was logged.` };
+      }
+    }
+
+    const { weekIso } = isoWeekOf(new Date(`${workDate}T00:00:00Z`));
+    const week = await ensureWeekShell(person, weekIso);
+    if (week.status !== "draft" && week.status !== "rejected") {
+      return {
+        ok: false,
+        errorCode: "week_locked",
+        errorMessage: `Week ${week.weekIso} is ${week.status} and can no longer be edited from chat.`,
+      };
+    }
+
     const id = rid("tse");
     await db.insert(atelierTimesheetEntries).values({
       id,
       orgId: ctx.persona.orgId,
-      weekId: String(input.weekId),
-      personId: String(input.personId),
-      personType: String(input.personType),
-      workDate: String(input.workDate),
-      engagementId: input.engagementId ? String(input.engagementId) : null,
-      activityCode: input.activityCode ? String(input.activityCode) : null,
-      hours: Number(input.hours),
+      weekId: week.id,
+      personId: person.id,
+      personType: person.type,
+      workDate,
+      engagementId,
+      activityCode,
+      hours,
+      billable: !!engagementId && activityCode === "billable",
       narrative: input.narrative ? String(input.narrative) : null,
       status: "draft",
       createdByUserId: ctx.persona.id,
     });
-    await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "create", input);
-    return { ok: true, data: { id, kind: "timesheet_entry", navigateTo: null } };
+    const updatedWeek = await recomputeWeekTotals(week.id);
+    await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "create", {
+      workDate,
+      engagementId,
+      activityCode,
+      hours,
+      weekId: week.id,
+      weekIso: week.weekIso,
+      personId: person.id,
+    });
+    return {
+      ok: true,
+      data: {
+        id,
+        kind: "timesheet_entry",
+        label: `${hours}h ${activityCode} on ${workDate}`,
+        weekId: week.id,
+        weekIso: week.weekIso,
+        weekTotalHours: updatedWeek?.totalHours ?? null,
+        weekBillableHours: updatedWeek?.billableHours ?? null,
+        navigateTo: null,
+      },
+    };
   },
 });
 
@@ -396,17 +523,62 @@ defineCapability({
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "timesheet_entry_update requires confirm:true." };
     }
+    const caller = await resolveTimesheetCaller(ctx);
+    if (!caller.ok) return { ok: false, errorCode: caller.errorCode, errorMessage: caller.errorMessage };
+    const person = caller.person;
+
     const id = String(input.id);
+    const [entry] = await db
+      .select()
+      .from(atelierTimesheetEntries)
+      .where(and(eq(atelierTimesheetEntries.id, id), eq(atelierTimesheetEntries.orgId, ctx.persona.orgId), isNull(atelierTimesheetEntries.deletedAt)));
+    if (!entry) {
+      return { ok: false, errorCode: "not_found", errorMessage: `Timesheet entry ${id} not found — nothing was updated.` };
+    }
+    if (entry.personId !== person.id) {
+      return { ok: false, errorCode: "forbidden", errorMessage: "You can only edit your own timesheet entries from chat." };
+    }
+    if (entry.status !== "draft") {
+      return { ok: false, errorCode: "entry_locked", errorMessage: `Entry is ${entry.status} and can no longer be edited from chat.` };
+    }
     const patch: Partial<typeof atelierTimesheetEntries.$inferInsert> = { updatedAt: new Date() };
-    if (input.hours !== undefined) patch.hours = Number(input.hours);
+    if (input.hours !== undefined) {
+      const hours = Number(input.hours);
+      if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+        return { ok: false, errorCode: "invalid_hours", errorMessage: "hours must be a number between 0 and 24 — nothing was updated." };
+      }
+      patch.hours = hours;
+    }
     if (input.narrative !== undefined) patch.narrative = String(input.narrative);
-    if (input.activityCode !== undefined) patch.activityCode = String(input.activityCode);
+    if (input.activityCode !== undefined) {
+      const activityCode = String(input.activityCode);
+      if (!TIMESHEET_ACTIVITY_CODES.has(activityCode)) {
+        return {
+          ok: false,
+          errorCode: "invalid_activity_code",
+          errorMessage: `activityCode must be one of ${[...TIMESHEET_ACTIVITY_CODES].join(", ")}; got "${activityCode}". Nothing was updated.`,
+        };
+      }
+      patch.activityCode = activityCode;
+      patch.billable = !!entry.engagementId && activityCode === "billable";
+    }
     await db
       .update(atelierTimesheetEntries)
       .set(patch)
       .where(and(eq(atelierTimesheetEntries.id, id), eq(atelierTimesheetEntries.orgId, ctx.persona.orgId), isNull(atelierTimesheetEntries.deletedAt)));
+    const updatedWeek = await recomputeWeekTotals(entry.weekId);
     await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "update", input);
-    return { ok: true, data: { id, kind: "timesheet_entry", navigateTo: null } };
+    return {
+      ok: true,
+      data: {
+        id,
+        kind: "timesheet_entry",
+        weekId: entry.weekId,
+        weekTotalHours: updatedWeek?.totalHours ?? null,
+        weekBillableHours: updatedWeek?.billableHours ?? null,
+        navigateTo: null,
+      },
+    };
   },
 });
 

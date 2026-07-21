@@ -51,6 +51,7 @@ import {
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
 import { resolveSelfPerson } from "../../routes/atelier/meRoutes.js";
+import { isoWeekOf } from "../../routes/atelier/ledgerRoutes.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -1469,6 +1470,11 @@ defineCapability({
         },
       };
     }
+    // Task #415 fix: target the ACTUAL current ISO week (the previous
+    // "latest row" query could surface an old or future week) and
+    // include the week's entries so "show my timesheet for today" is
+    // answerable.
+    const { weekIso: currentWeekIso } = isoWeekOf(new Date());
     const rows = await db
       .select({
         id: atelierTimesheetWeeks.id,
@@ -1483,25 +1489,57 @@ defineCapability({
         and(
           eq(atelierTimesheetWeeks.orgId, ctx.persona.orgId),
           eq(atelierTimesheetWeeks.personId, person.id),
+          eq(atelierTimesheetWeeks.weekIso, currentWeekIso),
           isNull(atelierTimesheetWeeks.deletedAt),
         ),
       )
-      .orderBy(desc(atelierTimesheetWeeks.weekIso))
       .limit(1);
     const week = rows[0] ?? null;
+    if (!week) {
+      return {
+        ok: true,
+        data: {
+          id: null,
+          label: `No hours logged yet for ${currentWeekIso}`,
+          weekIso: currentWeekIso,
+          status: "none",
+          totalHours: 0,
+          billableHours: 0,
+          entries: [],
+        },
+      };
+    }
+    const entries = await db
+      .select({
+        id: atelierTimesheetEntries.id,
+        workDate: atelierTimesheetEntries.workDate,
+        activityCode: atelierTimesheetEntries.activityCode,
+        engagementId: atelierTimesheetEntries.engagementId,
+        hours: atelierTimesheetEntries.hours,
+        billable: atelierTimesheetEntries.billable,
+        narrative: atelierTimesheetEntries.narrative,
+        status: atelierTimesheetEntries.status,
+      })
+      .from(atelierTimesheetEntries)
+      .where(
+        and(
+          eq(atelierTimesheetEntries.weekId, week.id),
+          isNull(atelierTimesheetEntries.deletedAt),
+        ),
+      )
+      .orderBy(atelierTimesheetEntries.workDate);
     return {
       ok: true,
-      data: week
-        ? {
-            id: week.id,
-            label: `Timesheet · ${week.weekIso}`,
-            weekIso: week.weekIso,
-            status: week.status,
-            totalHours: week.totalHours,
-            billableHours: week.billableHours,
-            flags: week.suspiciousFlags ?? [],
-          }
-        : { id: null, label: "No timesheet", weekIso: null, status: "none" },
+      data: {
+        id: week.id,
+        label: `Timesheet · ${week.weekIso}`,
+        weekIso: week.weekIso,
+        status: week.status,
+        totalHours: week.totalHours,
+        billableHours: week.billableHours,
+        flags: week.suspiciousFlags ?? [],
+        entries,
+      },
     };
   },
 });

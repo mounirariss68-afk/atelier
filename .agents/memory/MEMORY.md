@@ -103,3 +103,4 @@
 - [RN sheet → picker deferral](rn-sheet-picker-defer.md) — never timer-race native pickers after Modal close; defer via onDismiss + single-flight runExclusivePick or expo-document-picker wedges.
 - [Billing trigger draft concurrency](billing-trigger-concurrency.md) — invoice-from-trigger paths must FOR UPDATE-claim the trigger row in a tx; overlapping runs otherwise draft duplicates.
 - [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, UPDATE guarded on title IS NULL; stub probes now see an extra "You title chat conversations" call.
+- [Chat timesheet tools](atelier-chat-timesheet.md) — chat timesheet writes resolve roster person + ISO week server-side (never model ids) and recompute week totals; current-week fixtures must use isoWeekOf, not hardcoded week labels.

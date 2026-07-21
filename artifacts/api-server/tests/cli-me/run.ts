@@ -353,14 +353,26 @@ async function main(): Promise<void> {
       },
     ]);
 
+    // Task #415: timesheet_current now targets the ACTUAL current ISO
+    // week, so the "cur" fixture must be seeded dynamically instead of
+    // hardcoding a week label that goes stale.
+    const { isoWeekOf, parseWeekIso } = await import(
+      "../../src/routes/atelier/ledgerRoutes.js"
+    );
+    const { weekIso: CUR_ISO, weekStart } = isoWeekOf(new Date());
+    const CUR_START = weekStart.toISOString().slice(0, 10);
+    const prevMonday = new Date(parseWeekIso(CUR_ISO));
+    prevMonday.setUTCDate(prevMonday.getUTCDate() - 7);
+    const { weekIso: PREV_ISO } = isoWeekOf(prevMonday);
+    const PREV_START = prevMonday.toISOString().slice(0, 10);
     await db.insert(atelierTimesheetWeeks).values([
       {
         id: `tsw_${TAG}_cur`,
         orgId: ORG,
         personId: EMP_PERSON, // roster id — correct key
         personType: "employee",
-        weekIso: "2026-W29",
-        weekStartDate: "2026-07-13",
+        weekIso: CUR_ISO,
+        weekStartDate: CUR_START,
         status: "draft",
         totalHours: 32,
         billableHours: 24,
@@ -370,8 +382,8 @@ async function main(): Promise<void> {
         orgId: ORG,
         personId: EMP_PERSON,
         personType: "employee",
-        weekIso: "2026-W28",
-        weekStartDate: "2026-07-06",
+        weekIso: PREV_ISO,
+        weekStartDate: PREV_START,
         status: "partner_approved",
         totalHours: 40,
         billableHours: 36,
@@ -381,8 +393,8 @@ async function main(): Promise<void> {
         orgId: ORG,
         personId: EMP_UID, // user id — the legacy timesheet.current bug key
         personType: "employee",
-        weekIso: "2026-W29",
-        weekStartDate: "2026-07-13",
+        weekIso: CUR_ISO,
+        weekStartDate: CUR_START,
         status: "draft",
         totalHours: 1,
         billableHours: 1,
@@ -392,8 +404,8 @@ async function main(): Promise<void> {
         orgId: ORG,
         personId: OTHER_PERSON,
         personType: "employee",
-        weekIso: "2026-W29",
-        weekStartDate: "2026-07-13",
+        weekIso: CUR_ISO,
+        weekStartDate: CUR_START,
         status: "submitted",
         totalHours: 40,
         billableHours: 40,

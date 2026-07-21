@@ -22,6 +22,7 @@
     "test:cli-parity": "tsx ./tests/cli-parity/run.ts",
     "test:cli-smoke": "tsx ./tests/cli-smoke/run.ts",
     "test:cli-navigation": "tsx ./tests/cli-navigation/run.ts",
+    "test:cli-timesheet": "tsx ./tests/cli-timesheet/run.ts",
     "test:crm": "tsx ./tests/crm/run.ts",
     "test:esign": "tsx ./tests/esign/run.ts",
     "test:contracts": "tsx ./tests/crm/contract-lifecycle-probe.ts",
