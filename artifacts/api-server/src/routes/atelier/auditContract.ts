@@ -122,6 +122,9 @@ export const V3_AUDIT_ACTIONS = {
   BILLING_TRIGGER_RELEASED: "billing.trigger.released",
   BILLING_TRIGGER_SKIPPED: "billing.trigger.skipped",
   BILLING_TRIGGER_APPROVED: "billing.trigger.approved",
+
+  // Task #451 — client invoice email delivery from the billing worklist.
+  INVOICE_EMAILED: "wallet.invoice.emailed",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

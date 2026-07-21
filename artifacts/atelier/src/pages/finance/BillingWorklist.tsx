@@ -16,7 +16,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAtelierGetMe } from "@workspace/api-client-react";
 import { PageHero, SectionHead, Card, MonoChip, PillButton, BackLink } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, PauseCircle, PlayCircle, XCircle, CheckCircle2 } from "lucide-react";
+import { Zap, PauseCircle, PlayCircle, XCircle, CheckCircle2, FileText, Mail } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -90,6 +90,7 @@ export default function BillingWorklist() {
   const meQ = useAtelierGetMe();
   const role = meQ.data?.role ?? "";
   const isPartner = role === "founding_partner" || role === "partner";
+  const isFinanceLeadership = isPartner || role === "finance";
   const [busy, setBusy] = React.useState<string | null>(null);
 
   const wl = useQuery<Worklist>({
@@ -117,6 +118,24 @@ export default function BillingWorklist() {
         output: { rationaleSummary: string };
       };
       toast({ title: "Billing run finished", description: out.output.rationaleSummary });
+    });
+
+  const sendInvoice = (invoiceId: string, invoiceNumber: string | null) =>
+    act(`send-${invoiceId}`, async () => {
+      const out = (await jfetch(`/wallet/invoices/${invoiceId}/send`, { method: "POST", body: "{}" })) as {
+        delivered: boolean;
+        via: string;
+        to: string;
+      };
+      if (out.delivered) {
+        toast({ title: "Invoice emailed", description: `Sent ${invoiceNumber ?? "invoice"} to ${out.to}.` });
+      } else {
+        toast({
+          title: "Invoice NOT delivered",
+          description: `Email delivery is not configured (${out.via}) — download the PDF and send it manually.`,
+          variant: "destructive",
+        });
+      }
     });
 
   const t = wl.data?.triggers ?? [];
@@ -301,10 +320,33 @@ export default function BillingWorklist() {
                   {x.engagementName} · {TYPE_LABEL[x.triggerType] ?? x.triggerType} · due {x.dueDate}
                   {x.skippedReason ? ` · ${x.skippedReason}` : ""}
                 </span>
-                {x.invoice?.invoiceNumber && (
-                  <Link href={`/wallet/invoices/${x.invoiceId}`} className="underline opacity-70 hover:opacity-100">
-                    {x.invoice.invoiceNumber}
-                  </Link>
+                {x.invoice?.invoiceNumber && x.invoiceId && (
+                  <span className="flex items-center gap-3">
+                    <Link href={`/wallet/invoices/${x.invoiceId}`} className="underline opacity-70 hover:opacity-100">
+                      {x.invoice.invoiceNumber}
+                    </Link>
+                    <a
+                      href={`${API_BASE}/wallet/invoices/${x.invoiceId}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 underline opacity-70 hover:opacity-100"
+                      title="Open the client-ready invoice PDF"
+                    >
+                      <FileText className="h-3.5 w-3.5" /> PDF
+                    </a>
+                    {isFinanceLeadership && x.invoice.status !== "void" && (
+                      <button
+                        type="button"
+                        disabled={busy !== null}
+                        onClick={() => void sendInvoice(x.invoiceId as string, x.invoice?.invoiceNumber ?? null)}
+                        className="inline-flex items-center gap-1 underline opacity-70 hover:opacity-100 disabled:opacity-40"
+                        title="Email the invoice PDF to the client billing contact"
+                      >
+                        <Mail className="h-3.5 w-3.5" />
+                        {busy === `send-${x.invoiceId}` ? "Sending…" : "Email client"}
+                      </button>
+                    )}
+                  </span>
                 )}
               </li>
             ))}

@@ -48,6 +48,13 @@ import {
   isRestrictedPersona,
   isBoardObserver,
 } from "./personaRoles.js";
+import PDFDocument from "pdfkit";
+import {
+  writeClientInvoicePdf,
+  renderClientInvoicePdfBuffer,
+  type ClientInvoicePdfArgs,
+} from "../../lib/clientInvoicePdf.js";
+import { sendEmail } from "../../lib/email.js";
 
 const router: IRouter = Router();
 
@@ -600,6 +607,131 @@ router.post("/wallet/invoices/:id/issue", async (req, res) => {
     return;
   }
   res.json(out.invoice);
+});
+
+// =============================================================== client PDF + email send (Task #451)
+
+/**
+ * Load a numbered (non-draft) invoice with its lines + display names.
+ * Drafts have no minted number and are never rendered as client PDFs.
+ */
+async function loadForPdf(orgId: string, invoiceId: string): Promise<
+  | { ok: true; args: ClientInvoicePdfArgs }
+  | { ok: false; httpStatus: number; error: string; message?: string }
+> {
+  const [inv] = await db
+    .select()
+    .from(atelierInvoice)
+    .where(and(
+      eq(atelierInvoice.id, invoiceId),
+      eq(atelierInvoice.orgId, orgId),
+      isNull(atelierInvoice.deletedAt),
+    ));
+  if (!inv) return { ok: false, httpStatus: 404, error: "not_found" };
+  if (inv.status === "draft" || !inv.invoiceNumber) {
+    return { ok: false, httpStatus: 400, error: "invalid_state", message: "Only issued invoices have a client PDF. Issue the draft first." };
+  }
+  const lines = await db
+    .select()
+    .from(atelierInvoiceLine)
+    .where(eq(atelierInvoiceLine.invoiceId, inv.id))
+    .orderBy(atelierInvoiceLine.ord);
+  let accountName: string | null = null;
+  if (inv.accountId) {
+    const [acct] = await db
+      .select({ name: atelierAccounts.name })
+      .from(atelierAccounts)
+      .where(and(eq(atelierAccounts.id, inv.accountId), eq(atelierAccounts.orgId, orgId)));
+    accountName = acct?.name ?? null;
+  }
+  let engagementName: string | null = null;
+  if (inv.engagementId) {
+    const [eng] = await db
+      .select({ name: atelierEngagements.name })
+      .from(atelierEngagements)
+      .where(and(eq(atelierEngagements.id, inv.engagementId), eq(atelierEngagements.orgId, orgId)));
+    engagementName = eng?.name ?? null;
+  }
+  return { ok: true, args: { invoice: inv, lines, accountName, engagementName } };
+}
+
+// @cli-skip: binary download surface; worklist UI is the supported path
+router.get("/wallet/invoices/:id/pdf", async (req, res) => {
+  if (denyRestricted(req, res)) return;
+  if (denyBoardObserver(req, res)) return;
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const loaded = await loadForPdf(me.orgId, req.params.id);
+  if (!loaded.ok) {
+    res.status(loaded.httpStatus).json({ error: loaded.error, message: loaded.message });
+    return;
+  }
+  const inv = loaded.args.invoice;
+  const filename = `${(inv.invoiceNumber ?? inv.id).replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+  res.setHeader("Content-Type", "application/pdf");
+  const disposition = req.query.download === "1" ? "attachment" : "inline";
+  res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
+  const doc = new PDFDocument({ size: "A4", margin: 56 });
+  doc.pipe(res);
+  writeClientInvoicePdf(doc, loaded.args);
+  doc.end();
+});
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/wallet/invoices/:id/send", async (req, res) => {
+  if (denyRestricted(req, res)) return;
+  if (denyBoardObserver(req, res)) return;
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!isFinanceLeadership(me)) {
+    res.status(403).json({ error: "forbidden", message: "Finance leadership required to send invoices." });
+    return;
+  }
+  const loaded = await loadForPdf(me.orgId, req.params.id);
+  if (!loaded.ok) {
+    res.status(loaded.httpStatus).json({ error: loaded.error, message: loaded.message });
+    return;
+  }
+  const inv = loaded.args.invoice;
+  if (inv.status === "void") {
+    res.status(400).json({ error: "invalid_state", message: "Voided invoices cannot be sent to the client." });
+    return;
+  }
+  const bodyTo = typeof req.body?.to === "string" ? req.body.to.trim() : "";
+  const to = bodyTo || (inv.billTo?.contactEmail ?? "").trim();
+  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    res.status(400).json({
+      error: "invalid_input",
+      message: "No valid recipient: provide `to` or set bill_to.contactEmail on the invoice.",
+    });
+    return;
+  }
+  const clientName = inv.billTo?.name || loaded.args.accountName || "Client";
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const pdf = await renderClientInvoicePdfBuffer(loaded.args);
+  const result = await sendEmail({
+    to,
+    subject: `Invoice ${inv.invoiceNumber} from Cognirise`,
+    html: `
+      <p>Dear ${esc(clientName)},</p>
+      <p>Please find attached invoice <strong>${esc(inv.invoiceNumber ?? "")}</strong>
+      for <strong>${inv.currency} ${inv.total.toFixed(2)}</strong>${inv.dueDate ? `, due <strong>${esc(inv.dueDate)}</strong>` : ""}.</p>
+      <p>Please quote the invoice number with your remittance.</p>
+      <p>— Cognirise Finance</p>`,
+    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString("base64") }],
+  });
+  // Honest delivery semantics: only ok && via==="resend" means the email
+  // was actually accepted for delivery; log-only means NOT delivered.
+  const delivered = result.ok && result.via === "resend";
+  await audit({
+    entityType: "invoice", entityId: inv.id, actor: me,
+    action: "wallet.invoice.emailed",
+    payload: { to, delivered, via: result.via, ok: result.ok },
+    summary: delivered
+      ? `Emailed ${inv.invoiceNumber} to ${to}`
+      : `Invoice ${inv.invoiceNumber} email to ${to} NOT delivered (${result.via})`,
+  });
+  res.json({ ok: result.ok, via: result.via, delivered, to });
 });
 
 // =============================================================== void (irreversible)

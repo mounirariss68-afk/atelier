@@ -140,6 +140,39 @@ export default function WalletInvoiceDetail() {
           </Card>
         )}
 
+        {(inv.status === "issued" || inv.status === "paid" || inv.status === "void") && (
+          <Card className="p-4 space-y-2">
+            <div className="text-[11px] font-mono uppercase text-text-faint">Client PDF</div>
+            <div className="flex gap-2 text-sm">
+              <a href={`/api/atelier/wallet/invoices/${id}/pdf`} target="_blank" rel="noreferrer"
+                 className="px-3 py-1 rounded bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30">
+                View PDF
+              </a>
+              <a href={`/api/atelier/wallet/invoices/${id}/pdf?download=1`}
+                 className="px-3 py-1 rounded bg-gold/20 text-gold border border-gold/40 hover:bg-gold/30">
+                Download
+              </a>
+              {isFinance && inv.status !== "void" && (
+                <button disabled={busy} onClick={async () => {
+                  setBusy(true);
+                  try {
+                    const r = await fetch(`/api/atelier/wallet/invoices/${id}/send`, {
+                      method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: "{}",
+                    });
+                    const b = await r.json().catch(() => ({}));
+                    if (!r.ok) alert(`Failed: ${b?.message ?? b?.error ?? r.statusText}`);
+                    else if (b.delivered) alert(`Invoice emailed to ${b.to}.`);
+                    else alert(`NOT delivered — email is not configured (${b.via}). Download the PDF and send it manually.`);
+                  } finally { setBusy(false); }
+                }} className="px-3 py-1 rounded bg-success/20 text-success border border-success/40 disabled:opacity-40"
+                   title="Email the invoice PDF to the billing contact">
+                  Email client
+                </button>
+              )}
+            </div>
+          </Card>
+        )}
+
         {inv.status === "issued" && (
           <Card className="p-4 space-y-2">
             <div className="text-[11px] font-mono uppercase text-text-faint">Actions</div>
