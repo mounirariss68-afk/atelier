@@ -8196,6 +8196,11 @@ components:
         description:
           type: string
           nullable: true
+        # Task #500 — auditor one-liner incl. category-specific enrichment
+        # (trip route, flight route/class, hotel nights, ...).
+        summary:
+          type: string
+          nullable: true
         category:
           type: string
           nullable: true

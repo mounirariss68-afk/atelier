@@ -577,6 +577,9 @@ export default function ExpenseDetailScreen() {
                 {expense.description ? (
                   <ReadRow label={t("exp.description")} value={expense.description} />
                 ) : null}
+                {expense.summary ? (
+                  <ReadRow label={t("exp.summary")} value={expense.summary} />
+                ) : null}
                 <ReadRow label={t("exp.context")} value={t(`exp.contextType.${expense.contextType}`)} />
               </Card>
             )}

@@ -192,7 +192,7 @@ async function main() {
   check("no dates/amounts unusable", !assessTextQuality(noNumbers).isUsable);
 
   // 7. Media handling constants
-  const { RECEIPT_PARSE_MEDIA } = await import(
+  const { RECEIPT_PARSE_MEDIA, sanitizeReceiptDetails, formatReceiptDetails, composeEnrichedSummary } = await import(
     "../../src/lib/atelier-receipt-parse.js"
   );
   for (const m of ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]) {
@@ -208,6 +208,69 @@ async function main() {
   check("EU unknown → default pair", euUnknown.mapped === false && euUnknown.pair.categoryCode === DEFAULT_PAIR.categoryCode);
   const naUnknown = mapNaLabel("definitely-not-a-category");
   check("NA unknown → default pair", naUnknown.mapped === false && naUnknown.pair.categoryCode === DEFAULT_PAIR.categoryCode);
+
+  // 9. Task #500 — enrichment sanitize + description composition
+  check("sanitize null → undefined", sanitizeReceiptDetails(null) === undefined);
+  check("sanitize junk → undefined", sanitizeReceiptDetails({ bogus: 1, trip: "x" }) === undefined);
+  check(
+    "sanitize empty sub-objects → undefined",
+    sanitizeReceiptDetails({ trip: {}, flight: { route: "  " }, covers: -2 }) === undefined,
+  );
+  const trip = sanitizeReceiptDetails({
+    trip: { pickup: " DIFC ", dropoff: "Dubai Mall", datetime: "2026-07-20 18:45" },
+  });
+  check("trip sanitized", trip?.trip?.pickup === "DIFC" && trip?.trip?.dropoff === "Dubai Mall");
+  check(
+    "trip formatted",
+    formatReceiptDetails(trip) === "Trip: DIFC → Dubai Mall, 2026-07-20 18:45",
+    formatReceiptDetails(trip),
+  );
+  const flight = sanitizeReceiptDetails({
+    flight: { route: "IST → DXB", airline: "Turkish Airlines", travelClass: "Business", passenger: "G. Aydin", reference: "TK123ABC" },
+  });
+  check(
+    "flight formatted",
+    formatReceiptDetails(flight) ===
+      "Flight: IST → DXB, Turkish Airlines, Business, G. Aydin, ref TK123ABC",
+    formatReceiptDetails(flight),
+  );
+  const stay = sanitizeReceiptDetails({
+    stay: { checkIn: "2026-07-01", checkOut: "2026-07-04", nights: 3, city: "Riyadh" },
+  });
+  check(
+    "stay formatted",
+    formatReceiptDetails(stay) === "Stay: 2026-07-01 – 2026-07-04, 3 nights, Riyadh",
+    formatReceiptDetails(stay),
+  );
+  check("stay rejects bad dates", sanitizeReceiptDetails({ stay: { checkIn: "1 July" } }) === undefined);
+  const covers = sanitizeReceiptDetails({ covers: 4 });
+  check("covers formatted", formatReceiptDetails(covers) === "4 covers");
+  const rental = sanitizeReceiptDetails({
+    rental: { period: "2026-07-01 to 2026-07-04", pickupLocation: "DXB Airport", returnLocation: "DXB Airport", vehicleClass: "Compact SUV" },
+  });
+  check(
+    "rental same-location collapses",
+    formatReceiptDetails(rental) === "Rental: 2026-07-01 to 2026-07-04, DXB Airport, Compact SUV",
+    formatReceiptDetails(rental),
+  );
+  const sub = sanitizeReceiptDetails({
+    billingPeriod: { service: "Figma Professional", start: "2026-07-01", end: "2026-07-31" },
+  });
+  check(
+    "subscription formatted",
+    formatReceiptDetails(sub) === "Subscription: Figma Professional, 2026-07-01 – 2026-07-31",
+    formatReceiptDetails(sub),
+  );
+  check(
+    "compose appends detail",
+    composeEnrichedSummary("Meal, within policy.", covers) === "Meal, within policy. — 4 covers",
+  );
+  check(
+    "compose degrades to base when no detail",
+    composeEnrichedSummary("Meal, within policy.", undefined) === "Meal, within policy.",
+  );
+  check("compose empty base → detail only", composeEnrichedSummary("", covers) === "4 covers");
+  check("compose both empty", composeEnrichedSummary(null, undefined) === "");
 
   // ---- report ----
   if (failures.length) {

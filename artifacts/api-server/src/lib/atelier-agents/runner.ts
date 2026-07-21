@@ -5423,6 +5423,8 @@ export interface ExpenseAuditorInput {
   triggeredByUserId: string | null;
   ocr: {
     merchant?: string;
+    // Task #500 — original-script merchant name (Arabic/Turkish receipts).
+    merchantOriginalScript?: string;
     date?: string;
     total?: number;
     tax?: number;
@@ -5431,6 +5433,9 @@ export interface ExpenseAuditorInput {
     category?: string;
     rawText?: string;
     confidence?: "green" | "amber" | "red";
+    // Task #500 — category-specific enrichment (trip/flight/stay/rental/
+    // covers/billingPeriod), present only when printed on the receipt.
+    details?: unknown;
   } | null;
   contractDigest: {
     expensesClause?: boolean;

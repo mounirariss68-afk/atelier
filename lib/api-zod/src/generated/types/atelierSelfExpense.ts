@@ -13,6 +13,7 @@ export interface AtelierSelfExpense {
   merchantNormalized?: string | null;
   merchantResolution?: string | null;
   description?: string | null;
+  summary?: string | null;
   category?: string | null;
   amount: number;
   currency: string;

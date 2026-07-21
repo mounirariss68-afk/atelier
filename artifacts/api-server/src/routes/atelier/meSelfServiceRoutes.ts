@@ -1387,6 +1387,8 @@ function claimToWire(e: typeof atelierExpenses.$inferSelect) {
     merchantNormalized: e.merchantNormalized,
     merchantResolution: e.merchantResolution,
     description: e.description,
+    // Task #500 — enriched auditor summary (trip/flight/stay details).
+    summary: e.summary,
     category: e.category,
     amount: e.amount,
     currency: e.currency,

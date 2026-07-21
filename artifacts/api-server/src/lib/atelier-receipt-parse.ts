@@ -40,8 +40,47 @@ export const RECEIPT_PARSE_MEDIA = new Set([
   "application/pdf",
 ]);
 
+/**
+ * Task #500 — optional category-specific enrichment extracted alongside the
+ * base fields. Every field is optional and MUST only be present when the
+ * receipt actually prints the information (never inferred).
+ */
+export interface ReceiptEnrichmentDetails {
+  trip?: {
+    pickup?: string;
+    dropoff?: string;
+    datetime?: string;
+  };
+  flight?: {
+    route?: string;
+    airline?: string;
+    travelClass?: string;
+    passenger?: string;
+    reference?: string;
+  };
+  stay?: {
+    checkIn?: string;
+    checkOut?: string;
+    nights?: number;
+    city?: string;
+  };
+  covers?: number;
+  rental?: {
+    period?: string;
+    pickupLocation?: string;
+    returnLocation?: string;
+    vehicleClass?: string;
+  };
+  billingPeriod?: {
+    service?: string;
+    start?: string;
+    end?: string;
+  };
+}
+
 export interface VisionReceiptExtraction {
   merchant?: string;
+  merchantOriginalScript?: string;
   date?: string;
   total?: number;
   tax?: number;
@@ -51,10 +90,22 @@ export interface VisionReceiptExtraction {
   rawText?: string;
   confidence?: "green" | "amber" | "red";
   unreadable?: boolean;
+  details?: ReceiptEnrichmentDetails;
 }
 
 const EXTRACT_FIELDS_SPEC =
-  "merchant (string), date (YYYY-MM-DD if visible), total (number, grand total), tax (number, 0 if none), currency (3-letter ISO code), country (short code like KSA/UAE/US if inferable), category (one of flight|hotel|meal|gift|software|mileage|per_diem|taxi|other), rawText (the visible text, condensed), confidence (green if crisp and unambiguous, amber if partly readable, red if barely readable), unreadable (true ONLY if this is not a receipt/invoice or nothing is readable)";
+  "merchant (string), merchantOriginalScript (string, ONLY when the merchant name on the receipt is printed in a non-Latin script — the name exactly as printed), date (YYYY-MM-DD if visible), total (number, grand total), tax (number, 0 if none), currency (3-letter ISO code), country (short code like KSA/UAE/US if inferable), category (one of flight|hotel|meal|gift|software|mileage|per_diem|taxi|other), rawText (the visible text, condensed), confidence (green if crisp and unambiguous, amber if partly readable, red if barely readable), unreadable (true ONLY if this is not a receipt/invoice or nothing is readable), details (OPTIONAL object, see rules below)";
+
+const EXTRACT_GUIDANCE = `
+Multilingual rules: receipts may be in English, Arabic, or Turkish. Extract fields the same way regardless of language. Always return "merchant" in Latin script — transliterate Arabic names and keep Turkish names as written but in Latin characters; when the printed name uses a non-Latin script, also return it verbatim in "merchantOriginalScript". Keep the original-language text in "rawText".
+
+The "details" object carries category-specific enrichment. Include a sub-object ONLY when the receipt explicitly prints that information — NEVER infer, guess, or fabricate any detail. Omit "details" entirely (or any sub-field) when the information is not printed. Sub-objects (all fields optional strings unless noted):
+- trip (taxi / ride-hailing e.g. Uber, Careem, Bolt, BiTaksi): { pickup, dropoff, datetime (trip date/time as printed) }
+- flight (flight ticket/invoice): { route (e.g. "IST → DXB", use IATA codes when printed), airline, travelClass (economy|premium_economy|business|first as printed), passenger, reference (ticket number or PNR) }
+- stay (hotel): { checkIn (YYYY-MM-DD), checkOut (YYYY-MM-DD), nights (number), city }
+- covers (restaurant/entertainment): number of covers/guests, ONLY if printed
+- rental (car rental): { period (e.g. "2026-07-01 to 2026-07-04"), pickupLocation, returnLocation, vehicleClass }
+- billingPeriod (subscription/software invoice): { service (service/plan name), start (YYYY-MM-DD), end (YYYY-MM-DD) }`;
 
 function parseModelJson(text: string): VisionReceiptExtraction {
   const stripped = text
@@ -84,7 +135,7 @@ export async function extractReceiptWithVision(
       {
         model: "claude-haiku-4-5",
         max_tokens: 2048,
-        system: `You are an expense-receipt OCR extractor. Read the receipt image and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.`,
+        system: `You are an expense-receipt OCR extractor. Read the receipt image and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.\n${EXTRACT_GUIDANCE}`,
         messages: [
           {
             role: "user",
@@ -126,7 +177,7 @@ export async function extractReceiptFromText(
       {
         model: "claude-haiku-4-5",
         max_tokens: 2048,
-        system: `You are an expense-receipt/invoice extractor. Read the extracted document text and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.`,
+        system: `You are an expense-receipt/invoice extractor. Read the extracted document text and reply with ONLY a single JSON object (no prose, no code fences) with fields: ${EXTRACT_FIELDS_SPEC}.\n${EXTRACT_GUIDANCE}`,
         messages: [
           {
             role: "user",
@@ -146,6 +197,140 @@ export async function extractReceiptFromText(
 
 function isIsoDate(s: unknown): s is string {
   return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+// ---- Task #500 — enrichment sanitize + description composition ----------
+
+function cleanStr(v: unknown, max = 120): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t ? t.slice(0, max) : undefined;
+}
+
+function cleanNum(v: unknown): number | undefined {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+function prune<T extends Record<string, unknown>>(obj: T): T | undefined {
+  const entries = Object.entries(obj).filter(([, v]) => v !== undefined);
+  return entries.length ? (Object.fromEntries(entries) as T) : undefined;
+}
+
+/**
+ * Defensive sanitation of the model-returned `details` object: only known
+ * keys survive, strings are trimmed/capped, numbers validated. Returns
+ * undefined when nothing usable remains so absent enrichment stays absent.
+ */
+export function sanitizeReceiptDetails(raw: unknown): ReceiptEnrichmentDetails | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const d = raw as Record<string, unknown>;
+  const t = d.trip as Record<string, unknown> | undefined;
+  const f = d.flight as Record<string, unknown> | undefined;
+  const s = d.stay as Record<string, unknown> | undefined;
+  const r = d.rental as Record<string, unknown> | undefined;
+  const b = d.billingPeriod as Record<string, unknown> | undefined;
+  const out: ReceiptEnrichmentDetails = {
+    trip:
+      t && typeof t === "object"
+        ? prune({ pickup: cleanStr(t.pickup), dropoff: cleanStr(t.dropoff), datetime: cleanStr(t.datetime, 60) })
+        : undefined,
+    flight:
+      f && typeof f === "object"
+        ? prune({
+            route: cleanStr(f.route, 60),
+            airline: cleanStr(f.airline, 80),
+            travelClass: cleanStr(f.travelClass, 40),
+            passenger: cleanStr(f.passenger, 80),
+            reference: cleanStr(f.reference, 40),
+          })
+        : undefined,
+    stay:
+      s && typeof s === "object"
+        ? prune({
+            checkIn: isIsoDate(s.checkIn) ? s.checkIn : undefined,
+            checkOut: isIsoDate(s.checkOut) ? s.checkOut : undefined,
+            nights: cleanNum(s.nights),
+            city: cleanStr(s.city, 80),
+          })
+        : undefined,
+    covers: cleanNum(d.covers),
+    rental:
+      r && typeof r === "object"
+        ? prune({
+            period: cleanStr(r.period, 60),
+            pickupLocation: cleanStr(r.pickupLocation),
+            returnLocation: cleanStr(r.returnLocation),
+            vehicleClass: cleanStr(r.vehicleClass, 60),
+          })
+        : undefined,
+    billingPeriod:
+      b && typeof b === "object"
+        ? prune({
+            service: cleanStr(b.service, 80),
+            start: isIsoDate(b.start) ? b.start : undefined,
+            end: isIsoDate(b.end) ? b.end : undefined,
+          })
+        : undefined,
+  };
+  return prune(out as Record<string, unknown>) as ReceiptEnrichmentDetails | undefined;
+}
+
+/** Compact human-readable detail fragment, or "" when nothing to show. */
+export function formatReceiptDetails(details: ReceiptEnrichmentDetails | undefined): string {
+  if (!details) return "";
+  const parts: string[] = [];
+  if (details.trip) {
+    const { pickup, dropoff, datetime } = details.trip;
+    const route = pickup && dropoff ? `${pickup} → ${dropoff}` : pickup || dropoff;
+    const bits = [route, datetime].filter(Boolean);
+    if (bits.length) parts.push(`Trip: ${bits.join(", ")}`);
+  }
+  if (details.flight) {
+    const { route, airline, travelClass, passenger, reference } = details.flight;
+    const bits = [route, airline, travelClass, passenger, reference ? `ref ${reference}` : undefined].filter(Boolean);
+    if (bits.length) parts.push(`Flight: ${bits.join(", ")}`);
+  }
+  if (details.stay) {
+    const { checkIn, checkOut, nights, city } = details.stay;
+    const range = checkIn && checkOut ? `${checkIn} – ${checkOut}` : checkIn || checkOut;
+    const bits = [range, nights ? `${nights} night${nights === 1 ? "" : "s"}` : undefined, city].filter(Boolean);
+    if (bits.length) parts.push(`Stay: ${bits.join(", ")}`);
+  }
+  if (details.covers) {
+    parts.push(`${details.covers} cover${details.covers === 1 ? "" : "s"}`);
+  }
+  if (details.rental) {
+    const { period, pickupLocation, returnLocation, vehicleClass } = details.rental;
+    const locs =
+      pickupLocation && returnLocation && pickupLocation !== returnLocation
+        ? `${pickupLocation} → ${returnLocation}`
+        : pickupLocation || returnLocation;
+    const bits = [period, locs, vehicleClass].filter(Boolean);
+    if (bits.length) parts.push(`Rental: ${bits.join(", ")}`);
+  }
+  if (details.billingPeriod) {
+    const { service, start, end } = details.billingPeriod;
+    const range = start && end ? `${start} – ${end}` : start || end;
+    const bits = [service, range].filter(Boolean);
+    if (bits.length) parts.push(`Subscription: ${bits.join(", ")}`);
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * Append the enrichment fragment to a base description/summary. Degrades to
+ * the base string unchanged when no enrichment is present.
+ */
+export function composeEnrichedSummary(
+  base: string | null | undefined,
+  details: ReceiptEnrichmentDetails | undefined,
+): string {
+  const detail = formatReceiptDetails(details);
+  const b = (base ?? "").trim();
+  if (!detail) return b;
+  if (!b) return detail;
+  return `${b} — ${detail}`;
 }
 
 export type ReceiptParseResult =
@@ -266,8 +451,11 @@ export async function parseReceiptForExpense(args: {
       ? vision.currency.toUpperCase()
       : row.currency;
   const expenseDate = isIsoDate(vision.date) ? vision.date : row.expenseDate;
+  // Task #500 — category-specific enrichment (sanitized; absent stays absent).
+  const details = sanitizeReceiptDetails(vision.details);
   const ocr = {
     merchant: vision.merchant || row.merchant || undefined,
+    merchantOriginalScript: cleanStr(vision.merchantOriginalScript, 200),
     date: expenseDate,
     total: amount,
     tax: Number.isFinite(Number(vision.tax)) ? Number(vision.tax) : 0,
@@ -277,6 +465,7 @@ export async function parseReceiptForExpense(args: {
     rawText: vision.rawText || undefined,
     confidence: vision.confidence ?? "amber",
     extractionMethod,
+    details,
   };
   const contractDigest = await buildContractDigest(row.engagementId ?? null);
   let runId: string;
@@ -330,7 +519,9 @@ export async function parseReceiptForExpense(args: {
     role: me.role,
     flightClass:
       proposal.category === "flight"
-        ? (ocr.rawText?.match(/\b(first|business|premium_economy|economy)\b/i)?.[1]?.toLowerCase() ?? null)
+        ? (details?.flight?.travelClass?.toLowerCase().replace(/\s+/g, "_") ??
+           ocr.rawText?.match(/\b(first|business|premium_economy|economy)\b/i)?.[1]?.toLowerCase() ??
+           null)
         : null,
   });
 
@@ -427,7 +618,7 @@ export async function parseReceiptForExpense(args: {
       ocrPayload: ocr,
       policyStatus: policy.status,
       policyFindings: policy.findings,
-      summary: proposal.summary,
+      summary: composeEnrichedSummary(proposal.summary, details),
       updatedAt: new Date(),
     })
     .where(eq(atelierExpenses.id, row.id))
