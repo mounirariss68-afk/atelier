@@ -36,6 +36,8 @@ const WEEK_ID = `tsw_test_ap_${STAMP}`;
 const LEAVE_ID = `lv_test_ap_${STAMP}`;
 const EXP_ID = `exp_test_ap_${STAMP}`;
 const EXP_OWN_ID = `exp_test_apown_${STAMP}`;
+const FP_ID = `p_test_apfp_${STAMP}`;
+const EXP_FP_ID = `exp_test_apfp_${STAMP}`;
 const EDGE_ID = `rte_test_ap_${STAMP}`;
 
 const failures: string[] = [];
@@ -92,6 +94,7 @@ async function main(): Promise<void> {
       { id: MGR_ID, role: "senior_manager", roleLabel: "Senior Manager", name: "AP Manager" },
       { id: PARTNER_ID, role: "partner", roleLabel: "Partner", name: "AP Partner" },
       { id: FIN_ID, role: "finance", roleLabel: "Finance", name: "AP Finance" },
+      { id: FP_ID, role: "founding_partner", roleLabel: "Founding Partner", name: "AP Founder" },
     ];
     for (const p of personas) {
       await db
@@ -196,6 +199,24 @@ async function main(): Promise<void> {
       submittedAt: daysAgo(2),
     });
 
+    // Submitted expense from the FOUNDING PARTNER — Task #501: founders
+    // self-approve, so this one MUST appear in the founder's own digest.
+    await db.insert(atelierExpenses).values({
+      id: EXP_FP_ID,
+      orgId: ORG,
+      personId: FP_ID,
+      personType: "employee",
+      expenseDate: iso(daysAgo(1)),
+      captureSource: "manual",
+      merchant: "AP Founder Own",
+      category: "meals",
+      amount: 25,
+      currency: "USD",
+      usdAmount: 25,
+      status: "submitted",
+      submittedAt: daysAgo(1),
+    });
+
     // =====================================================================
     group("non-approver \u2192 empty digest");
     // =====================================================================
@@ -286,9 +307,74 @@ async function main(): Promise<void> {
       !finKinds.includes(`leave:${LEAVE_ID}`),
       JSON.stringify(finKinds),
     );
+
+    // =====================================================================
+    group("founder self-approval (Task #501)");
+    // =====================================================================
+    const fp = await call(FP_ID);
+    check("founder \u2192 200", fp.status === 200, `status=${fp.status}`);
+    const fpKinds = (fp.body?.items ?? []).map((i: any) => `${i.kind}:${i.id}`);
+    check(
+      "founder DOES see own submitted expense in digest",
+      fpKinds.includes(`expense:${EXP_FP_ID}`),
+      JSON.stringify(fpKinds),
+    );
+
+    async function walletAction(
+      personaId: string,
+      expId: string,
+      action: "approve" | "reject",
+      body: Record<string, unknown> = {},
+    ): Promise<{ status: number; body: any }> {
+      const res = await fetch(`${API}/wallet/expenses/${expId}/${action}`, {
+        method: "POST",
+        headers: {
+          cookie: `atelier_persona=${personaId}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: await res.json().catch(() => null) };
+    }
+
+    // Partner tries to self-approve their own claim → explicit 403.
+    const parSelf = await walletAction(PARTNER_ID, EXP_OWN_ID, "approve");
+    check(
+      "partner self-approve \u2192 403 no-self-approval",
+      parSelf.status === 403 && parSelf.body?.error === "no-self-approval",
+      `status=${parSelf.status} body=${JSON.stringify(parSelf.body)}`,
+    );
+    const parSelfReject = await walletAction(PARTNER_ID, EXP_OWN_ID, "reject", {
+      reason: "probe",
+    });
+    check(
+      "partner self-reject \u2192 403 no-self-approval",
+      parSelfReject.status === 403 && parSelfReject.body?.error === "no-self-approval",
+      `status=${parSelfReject.status} body=${JSON.stringify(parSelfReject.body)}`,
+    );
+
+    // Founder self-approves their own claim → 200 stamped founder_self.
+    const fpSelf = await walletAction(FP_ID, EXP_FP_ID, "approve");
+    check(
+      "founder self-approve \u2192 200",
+      fpSelf.status === 200,
+      `status=${fpSelf.status} body=${JSON.stringify(fpSelf.body)}`,
+    );
+    check(
+      "founder self-approval stamped approvalRoute=founder_self",
+      fpSelf.body?.expense?.approvalRoute === "founder_self",
+      JSON.stringify(fpSelf.body?.expense),
+    );
+    check(
+      "founder self-approved claim is now approved",
+      fpSelf.body?.expense?.status === "approved",
+      JSON.stringify(fpSelf.body?.expense),
+    );
   } finally {
     // --- cleanup (reverse dependency order) ---
-    await db.delete(atelierExpenses).where(inArray(atelierExpenses.id, [EXP_ID, EXP_OWN_ID]));
+    await db
+      .delete(atelierExpenses)
+      .where(inArray(atelierExpenses.id, [EXP_ID, EXP_OWN_ID, EXP_FP_ID]));
     await db.delete(atelierLeaveRequests).where(eq(atelierLeaveRequests.id, LEAVE_ID));
     await db.delete(atelierTimesheetWeeks).where(eq(atelierTimesheetWeeks.id, WEEK_ID));
     await db.delete(atelierRosterReportsTo).where(eq(atelierRosterReportsTo.id, EDGE_ID));
@@ -297,7 +383,7 @@ async function main(): Promise<void> {
       .where(inArray(atelierEmployees.id, [EMP_PERSON, MGR_PERSON]));
     await db
       .delete(atelierUsers)
-      .where(inArray(atelierUsers.id, [EMP_ID, MGR_ID, PARTNER_ID, FIN_ID]));
+      .where(inArray(atelierUsers.id, [EMP_ID, MGR_ID, PARTNER_ID, FIN_ID, FP_ID]));
     server.close();
     await pool.end().catch(() => {});
   }

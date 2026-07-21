@@ -107,4 +107,5 @@
 - [Chat timesheet tools](atelier-chat-timesheet.md) — chat timesheet writes resolve roster person + ISO week server-side (never model ids) and recompute week totals; current-week fixtures must use isoWeekOf, not hardcoded week labels.
 - [Cash matchProposal shape](atelier-cash-matchproposal.md) — matchProposal.recommended is a string ACTION ("apply_full"); the invoice lives in candidates[0]; consumers must handle both shapes.
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock semantics; Collections Agent reads ONLY isDefault dunning ladders per jurisdiction.
+- [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
 - [Atelier GL statements](atelier-gl-statements.md) — entity P&L/BS/CF from GL journals; BS/CF identities by construction (new stock buckets must wire into CF); IC tagged by account name; budget firm-level only.

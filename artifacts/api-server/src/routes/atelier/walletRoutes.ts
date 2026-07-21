@@ -329,6 +329,18 @@ async function resolveApprovalAuthority(
   me: typeof atelierUsers.$inferSelect,
   expense: typeof atelierExpenses.$inferSelect,
 ): Promise<string | null> {
+  // Task #501 — self-approval: ONLY founding partners may approve/reject
+  // their own claim (stamped distinctly as `founder_self`). Every other
+  // role — including partner and finance leadership — gets an explicit
+  // 403 before any leadership/HR/line-manager route can resolve.
+  if (expense.personId === me.id) {
+    if (me.role === "founding_partner") return "founder_self";
+    res.status(403).json({
+      error: "no-self-approval",
+      message: "You cannot approve or reject your own expense claim.",
+    });
+    return null;
+  }
   if (expense.engagementId) {
     const [eng] = await db
       .select({ leadId: atelierEngagements.engagementLeadId })
@@ -350,6 +362,47 @@ async function resolveApprovalAuthority(
     message: "Internal expenses are approved by the claimant's line manager, HR, or leadership.",
   });
   return null;
+}
+
+/**
+ * Task #501 — every submitted expense must land visibly in BOTH founders'
+ * queues. Notify all founding_partner users in the claim's org when a
+ * claim is submitted (any source: wallet or Me lens). The submitting
+ * founder is skipped so they aren't notified twice about their own claim.
+ */
+export async function notifyFoundersOfSubmittedExpense(expense: {
+  id: string;
+  orgId: string;
+  personId: string;
+  merchant: string | null;
+  currency: string;
+  amount: number;
+}): Promise<void> {
+  const founders = await db
+    .select({ id: atelierUsers.id })
+    .from(atelierUsers)
+    .where(
+      and(
+        eq(atelierUsers.orgId, expense.orgId),
+        eq(atelierUsers.role, "founding_partner"),
+        isNull(atelierUsers.deletedAt),
+      ),
+    );
+  const [submitter] = await db
+    .select({ name: atelierUsers.name })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, expense.personId));
+  for (const f of founders) {
+    if (f.id === expense.personId) continue;
+    await emitSelfNotification({
+      orgId: expense.orgId,
+      userId: f.id,
+      kind: "expense_submitted",
+      title: "Expense claim awaiting approval",
+      body: `${submitter?.name ?? expense.personId} — ${expense.merchant ?? "expense"} ${expense.currency} ${expense.amount.toFixed(2)} is ready for review.`,
+      href: "/wallet/expenses",
+    });
+  }
 }
 
 /**
@@ -1175,6 +1228,9 @@ router.post("/wallet/expenses/:id/submit", async (req, res) => {
       orgId: me.orgId,
     });
   }
+
+  // Task #501 — every submitted claim lands in both founders' queues.
+  await notifyFoundersOfSubmittedExpense(expense);
 
   const [final] = await db.select().from(atelierExpenses).where(eq(atelierExpenses.id, expense.id));
   res.json({ expense: expenseToWire(final, me) });

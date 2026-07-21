@@ -651,7 +651,12 @@ export const AtelierListMyExpensesResponse = zod.object({
       fundingSource: zod.string().nullish(),
       fundingBankAccountId: zod.string().nullish(),
       timesheetWeekId: zod.string().nullish(),
-      approvalRoute: zod.string().nullish(),
+      approvalRoute: zod
+        .string()
+        .nullish()
+        .describe(
+          "How the approval was authorised: engagement_lead | line_manager | hr | leadership | timesheet_auto | founder_self (a founding partner approving their own claim — Task #501).",
+        ),
       createdAt: zod.string(),
     }),
   ),
@@ -788,7 +793,12 @@ export const AtelierUpdateMyExpenseResponse = zod.object({
     fundingSource: zod.string().nullish(),
     fundingBankAccountId: zod.string().nullish(),
     timesheetWeekId: zod.string().nullish(),
-    approvalRoute: zod.string().nullish(),
+    approvalRoute: zod
+      .string()
+      .nullish()
+      .describe(
+        "How the approval was authorised: engagement_lead | line_manager | hr | leadership | timesheet_auto | founder_self (a founding partner approving their own claim — Task #501).",
+      ),
     createdAt: zod.string(),
   }),
 });
@@ -855,7 +865,12 @@ export const AtelierSubmitMyExpenseResponse = zod.object({
     fundingSource: zod.string().nullish(),
     fundingBankAccountId: zod.string().nullish(),
     timesheetWeekId: zod.string().nullish(),
-    approvalRoute: zod.string().nullish(),
+    approvalRoute: zod
+      .string()
+      .nullish()
+      .describe(
+        "How the approval was authorised: engagement_lead | line_manager | hr | leadership | timesheet_auto | founder_self (a founding partner approving their own claim — Task #501).",
+      ),
     createdAt: zod.string(),
   }),
 });
@@ -902,7 +917,12 @@ export const AtelierParseMyExpenseReceiptResponse = zod.object({
     fundingSource: zod.string().nullish(),
     fundingBankAccountId: zod.string().nullish(),
     timesheetWeekId: zod.string().nullish(),
-    approvalRoute: zod.string().nullish(),
+    approvalRoute: zod
+      .string()
+      .nullish()
+      .describe(
+        "How the approval was authorised: engagement_lead | line_manager | hr | leadership | timesheet_auto | founder_self (a founding partner approving their own claim — Task #501).",
+      ),
     createdAt: zod.string(),
   }),
   runId: zod.string(),

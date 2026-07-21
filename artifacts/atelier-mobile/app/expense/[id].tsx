@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import {
   useAtelierDeleteMyExpense,
+  useAtelierGetMyProfile,
   useAtelierListMyExpenseContexts,
   useAtelierListMyExpenses,
   useAtelierSubmitMyExpense,
@@ -42,7 +43,7 @@ import {
 import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
-import { HttpError } from "@/lib/api";
+import { HttpError, apiJson } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
 
 const CONTEXT_TYPES: AtelierSelfExpenseCreateContextType[] = [
@@ -106,6 +107,7 @@ export default function ExpenseDetailScreen() {
   const { id, parsed } = useLocalSearchParams<{ id: string; parsed?: string }>();
 
   const list = useAtelierListMyExpenses();
+  const profile = useAtelierGetMyProfile();
   const contexts = useAtelierListMyExpenseContexts();
   const update = useAtelierUpdateMyExpense();
   const del = useAtelierDeleteMyExpense();
@@ -246,6 +248,57 @@ export default function ExpenseDetailScreen() {
     [id, update, submit, patchBody, list, router, t, feedback],
   );
 
+  // Task #501 — founding partners may approve/reject their OWN submitted
+  // claim (stamped `founder_self` server-side). This screen is self-scoped,
+  // so any claim shown here belongs to the viewer.
+  const isFounder = profile.data?.user.role === "founding_partner";
+  const [selfActing, setSelfActing] = useState(false);
+
+  const selfApprove = useCallback(async () => {
+    if (!id) return;
+    setSelfActing(true);
+    try {
+      await apiJson(`/api/atelier/wallet/expenses/${id}/approve`, {
+        method: "POST",
+        body: {},
+      });
+      await list.refetch();
+      hapticSuccess();
+      feedback.toast(t("exp.selfApproved"), "success");
+    } catch {
+      hapticError();
+      feedback.toast(t("common.error"), "error");
+    } finally {
+      setSelfActing(false);
+    }
+  }, [id, list, t, feedback]);
+
+  const selfReject = useCallback(async () => {
+    if (!id) return;
+    const ok = await feedback.confirm({
+      title: t("exp.selfRejectTitle"),
+      message: t("exp.selfRejectConfirm"),
+      confirmLabel: t("exp.reject"),
+      cancelLabel: t("common.cancel"),
+      destructive: true,
+    });
+    if (!ok) return;
+    setSelfActing(true);
+    try {
+      await apiJson(`/api/atelier/wallet/expenses/${id}/reject`, {
+        method: "POST",
+        body: { reason: t("exp.selfRejectReason") },
+      });
+      await list.refetch();
+      hapticSuccess();
+    } catch {
+      hapticError();
+      feedback.toast(t("common.error"), "error");
+    } finally {
+      setSelfActing(false);
+    }
+  }, [id, list, t, feedback]);
+
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
 
   const accounts = contexts.data?.accounts ?? [];
@@ -316,6 +369,14 @@ export default function ExpenseDetailScreen() {
                         : c.elevate2
                 }
               />
+              {expense.approvalRoute === "founder_self" ? (
+                <Chip
+                  icon="award"
+                  label={t("exp.selfApprovedChip")}
+                  color={c.warning}
+                  bg={c.warningTint}
+                />
+              ) : null}
               {expense.policyStatus !== "green" ? (
                 <Chip
                   icon={expense.policyStatus === "red" ? "x-octagon" : "alert-triangle"}
@@ -550,6 +611,34 @@ export default function ExpenseDetailScreen() {
                   icon="send"
                   loading={submit.isPending}
                   onPress={() => doSubmit()}
+                />
+              </View>
+            ) : null}
+
+            {expense.status === "submitted" && isFounder ? (
+              <View style={{ gap: 10 }}>
+                <Text
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontSize: 13,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {t("exp.founderSelfHint")}
+                </Text>
+                <Button
+                  label={t("exp.approveOwn")}
+                  icon="check-circle"
+                  loading={selfActing}
+                  onPress={selfApprove}
+                />
+                <Button
+                  label={t("exp.reject")}
+                  icon="x-circle"
+                  variant="secondary"
+                  loading={selfActing}
+                  onPress={selfReject}
                 />
               </View>
             ) : null}

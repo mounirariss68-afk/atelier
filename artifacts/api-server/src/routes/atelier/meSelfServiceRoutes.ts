@@ -66,6 +66,8 @@ import {
   type PersonRow,
 } from "./ledgerRoutes";
 import { emitSelfNotification, resolveUserIdForPerson } from "./meRoutes";
+// Task #501 — founder submit-notifications shared with the wallet route.
+import { notifyFoundersOfSubmittedExpense } from "./walletRoutes";
 import {
   canApproveAsLead,
   canApproveAsPartner,
@@ -1828,6 +1830,8 @@ router.post("/me/expenses/:id/submit", async (req, res, next) => {
       body: `${row.merchant} — ${row.currency} ${row.amount.toFixed(2)} is with the approvers.`,
       href: "/me",
     });
+    // Task #501 — every submitted claim lands in both founders' queues.
+    await notifyFoundersOfSubmittedExpense(updated);
     res.json({ expense: claimToWire(updated) });
   } catch (err) {
     next(err);
@@ -2275,9 +2279,13 @@ router.get("/me/approvals", async (req, res, next) => {
           ),
         )
         .orderBy(desc(atelierExpenses.submittedAt));
-      // No self-approval; senior_manager only sees claims on engagements
-      // they lead (mirrors /wallet/expenses/:id/approve).
-      claims = claims.filter((c) => c.personId !== me.id);
+      // No self-approval — EXCEPT founding partners (Task #501): founders
+      // may self-approve, so their own claims stay in their digest.
+      // senior_manager only sees claims on engagements they lead
+      // (mirrors /wallet/expenses/:id/approve).
+      if (me.role !== "founding_partner") {
+        claims = claims.filter((c) => c.personId !== me.id);
+      }
       if (!isFirmWideExpenseApprover) {
         claims = claims.filter((c) => c.engagementId && ledEngIds.includes(c.engagementId));
       }

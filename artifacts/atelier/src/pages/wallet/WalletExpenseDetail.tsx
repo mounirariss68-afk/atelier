@@ -53,6 +53,12 @@ interface Expense {
   approvedAt: string | null;
   rejectedAt: string | null;
   rejectedReason: string | null;
+  approvalRoute: string | null;
+}
+
+interface Me {
+  id: string;
+  role: string;
 }
 
 // Task #76 — inline receipt preview. Receipts may be images or PDFs; try an
@@ -191,6 +197,7 @@ export default function WalletExpenseDetail() {
   const [, params] = useRoute("/wallet/expenses/:id");
   const [, setLocation] = useLocation();
   const [expense, setExpense] = React.useState<Expense | null>(null);
+  const [me, setMe] = React.useState<Me | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -212,6 +219,28 @@ export default function WalletExpenseDetail() {
   React.useEffect(() => {
     void load();
   }, [load]);
+
+  // Task #501 — needed to decide whether the viewer may act on their own
+  // claim (founding partners self-approve; everyone else may not).
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/atelier/me", { credentials: "include" });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setMe({ id: d.id, role: d.role });
+      } catch {
+        // non-fatal; buttons fall back to server-side enforcement
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isOwnClaim = !!(me && expense && expense.personId === me.id);
+  const canActOnClaim = !isOwnClaim || me?.role === "founding_partner";
 
   async function action(path: string, body: Record<string, unknown> = {}) {
     if (!id) return;
@@ -274,7 +303,20 @@ export default function WalletExpenseDetail() {
               <div><dt className="text-stone-500">VAT</dt><dd>{expense.vatTreatment} · {expense.vatAmount.toFixed(2)} {expense.currency}</dd></div>
               <div><dt className="text-stone-500">Country</dt><dd>{expense.vatCountry ?? "—"}</dd></div>
               <div><dt className="text-stone-500">Client billable</dt><dd>{expense.clientBillable ? `yes · markup ${expense.markupPct}%` : "no"}</dd></div>
-              <div><dt className="text-stone-500">Status</dt><dd><MonoChip>{expense.status}</MonoChip> · policy <MonoChip>{expense.policyStatus}</MonoChip></dd></div>
+              <div>
+                <dt className="text-stone-500">Status</dt>
+                <dd>
+                  <MonoChip>{expense.status}</MonoChip> · policy <MonoChip>{expense.policyStatus}</MonoChip>
+                  {expense.approvalRoute === "founder_self" ? (
+                    <span
+                      className="ml-2 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800"
+                      data-testid="chip-founder-self"
+                    >
+                      Self-approved (founder)
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
             </dl>
             {expense.merchantNormalized && expense.merchantNormalized !== expense.merchant ? (
               <p className="mt-3 text-xs text-stone-500" data-testid="merchant-normalized">
@@ -384,14 +426,15 @@ export default function WalletExpenseDetail() {
                 Mark reimbursed
               </button>
             ) : null}
-            {expense.status === "submitted" ? (
+            {expense.status === "submitted" && canActOnClaim ? (
               <>
                 <button
                   className="rounded bg-emerald-700 px-4 py-2 text-sm text-white disabled:opacity-50"
                   disabled={busy}
                   onClick={() => action("approve")}
+                  data-testid="btn-approve-expense"
                 >
-                  Approve
+                  {isOwnClaim ? "Approve (own claim)" : "Approve"}
                 </button>
                 <button
                   className="rounded bg-red-700 px-4 py-2 text-sm text-white disabled:opacity-50"
@@ -400,10 +443,16 @@ export default function WalletExpenseDetail() {
                     const reason = prompt("Reject reason:") ?? "rejected";
                     void action("reject", { reason });
                   }}
+                  data-testid="btn-reject-expense"
                 >
                   Reject
                 </button>
               </>
+            ) : null}
+            {expense.status === "submitted" && !canActOnClaim ? (
+              <span className="self-center text-xs text-stone-500" data-testid="text-no-self-approval">
+                Awaiting approval — you can't approve your own claim.
+              </span>
             ) : null}
             <button
               className="rounded border px-4 py-2 text-sm"

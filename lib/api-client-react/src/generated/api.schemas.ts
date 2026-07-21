@@ -3125,6 +3125,7 @@ export interface AtelierSelfExpense {
   fundingSource?: string | null;
   fundingBankAccountId?: string | null;
   timesheetWeekId?: string | null;
+  /** How the approval was authorised: engagement_lead | line_manager | hr | leadership | timesheet_auto | founder_self (a founding partner approving their own claim — Task #501). */
   approvalRoute?: string | null;
   createdAt: string;
 }
