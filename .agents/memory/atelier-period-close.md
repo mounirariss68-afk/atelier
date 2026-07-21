@@ -9,4 +9,4 @@ description: Close-cycle workflow, sign-off lock semantics, and Collections Agen
 - Accrual approve posts a kind "accrual" / sourceKind "close_accrual" journal dated last day of the month; requires the entity's chart seeded (400 missing_account otherwise).
 - **Collections Agent only reads `isDefault: true` dunning ladders**, keyed by invoice `jurisdiction` — a non-default ladder is silently ignored (invoices count as "not yet due"). Probe tests should use a unique jurisdiction to avoid colliding with a real default ladder.
 - Escalation drafts (ladder exhausted) are internal: approve-send marks them sent via "internal" with NO email and NO dunning event; normal sends re-validate invoice state, event count === stepIndex, and open future promise-to-pay at send time.
-- Probe: `artifacts/api-server/scripts/close-probe.ts` (period 2019-01/year 2019, tag __T432, self-cleaning; personas p_mounir_ariss + p_gokhan_guney for the two-partner flow).
+- Probe: `artifacts/api-server/scripts/close-probe.ts` (self-cleaning; uses the two seeded founding-partner personas for the two-partner sign-off flow).

@@ -1,9 +1,9 @@
 /**
  * FinanceHome — CFO overview dashboard (Task #413).
  *
- * Replaces the previous Finance section index (Task #372). The eight-
- * section ribbon is rendered below the dashboard via
- * `FinanceSectionRibbon` so deep-link routes continue to resolve.
+ * Replaces the previous Finance section index (Task #372). Section
+ * navigation lives in the top menu bar; the old bottom ribbon was
+ * removed as redundant (Task feedback, Jul 2026).
  *
  * Filter semantics (applied end-to-end, not just URL state)
  *   - Entity:  filters the entities array used by Close / Compliance /
@@ -59,7 +59,6 @@ import {
   type CashForecastWeek,
 } from "./cfoData";
 import { useFpaBudget, useFpaHeadcount, useFpaRenewals } from "@/lib/v5-hooks";
-import FinanceSectionRibbon from "./FinanceSectionRibbon";
 import { fmtPresentationMoney } from "@/lib/presentationCurrency";
 import {
   useExpectedDisbursements,
@@ -1025,6 +1024,17 @@ export default function FinanceHome() {
         <section data-testid="finance-plan-fpa">
           <Eyebrow>FP&amp;A · driver-based plan ({fpaBudget?.scenarioLabel ?? "Base case"})</Eyebrow>
           <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-2">
+            {fpaBudget && !fpaBudget.committedScenarioId ? (
+              <Link href="/finance/plan/budget" className="sm:col-span-2 lg:col-span-3">
+                <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-no-committed-plan">
+                  <Eyebrow>No committed plan</Eyebrow>
+                  <div className="text-sm font-light mt-1 text-text-mute">
+                    Plan figures appear here once finance leadership commits a scenario in Plan (FP&amp;A).
+                  </div>
+                </Card>
+              </Link>
+            ) : (
+            <>
             <Link href="/finance/plan/budget">
               <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-revenue-plan">
                 <Eyebrow>Revenue (FY plan)</Eyebrow>
@@ -1089,6 +1099,8 @@ export default function FinanceHome() {
                 </div>
               </Card>
             </Link>
+            </>
+            )}
             <Link href="/finance/plan/headcount">
               <Card className="p-4 cursor-pointer hover:border-gold/40 transition-colors h-full" data-testid="kpi-tile-headcount-plan">
                 <Eyebrow>Headcount EOP</Eyebrow>
@@ -1112,8 +1124,6 @@ export default function FinanceHome() {
           </div>
         </section>
       </div>
-
-      <FinanceSectionRibbon />
     </div>
   );
 }
