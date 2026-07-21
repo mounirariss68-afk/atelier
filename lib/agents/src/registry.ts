@@ -1873,6 +1873,96 @@ export const BillingOrchestrator = defineAgent({
   evals: [],
 });
 
+// ====================== TASK #432 — CLOSE CONTROLLER ======================
+// Rule-based: deterministic close-readiness checks per legal entity +
+// period, accrual proposals (approval-gated), and hard sign-off blocking.
+
+export const CloseController = defineAgent({
+  id: "ag_close_controller",
+  name: "Close Controller",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Rule-based period-close engine: runs deterministic close-readiness checks per legal entity and period (bank match completeness, subledger-to-GL ties, revenue recognition posted, expense cutoffs, open GL posting exceptions), updates the close checklist, proposes accrual journals for partner approval, and hard-blocks two-partner sign-off while open items remain.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/close_controller.v1.md",
+  inputSchema: z.object({
+    cycleId: z.string(),
+    entityId: z.string(),
+    periodType: z.enum(["month", "quarter", "year"]),
+    periodLabel: z.string(),
+  }),
+  outputSchema: z.object({
+    cycleId: z.string(),
+    periodLabel: z.string(),
+    checksRun: z.number(),
+    itemsPassed: z.number(),
+    itemsBlocked: z.number(),
+    itemsManualOpen: z.number(),
+    accrualsProposed: z.number(),
+    readyForSignoff: z.boolean(),
+    blockers: z.array(
+      z.object({ itemKey: z.string(), title: z.string(), message: z.string() }),
+    ),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Deterministic and idempotent per cycle — re-runs refresh check results, never duplicate items or proposals.",
+    "Never posts a journal: accruals are proposals that require a partner approval to post.",
+    "Never signs off or locks a period itself — sign-off is a two-distinct-partner human action.",
+    "Sign-off is hard-blocked while any checklist item is open/blocked or any accrual proposal is undecided.",
+  ],
+  humanCheckpoints: [
+    partnerCheck("Partner approves each accrual journal before posting"),
+    { id: "cp_two_partner_signoff", label: "Two distinct partners sign off to lock the period", decider: "partner", blocking: true },
+  ],
+  evals: [],
+});
+
+// ====================== TASK #432 — COLLECTIONS AGENT ======================
+// Rule-based over the existing dunning ladder: drafts chase emails and
+// escalations; a human approves every send. Never auto-sends.
+
+export const CollectionsAgent = defineAgent({
+  id: "ag_collections",
+  name: "Collections Agent",
+  group: "Atelier",
+  stage: "Deliver",
+  purpose:
+    "Watches overdue issued invoices against the jurisdiction's dunning ladder: drafts the next chase email per invoice when its ladder step is due (suppressed while an open future promise-to-pay stands), tracks promise-to-pay context, and drafts partner escalations when the ladder is exhausted. Drafts only — every send requires human approval.",
+  model: "rule-based",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/atelier/collections.v1.md",
+  inputSchema: z.object({
+    asOf: z.string().optional(),
+    invoiceId: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    invoicesScanned: z.number(),
+    draftsCreated: z.number(),
+    draftsRefreshed: z.number(),
+    suppressedByPromise: z.number(),
+    notYetDue: z.number(),
+    escalationsDrafted: z.number(),
+    rationaleSummary: z.string(),
+  }),
+  tools: [],
+  guardrails: [
+    "Never sends anything — every draft waits for an explicit human approve-send.",
+    "Honors ladder cadence: a step is only drafted once its offsetDays have elapsed.",
+    "An open future promise-to-pay suppresses further chasing until kept or broken.",
+    "Idempotent per (invoice, step) — re-runs refresh the draft, never duplicate sends.",
+  ],
+  humanCheckpoints: [
+    partnerCheck("Human approves every chase email before it is sent"),
+  ],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -1936,6 +2026,9 @@ export const ATELIER_AGENTS: Agent[] = [
   SelfBillingClerk,
   // Automated billing (Task #429)
   BillingOrchestrator,
+  // Period close + collections (Task #432)
+  CloseController,
+  CollectionsAgent,
   // Account-management agents — propose-then-approve
   NextBestAction,
   RelationshipHealth,

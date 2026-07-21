@@ -104,6 +104,7 @@ import changeOrderRoutes from "./changeOrderRoutes";
 import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 import revrecRoutes from "./revrecRoutes";
 import glRoutes from "./glRoutes";
+import closeRoutes from "./closeRoutes";
 import marginReportsRoutes from "./marginReportsRoutes";
 import bankRoutes from "./bankRoutes";
 import cashRoutes from "./cashRoutes";
@@ -392,6 +393,7 @@ router.use(revrecRoutes);
 // Task #428 — Finance GL backbone: chart of accounts, append-only
 // journal, entity tagging, Bookkeeper posting agent, trial balance.
 router.use(glRoutes);
+router.use(closeRoutes);
 
 // Task #434 — Margin / realization reporting suite: sold-position
 // snapshots, client margin rollups, overhead allocation, realization

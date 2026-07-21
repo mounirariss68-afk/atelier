@@ -30,6 +30,7 @@
 
 import * as React from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAtelierGetPipelineForecast, useAtelierListEngagements } from "@workspace/api-client-react";
 import { PageHero, SectionHead, Card, MonoChip, Eyebrow } from "@/components/ui/primitives";
 import { useFinanceEntities, useEntityExpiries, type FinanceEntityRow, type EntityExpiryRow } from "@/lib/v5-hooks";
@@ -771,12 +772,37 @@ function toneClasses(t: "red" | "amber" | "gold" | "default"): string {
   }
 }
 
+interface CloseCycleLite {
+  id: string;
+  entityId: string;
+  periodLabel: string;
+  status: string;
+  summary: { itemsBlocked?: number; itemsManualOpen?: number; readyForSignoff?: boolean } | null;
+}
+
 function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
   entities: FinanceEntityRow[];
   expiries: EntityExpiryRow[];
   inbox: ReturnType<typeof buildCfoInbox>;
   asOfMs: number;
 }) {
+  // Task #432 — live per-entity close status from the close-cycle API
+  const closeQ = useQuery({
+    queryKey: ["close-cycles-home"],
+    queryFn: async () => {
+      const res = await fetch(`${import.meta.env?.BASE_URL ?? "/"}api/atelier/close/cycles?periodType=month`, { credentials: "include" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as { data: { rows: CloseCycleLite[] } };
+    },
+  });
+  const latestCycleByEntity = React.useMemo(() => {
+    const map = new Map<string, CloseCycleLite>();
+    for (const c of closeQ.data?.data.rows ?? []) {
+      const prev = map.get(c.entityId);
+      if (!prev || c.periodLabel > prev.periodLabel) map.set(c.entityId, c);
+    }
+    return map;
+  }, [closeQ.data]);
   // Compliance calendar — 90-day rolling from as-of
   const calendar = React.useMemo(() => {
     const items: Array<{ id: string; label: string; entity: string; date: string; tone: "red" | "amber" | "gold" | "default"; daysOut: number; href: string }> = [];
@@ -832,9 +858,17 @@ function CloseComplianceInbox({ entities, expiries, inbox, asOfMs }: {
                   <MonoChip tone={tone === "red" ? "red" : tone === "amber" ? "amber" : "default"}>{!Number.isFinite(closeD) ? "no close date" : closeD < 0 ? `${Math.abs(closeD)}d late` : `${closeD}d to close`}</MonoChip>
                 </div>
                 <div className="text-text-faint font-mono mt-0.5 text-[10px] flex justify-between">
-                  <span>checklist <span className="italic">— W4</span></span>
-                  <span>recs <span className="italic">— W4</span></span>
-                  <span>sign-off <span className="italic">— W4</span></span>
+                  {(() => {
+                    const cy = latestCycleByEntity.get(e.id);
+                    if (!cy) return <span className="italic">no close cycle yet</span>;
+                    if (cy.status === "signed_off") return <span>{cy.periodLabel} · signed off · locked</span>;
+                    if (cy.summary?.readyForSignoff) return <span className="text-gold">{cy.periodLabel} · ready for sign-off</span>;
+                    return (
+                      <span>
+                        {cy.periodLabel} · {cy.summary?.itemsBlocked ?? "?"} blocked · {cy.summary?.itemsManualOpen ?? "?"} manual open
+                      </span>
+                    );
+                  })()}
                 </div>
               </li>
             );

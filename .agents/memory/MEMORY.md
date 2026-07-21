@@ -105,3 +105,4 @@
 - [Chat session auto-titles](chat-session-titles.md) — fire-and-forget Haiku title after first turn, UPDATE guarded on title IS NULL; stub probes now see an extra "You title chat conversations" call.
 - [Chat timesheet tools](atelier-chat-timesheet.md) — chat timesheet writes resolve roster person + ISO week server-side (never model ids) and recompute week totals; current-week fixtures must use isoWeekOf, not hardcoded week labels.
 - [Cash matchProposal shape](atelier-cash-matchproposal.md) — matchProposal.recommended is a string ACTION ("apply_full"); the invoice lives in candidates[0]; consumers must handle both shapes.
+- [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock semantics; Collections Agent reads ONLY isDefault dunning ladders per jurisdiction.
