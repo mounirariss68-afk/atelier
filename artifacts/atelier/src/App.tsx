@@ -122,6 +122,7 @@ import FinanceReportsBs from "@/pages/finance/FinanceReportsBs";
 import FinanceReportsCf from "@/pages/finance/FinanceReportsCf";
 import FinanceReportsCube from "@/pages/finance/FinanceReportsCube";
 import FinanceReportsMargin from "@/pages/finance/FinanceReportsMargin";
+import FinanceReportsWorkingCapital from "@/pages/finance/FinanceReportsWorkingCapital";
 import FinanceReportsBoardPack from "@/pages/finance/FinanceReportsBoardPack";
 // Task #414 — Wave 2 engagement P&L / EAC / change-order register pages.
 import EngagementHealth from "@/pages/finance/EngagementHealth";
@@ -734,6 +735,7 @@ function Router() {
         <Route path="/finance/reports/profitability" component={FinanceReportsCube} />
         <Route path="/finance/reports/board-pack" component={FinanceReportsBoardPack} />
         <Route path="/finance/reports/margin" component={FinanceReportsMargin} />
+        <Route path="/finance/reports/working-capital" component={FinanceReportsWorkingCapital} />
         <Route path="/finance/reports">{() => <FinanceSection sectionId="reports" />}</Route>
         {/* Task #419 — Comply registers (controls + SoD, statutory, TP, insurance).
             These must come before the catch-all /finance/comply landing. */}

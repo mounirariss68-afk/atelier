@@ -1000,14 +1000,17 @@ export interface PnlResp {
   consolidated: { actual: PnlLines; budget: PnlLines; forecast: PnlLines; priorYear: PnlLines } | null;
   eliminations: ReportEliminations | null;
   variance: PnlVariance | null; commentary: string[];
+  preliminary?: boolean; closedPeriods?: string[];
 }
 export interface BsResp {
   period: string; currency: string; entity: string | null;
   perEntity: BsEntityRow[]; consolidated: BsLines | null; eliminations: ReportEliminations | null;
+  preliminary?: boolean; closedPeriods?: string[];
 }
 export interface CfResp {
   period: string; scope: string; currency: string; entity: string | null;
   perEntity: CfEntityRow[]; consolidated: CfLines | null;
+  preliminary?: boolean; closedPeriods?: string[];
 }
 export interface CubeRow {
   engagementId: string; engagementName: string;
@@ -1034,7 +1037,24 @@ export interface BoardPackSection {
 }
 export interface BoardPackResp {
   period: string; periodLabel: string; presentationCurrency: string;
+  preliminary?: boolean; closedPeriods?: string[];
   sections: BoardPackSection[];
+}
+// Working capital (Task #433)
+export interface WorkingCapitalMetrics {
+  ar: number; wip: number; ap: number;
+  revenue: number; spend: number; days: number;
+  dso: number | null; wipDays: number | null; dpo: number | null; lockupDays: number | null;
+}
+export interface WorkingCapitalEntityRow extends WorkingCapitalMetrics {
+  entityId: string; entityName: string; baseCurrency: string;
+}
+export interface WorkingCapitalResp {
+  period: string; scope: string; currency: string; entity: string | null;
+  periodsCovered: string[]; days: number;
+  perEntity: WorkingCapitalEntityRow[];
+  consolidated: WorkingCapitalMetrics;
+  preliminary?: boolean; closedPeriods?: string[];
 }
 export interface BoardPackSchedule {
   id: string; name: string; cron: string; nextRunOn: string;
@@ -1084,6 +1104,14 @@ export function useFinanceReportsBoardPack(period: string | null, currency = "US
   return useQuery<BoardPackResp>({
     queryKey: ["atelier-v5", "finance-reports-board-pack", period, currency],
     queryFn: () => get<BoardPackResp>(`/finance/reports/board-pack?period=${period ?? ""}&currency=${currency}`),
+    staleTime: 30_000,
+    enabled: !!period,
+  });
+}
+export function useFinanceReportsWorkingCapital(period: string | null, scope: string, entity: string | null, currency: string) {
+  return useQuery<WorkingCapitalResp>({
+    queryKey: ["atelier-v5", "finance-reports-working-capital", period, scope, entity ?? "consolidated", currency],
+    queryFn: () => get<WorkingCapitalResp>(`/finance/reports/working-capital?period=${period ?? ""}&scope=${scope}&currency=${currency}${entity ? `&entity=${entity}` : ""}`),
     staleTime: 30_000,
     enabled: !!period,
   });

@@ -9,7 +9,7 @@ import {
   type PnlLines,
 } from "@/lib/v5-hooks";
 import {
-  ReportFilterBar, useReportFilters, fmtMoney, VarianceCellChip,
+  ReportFilterBar, useReportFilters, fmtMoney, VarianceCellChip, PreliminaryChip,
 } from "./financeReportsShared";
 
 const ROWS: Array<{ key: keyof PnlLines; label: string; bold?: boolean; negate?: boolean }> = [
@@ -50,8 +50,9 @@ export default function FinanceReportsPnl() {
           headline="Profit & Loss"
           lede="Per-entity and consolidated P&L. Inter-company eliminations applied on consolidation; FX translation at average rate. Variance vs budget / forecast / prior year with auto-commentary."
         />
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <ReportFilterBar filters={filters} periods={periods.map((p) => ({ id: p.id, label: p.label }))} onChange={setFilters} />
+          <PreliminaryChip preliminary={data?.preliminary} />
         </div>
       </PageHero>
 

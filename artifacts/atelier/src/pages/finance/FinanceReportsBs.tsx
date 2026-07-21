@@ -8,7 +8,7 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { useFinanceReportsPeriods, useFinanceReportsBs, type BsLines } from "@/lib/v5-hooks";
-import { ReportFilterBar, useReportFilters, fmtMoney } from "./financeReportsShared";
+import { ReportFilterBar, useReportFilters, fmtMoney, PreliminaryChip } from "./financeReportsShared";
 
 const ASSETS: Array<{ key: keyof BsLines; label: string; bold?: boolean }> = [
   { key: "cash", label: "Cash" },
@@ -71,8 +71,9 @@ export default function FinanceReportsBs() {
           headline="Balance Sheet"
           lede="Closing balances per entity and consolidated. FX translation at closing rate; equity at historical; FCTR plug carries any translation differential. IC AR/AP and IC loans eliminate on consolidation."
         />
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <ReportFilterBar filters={filters} periods={periods.map((p) => ({ id: p.id, label: p.label }))} onChange={setFilters} showScope={false} />
+          <PreliminaryChip preliminary={data?.preliminary} />
         </div>
       </PageHero>
 

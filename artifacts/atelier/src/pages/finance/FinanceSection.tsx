@@ -129,6 +129,7 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
       { label: "Balance Sheet", href: "/finance/reports/bs", blurb: "Closing balances per entity / consolidated; FX translation with FCTR plug; IC AR/AP and loans eliminate.", status: "live" },
       { label: "Cash Flow", href: "/finance/reports/cf", blurb: "Indirect-method cash flow per entity and consolidated; closing cash ties to BS.", status: "live" },
       { label: "Profitability cube", href: "/finance/reports/profitability", blurb: "Engagement revenue & gross margin rolled up by client · partner · sector · type.", status: "live" },
+      { label: "Working capital", href: "/finance/reports/working-capital", blurb: "DSO · WIP days · DPO · lockup per entity and consolidated, from GL balances.", status: "live" },
       { label: "Margin & realization", href: "/finance/reports/margin", blurb: "Client margin rollups, net margin after overhead allocation, sold-vs-delivered realization with leakage decomposition.", status: "live" },
       { label: "Board / management pack", href: "/finance/reports/board-pack", blurb: "Standing monthly board pack with PDF export and a monthly delivery schedule.", status: "live" },
     ],

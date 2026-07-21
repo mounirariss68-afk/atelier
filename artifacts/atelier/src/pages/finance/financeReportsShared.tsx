@@ -121,6 +121,18 @@ export function ReportFilterBar({
   );
 }
 
+/** Chip flagging that periods in scope lack a GL close lock (Task #433). */
+export function PreliminaryChip({ preliminary }: { preliminary?: boolean }) {
+  if (!preliminary) return null;
+  return (
+    <span
+      className="px-2 py-0.5 rounded border border-amber-400/40 bg-amber-400/10 text-amber-400 font-mono text-[10px] uppercase tracking-widest"
+      data-testid="chip-preliminary"
+      title="One or more periods in scope have not completed GL close — figures may change."
+    >Preliminary</span>
+  );
+}
+
 export function VarianceCellChip({ pct, kind = "favorable_high" }: { pct: number; kind?: "favorable_high" | "favorable_low" }) {
   const fav = kind === "favorable_high" ? pct >= 0 : pct <= 0;
   const tone = Math.abs(pct) < 0.03 ? "text-text-mute" : fav ? "text-emerald-400" : "text-amber-400";

@@ -5,7 +5,7 @@
 import * as React from "react";
 import { PageHero, SectionHead, Card } from "@/components/ui/primitives";
 import { useFinanceReportsPeriods, useFinanceReportsCf, type CfLines } from "@/lib/v5-hooks";
-import { ReportFilterBar, useReportFilters, fmtMoney } from "./financeReportsShared";
+import { ReportFilterBar, useReportFilters, fmtMoney, PreliminaryChip } from "./financeReportsShared";
 
 const ROWS: Array<{ key: keyof CfLines; label: string; bold?: boolean; section?: string }> = [
   { key: "netIncome", label: "Net income", section: "ops" },
@@ -40,8 +40,9 @@ export default function FinanceReportsCf() {
           headline="Cash Flow Statement"
           lede="Indirect-method cash flow for the period. Operating, investing and financing sections; closing cash ties to the Balance Sheet."
         />
-        <div className="mt-6">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           <ReportFilterBar filters={filters} periods={periods.map((p) => ({ id: p.id, label: p.label }))} onChange={setFilters} />
+          <PreliminaryChip preliminary={data?.preliminary} />
         </div>
       </PageHero>
 
