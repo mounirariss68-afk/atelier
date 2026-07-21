@@ -1,0 +1,13 @@
+---
+name: Atelier pricing structures module
+description: Invariants of the 7-structure engagement pricing engine, gating, and probe.
+---
+
+- Risk-adjusted margin blend weights are **0.2 best / 0.6 expected / 0.2 worst** (BAND_WEIGHTS in `atelier-pricing-structures.ts`) — not 0.2/0.5/0.3; tests must mirror the constant, or better, compare against the engine output.
+- Margin lock and billing handoff both gate on `classifyMarginGate(riskAdjustedMarginPct ?? computedMarginPct)`; legacy model names (e.g. `time_and_materials`) normalize to `tnm`.
+- PUT pricing invalidates prior partner override/countersign whenever structureParams change.
+- Rate-card new-version: partner-only, 409 `effective-from-not-after-current`, uplift applies to `dayRateClientPrice` only, prior version closed at the new effectiveFrom.
+- Agent run rows persist status `"complete"` (not "succeeded"/"completed").
+- Probe: `pnpm test:pricing-structures` in api-server (CRM scratch harness + stub Anthropic). Seeding `atelier_opportunities` directly requires slug, engagementLeadId, dealSizeHypothesis, probabilityPct, nextMilestone, sourceLead — copy the seed block from margin-reports-probe.
+**Why:** first probe run failed on all three assumptions (blend weights, run status, opp NOT NULLs).
+**How to apply:** when extending pricing routes/engine or writing new opp-seeding probes.

@@ -52,7 +52,8 @@
     "test:awaiting-signature": "tsx ./tests/crm/awaiting-signature-probe.ts",
     "test:billing": "tsx ./tests/crm/billing-orchestrator-probe.ts",
     "test:chat-title": "tsx ./tests/crm/chat-title-probe.ts",
-    "test:finance-reports": "tsx ./tests/finance-reports/run.ts"
+    "test:finance-reports": "tsx ./tests/finance-reports/run.ts",
+    "test:pricing-structures": "tsx ./tests/crm/pricing-structures-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

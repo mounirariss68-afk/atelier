@@ -3972,6 +3972,265 @@ function buildRisks(status: "green" | "amber" | "red", policy: PricingMarginPoli
 }
 
 // =============================================================
+// Pricing Analyst — Task #435. Full engagement-pricing structure
+// comparison. Deterministic simulation math (atelier-pricing-structures)
+// for every number; the LLM authors only the recommendation + rationale
+// per AGENT_STANDARD (ag_pricing_analyst design doc).
+// =============================================================
+
+export interface PricingAnalystResult {
+  runId: string;
+  scenarios: Array<{
+    kind: string;
+    label: string;
+    best: { revenueUsd: number; costUsd: number; marginPct: number };
+    expected: { revenueUsd: number; costUsd: number; marginPct: number };
+    worst: { revenueUsd: number; costUsd: number; marginPct: number };
+    riskAdjustedMarginPct: number;
+    marginLockStatus: "green" | "amber" | "red";
+    cashProfile: Array<{ week: number; amountUsd: number; label: string }>;
+    weeksToCash80: number;
+    notes: string[];
+  }>;
+  sensitivity: Array<{ kind: string; driver: string; impact: string }>;
+  recommendation: {
+    kind: string;
+    label: string;
+    rationale: string;
+    tradeoffs: string[];
+  };
+  trendNotes: string[];
+  marginLockChip: "green" | "amber" | "red";
+  partnerOverrideRequired: boolean;
+  twoPartnerRequired: boolean;
+  confidence: "green" | "amber" | "red";
+}
+
+export async function runPricingAnalyst(args: {
+  opportunity: typeof atelierOpportunities.$inferSelect;
+  pricing: {
+    id: string;
+    teamMix: unknown;
+    durationWeeks: number;
+    pricingModel: string;
+    rateCardId: string;
+    structureParams?: unknown;
+  };
+  policy: PricingMarginPolicy;
+  rateCardRows: PricingRateCardRowLite[];
+  actorId: string;
+  actorLabel: string;
+  /** Optional restriction of structures to compare (kinds). */
+  structures?: Array<{ kind: string; params?: Record<string, unknown> }>;
+  /** Optional per-kind parameter overrides when comparing all structures. */
+  paramsByKind?: Record<string, Record<string, unknown>>;
+}): Promise<PricingAnalystResult> {
+  const t0 = Date.now();
+  const {
+    simulateStructure,
+    simulateAllStructures,
+    normalizeStructureKind,
+  } = await import("../atelier-pricing-structures.js");
+  const { PRICING_TREND_GUIDANCE } = await import("../atelier-pricing-trends.js");
+
+  const runId = await startRun({
+    agentId: "ag_pricing_analyst",
+    triggeredByUserId: args.actorId,
+    targetType: "opportunity",
+    targetId: args.opportunity.id,
+    targetLabel: args.opportunity.name,
+    actorLabel: args.actorLabel,
+    inputs: {
+      pricingModel: args.pricing.pricingModel,
+      durationWeeks: args.pricing.durationWeeks,
+      teamMixSize: Array.isArray(args.pricing.teamMix) ? args.pricing.teamMix.length : 0,
+      structures: args.structures?.map((s) => s.kind) ?? "all",
+    },
+  });
+
+  try {
+    await progressRun(runId, 20, "Simulating pricing structures (deterministic)");
+    const teamMix = (Array.isArray(args.pricing.teamMix) ? args.pricing.teamMix : []) as PricingTeamMixEntry[];
+    const baseArgs = {
+      teamMix,
+      durationWeeks: args.pricing.durationWeeks,
+      rateCardRows: args.rateCardRows,
+      policy: args.policy,
+    };
+    const currentKind = normalizeStructureKind(args.pricing.pricingModel);
+    const currentParams = (args.pricing.structureParams as Record<string, unknown> | null) ?? null;
+
+    const sims = args.structures?.length
+      ? args.structures.map((s) =>
+          simulateStructure({ ...baseArgs, kind: normalizeStructureKind(s.kind), params: s.params ?? null }),
+        )
+      : simulateAllStructures({
+          ...baseArgs,
+          paramsByKind: {
+            [currentKind]: currentParams ?? undefined,
+            ...(args.paramsByKind ?? {}),
+          } as never,
+        });
+
+    await progressRun(runId, 50, "Computing margin sensitivity");
+    // Deterministic sensitivity: what moves the risk-adjusted margin most
+    // per structure (overrun exposure vs. success probability vs. rate).
+    const sensitivity = sims.map((s) => {
+      const spread = s.scenarios.best.marginPct - s.scenarios.worst.marginPct;
+      let driver = "delivery overrun";
+      let impact = `best-to-worst margin spread ${(spread * 100).toFixed(1)} pts`;
+      if (s.kind === "outcome_based" || s.kind === "hybrid") {
+        driver = "outcome success probability";
+        impact = `worst case (no success fee + overrun) drops margin to ${(s.scenarios.worst.marginPct * 100).toFixed(1)}%`;
+      } else if (s.kind === "tnm") {
+        driver = "rate-card realization";
+        impact = "margin is stable across bands — revenue tracks effort";
+      } else if (s.kind === "capped_tnm") {
+        driver = "burn vs. cap";
+        impact = `overrun beyond the cap lands margin at ${(s.scenarios.worst.marginPct * 100).toFixed(1)}%`;
+      }
+      return { kind: s.kind, driver, impact };
+    });
+
+    // Deterministic default recommendation: best risk-adjusted margin among
+    // structures whose gate is not red; ties break toward earlier cash.
+    const ranked = [...sims].sort((a, b) => {
+      const gateRank = (s: typeof a) => (s.marginLockStatus === "red" ? 1 : 0);
+      if (gateRank(a) !== gateRank(b)) return gateRank(a) - gateRank(b);
+      if (b.riskAdjustedMarginPct !== a.riskAdjustedMarginPct)
+        return b.riskAdjustedMarginPct - a.riskAdjustedMarginPct;
+      return a.weeksToCash80 - b.weeksToCash80;
+    });
+    const fallbackPick = ranked[0];
+    const currentSim = sims.find((s) => s.kind === currentKind) ?? fallbackPick;
+
+    await progressRun(runId, 75, "Drafting analyst recommendation (LLM narrative only)");
+    const trendItems = PRICING_TREND_GUIDANCE.filter(
+      (t) => t.structure === "general" || sims.some((s) => s.kind === t.structure),
+    );
+    let systemPrompt: string;
+    try {
+      systemPrompt = loadPrompt("pricing_analyst", 2);
+    } catch {
+      systemPrompt =
+        "You are Cognirise's Pricing Analyst. All numbers are precomputed and authoritative — never invent or alter them. Recommend one structure and explain tradeoffs.";
+    }
+    const userPrompt = JSON.stringify({
+      opportunity: { id: args.opportunity.id, name: args.opportunity.name, accountId: args.opportunity.accountId },
+      policy: args.policy,
+      currentStructure: currentKind,
+      simulations: sims.map((s) => ({
+        kind: s.kind,
+        label: s.label,
+        scenarios: s.scenarios,
+        riskAdjustedMarginPct: s.riskAdjustedMarginPct,
+        marginLockStatus: s.marginLockStatus,
+        weeksToCash80: s.weeksToCash80,
+        notes: s.notes,
+      })),
+      sensitivity,
+      trendGuidance: trendItems.map((t) => ({ structure: t.structure, title: t.title, direction: t.direction, guidance: t.guidance })),
+      deterministicPick: { kind: fallbackPick.kind, riskAdjustedMarginPct: fallbackPick.riskAdjustedMarginPct },
+      askFor: {
+        recommendedKind: `one of ${sims.map((s) => s.kind).join("|")}`,
+        rationale: "2-4 sentence Partner-facing rationale for the recommended structure",
+        tradeoffs: "2-4 short bullets on what the Partner gives up vs. alternatives",
+        trendNotes: "1-3 short bullets connecting the recommendation to market trend guidance",
+      },
+    });
+    interface AnalystJson {
+      recommendedKind?: string;
+      rationale?: string;
+      tradeoffs?: string[];
+      trendNotes?: string[];
+    }
+    const llm = await callClaudeJson<AnalystJson>("claude-sonnet-4-5", systemPrompt, userPrompt);
+
+    // The LLM may only pick among the simulated structures; anything else
+    // falls back to the deterministic ranking.
+    const recKind =
+      llm.value.recommendedKind && sims.some((s) => s.kind === normalizeStructureKind(llm.value.recommendedKind!))
+        ? normalizeStructureKind(llm.value.recommendedKind)
+        : fallbackPick.kind;
+    const recSim = sims.find((s) => s.kind === recKind) ?? fallbackPick;
+    const fallbackRationale =
+      `${recSim.label} carries the strongest risk-adjusted margin (${(recSim.riskAdjustedMarginPct * 100).toFixed(1)}%) ` +
+      `with 80% of cash landed by week ${recSim.weeksToCash80}.`;
+
+    const result: PricingAnalystResult = {
+      runId,
+      scenarios: sims.map((s) => ({
+        kind: s.kind,
+        label: s.label,
+        best: s.scenarios.best,
+        expected: s.scenarios.expected,
+        worst: s.scenarios.worst,
+        riskAdjustedMarginPct: s.riskAdjustedMarginPct,
+        marginLockStatus: s.marginLockStatus,
+        cashProfile: s.cashProfile,
+        weeksToCash80: s.weeksToCash80,
+        notes: s.notes,
+      })),
+      sensitivity,
+      recommendation: {
+        kind: recSim.kind,
+        label: recSim.label,
+        rationale: llm.value.rationale?.trim() || fallbackRationale,
+        tradeoffs:
+          Array.isArray(llm.value.tradeoffs) && llm.value.tradeoffs.length
+            ? llm.value.tradeoffs
+            : ["See scenario bands — structures trade margin certainty against cash timing and upside."],
+      },
+      trendNotes:
+        Array.isArray(llm.value.trendNotes) && llm.value.trendNotes.length
+          ? llm.value.trendNotes
+          : trendItems.slice(0, 2).map((t) => t.title),
+      marginLockChip: currentSim.marginLockStatus,
+      partnerOverrideRequired: currentSim.partnerOverrideRequired,
+      twoPartnerRequired: currentSim.twoPartnerRequired,
+      confidence: currentSim.marginLockStatus === "red" ? "amber" : "green",
+    };
+
+    // Persist snapshot on the pricing row (does NOT mutate the chosen
+    // economic terms — per design doc, the analyst writes a snapshot only).
+    try {
+      await db
+        .update(atelierDealPricings)
+        .set({
+          pricingAnalystRunId: runId,
+          pricingAnalystOutput: result as unknown as Record<string, unknown>,
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierDealPricings.id, args.pricing.id));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn("[pricing-analyst] failed to persist snapshot:", e);
+    }
+
+    await completeRun({
+      runId,
+      output: result as unknown,
+      confidence: result.confidence,
+      costUsd: llm.costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: sims.length,
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+      targetLabel: args.opportunity.name,
+    });
+    return result;
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
 // WIN/LOSS INTERVIEWER (Sonnet 4.6) — Task #241
 // =============================================================
 //

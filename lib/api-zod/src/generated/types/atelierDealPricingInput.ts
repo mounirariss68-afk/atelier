@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierDealPricingInputStructureParams } from "./atelierDealPricingInputStructureParams";
 import type { AtelierTeamMixEntry } from "./atelierTeamMixEntry";
 
 export interface AtelierDealPricingInput {
@@ -12,4 +13,5 @@ export interface AtelierDealPricingInput {
   durationWeeks?: number;
   pricingModel?: string;
   rateCardId?: string;
+  structureParams?: AtelierDealPricingInputStructureParams;
 }

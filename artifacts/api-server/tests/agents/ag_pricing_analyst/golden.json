@@ -1,0 +1,63 @@
+{
+  "agentId": "ag_pricing_analyst",
+  "input": {
+    "opportunityId": "opp_demo_001",
+    "structures": [
+      { "kind": "fixed_fee", "params": { "riskPremiumPct": 0.12 } },
+      { "kind": "tnm" }
+    ]
+  },
+  "expectedOutput": {
+    "runId": "run_pa_001",
+    "scenarios": [
+      {
+        "kind": "fixed_fee",
+        "label": "Fixed Fee",
+        "best": { "revenueUsd": 1064000, "costUsd": 540000, "marginPct": 0.4925 },
+        "expected": { "revenueUsd": 1064000, "costUsd": 600000, "marginPct": 0.4361 },
+        "worst": { "revenueUsd": 1064000, "costUsd": 720000, "marginPct": 0.3233 },
+        "riskAdjustedMarginPct": 0.4195,
+        "marginLockStatus": "green",
+        "cashProfile": [
+          { "week": 0, "amountUsd": 319200, "label": "30% mobilisation" },
+          { "week": 6, "amountUsd": 425600, "label": "40% midpoint" },
+          { "week": 12, "amountUsd": 319200, "label": "30% completion" }
+        ],
+        "weeksToCash80": 6,
+        "notes": ["Delivery overrun risk sits with the firm; risk premium priced in."]
+      },
+      {
+        "kind": "tnm",
+        "label": "Time & Materials",
+        "best": { "revenueUsd": 1045000, "costUsd": 570000, "marginPct": 0.4545 },
+        "expected": { "revenueUsd": 950000, "costUsd": 600000, "marginPct": 0.3684 },
+        "worst": { "revenueUsd": 855000, "costUsd": 630000, "marginPct": 0.2632 },
+        "riskAdjustedMarginPct": 0.3611,
+        "marginLockStatus": "amber",
+        "cashProfile": [
+          { "week": 4, "amountUsd": 316667, "label": "Monthly invoice 1" },
+          { "week": 8, "amountUsd": 316667, "label": "Monthly invoice 2" },
+          { "week": 12, "amountUsd": 316666, "label": "Monthly invoice 3" }
+        ],
+        "weeksToCash80": 12,
+        "notes": ["Margin tracks utilisation; low structural risk but slow cash."]
+      }
+    ],
+    "sensitivity": [
+      { "kind": "fixed_fee", "driver": "delivery overrun +20%", "impact": "expected margin -11.3pp" },
+      { "kind": "tnm", "driver": "utilisation -10%", "impact": "expected margin -3.7pp" }
+    ],
+    "recommendation": {
+      "kind": "fixed_fee",
+      "label": "Fixed Fee",
+      "rationale": "Fixed fee clears the target margin on a risk-adjusted basis and front-loads cash via the mobilisation payment.",
+      "tradeoffs": ["Firm carries delivery-overrun risk", "Scope change control must be strict"]
+    },
+    "trendNotes": ["Buyers increasingly expect outcome-linked components in AI transformation deals."],
+    "marginLockChip": "green",
+    "partnerOverrideRequired": false,
+    "twoPartnerRequired": false,
+    "confidence": "green"
+  },
+  "notes": "Pricing Analyst fixture: two-structure comparison, fixed-fee recommendation, risk-adjusted gating green."
+}

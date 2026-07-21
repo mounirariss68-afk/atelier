@@ -32576,6 +32576,8 @@ export const AtelierListRateCardsResponseItem = zod.object({
   currency: zod.string(),
   effectiveFrom: zod.coerce.date(),
   effectiveTo: zod.coerce.date().nullish(),
+  version: zod.number().optional(),
+  supersedesId: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   notes: zod.string().nullish(),
   createdAt: zod.coerce.date().optional(),
@@ -32609,6 +32611,8 @@ export const AtelierGetRateCardResponse = zod
     currency: zod.string(),
     effectiveFrom: zod.coerce.date(),
     effectiveTo: zod.coerce.date().nullish(),
+    version: zod.number().optional(),
+    supersedesId: zod.string().nullish(),
     sourceUrl: zod.string().nullish(),
     notes: zod.string().nullish(),
     createdAt: zod.coerce.date().optional(),
@@ -32652,6 +32656,8 @@ export const AtelierUpdateRateCardResponse = zod.object({
   currency: zod.string(),
   effectiveFrom: zod.coerce.date(),
   effectiveTo: zod.coerce.date().nullish(),
+  version: zod.number().optional(),
+  supersedesId: zod.string().nullish(),
   sourceUrl: zod.string().nullish(),
   notes: zod.string().nullish(),
   createdAt: zod.coerce.date().optional(),
@@ -32740,6 +32746,13 @@ export const AtelierGetDealPricingResponse = zod.object({
     alternativeStructures: zod
       .array(zod.record(zod.string(), zod.unknown()))
       .optional(),
+    structureParams: zod.record(zod.string(), zod.unknown()).nullish(),
+    structureSim: zod.record(zod.string(), zod.unknown()).nullish(),
+    riskAdjustedMarginPct: zod.number().nullish(),
+    billingRuleId: zod.string().nullish(),
+    billingHandoffAt: zod.coerce.date().nullish(),
+    pricingAnalystRunId: zod.string().nullish(),
+    pricingAnalystOutput: zod.record(zod.string(), zod.unknown()).nullish(),
   }),
   policy: zod.object({
     id: zod.string(),
@@ -32757,6 +32770,7 @@ export const AtelierGetDealPricingResponse = zod.object({
     }),
   ),
   breakdown: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  structureSim: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 export const AtelierUpdateDealPricingParams = zod.object({
@@ -32776,6 +32790,7 @@ export const AtelierUpdateDealPricingBody = zod.object({
   durationWeeks: zod.number().optional(),
   pricingModel: zod.string().optional(),
   rateCardId: zod.string().optional(),
+  structureParams: zod.record(zod.string(), zod.unknown()).optional(),
 });
 
 export const AtelierUpdateDealPricingResponse = zod.object({
@@ -32806,6 +32821,13 @@ export const AtelierUpdateDealPricingResponse = zod.object({
     alternativeStructures: zod
       .array(zod.record(zod.string(), zod.unknown()))
       .optional(),
+    structureParams: zod.record(zod.string(), zod.unknown()).nullish(),
+    structureSim: zod.record(zod.string(), zod.unknown()).nullish(),
+    riskAdjustedMarginPct: zod.number().nullish(),
+    billingRuleId: zod.string().nullish(),
+    billingHandoffAt: zod.coerce.date().nullish(),
+    pricingAnalystRunId: zod.string().nullish(),
+    pricingAnalystOutput: zod.record(zod.string(), zod.unknown()).nullish(),
   }),
   policy: zod.object({
     id: zod.string(),
@@ -32823,6 +32845,7 @@ export const AtelierUpdateDealPricingResponse = zod.object({
     }),
   ),
   breakdown: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  structureSim: zod.record(zod.string(), zod.unknown()).nullish(),
 });
 
 export const AtelierWhatifDealPricingParams = zod.object({
@@ -32842,6 +32865,7 @@ export const AtelierWhatifDealPricingBody = zod.object({
   durationWeeks: zod.number().optional(),
   pricingModel: zod.string().optional(),
   rateCardId: zod.string().optional(),
+  structureParams: zod.record(zod.string(), zod.unknown()).optional(),
 });
 
 export const AtelierWhatifDealPricingResponse = zod.object({
@@ -32862,6 +32886,162 @@ export const AtelierWhatifDealPricingResponse = zod.object({
       twoPartnerThresholdPct: zod.number(),
     })
     .optional(),
+});
+
+export const AtelierSimulatePricingStructuresParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierSimulatePricingStructuresBody = zod.object({
+  teamMix: zod
+    .array(
+      zod.object({
+        seniority: zod.string(),
+        role: zod.string().optional(),
+        ftePct: zod.number(),
+      }),
+    )
+    .optional(),
+  durationWeeks: zod.number().optional(),
+  rateCardId: zod.string().optional(),
+  structures: zod
+    .array(
+      zod.object({
+        kind: zod.string(),
+        params: zod.record(zod.string(), zod.unknown()).optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const AtelierSimulatePricingStructuresResponse = zod.object({
+  simulations: zod.array(
+    zod.object({
+      kind: zod.string(),
+      label: zod.string(),
+      scenarios: zod.object({
+        best: zod.object({
+          revenueUsd: zod.number(),
+          costUsd: zod.number(),
+          marginPct: zod.number(),
+        }),
+        expected: zod.object({
+          revenueUsd: zod.number(),
+          costUsd: zod.number(),
+          marginPct: zod.number(),
+        }),
+        worst: zod.object({
+          revenueUsd: zod.number(),
+          costUsd: zod.number(),
+          marginPct: zod.number(),
+        }),
+      }),
+      riskAdjustedMarginPct: zod.number(),
+      marginLockStatus: zod.enum(["green", "amber", "red"]),
+      partnerOverrideRequired: zod.boolean().optional(),
+      twoPartnerRequired: zod.boolean().optional(),
+      cashProfile: zod.array(
+        zod.object({
+          week: zod.number(),
+          amountUsd: zod.number(),
+          label: zod.string(),
+        }),
+      ),
+      weeksToCash80: zod.number(),
+      params: zod.record(zod.string(), zod.unknown()).optional(),
+      assumptions: zod.record(zod.string(), zod.unknown()).optional(),
+      notes: zod.array(zod.string()).optional(),
+    }),
+  ),
+  policy: zod.object({
+    id: zod.string(),
+    targetMarginPct: zod.number(),
+    amberThresholdPct: zod.number(),
+    redThresholdPct: zod.number(),
+    twoPartnerThresholdPct: zod.number(),
+  }),
+  structureKinds: zod.array(zod.string()),
+});
+
+export const AtelierRunPricingAnalystParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierRunPricingAnalystBody = zod.object({
+  structures: zod
+    .array(
+      zod.object({
+        kind: zod.string(),
+        params: zod.record(zod.string(), zod.unknown()).optional(),
+      }),
+    )
+    .optional(),
+  paramsByKind: zod
+    .record(zod.string(), zod.record(zod.string(), zod.unknown()))
+    .optional(),
+});
+
+export const AtelierRunPricingAnalystResponse = zod.object({
+  runId: zod.string(),
+  scenarios: zod.array(zod.record(zod.string(), zod.unknown())),
+  sensitivity: zod
+    .array(
+      zod.object({
+        kind: zod.string(),
+        driver: zod.string(),
+        impact: zod.string(),
+      }),
+    )
+    .optional(),
+  recommendation: zod.object({
+    kind: zod.string(),
+    label: zod.string(),
+    rationale: zod.string(),
+    tradeoffs: zod.array(zod.string()),
+  }),
+  trendNotes: zod.array(zod.string()).optional(),
+  marginLockChip: zod.enum(["green", "amber", "red"]),
+  partnerOverrideRequired: zod.boolean().optional(),
+  twoPartnerRequired: zod.boolean().optional(),
+  confidence: zod.enum(["green", "amber", "red"]).optional(),
+});
+
+export const AtelierPricingHandoffBillingParams = zod.object({
+  oppId: zod.coerce.string(),
+});
+
+export const AtelierPricingHandoffBillingBody = zod.object({
+  engagementId: zod.string().optional(),
+  startDate: zod.string().optional(),
+});
+
+export const AtelierGetPricingTrendsQueryParams = zod.object({
+  structure: zod.coerce.string().optional(),
+});
+
+export const AtelierGetPricingTrendsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      structure: zod.string(),
+      title: zod.string(),
+      guidance: zod.string(),
+      direction: zod.enum(["rising", "stable", "declining"]),
+      bestFor: zod.array(zod.string()).optional(),
+      watchouts: zod.array(zod.string()).optional(),
+    }),
+  ),
+});
+
+export const AtelierCreateRateCardVersionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierCreateRateCardVersionBody = zod.object({
+  effectiveFrom: zod.coerce.date().optional(),
+  upliftPct: zod.number().optional(),
+  name: zod.string().optional(),
+  notes: zod.string().optional(),
 });
 
 export const AtelierRunPricingStrategistParams = zod.object({

@@ -6399,6 +6399,9 @@ export interface AtelierRateCard {
   effectiveFrom: string;
   /** @nullable */
   effectiveTo?: string | null;
+  version?: number;
+  /** @nullable */
+  supersedesId?: string | null;
   /** @nullable */
   sourceUrl?: string | null;
   /** @nullable */
@@ -6472,6 +6475,25 @@ export type AtelierDealPricingAlternativeStructuresItem = {
   [key: string]: unknown;
 };
 
+/**
+ * @nullable
+ */
+export type AtelierDealPricingStructureParams = {
+  [key: string]: unknown;
+} | null;
+
+/**
+ * @nullable
+ */
+export type AtelierDealPricingStructureSim = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type AtelierDealPricingPricingAnalystOutput = {
+  [key: string]: unknown;
+} | null;
+
 export interface AtelierDealPricing {
   id: string;
   opportunityId: string;
@@ -6497,6 +6519,20 @@ export interface AtelierDealPricing {
   /** @nullable */
   countersignRationale?: string | null;
   alternativeStructures?: AtelierDealPricingAlternativeStructuresItem[];
+  /** @nullable */
+  structureParams?: AtelierDealPricingStructureParams;
+  /** @nullable */
+  structureSim?: AtelierDealPricingStructureSim;
+  /** @nullable */
+  riskAdjustedMarginPct?: number | null;
+  /** @nullable */
+  billingRuleId?: string | null;
+  /** @nullable */
+  billingHandoffAt?: string | null;
+  /** @nullable */
+  pricingAnalystRunId?: string | null;
+  /** @nullable */
+  pricingAnalystOutput?: AtelierDealPricingPricingAnalystOutput;
 }
 
 export type AtelierDealPricingEnvelopeRateCardRowsItem = {
@@ -6510,18 +6546,164 @@ export type AtelierDealPricingEnvelopeBreakdownItem = {
   [key: string]: unknown;
 };
 
+/**
+ * @nullable
+ */
+export type AtelierDealPricingEnvelopeStructureSim = {
+  [key: string]: unknown;
+} | null;
+
 export interface AtelierDealPricingEnvelope {
   pricing: AtelierDealPricing;
   policy: AtelierMarginPolicy;
   rateCardRows: AtelierDealPricingEnvelopeRateCardRowsItem[];
   breakdown?: AtelierDealPricingEnvelopeBreakdownItem[];
+  /** @nullable */
+  structureSim?: AtelierDealPricingEnvelopeStructureSim;
 }
+
+export type AtelierDealPricingInputStructureParams = { [key: string]: unknown };
 
 export interface AtelierDealPricingInput {
   teamMix?: AtelierTeamMixEntry[];
   durationWeeks?: number;
   pricingModel?: string;
   rateCardId?: string;
+  structureParams?: AtelierDealPricingInputStructureParams;
+}
+
+export interface AtelierPricingScenarioBand {
+  revenueUsd: number;
+  costUsd: number;
+  marginPct: number;
+}
+
+export type AtelierPricingStructureSimScenarios = {
+  best: AtelierPricingScenarioBand;
+  expected: AtelierPricingScenarioBand;
+  worst: AtelierPricingScenarioBand;
+};
+
+export type AtelierPricingStructureSimCashProfileItem = {
+  week: number;
+  amountUsd: number;
+  label: string;
+};
+
+export type AtelierPricingStructureSimParams = { [key: string]: unknown };
+
+export type AtelierPricingStructureSimAssumptions = { [key: string]: unknown };
+
+export interface AtelierPricingStructureSim {
+  kind: string;
+  label: string;
+  scenarios: AtelierPricingStructureSimScenarios;
+  riskAdjustedMarginPct: number;
+  marginLockStatus: AtelierMarginLockStatus;
+  partnerOverrideRequired?: boolean;
+  twoPartnerRequired?: boolean;
+  cashProfile: AtelierPricingStructureSimCashProfileItem[];
+  weeksToCash80: number;
+  params?: AtelierPricingStructureSimParams;
+  assumptions?: AtelierPricingStructureSimAssumptions;
+  notes?: string[];
+}
+
+export type AtelierPricingSimulateInputStructuresItemParams = {
+  [key: string]: unknown;
+};
+
+export type AtelierPricingSimulateInputStructuresItem = {
+  kind: string;
+  params?: AtelierPricingSimulateInputStructuresItemParams;
+};
+
+export interface AtelierPricingSimulateInput {
+  teamMix?: AtelierTeamMixEntry[];
+  durationWeeks?: number;
+  rateCardId?: string;
+  structures?: AtelierPricingSimulateInputStructuresItem[];
+}
+
+export interface AtelierPricingSimulateResult {
+  simulations: AtelierPricingStructureSim[];
+  policy: AtelierMarginPolicy;
+  structureKinds: string[];
+}
+
+export type AtelierPricingTrendEntryDirection =
+  (typeof AtelierPricingTrendEntryDirection)[keyof typeof AtelierPricingTrendEntryDirection];
+
+export const AtelierPricingTrendEntryDirection = {
+  rising: "rising",
+  stable: "stable",
+  declining: "declining",
+} as const;
+
+export interface AtelierPricingTrendEntry {
+  id: string;
+  structure: string;
+  title: string;
+  guidance: string;
+  direction: AtelierPricingTrendEntryDirection;
+  bestFor?: string[];
+  watchouts?: string[];
+}
+
+export type AtelierPricingAnalystInputStructuresItemParams = {
+  [key: string]: unknown;
+};
+
+export type AtelierPricingAnalystInputStructuresItem = {
+  kind: string;
+  params?: AtelierPricingAnalystInputStructuresItemParams;
+};
+
+export type AtelierPricingAnalystInputParamsByKind = {
+  [key: string]: { [key: string]: unknown };
+};
+
+export interface AtelierPricingAnalystInput {
+  structures?: AtelierPricingAnalystInputStructuresItem[];
+  paramsByKind?: AtelierPricingAnalystInputParamsByKind;
+}
+
+export type AtelierPricingAnalystResultScenariosItem = {
+  [key: string]: unknown;
+};
+
+export type AtelierPricingAnalystResultSensitivityItem = {
+  kind: string;
+  driver: string;
+  impact: string;
+};
+
+export type AtelierPricingAnalystResultRecommendation = {
+  kind: string;
+  label: string;
+  rationale: string;
+  tradeoffs: string[];
+};
+
+export type AtelierPricingAnalystResultConfidence =
+  (typeof AtelierPricingAnalystResultConfidence)[keyof typeof AtelierPricingAnalystResultConfidence];
+
+export const AtelierPricingAnalystResultConfidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierPricingAnalystResult {
+  runId: string;
+  scenarios: AtelierPricingAnalystResultScenariosItem[];
+  sensitivity?: AtelierPricingAnalystResultSensitivityItem[];
+  recommendation: AtelierPricingAnalystResultRecommendation;
+  trendNotes?: string[];
+  marginLockChip: AtelierMarginLockStatus;
+  partnerOverrideRequired?: boolean;
+  twoPartnerRequired?: boolean;
+  confidence?: AtelierPricingAnalystResultConfidence;
 }
 
 export type AtelierDealPricingComputedPerRoleBreakdownItem = {
@@ -7622,6 +7804,34 @@ export type AtelierAgentsUsageCounts200Item = {
 
 export type AtelierPromoteAgentDesign200 = {
   agentId: string;
+};
+
+export type AtelierPricingHandoffBillingBody = {
+  engagementId?: string;
+  startDate?: string;
+};
+
+export type AtelierPricingHandoffBilling201 = { [key: string]: unknown };
+
+export type AtelierGetPricingTrendsParams = {
+  structure?: string;
+};
+
+export type AtelierGetPricingTrends200 = {
+  items: AtelierPricingTrendEntry[];
+};
+
+export type AtelierCreateRateCardVersionBody = {
+  effectiveFrom?: string;
+  upliftPct?: number;
+  name?: string;
+  notes?: string;
+};
+
+export type AtelierCreateRateCardVersion201 = {
+  card: AtelierRateCard;
+  rowsCloned: number;
+  supersedes: string;
 };
 
 export type AtelierOverridePricing200 = { [key: string]: unknown };

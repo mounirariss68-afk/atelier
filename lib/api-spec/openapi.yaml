@@ -5612,6 +5612,123 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierDealPricingComputed" }
+  /atelier/opportunities/{oppId}/pricing/simulate:
+    post:
+      operationId: atelierSimulatePricingStructures
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPricingSimulateInput" }
+      responses:
+        "200":
+          description: Structure simulations (no persistence)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPricingSimulateResult" }
+  /atelier/opportunities/{oppId}/pricing/analyst:
+    post:
+      operationId: atelierRunPricingAnalyst
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPricingAnalystInput" }
+      responses:
+        "200":
+          description: Pricing Analyst run result (structure comparison + recommendation)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPricingAnalystResult" }
+  /atelier/opportunities/{oppId}/pricing/handoff-billing:
+    post:
+      operationId: atelierPricingHandoffBilling
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: oppId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                engagementId: { type: string }
+                startDate: { type: string }
+      responses:
+        "201":
+          description: Billing rule created from the locked pricing structure
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /atelier/pricing/trends:
+    get:
+      operationId: atelierGetPricingTrends
+      tags: [atelier]
+      parameters:
+        - in: query
+          name: structure
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Curated pricing trend guidance
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierPricingTrendEntry" }
+  /atelier/rate-cards/{id}/new-version:
+    post:
+      operationId: atelierCreateRateCardVersion
+      tags: [atelier]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                effectiveFrom: { type: string, format: date-time }
+                upliftPct: { type: number }
+                name: { type: string }
+                notes: { type: string }
+      responses:
+        "201":
+          description: New effective-dated rate-card version
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [card, rowsCloned, supersedes]
+                properties:
+                  card: { $ref: "#/components/schemas/AtelierRateCard" }
+                  rowsCloned: { type: number }
+                  supersedes: { type: string }
   /atelier/opportunities/{oppId}/pricing/strategist:
     post:
       operationId: atelierRunPricingStrategist
@@ -10624,6 +10741,8 @@ components:
         currency: { type: string }
         effectiveFrom: { type: string, format: date-time }
         effectiveTo: { type: ["string", "null"], format: date-time }
+        version: { type: number }
+        supersedesId: { type: ["string", "null"] }
         sourceUrl: { type: ["string", "null"] }
         notes: { type: ["string", "null"] }
         createdAt: { type: string, format: date-time }
@@ -10724,6 +10843,19 @@ components:
           items:
             type: object
             additionalProperties: true
+        structureParams:
+          type: ["object", "null"]
+          additionalProperties: true
+        structureSim:
+          type: ["object", "null"]
+          additionalProperties: true
+        riskAdjustedMarginPct: { type: ["number", "null"] }
+        billingRuleId: { type: ["string", "null"] }
+        billingHandoffAt: { type: ["string", "null"], format: date-time }
+        pricingAnalystRunId: { type: ["string", "null"] }
+        pricingAnalystOutput:
+          type: ["object", "null"]
+          additionalProperties: true
 
     AtelierDealPricingEnvelope:
       type: object
@@ -10746,6 +10878,9 @@ components:
           items:
             type: object
             additionalProperties: true
+        structureSim:
+          type: ["object", "null"]
+          additionalProperties: true
 
     AtelierDealPricingInput:
       type: object
@@ -10756,6 +10891,157 @@ components:
         durationWeeks: { type: number }
         pricingModel: { type: string }
         rateCardId: { type: string }
+        structureParams:
+          type: object
+          additionalProperties: true
+
+    AtelierPricingScenarioBand:
+      type: object
+      required: [revenueUsd, costUsd, marginPct]
+      properties:
+        revenueUsd: { type: number }
+        costUsd: { type: number }
+        marginPct: { type: number }
+
+    AtelierPricingStructureSim:
+      type: object
+      required: [kind, label, scenarios, riskAdjustedMarginPct, marginLockStatus, cashProfile, weeksToCash80]
+      properties:
+        kind: { type: string }
+        label: { type: string }
+        scenarios:
+          type: object
+          required: [best, expected, worst]
+          properties:
+            best: { $ref: "#/components/schemas/AtelierPricingScenarioBand" }
+            expected: { $ref: "#/components/schemas/AtelierPricingScenarioBand" }
+            worst: { $ref: "#/components/schemas/AtelierPricingScenarioBand" }
+        riskAdjustedMarginPct: { type: number }
+        marginLockStatus: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        partnerOverrideRequired: { type: boolean }
+        twoPartnerRequired: { type: boolean }
+        cashProfile:
+          type: array
+          items:
+            type: object
+            required: [week, amountUsd, label]
+            properties:
+              week: { type: number }
+              amountUsd: { type: number }
+              label: { type: string }
+        weeksToCash80: { type: number }
+        params:
+          type: object
+          additionalProperties: true
+        assumptions:
+          type: object
+          additionalProperties: true
+        notes:
+          type: array
+          items: { type: string }
+
+    AtelierPricingSimulateInput:
+      type: object
+      properties:
+        teamMix:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierTeamMixEntry" }
+        durationWeeks: { type: number }
+        rateCardId: { type: string }
+        structures:
+          type: array
+          items:
+            type: object
+            required: [kind]
+            properties:
+              kind: { type: string }
+              params:
+                type: object
+                additionalProperties: true
+
+    AtelierPricingSimulateResult:
+      type: object
+      required: [simulations, policy, structureKinds]
+      properties:
+        simulations:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPricingStructureSim" }
+        policy: { $ref: "#/components/schemas/AtelierMarginPolicy" }
+        structureKinds:
+          type: array
+          items: { type: string }
+
+    AtelierPricingTrendEntry:
+      type: object
+      required: [id, structure, title, guidance, direction]
+      properties:
+        id: { type: string }
+        structure: { type: string }
+        title: { type: string }
+        guidance: { type: string }
+        direction: { type: string, enum: [rising, stable, declining] }
+        bestFor:
+          type: array
+          items: { type: string }
+        watchouts:
+          type: array
+          items: { type: string }
+
+    AtelierPricingAnalystInput:
+      type: object
+      properties:
+        structures:
+          type: array
+          items:
+            type: object
+            required: [kind]
+            properties:
+              kind: { type: string }
+              params:
+                type: object
+                additionalProperties: true
+        paramsByKind:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: true
+
+    AtelierPricingAnalystResult:
+      type: object
+      required: [runId, scenarios, recommendation, marginLockChip]
+      properties:
+        runId: { type: string }
+        scenarios:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        sensitivity:
+          type: array
+          items:
+            type: object
+            required: [kind, driver, impact]
+            properties:
+              kind: { type: string }
+              driver: { type: string }
+              impact: { type: string }
+        recommendation:
+          type: object
+          required: [kind, label, rationale, tradeoffs]
+          properties:
+            kind: { type: string }
+            label: { type: string }
+            rationale: { type: string }
+            tradeoffs:
+              type: array
+              items: { type: string }
+        trendNotes:
+          type: array
+          items: { type: string }
+        marginLockChip: { $ref: "#/components/schemas/AtelierMarginLockStatus" }
+        partnerOverrideRequired: { type: boolean }
+        twoPartnerRequired: { type: boolean }
+        confidence: { type: string, enum: [green, amber, red] }
 
     AtelierDealPricingComputed:
       type: object

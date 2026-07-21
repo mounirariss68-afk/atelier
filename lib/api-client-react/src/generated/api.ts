@@ -100,6 +100,8 @@ import type {
   AtelierCreateMyEmergencyContact201,
   AtelierCreateOpportunityInput,
   AtelierCreateOpportunityResponse,
+  AtelierCreateRateCardVersion201,
+  AtelierCreateRateCardVersionBody,
   AtelierCreateStageTransition200,
   AtelierCredential,
   AtelierCredentialInput,
@@ -136,6 +138,8 @@ import type {
   AtelierGetMyCalendar502,
   AtelierGetMyCalendarParams,
   AtelierGetMyReceiptUploadUrl200,
+  AtelierGetPricingTrends200,
+  AtelierGetPricingTrendsParams,
   AtelierGrantDocumentAccess201,
   AtelierGrantDocumentAccessBody,
   AtelierHireCandidate,
@@ -204,6 +208,12 @@ import type {
   AtelierPersonaSwitchInput,
   AtelierPov,
   AtelierPovVersion,
+  AtelierPricingAnalystInput,
+  AtelierPricingAnalystResult,
+  AtelierPricingHandoffBilling201,
+  AtelierPricingHandoffBillingBody,
+  AtelierPricingSimulateInput,
+  AtelierPricingSimulateResult,
   AtelierPricingStrategistInput,
   AtelierPricingStrategistResult,
   AtelierProcess,
@@ -23630,6 +23640,444 @@ export const useAtelierWhatifDealPricing = <
   TContext
 > => {
   return useMutation(getAtelierWhatifDealPricingMutationOptions(options));
+};
+
+export const getAtelierSimulatePricingStructuresUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/pricing/simulate`;
+};
+
+export const atelierSimulatePricingStructures = async (
+  oppId: string,
+  atelierPricingSimulateInput?: AtelierPricingSimulateInput,
+  options?: RequestInit,
+): Promise<AtelierPricingSimulateResult> => {
+  return customFetch<AtelierPricingSimulateResult>(
+    getAtelierSimulatePricingStructuresUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPricingSimulateInput),
+    },
+  );
+};
+
+export const getAtelierSimulatePricingStructuresMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSimulatePricingStructures>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingSimulateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierSimulatePricingStructures>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingSimulateInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierSimulatePricingStructures"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierSimulatePricingStructures>>,
+    { oppId: string; data: BodyType<AtelierPricingSimulateInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierSimulatePricingStructures(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierSimulatePricingStructuresMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierSimulatePricingStructures>>
+>;
+export type AtelierSimulatePricingStructuresMutationBody =
+  BodyType<AtelierPricingSimulateInput>;
+export type AtelierSimulatePricingStructuresMutationError = ErrorType<unknown>;
+
+export const useAtelierSimulatePricingStructures = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierSimulatePricingStructures>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingSimulateInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierSimulatePricingStructures>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingSimulateInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierSimulatePricingStructuresMutationOptions(options),
+  );
+};
+
+export const getAtelierRunPricingAnalystUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/pricing/analyst`;
+};
+
+export const atelierRunPricingAnalyst = async (
+  oppId: string,
+  atelierPricingAnalystInput?: AtelierPricingAnalystInput,
+  options?: RequestInit,
+): Promise<AtelierPricingAnalystResult> => {
+  return customFetch<AtelierPricingAnalystResult>(
+    getAtelierRunPricingAnalystUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPricingAnalystInput),
+    },
+  );
+};
+
+export const getAtelierRunPricingAnalystMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPricingAnalyst>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingAnalystInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRunPricingAnalyst>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingAnalystInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRunPricingAnalyst"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRunPricingAnalyst>>,
+    { oppId: string; data: BodyType<AtelierPricingAnalystInput> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierRunPricingAnalyst(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRunPricingAnalystMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRunPricingAnalyst>>
+>;
+export type AtelierRunPricingAnalystMutationBody =
+  BodyType<AtelierPricingAnalystInput>;
+export type AtelierRunPricingAnalystMutationError = ErrorType<unknown>;
+
+export const useAtelierRunPricingAnalyst = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRunPricingAnalyst>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingAnalystInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRunPricingAnalyst>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingAnalystInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRunPricingAnalystMutationOptions(options));
+};
+
+export const getAtelierPricingHandoffBillingUrl = (oppId: string) => {
+  return `/api/atelier/opportunities/${oppId}/pricing/handoff-billing`;
+};
+
+export const atelierPricingHandoffBilling = async (
+  oppId: string,
+  atelierPricingHandoffBillingBody?: AtelierPricingHandoffBillingBody,
+  options?: RequestInit,
+): Promise<AtelierPricingHandoffBilling201> => {
+  return customFetch<AtelierPricingHandoffBilling201>(
+    getAtelierPricingHandoffBillingUrl(oppId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPricingHandoffBillingBody),
+    },
+  );
+};
+
+export const getAtelierPricingHandoffBillingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPricingHandoffBilling>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingHandoffBillingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPricingHandoffBilling>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingHandoffBillingBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierPricingHandoffBilling"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPricingHandoffBilling>>,
+    { oppId: string; data: BodyType<AtelierPricingHandoffBillingBody> }
+  > = (props) => {
+    const { oppId, data } = props ?? {};
+
+    return atelierPricingHandoffBilling(oppId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPricingHandoffBillingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPricingHandoffBilling>>
+>;
+export type AtelierPricingHandoffBillingMutationBody =
+  BodyType<AtelierPricingHandoffBillingBody>;
+export type AtelierPricingHandoffBillingMutationError = ErrorType<unknown>;
+
+export const useAtelierPricingHandoffBilling = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPricingHandoffBilling>>,
+    TError,
+    { oppId: string; data: BodyType<AtelierPricingHandoffBillingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPricingHandoffBilling>>,
+  TError,
+  { oppId: string; data: BodyType<AtelierPricingHandoffBillingBody> },
+  TContext
+> => {
+  return useMutation(getAtelierPricingHandoffBillingMutationOptions(options));
+};
+
+export const getAtelierGetPricingTrendsUrl = (
+  params?: AtelierGetPricingTrendsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/pricing/trends?${stringifiedParams}`
+    : `/api/atelier/pricing/trends`;
+};
+
+export const atelierGetPricingTrends = async (
+  params?: AtelierGetPricingTrendsParams,
+  options?: RequestInit,
+): Promise<AtelierGetPricingTrends200> => {
+  return customFetch<AtelierGetPricingTrends200>(
+    getAtelierGetPricingTrendsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetPricingTrendsQueryKey = (
+  params?: AtelierGetPricingTrendsParams,
+) => {
+  return [`/api/atelier/pricing/trends`, ...(params ? [params] : [])] as const;
+};
+
+export const getAtelierGetPricingTrendsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetPricingTrends>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierGetPricingTrendsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetPricingTrends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetPricingTrendsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetPricingTrends>>
+  > = ({ signal }) =>
+    atelierGetPricingTrends(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPricingTrends>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetPricingTrendsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetPricingTrends>>
+>;
+export type AtelierGetPricingTrendsQueryError = ErrorType<unknown>;
+
+export function useAtelierGetPricingTrends<
+  TData = Awaited<ReturnType<typeof atelierGetPricingTrends>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierGetPricingTrendsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetPricingTrends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetPricingTrendsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAtelierCreateRateCardVersionUrl = (id: string) => {
+  return `/api/atelier/rate-cards/${id}/new-version`;
+};
+
+export const atelierCreateRateCardVersion = async (
+  id: string,
+  atelierCreateRateCardVersionBody?: AtelierCreateRateCardVersionBody,
+  options?: RequestInit,
+): Promise<AtelierCreateRateCardVersion201> => {
+  return customFetch<AtelierCreateRateCardVersion201>(
+    getAtelierCreateRateCardVersionUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierCreateRateCardVersionBody),
+    },
+  );
+};
+
+export const getAtelierCreateRateCardVersionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRateCardVersion>>,
+    TError,
+    { id: string; data: BodyType<AtelierCreateRateCardVersionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateRateCardVersion>>,
+  TError,
+  { id: string; data: BodyType<AtelierCreateRateCardVersionBody> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateRateCardVersion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateRateCardVersion>>,
+    { id: string; data: BodyType<AtelierCreateRateCardVersionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierCreateRateCardVersion(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateRateCardVersionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateRateCardVersion>>
+>;
+export type AtelierCreateRateCardVersionMutationBody =
+  BodyType<AtelierCreateRateCardVersionBody>;
+export type AtelierCreateRateCardVersionMutationError = ErrorType<unknown>;
+
+export const useAtelierCreateRateCardVersion = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateRateCardVersion>>,
+    TError,
+    { id: string; data: BodyType<AtelierCreateRateCardVersionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateRateCardVersion>>,
+  TError,
+  { id: string; data: BodyType<AtelierCreateRateCardVersionBody> },
+  TContext
+> => {
+  return useMutation(getAtelierCreateRateCardVersionMutationOptions(options));
 };
 
 export const getAtelierRunPricingStrategistUrl = (oppId: string) => {

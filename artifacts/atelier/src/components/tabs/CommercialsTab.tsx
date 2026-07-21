@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Lock, ShieldAlert, Plus, Trash2 } from "lucide-react";
+import { PricingStructuresPanel } from "./PricingStructuresPanel";
 
 const SENIORITY_BANDS = [
   "Partner",
@@ -175,7 +176,7 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
     setDraftMix((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
   const onStrategist = async () => {
-    const result = await strategist.mutateAsync({ oppId });
+    const result = await strategist.mutateAsync({ oppId, data: {} });
     setStrategistResult(result);
   };
 
@@ -259,10 +260,16 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
               className={`${fieldControlCls} mt-1 bg-bg-elevate border border-border rounded-md text-text text-sm`}
               data-testid="select-model"
             >
-              <option value="time_and_materials">Time &amp; Materials</option>
+              <option value="tnm">Time &amp; Materials</option>
+              <option value="capped_tnm">Capped T&amp;M</option>
               <option value="fixed_fee">Fixed Fee</option>
-              <option value="outcome_based">Outcome-Based</option>
+              <option value="milestone">Milestone</option>
               <option value="retainer">Retainer</option>
+              <option value="outcome_based">Outcome-Based</option>
+              <option value="hybrid">Hybrid (Base + Success)</option>
+              {draftModel === "time_and_materials" && (
+                <option value="time_and_materials">Time &amp; Materials (legacy)</option>
+              )}
             </select>
           </label>
         </div>
@@ -329,6 +336,13 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
           Rate card rows loaded: {rateCardRows.length}
         </div>
       </Card>
+
+      <PricingStructuresPanel
+        oppId={oppId}
+        isPartner={isPartner}
+        canSeeCost={pricing.computedCostUsd != null}
+        selectedModel={draftModel}
+      />
 
       <Card className="p-6 space-y-4">
         <div className="flex items-center justify-between">

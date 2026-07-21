@@ -16,6 +16,9 @@ export interface AtelierRateCard {
   effectiveFrom: Date;
   /** @nullable */
   effectiveTo?: Date | null;
+  version?: number;
+  /** @nullable */
+  supersedesId?: string | null;
   /** @nullable */
   sourceUrl?: string | null;
   /** @nullable */

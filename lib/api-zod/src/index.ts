@@ -18,5 +18,7 @@ export type {
   AtelierReplaceBankSignatoriesBody,
   AtelierReplaceExpenseGlMappingsBody,
   AtelierSetEngagementExpenseMarkupBody,
+  AtelierCreateRateCardVersionBody,
+  AtelierPricingHandoffBillingBody,
   AuthLoginResponse,
 } from "./generated/types";

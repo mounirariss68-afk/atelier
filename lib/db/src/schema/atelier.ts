@@ -1615,6 +1615,10 @@ export const atelierRateCards = pgTable(
     currency: text("currency").notNull(), // USD reporting; row-level may differ
     effectiveFrom: timestamp("effective_from").notNull().defaultNow(),
     effectiveTo: timestamp("effective_to"),
+    /** Effective-dated versioning (Task #435): monotonically increasing per lineage. */
+    version: integer("version").notNull().default(1),
+    /** Prior version of this card in the same lineage (null = first version). */
+    supersedesId: text("supersedes_id"),
     sourceUrl: text("source_url"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -1691,6 +1695,18 @@ export const atelierDealPricings = pgTable(
     countersignAt: timestamp("countersign_at"),
     countersignRationale: text("countersign_rationale"),
     alternativeStructures: jsonb("alternative_structures").notNull().default([]),
+    // Task #435 — engagement pricing structures. structureParams shape is
+    // StructureParams (api-server lib/atelier-pricing-structures.ts).
+    structureParams: jsonb("structure_params").$type<Record<string, unknown> | null>(),
+    /** Persisted simulation snapshot for the chosen structure (bands + cash profile). */
+    structureSim: jsonb("structure_sim").$type<Record<string, unknown> | null>(),
+    /** Risk-adjusted (probability-weighted) margin — what the margin lock gates on. */
+    riskAdjustedMarginPct: doublePrecision("risk_adjusted_margin_pct"),
+    /** Billing handoff — set when the chosen structure was pushed to a billing rule. */
+    billingRuleId: text("billing_rule_id"),
+    billingHandoffAt: timestamp("billing_handoff_at"),
+    pricingAnalystRunId: text("pricing_analyst_run_id"),
+    pricingAnalystOutput: jsonb("pricing_analyst_output"),
     pricingStrategistBriefId: text("pricing_strategist_brief_id"),
     pricingStrategistRunId: text("pricing_strategist_run_id"),
     pricingStrategistOutput: jsonb("pricing_strategist_output"),

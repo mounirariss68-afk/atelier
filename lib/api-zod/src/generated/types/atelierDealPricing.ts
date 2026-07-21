@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierDealPricingAlternativeStructuresItem } from "./atelierDealPricingAlternativeStructuresItem";
+import type { AtelierDealPricingPricingAnalystOutput } from "./atelierDealPricingPricingAnalystOutput";
+import type { AtelierDealPricingStructureParams } from "./atelierDealPricingStructureParams";
+import type { AtelierDealPricingStructureSim } from "./atelierDealPricingStructureSim";
 import type { AtelierMarginLockStatus } from "./atelierMarginLockStatus";
 import type { AtelierTeamMixEntry } from "./atelierTeamMixEntry";
 
@@ -34,4 +37,18 @@ export interface AtelierDealPricing {
   /** @nullable */
   countersignRationale?: string | null;
   alternativeStructures?: AtelierDealPricingAlternativeStructuresItem[];
+  /** @nullable */
+  structureParams?: AtelierDealPricingStructureParams;
+  /** @nullable */
+  structureSim?: AtelierDealPricingStructureSim;
+  /** @nullable */
+  riskAdjustedMarginPct?: number | null;
+  /** @nullable */
+  billingRuleId?: string | null;
+  /** @nullable */
+  billingHandoffAt?: Date | null;
+  /** @nullable */
+  pricingAnalystRunId?: string | null;
+  /** @nullable */
+  pricingAnalystOutput?: AtelierDealPricingPricingAnalystOutput;
 }

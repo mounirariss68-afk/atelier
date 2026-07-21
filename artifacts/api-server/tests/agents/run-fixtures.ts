@@ -99,7 +99,7 @@ function main(): void {
   // Coverage check — every MVP / registered agent should have ≥1 fixture.
   const covered = new Set(fixtures.map((f) => f.agentId));
   const missing = ATELIER_AGENTS.filter(
-    (a) => (a.status === "mvp" || a.status === "registered") && !covered.has(a.id) && !a.id.match(/^ag_(triage|raid_watchdog|knowledge_concierge|atelier_curator|prompt_librarian|diagnostic_memo|workplan_architect|adoption_coach|value_case_tracker|compliance_reviewer|pricing_analyst|bench_planner|brand_translator|storyboarder)$/),
+    (a) => (a.status === "mvp" || a.status === "registered") && !covered.has(a.id) && !a.id.match(/^ag_(triage|raid_watchdog|knowledge_concierge|atelier_curator|prompt_librarian|diagnostic_memo|workplan_architect|adoption_coach|value_case_tracker|compliance_reviewer|bench_planner|brand_translator|storyboarder)$/),
   );
 
   console.log(`\n[test:agents] ran ${fixtures.length} fixture(s) across ${registryIds.size} registered agents`);

@@ -1465,7 +1465,70 @@ export const WorkplanArchitect = stub("ag_workplan_architect", "Workplan Archite
 export const AdoptionCoach = stub("ag_adoption_coach", "Adoption Coach", "Deliver", "Deliver", "Coaches client teams through change-management plays.");
 export const ValueCaseTracker = stub("ag_value_case_tracker", "Value Case Tracker", "Deliver", "Deliver", "Tracks realized value vs. business case across engagements.");
 export const ComplianceReviewer = stub("ag_compliance_reviewer", "Compliance Reviewer", "Quality", "Cross-cutting", "Reviews proposals and deliverables for regulatory compliance.", "claude-sonnet-4-6");
-export const PricingAnalyst = stub("ag_pricing_analyst", "Pricing Analyst", "Front of House", "Pursue", "Models pricing scenarios and margin sensitivity.");
+// Task #435 — Pricing Analyst upgraded from stub to a fully specified agent.
+// Deterministic structure simulations (revenue/cost/margin bands + cash
+// profile) are computed server-side; the LLM authors only the
+// recommendation narrative.
+export const PricingAnalyst = defineAgent({
+  id: "ag_pricing_analyst",
+  name: "Pricing Analyst",
+  group: "Front of House",
+  stage: "Pursue",
+  purpose:
+    "Simulates every engagement pricing structure (T&M, capped T&M, fixed fee, milestone, retainer, outcome-based, hybrid) with margin bands, risk-adjusted margin, and cash-receipt profiles; recommends a structure with tradeoffs.",
+  model: "claude-sonnet-4-5",
+  starred: false,
+  status: "registered",
+  systemPromptRef: "prompts/pricing_analyst/v2.md",
+  inputSchema: z.object({
+    opportunityId: z.string(),
+    structures: z
+      .array(z.object({ kind: z.string(), params: z.record(z.unknown()).optional() }))
+      .optional(),
+    paramsByKind: z.record(z.record(z.unknown())).optional(),
+  }).passthrough(),
+  outputSchema: z.object({
+    runId: z.string(),
+    scenarios: z.array(z.object({
+      kind: z.string(),
+      label: z.string(),
+      best: z.object({ revenueUsd: z.number(), costUsd: z.number(), marginPct: z.number() }),
+      expected: z.object({ revenueUsd: z.number(), costUsd: z.number(), marginPct: z.number() }),
+      worst: z.object({ revenueUsd: z.number(), costUsd: z.number(), marginPct: z.number() }),
+      riskAdjustedMarginPct: z.number(),
+      marginLockStatus: z.enum(["green", "amber", "red"]),
+      cashProfile: z.array(z.object({ week: z.number(), amountUsd: z.number(), label: z.string() })),
+      weeksToCash80: z.number(),
+      notes: z.array(z.string()),
+    })),
+    sensitivity: z.array(z.object({ kind: z.string(), driver: z.string(), impact: z.string() })),
+    recommendation: z.object({
+      kind: z.string(),
+      label: z.string(),
+      rationale: z.string(),
+      tradeoffs: z.array(z.string()),
+    }),
+    trendNotes: z.array(z.string()),
+    marginLockChip: z.enum(["green", "amber", "red"]),
+    partnerOverrideRequired: z.boolean(),
+    twoPartnerRequired: z.boolean(),
+    confidence: z.enum(["green", "amber", "red"]),
+  }),
+  tools: ["rate_card.read", "pricing_rules.lookup"],
+  guardrails: [
+    "All revenue/cost/margin figures are deterministic server-side math — the model never invents or alters numbers.",
+    "Margin lock gates on the risk-adjusted margin, not the best case.",
+    "The analyst writes a snapshot only; it never mutates the chosen economic terms.",
+    "Recommendation must be one of the simulated structures.",
+  ],
+  humanCheckpoints: [
+    { id: "cp_partner_structure", label: "Partner selects the pricing structure", decider: "partner", blocking: true },
+  ],
+  evals: [
+    { id: "ev_bands", description: "every scenario carries best/expected/worst bands", threshold: 1 },
+    { id: "ev_rec_in_set", description: "recommendation.kind is one of the simulated kinds", threshold: 1 },
+  ],
+});
 export const BenchPlanner = stub("ag_bench_planner", "Bench Planner", "Personal", "Cross-cutting", "Plans staffing and bench utilisation across active engagements.");
 export const BrandTranslator = stub("ag_brand_translator", "Brand Translator", "Quality", "Cross-cutting", "Rewrites drafts into Cognirise brand voice across EN/AR/TR.");
 export const Storyboarder = stub("ag_storyboarder", "Storyboarder", "Front of House", "Shape", "Turns narratives into slide-ready storyboards.");

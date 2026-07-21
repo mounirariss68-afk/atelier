@@ -8,6 +8,7 @@
 import type { AtelierDealPricing } from "./atelierDealPricing";
 import type { AtelierDealPricingEnvelopeBreakdownItem } from "./atelierDealPricingEnvelopeBreakdownItem";
 import type { AtelierDealPricingEnvelopeRateCardRowsItem } from "./atelierDealPricingEnvelopeRateCardRowsItem";
+import type { AtelierDealPricingEnvelopeStructureSim } from "./atelierDealPricingEnvelopeStructureSim";
 import type { AtelierMarginPolicy } from "./atelierMarginPolicy";
 
 export interface AtelierDealPricingEnvelope {
@@ -15,4 +16,6 @@ export interface AtelierDealPricingEnvelope {
   policy: AtelierMarginPolicy;
   rateCardRows: AtelierDealPricingEnvelopeRateCardRowsItem[];
   breakdown?: AtelierDealPricingEnvelopeBreakdownItem[];
+  /** @nullable */
+  structureSim?: AtelierDealPricingEnvelopeStructureSim;
 }
