@@ -91,6 +91,11 @@ export const STRINGS = {
   // Task #485 — manual chat rename.
   historyRename: { en: "Rename chat", ar: "إعادة تسمية المحادثة" },
   historyRenamePlaceholder: { en: "Chat title…", ar: "عنوان المحادثة…" },
+  // Task #490 — delete a chat from the history list (with confirm).
+  historyDelete: { en: "Delete chat", ar: "حذف المحادثة" },
+  historyDeleteConfirm: { en: "Delete this chat?", ar: "حذف هذه المحادثة؟" },
+  historyDeleteYes: { en: "Delete", ar: "حذف" },
+  historyDeleteNo: { en: "Cancel", ar: "إلغاء" },
   localeLabel: { en: "Language", ar: "اللغة" },
   asyncBadge: { en: "ASYNC", ar: "غير متزامن" },
   errorBadge: { en: "ERROR", ar: "خطأ" },

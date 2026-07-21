@@ -6,6 +6,7 @@ import {
   apiJson,
   authHeader,
   type CliSessionMeta,
+  deleteCliSession,
   listCliSessions,
   renameCliSession,
   uploadCliAttachment,
@@ -122,6 +123,25 @@ export function useChat() {
     );
     try {
       await renameCliSession(id, clean);
+    } catch {
+      // best-effort; the list refreshes on next open
+    }
+  }, []);
+
+  // Task #490 — delete a chat: optimistic list removal, then DELETE
+  // (server soft-deletes). If the deleted chat is the active one, the
+  // transcript resets so the next message starts a fresh session.
+  const deleteSession = useCallback(async (id: string) => {
+    setSessions((list) => list.filter((s) => s.id !== id));
+    if (sessionRef.current === id) {
+      abortRef.current?.abort();
+      sessionRef.current = null;
+      setSessionId(null);
+      setTurns([]);
+      setBusy(false);
+    }
+    try {
+      await deleteCliSession(id);
     } catch {
       // best-effort; the list refreshes on next open
     }
@@ -374,6 +394,7 @@ export function useChat() {
     sessions,
     refreshSessions,
     renameSession,
+    deleteSession,
     uploadAttachment,
     submit,
     answerClarification,

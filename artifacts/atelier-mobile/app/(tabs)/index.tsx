@@ -6,6 +6,7 @@ import { runExclusivePick } from "@/lib/pickerGuard";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Keyboard,
   Modal,
@@ -499,6 +500,26 @@ export default function ChatScreen() {
     [chat, renameDraft],
   );
 
+  // Task #490 — delete a chat from the history sheet, with a confirm
+  // step (native Alert; window.confirm on web where Alert buttons no-op).
+  const confirmDelete = useCallback(
+    (id: string) => {
+      const doDelete = () => void chat.deleteSession(id);
+      if (Platform.OS === "web") {
+        // eslint-disable-next-line no-alert
+        if (window.confirm(`${t("chat.deleteConfirmTitle")}\n${t("chat.deleteConfirmBody")}`)) {
+          doDelete();
+        }
+        return;
+      }
+      Alert.alert(t("chat.deleteConfirmTitle"), t("chat.deleteConfirmBody"), [
+        { text: t("chat.deleteConfirmNo"), style: "cancel" },
+        { text: t("chat.deleteConfirmYes"), style: "destructive", onPress: doDelete },
+      ]);
+    },
+    [chat, t],
+  );
+
   const send = useCallback(() => {
     const prompt = input.trim();
     if (!prompt && attachments.length === 0) return;
@@ -888,6 +909,21 @@ export default function ChatScreen() {
                       })}
                     >
                       <Feather name="edit-2" size={16} color={c.mutedForeground} />
+                    </Pressable>
+                    <Pressable
+                      accessibilityLabel={t("chat.delete")}
+                      hitSlop={8}
+                      onPress={() => {
+                        hapticLight();
+                        setRenamingId(null);
+                        confirmDelete(s.id);
+                      }}
+                      style={({ pressed }) => ({
+                        padding: 10,
+                        opacity: pressed ? 0.5 : 1,
+                      })}
+                    >
+                      <Feather name="trash-2" size={16} color={c.destructive} />
                     </Pressable>
                   </View>
                 ),

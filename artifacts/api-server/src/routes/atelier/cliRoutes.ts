@@ -362,6 +362,71 @@ router.patch("/cli/sessions/:id", async (req, res) => {
 });
 
 /**
+ * Task #490 — delete a chat session (soft-delete: sets deletedAt so the
+ * list query hides it; turns are kept for audit). Scoped to the owning
+ * user + org. Any turn in the session still paused awaiting_clarification
+ * is cancelled so the pending-clarification rehydration lookup (which
+ * deliberately ignores session deletedAt for inactivity rollover, Task
+ * #184) never resurrects a question from an explicitly deleted chat.
+ * Idempotent: deleting an already-deleted session returns 404 (the
+ * scoping select filters on deletedAt IS NULL).
+ */
+// @cli-skip: session housekeeping, not a capability
+router.delete("/cli/sessions/:id", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const [session] = await db
+    .select({ id: atelierCliSessions.id, title: atelierCliSessions.title })
+    .from(atelierCliSessions)
+    .where(
+      and(
+        eq(atelierCliSessions.id, req.params.id),
+        eq(atelierCliSessions.userId, me.id),
+        eq(atelierCliSessions.orgId, me.orgId),
+        isNull(atelierCliSessions.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!session) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const now = new Date();
+  await db
+    .update(atelierCliSessions)
+    .set({ deletedAt: now, updatedAt: now })
+    .where(eq(atelierCliSessions.id, session.id));
+  await db
+    .update(atelierCliTurns)
+    .set({
+      status: "cancelled",
+      statusMessage: "session deleted by user",
+      finishedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(atelierCliTurns.sessionId, session.id),
+        eq(atelierCliTurns.status, "awaiting_clarification"),
+      ),
+    );
+  assertAuditAction(V3_AUDIT_ACTIONS.CLI_SESSION_DELETED);
+  await db.insert(atelierAuditEvents).values({
+    id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    orgId: me.orgId,
+    entityType: "cli_session",
+    entityId: session.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: V3_AUDIT_ACTIONS.CLI_SESSION_DELETED,
+    payload: { title: session.title },
+    payloadSummary: `Chat deleted${session.title ? ` ("${session.title}")` : ""}`,
+  });
+  res.json({ ok: true, session: { id: session.id } });
+});
+
+/**
  * Task #333 — recent turns across all sessions for the persona, used
  * by the right-rail Activity tab to render per-turn `cli_turn` rows
  * with status icon and a deep-link to /cli?session=…&turn=…

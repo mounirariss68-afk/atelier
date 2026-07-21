@@ -103,6 +103,8 @@ export const V3_AUDIT_ACTIONS = {
   CLI_UNDO: "cli.undo",
   // Task #485 — manual chat rename (auto-title only fires on title IS NULL).
   CLI_SESSION_RENAMED: "cli.session.renamed",
+  // Task #490 — user-initiated soft-delete of a chat session.
+  CLI_SESSION_DELETED: "cli.session.deleted",
 
   // EA delegation — Task #386 (partner ↔ Executive Assistant grants +
   // delegated pending items; every row carries dual attribution:

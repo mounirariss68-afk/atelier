@@ -135,6 +135,13 @@ export async function renameCliSession(id: string, title: string): Promise<void>
   });
 }
 
+/** Task #490 — soft-delete a chat session (server sets deletedAt). */
+export async function deleteCliSession(id: string): Promise<void> {
+  await apiJson(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 /** PUT raw bytes of a local file URI to a signed upload URL. */
 export async function putFileToSignedUrl(
   uploadURL: string,

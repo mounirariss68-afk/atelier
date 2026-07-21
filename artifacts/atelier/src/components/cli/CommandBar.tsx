@@ -785,6 +785,16 @@ export function CommandBar(props: CommandBarProps) {
                   /* optimistic; list refreshes on next open */
                 });
               }}
+              onDelete={(id) => {
+                // Task #490 — optimistic removal; server soft-deletes.
+                setHistorySessions((prev) => prev.filter((sess) => sess.id !== id));
+                void fetch(`/api/atelier/cli/sessions/${encodeURIComponent(id)}`, {
+                  method: "DELETE",
+                  credentials: "include",
+                }).catch(() => {
+                  /* optimistic; list refreshes on next open */
+                });
+              }}
               onPick={(id) => {
                 setHistoryOpen(false);
                 // Task #484 — adopt the picked session so the next
@@ -2779,6 +2789,7 @@ function HistoryPanel({
   locale,
   onPick,
   onRename,
+  onDelete,
 }: {
   sessions: Array<{
     id: string;
@@ -2789,9 +2800,12 @@ function HistoryPanel({
   locale: CliLocale;
   onPick: (id: string) => void;
   onRename: (id: string, title: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [draft, setDraft] = React.useState("");
+  // Task #490 — id of the row showing the delete confirm strip.
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
 
   const commit = (id: string) => {
     const title = draft.trim().replace(/\s+/g, " ").slice(0, 60);
@@ -2812,7 +2826,35 @@ function HistoryPanel({
               className="group relative w-full bg-bg-elevate border border-border rounded text-xs hover:border-gold/50 hover:bg-bg-elevate-2 transition-colors"
               data-testid="cli-history-row"
             >
-              {editingId === sess.id ? (
+              {confirmingId === sess.id ? (
+                <div
+                  className="p-2.5 flex items-center gap-2"
+                  data-testid="cli-history-delete-confirm"
+                >
+                  <span className="flex-1 truncate text-text-faint">
+                    {s("historyDeleteConfirm", locale)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmingId(null);
+                      onDelete(sess.id);
+                    }}
+                    className="px-2 py-1 rounded border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors"
+                    data-testid="cli-history-delete-yes"
+                  >
+                    {s("historyDeleteYes", locale)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingId(null)}
+                    className="px-2 py-1 rounded border border-border hover:bg-bg transition-colors"
+                    data-testid="cli-history-delete-no"
+                  >
+                    {s("historyDeleteNo", locale)}
+                  </button>
+                </div>
+              ) : editingId === sess.id ? (
                 <div className="p-2.5">
                   <input
                     autoFocus
@@ -2835,7 +2877,7 @@ function HistoryPanel({
                   <button
                     type="button"
                     onClick={() => onPick(sess.id)}
-                    className="w-full text-left p-2.5 pe-9"
+                    className="w-full text-left p-2.5 pe-14"
                   >
                     <div className="font-medium leading-snug truncate">
                       {sess.title ?? s("historyNewChat", locale)}
@@ -2863,7 +2905,7 @@ function HistoryPanel({
                       setDraft(sess.title ?? "");
                       setEditingId(sess.id);
                     }}
-                    className="absolute top-2 end-2 p-1 rounded text-text-faint opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-gold hover:bg-bg transition-opacity"
+                    className="absolute top-2 end-7 p-1 rounded text-text-faint opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-gold hover:bg-bg transition-opacity"
                     title={s("historyRename", locale)}
                     aria-label={s("historyRename", locale)}
                     data-testid="cli-history-rename"
@@ -2879,6 +2921,33 @@ function HistoryPanel({
                       strokeLinejoin="round"
                     >
                       <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(null);
+                      setConfirmingId(sess.id);
+                    }}
+                    className="absolute top-2 end-2 p-1 rounded text-text-faint opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-red-400 hover:bg-bg transition-opacity"
+                    title={s("historyDelete", locale)}
+                    aria-label={s("historyDelete", locale)}
+                    data-testid="cli-history-delete"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </button>
                 </>
