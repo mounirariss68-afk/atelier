@@ -387,6 +387,78 @@ async function main() {
       src.includes("NEVER infer, guess, or fabricate") &&
         src.includes('Omit "details" entirely'),
     );
+
+    // 11. Task #510 — same stub probe, but through the VISION (photo) path:
+    // extractReceiptWithVision must also refuse invented details. We feed a
+    // tiny 1x1 PNG buffer; the stub serves canned extractions with omitted or
+    // hallucinated-malformed details, and we assert the proposal-side values
+    // mirror section 10: details === undefined, summary byte-identical.
+    const { extractReceiptWithVision } = await import(
+      "../../src/lib/atelier-receipt-parse.js"
+    );
+    const tinyPng = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+
+    // (a) Blurry photo: model follows the prompt and omits `details`.
+    cannedQueue.push({
+      merchant: "Careem",
+      total: 48.5,
+      currency: "AED",
+      category: "taxi",
+      rawText: "C▌reem ... 48.5▌ AED [photo blurry]",
+      confidence: "red",
+    });
+    const visBlurry = await extractReceiptWithVision(tinyPng, "image/png");
+    check("vision blurry: model omits details", visBlurry.details === undefined);
+    const visBlurryDetails = sanitizeReceiptDetails(visBlurry.details);
+    check("vision blurry: sanitized details stay absent", visBlurryDetails === undefined);
+    const visBlurryBase = "Taxi ride, photo blurry.";
+    check(
+      "vision blurry: summary unchanged",
+      composeEnrichedSummary(visBlurryBase, visBlurryDetails) === visBlurryBase,
+    );
+
+    // (b) Photo of a torn hotel receipt: model hallucinates a malformed
+    // details object — sanitizer must drop every part of it.
+    cannedQueue.push({
+      merchant: "Hilton",
+      total: 900,
+      currency: "SAR",
+      category: "hotel",
+      rawText: "HILTON ... TOTAL 900 [photo cut off]",
+      confidence: "amber",
+      details: {
+        stay: { checkIn: "early July", checkOut: "sometime", nights: 0, city: "  " },
+        flight: { route: "", airline: 42 },
+        covers: -3,
+        inventedKey: { foo: "bar" },
+      },
+    });
+    const visPartial = await extractReceiptWithVision(tinyPng, "image/png");
+    const visPartialDetails = sanitizeReceiptDetails(visPartial.details);
+    check(
+      "vision partial: hallucinated malformed details dropped",
+      visPartialDetails === undefined,
+      JSON.stringify(visPartialDetails),
+    );
+    const visPartialBase = "Hotel stay, photo partially cut off.";
+    check(
+      "vision partial: summary unchanged",
+      composeEnrichedSummary(visPartialBase, visPartialDetails) === visPartialBase,
+    );
+
+    // (c) Unreadable photo: model flags unreadable, no details anywhere.
+    cannedQueue.push({ unreadable: true, confidence: "red", rawText: "" });
+    const visScrap = await extractReceiptWithVision(tinyPng, "image/png");
+    check("vision scrap: unreadable flagged", visScrap.unreadable === true);
+    check(
+      "vision scrap: no details, summary unchanged",
+      sanitizeReceiptDetails(visScrap.details) === undefined &&
+        composeEnrichedSummary("Unreadable receipt photo.", sanitizeReceiptDetails(visScrap.details)) ===
+          "Unreadable receipt photo.",
+    );
   } finally {
     stub.close();
   }
