@@ -508,8 +508,13 @@ function windowIso(days: number) {
 }
 
 // ------------------------------------------------------------------
-// Day calendar view — time-ordered meeting cards (all-day on top).
+// Day calendar view — full-day timeline with positioned meeting blocks.
 // ------------------------------------------------------------------
+
+const HOUR_H = 56;
+const GUTTER = 52;
+/** Default scroll position when opening the day view: the 9:00 AM slot. */
+const DAY_DEFAULT_HOUR = 9;
 
 function startOfDay(d: Date) {
   const s = new Date(d);
@@ -525,29 +530,65 @@ function sameDay(a: Date, b: Date) {
   );
 }
 
-/** Mark timed meetings that overlap another meeting so day-view cards can
- * flag them (the old timeline showed this via side-by-side columns). */
-function markOverlaps(meetings: AtelierCalendarMeeting[]) {
-  const sorted = [...meetings].sort(
-    (a, b) =>
-      new Date(a.start).getTime() - new Date(b.start).getTime() ||
-      new Date(a.end).getTime() - new Date(b.end).getTime(),
-  );
-  const overlapping = new Set<string>();
-  for (let i = 0; i < sorted.length; i += 1) {
-    for (let j = i + 1; j < sorted.length; j += 1) {
-      if (
-        new Date(sorted[j].start).getTime() <
-        new Date(sorted[i].end).getTime()
-      ) {
-        overlapping.add(sorted[i].id);
-        overlapping.add(sorted[j].id);
-      } else {
-        break;
-      }
+interface TimedBlock {
+  m: AtelierCalendarMeeting;
+  top: number;
+  height: number;
+  col: number;
+  cols: number;
+}
+
+/** Position timed meetings for one day: clamp to day bounds, then greedy
+ * column assignment inside each overlapping cluster. */
+function layoutDayBlocks(
+  meetings: AtelierCalendarMeeting[],
+  dayStart: Date,
+): TimedBlock[] {
+  const dayStartMs = dayStart.getTime();
+  const dayEndMs = dayStartMs + 24 * 3600 * 1000;
+  const items = meetings
+    .map((m) => {
+      const s = Math.max(new Date(m.start).getTime(), dayStartMs);
+      const e = Math.min(new Date(m.end).getTime(), dayEndMs);
+      const startMin = (s - dayStartMs) / 60000;
+      const endMin = Math.max((e - dayStartMs) / 60000, startMin + 30);
+      return { m, startMin, endMin, col: 0, cols: 1 };
+    })
+    .filter((x) => x.endMin > 0 && x.startMin < 24 * 60)
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  // Cluster overlapping runs, then assign columns greedily.
+  let i = 0;
+  while (i < items.length) {
+    let clusterEnd = items[i].endMin;
+    let j = i + 1;
+    while (j < items.length && items[j].startMin < clusterEnd) {
+      clusterEnd = Math.max(clusterEnd, items[j].endMin);
+      j += 1;
     }
+    const cluster = items.slice(i, j);
+    const colEnds: number[] = [];
+    for (const ev of cluster) {
+      let col = colEnds.findIndex((end) => end <= ev.startMin);
+      if (col === -1) {
+        col = colEnds.length;
+        colEnds.push(ev.endMin);
+      } else {
+        colEnds[col] = ev.endMin;
+      }
+      ev.col = col;
+    }
+    for (const ev of cluster) ev.cols = colEnds.length;
+    i = j;
   }
-  return { sorted, overlapping };
+
+  return items.map((ev) => ({
+    m: ev.m,
+    top: (ev.startMin / 60) * HOUR_H,
+    height: Math.max(((ev.endMin - ev.startMin) / 60) * HOUR_H, 26),
+    col: ev.col,
+    cols: ev.cols,
+  }));
 }
 
 function DayNavigator({
@@ -634,128 +675,10 @@ function DayNavigator({
   );
 }
 
-/** One compact day-view meeting card, styled after the list view rows. */
-function DayMeetingCard({
-  m,
-  overlaps,
-  onOpen,
-}: {
-  m: AtelierCalendarMeeting;
-  overlaps: boolean;
-  onOpen: () => void;
-}) {
-  const c = useColors();
-  const rtl = useRTL();
-  const { t } = useI18n();
-  const matched = m.matches.length > 0;
-  return (
-    <Pressable
-      onPress={() => {
-        hapticLight();
-        onOpen();
-      }}
-      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-    >
-      <Card
-        style={{
-          gap: 8,
-          borderLeftWidth: 3,
-          borderLeftColor: matched ? c.primary : overlaps ? c.mutedForeground : "transparent",
-        }}
-      >
-        <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 12 }}>
-          <View style={{ width: 84 }}>
-            <Text
-              style={{
-                color: c.foreground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
-                fontSize: 12,
-              }}
-            >
-              {m.isAllDay ? t("mtg.allDay") : fmtTime(m.start)}
-            </Text>
-            {!m.isAllDay ? (
-              <Text
-                style={{
-                  color: c.mutedForeground,
-                  fontFamily: "PlusJakartaSans_400Regular",
-                  fontSize: 12,
-                }}
-              >
-                {fmtTime(m.end)}
-              </Text>
-            ) : null}
-          </View>
-          <View style={{ flex: 1, gap: 6 }}>
-            <Text
-              numberOfLines={2}
-              style={{
-                color: c.foreground,
-                fontFamily: "PlusJakartaSans_600SemiBold",
-                fontSize: 15,
-                textAlign: rtl.textAlign,
-              }}
-            >
-              {m.subject || t("mtg.noSubject")}
-            </Text>
-            <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 6 }}>
-              {m.internal ? <Chip label={t("mtg.internal")} color={c.primary} /> : null}
-              {m.matches.slice(0, 2).map((match) => (
-                <Chip
-                  key={`${m.id}-${match.contactId}`}
-                  label={match.accountName}
-                  color={c.primary}
-                />
-              ))}
-            </View>
-            {m.joinUrl ? (
-              <Pressable
-                onPress={() => {
-                  void openJoinUrl(m.joinUrl!, t("mtg.joinError"));
-                }}
-                style={({ pressed }) => ({
-                  flexDirection: rtl.row,
-                  alignItems: "center",
-                  gap: 6,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <Feather name="video" size={14} color={c.primary} />
-                <Text
-                  style={{
-                    color: c.primary,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
-                    fontSize: 13,
-                  }}
-                >
-                  {t("mtg.join")}
-                </Text>
-              </Pressable>
-            ) : m.location ? (
-              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6 }}>
-                <Feather name="map-pin" size={12} color={c.mutedForeground} />
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    color: c.mutedForeground,
-                    fontFamily: "PlusJakartaSans_400Regular",
-                    fontSize: 13,
-                  }}
-                >
-                  {m.location}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-      </Card>
-    </Pressable>
-  );
-}
-
-/** Day view content: all-day cards first, then timed meetings in start
- * order. A red "now" divider sits between past and upcoming (today only). */
-function DayCards({
+/** Full-day hour-grid timeline: time labels down the side, meeting blocks
+ * positioned/sized by start time and duration, and a red "now" indicator on
+ * today. Tapping a block opens the full meeting detail sheet. */
+function DayTimeline({
   meetings,
   date,
   onOpen,
@@ -766,54 +689,152 @@ function DayCards({
 }) {
   const c = useColors();
   const { t } = useI18n();
-  const allDay = meetings.filter((m) => m.isAllDay);
-  const { sorted, overlapping } = useMemo(
-    () => markOverlaps(meetings.filter((m) => !m.isAllDay)),
-    [meetings],
-  );
   const isToday = sameDay(date, new Date());
-  const nowMs = Date.now();
-  // Index of the first meeting that hasn't ended yet — the "now" line goes
-  // right above it (today only, and only between cards).
-  const nowIdx = isToday
-    ? sorted.findIndex((m) => new Date(m.end).getTime() > nowMs)
-    : -1;
-
-  const nowLine = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: c.destructive,
-        }}
-      />
-      <View style={{ flex: 1, height: 2, backgroundColor: c.destructive }} />
-    </View>
+  const blocks = useMemo(
+    () => layoutDayBlocks(meetings.filter((m) => !m.isAllDay), startOfDay(date)),
+    [meetings, date],
   );
+  const now = new Date();
+  const nowTop =
+    isToday ? ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H : null;
+
+  const hourLabel = (h: number) => {
+    const d = new Date(date);
+    d.setHours(h, 0, 0, 0);
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  };
 
   return (
-    <View style={{ gap: 10 }}>
-      {allDay.length > 0 ? (
-        <View style={{ gap: 8 }}>
-          <SectionHeading label={t("mtg.allDay")} />
-          {allDay.map((m) => (
-            <DayMeetingCard key={m.id} m={m} overlaps={false} onOpen={() => onOpen(m)} />
-          ))}
+    <View style={{ height: 24 * HOUR_H, position: "relative" }}>
+      {Array.from({ length: 24 }, (_, h) => (
+        <View
+          key={h}
+          style={{
+            position: "absolute",
+            top: h * HOUR_H,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "flex-start",
+          }}
+        >
+          <Text
+            style={{
+              width: GUTTER - 8,
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_400Regular",
+              fontSize: 10,
+              textAlign: "right",
+              transform: [{ translateY: -6 }],
+            }}
+          >
+            {hourLabel(h)}
+          </Text>
+          <View
+            style={{
+              flex: 1,
+              marginLeft: 8,
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: c.border,
+            }}
+          />
+        </View>
+      ))}
+
+      {/* Lane area: blocks use % geometry relative to this container. */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: GUTTER,
+          right: 4,
+        }}
+      >
+        {blocks.map(({ m, top, height, col, cols }) => {
+          const matched = m.matches.length > 0;
+          return (
+            <Pressable
+              key={m.id}
+              onPress={() => {
+                hapticLight();
+                onOpen(m);
+              }}
+              style={({ pressed }) => ({
+                position: "absolute",
+                top,
+                height,
+                left: `${(col / cols) * 100}%`,
+                width: `${100 / cols}%`,
+                paddingRight: col === cols - 1 ? 0 : 3,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 8,
+                  borderWidth: StyleSheet.hairlineWidth,
+                  borderColor: c.border,
+                  backgroundColor: matched ? c.primary + "22" : c.secondary,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  overflow: "hidden",
+                }}
+              >
+                <Text
+                  numberOfLines={height > 40 ? 2 : 1}
+                  style={{
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 12,
+                  }}
+                >
+                  {m.subject || t("mtg.noSubject")}
+                </Text>
+                {height > 44 ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontSize: 11,
+                    }}
+                  >
+                    {fmtTime(m.start)} – {fmtTime(m.end)}
+                    {m.joinUrl ? "  ·  " + t("mtg.join") : ""}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Current-time indicator (today only). */}
+      {nowTop !== null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: nowTop,
+            left: GUTTER - 4,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: c.destructive,
+            }}
+          />
+          <View style={{ flex: 1, height: 2, backgroundColor: c.destructive }} />
         </View>
       ) : null}
-      {sorted.map((m, i) => (
-        <React.Fragment key={m.id}>
-          {i === nowIdx ? nowLine : null}
-          <DayMeetingCard
-            m={m}
-            overlaps={overlapping.has(m.id)}
-            onOpen={() => onOpen(m)}
-          />
-        </React.Fragment>
-      ))}
-      {isToday && sorted.length > 0 && nowIdx === -1 ? nowLine : null}
     </View>
   );
 }
@@ -1579,14 +1600,40 @@ export default function MeetingsScreen() {
   const meetings = calendar.data?.meetings ?? [];
 
   const dayMeetings = dayCalendar.data?.meetings ?? [];
+  const allDayMeetings = dayMeetings.filter((m) => m.isAllDay);
   const connected = Boolean(conn.data?.configured && conn.data.connected);
+
+  // When the day view opens or the day's data arrives, land on the 9:00 AM
+  // slot by default — unless a deep link focuses a meeting on this day, in
+  // which case scroll to that meeting instead. Re-runs when the day query
+  // succeeds so the scroll isn't clamped by the short loading-skeleton
+  // content on first open.
+  useEffect(() => {
+    if (view !== "day") return;
+    let y = DAY_DEFAULT_HOUR * HOUR_H;
+    if (focusMeetingId) {
+      const target = dayMeetings.find(
+        (m) => m.id === focusMeetingId && !m.isAllDay,
+      );
+      if (target) {
+        const dayStartMs = startOfDay(selectedDate).getTime();
+        const startMin = Math.max(
+          0,
+          (new Date(target.start).getTime() - dayStartMs) / 60000,
+        );
+        y = Math.max(0, (startMin / 60) * HOUR_H - HOUR_H / 2);
+      }
+    }
+    scrollRef.current?.scrollTo({ y, animated: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, dayWin.start, dayCalendar.isSuccess, focusMeetingId]);
 
   // Subtle fade when the day changes (arrows or swipe).
   const dayFade = useRef(new Animated.Value(1)).current;
   const changeDay = useCallback(
     (d: Date) => {
       setSelectedDate(d);
-      scrollRef.current?.scrollTo({ y: 0, animated: false });
+      scrollRef.current?.scrollTo({ y: DAY_DEFAULT_HOUR * HOUR_H, animated: false });
       dayFade.setValue(0.25);
       Animated.timing(dayFade, {
         toValue: 1,
@@ -1858,18 +1905,57 @@ export default function MeetingsScreen() {
                 onRetry={() => dayCalendar.refetch()}
                 message={t("mtg.error")}
               />
-            ) : dayMeetings.length === 0 ? (
-              <EmptyState
-                icon="calendar"
-                title={t("mtg.empty")}
-                body={t("mtg.emptyDay")}
-              />
             ) : (
-              <DayCards
-                meetings={dayMeetings}
-                date={selectedDate}
-                onOpen={(m) => setDetailMeeting(m)}
-              />
+              <>
+                {allDayMeetings.length > 0 ? (
+                  <View style={{ gap: 6 }}>
+                    <SectionHeading label={t("mtg.allDay")} />
+                    {allDayMeetings.map((m) => (
+                      <Pressable
+                        key={m.id}
+                        onPress={() => {
+                          hapticLight();
+                          setDetailMeeting(m);
+                        }}
+                        style={({ pressed }) => ({
+                          borderRadius: 8,
+                          borderWidth: StyleSheet.hairlineWidth,
+                          borderColor: c.border,
+                          backgroundColor:
+                            m.matches.length > 0 ? c.primary + "22" : c.secondary,
+                          paddingHorizontal: 10,
+                          paddingVertical: 8,
+                          opacity: pressed ? 0.8 : 1,
+                        })}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: c.foreground,
+                            fontFamily: "PlusJakartaSans_600SemiBold",
+                            fontSize: 13,
+                            textAlign: rtl.textAlign,
+                          }}
+                        >
+                          {m.subject || t("mtg.noSubject")}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+                {dayMeetings.length === 0 ? (
+                  <EmptyState
+                    icon="calendar"
+                    title={t("mtg.empty")}
+                    body={t("mtg.emptyDay")}
+                  />
+                ) : null}
+                <DayTimeline
+                  meetings={dayMeetings}
+                  date={selectedDate}
+                  onOpen={(m) => setDetailMeeting(m)}
+                />
+              </>
             )}
           </Animated.View>
         ) : calendar.isLoading ? (
