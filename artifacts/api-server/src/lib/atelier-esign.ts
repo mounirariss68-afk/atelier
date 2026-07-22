@@ -32,7 +32,12 @@ import {
   atelierAuditEvents,
   atelierUsers,
 } from "@workspace/db";
-import { sendEmail, getBrandedFromAddress } from "./email.js";
+import {
+  sendEmail,
+  getBrandedFromAddress,
+  resolveSender,
+  type EmailSender,
+} from "./email.js";
 import {
   createTemplateFromPdf,
   createSubmission,
@@ -163,14 +168,25 @@ async function deliverBrandedInvite(args: {
 }): Promise<"delivered" | "undelivered"> {
   const { row, signer, signingLink } = args;
   let status: "delivered" | "undelivered" = "undelivered";
+  // Task #545 — invites go out as the requesting user when their address
+  // is on a verified sending domain; otherwise branded with Reply-To.
+  const [creator] = await db
+    .select({ email: atelierUsers.email, name: atelierUsers.name })
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.orgId, row.orgId), eq(atelierUsers.id, row.createdBy)));
+  const sender: EmailSender = creator?.email
+    ? { actor: { name: creator.name || row.createdByLabel, email: creator.email } }
+    : "system";
+  const resolved = await resolveSender(sender).catch(() => null);
   // Branded invites must come from a validated Cognirise address — never
-  // the onboarding/dev fallback sender. No valid address = undelivered.
+  // the onboarding/dev fallback sender. No valid address = undelivered,
+  // unless the requester themselves is a verified-domain sender.
   const brandedFrom = await getBrandedFromAddress().catch(() => null);
   if (!signingLink) {
     console.error(
       `[esign-email] no signing link available for signer ${signer.id} on request ${row.id}; invite not sent`,
     );
-  } else if (!brandedFrom) {
+  } else if (!brandedFrom && !resolved?.asActor) {
     console.error(
       `[esign-email] invite to ${signer.email} for ${row.id} NOT sent: no valid branded from-address configured (set RESEND_BRANDED_FROM or RESEND_FROM to a real address) — surface the signing link to the sender`,
     );
@@ -186,7 +202,7 @@ async function deliverBrandedInvite(args: {
         ? `<p>This request expires on ${row.expiresAt.toISOString().slice(0, 10)}.</p>`
         : "";
       const result = await sendEmail({
-        from: brandedFrom,
+        sender,
         to: signer.email,
         subject: `${args.reminder ? "Reminder — signature" : "Signature"} requested: ${row.title}`,
         html:
@@ -609,6 +625,7 @@ async function notifyRequesterOfTerminalStatus(
           ? "Open Agreements in the portal to review and follow up."
           : "Open Agreements in the portal to resend if needed.";
     const result = await sendEmail({
+      sender: "system",
       to: creator.email,
       subject: wording.title,
       html: `<p>Hi ${esc(creator.name || "there")},</p><p>${esc(wording.body)}</p><p>${esc(extra)}</p><p>— The Atelier</p>`,

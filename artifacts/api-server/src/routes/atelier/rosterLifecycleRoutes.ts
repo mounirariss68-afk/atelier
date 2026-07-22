@@ -1340,6 +1340,7 @@ router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
       activationValidity: "72 hours",
       workerType: person.workerType === "employee" ? "employee" : "contractor",
       signInUrl,
+      sender: { actor: { name: me.name, email: me.email } },
     });
 
     // The activation URL is returned once so HR can share it through a

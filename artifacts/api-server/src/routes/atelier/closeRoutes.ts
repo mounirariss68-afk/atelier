@@ -476,7 +476,7 @@ router.post("/collections/drafts/:id/approve-send", async (req, res) => {
   if (!recipient)
     return res.status(400).json({ error: "no_recipient", message: "Invoice bill-to has no contact email. Add one before sending." });
 
-  const sendResult = await sendEmail({ to: recipient, subject: draft.subject, html: `<pre style="font-family:inherit;white-space:pre-wrap">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` });
+  const sendResult = await sendEmail({ sender: { actor: { name: me.name, email: me.email } }, to: recipient, subject: draft.subject, html: `<pre style="font-family:inherit;white-space:pre-wrap">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` });
   const via = sendResult.ok ? sendResult.via : "log-only";
 
   const eventId = rid("dun");

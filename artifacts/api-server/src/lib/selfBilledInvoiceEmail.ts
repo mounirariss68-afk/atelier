@@ -19,7 +19,7 @@
  */
 import { db, atelierSelfBilledInvoices, atelierAuditEvents, type SelfBilledEmailEvent } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { sendEmail } from "./email";
+import { sendEmail, type EmailSender } from "./email";
 import { renderSelfBilledInvoicePdfBuffer } from "./selfBilledInvoicePdf";
 import { logger } from "./logger";
 
@@ -69,6 +69,7 @@ function remittanceHtml(inv: SelfBilledInvoice): { subject: string; html: string
 export async function notifySupplierOfInvoice(
   invoiceId: string,
   kind: "approval" | "remittance",
+  sender: EmailSender,
 ): Promise<SelfBilledEmailEvent | null> {
   try {
     const [inv] = await db
@@ -85,6 +86,7 @@ export async function notifySupplierOfInvoice(
       const { subject, html } = kind === "approval" ? approvalHtml(inv) : remittanceHtml(inv);
       const pdf = await renderSelfBilledInvoicePdfBuffer(inv);
       const result = await sendEmail({
+        sender,
         to,
         subject,
         html,

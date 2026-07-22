@@ -710,6 +710,7 @@ router.post("/wallet/invoices/:id/send", async (req, res) => {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const pdf = await renderClientInvoicePdfBuffer(loaded.args);
   const result = await sendEmail({
+    sender: { actor: { name: me.name, email: me.email } },
     to,
     subject: `Invoice ${inv.invoiceNumber} from Cognirise`,
     html: `

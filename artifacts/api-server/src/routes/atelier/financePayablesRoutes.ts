@@ -285,7 +285,9 @@ router.post("/finance/payables/self-billing/:id/approve", async (req, res, next)
     });
     // Notify the supplier with the invoice PDF attached. Never blocks
     // the approval — the outcome is recorded on the invoice row.
-    const email = await notifySupplierOfInvoice(inv.id, "approval");
+    const email = await notifySupplierOfInvoice(inv.id, "approval", {
+      actor: { name: me.name, email: me.email },
+    });
     res.json({ ok: true, email });
   } catch (err) { next(err); }
 });
@@ -737,7 +739,11 @@ router.post("/finance/payables/payment-runs/:id/mark-paid", async (req, res, nex
     // per invoice). Sequential — runs are small; failures never block.
     const emails = [];
     for (const invId of paidInvoiceIds) {
-      emails.push(await notifySupplierOfInvoice(invId, "remittance"));
+      emails.push(
+        await notifySupplierOfInvoice(invId, "remittance", {
+          actor: { name: me.name, email: me.email },
+        }),
+      );
     }
     res.json({ ok: true, itemsPaid: items.length, emails });
   } catch (err) { next(err); }

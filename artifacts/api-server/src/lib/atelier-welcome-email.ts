@@ -1,4 +1,4 @@
-import { sendEmail } from "./email";
+import { sendEmail, type EmailSender } from "./email";
 import { logger } from "./logger";
 
 export type WelcomeEmailStatus = "sent" | "failed" | "not_configured";
@@ -24,6 +24,8 @@ export interface WelcomeEmailArgs {
   workerType: "employee" | "contractor";
   /** Absolute origin of the portal (from the request Origin header), if known. */
   signInUrl?: string | null;
+  /** Task #545 — who is sending: the onboarding HR user, or "system". */
+  sender: EmailSender;
 }
 
 export function buildWelcomeEmailHtml(args: WelcomeEmailArgs): string {
@@ -83,6 +85,7 @@ export async function sendJoinerWelcomeEmail(
 ): Promise<WelcomeEmailStatus> {
   try {
     const result = await sendEmail({
+      sender: args.sender,
       to: args.email,
       subject: "Welcome to Cognirise — your Atelier login details",
       html: buildWelcomeEmailHtml(args),

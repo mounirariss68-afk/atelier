@@ -338,6 +338,7 @@ router.post("/roster/joiners", async (req, res, next) => {
       tempPassword,
       workerType,
       signInUrl,
+      sender: { actor: { name: me.name, email: me.email } },
     });
     try {
       await db.insert(atelierAuditEvents).values({

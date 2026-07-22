@@ -3422,6 +3422,7 @@ export async function runPriceScrape(
           <p>Investigate selectors / category drift in <code>artifacts/api-server/src/lib/scraper.ts</code>.</p>
         `;
         sendEmail({
+          sender: "system",
           to: alertEmail,
           subject: `[Cognirise] ${summary}`,
           html,
