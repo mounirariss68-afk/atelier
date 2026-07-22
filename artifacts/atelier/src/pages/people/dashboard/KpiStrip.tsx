@@ -47,38 +47,6 @@ export function KpiStrip() {
       noData: true,
     },
     {
-      id: "voluntary-attrition",
-      eyebrow: "Voluntary attrition",
-      value: "—",
-      caption: "No attrition history captured yet",
-      href: "/people/retain",
-      noData: true,
-    },
-    {
-      id: "flight-risk",
-      eyebrow: "Flight-risk watch",
-      value: "—",
-      caption: "No flight-risk records yet",
-      href: "/people/retain/flight-risk",
-      noData: true,
-    },
-    {
-      id: "enps",
-      eyebrow: "Engagement (eNPS)",
-      value: "—",
-      caption: "No engagement surveys run yet",
-      href: "/people/retain/engagement",
-      noData: true,
-    },
-    {
-      id: "mobility",
-      eyebrow: "Internal mobility",
-      value: "—",
-      caption: "No internal moves recorded yet",
-      href: "/people/retain/mobility",
-      noData: true,
-    },
-    {
       id: "perf-health",
       eyebrow: "Performance health",
       value: "—",
@@ -99,7 +67,7 @@ export function KpiStrip() {
       eyebrow: "Comp · pay-equity",
       value: "—",
       caption: "No comp-review records yet",
-      href: "/people/reward/review",
+      href: "/people/reward",
       noData: true,
     },
   ];
@@ -117,7 +85,7 @@ export function KpiStrip() {
           Headcount reads live from the roster · other metrics await real HR data
         </span>
       </div>
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 2xl:grid-cols-9">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 2xl:grid-cols-5">
         {kpis.map((k) => (
           <Link key={k.id} href={k.href} data-testid={`kpi-${k.id}`}>
             <Card hover className="p-3 cursor-pointer h-full flex flex-col justify-between min-h-[112px]">

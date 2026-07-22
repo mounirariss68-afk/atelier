@@ -2,6 +2,10 @@ import * as React from "react";
 import { useAtelierUpdateRosterPerson } from "@workspace/api-client-react";
 import type { AtelierRosterPersonEdit } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
+// Task #509 (T4) — shared country picker + titles registry + legal-entity register.
+import { CountryCombobox } from "@/components/CountryCombobox";
+import { countryCode, countryName } from "@/lib/countries";
+import { useRosterTitles, FALLBACK_SENIORITIES } from "@/lib/rosterTitles";
 
 /**
  * Task #199 — full "Edit person" form on the roster person page.
@@ -40,6 +44,11 @@ export interface EditablePerson {
   gender?: string | null;
   cellPhones?: Array<{ country: string; number: string }> | null;
   officeAddress?: string | null;
+  payrollCountry?: string | null;
+  iban?: string | null;
+  swift?: string | null;
+  dayRateAmount?: number | null;
+  dayRateCurrency?: string | null;
 }
 
 type Draft = {
@@ -67,14 +76,12 @@ type Draft = {
   officeAddress: string;
 };
 
-const SENIORITIES = [
-  "analyst",
-  "consultant",
-  "senior_consultant",
-  "manager",
-  "principal",
-  "partner",
-];
+interface LegalEntityRow {
+  name: string;
+  jurisdiction?: string | null;
+  officeAddress?: string | null;
+  country?: string | null;
+}
 
 function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
   return {
@@ -107,11 +114,13 @@ function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
 export function EditPersonForm({
   person,
   viewerCanEditTitle,
+  viewerCanSeeComp = false,
   onSaved,
   onClose,
 }: {
   person: EditablePerson;
   viewerCanEditTitle: boolean;
+  viewerCanSeeComp?: boolean;
   onSaved: (updated: Record<string, unknown>) => void;
   onClose: () => void;
 }) {
@@ -124,9 +133,19 @@ export function EditPersonForm({
   const [personalEmail0, setPersonalEmail0] = React.useState<string | null>(null);
   const [personalLoaded, setPersonalLoaded] = React.useState(isPfr);
   const [firms, setFirms] = React.useState<Array<{ id: string; name: string }>>([]);
+  const [legalEntities, setLegalEntities] = React.useState<LegalEntityRow[]>([]);
   const [draft, setDraft] = React.useState<Draft>(() => draftFrom(person, null));
   const [error, setError] = React.useState<string | null>(null);
   const mutation = useAtelierUpdateRosterPerson();
+  // Task #509 (T4) — seniority options from the titles registry; when the
+  // registry is empty we fall back to the legacy hardcoded ladder.
+  const { titles } = useRosterTitles();
+  const seniorityOptions = React.useMemo(() => {
+    const fromTitles = Array.from(new Set(titles.map((t) => t.seniority).filter(Boolean)));
+    const opts = fromTitles.length > 0 ? fromTitles : FALLBACK_SENIORITIES;
+    if (draft.seniority && !opts.includes(draft.seniority)) return [draft.seniority, ...opts];
+    return opts;
+  }, [titles, draft.seniority]);
 
   React.useEffect(() => {
     let alive = true;
@@ -146,6 +165,24 @@ export function EditPersonForm({
       fetch(`/api/atelier/roster/partner-firms`, { credentials: "include" })
         .then((r) => (r.ok ? r.json() : { firms: [] }))
         .then((d) => alive && setFirms(d.firms ?? []))
+        .catch(() => undefined);
+    }
+    if (isEmployee) {
+      // Task #509 (T4) — employing-entity picker sourced from the firm's
+      // legal-entity register (carries office address + country per entity).
+      fetch(`/api/atelier/firm-profile`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!alive || !d) return;
+          // Firm-profile wire shape is { published, latestDraft, canPublish };
+          // the register lives under <version>.payload.legalEntities.
+          const payload =
+            (d?.published?.payload as Record<string, unknown> | undefined) ??
+            (d?.latestDraft?.payload as Record<string, unknown> | undefined) ??
+            {};
+          const entities = (payload.legalEntities ?? []) as LegalEntityRow[];
+          setLegalEntities(entities);
+        })
         .catch(() => undefined);
     }
     return () => {
@@ -305,8 +342,9 @@ export function EditPersonForm({
             <FieldWrap label="Seniority">
               <select className={input} value={draft.seniority}
                 onChange={(e) => set({ seniority: e.target.value })} data-testid="edit-seniority">
-                {SENIORITIES.map((s) => (
-                  <option key={s} value={s}>{s.replace("_", " ")}</option>
+                <option value="">—</option>
+                {seniorityOptions.map((s) => (
+                  <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
                 ))}
               </select>
             </FieldWrap>
@@ -350,9 +388,36 @@ export function EditPersonForm({
                 </select>
               </FieldWrap>
               <FieldWrap label="Employing entity">
-                <input className={input} value={draft.employingEntity} maxLength={120}
-                  placeholder="DIFC / ADGM / KSA / Other"
-                  onChange={(e) => set({ employingEntity: e.target.value })} data-testid="edit-employingentity" />
+                {legalEntities.length > 0 ? (
+                  <select className={input} value={draft.employingEntity} data-testid="edit-employingentity"
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      const ent = legalEntities.find((le) => le.name === name);
+                      const patch: Partial<Draft> = { employingEntity: name };
+                      // Autofill office address + country from the register;
+                      // both remain editable below (country is overridable).
+                      if (ent?.officeAddress && !draft.officeAddress.trim()) patch.officeAddress = ent.officeAddress;
+                      if (ent?.country) {
+                        const iso = countryCode(ent.country) ?? ent.country;
+                        if (!draft.country.trim()) patch.country = iso;
+                      }
+                      set(patch);
+                    }}>
+                    <option value="">—</option>
+                    {legalEntities.some((le) => le.name === draft.employingEntity) || !draft.employingEntity ? null : (
+                      <option value={draft.employingEntity}>{draft.employingEntity}</option>
+                    )}
+                    {legalEntities.map((le) => (
+                      <option key={le.name} value={le.name}>
+                        {le.name}{le.jurisdiction ? ` (${le.jurisdiction})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input className={input} value={draft.employingEntity} maxLength={120}
+                    placeholder="DIFC / ADGM / KSA / Other"
+                    onChange={(e) => set({ employingEntity: e.target.value })} data-testid="edit-employingentity" />
+                )}
               </FieldWrap>
               <FieldWrap label="Home office">
                 <input className={input} value={draft.homeOffice} maxLength={120}
@@ -442,17 +507,54 @@ export function EditPersonForm({
         </section>
       )}
 
+      {/* Compensation & banking — mirrors the profile card for comp-cleared
+          viewers. These fields are deliberately read-only here: bank details
+          change only via the HR-approved bank-change flow, and pay data via
+          the finance flows. */}
+      {viewerCanSeeComp && (
+        <section className="space-y-2" data-testid="edit-comp-section">
+          <div className={label}>Compensation &amp; banking (read-only)</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FieldWrap label="Payroll country">
+              <input className={input} value={countryName(person.payrollCountry) ?? person.payrollCountry ?? ""} disabled readOnly data-testid="edit-payrollcountry-ro" />
+            </FieldWrap>
+            <FieldWrap label="Day rate">
+              <input
+                className={input}
+                value={
+                  person.dayRateAmount != null
+                    ? `${(person.dayRateAmount / 100).toLocaleString()} ${person.dayRateCurrency ?? ""}`
+                    : ""
+                }
+                disabled readOnly data-testid="edit-dayrate-ro"
+              />
+            </FieldWrap>
+            <FieldWrap label="IBAN">
+              <input className={input} value={person.iban ?? ""} disabled readOnly data-testid="edit-iban-ro" />
+            </FieldWrap>
+            <FieldWrap label="SWIFT">
+              <input className={input} value={person.swift ?? ""} disabled readOnly data-testid="edit-swift-ro" />
+            </FieldWrap>
+          </div>
+          <p className="text-[11px] text-text-faint">
+            Bank details change via the HR-approved bank-change flow; pay data
+            via Finance. This keeps a single audited write path for money
+            fields.
+          </p>
+        </section>
+      )}
+
       {/* Demographics */}
       <section className="space-y-2">
         <div className={label}>Demographics &amp; location</div>
         <div className="grid gap-3 md:grid-cols-3">
           <FieldWrap label="Country (location)">
-            <input className={input} value={draft.country} maxLength={120}
-              onChange={(e) => set({ country: e.target.value })} data-testid="edit-country" />
+            <CountryCombobox value={draft.country} allowClear testIdPrefix="edit-country"
+              onChange={(iso) => set({ country: iso })} />
           </FieldWrap>
-          <FieldWrap label="Nationality (ISO α-2)">
-            <input className={input} value={draft.nationality} maxLength={2} placeholder="EG"
-              onChange={(e) => set({ nationality: e.target.value.toUpperCase() })} data-testid="edit-nationality" />
+          <FieldWrap label="Nationality">
+            <CountryCombobox value={draft.nationality} allowClear testIdPrefix="edit-nationality"
+              onChange={(iso) => set({ nationality: iso })} />
           </FieldWrap>
           <FieldWrap label="Gender (self-identified)">
             <select className={input} value={draft.gender}

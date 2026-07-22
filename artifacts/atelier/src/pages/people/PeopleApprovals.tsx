@@ -2,11 +2,10 @@ import * as React from "react";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
-import { usePeopleApprovals, type PeopleApprovalRow } from "./peopleSeed";
 
 interface UnifiedApproval {
   id: string;
-  source: "people" | "timesheet";
+  source: "timesheet";
   kind: string;
   subject: string;
   requester: string;
@@ -14,10 +13,6 @@ interface UnifiedApproval {
   submittedOn: string;
   status: "pending" | "approved" | "rejected";
   amount: string | null;
-}
-
-function toUnified(r: PeopleApprovalRow): UnifiedApproval {
-  return { ...r, source: "people" };
 }
 
 interface TimesheetApprovalRow {
@@ -32,16 +27,13 @@ interface TimesheetApprovalRow {
 }
 
 /**
- * People approvals inbox — merges the people-shaped approvals (promotions,
- * comp changes, hire offers, exits, leaves, policy exceptions) with the
- * existing timesheet approvals coming from
- * `/api/atelier/ledger/approvals?stage=submitted`.
+ * People approvals inbox — leave requests, entitlements and the timesheet
+ * approvals coming from `/api/atelier/ledger/approvals?stage=submitted`.
  *
  * The inbox preserves the existing badge semantics for timesheet rows
- * (submitted = pending) while presenting one unified table.
+ * (submitted = pending).
  */
 export default function PeopleApprovals() {
-  const peopleRows = usePeopleApprovals();
   const [tsRows, setTsRows] = React.useState<TimesheetApprovalRow[]>([]);
   const [tsErr, setTsErr] = React.useState(false);
 
@@ -73,9 +65,8 @@ export default function PeopleApprovals() {
       status: (r.status === "submitted" ? "pending" : (r.status as UnifiedApproval["status"])) ?? "pending",
       amount: typeof r.totalHours === "number" ? `${r.totalHours.toFixed(1)}h` : null,
     }));
-    const ppl = peopleRows.map(toUnified);
-    return [...ts, ...ppl].sort((a, b) => (a.submittedOn < b.submittedOn ? 1 : -1));
-  }, [peopleRows, tsRows]);
+    return [...ts].sort((a, b) => (a.submittedOn < b.submittedOn ? 1 : -1));
+  }, [tsRows]);
 
   const pendingCount = merged.filter((r) => r.status === "pending").length;
 
@@ -83,7 +74,7 @@ export default function PeopleApprovals() {
     <PeopleShell module="approvals">
       <LensPageHeader
         headline="People approvals inbox"
-        lede="Promotions, comp changes, hire offers, exits, leaves, policy exceptions and timesheet approvals — one inbox."
+        lede="Leave requests, entitlements and timesheet approvals — one inbox."
         actions={
           <div className="flex items-center gap-2 text-xs text-text-mute">
             <MonoChip tone={pendingCount > 0 ? "gold" : "default"}>{pendingCount} pending</MonoChip>

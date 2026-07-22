@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useRoute, Link } from "wouter";
+import { useRoute } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierListTrainingMaterials,
@@ -17,18 +17,11 @@ import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
-import {
-  useLearningCatalogue, useMyLearning, useMentoringPairs, useSkillGaps,
-} from "./peopleSeed";
 import { useEmployeeOptions } from "./useEmployeeOptions";
 
 const SUBS = [
   { id: "library",       label: "Training library" },
-  { id: "catalogue",     label: "Learning catalogue" },
-  { id: "my-learning",   label: "My learning" },
   { id: "certifications", label: "Certifications" },
-  { id: "mentoring",     label: "Mentoring" },
-  { id: "skill-gaps",    label: "Skill gaps" },
 ];
 
 export default function PeopleDevelop() {
@@ -38,8 +31,8 @@ export default function PeopleDevelop() {
   return (
     <PeopleShell stage="develop">
       <LensPageHeader
-        headline="Learning, certifications, mentoring, skill gaps"
-        lede="Where the firm grows the people it has. Skill-gap views read directly from the Skill Graph."
+        headline="Training library and certifications"
+        lede="Where the firm grows the people it has — HR-managed training materials and the certifications on file."
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
@@ -51,11 +44,7 @@ export default function PeopleDevelop() {
         </TabNav>
         <div className="mt-4">
           {section === "library" && <TrainingLibraryView />}
-          {section === "catalogue" && <CatalogueView />}
-          {section === "my-learning" && <MyLearningView />}
           {section === "certifications" && <CertificationsView />}
-          {section === "mentoring" && <MentoringView />}
-          {section === "skill-gaps" && <SkillGapsView />}
         </div>
       </div>
     </PeopleShell>
@@ -297,60 +286,6 @@ function NewMaterialForm({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-function CatalogueView() {
-  const rows = useLearningCatalogue();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No catalogue courses yet. External course records will appear here once they are added." />;
-  }
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {rows.map((c) => (
-        <Card key={c.id} className="p-4 space-y-2">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="font-medium text-text">{c.title}</div>
-              <div className="text-xs text-text-faint">{c.provider} · {c.durationHours}h · {c.format}</div>
-            </div>
-            <MonoChip tone={c.level === "advanced" ? "gold" : c.level === "core" ? "green" : "default"}>{c.level}</MonoChip>
-          </div>
-          <div className="flex gap-1 flex-wrap">
-            {c.skillTagIds.map((s) => <MonoChip key={s}>{s}</MonoChip>)}
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function MyLearningView() {
-  const rows = useMyLearning();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No learning enrolments yet. Assign training from the Training library to see progress here." />;
-  }
-  return (
-    <div className="space-y-2">
-      {rows.map((r) => (
-        <Card key={r.id} className="p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              <div className="text-text">{r.courseTitle}</div>
-              <div className="text-xs text-text-faint">
-                {r.status === "completed" ? `completed ${r.completedAt}` : r.dueDate ? `due ${r.dueDate}` : "—"}
-              </div>
-            </div>
-            <div className="w-32 h-2 bg-border rounded overflow-hidden">
-              <div className="h-full bg-gold" style={{ width: `${r.progressPct}%` }} />
-            </div>
-            <MonoChip tone={r.status === "completed" ? "green" : r.status === "in-progress" ? "gold" : "default"}>
-              {r.status}
-            </MonoChip>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 function CertificationsView() {
   const qc = useQueryClient();
   const { data: rows, isLoading, error } = useAtelierListCertifications();
@@ -474,53 +409,3 @@ function NewCertificationForm({
   );
 }
 
-function MentoringView() {
-  const rows = useMentoringPairs();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No mentoring pairings recorded yet." />;
-  }
-  return (
-    <div className="grid gap-3 md:grid-cols-2">
-      {rows.map((p) => (
-        <Card key={p.id} className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-text">{p.mentor} → {p.mentee}</div>
-              <div className="text-xs text-text-faint">started {p.startedOn}</div>
-            </div>
-            <MonoChip>{p.cadence}</MonoChip>
-          </div>
-          <div className="mt-2 text-sm text-text-mute">Focus: {p.focus}</div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function SkillGapsView() {
-  const rows = useSkillGaps();
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-text-mute">
-        Reads from the firm Skill Graph. <Link href="/people/skills" className="text-gold hover:underline">Open Skill graph →</Link>
-      </p>
-      {rows.length === 0 && (
-        <PeopleEmptyState message="No skill-gap analysis yet. Gaps appear once demand roles and the Skill Graph carry enough data." />
-      )}
-      {rows.map((g) => (
-        <Card key={g.id} className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-text font-medium">{g.skill}</div>
-              <div className="text-xs text-text-faint">demand {g.demandRoles} · supply {g.internalSupply}</div>
-            </div>
-            <MonoChip tone={g.gap >= 4 ? "red" : g.gap >= 2 ? "amber" : "default"}>gap {g.gap}</MonoChip>
-          </div>
-          {g.topCandidates.length > 0 && (
-            <div className="mt-2 text-xs text-text-mute">Top internal candidates: {g.topCandidates.join(", ")}</div>
-          )}
-        </Card>
-      ))}
-    </div>
-  );
-}

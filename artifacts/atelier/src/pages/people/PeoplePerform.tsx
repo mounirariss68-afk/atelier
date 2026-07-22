@@ -20,30 +20,24 @@ import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
-import { useCalibrationCohorts, useSuccession } from "./peopleSeed";
-import { useCanSeeSuccession } from "./peoplePerms";
 import { useEmployeeOptions } from "./useEmployeeOptions";
 
-const BASE_SUBS = [
+const SUBS = [
   { id: "goals",       label: "Goals" },
   { id: "check-ins",   label: "Check-ins" },
   { id: "reviews",     label: "Reviews" },
   { id: "releases",    label: "Releases" },
-  { id: "calibration", label: "Calibration" },
 ];
-const SUCCESSION_SUB = { id: "succession",  label: "Succession" };
 
 export default function PeoplePerform() {
   const [, params] = useRoute("/people/perform/:section");
   const section = params?.section ?? "goals";
-  const { allowed: canSeeSuccession } = useCanSeeSuccession();
-  const SUBS = canSeeSuccession ? [...BASE_SUBS, SUCCESSION_SUB] : BASE_SUBS;
 
   return (
     <PeopleShell stage="perform">
       <LensPageHeader
-        headline="Goals, check-ins, reviews, calibration, succession"
-        lede="The performance loop end-to-end — from goals set at the start of the cycle to calibrated ratings and succession depth at the end."
+        headline="Goals, check-ins, reviews"
+        lede="The performance loop end-to-end — from goals set at the start of the cycle through check-ins to released reviews."
       />
       <div className="container-atelier py-6 space-y-6">
         <Card className="p-4 flex flex-wrap items-center gap-3" data-testid="perform-composition-entry">
@@ -74,13 +68,6 @@ export default function PeoplePerform() {
           {section === "check-ins" && <CheckInsView />}
           {section === "reviews" && <ReviewsView />}
           {section === "releases" && <ReleasesView />}
-          {section === "calibration" && <CalibrationView />}
-          {section === "succession" && (canSeeSuccession ? <SuccessionView /> : (
-            <Card className="p-6 text-sm text-text-mute" data-testid="people-succession-restricted">
-              <MonoChip tone="amber">Restricted</MonoChip>
-              <div className="mt-2">Succession slates are visible to Partner and People-Ops Admin personas only.</div>
-            </Card>
-          ))}
         </div>
       </div>
     </PeopleShell>
@@ -213,7 +200,10 @@ function NewCheckInForm({
         </select>
         <input className={inputCls} type="date" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} data-testid="check-in-date" />
       </div>
-      <input className={inputCls} placeholder="Run by (manager / partner name)" value={managerName} onChange={(e) => setManagerName(e.target.value)} />
+      <select className={inputCls} value={managerName} onChange={(e) => setManagerName(e.target.value)} data-testid="check-in-manager">
+        <option value="">Run by (manager / partner)…</option>
+        {employees.map((e) => <option key={e.id} value={e.fullName}>{e.fullName}</option>)}
+      </select>
       <textarea className={inputCls} rows={2} placeholder="Topics / notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
       <button
         className={btnCls}
@@ -503,70 +493,3 @@ function NewGoalForm({
   );
 }
 
-function CalibrationView() {
-  const rows = useCalibrationCohorts();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No calibration cohorts yet. Cohorts form once a review cycle is underway." />;
-  }
-  return (
-    <Card className="p-4">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-text-mute font-mono uppercase">
-          <tr><th className="text-left py-2">Cohort</th><th>Pop.</th><th>Exceeds</th><th>Meets</th><th>Developing</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id} className="border-t border-border-soft">
-              <td className="py-2 text-text">{c.cohort}</td>
-              <td className="text-center">{c.population}</td>
-              <td className="text-center"><MonoChip tone="gold">{c.proposedExceeds}</MonoChip></td>
-              <td className="text-center"><MonoChip tone="green">{c.proposedMeets}</MonoChip></td>
-              <td className="text-center"><MonoChip tone="amber">{c.proposedDeveloping}</MonoChip></td>
-              <td className="text-center">
-                <MonoChip tone={c.status === "locked" ? "green" : c.status === "in-review" ? "gold" : "default"}>{c.status}</MonoChip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-function SuccessionView() {
-  const rows = useSuccession();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No succession slates yet." />;
-  }
-  return (
-    <div className="space-y-3">
-      {rows.map((s) => (
-        <Card key={s.id} className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-text font-medium">{s.role}</div>
-              <div className="text-xs text-text-faint">incumbent · {s.incumbent}</div>
-            </div>
-            <MonoChip tone={s.riskFlag === "low" ? "green" : s.riskFlag === "medium" ? "amber" : "red"}>
-              risk · {s.riskFlag}
-            </MonoChip>
-          </div>
-          <div className="grid gap-2 md:grid-cols-3 mt-3 text-sm">
-            <div>
-              <div className="text-xs font-mono uppercase text-text-faint">Ready now</div>
-              <div className="text-text mt-1">{s.readyNow.join(", ") || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs font-mono uppercase text-text-faint">1 year</div>
-              <div className="text-text mt-1">{s.readyOneYear.join(", ") || "—"}</div>
-            </div>
-            <div>
-              <div className="text-xs font-mono uppercase text-text-faint">2-3 years</div>
-              <div className="text-text mt-1">{s.readyTwoToThreeYears.join(", ") || "—"}</div>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}

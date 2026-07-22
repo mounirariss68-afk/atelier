@@ -36,7 +36,8 @@ const OFFERING_ANCHORS = [
   "ai_product",
 ];
 
-type Tab = "countries" | "industries" | "sub_industries";
+type Tab = "countries" | "industries" | "sub_industries" | "titles";
+const WORKER_TYPES = ["employee", "contractor", "partner_firm_resource"] as const;
 
 export default function ReferenceData() {
   const { data: me, isLoading: meLoading } = useAtelierGetMe();
@@ -71,7 +72,7 @@ export default function ReferenceData() {
           lede="Canonical countries and industries used everywhere in the portal. Edits are versioned and audit-logged; deprecate instead of delete to preserve historical references."
         />
         <div className="flex items-center gap-2 mt-4">
-          {(["countries", "industries", "sub_industries"] as Tab[]).map((t) => (
+          {(["countries", "industries", "sub_industries", "titles"] as Tab[]).map((t) => (
             <button
               key={t}
               type="button"
@@ -93,6 +94,7 @@ export default function ReferenceData() {
         {tab === "countries" && <CountriesPanel />}
         {tab === "industries" && <IndustriesPanel />}
         {tab === "sub_industries" && <SubIndustriesPanel />}
+        {tab === "titles" && <TitlesPanel />}
       </div>
     </div>
   );
@@ -857,6 +859,269 @@ function SubIndustryEditRow({
         <PillButton variant="ghost" onClick={onCancel}>
           Cancel
         </PillButton>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================
+// Task #509 (T4) — Titles registry (title → canonical seniority).
+// Roster endpoints are raw fetch (not codegen). Writes gated to
+// founding_partner / hr on the server.
+// =============================================================
+interface TitleRow {
+  id: string;
+  title: string;
+  seniority: string;
+  rank: number;
+  workerTypes: string[];
+  status: "active" | "deprecated";
+  notes: string | null;
+}
+
+async function deleteJson(url: string): Promise<Response> {
+  return fetch(url, { method: "DELETE", credentials: "include" });
+}
+
+function TitlesPanel() {
+  const { toast } = useToast();
+  const [rows, setRows] = React.useState<TitleRow[] | null>(null);
+  const [showDeprecated, setShowDeprecated] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const blank = { title: "", seniority: "", rank: "0", notes: "", workerTypes: [] as string[] };
+  const [form, setForm] = React.useState(blank);
+
+  const load = React.useCallback(() => {
+    fetch(`/api/atelier/roster/titles?status=all`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { titles: [] }))
+      .then((d) => setRows(d.titles ?? []))
+      .catch(() => setRows([]));
+  }, []);
+  React.useEffect(() => load(), [load]);
+
+  const list = React.useMemo(() => {
+    if (!rows) return [] as TitleRow[];
+    return showDeprecated ? rows : rows.filter((t) => t.status === "active");
+  }, [rows, showDeprecated]);
+
+  async function create() {
+    if (!form.title.trim() || !form.seniority.trim()) {
+      toast({ title: "Title and seniority are required", variant: "destructive" });
+      return;
+    }
+    const res = await postJson(`/api/atelier/roster/titles`, {
+      title: form.title.trim(),
+      seniority: form.seniority.trim(),
+      rank: Number(form.rank) || 0,
+      workerTypes: form.workerTypes,
+      notes: form.notes.trim() || null,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Create failed", description: err.error ?? res.statusText, variant: "destructive" });
+      return;
+    }
+    setAdding(false);
+    setForm(blank);
+    load();
+    toast({ title: "Title added" });
+  }
+
+  async function applyPatch(id: string, body: Record<string, unknown>) {
+    const res = await patchJson(`/api/atelier/roster/titles/${id}`, body);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Update failed", description: err.error ?? res.statusText, variant: "destructive" });
+      return false;
+    }
+    load();
+    return true;
+  }
+
+  async function remove(id: string) {
+    const res = await deleteJson(`/api/atelier/roster/titles/${id}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Delete failed", description: err.error ?? res.statusText, variant: "destructive" });
+      return;
+    }
+    load();
+    toast({ title: "Title removed" });
+  }
+
+  function toggleWorkerType(wt: string) {
+    setForm((f) => ({
+      ...f,
+      workerTypes: f.workerTypes.includes(wt)
+        ? f.workerTypes.filter((x) => x !== wt)
+        : [...f.workerTypes, wt],
+    }));
+  }
+
+  if (rows === null) return <Skeleton className="h-64 bg-bg-elevate" />;
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono uppercase tracking-widest text-text-faint">
+        <label className="inline-flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={showDeprecated} onChange={(e) => setShowDeprecated(e.target.checked)} />
+          Show deprecated
+        </label>
+        <span className="text-text-mute">{list.length} title{list.length === 1 ? "" : "s"}</span>
+        <PillButton
+          variant={adding ? "ghost" : "primary"}
+          onClick={() => setAdding((v) => !v)}
+          className="ml-auto"
+          data-testid="title-add-toggle"
+        >
+          {adding ? "Cancel" : "Add title"}
+        </PillButton>
+      </div>
+
+      {adding && (
+        <Card className="p-4 grid gap-2 grid-cols-2">
+          <Input placeholder="Title (e.g. Senior Consultant)" value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })} data-testid="title-input" />
+          <Input placeholder="Seniority (e.g. senior_consultant)" value={form.seniority}
+            onChange={(e) => setForm({ ...form, seniority: e.target.value })} data-testid="seniority-input" />
+          <Input placeholder="Rank (higher = more senior)" value={form.rank}
+            onChange={(e) => setForm({ ...form, rank: e.target.value })} />
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-text-mute">
+            {WORKER_TYPES.map((wt) => (
+              <label key={wt} className="inline-flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" checked={form.workerTypes.includes(wt)} onChange={() => toggleWorkerType(wt)} />
+                {wt}
+              </label>
+            ))}
+          </div>
+          <Input placeholder="Notes (optional)" value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })} className="col-span-2" />
+          <PillButton variant="primary" onClick={create} className="col-span-2" data-testid="title-create">
+            Create title
+          </PillButton>
+        </Card>
+      )}
+
+      <Card className="overflow-hidden">
+        <div className="grid grid-cols-[1fr_160px_60px_1fr_200px] gap-2 px-3 py-2 text-[10px] font-mono uppercase tracking-widest text-text-faint border-b border-border">
+          <span>Title</span>
+          <span>Seniority</span>
+          <span>Rank</span>
+          <span>Worker types</span>
+          <span>Actions</span>
+        </div>
+        {list.map((t) => (
+          <React.Fragment key={t.id}>
+            <div
+              className="grid grid-cols-[1fr_160px_60px_1fr_200px] gap-2 px-3 py-2 text-xs border-b border-border-soft items-center"
+              data-testid={`title-row-${t.id}`}
+            >
+              <span className="text-text">{t.title}</span>
+              <span className="font-mono text-gold">{t.seniority}</span>
+              <span className="text-text-mute">{t.rank}</span>
+              <span className="flex flex-wrap gap-1">
+                {t.workerTypes.length === 0 ? (
+                  <span className="text-text-faint">all</span>
+                ) : (
+                  t.workerTypes.map((w) => <MonoChip key={w}>{w.replace(/_/g, " ")}</MonoChip>)
+                )}
+              </span>
+              <span className="flex items-center gap-3">
+                <MonoChip tone={t.status === "active" ? "green" : "amber"}>{t.status}</MonoChip>
+                <button type="button"
+                  onClick={() => setEditingId((p) => (p === t.id ? null : t.id))}
+                  className="text-text-mute hover:text-gold underline text-[10px]"
+                  data-testid={`edit-title-${t.id}`}>
+                  {editingId === t.id ? "Close" : "Edit"}
+                </button>
+                <button type="button"
+                  onClick={() => applyPatch(t.id, { status: t.status === "active" ? "deprecated" : "active" })}
+                  className="text-text-mute hover:text-gold underline text-[10px]"
+                  data-testid={`toggle-title-${t.id}`}>
+                  {t.status === "active" ? "Deprecate" : "Restore"}
+                </button>
+                <button type="button"
+                  onClick={() => remove(t.id)}
+                  className="text-text-mute hover:text-warn underline text-[10px]"
+                  data-testid={`delete-title-${t.id}`}>
+                  Delete
+                </button>
+              </span>
+            </div>
+            {editingId === t.id && (
+              <TitleEditRow
+                row={t}
+                onCancel={() => setEditingId(null)}
+                onSave={async (body) => {
+                  const ok = await applyPatch(t.id, body);
+                  if (ok) setEditingId(null);
+                }}
+              />
+            )}
+          </React.Fragment>
+        ))}
+        {list.length === 0 && (
+          <div className="p-6 text-center text-text-mute text-sm">
+            No titles defined yet. Dropdowns fall back to the legacy seniority ladder until you add some.
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function TitleEditRow({
+  row,
+  onSave,
+  onCancel,
+}: {
+  row: TitleRow;
+  onSave: (body: Record<string, unknown>) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = React.useState({
+    title: row.title,
+    seniority: row.seniority,
+    rank: String(row.rank),
+    notes: row.notes ?? "",
+    workerTypes: [...row.workerTypes],
+  });
+  function toggle(wt: string) {
+    setForm((f) => ({
+      ...f,
+      workerTypes: f.workerTypes.includes(wt)
+        ? f.workerTypes.filter((x) => x !== wt)
+        : [...f.workerTypes, wt],
+    }));
+  }
+  return (
+    <div className="px-3 py-3 bg-bg-elevate/40 border-b border-border-soft grid grid-cols-2 gap-2 text-xs">
+      <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Title" />
+      <Input value={form.seniority} onChange={(e) => setForm({ ...form, seniority: e.target.value })} placeholder="Seniority" />
+      <Input value={form.rank} onChange={(e) => setForm({ ...form, rank: e.target.value })} placeholder="Rank" />
+      <div className="flex flex-wrap items-center gap-3 text-[11px] text-text-mute">
+        {WORKER_TYPES.map((wt) => (
+          <label key={wt} className="inline-flex items-center gap-1 cursor-pointer">
+            <input type="checkbox" checked={form.workerTypes.includes(wt)} onChange={() => toggle(wt)} />
+            {wt}
+          </label>
+        ))}
+      </div>
+      <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Notes" className="col-span-2" />
+      <div className="col-span-2 flex items-center gap-2">
+        <PillButton variant="primary"
+          onClick={() =>
+            onSave({
+              title: form.title.trim(),
+              seniority: form.seniority.trim(),
+              rank: Number(form.rank) || 0,
+              workerTypes: form.workerTypes,
+              notes: form.notes.trim() || null,
+            })
+          }>
+          Save
+        </PillButton>
+        <PillButton variant="ghost" onClick={onCancel}>Cancel</PillButton>
       </div>
     </div>
   );

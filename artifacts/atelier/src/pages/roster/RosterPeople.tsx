@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { Input } from "@/components/ui/input";
 import { Users, Filter, X } from "lucide-react";
+import { countryName } from "@/lib/countries";
 
 type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 
@@ -200,7 +201,7 @@ export default function RosterPeople() {
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded font-mono text-[10px] uppercase tracking-widest bg-gold/10 border border-gold/40 text-gold hover:bg-gold/20"
               data-testid={`cohort-chip-${k}`}
             >
-              {COHORT_LABEL[k]}: {cohort[k]}
+              {COHORT_LABEL[k]}: {(k === "nationality" || k === "country") ? countryName(cohort[k]) : cohort[k]}
               <X className="w-3 h-3" />
             </button>
           ))}
@@ -251,8 +252,8 @@ export default function RosterPeople() {
                 </div>
                 <div className="flex flex-wrap gap-1 text-xs">
                   {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
-                  {p.country && <MonoChip>{p.country}</MonoChip>}
-                  {p.nationality && <MonoChip>nat · {p.nationality}</MonoChip>}
+                  {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
+                  {p.nationality && <MonoChip>nat · {countryName(p.nationality)}</MonoChip>}
                   {p.partnerFirmName && (
                     <MonoChip>{p.partnerFirmName}</MonoChip>
                   )}

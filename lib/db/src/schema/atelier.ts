@@ -2607,6 +2607,34 @@ export const atelierEmergencyContacts = pgTable(
 // Invitations — pre-onboarding hand-off. A pending row holds the personDraft
 // (full_name + email + worker_type + role) until accepted, at which point
 // the Onboarding Concierge materialises the actual person row + sequence.
+// Task #509 — Titles definition registry: maps display titles → canonical
+// seniority values (the same strings rate cards / pricing gates key on).
+// Managed by HR / founding partners in the Org admin area; all seniority
+// dropdowns across HR read from this table (falling back to the legacy
+// hardcoded list when empty — production policy forbids seeding).
+export const atelierTitles = pgTable(
+  "atelier_titles",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    title: text("title").notNull(), // display title, e.g. "Founding Partner"
+    seniority: text("seniority").notNull(), // canonical seniority value (rate-card compatible)
+    rank: integer("rank").notNull().default(0), // sort order, higher = more senior
+    workerTypes: jsonb("worker_types").$type<string[]>().notNull().default([]), // empty = all
+    status: text("status").notNull().default("active"), // active | deprecated
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_titles_org").on(t.orgId),
+    index("idx_atelier_titles_status").on(t.status),
+    uniqueIndex("uniq_atelier_titles_org_title").on(t.orgId, t.title),
+  ],
+);
+
 export const atelierInvitations = pgTable(
   "atelier_invitations",
   {
@@ -2623,8 +2651,14 @@ export const atelierInvitations = pgTable(
         country?: string | null;
         partnerFirmId?: string | null;
         startDate?: string | null;
+        employingEntity?: string | null;
       }>()
       .notNull(),
+    // Task #509 — invitations may only be created from a hiring source:
+    // a hired candidate, an accepted offer, or a contracted partner-firm
+    // resource. These record the provenance.
+    sourceKind: text("source_kind"), // hired_candidate | accepted_offer | partner_firm_resource
+    sourceId: text("source_id"),
     sentByUserId: text("sent_by_user_id").notNull(),
     sentAt: timestamp("sent_at").notNull().defaultNow(),
     expiresAt: timestamp("expires_at"),
@@ -4158,6 +4192,27 @@ export const atelierAuthCredentials = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (t) => [index("idx_atelier_auth_cred_user").on(t.userId)],
+);
+
+/**
+ * One-time login activation tokens for newly onboarded joiners. The
+ * create-login onboarding step no longer reveals a temporary password;
+ * instead it mints a short-lived, single-use token whose SHA-256 hash is
+ * stored here. The joiner opens the activation link, chooses their own
+ * password, and the token is consumed. Raw tokens are never stored.
+ */
+export const atelierLoginActivationTokens = pgTable(
+  "atelier_login_activation_tokens",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    email: text("email").notNull(),
+    userId: text("user_id").notNull(),
+    createdByUserId: text("created_by_user_id"),
+    expiresAt: timestamp("expires_at").notNull(),
+    usedAt: timestamp("used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_login_activation_email").on(t.email)],
 );
 
 export const atelierAuthSessions = pgTable(

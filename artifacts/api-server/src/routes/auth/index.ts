@@ -1,7 +1,13 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, atelierAuthCredentials, atelierUsers, atelierAuditEvents } from "@workspace/db";
+import {
+  db,
+  atelierAuthCredentials,
+  atelierUsers,
+  atelierAuditEvents,
+  atelierLoginActivationTokens,
+} from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
-import { randomUUID, randomBytes } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { verifyPassword, hashPassword } from "../../lib/auth/passwords";
 import {
   AUTH_SESSION_COOKIE,
@@ -52,7 +58,9 @@ async function audit(
     | "password_changed"
     | "password_change_failed"
     | "password_reset_by_partner"
-    | "password_reset_denied",
+    | "password_reset_denied"
+    | "account_activated"
+    | "account_activation_failed",
   opts: {
     actorId?: string | null;
     actorLabel: string;
@@ -88,7 +96,11 @@ async function audit(
                   ? `${opts.actorLabel} reset the password for ${opts.targetEmail ?? "a colleague"}`
                   : action === "password_reset_denied"
                     ? `Denied password reset attempt by ${opts.actorLabel}`
-                    : `Failed sign-in attempt`,
+                    : action === "account_activated"
+                      ? `${opts.actorLabel} activated their account`
+                      : action === "account_activation_failed"
+                        ? `Failed account activation attempt`
+                        : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -278,6 +290,117 @@ router.post("/change-password", async (req: Request, res: Response) => {
     ip,
   });
   res.json({ ok: true });
+});
+
+// ---- one-time account activation (new-joiner bootstrap) ----------------
+// The create-login onboarding step mints a single-use, 72-hour token
+// (SHA-256 hash stored server-side). The joiner opens the activation link
+// and chooses their own password here — no temporary password ever exists.
+
+async function lookupActivationToken(rawToken: string) {
+  if (!/^[0-9a-f]{64}$/.test(rawToken)) return null;
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const [row] = await db
+    .select()
+    .from(atelierLoginActivationTokens)
+    .where(eq(atelierLoginActivationTokens.tokenHash, tokenHash));
+  if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) return null;
+  return row;
+}
+
+// Pre-auth: lets the activation page show which account is being activated.
+// Tokens are 256-bit random values, so this is not enumerable.
+router.get("/activate-info", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const row = await lookupActivationToken(String(req.query?.token ?? ""));
+  if (!row) {
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This activation link is invalid, expired, or already used. Ask your onboarding contact for a new one.",
+    });
+    return;
+  }
+  res.json({ ok: true, email: row.email, expiresAt: row.expiresAt.toISOString() });
+});
+
+router.post("/activate", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const rawToken = String(req.body?.token ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+  if (newPassword.length < 10 || newPassword.length > 200) {
+    res.status(400).json({ error: "weak-password", message: "Password must be at least 10 characters." });
+    return;
+  }
+  const row = await lookupActivationToken(rawToken);
+  if (!row) {
+    await audit("account_activation_failed", { actorLabel: "unknown", ip });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This activation link is invalid, expired, or already used. Ask your onboarding contact for a new one.",
+    });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, row.email));
+  if (!cred || cred.userId !== row.userId || cred.disabled) {
+    await audit("account_activation_failed", { actorLabel: row.email, ip });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This activation link is no longer valid. Ask your onboarding contact for a new one.",
+    });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    // Consume the token first; the WHERE guard on used_at makes activation
+    // single-use even under concurrent requests.
+    const consumed = await tx
+      .update(atelierLoginActivationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(atelierLoginActivationTokens.tokenHash, row.tokenHash),
+          isNull(atelierLoginActivationTokens.usedAt),
+        ),
+      )
+      .returning({ tokenHash: atelierLoginActivationTokens.tokenHash });
+    if (consumed.length === 0) throw Object.assign(new Error("token-already-used"), { activationRace: true });
+    await tx
+      .update(atelierAuthCredentials)
+      .set({
+        passwordHash: hashPassword(newPassword),
+        userManaged: true,
+        mustChangePassword: false,
+        mustChangeReason: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAuthCredentials.email, row.email));
+  }).catch(async (err: unknown) => {
+    if ((err as { activationRace?: boolean }).activationRace) {
+      await audit("account_activation_failed", { actorLabel: row.email, ip });
+      res.status(404).json({ error: "invalid-or-expired", message: "This activation link was already used." });
+      return;
+    }
+    throw err;
+  });
+  if (res.headersSent) return;
+  await audit("account_activated", {
+    actorId: row.userId,
+    actorLabel: row.email,
+    ip,
+    targetEmail: row.email,
+    targetUserId: row.userId,
+  });
+  res.json({ ok: true, email: row.email });
 });
 
 router.get("/session", async (req: Request, res: Response) => {

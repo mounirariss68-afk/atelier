@@ -4,6 +4,7 @@ import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitive
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RosterNav } from "./RosterNav";
+import { PersonPicker } from "./rosterPickers";
 
 interface Step {
   id: string;
@@ -113,12 +114,12 @@ export default function RosterOffboarding(): React.ReactElement {
         <h3 className="font-mono text-xs uppercase text-text-mute">Initiate offboarding</h3>
         <div className="grid gap-3 md:grid-cols-3">
           <label className="space-y-1">
-            <span className="font-mono text-[11px] uppercase text-text-mute">Person id</span>
-            <Input
+            <span className="font-mono text-[11px] uppercase text-text-mute">Person</span>
+            <PersonPicker
               value={draft.personId}
-              onChange={(e) => setDraft({ ...draft, personId: e.target.value })}
-              placeholder="emp_… / ctr_… / pfr_…"
-              data-testid="offb-personid"
+              onChange={(id) => setDraft({ ...draft, personId: id })}
+              placeholder="Search roster…"
+              testId="offb-personid"
             />
           </label>
           <label className="space-y-1">

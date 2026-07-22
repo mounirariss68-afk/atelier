@@ -3,18 +3,15 @@ import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useAtelierListJoiners,
-  useAtelierAddJoiner,
   useAtelierDeactivateJoiner,
   useAtelierReactivateJoiner,
   useAtelierListUsers,
   useAtelierGetLeaverHandover,
   useAtelierReassignLeaverItems,
-  useAtelierUpdateHireOffer,
   getAtelierListJoinersQueryKey,
   getAtelierGetLeaverHandoverQueryKey,
-  getAtelierListHireOffersQueryKey,
 } from "@workspace/api-client-react";
-import { TabNav, TabNavLink, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { TabNav, TabNavLink, Card, MonoChip } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { useToast } from "@/hooks/use-toast";
 import { PeopleShell } from "./PeopleShell";
@@ -67,57 +64,6 @@ function JoinersView() {
   const invalidate = () =>
     void qc.invalidateQueries({ queryKey: getAtelierListJoinersQueryKey() });
 
-  // Task #125 — offer→joiner continuation: /people/onboard/joiners can be
-  // opened from an accepted offer with ?fromOffer=<id>&name=&email=&title=&start=
-  // to prefill the form; after the joiner is created we link the offer to the
-  // new login (joinerUserId) so the Offers tab shows "login created".
-  const prefill = React.useMemo(() => {
-    const q = new URLSearchParams(window.location.search);
-    return {
-      fromOffer: q.get("fromOffer") ?? "",
-      name: q.get("name") ?? "",
-      email: q.get("email") ?? "",
-      title: q.get("title") ?? "",
-      start: q.get("start") ?? "",
-    };
-  }, []);
-
-  const [fullName, setFullName] = React.useState(prefill.name);
-  const [email, setEmail] = React.useState(prefill.email);
-  const [title, setTitle] = React.useState(prefill.title);
-  const [workerType, setWorkerType] = React.useState<"employee" | "contractor">("employee");
-  const [startDate, setStartDate] = React.useState(prefill.start);
-  const [tempPassword, setTempPassword] = React.useState<{ email: string; password: string; welcomeEmail: "sent" | "failed" | "not_configured" } | null>(null);
-
-  const linkOffer = useAtelierUpdateHireOffer({
-    mutation: {
-      onSuccess: () => {
-        void qc.invalidateQueries({ queryKey: getAtelierListHireOffersQueryKey() });
-        toast({ title: "Offer linked", description: "The offer now shows the login was created." });
-      },
-      onError: () =>
-        toast({ title: "Could not link the offer", description: "The login was created, but the offer wasn't updated. You can leave it — the offer stays accepted.", variant: "destructive" }),
-    },
-  });
-
-  const addJoiner = useAtelierAddJoiner({
-    mutation: {
-      onSuccess: (res) => {
-        setTempPassword({ email: res.user.email, password: res.tempPassword, welcomeEmail: res.welcomeEmail });
-        setFullName(""); setEmail(""); setTitle(""); setStartDate("");
-        invalidate();
-        toast({ title: "Joiner added", description: `${res.user.name} can now sign in with the one-time password below.` });
-        if (prefill.fromOffer) {
-          linkOffer.mutate({ id: prefill.fromOffer, data: { joinerUserId: res.user.id } });
-          window.history.replaceState(null, "", window.location.pathname);
-        }
-      },
-      onError: (err: unknown) => {
-        const msg = (err as { data?: { message?: string } })?.data?.message ?? "Could not add the joiner.";
-        toast({ title: "Add joiner failed", description: msg, variant: "destructive" });
-      },
-    },
-  });
   const [confirmingUserId, setConfirmingUserId] = React.useState<string | null>(null);
   const [markLeaver, setMarkLeaver] = React.useState(true);
   const [leaverEndDate, setLeaverEndDate] = React.useState("");
@@ -139,78 +85,18 @@ function JoinersView() {
     },
   });
 
-  const inputCls =
-    "w-full rounded border border-border bg-bg-elevate px-3 py-2 text-sm text-text placeholder:text-text-faint focus:outline-none focus:border-gold";
-
   return (
     <div className="space-y-6" data-testid="joiners-view">
       <Card className="p-4">
-        <h3 className="text-sm font-semibold text-text mb-3">Add a joiner</h3>
-        <p className="text-xs text-text-mute mb-4 max-w-prose">
-          Creates the roster record and a login in one step. You'll get a
-          one-time temporary password to hand to the joiner — they must
-          change it at first sign-in.
+        <h3 className="text-sm font-semibold text-text mb-3">Adding a joiner</h3>
+        <p className="text-xs text-text-mute max-w-prose">
+          Logins are created from an invitation. Start from an accepted offer or
+          hired candidate in{" "}
+          <Link href="/people/onboard/invitations" className="text-gold hover:underline" data-testid="joiners-invitations-link">
+            Invitations
+          </Link>{" "}
+          — once accepted, create the login from the Pre-boarding checklist.
         </p>
-        <form
-          className="grid gap-3 md:grid-cols-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!fullName.trim() || !email.trim()) return;
-            addJoiner.mutate({ data: { fullName: fullName.trim(), email: email.trim(), workerType, title: title.trim() || undefined, startDate: startDate || undefined } });
-          }}
-        >
-          <input className={inputCls} placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} data-testid="joiner-name" />
-          <input className={inputCls} placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="joiner-email" />
-          <input className={inputCls} placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} data-testid="joiner-title" />
-          <select className={inputCls} value={workerType} onChange={(e) => setWorkerType(e.target.value as "employee" | "contractor")} data-testid="joiner-worker-type">
-            <option value="employee">Employee</option>
-            <option value="contractor">Contractor</option>
-          </select>
-          <label className="block">
-            <span className="mb-1 block font-mono text-[10px] uppercase tracking-wider text-text-faint">Start date (optional)</span>
-            <input className={inputCls} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="joiner-start-date" />
-          </label>
-          <div className="md:col-span-2">
-            <PillButton type="submit" disabled={addJoiner.isPending || !fullName.trim() || !email.trim()} data-testid="joiner-submit">
-              {addJoiner.isPending ? "Adding…" : "Add joiner"}
-            </PillButton>
-          </div>
-        </form>
-        {tempPassword ? (
-          <div className="mt-4 rounded border border-gold/40 bg-gold/10 p-3" data-testid="joiner-temp-password">
-            <p className="text-xs text-text-mute">
-              One-time temporary password for <span className="text-text font-medium">{tempPassword.email}</span> — shown once, never again. They must change it at first sign-in.
-            </p>
-            {tempPassword.welcomeEmail === "sent" ? (
-              <p className="mt-2 text-xs text-emerald-400" data-testid="joiner-welcome-email-status">
-                Welcome email with these login details was sent to {tempPassword.email}.
-              </p>
-            ) : (
-              <p className="mt-2 text-xs text-amber-400" data-testid="joiner-welcome-email-status">
-                {tempPassword.welcomeEmail === "not_configured"
-                  ? "Welcome email not sent — email delivery isn't configured. Share the temporary password with them yourself."
-                  : "Welcome email couldn't be sent. Share the temporary password with them yourself."}
-              </p>
-            )}
-            <div className="mt-2 flex items-center gap-3">
-              <code className="font-mono text-sm text-gold select-all">{tempPassword.password}</code>
-              <button
-                type="button"
-                className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text"
-                onClick={() => { void navigator.clipboard?.writeText(tempPassword.password); toast({ title: "Copied" }); }}
-              >
-                Copy
-              </button>
-              <button
-                type="button"
-                className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text"
-                onClick={() => setTempPassword(null)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        ) : null}
       </Card>
 
       <Card className="p-4">

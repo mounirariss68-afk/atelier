@@ -14,7 +14,13 @@ const esc = (s: string) =>
 export interface WelcomeEmailArgs {
   fullName: string;
   email: string;
-  tempPassword: string;
+  /**
+   * One-time activation link (short TTL, single use). The joiner opens it
+   * to choose their own password — no credentials travel by email.
+   */
+  activationUrl?: string | null;
+  /** Human-readable validity window for the activation link, e.g. "72 hours". */
+  activationValidity?: string;
   workerType: "employee" | "contractor";
   /** Absolute origin of the portal (from the request Origin header), if known. */
   signInUrl?: string | null;
@@ -40,16 +46,20 @@ export function buildWelcomeEmailHtml(args: WelcomeEmailArgs): string {
       <div style="background:#ffffff;border-radius:0 0 8px 8px;padding:32px;">
         <p style="font-size:16px;">Dear ${firstName},</p>
         <p>Welcome to Cognirise. ${roleLine}</p>
-        <p>Your workspace in The Atelier is ready. Here are your login details:</p>
+        <p>Your workspace in The Atelier is ready. Your sign-in email is:</p>
         <div style="background:#f7f5f0;border:1px solid #e4ddcf;border-radius:6px;padding:16px 20px;margin:20px 0;font-family:Menlo,Consolas,monospace;font-size:14px;">
           <div><span style="color:#6b6b6b;">Email:</span> ${esc(args.email)}</div>
-          <div style="margin-top:8px;"><span style="color:#6b6b6b;">Temporary password:</span> ${esc(args.tempPassword)}</div>
         </div>
-        <p style="font-size:14px;color:#444;">For security, you will be asked to choose a new password the first time you sign in. This temporary password works only once you complete that step.</p>
+        ${
+          args.activationUrl
+            ? `<p style="margin:24px 0;"><a href="${esc(args.activationUrl)}" style="display:inline-block;background:#0b1f3a;color:#c9a24b;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Activate your account</a></p>
+        <p style="font-size:14px;color:#444;">This activation link is valid for ${esc(args.activationValidity ?? "72 hours")} and can be used once. It lets you choose your own password — we never send passwords by email.</p>`
+            : `<p style="font-size:14px;color:#444;">Your onboarding contact will share a one-time activation link with you so you can choose your own password — we never send passwords by email.</p>`
+        }
         ${signInBlock}
         <p style="font-weight:600;margin-bottom:8px;">Getting started</p>
         <ol style="margin:0 0 20px;padding-left:20px;color:#333;">
-          <li style="margin-bottom:6px;">Sign in and set your new password.</li>
+          <li style="margin-bottom:6px;">Open your activation link and set your password.</li>
           <li style="margin-bottom:6px;">Review and complete your profile.</li>
           <li style="margin-bottom:6px;">Explore your Time and Expenses tabs.</li>
         </ol>

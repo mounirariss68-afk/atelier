@@ -129,6 +129,14 @@ export const V3_AUDIT_ACTIONS = {
 
   // Task #451 — client invoice email delivery from the billing worklist.
   INVOICE_EMAILED: "wallet.invoice.emailed",
+
+  // Task #509 — Titles definition registry (HR admin).
+  TITLE_CREATED: "roster.title.created",
+  TITLE_UPDATED: "roster.title.updated",
+  TITLE_DELETED: "roster.title.deleted",
+  // Task #509 — invitation lifecycle rationalisation.
+  ROSTER_INVITATION_ACCEPTED: "invitation.accepted",
+  ROSTER_INVITATION_LOGIN_CREATED: "invitation.login.created",
 } as const;
 
 export type V3AuditAction = (typeof V3_AUDIT_ACTIONS)[keyof typeof V3_AUDIT_ACTIONS];

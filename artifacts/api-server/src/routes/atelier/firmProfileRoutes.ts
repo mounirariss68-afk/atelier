@@ -387,6 +387,7 @@ const legalEntitiesBody = z.object({
         name: z.string().trim().min(1).max(300),
         jurisdiction: z.string().trim().max(300).default(""),
         registeredAddress: z.string().trim().max(600).default(""),
+        officeAddress: z.string().trim().max(600).default(""),
         country: z.string().trim().max(120).default(""),
         governingLaw: z.string().trim().max(600).default(""),
         courts: z.string().trim().max(600).default(""),

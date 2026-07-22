@@ -145,6 +145,7 @@ export type SigningEntity = {
   name: string;
   jurisdiction: string;
   registeredAddress: string;
+  officeAddress: string;
   country: string;
   governingLaw: string;
   courts: string;
@@ -156,6 +157,7 @@ type RawLegalEntity = {
   name: string;
   jurisdiction: string;
   registeredAddress?: string;
+  officeAddress?: string;
   country?: string;
   governingLaw?: string;
   courts?: string;
@@ -191,6 +193,7 @@ export function normalizeSigningEntities(raw: unknown): SigningEntity[] {
       name: e.name.trim(),
       jurisdiction: String(e.jurisdiction ?? "").trim(),
       registeredAddress: String(e.registeredAddress ?? "").trim(),
+      officeAddress: String(e.officeAddress ?? "").trim(),
       country: String(e.country ?? "").trim(),
       governingLaw: String(e.governingLaw ?? "").trim(),
       courts: String(e.courts ?? "").trim(),
@@ -240,6 +243,7 @@ export async function listSigningEntities(orgId: string): Promise<SigningEntity[
       name: r.legalNameEn,
       jurisdiction: r.jurisdiction || "",
       registeredAddress: r.registeredAddress || "",
+      officeAddress: (r as { officeAddress?: string | null }).officeAddress || "",
       country: r.country || "",
       governingLaw: r.governingLaw || "",
       courts: r.courts || "",

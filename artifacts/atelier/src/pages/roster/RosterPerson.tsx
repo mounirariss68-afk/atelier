@@ -6,6 +6,9 @@ import { BusinessCardQR } from "./BusinessCardQR";
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 // Task #199 — full "Edit person" form (hr / partner / founding_partner).
 import { EditPersonForm } from "./EditPersonForm";
+// Task #509 (T4) — full country-name display everywhere in HR.
+import { countryName } from "@/lib/countries";
+import { CountryCombobox } from "@/components/CountryCombobox";
 
 interface Person {
   id: string;
@@ -52,8 +55,6 @@ const TABS = [
   { id: "skills", label: "Skills" },
   { id: "learning", label: "Learning" },
   { id: "performance", label: "Performance" },
-  { id: "compensation", label: "Compensation" },
-  { id: "succession", label: "Succession" },
   { id: "timesheet", label: "Time" },
   { id: "documents", label: "Documents" },
   { id: "conflicts", label: "Conflicts" },
@@ -118,7 +119,7 @@ export default function RosterPerson() {
           </MonoChip>
           {person.title && <MonoChip>{person.title}</MonoChip>}
           {person.seniority && <MonoChip>{person.seniority}</MonoChip>}
-          {person.country && <MonoChip>{person.country}</MonoChip>}
+          {person.country && <MonoChip>{countryName(person.country)}</MonoChip>}
           <MonoChip>{person.status}</MonoChip>
         </div>
       </PageHero>
@@ -130,7 +131,6 @@ export default function RosterPerson() {
           // IDs, scans) + Audit are sensitive-people surfaces; Conflicts and
           // Compensation drop out of the manager (business-only) view.
           if ((t.id === "documents" || t.id === "audit") && !viewerCanSeeSensitive) return false;
-          if (t.id === "compensation" && !viewerCanSeeComp) return false;
           if (t.id === "conflicts" && viewerScope !== "full") return false;
           return true;
         }).map((t) => (
@@ -164,11 +164,9 @@ export default function RosterPerson() {
             <SkillsTab personId={personId} />
           )
         )}
-        {activeTab === "learning" && <PlaceholderTab title="Learning · enrollments, certifications, mentor pairing" />}
-        {activeTab === "performance" && <PlaceholderTab title="Performance · goals, check-ins, reviews, calibration outcomes" />}
-        {activeTab === "compensation" && <PlaceholderTab title="Compensation · band position, history, total rewards (Partner-only)" />}
-        {activeTab === "succession" && <PlaceholderTab title="Succession · roles this person is in the slate for" />}
-        {activeTab === "timesheet" && <PlaceholderTab title="Time · summary, recent weeks, approvals" />}
+        {activeTab === "learning" && <LearningTab personId={personId} workerType={person.workerType} />}
+        {activeTab === "performance" && <PerformanceTab personId={personId} workerType={person.workerType} />}
+        {activeTab === "timesheet" && <TimeTab personId={personId} />}
         {activeTab === "documents" && (
           <>
             <ContractsPanel personId={personId} title="Contracts" />
@@ -203,6 +201,7 @@ function ProfileTab({
       <EditPersonForm
         person={person}
         viewerCanEditTitle={viewerCanEditTitle}
+        viewerCanSeeComp={viewerCanSeeComp}
         onSaved={(updated) => onUpdated({ ...person, ...(updated as Partial<Person>) })}
         onClose={() => setEditing(false)}
       />
@@ -232,7 +231,7 @@ function ProfileTab({
         ) : (
           <Field label="Title" value={person.title} />
         )}
-        <Field label="Country" value={person.country} />
+        <Field label="Country" value={countryName(person.country)} />
         <Field label="Status" value={person.status} />
         <Field label="Start" value={person.startDate} />
         <Field label="End" value={person.endDate} />
@@ -240,12 +239,17 @@ function ProfileTab({
       </Card>
       <Card className="p-4 space-y-3">
         <h3 className="font-mono text-xs uppercase text-text-mute">
-          Engagement
+          Employment details
         </h3>
         <Field label="Employment type" value={person.employmentType} />
+        <Field label="Employing entity" value={person.employingEntity} />
         <Field label="Home office" value={person.homeOffice} />
-        <Field label="Vendor entity" value={person.vendorEntity} />
-        <Field label="Partner firm" value={person.partnerFirmName} />
+        {person.workerType === "contractor" && (
+          <Field label="Vendor entity" value={person.vendorEntity} />
+        )}
+        {person.workerType === "partner_firm_resource" && (
+          <Field label="Partner firm" value={person.partnerFirmName} />
+        )}
         <Field label="External employee id" value={person.employeeIdExternal} />
       </Card>
       {person.workerType === "employee" && (
@@ -337,7 +341,7 @@ function DemographicsEditor({
         className="space-y-2 border border-border-soft rounded p-2"
         data-testid="demographics-group"
       >
-        <Field label="Nationality" value={person.nationality} />
+        <Field label="Nationality" value={countryName(person.nationality)} />
         <Field
           label="Gender (self-identified)"
           value={
@@ -390,15 +394,15 @@ function DemographicsEditor({
   return (
     <div className="space-y-2 border border-border-soft rounded p-2" data-testid="demographics-editor">
       <label className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-text-mute">Nationality (ISO α-2)</span>
-        <input
-          value={nationality}
-          onChange={(e) => setNationality(e.target.value.toUpperCase())}
-          maxLength={2}
-          placeholder="EG"
-          className="bg-bg-elevate border border-border-soft rounded px-2 py-0.5 text-text font-mono text-xs w-16 text-center"
-          data-testid="demographics-nationality"
-        />
+        <span className="text-text-mute">Nationality</span>
+        <span className="w-48">
+          <CountryCombobox
+            value={nationality || null}
+            allowClear
+            testIdPrefix="demographics-nationality"
+            onChange={(iso) => setNationality(iso)}
+          />
+        </span>
       </label>
       <label className="flex items-center justify-between gap-3 text-sm">
         <span className="text-text-mute">Gender (self-identified)</span>
@@ -737,6 +741,201 @@ function PlaceholderTab({ title }: { title: string }) {
   );
 }
 
+// Task #509 (T4) — shared fetch helper for the read-only person tabs below.
+// These HR-gated endpoints 403 for out-of-scope viewers; we surface that
+// cleanly rather than spinning forever.
+function useTabFetch<T>(url: string): { data: T | null; state: "loading" | "ready" | "forbidden" | "error" } {
+  const [data, setData] = React.useState<T | null>(null);
+  const [state, setState] = React.useState<"loading" | "ready" | "forbidden" | "error">("loading");
+  React.useEffect(() => {
+    let alive = true;
+    setState("loading");
+    fetch(url, { credentials: "include" })
+      .then(async (r) => {
+        if (!alive) return;
+        if (r.status === 403) { setState("forbidden"); return; }
+        if (!r.ok) { setState("error"); return; }
+        const d = await r.json();
+        setData(d as T);
+        setState("ready");
+      })
+      .catch(() => alive && setState("error"));
+    return () => { alive = false; };
+  }, [url]);
+  return { data, state };
+}
+
+function TabNotice({ state, kind }: { state: "loading" | "forbidden" | "error"; kind: string }) {
+  if (state === "loading") return <div className="text-text-mute">Loading…</div>;
+  if (state === "forbidden")
+    return (
+      <Card className="p-6 text-text-mute text-sm">
+        {kind} records are restricted to HR / partners for this person.
+      </Card>
+    );
+  return <Card className="p-6 text-warning text-sm">Could not load {kind.toLowerCase()} records.</Card>;
+}
+
+interface PerfGoalRow { id: string; cycle: string; title: string; description: string; weightPct: number; status: string; }
+interface CheckInRow { id: string; managerName: string | null; scheduledFor: string; status: string; notes: string | null; }
+interface ReviewRow { id: string; cycle: string; reviewedOn: string | null; selfRating: number | null; managerRating: number | null; managerSummary: string | null; status: string; releasedAt: string | null; }
+interface CertRow { id: string; certName: string; issuer: string | null; issuedOn: string | null; expiresOn: string | null; status: string; }
+interface MaterialRow { id: string; title: string; description: string | null; topic: string | null; kind: string; url: string | null; audience: string; completionCount: number; }
+
+function PerformanceTab({ personId, workerType }: { personId: string; workerType: string }) {
+  const goals = useTabFetch<PerfGoalRow[]>(`/api/atelier/people/performance/goals?employeeId=${personId}`);
+  const checkIns = useTabFetch<CheckInRow[]>(`/api/atelier/people/check-ins?employeeId=${personId}`);
+  const reviews = useTabFetch<ReviewRow[]>(`/api/atelier/people/performance/reviews?employeeId=${personId}`);
+
+  if (goals.state === "forbidden") return <TabNotice state="forbidden" kind="Performance" />;
+  if (goals.state === "loading") return <TabNotice state="loading" kind="Performance" />;
+
+  return (
+    <div className="space-y-6" data-testid="performance-tab">
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Goals · {goals.data?.length ?? 0}</div>
+        {(goals.data ?? []).map((g) => (
+          <Card key={g.id} className="p-3" data-testid={`perf-goal-${g.id}`}>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm">{g.title}</span>
+              <MonoChip>{g.cycle}</MonoChip>
+              <MonoChip>{g.status.replace("_", " ")}</MonoChip>
+              {g.weightPct > 0 && <MonoChip>{g.weightPct}%</MonoChip>}
+            </div>
+            {g.description && <div className="text-xs text-text-mute mt-1">{g.description}</div>}
+          </Card>
+        ))}
+        {(goals.data?.length ?? 0) === 0 && <Card className="p-4 text-text-mute text-sm">No goals recorded.</Card>}
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Check-ins · {checkIns.data?.length ?? 0}</div>
+        {(checkIns.data ?? []).map((c) => (
+          <Card key={c.id} className="p-3" data-testid={`perf-checkin-${c.id}`}>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm">{c.scheduledFor}</span>
+              <MonoChip>{c.status}</MonoChip>
+              {c.managerName && <span className="text-xs text-text-mute">with {c.managerName}</span>}
+            </div>
+            {c.notes && <div className="text-xs text-text-mute mt-1">{c.notes}</div>}
+          </Card>
+        ))}
+        {(checkIns.data?.length ?? 0) === 0 && <Card className="p-4 text-text-mute text-sm">No check-ins scheduled.</Card>}
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Reviews · {reviews.data?.length ?? 0}</div>
+        {(reviews.data ?? []).map((r) => (
+          <Card key={r.id} className="p-3" data-testid={`perf-review-${r.id}`}>
+            <div className="flex flex-wrap gap-2 items-center">
+              <MonoChip>{r.cycle}</MonoChip>
+              <MonoChip>{r.status}</MonoChip>
+              {r.managerRating != null && <MonoChip>mgr {r.managerRating}/5</MonoChip>}
+              {r.selfRating != null && <MonoChip>self {r.selfRating}/5</MonoChip>}
+            </div>
+            {r.managerSummary && <div className="text-xs text-text-mute mt-1">{r.managerSummary}</div>}
+          </Card>
+        ))}
+        {(reviews.data?.length ?? 0) === 0 && <Card className="p-4 text-text-mute text-sm">No reviews recorded.</Card>}
+      </div>
+      {workerType !== "employee" && (
+        <div className="text-xs text-text-faint">Performance tracking is primarily maintained for employees.</div>
+      )}
+    </div>
+  );
+}
+
+function LearningTab({ personId, workerType }: { personId: string; workerType: string }) {
+  const certs = useTabFetch<CertRow[]>(`/api/atelier/people/certifications?employeeId=${personId}`);
+  const materials = useTabFetch<MaterialRow[]>(`/api/atelier/people/training-materials`);
+
+  if (certs.state === "forbidden") return <TabNotice state="forbidden" kind="Learning" />;
+  if (certs.state === "loading") return <TabNotice state="loading" kind="Learning" />;
+
+  return (
+    <div className="space-y-6" data-testid="learning-tab">
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Certifications · {certs.data?.length ?? 0}</div>
+        {(certs.data ?? []).map((c) => (
+          <Card key={c.id} className="p-3" data-testid={`cert-${c.id}`}>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm">{c.certName}</span>
+              {c.issuer && <MonoChip>{c.issuer}</MonoChip>}
+              <MonoChip className={c.status === "expired" ? "text-warning border-warning/40" : ""}>{c.status}</MonoChip>
+            </div>
+            <div className="text-xs text-text-mute mt-1">
+              {c.issuedOn && <span>issued {c.issuedOn}</span>}
+              {c.expiresOn && <span>{c.issuedOn ? " · " : ""}expires {c.expiresOn}</span>}
+            </div>
+          </Card>
+        ))}
+        {(certs.data?.length ?? 0) === 0 && <Card className="p-4 text-text-mute text-sm">No certifications recorded.</Card>}
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Training library · {materials.data?.length ?? 0}</div>
+        {(materials.data ?? [])
+          .filter((m) => m.audience === "all" || m.audience === (workerType === "employee" ? "employees" : "contractors"))
+          .map((m) => (
+            <Card key={m.id} className="p-3" data-testid={`training-${m.id}`}>
+              <div className="flex flex-wrap gap-2 items-center">
+                {m.url ? (
+                  <a href={m.url} target="_blank" rel="noreferrer" className="text-sm text-gold hover:underline">{m.title}</a>
+                ) : (
+                  <span className="text-sm">{m.title}</span>
+                )}
+                {m.topic && <MonoChip>{m.topic}</MonoChip>}
+                <MonoChip>{m.kind}</MonoChip>
+              </div>
+              {m.description && <div className="text-xs text-text-mute mt-1">{m.description}</div>}
+            </Card>
+          ))}
+        {(materials.data?.length ?? 0) === 0 && <Card className="p-4 text-text-mute text-sm">No training materials published.</Card>}
+      </div>
+    </div>
+  );
+}
+
+interface TimesheetSummary {
+  rolling4Week: { weeks: Array<{ weekIso: string; status: string; totalHours: number | string; billableHours: number | string }>; totalHours: number; billableHours: number; billablePct: number };
+  ytd: { totalHours: number; billableHours: number; billablePct: number };
+  missingWeeks: string[];
+  lastSubmittedWeekStatus: string;
+}
+
+function TimeTab({ personId }: { personId: string }) {
+  const { data, state } = useTabFetch<TimesheetSummary>(`/api/atelier/roster/people/${personId}/timesheet-summary`);
+  if (state !== "ready" || !data) return <TabNotice state={state === "ready" ? "error" : state} kind="Time" />;
+
+  return (
+    <div className="space-y-6" data-testid="time-tab">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 space-y-2">
+          <div className="text-xs font-mono uppercase text-text-mute">Rolling 4 weeks</div>
+          <div className="text-sm">Total {data.rolling4Week.totalHours}h · Billable {data.rolling4Week.billableHours}h ({data.rolling4Week.billablePct}%)</div>
+        </Card>
+        <Card className="p-4 space-y-2">
+          <div className="text-xs font-mono uppercase text-text-mute">Year to date</div>
+          <div className="text-sm">Total {data.ytd.totalHours}h · Billable {data.ytd.billableHours}h ({data.ytd.billablePct}%)</div>
+        </Card>
+      </div>
+      <div className="space-y-2">
+        <div className="text-xs font-mono uppercase text-text-mute">Recent weeks</div>
+        {data.rolling4Week.weeks.map((w) => (
+          <Card key={w.weekIso} className="p-3 flex flex-wrap gap-2 items-center" data-testid={`ts-week-${w.weekIso}`}>
+            <span className="text-sm font-mono">{w.weekIso}</span>
+            <MonoChip>{w.status}</MonoChip>
+            <span className="text-xs text-text-mute">{w.totalHours}h total · {w.billableHours}h billable</span>
+          </Card>
+        ))}
+        {data.rolling4Week.weeks.length === 0 && <Card className="p-4 text-text-mute text-sm">No timesheet weeks recorded.</Card>}
+      </div>
+      {data.missingWeeks.length > 0 && (
+        <Card className="p-3 text-warning text-sm" data-testid="ts-missing">
+          Missing weeks: {data.missingWeeks.join(", ")}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 interface EngagementGrant {
   id: string;
   engagementId: string;
@@ -755,22 +954,45 @@ function AccessTab({ personId }: { personId: string }) {
   // PRD §1 IA — Access tab shows engagements the person is on with role + scope chips.
   // Same data shape as /engagements endpoint, but rendered as a flatter access ledger.
   const [rows, setRows] = React.useState<EngagementGrant[] | null>(null);
+  const [firmWide, setFirmWide] = React.useState(false);
+  const [scopeNote, setScopeNote] = React.useState<string | null>(null);
   React.useEffect(() => {
     fetch(`/api/atelier/roster/people/${personId}/access`, {
       credentials: "include",
     })
       .then((r) => r.json())
-      .then((d) => setRows(d.grants ?? d.access ?? d.engagements ?? []));
+      .then((d) => {
+        setFirmWide(Boolean(d.firmWide));
+        setScopeNote(d.scopeNote ?? null);
+        setRows(d.grants ?? d.access ?? d.engagements ?? []);
+      });
   }, [personId]);
   if (!rows) return <div className="text-text-mute">Loading…</div>;
+  if (firmWide)
+    return (
+      <Card className="p-6" data-testid="access-firm-wide">
+        <div className="text-gold font-mono text-sm">Full firm-wide access</div>
+        <div className="text-text-mute text-xs mt-1">
+          Founding Partners and Partners have access to all accounts,
+          opportunities and engagements by role — no per-engagement grants
+          apply.
+        </div>
+      </Card>
+    );
   if (rows.length === 0)
     return (
       <Card className="p-6 text-text-mute">
+        {scopeNote ? (
+          <div className="text-gold text-xs font-mono mb-2" data-testid="access-scope-note">{scopeNote}</div>
+        ) : null}
         No engagement-access grants. Use the Roster admin (Partner-only) to grant access.
       </Card>
     );
   return (
     <div className="space-y-2" data-testid="access-tab-rows">
+      {scopeNote ? (
+        <div className="text-gold text-xs font-mono" data-testid="access-scope-note">{scopeNote}</div>
+      ) : null}
       <div className="text-xs text-text-mute font-mono uppercase mb-2">
         Access ledger — role · allocation · scope chips · status
       </div>

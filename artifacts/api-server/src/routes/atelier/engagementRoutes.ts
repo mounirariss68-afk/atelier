@@ -87,7 +87,10 @@ async function loadEng(id: string) {
  */
 export async function accessibleEngagementIds(
   me: typeof atelierUsers.$inferSelect,
-): Promise<{ all: true } | { all: false; ids: Set<string> }> {
+): Promise<
+  | { all: true; allAccounts?: true }
+  | { all: false; allAccounts?: boolean; ids: Set<string> }
+> {
   // Task #292 — founding_partner + partner both have firm-wide visibility.
   if (me.role === "partner" || me.role === "founding_partner") return { all: true };
   const grants = await db
@@ -102,7 +105,15 @@ export async function accessibleEngagementIds(
         isNull(atelierEngagementAccess.deletedAt),
       ),
     );
-  return { all: false, ids: new Set(grants.map((g) => g.engagementId)) };
+  // Task #509 — access tiers: senior managers (Senior Principals) can see
+  // ALL accounts, but only their assigned opportunities/engagements. The
+  // engagement id set stays grant-scoped; account-level predicates honor
+  // the allAccounts flag (see canSeeAccount).
+  return {
+    all: false,
+    allAccounts: me.role === "senior_manager",
+    ids: new Set(grants.map((g) => g.engagementId)),
+  };
 }
 
 export async function ensureEngAccess(

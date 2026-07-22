@@ -87,7 +87,11 @@ export default function RosterAccessMatrix() {
             </tr>
           </thead>
           <tbody>
-            {userIds.map((uid) => (
+            {userIds.map((uid) => {
+              const role = userMeta.get(uid)?.role ?? "";
+              const firmWide = role === "founding_partner" || role === "partner";
+              const seniorManager = role === "senior_manager";
+              return (
               <tr
                 key={uid}
                 className="border-t border-border-soft hover:bg-bg-elevate-2"
@@ -96,11 +100,23 @@ export default function RosterAccessMatrix() {
                   <div className="text-text font-medium">
                     {userMeta.get(uid)?.name}
                   </div>
-                  <div className="text-text-faint">
-                    {userMeta.get(uid)?.role}
-                  </div>
+                  <div className="text-text-faint">{role}</div>
+                  {seniorManager && (
+                    <div className="text-[10px] text-gold mt-1" data-testid={`scope-note-${uid}`}>
+                      All accounts; assigned opportunities &amp; engagements
+                    </div>
+                  )}
                 </td>
-                {engIds.map((eid) => {
+                {firmWide ? (
+                  <td
+                    className="p-3 border-l border-border-soft align-middle text-gold font-mono text-[11px]"
+                    colSpan={engIds.length || 1}
+                    data-testid={`firm-wide-${uid}`}
+                  >
+                    Full firm-wide access
+                  </td>
+                ) : (
+                engIds.map((eid) => {
                   const c = cell(uid, eid);
                   return (
                     <td
@@ -131,9 +147,11 @@ export default function RosterAccessMatrix() {
                       )}
                     </td>
                   );
-                })}
+                })
+                )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </Card>

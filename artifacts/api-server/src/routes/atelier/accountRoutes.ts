@@ -90,6 +90,9 @@ export async function canSeeAccount(
   accountId: string,
 ): Promise<boolean> {
   if (access.all) return true;
+  // Task #509 — senior managers see every account (tiered access model);
+  // opportunity/engagement visibility stays grant-scoped.
+  if (access.allAccounts) return true;
   const engs = await db
     .select({ id: atelierEngagements.id })
     .from(atelierEngagements)

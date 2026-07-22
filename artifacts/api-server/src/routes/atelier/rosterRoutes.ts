@@ -38,6 +38,7 @@ import {
   atelierDependents,
   atelierEmergencyContacts,
   atelierRosterReportsTo,
+  atelierTitles,
 } from "@workspace/db";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
@@ -1362,7 +1363,35 @@ router.get("/roster/partner-firms", async (req, res, next) => {
       .from(atelierPartnerFirms)
       .where(and(eq(atelierPartnerFirms.orgId, me.orgId), isNull(atelierPartnerFirms.deletedAt)));
     firms.sort((a, b) => a.name.localeCompare(b.name));
-    res.json({ firms });
+    // Contracted (active) resources ride along so pickers (e.g. invitation
+    // source) can offer individual partner-firm people, not just firm rows.
+    const resources = await db
+      .select({
+        id: atelierPartnerFirmResources.id,
+        partnerFirmId: atelierPartnerFirmResources.partnerFirmId,
+        fullName: atelierPartnerFirmResources.fullName,
+        email: atelierPartnerFirmResources.email,
+        role: atelierPartnerFirmResources.role,
+        seniority: atelierPartnerFirmResources.seniority,
+        country: atelierPartnerFirmResources.country,
+        startDate: atelierPartnerFirmResources.startDate,
+        status: atelierPartnerFirmResources.status,
+        firmName: atelierPartnerFirms.name,
+      })
+      .from(atelierPartnerFirmResources)
+      .leftJoin(
+        atelierPartnerFirms,
+        eq(atelierPartnerFirmResources.partnerFirmId, atelierPartnerFirms.id),
+      )
+      .where(
+        and(
+          eq(atelierPartnerFirmResources.orgId, me.orgId),
+          eq(atelierPartnerFirmResources.status, "active"),
+          isNull(atelierPartnerFirmResources.deletedAt),
+        ),
+      );
+    resources.sort((a, b) => a.fullName.localeCompare(b.fullName));
+    res.json({ firms, resources });
   } catch (err) {
     next(err);
   }
@@ -1657,6 +1686,16 @@ router.get("/roster/people/:id/access", async (req, res, next) => {
       });
       return;
     }
+    const [linkedUser] = await db
+      .select({ role: atelierUsers.role })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.id, userId))
+      .limit(1);
+    const userRole = linkedUser?.role ?? null;
+    // Founding partners / partners have firm-wide access by role — the
+    // engagement-grant ledger is irrelevant for them, so surface an explicit
+    // firm-wide marker (matching the Access matrix) instead of "no grants".
+    const firmWide = userRole === "founding_partner" || userRole === "partner";
     const grants = await db
       .select({
         id: atelierEngagementAccess.id,
@@ -1681,6 +1720,12 @@ router.get("/roster/people/:id/access", async (req, res, next) => {
       );
     res.json({
       person: { id: person.id, fullName: person.fullName, workerType: person.workerType },
+      role: userRole,
+      firmWide,
+      scopeNote:
+        userRole === "senior_manager"
+          ? "All accounts; assigned opportunities & engagements"
+          : null,
       grants,
     });
   } catch (err) {
@@ -2314,6 +2359,219 @@ router.get("/roster/people/:id/conflicts", async (req, res, next) => {
       `);
     });
     res.json({ conflicts: result.rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// Task #509 — Titles definition registry.
+// Maps display titles → canonical seniority values (rate-card compatible).
+// Reads: any org persona (dropdowns everywhere). Writes: HR + founding
+// partners only. When the table is empty the UI falls back to the legacy
+// hardcoded seniority list (production policy forbids seeding).
+// =============================================================
+
+const titleBody = z.object({
+  title: z.string().trim().min(1).max(200),
+  seniority: z.string().trim().min(1).max(100),
+  rank: z.number().int().min(0).max(1000).default(0),
+  workerTypes: z
+    .array(z.enum(["employee", "contractor", "partner_firm_resource"]))
+    .max(3)
+    .default([]),
+  notes: z.string().trim().max(2000).nullish(),
+});
+
+function canManageTitles(me: { role: string }): boolean {
+  return me.role === "founding_partner" || me.role === "hr";
+}
+
+// @cli-skip: reference dropdown data; UI-driven (Task #509)
+router.get("/roster/titles", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    const includeDeprecated = String(req.query.status ?? "") === "all";
+    const rows = await db
+      .select()
+      .from(atelierTitles)
+      .where(
+        includeDeprecated
+          ? isNull(atelierTitles.deletedAt)
+          : and(isNull(atelierTitles.deletedAt), eq(atelierTitles.status, "active")),
+      )
+      .orderBy(desc(atelierTitles.rank), atelierTitles.title);
+    res.json({
+      titles: rows.map((t) => ({
+        id: t.id,
+        title: t.title,
+        seniority: t.seniority,
+        rank: t.rank,
+        workerTypes: t.workerTypes ?? [],
+        status: t.status,
+        notes: t.notes,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; UI-driven (Task #509)
+router.post("/roster/titles", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    if (!canManageTitles(me)) {
+      res.status(403).json({ error: "hr-or-founding-partner-only" });
+      return;
+    }
+    const parsed = titleBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+      return;
+    }
+    const b = parsed.data;
+    const [dup] = await db
+      .select({ id: atelierTitles.id })
+      .from(atelierTitles)
+      .where(
+        and(
+          sql`lower(${atelierTitles.title}) = ${b.title.toLowerCase()}`,
+          isNull(atelierTitles.deletedAt),
+        ),
+      );
+    if (dup) {
+      res.status(409).json({ error: "duplicate-title" });
+      return;
+    }
+    const id = rid("ttl");
+    await db.insert(atelierTitles).values({
+      id,
+      title: b.title,
+      seniority: b.seniority,
+      rank: b.rank,
+      workerTypes: b.workerTypes,
+      notes: b.notes ?? null,
+      createdByUserId: me.id,
+    });
+    assertAuditAction("roster.title.created");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "roster_title",
+      entityId: id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "roster.title.created",
+      payload: { title: b.title, seniority: b.seniority },
+      payloadSummary: `${me.name} added title "${b.title}" (→ ${b.seniority}).`,
+    });
+    res.status(201).json({ ok: true, id });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; UI-driven (Task #509)
+router.patch("/roster/titles/:id", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    if (!canManageTitles(me)) {
+      res.status(403).json({ error: "hr-or-founding-partner-only" });
+      return;
+    }
+    const parsed = titleBody
+      .partial()
+      .extend({ status: z.enum(["active", "deprecated"]).optional() })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+      return;
+    }
+    const [row] = await db
+      .select()
+      .from(atelierTitles)
+      .where(and(eq(atelierTitles.id, String(req.params.id)), isNull(atelierTitles.deletedAt)));
+    if (!row) {
+      res.status(404).json({ error: "title-not-found" });
+      return;
+    }
+    const b = parsed.data;
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (b.title !== undefined) patch.title = b.title;
+    if (b.seniority !== undefined) patch.seniority = b.seniority;
+    if (b.rank !== undefined) patch.rank = b.rank;
+    if (b.workerTypes !== undefined) patch.workerTypes = b.workerTypes;
+    if (b.notes !== undefined) patch.notes = b.notes ?? null;
+    if (b.status !== undefined) patch.status = b.status;
+    await db.update(atelierTitles).set(patch).where(eq(atelierTitles.id, row.id));
+    assertAuditAction("roster.title.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "roster_title",
+      entityId: row.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "roster.title.updated",
+      payload: { changes: b },
+      payloadSummary: `${me.name} updated title "${b.title ?? row.title}".`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR admin write; UI-driven (Task #509)
+router.delete("/roster/titles/:id", async (req, res, next) => {
+  try {
+    const me = req.atelierPersona;
+    if (!me) {
+      res.status(401).json({ error: "no-active-persona" });
+      return;
+    }
+    if (!canManageTitles(me)) {
+      res.status(403).json({ error: "hr-or-founding-partner-only" });
+      return;
+    }
+    const [row] = await db
+      .select()
+      .from(atelierTitles)
+      .where(and(eq(atelierTitles.id, String(req.params.id)), isNull(atelierTitles.deletedAt)));
+    if (!row) {
+      res.status(404).json({ error: "title-not-found" });
+      return;
+    }
+    await db
+      .update(atelierTitles)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierTitles.id, row.id));
+    assertAuditAction("roster.title.deleted");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "roster_title",
+      entityId: row.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "roster.title.deleted",
+      payload: { title: row.title },
+      payloadSummary: `${me.name} removed title "${row.title}".`,
+    });
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

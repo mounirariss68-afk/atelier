@@ -1,24 +1,18 @@
 import { useRoute } from "wouter";
-import { Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { Card, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
-import { PeopleEmptyState } from "./PeopleEmptyState";
-import { useCompBands, useCompReview, useRecognition } from "./peopleSeed";
 import { useCanSeeReward } from "./peoplePerms";
 import { PayDocsAdminView, BankChangesAdminView } from "./PeoplePayAdmin";
 
 const SUBS = [
-  { id: "bands",        label: "Comp bands" },
-  { id: "review",       label: "Comp review" },
-  { id: "rewards",      label: "Total rewards" },
-  { id: "recognition",  label: "Recognition" },
   { id: "paydocs",      label: "Pay documents" },
   { id: "bankchanges",  label: "Bank changes" },
 ];
 
 export default function PeopleReward() {
   const [, params] = useRoute("/people/reward/:section");
-  const section = params?.section ?? "bands";
+  const section = params?.section ?? "paydocs";
   const { allowed, loading } = useCanSeeReward();
 
   if (loading) {
@@ -31,11 +25,11 @@ export default function PeopleReward() {
         <LensPageHeader
           eyebrow="Manage · People · Reward · Restricted"
           headline="Reward is Partner/Admin only"
-          lede="Compensation bands, comp-review pipelines and total-rewards detail are visible to Partner and People-Ops Admin personas only. Recognition flows visible to your role live on the home stream."
+          lede="Pay documents and bank-detail changes are visible to Partner and People-Ops Admin personas only."
         />
         <div className="container-atelier py-6">
           <Card className="p-6 text-sm text-text-mute" data-testid="people-reward-restricted">
-            Ask your People Ops partner if you need a specific comp record reviewed.
+            Ask your People Ops partner if you need a specific pay record reviewed.
           </Card>
         </div>
       </PeopleShell>
@@ -45,8 +39,8 @@ export default function PeopleReward() {
   return (
     <PeopleShell stage="reward">
       <LensPageHeader
-        headline="Comp bands, comp review, total rewards, recognition"
-        lede="Compensation policy applied: who's in band, who's drifting, and where carry/bonus and recognition land in the cycle."
+        headline="Pay documents and bank changes"
+        lede="Payslips and pay documents issued to each person, and the bank-detail changes awaiting review."
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
@@ -57,100 +51,10 @@ export default function PeopleReward() {
           ))}
         </TabNav>
         <div className="mt-4">
-          {section === "bands" && <BandsView />}
-          {section === "review" && <ReviewView />}
-          {section === "rewards" && <TotalRewardsView />}
-          {section === "recognition" && <RecognitionView />}
           {section === "paydocs" && <PayDocsAdminView />}
           {section === "bankchanges" && <BankChangesAdminView />}
         </div>
       </div>
     </PeopleShell>
-  );
-}
-
-function BandsView() {
-  const rows = useCompBands();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No compensation bands published yet." />;
-  }
-  return (
-    <Card className="p-4">
-      <table className="w-full text-sm">
-        <thead className="text-xs text-text-mute font-mono uppercase">
-          <tr>
-            <th className="text-left py-2">Level</th>
-            <th>Jurisdiction</th><th>p25</th><th>p50</th><th>p75</th><th>Bonus</th><th>Carry</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((b) => (
-            <tr key={b.id} className="border-t border-border-soft">
-              <td className="py-2 text-text">{b.level}</td>
-              <td className="text-center text-text-mute">{b.jurisdiction}</td>
-              <td className="text-center text-text">${b.baseP25K}K</td>
-              <td className="text-center text-text">${b.baseP50K}K</td>
-              <td className="text-center text-text">${b.baseP75K}K</td>
-              <td className="text-center text-text-mute">{b.bonusTargetPct}%</td>
-              <td className="text-center">
-                <MonoChip tone={b.carryEligible ? "gold" : "default"}>{b.carryEligible ? "yes" : "—"}</MonoChip>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-function ReviewView() {
-  const rows = useCompReview();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No comp-review proposals yet." />;
-  }
-  return (
-    <div className="space-y-2">
-      {rows.map((r) => (
-        <Card key={r.id} className="p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex-1">
-              <div className="text-text">{r.personName}</div>
-              <div className="text-xs text-text-mute mt-0.5">{r.rationale}</div>
-            </div>
-            <MonoChip>${r.currentBaseK}K → ${r.proposedBaseK}K</MonoChip>
-            <MonoChip tone={r.deltaPct > 10 ? "gold" : "default"}>+{r.deltaPct.toFixed(1)}%</MonoChip>
-            <MonoChip>{r.bandPosition}</MonoChip>
-            <MonoChip tone={r.status === "approved" ? "green" : r.status === "submitted" ? "gold" : "default"}>{r.status}</MonoChip>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
-function TotalRewardsView() {
-  return <PeopleEmptyState message="No total-rewards policy published yet." />;
-}
-
-function RecognitionView() {
-  const rows = useRecognition();
-  if (rows.length === 0) {
-    return <PeopleEmptyState message="No recognition awards recorded yet." />;
-  }
-  return (
-    <div className="space-y-2">
-      {rows.map((r) => (
-        <Card key={r.id} className="p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex-1">
-              <div className="text-text">{r.givenBy} → {r.givenTo}</div>
-              <div className="text-sm text-text-mute mt-0.5 italic">"{r.citation}"</div>
-            </div>
-            <MonoChip tone="gold">{r.category}</MonoChip>
-            <span className="text-xs text-text-faint">{r.awardedOn}</span>
-          </div>
-        </Card>
-      ))}
-    </div>
   );
 }

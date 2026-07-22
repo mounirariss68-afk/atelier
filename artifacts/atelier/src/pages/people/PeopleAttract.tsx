@@ -4,11 +4,10 @@ import { UserPlus } from "lucide-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { useReferrals } from "@/lib/v5-hooks";
+import { useAtelierListHireRoles } from "@workspace/api-client-react";
 
 const SUBS = [
   { id: "plan",      label: "Workforce plan" },
-  { id: "brand",     label: "Employer brand" },
-  { id: "sourcing",  label: "Sourcing" },
   { id: "referrals", label: "Referrals" },
 ];
 
@@ -19,8 +18,8 @@ export default function PeopleAttract() {
   return (
     <PeopleShell stage="attract">
       <LensPageHeader
-        headline="Workforce plan, employer brand, sourcing, referrals"
-        lede="The top of the funnel: where the firm decides what it needs, makes itself known, and surfaces candidates the recruiting workspace can act on."
+        headline="Workforce plan and referrals"
+        lede="The top of the funnel: where the firm decides what it needs and surfaces candidates the recruiting workspace can act on."
       />
       <div className="container-atelier py-6 space-y-6">
         <TabNav>
@@ -32,8 +31,6 @@ export default function PeopleAttract() {
         </TabNav>
         <div className="mt-4">
           {section === "plan" && <PlanView />}
-          {section === "brand" && <BrandView />}
-          {section === "sourcing" && <SourcingView />}
           {section === "referrals" && <ReferralsView />}
         </div>
       </div>
@@ -42,36 +39,68 @@ export default function PeopleAttract() {
 }
 
 function PlanView() {
-  return (
-    <Card className="p-6 text-sm text-text-mute" data-testid="workforce-plan-empty">
-      No workforce plan published yet. When practice leads set headcount plans, the open-vs-plan gap per practice appears here.
-    </Card>
-  );
-}
+  const { data, isLoading, error } = useAtelierListHireRoles();
+  if (error) {
+    return (
+      <Card className="p-6 text-sm text-text-mute" data-testid="workforce-plan-restricted">
+        The workforce plan is visible to HR and partner-tier personas.
+      </Card>
+    );
+  }
+  if (isLoading) return <p className="text-sm text-text-faint">Loading…</p>;
 
-function BrandView() {
+  const roles = data?.items ?? [];
+  const openRoles = roles.filter((r) => r.status === "open");
+
+  if (openRoles.length === 0) {
+    return (
+      <Card className="p-6 text-sm text-text-mute" data-testid="workforce-plan-empty">
+        No open positions yet. Open roles in the Hire workspace and the headcount gap per practice appears here.
+        <Link href="/people/hire/roles" className="mt-3 inline-block text-gold hover:underline">Open Hire →</Link>
+      </Card>
+    );
+  }
+
+  // Minimal workforce plan: headcount gap per practice (grouped by level as
+  // the closest available dimension on hire roles) vs open roles.
+  const byPractice = new Map<string, { open: number; candidates: number }>();
+  for (const r of openRoles) {
+    const key = r.level?.trim() || "Unspecified";
+    const cur = byPractice.get(key) ?? { open: 0, candidates: 0 };
+    cur.open += 1;
+    cur.candidates += r.activeCandidates ?? 0;
+    byPractice.set(key, cur);
+  }
+  const rows = Array.from(byPractice.entries()).sort((a, b) => b[1].open - a[1].open);
+
   return (
-    <div className="grid gap-3 md:grid-cols-2">
+    <div className="space-y-4" data-testid="workforce-plan">
+      <p className="text-sm text-text-mute">
+        {openRoles.length} open position(s) across {rows.length} practice group(s). The gap is the number of
+        open roles still to be filled per practice.
+      </p>
       <Card className="p-4">
-        <div className="text-xs font-mono uppercase text-text-mute">Careers site</div>
-        <div className="mt-2 text-sm text-text-mute">No careers-site analytics connected yet.</div>
+        <table className="w-full text-sm">
+          <thead className="text-xs text-text-mute font-mono uppercase">
+            <tr>
+              <th className="text-left py-2">Practice</th>
+              <th>Open roles (gap)</th>
+              <th>Active candidates</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([practice, stat]) => (
+              <tr key={practice} className="border-t border-border-soft" data-testid={`workforce-plan-row-${practice}`}>
+                <td className="py-2 text-text">{practice}</td>
+                <td className="text-center"><MonoChip tone={stat.open > 0 ? "gold" : "default"}>{stat.open}</MonoChip></td>
+                <td className="text-center text-text-mute">{stat.candidates}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Card>
-      <Card className="p-4">
-        <div className="text-xs font-mono uppercase text-text-mute">Press & content</div>
-        <Link href="/press" className="mt-1 inline-block text-gold hover:underline">Open The Press →</Link>
-        <div className="mt-2 text-sm text-text-mute">Editorial calendar drives top-of-funnel signal.</div>
-      </Card>
+      <Link href="/people/hire/candidates" className="inline-block text-gold hover:underline">Open Candidates →</Link>
     </div>
-  );
-}
-
-function SourcingView() {
-  return (
-    <Card className="p-4 text-sm text-text-mute">
-      <div className="text-text font-medium">Pursuit Scout — recruiting mode</div>
-      <p className="mt-2">Sourced candidates land in the Hire workspace under Candidate CRM. Scout runs nightly across configured channels (LinkedIn, alumni, referrals, partner-firm bench).</p>
-      <Link href="/people/hire/candidates" className="mt-3 inline-block text-gold hover:underline">Open Candidate CRM →</Link>
-    </Card>
   );
 }
 

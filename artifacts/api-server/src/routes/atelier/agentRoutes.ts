@@ -42,6 +42,7 @@ import {
   type SalesStage,
 } from "../../lib/atelier-agents/pipeline.js";
 import { atelierEngagements, atelierCharterVersions } from "@workspace/db";
+import { ensureAssignmentGrant } from "../../lib/atelier-access-autogrant.js";
 import { runCharterArchitect } from "../../lib/atelier-agents/runner.js";
 import { applyStageTransition } from "../../lib/atelier-agents/stage-service.js";
 import { scoreRubric } from "../../lib/atelier-cli/qualification-rubric.js";
@@ -618,6 +619,41 @@ router.patch("/opportunities/:oppId", async (req, res) => {
     payload: { changed, ...patch, updatedAt: undefined },
     payloadSummary: `${me.name} edited ${changed.join(", ")} on "${updated.name}".`,
   });
+
+  // Task #509 — assignment auto-grants: when the opportunity already has a
+  // delivery engagement, assigning a new owner/lead must also grant them
+  // access to that engagement (firm-wide roles are skipped inside the helper).
+  if (changed.includes("partnerOwnerId") || changed.includes("engagementLeadId")) {
+    const [linkedEng] = await db
+      .select({ id: atelierEngagements.id })
+      .from(atelierEngagements)
+      .where(
+        and(
+          eq(atelierEngagements.opportunityId, opp.id),
+          isNull(atelierEngagements.deletedAt),
+        ),
+      );
+    if (linkedEng) {
+      if (changed.includes("engagementLeadId") && updated.engagementLeadId) {
+        await ensureAssignmentGrant({
+          userId: updated.engagementLeadId,
+          engagementId: linkedEng.id,
+          roleOnEngagement: "lead",
+          actor: me,
+          reason: "opportunity-lead-assignment",
+        });
+      }
+      if (changed.includes("partnerOwnerId") && updated.partnerOwnerId) {
+        await ensureAssignmentGrant({
+          userId: updated.partnerOwnerId,
+          engagementId: linkedEng.id,
+          roleOnEngagement: "member",
+          actor: me,
+          reason: "opportunity-owner-assignment",
+        });
+      }
+    }
+  }
 
   res.json(await buildOppWire(updated));
 });

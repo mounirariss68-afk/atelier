@@ -4,6 +4,7 @@ import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitive
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RosterNav } from "./RosterNav";
+import { PersonPicker, PartnerFirmSelect, JurisdictionSelect } from "./rosterPickers";
 
 interface ComplianceRecord {
   id: string;
@@ -152,7 +153,11 @@ export default function RosterCompliance(): React.ReactElement {
           </label>
           <label className="space-y-1">
             <span className="font-mono text-[11px] uppercase text-text-mute">Jurisdiction</span>
-            <Input value={draft.jurisdiction} onChange={(e) => setDraft({ ...draft, jurisdiction: e.target.value })} />
+            <JurisdictionSelect
+              value={draft.jurisdiction}
+              onChange={(v) => setDraft({ ...draft, jurisdiction: v })}
+              testId="compliance-jurisdiction"
+            />
           </label>
           <label className="space-y-1">
             <span className="font-mono text-[11px] uppercase text-text-mute">Person type</span>
@@ -170,14 +175,19 @@ export default function RosterCompliance(): React.ReactElement {
             </select>
           </label>
           <label className="space-y-1">
-            <span className="font-mono text-[11px] uppercase text-text-mute">Person id</span>
-            <Input value={draft.personId} onChange={(e) => setDraft({ ...draft, personId: e.target.value })} />
+            <span className="font-mono text-[11px] uppercase text-text-mute">Person</span>
+            <PersonPicker
+              value={draft.personId}
+              onChange={(id) => setDraft({ ...draft, personId: id })}
+              testId="compliance-personid"
+            />
           </label>
           <label className="space-y-1">
-            <span className="font-mono text-[11px] uppercase text-text-mute">Partner firm id</span>
-            <Input
+            <span className="font-mono text-[11px] uppercase text-text-mute">Partner firm</span>
+            <PartnerFirmSelect
               value={draft.partnerFirmId}
-              onChange={(e) => setDraft({ ...draft, partnerFirmId: e.target.value })}
+              onChange={(id) => setDraft({ ...draft, partnerFirmId: id })}
+              testId="compliance-partner-firm"
             />
           </label>
           <label className="space-y-1">

@@ -16,6 +16,7 @@ import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { PeopleShell } from "./PeopleShell";
 import { PeopleEmptyState } from "./PeopleEmptyState";
+import { countryName, countryCode } from "@/lib/countries";
 
 // ------------------------------------------------------------------
 // Wire types + data hooks (live roster API)
@@ -200,15 +201,8 @@ const WORKER_LABEL: Record<WorkerKind, string> = {
   partner_firm_resource: "Partner-firm",
 };
 
-const COUNTRY_LABEL: Record<string, string> = {
-  AE: "United Arab Emirates", SA: "Saudi Arabia", EG: "Egypt", JO: "Jordan",
-  QA: "Qatar", LB: "Lebanon", IN: "India", PT: "Portugal", GB: "United Kingdom",
-  DE: "Germany", ES: "Spain", FR: "France", SG: "Singapore", JP: "Japan",
-  BR: "Brazil", NG: "Nigeria", PL: "Poland", TR: "Türkiye", US: "United States",
-  IT: "Italy", NL: "Netherlands", CH: "Switzerland", GR: "Greece", MA: "Morocco",
-  TN: "Tunisia", KW: "Kuwait", BH: "Bahrain", OM: "Oman", PK: "Pakistan",
-};
-const labelCountry = (iso: string) => COUNTRY_LABEL[iso] ?? iso;
+// Task #509 — country labels come from the shared all-countries reference.
+const labelCountry = (iso: string) => countryName(iso);
 
 function tenureYears(startDate: string): number {
   const start = new Date(startDate).getTime();
@@ -501,7 +495,7 @@ function DemographicsPanel({
             onClick={(state: { activeLabel?: string }) => {
               const label = state?.activeLabel;
               if (label) {
-                const iso = Object.entries(COUNTRY_LABEL).find(([, v]) => v === label)?.[0] ?? label;
+                const iso = countryCode(label) ?? label;
                 navigate(cohortHref({ country: iso }));
               }
             }}

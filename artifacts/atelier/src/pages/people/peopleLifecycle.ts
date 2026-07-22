@@ -5,7 +5,7 @@
  * modules. The People lens shell renders the lifecycle ribbon from this file
  * and the Manage shell's contextual section-tabs slot reads the same labels.
  *
- *   Attract → Hire → Onboard → Develop → Perform → Reward → Retain → Offboard
+ *   Attract → Hire → Onboard → Develop → Perform → Reward → Offboard
  */
 
 export type StageId =
@@ -15,7 +15,6 @@ export type StageId =
   | "develop"
   | "perform"
   | "reward"
-  | "retain"
   | "offboard";
 
 export interface StageDef {
@@ -28,14 +27,13 @@ export interface StageDef {
 }
 
 export const STAGES: readonly StageDef[] = [
-  { id: "attract",  label: "Attract",  href: "/people/attract",  blurb: "Workforce plan, employer brand, sourcing, referrals." },
+  { id: "attract",  label: "Attract",  href: "/people/attract",  blurb: "Workforce plan and referrals." },
   { id: "hire",     label: "Hire",     href: "/people/hire",     blurb: "Roles, candidates, interviews, references, offers." },
   { id: "onboard",  label: "Onboard",  href: "/people/onboard",  blurb: "Pre-boarding, day-1, equipment, attestations." },
-  { id: "develop",  label: "Develop",  href: "/people/develop",  blurb: "Learning, certifications, mentoring, skill gaps." },
-  { id: "perform",  label: "Perform",  href: "/people/perform",  blurb: "Goals, check-ins, reviews, calibration, succession." },
-  { id: "reward",   label: "Reward",   href: "/people/reward",   blurb: "Comp bands, comp review, total rewards, recognition." },
-  { id: "retain",   label: "Retain",   href: "/people/retain",   blurb: "Engagement, flight-risk, internal mobility, stay interviews." },
-  { id: "offboard", label: "Offboard", href: "/people/offboard", blurb: "Resignation, knowledge transfer, access revocation, exit." },
+  { id: "develop",  label: "Develop",  href: "/people/develop",  blurb: "Training library and certifications." },
+  { id: "perform",  label: "Perform",  href: "/people/perform",  blurb: "Goals, check-ins, reviews." },
+  { id: "reward",   label: "Reward",   href: "/people/reward",   blurb: "Pay documents and bank changes." },
+  { id: "offboard", label: "Offboard", href: "/people/offboard", blurb: "Offboarding queue and last-day tasks." },
 ] as const;
 
 export interface CrossModuleDef {
@@ -46,7 +44,6 @@ export interface CrossModuleDef {
 
 export const CROSS_MODULES: readonly CrossModuleDef[] = [
   { id: "people",     label: "People directory", href: "/people/people" },
-  { id: "org",        label: "Org & roles",      href: "/people/org" },
   { id: "access",     label: "Access matrix",    href: "/people/access" },
   { id: "skills",     label: "Skill graph",      href: "/people/skills" },
   { id: "composition", label: "Team composition", href: "/people/composition" },

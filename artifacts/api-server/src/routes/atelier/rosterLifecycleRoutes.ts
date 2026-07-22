@@ -24,13 +24,13 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, desc, eq, isNull, lte, gte, ne, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierEmployees,
   atelierContractors,
-  atelierPartnerFirms,
   atelierPartnerFirmResources,
   atelierAccounts,
   atelierEngagements,
@@ -45,10 +45,17 @@ import {
   atelierOffboardingSteps,
   atelierComplianceRecords,
   atelierPaneAItems,
+  atelierStudioCandidates,
+  atelierStudioOffers,
+  atelierAuthCredentials,
+  atelierLoginActivationTokens,
 } from "@workspace/db";
 import { runAccessSentinel } from "./rosterRoutes.js";
 import { canViewSensitivePeopleData } from "./personaRoles.js";
 import { assertAuditAction } from "./auditContract.js";
+import { hashPassword } from "../../lib/auth/passwords.js";
+import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email.js";
+import { emitSelfNotification } from "./meRoutes.js";
 
 const router: IRouter = Router();
 
@@ -188,35 +195,38 @@ interface StepTemplate {
   daysFromStart?: number;
 }
 
+// Task #509 — researched role-specific pre-boarding checklists per worker
+// type. Every sequence ends with the "login.created" step: creating the
+// portal login is the FINAL pre-boarding action (replaces the old parallel
+// add-joiner form) and is executed via POST /roster/onboarding/:id/create-login.
+const LOGIN_STEP_CODE = "login.created";
+
 const ONBOARDING_TEMPLATES: Record<WorkerType, StepTemplate[]> = {
   employee: [
-    { code: "nda.signed", title: "NDA signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "contract.signed", title: "Employment contract signed", ownerRole: "partner", daysFromStart: 0, isComplianceGate: true },
-    { code: "payroll.registered", title: "Payroll registered (GOSI / WPS)", ownerRole: "hr", daysFromStart: 1, isComplianceGate: true },
-    { code: "sso.provisioned", title: "SSO + email provisioned", ownerRole: "hr", daysFromStart: 2 },
-    { code: "slack.invited", title: "Invited to Slack workspaces", ownerRole: "hr", daysFromStart: 2 },
-    { code: "calendar.welcome", title: "Welcome calendar block", ownerRole: "hr", daysFromStart: 3 },
-    { code: "equipment.shipped", title: "Equipment shipped", ownerRole: "hr", daysFromStart: 3 },
-    { code: "benefits.enrolled", title: "Benefits enrollment", ownerRole: "hr", daysFromStart: 5 },
-    { code: "security.training", title: "Security & data-handling training", ownerRole: "hr", daysFromStart: 7 },
-    { code: "manager.intro", title: "Manager intro session", ownerRole: "senior_manager", daysFromStart: 7 },
-    { code: "atelier.tour", title: "The Atelier walkthrough", ownerRole: "senior_manager", daysFromStart: 7 },
+    { code: "contract.signed", title: "Employment contract signed", description: "Countersigned employment contract on file.", ownerRole: "partner", daysFromStart: 0, isComplianceGate: true },
+    { code: "rtw.verified", title: "Right-to-work / visa verified", description: "Passport, residency/visa status and work permit checked and recorded.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "it.sso.provisioned", title: "IT account, email & SSO provisioned", description: "Corporate email, SSO identity, MFA enrolment and core tool access.", ownerRole: "hr", daysFromStart: 2 },
+    { code: "payroll.bank", title: "Payroll & bank details registered", description: "Payroll enrolment (incl. GOSI/WPS where applicable) and verified bank details.", ownerRole: "hr", daysFromStart: 2, isComplianceGate: true },
+    { code: "policies.acknowledged", title: "Policies acknowledged", description: "Code of conduct, confidentiality, IT security and expenses policies signed off.", ownerRole: "hr", daysFromStart: 3 },
+    { code: "buddy.manager.intro", title: "Buddy & manager introductions", description: "Buddy assigned; manager intro and first-week schedule booked.", ownerRole: "senior_manager", daysFromStart: 5 },
+    { code: "workspace.ready", title: "Workspace ready", description: "Equipment issued/shipped and desk or remote setup confirmed.", ownerRole: "hr", daysFromStart: 5 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 7 },
   ],
   contractor: [
-    { code: "nda.signed", title: "NDA signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "msa.signed", title: "Master services agreement signed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "conflict.disclosed", title: "Conflicts of interest disclosed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "vendor.onboarded", title: "Vendor entity onboarded (AP)", ownerRole: "hr", daysFromStart: 1 },
-    { code: "sso.provisioned", title: "Limited SSO provisioned", ownerRole: "hr", daysFromStart: 2 },
-    { code: "invoice.setup", title: "Invoice cadence configured", ownerRole: "hr", daysFromStart: 3 },
-    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "senior_manager", daysFromStart: 3 },
+    { code: "nda.msa.signed", title: "NDA & MSA signed", description: "Non-disclosure and master services agreements executed.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "conflict.disclosed", title: "Conflicts of interest disclosed", description: "Conflict disclosure captured and cleared.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "vendor.ap.setup", title: "Vendor & AP setup", description: "Vendor entity registered with accounts payable; payment terms agreed.", ownerRole: "hr", daysFromStart: 1 },
+    { code: "sso.limited", title: "Limited SSO provisioned", description: "Scoped access to the tools required for the engagement only.", ownerRole: "hr", daysFromStart: 2 },
+    { code: "invoice.cadence", title: "Invoice cadence agreed", description: "Invoicing schedule, rate and approval chain confirmed.", ownerRole: "hr", daysFromStart: 3 },
+    { code: "scope.briefed", title: "Engagement scope briefed", description: "Scope of work, deliverables and ways of working walked through.", ownerRole: "senior_manager", daysFromStart: 3 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 4 },
   ],
   partner_firm_resource: [
-    { code: "msa.firm.verified", title: "Firm MSA verified active", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "nda.firm.verified", title: "Firm NDA covers resource", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "conflict.disclosed", title: "Resource conflicts disclosed", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
-    { code: "sso.guest", title: "Guest SSO provisioned", ownerRole: "hr", daysFromStart: 1 },
-    { code: "scope.briefed", title: "Engagement scope briefed", ownerRole: "senior_manager", daysFromStart: 2 },
+    { code: "firm.agreement.verified", title: "Partner-firm agreement verified", description: "Firm MSA and NDA verified active and covering this resource.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "conflict.disclosed", title: "Resource conflicts disclosed", description: "Conflict disclosure for this resource captured and cleared.", ownerRole: "hr", daysFromStart: 0, isComplianceGate: true },
+    { code: "access.limited", title: "Limited access provisioned", description: "Guest access scoped to the assigned engagement only.", ownerRole: "hr", daysFromStart: 1 },
+    { code: "engagement.briefed", title: "Engagement brief delivered", description: "Engagement context, client protocols and deliverables briefed.", ownerRole: "senior_manager", daysFromStart: 2 },
+    { code: LOGIN_STEP_CODE, title: "Portal login created", description: "Create the Atelier login — the final pre-boarding step.", ownerRole: "hr", daysFromStart: 3 },
   ],
 };
 
@@ -531,7 +541,10 @@ router.post("/roster/invitations", async (req, res, next) => {
       country?: string | null;
       partnerFirmId?: string | null;
       startDate?: string | null;
+      employingEntity?: string | null;
       expiresInDays?: number;
+      sourceKind?: string;
+      sourceId?: string;
     };
     const wt = body.workerType;
     if (!wt || !["employee", "contractor", "partner_firm_resource"].includes(wt)) {
@@ -541,6 +554,84 @@ router.post("/roster/invitations", async (req, res, next) => {
     if (!body.fullName?.trim() || !body.email?.trim()) {
       res.status(400).json({ error: "fullName + email required" });
       return;
+    }
+    // Task #509 — invitations can only be created from a hiring source:
+    // a hired candidate, an accepted offer, or a contracted partner firm.
+    // Free-standing invitations are no longer allowed.
+    const sourceKind = body.sourceKind;
+    const sourceId = (body.sourceId ?? "").trim();
+    if (
+      !sourceKind ||
+      !["hired_candidate", "accepted_offer", "partner_firm_resource"].includes(sourceKind) ||
+      !sourceId
+    ) {
+      res.status(400).json({
+        error: "invitation-source-required",
+        message:
+          "Invitations must be created from a hired candidate, an accepted offer, or a contracted partner-firm resource (sourceKind + sourceId).",
+      });
+      return;
+    }
+    if (sourceKind === "hired_candidate") {
+      const [cand] = await db
+        .select({ id: atelierStudioCandidates.id, stage: atelierStudioCandidates.stage })
+        .from(atelierStudioCandidates)
+        .where(and(eq(atelierStudioCandidates.id, sourceId), isNull(atelierStudioCandidates.deletedAt)));
+      if (!cand) {
+        res.status(404).json({ error: "source-candidate-not-found" });
+        return;
+      }
+      if (cand.stage !== "hired") {
+        res.status(422).json({ error: "candidate-not-hired", stage: cand.stage });
+        return;
+      }
+    } else if (sourceKind === "accepted_offer") {
+      const [offer] = await db
+        .select({ id: atelierStudioOffers.id, status: atelierStudioOffers.status })
+        .from(atelierStudioOffers)
+        .where(and(eq(atelierStudioOffers.id, sourceId), isNull(atelierStudioOffers.deletedAt)));
+      if (!offer) {
+        res.status(404).json({ error: "source-offer-not-found" });
+        return;
+      }
+      if (offer.status !== "accepted") {
+        res.status(422).json({ error: "offer-not-accepted", status: offer.status });
+        return;
+      }
+    } else {
+      // partner_firm_resource — the source is a contracted individual on a
+      // partner firm's bench, not the firm row itself. Provenance and firm
+      // linkage come from the resource record.
+      const [resource] = await db
+        .select({
+          id: atelierPartnerFirmResources.id,
+          partnerFirmId: atelierPartnerFirmResources.partnerFirmId,
+          status: atelierPartnerFirmResources.status,
+        })
+        .from(atelierPartnerFirmResources)
+        .where(
+          and(
+            eq(atelierPartnerFirmResources.id, sourceId),
+            isNull(atelierPartnerFirmResources.deletedAt),
+          ),
+        );
+      if (!resource) {
+        res.status(404).json({ error: "source-partner-firm-resource-not-found" });
+        return;
+      }
+      if (resource.status !== "active") {
+        res.status(422).json({
+          error: "partner-firm-resource-not-active",
+          status: resource.status,
+        });
+        return;
+      }
+      if (wt !== "partner_firm_resource") {
+        res.status(422).json({ error: "partner-firm-source-requires-pfr-worker-type" });
+        return;
+      }
+      // Firm linkage always comes from the resource record.
+      body.partnerFirmId = resource.partnerFirmId;
     }
     const id = rid("inv");
     const expDays = Math.max(1, Math.min(60, body.expiresInDays ?? 14));
@@ -557,7 +648,10 @@ router.post("/roster/invitations", async (req, res, next) => {
         country: body.country ?? null,
         partnerFirmId: body.partnerFirmId ?? null,
         startDate: body.startDate ?? null,
+        employingEntity: body.employingEntity ?? null,
       },
+      sourceKind,
+      sourceId,
       sentByUserId: me.id,
       sentAt: new Date(),
       expiresAt,
@@ -568,7 +662,7 @@ router.post("/roster/invitations", async (req, res, next) => {
       entityId: id,
       actor: me,
       action: "invitation.sent",
-      payload: { workerType: wt, email: body.email },
+      payload: { workerType: wt, email: body.email, sourceKind, sourceId },
       summary: `${me.name} invited ${body.fullName} (${wt}).`,
     });
     // Onboarding sequence is started immediately on invitation creation so the
@@ -717,6 +811,7 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
         title: draft.title ?? null,
         country: draft.country ?? null,
         startDate: draft.startDate ?? null,
+        employingEntity: draft.employingEntity ?? null,
         status: "onboarding",
       });
     } else if (inv.workerType === "contractor") {
@@ -846,13 +941,24 @@ router.get("/roster/onboarding", async (req, res, next) => {
     const out = await Promise.all(
       onbs.map(async (o) => {
         const person = await findPerson(o.personId);
+        // Task #509 — never show raw "draft:inv_…" placeholders. A draft
+        // onboarding (invitation not yet accepted) resolves the invitee's
+        // name from the invitation's person draft.
+        let personName = person?.fullName ?? null;
+        if (!personName && o.invitationId) {
+          const [inv] = await db
+            .select({ personDraft: atelierInvitations.personDraft })
+            .from(atelierInvitations)
+            .where(eq(atelierInvitations.id, o.invitationId));
+          personName = inv?.personDraft?.fullName ?? null;
+        }
         const steps = (stepsByOnb.get(o.id) ?? []).sort((a, b) => a.sortKey - b.sortKey);
         const done = steps.filter((s) => s.status === "done").length;
         return {
           id: o.id,
           personId: o.personId,
           personType: o.personType,
-          personName: person?.fullName ?? o.personId,
+          personName: personName ?? o.personId,
           status: o.status,
           targetStartDate: o.targetStartDate,
           startedAt: o.startedAt.toISOString(),
@@ -905,6 +1011,16 @@ router.post("/roster/onboarding/:id/steps/:stepId/advance", async (req, res, nex
       );
     if (!step) {
       res.status(404).json({ error: "step-not-found" });
+      return;
+    }
+    // Task #509 — the "Portal login created" step is completed exclusively by
+    // POST /roster/onboarding/:id/create-login (which actually creates the
+    // login). It may still be skipped/blocked manually.
+    if (step.code === LOGIN_STEP_CODE && next_status === "done") {
+      res.status(422).json({
+        error: "use-create-login",
+        message: "Create the portal login via the Create Login action — that marks this step done.",
+      });
       return;
     }
     await db
@@ -993,6 +1109,249 @@ router.post("/roster/onboarding/:id/steps/:stepId/advance", async (req, res, nex
         .where(eq(atelierOnboardings.id, req.params.id));
     }
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #509 — create the portal login as the FINAL pre-boarding step.
+// Replaces the parallel "Add joiner" form: the person row already exists
+// (materialised at invitation-accept), so this creates only the
+// atelier_users identity + credential, links employees.user_id, marks the
+// "login.created" onboarding step done, and emails the invitee a one-time
+// temporary password (returned once, never persisted in plaintext).
+// @cli-skip: HR admin mutation returning a one-time secret; no CLI shape
+router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isPartnerOrOps(me)) {
+      res.status(403).json({ error: "partner-or-operations-only" });
+      return;
+    }
+    const [onb] = await db
+      .select()
+      .from(atelierOnboardings)
+      .where(and(eq(atelierOnboardings.id, req.params.id), isNull(atelierOnboardings.deletedAt)));
+    if (!onb) {
+      res.status(404).json({ error: "onboarding-not-found" });
+      return;
+    }
+    if (onb.personId.startsWith("draft:")) {
+      res.status(422).json({
+        error: "invitation-not-accepted",
+        message: "Mark the invitation accepted first — the login is created for the materialised person.",
+      });
+      return;
+    }
+    const person = await findPerson(onb.personId);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const email = (person.email ?? "").trim().toLowerCase();
+    if (!email.includes("@")) {
+      res.status(422).json({ error: "person-has-no-email" });
+      return;
+    }
+    const existingUserId = await resolveLinkedUserIdForPerson(person);
+    if (existingUserId) {
+      const [cred] = await db
+        .select({ email: atelierAuthCredentials.email })
+        .from(atelierAuthCredentials)
+        .where(eq(atelierAuthCredentials.userId, existingUserId));
+      if (cred) {
+        res.status(409).json({ error: "login-already-exists" });
+        return;
+      }
+    }
+    const [credByEmail] = await db
+      .select({ email: atelierAuthCredentials.email })
+      .from(atelierAuthCredentials)
+      .where(eq(atelierAuthCredentials.email, email));
+    if (credByEmail) {
+      res.status(409).json({ error: "email-taken", message: "A login already exists for that email." });
+      return;
+    }
+
+    const initials =
+      person.fullName
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((p) => p[0]!.toUpperCase())
+        .slice(0, 2)
+        .join("") || "??";
+    const role =
+      person.workerType === "employee"
+        ? "employee"
+        : person.workerType === "contractor"
+          ? "contractor"
+          : "partner_firm_resource";
+    const roleLabel =
+      person.workerType === "employee"
+        ? "Employee"
+        : person.workerType === "contractor"
+          ? "Contractor"
+          : "Partner Firm Resource";
+    // Security: no temporary password is ever generated, returned, or
+    // emailed. The credential row is created with an unguessable random
+    // hash (the account cannot sign in yet) and a one-time, short-TTL
+    // activation token lets the joiner choose their own password.
+    const activationToken = randomBytes(32).toString("hex");
+    const activationTokenHash = createHash("sha256").update(activationToken).digest("hex");
+    const activationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    const userId = existingUserId ?? rid("p_joiner");
+
+    await db.transaction(async (tx) => {
+      if (!existingUserId) {
+        await tx.insert(atelierUsers).values({
+          id: userId,
+          orgId: me.orgId,
+          email,
+          name: person.fullName,
+          initials,
+          role,
+          roleLabel,
+          title: roleLabel,
+        });
+        if (person.workerType === "employee") {
+          await tx
+            .update(atelierEmployees)
+            .set({ userId, updatedAt: new Date() })
+            .where(eq(atelierEmployees.id, person.id));
+        }
+      }
+      await tx.insert(atelierAuthCredentials).values({
+        email,
+        userId,
+        // Placeholder hash of 48 random bytes that are immediately
+        // discarded — sign-in is impossible until the activation link is
+        // used to set a real password.
+        passwordHash: hashPassword(randomBytes(48).toString("hex")),
+        // user_managed=true: the boot seed must never overwrite this hash.
+        userManaged: true,
+        mustChangePassword: true,
+        mustChangeReason: "joiner",
+      });
+      await tx.insert(atelierLoginActivationTokens).values({
+        tokenHash: activationTokenHash,
+        email,
+        userId,
+        createdByUserId: me.id,
+        expiresAt: activationExpiresAt,
+      });
+      // Mark the login.created step done (if the sequence has one).
+      const [loginStep] = await tx
+        .select()
+        .from(atelierOnboardingSteps)
+        .where(
+          and(
+            eq(atelierOnboardingSteps.onboardingId, onb.id),
+            eq(atelierOnboardingSteps.code, LOGIN_STEP_CODE),
+          ),
+        );
+      if (loginStep && loginStep.status !== "done") {
+        await tx
+          .update(atelierOnboardingSteps)
+          .set({
+            status: "done",
+            completedAt: new Date(),
+            completedByUserId: me.id,
+            blockedReason: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierOnboardingSteps.id, loginStep.id));
+      }
+      await tx.insert(atelierAuditEvents).values({
+        id: `audit_${randomUUID()}`,
+        entityType: "onboarding",
+        entityId: onb.id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "onboarding.login.created",
+        payload: { personId: person.id, userId, email, workerType: person.workerType },
+        payloadSummary: `${me.name} created the portal login for ${person.fullName} (${email}).`,
+      });
+      await emitSelfNotification(
+        {
+          orgId: me.orgId,
+          userId,
+          kind: "welcome",
+          title: "Welcome to Cognirise",
+          body: "Your workspace is ready. Start by reviewing your profile, then explore your Time and Expenses tabs.",
+          href: "/me/profile",
+        },
+        tx,
+      );
+    });
+
+    // If login was the last outstanding step, complete the sequence and
+    // activate the person (same rule as the advance route).
+    const allSteps = await db
+      .select()
+      .from(atelierOnboardingSteps)
+      .where(eq(atelierOnboardingSteps.onboardingId, onb.id));
+    const blockedCompliance = allSteps.some((s) => s.isComplianceGate && s.status === "blocked");
+    const allFinal = allSteps.every((s) => s.status === "done" || s.status === "skipped");
+    if (!blockedCompliance && allFinal) {
+      await db
+        .update(atelierOnboardings)
+        .set({ status: "complete", completedAt: new Date(), blockedAt: null, blockedReason: null, updatedAt: new Date() })
+        .where(eq(atelierOnboardings.id, onb.id));
+      const tbl =
+        onb.personType === "employee"
+          ? atelierEmployees
+          : onb.personType === "contractor"
+            ? atelierContractors
+            : atelierPartnerFirmResources;
+      await db
+        .update(tbl)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(eq(tbl.id, onb.personId));
+      await audit({
+        entityType: "onboarding",
+        entityId: onb.id,
+        actor: { id: "ag_onboarding_concierge", name: "Onboarding Concierge", role: "agent" },
+        actorIsAgent: true,
+        agentId: "ag_onboarding_concierge",
+        action: "onboarding.completed",
+        summary: `Onboarding Concierge completed sequence — person activated.`,
+      });
+    }
+
+    // Welcome email — best-effort, after commit; never fails the request.
+    let signInUrl: string | null = null;
+    try {
+      const parsedOrigin = new URL(req.get("origin")?.trim() ?? "");
+      if (parsedOrigin.protocol === "https:" || parsedOrigin.protocol === "http:") {
+        signInUrl = parsedOrigin.origin;
+      }
+    } catch {
+      // No/invalid Origin — omit the link.
+    }
+    const activationUrl = signInUrl
+      ? `${signInUrl}/activate?token=${activationToken}`
+      : `/activate?token=${activationToken}`;
+    const welcomeEmail = await sendJoinerWelcomeEmail({
+      fullName: person.fullName,
+      email,
+      activationUrl: signInUrl ? activationUrl : null,
+      activationValidity: "72 hours",
+      workerType: person.workerType === "employee" ? "employee" : "contractor",
+      signInUrl,
+    });
+
+    // The activation URL is returned once so HR can share it through a
+    // secure channel when email delivery isn't configured. It is a
+    // single-use, 72-hour token — never a password.
+    res.status(201).json({
+      ok: true,
+      userId,
+      activationUrl,
+      activationExpiresAt: activationExpiresAt.toISOString(),
+      welcomeEmail,
+    });
   } catch (err) {
     next(err);
   }

@@ -39,8 +39,20 @@ const STATUS_TONE: Record<string, "default" | "gold" | "green" | "amber" | "red"
   skipped: "default",
 };
 
+const LOGIN_STEP_CODE = "login.created";
+
+interface LoginResult {
+  personName: string;
+  activationUrl: string;
+  activationExpiresAt?: string;
+  welcomeEmail: unknown;
+}
+
 export default function RosterOnboarding(): React.ReactElement {
   const [rows, setRows] = React.useState<Onboarding[] | null>(null);
+  const [loginResult, setLoginResult] = React.useState<LoginResult | null>(null);
+  const [loginError, setLoginError] = React.useState<string | null>(null);
+  const [loginBusy, setLoginBusy] = React.useState<string | null>(null);
   const reload = React.useCallback(() => {
     fetch("/api/atelier/roster/onboarding", { credentials: "include" })
       .then((r) => r.json())
@@ -59,6 +71,31 @@ export default function RosterOnboarding(): React.ReactElement {
       body: JSON.stringify({ status, blockedReason: reason }),
     });
     reload();
+  };
+
+  const createLogin = async (onbId: string, personName: string) => {
+    setLoginBusy(onbId);
+    setLoginError(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/onboarding/${onbId}/create-login`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setLoginError(d.message ?? d.error ?? "create-login failed");
+        return;
+      }
+      setLoginResult({
+        personName,
+        activationUrl: d.activationUrl,
+        activationExpiresAt: d.activationExpiresAt,
+        welcomeEmail: d.welcomeEmail,
+      });
+      reload();
+    } finally {
+      setLoginBusy(null);
+    }
   };
 
   return (
@@ -119,10 +156,22 @@ export default function RosterOnboarding(): React.ReactElement {
                   <MonoChip tone={STATUS_TONE[s.status] ?? "default"}>{s.status}</MonoChip>
                   {s.status !== "done" && s.status !== "skipped" && (
                     <div className="flex gap-1">
-                      <Button size="sm" variant="outline" onClick={() => advance(o.id, s.id, "done")}>
-                        Mark done
-                      </Button>
-                      {s.status !== "blocked" && (
+                      {s.code === LOGIN_STEP_CODE ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={loginBusy === o.id || o.personId.startsWith("draft:")}
+                          onClick={() => createLogin(o.id, o.personName)}
+                          data-testid={`create-login-${o.id}`}
+                        >
+                          {loginBusy === o.id ? "Creating…" : "Create login"}
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => advance(o.id, s.id, "done")}>
+                          Mark done
+                        </Button>
+                      )}
+                      {s.status !== "blocked" && s.code !== LOGIN_STEP_CODE && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -142,6 +191,52 @@ export default function RosterOnboarding(): React.ReactElement {
           </Card>
         ))}
       </div>
+
+      {loginError && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="p-6 max-w-md w-full space-y-4">
+            <h3 className="font-medium text-red-500">Couldn’t create login</h3>
+            <p className="text-sm text-text-mute font-mono">{loginError}</p>
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setLoginError(null)}>
+                Close
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {loginResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="p-6 max-w-md w-full space-y-4" data-testid="login-created-dialog">
+            <h3 className="font-medium">Portal login created</h3>
+            <p className="text-sm text-text-mute">
+              A one-time activation link has been generated for{" "}
+              <span className="text-text font-medium">{loginResult.personName}</span>. It lets them
+              choose their own password — no password is ever shared. The link is single-use and
+              expires in 72 hours; if the welcome email wasn't delivered, share it through a secure
+              channel.
+            </p>
+            <div className="bg-bg-deep border border-line rounded p-3 font-mono text-xs break-all select-all" data-testid="login-activation-link">
+              {loginResult.activationUrl}
+            </div>
+            <div className="text-xs text-text-mute font-mono">
+              Welcome email:{" "}
+              {(() => {
+                const w = loginResult.welcomeEmail as { sent?: boolean; status?: string } | null;
+                if (w && typeof w === "object") {
+                  if (w.sent) return "sent";
+                  if (w.status) return String(w.status);
+                }
+                return "not sent";
+              })()}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={() => setLoginResult(null)}>Done</Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

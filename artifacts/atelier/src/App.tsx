@@ -18,6 +18,7 @@ import NotFound from "@/pages/not-found";
 
 // Pages
 import SignIn from "@/pages/SignIn";
+import Activate from "@/pages/Activate";
 import ForcePasswordChange from "@/pages/ForcePasswordChange";
 import Cli from "@/pages/Cli";
 import Home from "@/pages/Home";
@@ -191,9 +192,7 @@ import PeopleOnboard from "@/pages/people/PeopleOnboard";
 import PeopleDevelop from "@/pages/people/PeopleDevelop";
 import PeoplePerform from "@/pages/people/PeoplePerform";
 import PeopleReward from "@/pages/people/PeopleReward";
-import PeopleRetain from "@/pages/people/PeopleRetain";
 import PeopleOffboard from "@/pages/people/PeopleOffboard";
-import PeopleOrg from "@/pages/people/PeopleOrg";
 import PeopleApprovals from "@/pages/people/PeopleApprovals";
 import PeoplePeople from "@/pages/people/PeoplePeople";
 import PeoplePerson from "@/pages/people/PeoplePerson";
@@ -245,6 +244,11 @@ const queryClient = new QueryClient({
 /** Renders the login screen for any route while unauthenticated. */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, mustChangePassword } = useAuth();
+  // One-time joiner activation link — must render pre-auth (the new
+  // joiner has no session yet). The page itself validates the token.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/activate")) {
+    return <Activate />;
+  }
   if (status === "loading") {
     return (
       <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -666,12 +670,13 @@ function Router() {
         <Route path="/people/perform/:section" component={PeoplePerform} />
         <Route path="/people/reward" component={PeopleReward} />
         <Route path="/people/reward/:section" component={PeopleReward} />
-        <Route path="/people/retain" component={PeopleRetain} />
-        <Route path="/people/retain/:section" component={PeopleRetain} />
+        {/* Task #509 — Retain and Org stubs removed; redirect stale links. */}
+        <Route path="/people/retain/:section">{() => <Redirect to="/people" />}</Route>
+        <Route path="/people/retain">{() => <Redirect to="/people" />}</Route>
         <Route path="/people/offboard" component={PeopleOffboard} />
         <Route path="/people/offboard/:section" component={PeopleOffboard} />
-        <Route path="/people/org" component={PeopleOrg} />
-        <Route path="/people/org/:section" component={PeopleOrg} />
+        <Route path="/people/org/:section">{() => <Redirect to="/people/people" />}</Route>
+        <Route path="/people/org">{() => <Redirect to="/people/people" />}</Route>
         <Route path="/people/approvals" component={PeopleApprovals} />
         <Route path="/people/people" component={PeoplePeople} />
         <Route path="/people/people/:id" component={PeoplePerson} />

@@ -123,6 +123,8 @@ export const atelierLegalEntities = pgTable(
     durationYears: integer("duration_years"),
     baseCurrency: text("base_currency").notNull().default(""),
     registeredAddress: text("registered_address").notNull().default(""),
+    /** Task #509 — physical office address (may differ from registered). */
+    officeAddress: text("office_address").notNull().default(""),
     governingLaw: text("governing_law").notNull().default(""),
     courts: text("courts").notNull().default(""),
     registrations: jsonb("registrations").$type<EntityRegistration[]>().notNull().default([]),

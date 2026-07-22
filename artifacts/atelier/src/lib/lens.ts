@@ -12,6 +12,8 @@
  * to render or reason about the picker should import from here.
  */
 
+import { STAGES as PEOPLE_STAGES } from "@/pages/people/peopleLifecycle";
+
 export type LensId =
   | "clients"
   | "people"
@@ -79,22 +81,16 @@ export const LENSES: readonly LensDef[] = [
     description: "Studio, roster, timesheets — hire, run, develop, off-board.",
     shortcut: "⌘2",
     shortcutKey: "2",
+    // Nav defined once (Task #509): the lifecycle strip derives from
+    // peopleLifecycle.STAGES so the two nav configs can't drift.
     sections: [
       { id: "overview", label: "Overview", href: "/people" },
       { id: "roster", label: "Roster", href: "/people/people" },
-      { id: "attract", label: "Attract", href: "/people/attract" },
-      { id: "hire", label: "Hire", href: "/people/hire" },
-      { id: "onboard", label: "Onboard", href: "/people/onboard" },
-      { id: "develop", label: "Develop", href: "/people/develop" },
-      { id: "perform", label: "Perform", href: "/people/perform" },
-      { id: "reward", label: "Reward", href: "/people/reward" },
-      { id: "retain", label: "Retain", href: "/people/retain" },
-      { id: "offboard", label: "Offboard", href: "/people/offboard" },
+      ...PEOPLE_STAGES.map((s) => ({ id: s.id, label: s.label, href: s.href })),
     ],
     // Cross-cutting People modules — reachable but out of the primary
     // lifecycle strip so it doesn't overcrowd.
     more: [
-      { id: "org", label: "Org chart", href: "/people/org" },
       { id: "access", label: "Access", href: "/people/access" },
       { id: "skills", label: "Skills", href: "/people/skills" },
       { id: "time", label: "Time", href: "/people/time" },

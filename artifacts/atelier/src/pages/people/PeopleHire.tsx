@@ -309,6 +309,16 @@ function RoleEditForm({
 
 const CANDIDATE_STAGES = ["sourced", "screening", "interview", "reference", "offer"] as const;
 
+const CANDIDATE_SOURCES = [
+  "referral",
+  "linkedin",
+  "agency",
+  "inbound",
+  "job_board",
+  "networking",
+  "other",
+] as const;
+
 function CandidatesView() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -405,7 +415,12 @@ function CandidatesView() {
                 <option key={r.id} value={r.id}>{r.title} — {r.level}</option>
               ))}
             </select>
-            <input className={inputCls} placeholder="Source (e.g. referral, LinkedIn)" value={source} onChange={(e) => setSource(e.target.value)} data-testid="candidate-source" />
+            <select className={inputCls} value={source} onChange={(e) => setSource(e.target.value)} data-testid="candidate-source">
+              <option value="">Source…</option>
+              {CANDIDATE_SOURCES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
             <input className={inputCls} placeholder="Current role (optional)" value={currentRole} onChange={(e) => setCurrentRole(e.target.value)} />
             <input className={inputCls} placeholder="Current employer (optional)" value={currentEmployer} onChange={(e) => setCurrentEmployer(e.target.value)} />
             <textarea className={`${inputCls} md:col-span-2`} rows={2} placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -547,7 +562,12 @@ function CandidateEditForm({
           <option key={r.id} value={r.id}>{r.title}{r.level ? ` — ${r.level}` : ""}</option>
         ))}
       </select>
-      <input className={inputCls} placeholder="Source (e.g. referral, LinkedIn)" value={source} onChange={(e) => setSource(e.target.value)} />
+      <select className={inputCls} value={source} onChange={(e) => setSource(e.target.value)}>
+        <option value="">Source…</option>
+        {CANDIDATE_SOURCES.map((s) => (
+          <option key={s} value={s}>{s}</option>
+        ))}
+      </select>
       <input className={inputCls} placeholder="Current role" value={currentRole} onChange={(e) => setCurrentRole(e.target.value)} />
       <input className={inputCls} placeholder="Current employer" value={currentEmployer} onChange={(e) => setCurrentEmployer(e.target.value)} />
       <textarea className={`${inputCls} md:col-span-2`} rows={2} placeholder="Notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -980,13 +1000,10 @@ function OffersView() {
         offers.map((o: AtelierHireOffer) => {
           const cand = o.candidateId ? candidateById.get(o.candidateId) : undefined;
           const joinerHref =
-            "/people/onboard/joiners?" +
+            "/people/onboard/invitations?" +
             new URLSearchParams({
-              fromOffer: o.id,
-              name: o.candidateName,
-              ...(cand?.email ? { email: cand.email } : {}),
-              title: o.roleTitle,
-              ...(o.startDate ? { start: o.startDate } : {}),
+              sourceKind: "accepted_offer",
+              sourceId: o.id,
             }).toString();
           return (
             <Card key={o.id} className="p-4" data-testid={`offer-card-${o.id}`}>
@@ -1012,7 +1029,7 @@ function OffersView() {
                   </select>
                   {o.status === "accepted" && !o.joinerUserId ? (
                     <Link href={joinerHref} className={goldBtnCls} data-testid={`offer-create-login-${o.id}`}>
-                      Create their login →
+                      Send invitation →
                     </Link>
                   ) : null}
                   {o.joinerUserId ? <MonoChip tone="gold">login created</MonoChip> : null}

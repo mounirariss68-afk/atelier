@@ -2,7 +2,6 @@ import * as React from "react";
 import { Link } from "wouter";
 import { Card } from "@/components/ui/primitives";
 import { BarRows, Donut, type BarRowDatum, type DonutSegment } from "./charts";
-import { useOrgUnits } from "../peopleSeed";
 import { useRosterDirectory } from "./useRosterDirectory";
 
 const SENIORITY_PALETTE = [
@@ -35,18 +34,7 @@ function prettyGender(g: string): string {
 }
 
 export function WorkforceComposition() {
-  const orgUnits = useOrgUnits();
   const { rows: rosterPeople } = useRosterDirectory();
-
-  const businessUnits: BarRowDatum[] = orgUnits
-    .filter((o) => o.parentId !== null)
-    .map((o) => ({
-      label: o.name,
-      value: o.headcount,
-      caption: o.openRoles > 0 ? `· ${o.openRoles} open` : undefined,
-      tone: o.openRoles > 2 ? ("amber" as const) : ("default" as const),
-    }))
-    .sort((a, b) => b.value - a.value);
 
   const locationRows: BarRowDatum[] = React.useMemo(() => {
     if (!rosterPeople) return [];
@@ -133,20 +121,7 @@ export function WorkforceComposition() {
       <h3 className="font-mono text-xs uppercase tracking-widest text-text-mute">
         Workforce composition
       </h3>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <Link href="/people/org" data-testid="composition-by-unit">
-          <Card hover className="p-4 cursor-pointer h-full">
-            <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">
-              By business unit
-            </div>
-            {businessUnits.length === 0 ? (
-              <div className="text-xs text-text-faint">No business units recorded yet.</div>
-            ) : (
-              <BarRows rows={businessUnits} />
-            )}
-          </Card>
-        </Link>
-
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <Link href="/people/people" data-testid="composition-by-level">
           <Card hover className="p-4 cursor-pointer h-full">
             <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint mb-3">

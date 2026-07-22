@@ -39,6 +39,7 @@ import {
   type StageGateError,
 } from "./pipeline.js";
 import { runCharterArchitect } from "./runner.js";
+import { ensureAssignmentGrant } from "../atelier-access-autogrant.js";
 
 type OppRow = typeof atelierOpportunities.$inferSelect;
 
@@ -406,6 +407,27 @@ export async function ensureEngagementForContract(
         payload: { opportunityId: opp.id, accountId: opp.accountId },
         payloadSummary: `Atelier opened engagement "${eng.name}" automatically when ${opp.name} reached Contract.`,
       });
+      // Task #509 — assignment auto-grants: the opportunity's lead/owner must
+      // be able to see the engagement they were assigned to. The helper skips
+      // firm-wide roles (founding_partner/partner) and is idempotent.
+      if (opp.engagementLeadId) {
+        await ensureAssignmentGrant({
+          userId: opp.engagementLeadId,
+          engagementId: eng.id,
+          roleOnEngagement: "lead",
+          actor: null,
+          reason: "engagement-auto-created-lead",
+        });
+      }
+      if (opp.partnerOwnerId && opp.partnerOwnerId !== opp.engagementLeadId) {
+        await ensureAssignmentGrant({
+          userId: opp.partnerOwnerId,
+          engagementId: eng.id,
+          roleOnEngagement: "member",
+          actor: null,
+          reason: "engagement-auto-created-owner",
+        });
+      }
     }
 
     const [existingCharter] = await db

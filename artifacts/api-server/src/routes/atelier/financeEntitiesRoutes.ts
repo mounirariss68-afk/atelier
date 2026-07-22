@@ -194,6 +194,7 @@ const entityBody = z.object({
   durationYears: z.number().int().min(0).max(1000).nullish(),
   baseCurrency: str(10).default(""),
   registeredAddress: str(600).default(""),
+  officeAddress: str(600).default(""),
   governingLaw: str(600).default(""),
   courts: str(600).default(""),
   registrations: z.array(registrationSchema).max(50).default([]),
@@ -289,6 +290,7 @@ function entityShape(e: EntityRow) {
     durationYears: e.durationYears,
     baseCurrency: e.baseCurrency,
     registeredAddress: e.registeredAddress,
+    officeAddress: e.officeAddress,
     governingLaw: e.governingLaw,
     courts: e.courts,
     registrations: e.registrations ?? [],
@@ -614,6 +616,7 @@ router.post("/finance/entities", async (req, res) => {
       durationYears: b.durationYears ?? null,
       baseCurrency: b.baseCurrency,
       registeredAddress: b.registeredAddress,
+      officeAddress: b.officeAddress,
       governingLaw: b.governingLaw,
       courts: b.courts,
       registrations: normalizeRegistrations(b.registrations),
@@ -671,6 +674,7 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.durationYears !== undefined) assign("durationYears", b.durationYears ?? null);
   if (b.baseCurrency !== undefined) assign("baseCurrency", b.baseCurrency);
   if (b.registeredAddress !== undefined) assign("registeredAddress", b.registeredAddress);
+  if (b.officeAddress !== undefined) assign("officeAddress", b.officeAddress);
   if (b.governingLaw !== undefined) assign("governingLaw", b.governingLaw);
   if (b.courts !== undefined) assign("courts", b.courts);
   if (b.registrations !== undefined)
