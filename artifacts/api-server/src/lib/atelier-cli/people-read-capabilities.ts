@@ -911,6 +911,20 @@ async function canSeeMeetingParent(
     : false;
 }
 
+/** Task #553 — internal-meeting visibility: creator, attendee, or
+ *  founding partner. Standalone meetings have no CRM parent to gate on. */
+export function canSeeInternalMeeting(
+  persona: { id: string; role: string },
+  m: {
+    createdByUserId: string | null;
+    internalAttendees: Array<{ userId: string }> | null;
+  },
+): boolean {
+  if (persona.role === "founding_partner") return true;
+  if (m.createdByUserId === persona.id) return true;
+  return (m.internalAttendees ?? []).some((a) => a.userId === persona.id);
+}
+
 // ---------------------------------------------------------------------
 // meeting.list — ranked_list
 // ---------------------------------------------------------------------
@@ -981,6 +995,24 @@ defineCapability({
     const items: Array<Record<string, unknown>> = [];
     for (const m of rows) {
       if (items.length >= limit) break;
+      // Task #553 — standalone internal meetings: no CRM parent; visible
+      // to creator / attendee / founding partner; excluded from account
+      // or engagement-filtered listings.
+      if (m.parentType === "internal") {
+        if (engagementFilter || accountFilter) continue;
+        if (!canSeeInternalMeeting(ctx.persona, m)) continue;
+        items.push({
+          id: m.id,
+          label: m.title,
+          date: m.date,
+          kind: m.kind,
+          status: m.status,
+          parentType: "internal",
+          parentName: "Internal",
+          href: `/me?tab=calendar`,
+        });
+        continue;
+      }
       const parent = await liveMeetingParent(m.parentType, m.parentId, ctx.persona.orgId);
       if (!parent) continue;
       if (engagementFilter && !(parent.kind === "engagement" && parent.id === engagementFilter)) continue;
@@ -1074,6 +1106,34 @@ defineCapability({
       )
       .limit(1);
     if (!m) return notFound("meeting");
+    // Task #553 — internal meetings: creator / attendee / FP visibility.
+    if (m.parentType === "internal") {
+      if (!canSeeInternalMeeting(ctx.persona, m)) {
+        return denyForbidden("You don't have access to this internal meeting.");
+      }
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: m.id,
+            title: m.title,
+            date: m.date,
+            kind: m.kind,
+            status: m.status,
+            attendees: (m.internalAttendees ?? []).map((a) => a.name),
+            startAt: m.startAt?.toISOString() ?? null,
+            endAt: m.endAt?.toISOString() ?? null,
+            locationType: m.locationType ?? null,
+            joinUrl: m.joinUrl ?? null,
+            summary: m.summary ?? null,
+            decisions: m.decisions ?? [],
+            actionItems: m.actionItems ?? [],
+          },
+          parent: { kind: "internal", id: "internal", name: "Internal" },
+          href: "/me?tab=calendar",
+        },
+      };
+    }
     const parent = await liveMeetingParent(m.parentType, m.parentId, ctx.persona.orgId);
     if (!parent) return notFound("meeting");
     if (!(await canSeeMeetingParent(ctx.persona, parent))) {

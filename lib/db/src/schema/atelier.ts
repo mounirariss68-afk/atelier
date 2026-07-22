@@ -1021,13 +1021,30 @@ export const atelierMeetings = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    parentType: text("parent_type").notNull(), // opportunity | engagement
-    parentId: text("parent_id").notNull(),
-    mode: text("mode").notNull().default("upload"), // upload | paste | live_bot
-    kind: text("kind").notNull().default("discovery"), // discovery | workshop | steering | kickoff
+    parentType: text("parent_type").notNull(), // opportunity | engagement | internal
+    parentId: text("parent_id").notNull(), // for internal meetings: literal "internal"
+    mode: text("mode").notNull().default("upload"), // upload | paste | live_bot | scheduled
+    kind: text("kind").notNull().default("discovery"), // discovery | workshop | steering | kickoff | internal
     title: text("title").notNull(),
     date: text("date").notNull(),
     attendees: jsonb("attendees").notNull().default([]),
+    // ---- Task #553: standalone internal meetings (scheduled via chat) ----
+    /** Precise start/end (UTC) for scheduled internal meetings. */
+    startAt: timestamp("start_at"),
+    endAt: timestamp("end_at"),
+    /** "online" | "in_person" (internal meetings only). */
+    locationType: text("location_type"),
+    /** Teams join link when booked online. */
+    joinUrl: text("join_url"),
+    webLink: text("web_link"),
+    /** Graph event id on the organizer's calendar (per-mailbox id space). */
+    msEventId: text("ms_event_id"),
+    /** Graph iCalUId — identical across every attendee's mailbox copy;
+     *  used to de-dupe calendar views + the meeting auto-logger. */
+    msEventUid: text("ms_event_uid"),
+    /** Roster attendees: [{ userId, name, email }] (internal meetings). */
+    internalAttendees: jsonb("internal_attendees")
+      .$type<Array<{ userId: string; name: string; email: string | null }>>(),
     transcriptId: text("transcript_id"),
     summary: text("summary"),
     decisions: jsonb("decisions").notNull().default([]),

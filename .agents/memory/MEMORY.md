@@ -117,3 +117,4 @@
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
 - [Qualify fit-scorecard adjust](atelier-qualify-fit-scorecard.md) — total/verdict recomputed only via shared computeFitTotals; adjust stamps mark manual scores; noop = no audit; legacy capabilities column unused.
 - [Atelier structured person names](atelier-structured-names.md) — name updates go through writePersonAndSync (mirrors!); signer snapshots upgrade to legal name; parser keeps underscores; Me self-edit preferredName-only.
+- [Atelier internal meetings](atelier-internal-meetings.md) — parentType="internal" rows merge into /me/calendar even when MS not connected (never gate UI fetch on connected); iCalUId dedupe; invite-before-insert.

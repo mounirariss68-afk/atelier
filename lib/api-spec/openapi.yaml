@@ -8601,6 +8601,9 @@ components:
         matches:
           type: array
           items: { $ref: "#/components/schemas/AtelierCalendarMatch" }
+        internal:
+          type: boolean
+          description: True for Atelier-booked internal meetings (Task 553).
     AtelierCalendarResponse:
       type: object
       required: [configured, connected, meetings]

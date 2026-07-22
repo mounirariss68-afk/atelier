@@ -21,6 +21,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
   atelierUsers,
+  atelierMeetings,
   atelierMsConnections,
   atelierMsMeetingLogs,
   atelierActivities,
@@ -201,10 +202,30 @@ async function autologForConnection(
     now.toISOString(),
   );
 
+  // Task #553 — never auto-log Atelier-booked internal meetings. Their
+  // Graph copies (in every attendee's mailbox) share the iCalUId stored
+  // on the internal meeting row.
+  const internalUids = new Set(
+    (
+      await db
+        .select({ uid: atelierMeetings.msEventUid })
+        .from(atelierMeetings)
+        .where(
+          and(
+            eq(atelierMeetings.orgId, me.orgId),
+            eq(atelierMeetings.parentType, "internal"),
+          ),
+        )
+    )
+      .map((r) => r.uid)
+      .filter((u): u is string => Boolean(u)),
+  );
+
   // Ended, real meetings only.
   const ended: Array<MsCalendarEvent & { startAt: Date; endAt: Date }> = [];
   for (const ev of events) {
     if (ev.isCancelled || ev.isAllDay) continue;
+    if (ev.iCalUId && internalUids.has(ev.iCalUId)) continue;
     if (!ev.start?.dateTime || !ev.end?.dateTime) continue;
     const startAt = new Date(`${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`);
     const endAt = new Date(`${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`);

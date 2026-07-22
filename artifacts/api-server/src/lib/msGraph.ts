@@ -25,7 +25,17 @@ export const MS_SCOPES = [
   "offline_access",
   "User.Read",
   "Calendars.Read",
+  // Task #553 — required to create calendar events (send internal meeting
+  // invites) from the requester's own mailbox. Delegated only.
+  "Calendars.ReadWrite",
 ];
+
+/** Does a stored scope list include calendar write? Microsoft returns
+ *  scopes without the resource prefix for Graph delegated scopes, but be
+ *  lenient about a fully-qualified form. */
+export function hasCalendarWriteScope(scopes: readonly string[] | null | undefined): boolean {
+  return (scopes ?? []).some((s) => /(^|\/)Calendars\.ReadWrite$/i.test(s.trim()));
+}
 
 export function msConfigured(): boolean {
   return Boolean(
@@ -285,6 +295,19 @@ export async function refreshTokens(refreshToken: string): Promise<MsTokenSet> {
 // ------------------------------------------------------------------
 // Graph calls (delegated; the token only sees the caller's own data)
 // ------------------------------------------------------------------
+/** Typed Graph request failure — carries the HTTP status so callers can
+ *  distinguish a missing-scope 403 from transient unavailability. */
+export class MsGraphError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly detail?: string,
+  ) {
+    super(message);
+    this.name = "MsGraphError";
+  }
+}
+
 async function graphGet<T>(accessToken: string, path: string): Promise<T> {
   const resp = await fetch(`${graphBase()}${path}`, {
     headers: {
@@ -295,9 +318,63 @@ async function graphGet<T>(accessToken: string, path: string): Promise<T> {
   const text = await resp.text();
   if (!resp.ok) {
     console.error(`[msGraph] GET ${path} → ${resp.status} ${text.slice(0, 300)}`);
-    throw new Error(`graph-request-failed:${resp.status}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
   }
   return JSON.parse(text) as T;
+}
+
+async function graphPost<T>(
+  accessToken: string,
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const resp = await fetch(`${graphBase()}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      Prefer: 'outlook.timezone="UTC"',
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await resp.text();
+  if (!resp.ok) {
+    console.error(`[msGraph] POST ${path} → ${resp.status} ${text.slice(0, 300)}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+  }
+  return JSON.parse(text) as T;
+}
+
+/**
+ * Task #553 — create a calendar event on the caller's own calendar
+ * (delegated). Attendees receive a normal Outlook invite whether or not
+ * they connected the Atelier. Online meetings get a Teams join link.
+ */
+export async function createCalendarEvent(
+  accessToken: string,
+  args: {
+    subject: string;
+    startUtcIso: string; // e.g. 2026-07-23T04:00:00Z
+    endUtcIso: string;
+    attendees: Array<{ email: string; name?: string | null }>;
+    online: boolean;
+    bodyText?: string;
+  },
+): Promise<MsCalendarEvent> {
+  return graphPost<MsCalendarEvent>(accessToken, "/me/events", {
+    subject: args.subject,
+    body: args.bodyText
+      ? { contentType: "text", content: args.bodyText }
+      : undefined,
+    start: { dateTime: args.startUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
+    end: { dateTime: args.endUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
+    attendees: args.attendees.map((a) => ({
+      emailAddress: { address: a.email, name: a.name ?? undefined },
+      type: "required",
+    })),
+    isOnlineMeeting: args.online,
+    onlineMeetingProvider: args.online ? "teamsForBusiness" : undefined,
+  });
 }
 
 export interface MsProfile {
@@ -313,6 +390,7 @@ export async function getMsProfile(accessToken: string): Promise<MsProfile> {
 
 export interface MsCalendarEvent {
   id: string;
+  iCalUId?: string;
   subject?: string;
   isCancelled?: boolean;
   isAllDay?: boolean;
@@ -369,7 +447,7 @@ export async function getCalendarView(
     $orderby: "start/dateTime",
     $top: "100",
     $select:
-      "id,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink",
+      "id,iCalUId,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink",
   });
   const out: MsCalendarEvent[] = [];
   let path: string | null = `/me/calendarView?${qs.toString()}`;

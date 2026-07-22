@@ -301,6 +301,11 @@ export async function directIdLookup(
         .limit(1);
       if (!mtg) return null;
       const parentAlive =
+        // Task #553 — standalone internal meetings have no CRM parent;
+        // the row itself being live is enough.
+        mtg.parentType === "internal"
+          ? true
+          :
         mtg.parentType === "opportunity"
           ? (await db.select({ id: atelierOpportunities.id }).from(atelierOpportunities)
               .where(and(eq(atelierOpportunities.id, mtg.parentId), eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt))).limit(1)).length > 0

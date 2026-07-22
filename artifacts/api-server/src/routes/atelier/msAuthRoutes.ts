@@ -22,6 +22,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
   atelierUsers,
+  atelierMeetings,
   atelierMsConnections,
   atelierMsMeetingLogs,
   atelierActivities,
@@ -536,6 +537,60 @@ interface WireMeeting {
     accountId: string;
     accountName: string;
   }>;
+  /** Task #553 — true for Atelier-booked internal meetings. */
+  internal?: boolean;
+}
+
+/**
+ * Task #553 — internal meetings booked via the Atelier that fall in the
+ * window and are visible to `me` (creator, attendee, or founding partner).
+ * Also returns the org-wide iCalUId set for the window so Graph copies of
+ * these meetings can be de-duplicated out of the calendar view.
+ */
+async function internalMeetingsForWindow(
+  me: typeof atelierUsers.$inferSelect,
+  start: Date,
+  end: Date,
+): Promise<{ wire: WireMeeting[]; dedupeUids: Set<string> }> {
+  const rows = await db
+    .select()
+    .from(atelierMeetings)
+    .where(
+      and(
+        eq(atelierMeetings.orgId, me.orgId),
+        eq(atelierMeetings.parentType, "internal"),
+        isNull(atelierMeetings.deletedAt),
+      ),
+    );
+  const dedupeUids = new Set<string>();
+  const wire: WireMeeting[] = [];
+  for (const m of rows) {
+    if (!m.startAt || !m.endAt) continue;
+    if (m.endAt < start || m.startAt > end) continue;
+    if (m.msEventUid) dedupeUids.add(m.msEventUid);
+    const attendees = m.internalAttendees ?? [];
+    const visible =
+      me.role === "founding_partner" ||
+      m.createdByUserId === me.id ||
+      attendees.some((a) => a.userId === me.id);
+    if (!visible) continue;
+    wire.push({
+      id: m.id,
+      subject: m.title,
+      start: m.startAt.toISOString(),
+      end: m.endAt.toISOString(),
+      isAllDay: false,
+      location: m.locationType === "in_person" ? "In person" : null,
+      joinUrl: m.joinUrl ?? null,
+      webLink: m.webLink ?? null,
+      organizerEmail: null,
+      attendees: attendees.map((a) => ({ email: a.email ?? "", name: a.name })),
+      matches: [],
+      internal: true,
+    });
+  }
+  wire.sort((a, b) => a.start.localeCompare(b.start));
+  return { wire, dedupeUids };
 }
 
 // @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
@@ -543,16 +598,6 @@ router.get("/me/calendar", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    if (!msConfigured()) {
-      res.json({ configured: false, connected: false, meetings: [] });
-      return;
-    }
-    const row = await loadConnection(me);
-    if (!row) {
-      res.json({ configured: true, connected: false, meetings: [] });
-      return;
-    }
-
     // Window: default this week (today .. +7 days), max 60 days.
     const now = new Date();
     const startQ = typeof req.query.start === "string" ? req.query.start : null;
@@ -572,6 +617,22 @@ router.get("/me/calendar", async (req, res, next) => {
     }
     const accountIdFilter =
       typeof req.query.accountId === "string" ? req.query.accountId : null;
+
+    // Task #553 — internal (Atelier-booked) meetings are shown even when
+    // Microsoft 365 isn't configured/connected, so attendees who never
+    // connected still see meetings they're invited to.
+    const internal = await internalMeetingsForWindow(me, start, end);
+    const internalWire = accountIdFilter ? [] : internal.wire;
+
+    if (!msConfigured()) {
+      res.json({ configured: false, connected: false, meetings: internalWire });
+      return;
+    }
+    const row = await loadConnection(me);
+    if (!row) {
+      res.json({ configured: true, connected: false, meetings: internalWire });
+      return;
+    }
 
     // Fresh access token from the stored refresh token (persist rotation).
     let events: MsCalendarEvent[];
@@ -612,7 +673,14 @@ router.get("/me/calendar", async (req, res, next) => {
       return;
     }
 
-    const live = events.filter((ev) => !ev.isCancelled);
+    // Task #553 — drop Graph copies of Atelier-booked internal meetings
+    // (matched via iCalUId, which is identical across every attendee's
+    // mailbox) so a booked meeting shows exactly once.
+    const live = events.filter(
+      (ev) =>
+        !ev.isCancelled &&
+        !(ev.iCalUId && internal.dedupeUids.has(ev.iCalUId)),
+    );
 
     // CRM matching: attendee email → contact → account (org-scoped),
     // filtered through canSeeAccount so no invisible account leaks.
@@ -748,7 +816,11 @@ router.get("/me/calendar", async (req, res, next) => {
       .set({ lastSyncedAt: new Date(), lastError: null, updatedAt: new Date() })
       .where(eq(atelierMsConnections.id, row.id));
 
-    res.json({ configured: true, connected: true, meetings });
+    // Merge internal meetings with the Graph view, sorted by start.
+    const merged = [...internalWire, ...meetings].sort((a, b) =>
+      a.start.localeCompare(b.start),
+    );
+    res.json({ configured: true, connected: true, meetings: merged });
   } catch (err) {
     next(err);
   }

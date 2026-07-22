@@ -370,6 +370,11 @@ function MeetingRow({
           >
             {m.subject || t("mtg.noSubject")}
           </Text>
+          {m.internal ? (
+            <View style={{ flexDirection: rtl.row }}>
+              <Chip label={t("mtg.internal")} color={c.primary} />
+            </View>
+          ) : null}
           {m.joinUrl ? (
             <Pressable
               onPress={() => {
@@ -857,7 +862,9 @@ export default function MeetingsScreen() {
     }
   }, [connRefetch, t]);
   const win = useMemo(() => windowIso(7), []);
-  const enabled = Boolean(conn.data?.configured && conn.data?.connected);
+  // Task #553 — fetch even when not connected: the server still returns
+  // Atelier-booked internal meetings the viewer created or attends.
+  const enabled = Boolean(conn.data);
   const calendar = useAtelierGetMyCalendar(win, {
     query: {
       queryKey: getAtelierGetMyCalendarQueryKey(win),
@@ -1099,6 +1106,15 @@ export default function MeetingsScreen() {
               >
                 {connectError}
               </Text>
+            ) : null}
+            {/* Task #553 — internal (Atelier-booked) meetings still show
+                even before Microsoft 365 is connected. */}
+            {meetings.length > 0 ? (
+              <View style={{ alignSelf: "stretch", gap: 12, marginTop: 16 }}>
+                {meetings.map((m) => (
+                  <MeetingRow key={m.id} m={m} initialBriefAccountId={null} />
+                ))}
+              </View>
             ) : null}
           </View>
         ) : view === "day" ? (

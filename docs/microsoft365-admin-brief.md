@@ -32,6 +32,7 @@ Key security properties of the design:
    | `openid`, `profile`, `offline_access` | 1 | Sign-in and refresh tokens |
    | `User.Read` | 1 | Basic profile of the connecting user |
    | `Calendars.Read` | 1 | Read the user's own calendar |
+   | `Calendars.ReadWrite` | 1 | Create calendar events (with Teams links) when an employee books an internal meeting from the portal; supersedes `Calendars.Read` |
    | `Mail.Read` | 2 | Read the user's own mail (client-thread matching) |
    | `OnlineMeetings.Read` | 2 | Look up the user's own Teams meetings |
    | `OnlineMeetingTranscript.Read.All` (delegated) | 2 | Read transcripts of meetings the user organized/attended |
@@ -54,7 +55,10 @@ Key security properties of the design:
 - Shows each employee their own upcoming meetings inside the portal, linked to client records.
 - Automatically logs client meetings/emails as CRM activity entries (metadata + AI-generated summaries; the employee sees what is logged).
 - Generates AI summaries and action items from Teams transcripts of client meetings the employee attended.
-- **It does not**: access other employees' mailboxes, send mail as users, modify or delete any Microsoft 365 data (all requested scopes are read-only), or expose one employee's mailbox/calendar to another.
+- Books **internal meetings** on behalf of the organizing employee: when an employee schedules an internal meeting from the portal (or via its chat assistant), the portal creates one calendar event in *that employee's own* calendar and invites the selected colleagues; Microsoft delivers the invitations and a Teams link is attached for online meetings. This is the only write the portal performs (`Calendars.ReadWrite`).
+- **It does not**: access other employees' mailboxes, send mail as users, delete Microsoft 365 data, or expose one employee's mailbox/calendar to another. Colleague availability checks read only the calendars of employees who have themselves connected Microsoft 365.
+
+> **Note for already-connected users:** employees who linked their account before `Calendars.ReadWrite` was granted will be prompted in the portal to reconnect once, so their token picks up the new scope.
 
 ## High-value use cases planned on top of this connection
 

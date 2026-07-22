@@ -269,6 +269,7 @@ function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; show
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-text font-medium truncate">{m.subject || "(no subject)"}</span>
+          {m.internal && <MonoChip tone="gold">Internal</MonoChip>}
           {m.joinUrl && (
             <a
               href={m.joinUrl}
@@ -457,16 +458,17 @@ export function ConnectedAccountsCard() {
 export function MyMeetingsCard() {
   const { data: conn } = useAtelierGetMyMsConnection();
   const win = React.useMemo(() => windowIso(7), []);
+  // Task #553 — fetch even when not connected: the server still returns
+  // Atelier-booked internal meetings the viewer created or attends.
   const { data, isPending, error } = useAtelierGetMyCalendar(win, {
     query: {
       queryKey: getAtelierGetMyCalendarQueryKey(win),
-      enabled: Boolean(conn?.configured && conn?.connected),
+      enabled: Boolean(conn),
       retry: false,
     },
   });
 
-  // Nothing to show (and nothing to advertise) until MS is configured.
-  if (!conn?.configured) return null;
+  if (!conn) return null;
 
   return (
     <div className="space-y-4" data-testid="home-my-meetings">
@@ -476,14 +478,15 @@ export function MyMeetingsCard() {
         </span>
       </SectionLabel>
       <Card className="p-5">
-        {!conn.connected ? (
-          <div className="text-sm text-text-mute">
+        {conn.configured && !conn.connected && (
+          <div className="text-sm text-text-mute mb-3">
             <Link href="/me/profile" className="text-gold hover:underline">
               Connect Microsoft 365
             </Link>{" "}
-            to see your upcoming meetings here.
+            to see your full Outlook calendar here.
           </div>
-        ) : isPending ? (
+        )}
+        {isPending ? (
           <Skeleton className="h-24 bg-bg-elevate" />
         ) : error ? (
           <div className="text-sm text-text-mute">

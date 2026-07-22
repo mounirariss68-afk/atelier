@@ -2965,6 +2965,22 @@ export async function runTurn(
     // ahead, walk the FK graph to build a `<context>` block. The
     // model gets the resolved id + a typed neighbourhood without
     // having to call `resolve_entity` for the obvious cases.
+    // Task #553 — per-turn date/timezone context. Asia/Dubai is the firm
+    // default timezone (fixed UTC+4, no DST).
+    const buildDateContextBlock = (): string => {
+      const nowDubai = new Date(Date.now() + 4 * 3600 * 1000);
+      const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const ymd = `${nowDubai.getUTCFullYear()}-${pad(nowDubai.getUTCMonth() + 1)}-${pad(nowDubai.getUTCDate())}`;
+      const hm = `${pad(nowDubai.getUTCHours())}:${pad(nowDubai.getUTCMinutes())}`;
+      return [
+        "<current_datetime>",
+        `Today is ${days[nowDubai.getUTCDay()]}, ${ymd}. Local time: ${hm} (Asia/Dubai, UTC+4 — the firm's default timezone).`,
+        "Resolve relative dates like \"tomorrow\" or \"next Tuesday\" against this date yourself; do not ask the user what the date is.",
+        "</current_datetime>",
+      ].join("\n");
+    };
+
     let preludeContextBlock: string | null = null;
     let preludeResolved: { kind: string; id: string; label: string; via: string; score: number } | null = null;
     const CONTEXT_KINDS: ReadonlySet<ContextKind> = new Set([
@@ -3367,7 +3383,13 @@ export async function runTurn(
           // and now policy context does too.
           intent: typedIntent.label ?? input.intent ?? null,
           tier: turnTier,
-          contextBlock: preludeContextBlock,
+          // Task #553 — always prepend today's date + firm timezone so
+          // relative dates ("tomorrow", "next Tuesday") resolve without
+          // asking. Dubai is fixed UTC+4 (no DST), so plain offset math
+          // is safe. Kept out of the cached SYSTEM_PROMPT on purpose.
+          contextBlock: [buildDateContextBlock(), preludeContextBlock]
+            .filter(Boolean)
+            .join("\n\n"),
         });
       } catch (err) {
         // Upstream model failed after retry budget — surface a typed

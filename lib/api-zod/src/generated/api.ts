@@ -453,6 +453,10 @@ export const AtelierGetMyCalendarResponse = zod.object({
           accountName: zod.string(),
         }),
       ),
+      internal: zod
+        .boolean()
+        .optional()
+        .describe("True for Atelier-booked internal meetings (Task 553)."),
     }),
   ),
 });

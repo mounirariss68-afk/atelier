@@ -20,4 +20,6 @@ export interface AtelierCalendarMeeting {
   organizerEmail?: string | null;
   attendees: AtelierCalendarMeetingAttendeesItem[];
   matches: AtelierCalendarMatch[];
+  /** True for Atelier-booked internal meetings (Task 553). */
+  internal?: boolean;
 }
