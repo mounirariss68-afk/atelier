@@ -270,6 +270,19 @@ async function main(): Promise<void> {
       });
       check("joint-pipeline rejects unknown opportunity", jpBadOpp.status === 422, `status=${jpBadOpp.status}`);
 
+      // Opportunity-side view: filtering by opportunityId returns the entry
+      // with partner-sourced attribution + firm name (what Opportunity.tsx renders).
+      const jpByOpp = await call("GET", `/partners/joint-pipeline?opportunityId=${oppId}`, FP_ID);
+      const jpEntry = (jpByOpp.body?.items ?? []).find((e: any) => e.opportunityId === oppId);
+      check(
+        "joint-pipeline by opportunityId → partnerSourced + firm name for the opp view",
+        jpByOpp.status === 200 &&
+          jpEntry?.partnerSourced === true &&
+          jpEntry?.partnerFirmId === firmId &&
+          typeof jpEntry?.partnerFirmName === "string",
+        `status=${jpByOpp.status} entry=${JSON.stringify(jpEntry)?.slice(0, 200)}`,
+      );
+
       // ---- agreements: NDA maps to the partner firm by counterparty name ----
       group("agreements NDA \u2192 firm mapping");
       const cpId = `cp_test_pn_${STAMP}`;
@@ -332,7 +345,7 @@ async function main(): Promise<void> {
   } finally {
     // ---- cleanup: tag-sweep everything this probe created ----
     try {
-      await db.delete(atelierAllianceJointPipeline).where(like(atelierAllianceJointPipeline.id, "%"));
+      await db.delete(atelierAllianceJointPipeline).where(inArray(atelierAllianceJointPipeline.opportunityId, [oppId]));
       await db.delete(atelierAllianceCertifications).where(like(atelierAllianceCertifications.credential, `%${STAMP}%`));
       await db.delete(atelierAllianceConflicts).where(like(atelierAllianceConflicts.headline, `%${STAMP}%`));
       await db.delete(atelierPartnerFirms).where(like(atelierPartnerFirms.name, `%${STAMP}%`));

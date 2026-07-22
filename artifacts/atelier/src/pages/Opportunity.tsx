@@ -9,6 +9,8 @@ import {
   getAtelierListOpportunitiesQueryKey,
   getAtelierListAuditQueryKey,
   getAtelierGetPipelineForecastQueryKey,
+  useAtelierListJointPipeline,
+  getAtelierListJointPipelineQueryKey,
   type SalesStage,
 } from "@workspace/api-client-react";
 import {
@@ -269,6 +271,8 @@ export default function Opportunity() {
           <OpportunityAgreements oppId={opp.id} />
         )}
 
+        <OpportunityPartnerInvolvement oppId={opp.id} role={me?.role} />
+
         <TabNav>
           {TABS.map((tab) => (
             <TabNavItem
@@ -382,6 +386,76 @@ export default function Opportunity() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// Task #513 — partner involvement surfaced on the opportunity itself.
+// Only roles allowed through the /partners lens gate may query the co-sell
+// registry; everyone else sees nothing (no 403 noise).
+const PARTNERS_READER_ROLES = new Set([
+  "founding_partner",
+  "partner",
+  "senior_manager",
+  "consultant",
+  "finance",
+  "hr",
+  "compliance_officer",
+]);
+
+const LEAD_PARTY_LABEL: Record<string, string> = {
+  cognirise: "Cognirise-led",
+  partner: "Partner-led",
+  joint: "Jointly led",
+};
+
+function OpportunityPartnerInvolvement({ oppId, role }: { oppId: string; role?: string }) {
+  const canSee = !!role && PARTNERS_READER_ROLES.has(role);
+  const { data } = useAtelierListJointPipeline(
+    { opportunityId: oppId },
+    {
+      query: {
+        enabled: canSee && !!oppId,
+        queryKey: getAtelierListJointPipelineQueryKey({ opportunityId: oppId }),
+      },
+    },
+  );
+  const entries = data?.items ?? [];
+  if (!canSee || entries.length === 0) return null;
+
+  return (
+    <div
+      className="rounded-md border border-border-soft bg-bg-elevate/60 p-4 space-y-3"
+      data-testid="panel-partner-involvement"
+    >
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Partner involvement · co-sell
+      </div>
+      <ul className="space-y-2">
+        {entries.map((e) => (
+          <li
+            key={e.id}
+            className="flex flex-wrap items-center gap-2 text-sm"
+            data-testid={`row-partner-involvement-${e.id}`}
+          >
+            <span className="font-medium text-text">
+              {e.partnerFirmName ?? e.partnerFirmId}
+            </span>
+            {e.partnerSourced && <MonoChip tone="gold">Partner-sourced</MonoChip>}
+            {e.leadParty && <MonoChip>{LEAD_PARTY_LABEL[e.leadParty] ?? e.leadParty}</MonoChip>}
+            {(typeof e.cognirisePct === "number" || typeof e.partnerPct === "number") && (
+              <span className="text-xs font-mono text-text-mute">
+                Split {e.cognirisePct ?? 0}% / {e.partnerPct ?? 0}%
+              </span>
+            )}
+            {e.allianceLetterStatus && e.allianceLetterStatus !== "none" && (
+              <span className="text-xs text-text-faint">
+                Alliance letter: {e.allianceLetterStatus}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
