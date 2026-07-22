@@ -103,6 +103,9 @@ export interface LegalEntityFiscal {
   vatExpectedAmount: number | null;
   nextCtFilingDate: string | null;
   ctExpectedAmount: number | null;
+  ctTaxYearBasis?: string | null;
+  ctFirstPeriodStart?: string | null;
+  ctFirstPeriodEnd?: string | null;
 }
 export interface LegalEntityCashPolicy {
   openingBalance: number | null;

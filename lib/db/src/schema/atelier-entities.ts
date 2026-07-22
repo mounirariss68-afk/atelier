@@ -85,6 +85,14 @@ export interface EntityFiscal {
   vatExpectedAmount: number | null;
   nextCtFilingDate: string | null;
   ctExpectedAmount: number | null;
+  /**
+   * Task #542 — corporate-tax registration facts (FTA certificate):
+   * tax-year basis (e.g. "January – December") and first CT period bounds.
+   * Optional; older rows won't carry these keys.
+   */
+  ctTaxYearBasis?: string | null;
+  ctFirstPeriodStart?: string | null;
+  ctFirstPeriodEnd?: string | null;
 }
 
 /**

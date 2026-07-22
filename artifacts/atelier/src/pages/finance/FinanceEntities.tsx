@@ -160,6 +160,7 @@ export interface EntityDraft {
   fiscal: {
     vatPeriod: string; nextVatFilingDate: string; vatExpectedAmount: string;
     nextCtFilingDate: string; ctExpectedAmount: string;
+    ctTaxYearBasis: string; ctFirstPeriodStart: string; ctFirstPeriodEnd: string;
   };
   cashPolicy: {
     openingBalance: string; openingBalanceAsOf: string;
@@ -176,7 +177,7 @@ function emptyDraft(): EntityDraft {
     registrations: [], activities: [], owners: [],
     premises: { addressLine: "", building: "", unit: "", area: "", city: "", plotNumber: "", makaniNo: "", sizeSqm: "", usage: "" },
     lease: { contractNo: "", ejariTenantNo: "", lessorName: "", lessorLicenseNo: "", ownerName: "", startDate: "", endDate: "", annualRentAed: "", securityDepositAed: "", areaSqm: "", registrationFeesAed: "" },
-    fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "" },
+    fiscal: { vatPeriod: "", nextVatFilingDate: "", vatExpectedAmount: "", nextCtFilingDate: "", ctExpectedAmount: "", ctTaxYearBasis: "", ctFirstPeriodStart: "", ctFirstPeriodEnd: "" },
     cashPolicy: { openingBalance: "", openingBalanceAsOf: "", minCashPolicy: "", covenantFloor: "", notes: "" },
     notes: "",
   };
@@ -221,6 +222,9 @@ function draftFromEntity(e: LegalEntityRow): EntityDraft {
       vatExpectedAmount: e.fiscal?.vatExpectedAmount?.toString() ?? "",
       nextCtFilingDate: e.fiscal?.nextCtFilingDate ?? "",
       ctExpectedAmount: e.fiscal?.ctExpectedAmount?.toString() ?? "",
+      ctTaxYearBasis: e.fiscal?.ctTaxYearBasis ?? "",
+      ctFirstPeriodStart: e.fiscal?.ctFirstPeriodStart ?? "",
+      ctFirstPeriodEnd: e.fiscal?.ctFirstPeriodEnd ?? "",
     },
     cashPolicy: {
       openingBalance: e.cashPolicy?.openingBalance?.toString() ?? "",
@@ -293,6 +297,9 @@ function draftToBody(d: EntityDraft): Record<string, unknown> {
       vatExpectedAmount: num(d.fiscal.vatExpectedAmount),
       nextCtFilingDate: nn(d.fiscal.nextCtFilingDate),
       ctExpectedAmount: num(d.fiscal.ctExpectedAmount),
+      ctTaxYearBasis: nn(d.fiscal.ctTaxYearBasis),
+      ctFirstPeriodStart: nn(d.fiscal.ctFirstPeriodStart),
+      ctFirstPeriodEnd: nn(d.fiscal.ctFirstPeriodEnd),
     },
     cashPolicy: {
       openingBalance: num(d.cashPolicy.openingBalance),
@@ -394,6 +401,8 @@ const REG_TYPES = [
   ["establishment_card", "Establishment card"],
   ["initial_approval", "Initial approval"],
   ["moa_contract", "MoA contract"],
+  ["tax_registration_ct", "Corporate Tax registration"],
+  ["tax_registration_vat", "VAT registration"],
   ["tax", "Tax registration"],
   ["other", "Other"],
 ] as const;
@@ -632,6 +641,9 @@ export function EntityFormDialog(props: {
               <TextField label="Expected VAT amount" value={draft.fiscal.vatExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, vatExpectedAmount: v } })} testid="input-fiscal-vat-amount" />
               <TextField label="Next CT filing (YYYY-MM-DD)" value={draft.fiscal.nextCtFilingDate} onChange={(v) => up({ fiscal: { ...draft.fiscal, nextCtFilingDate: v } })} testid="input-fiscal-ct-date" />
               <TextField label="Expected CT amount" value={draft.fiscal.ctExpectedAmount} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctExpectedAmount: v } })} testid="input-fiscal-ct-amount" />
+              <TextField label="CT tax-year basis" value={draft.fiscal.ctTaxYearBasis} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctTaxYearBasis: v } })} placeholder="January – December" testid="input-fiscal-ct-taxyear" />
+              <TextField label="First CT period start (YYYY-MM-DD)" value={draft.fiscal.ctFirstPeriodStart} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctFirstPeriodStart: v } })} testid="input-fiscal-ct-period-start" />
+              <TextField label="First CT period end (YYYY-MM-DD)" value={draft.fiscal.ctFirstPeriodEnd} onChange={(v) => up({ fiscal: { ...draft.fiscal, ctFirstPeriodEnd: v } })} testid="input-fiscal-ct-period-end" />
             </div>
           </div>
 

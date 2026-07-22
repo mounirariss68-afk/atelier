@@ -165,6 +165,13 @@ const fiscalSchema = z.object({
   vatExpectedAmount: z.number().min(0).nullish(),
   nextCtFilingDate: isoDate.nullish(),
   ctExpectedAmount: z.number().min(0).nullish(),
+  // Task #542 — corporate-tax registration facts from the FTA certificate:
+  // tax-year basis (e.g. "January – December") and the first CT period
+  // bounds. Informational for the fiscal calendar; the cash forecast keys
+  // off nextCtFilingDate/ctExpectedAmount unchanged.
+  ctTaxYearBasis: optStr(60),
+  ctFirstPeriodStart: isoDate.nullish(),
+  ctFirstPeriodEnd: isoDate.nullish(),
 });
 
 // Task #272 — per-entity cash policy (opening balance, min-cash floor,
@@ -252,6 +259,9 @@ function normalizeFiscal(f: z.infer<typeof fiscalSchema> | null | undefined) {
     vatExpectedAmount: f.vatExpectedAmount ?? null,
     nextCtFilingDate: f.nextCtFilingDate ?? null,
     ctExpectedAmount: f.ctExpectedAmount ?? null,
+    ctTaxYearBasis: f.ctTaxYearBasis ?? null,
+    ctFirstPeriodStart: f.ctFirstPeriodStart ?? null,
+    ctFirstPeriodEnd: f.ctFirstPeriodEnd ?? null,
   };
   const hasValue = Object.values(out).some((v) => v !== null && v !== "");
   return hasValue ? out : null;
@@ -326,6 +336,9 @@ export interface FinanceEntityFiscal {
   vatExpectedAmount: number | null;
   nextCtFilingDate: string | null;
   ctExpectedAmount: number | null;
+  ctTaxYearBasis?: string | null;
+  ctFirstPeriodStart?: string | null;
+  ctFirstPeriodEnd?: string | null;
 }
 
 export interface FinanceEntityInfo {
@@ -742,14 +755,14 @@ Extract ONLY facts present in the document text. Never invent numbers, dates or 
 
 Return a single JSON object with this exact shape (all keys present):
 {
-  "documentKind": "trade_license" | "initial_approval" | "follow_up_receipt" | "memorandum_of_association" | "ejari_tenancy" | "establishment_card" | "other",
+  "documentKind": "trade_license" | "initial_approval" | "follow_up_receipt" | "memorandum_of_association" | "ejari_tenancy" | "establishment_card" | "tax_registration" | "other",
   "confidenceNote": string,
   "fields": {
     "legalNameEn": string|null, "legalNameAr": string|null,
     "legalForm": string|null, "country": string|null (ISO-3166 alpha-2),
     "jurisdiction": string|null, "incorporationDate": string|null,
     "durationYears": number|null, "registeredAddress": string|null,
-    "registrations": [{"type": "trade_license"|"commercial_register"|"chamber_membership"|"establishment_card"|"initial_approval"|"moa_contract"|"other", "label": string, "number": string, "issuer": string|null, "issuedOn": string|null, "expiresOn": string|null, "notes": string|null}],
+    "registrations": [{"type": "trade_license"|"commercial_register"|"chamber_membership"|"establishment_card"|"initial_approval"|"moa_contract"|"tax_registration_ct" (Corporate Tax TRN)|"tax_registration_vat" (VAT TRN)|"other", "label": string, "number": string, "issuer": string|null, "issuedOn": string|null, "expiresOn": string|null, "notes": string|null}],
     "activities": [{"code": string, "nameEn": string, "nameAr": string|null, "status": string|null}],
     "owners": [{"name": string, "nameAr": string|null, "roles": [string], "sharePct": number|null, "nationality": string|null, "passportNo": string|null, "personNo": string|null}],
     "premises": {"addressLine": string|null, "building": string|null, "unit": string|null, "area": string|null, "city": string|null, "plotNumber": string|null, "makaniNo": string|null, "sizeSqm": number|null, "usage": string|null} | null,
