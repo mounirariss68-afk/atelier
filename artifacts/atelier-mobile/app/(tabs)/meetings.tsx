@@ -13,6 +13,7 @@ import {
   useAtelierGetMyMsConnection,
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ExpoLinking from "expo-linking";
 import { useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
@@ -20,20 +21,25 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Linking,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { apiJson } from "@/lib/api";
 
 import {
+  Button,
   Card,
   Chip,
   EmptyState,
@@ -309,9 +315,12 @@ function MeetingBriefPanel({ accountId }: { accountId: string }) {
 function MeetingRow({
   m,
   initialBriefAccountId,
+  onOpen,
 }: {
   m: AtelierCalendarMeeting;
   initialBriefAccountId?: string | null;
+  /** Tapping the card opens the full meeting detail view. */
+  onOpen?: () => void;
 }) {
   const c = useColors();
   const rtl = useRTL();
@@ -335,7 +344,7 @@ function MeetingRow({
       : null,
   );
 
-  return (
+  const body = (
     <Card style={{ gap: 8 }}>
       <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 12 }}>
         <View style={{ width: 84 }}>
@@ -477,6 +486,19 @@ function MeetingRow({
       {briefAccountId ? <MeetingBriefPanel accountId={briefAccountId} /> : null}
     </Card>
   );
+
+  if (!onOpen) return body;
+  return (
+    <Pressable
+      onPress={() => {
+        hapticLight();
+        onOpen();
+      }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+    >
+      {body}
+    </Pressable>
+  );
 }
 
 function windowIso(days: number) {
@@ -486,11 +508,8 @@ function windowIso(days: number) {
 }
 
 // ------------------------------------------------------------------
-// Day calendar view — full-day timeline with positioned meeting blocks.
+// Day calendar view — time-ordered meeting cards (all-day on top).
 // ------------------------------------------------------------------
-
-const HOUR_H = 56;
-const GUTTER = 52;
 
 function startOfDay(d: Date) {
   const s = new Date(d);
@@ -506,65 +525,29 @@ function sameDay(a: Date, b: Date) {
   );
 }
 
-interface TimedBlock {
-  m: AtelierCalendarMeeting;
-  top: number;
-  height: number;
-  col: number;
-  cols: number;
-}
-
-/** Position timed meetings for one day: clamp to day bounds, then greedy
- * column assignment inside each overlapping cluster. */
-function layoutDayBlocks(
-  meetings: AtelierCalendarMeeting[],
-  dayStart: Date,
-): TimedBlock[] {
-  const dayStartMs = dayStart.getTime();
-  const dayEndMs = dayStartMs + 24 * 3600 * 1000;
-  const items = meetings
-    .map((m) => {
-      const s = Math.max(new Date(m.start).getTime(), dayStartMs);
-      const e = Math.min(new Date(m.end).getTime(), dayEndMs);
-      const startMin = (s - dayStartMs) / 60000;
-      const endMin = Math.max((e - dayStartMs) / 60000, startMin + 30);
-      return { m, startMin, endMin, col: 0, cols: 1 };
-    })
-    .filter((x) => x.endMin > 0 && x.startMin < 24 * 60)
-    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
-
-  // Cluster overlapping runs, then assign columns greedily.
-  let i = 0;
-  while (i < items.length) {
-    let clusterEnd = items[i].endMin;
-    let j = i + 1;
-    while (j < items.length && items[j].startMin < clusterEnd) {
-      clusterEnd = Math.max(clusterEnd, items[j].endMin);
-      j += 1;
-    }
-    const cluster = items.slice(i, j);
-    const colEnds: number[] = [];
-    for (const ev of cluster) {
-      let col = colEnds.findIndex((end) => end <= ev.startMin);
-      if (col === -1) {
-        col = colEnds.length;
-        colEnds.push(ev.endMin);
+/** Mark timed meetings that overlap another meeting so day-view cards can
+ * flag them (the old timeline showed this via side-by-side columns). */
+function markOverlaps(meetings: AtelierCalendarMeeting[]) {
+  const sorted = [...meetings].sort(
+    (a, b) =>
+      new Date(a.start).getTime() - new Date(b.start).getTime() ||
+      new Date(a.end).getTime() - new Date(b.end).getTime(),
+  );
+  const overlapping = new Set<string>();
+  for (let i = 0; i < sorted.length; i += 1) {
+    for (let j = i + 1; j < sorted.length; j += 1) {
+      if (
+        new Date(sorted[j].start).getTime() <
+        new Date(sorted[i].end).getTime()
+      ) {
+        overlapping.add(sorted[i].id);
+        overlapping.add(sorted[j].id);
       } else {
-        colEnds[col] = ev.endMin;
+        break;
       }
-      ev.col = col;
     }
-    for (const ev of cluster) ev.cols = colEnds.length;
-    i = j;
   }
-
-  return items.map((ev) => ({
-    m: ev.m,
-    top: (ev.startMin / 60) * HOUR_H,
-    height: Math.max(((ev.endMin - ev.startMin) / 60) * HOUR_H, 26),
-    col: ev.col,
-    cols: ev.cols,
-  }));
+  return { sorted, overlapping };
 }
 
 function DayNavigator({
@@ -651,167 +634,740 @@ function DayNavigator({
   );
 }
 
-function DayTimeline({
+/** One compact day-view meeting card, styled after the list view rows. */
+function DayMeetingCard({
+  m,
+  overlaps,
+  onOpen,
+}: {
+  m: AtelierCalendarMeeting;
+  overlaps: boolean;
+  onOpen: () => void;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const matched = m.matches.length > 0;
+  return (
+    <Pressable
+      onPress={() => {
+        hapticLight();
+        onOpen();
+      }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+    >
+      <Card
+        style={{
+          gap: 8,
+          borderLeftWidth: 3,
+          borderLeftColor: matched ? c.primary : overlaps ? c.mutedForeground : "transparent",
+        }}
+      >
+        <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 12 }}>
+          <View style={{ width: 84 }}>
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 12,
+              }}
+            >
+              {m.isAllDay ? t("mtg.allDay") : fmtTime(m.start)}
+            </Text>
+            {!m.isAllDay ? (
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 12,
+                }}
+              >
+                {fmtTime(m.end)}
+              </Text>
+            ) : null}
+          </View>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text
+              numberOfLines={2}
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 15,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {m.subject || t("mtg.noSubject")}
+            </Text>
+            <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 6 }}>
+              {m.internal ? <Chip label={t("mtg.internal")} color={c.primary} /> : null}
+              {m.matches.slice(0, 2).map((match) => (
+                <Chip
+                  key={`${m.id}-${match.contactId}`}
+                  label={match.accountName}
+                  color={c.primary}
+                />
+              ))}
+            </View>
+            {m.joinUrl ? (
+              <Pressable
+                onPress={() => {
+                  void openJoinUrl(m.joinUrl!, t("mtg.joinError"));
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 6,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <Feather name="video" size={14} color={c.primary} />
+                <Text
+                  style={{
+                    color: c.primary,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 13,
+                  }}
+                >
+                  {t("mtg.join")}
+                </Text>
+              </Pressable>
+            ) : m.location ? (
+              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6 }}>
+                <Feather name="map-pin" size={12} color={c.mutedForeground} />
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_400Regular",
+                    fontSize: 13,
+                  }}
+                >
+                  {m.location}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+/** Day view content: all-day cards first, then timed meetings in start
+ * order. A red "now" divider sits between past and upcoming (today only). */
+function DayCards({
   meetings,
   date,
-  selectedId,
-  onSelect,
+  onOpen,
 }: {
   meetings: AtelierCalendarMeeting[];
   date: Date;
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  onOpen: (m: AtelierCalendarMeeting) => void;
 }) {
   const c = useColors();
   const { t } = useI18n();
-  const isToday = sameDay(date, new Date());
-  const blocks = useMemo(
-    () => layoutDayBlocks(meetings.filter((m) => !m.isAllDay), startOfDay(date)),
-    [meetings, date],
+  const allDay = meetings.filter((m) => m.isAllDay);
+  const { sorted, overlapping } = useMemo(
+    () => markOverlaps(meetings.filter((m) => !m.isAllDay)),
+    [meetings],
   );
-  const now = new Date();
-  const nowTop =
-    isToday ? ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H : null;
+  const isToday = sameDay(date, new Date());
+  const nowMs = Date.now();
+  // Index of the first meeting that hasn't ended yet — the "now" line goes
+  // right above it (today only, and only between cards).
+  const nowIdx = isToday
+    ? sorted.findIndex((m) => new Date(m.end).getTime() > nowMs)
+    : -1;
 
-  const hourLabel = (h: number) => {
-    const d = new Date(date);
-    d.setHours(h, 0, 0, 0);
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const nowLine = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 0 }}>
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: c.destructive,
+        }}
+      />
+      <View style={{ flex: 1, height: 2, backgroundColor: c.destructive }} />
+    </View>
+  );
+
+  return (
+    <View style={{ gap: 10 }}>
+      {allDay.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <SectionHeading label={t("mtg.allDay")} />
+          {allDay.map((m) => (
+            <DayMeetingCard key={m.id} m={m} overlaps={false} onOpen={() => onOpen(m)} />
+          ))}
+        </View>
+      ) : null}
+      {sorted.map((m, i) => (
+        <React.Fragment key={m.id}>
+          {i === nowIdx ? nowLine : null}
+          <DayMeetingCard
+            m={m}
+            overlaps={overlapping.has(m.id)}
+            onOpen={() => onOpen(m)}
+          />
+        </React.Fragment>
+      ))}
+      {isToday && sorted.length > 0 && nowIdx === -1 ? nowLine : null}
+    </View>
+  );
+}
+
+// ------------------------------------------------------------------
+// Meeting detail sheet — full info + internal-meeting manage actions.
+// ------------------------------------------------------------------
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+function isoDateLocal(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+function hhmmLocal(d: Date) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function parseLocal(dateStr: string, timeStr: string): Date | null {
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(timeStr.trim());
+  if (!dm || !tm) return null;
+  const d = new Date(
+    Number(dm[1]),
+    Number(dm[2]) - 1,
+    Number(dm[3]),
+    Number(tm[1]),
+    Number(tm[2]),
+    0,
+    0,
+  );
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Reschedule form for an internal meeting the viewer can manage. Native
+ * uses the platform date/time pickers; web falls back to text inputs. */
+function RescheduleForm({
+  meeting,
+  onDone,
+}: {
+  meeting: AtelierCalendarMeeting;
+  onDone: () => Promise<void>;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const [start, setStart] = useState(() => new Date(meeting.start));
+  const [end, setEnd] = useState(() => new Date(meeting.end));
+  // Web text-input mirrors of the same values.
+  const [dateText, setDateText] = useState(() => isoDateLocal(new Date(meeting.start)));
+  const [startText, setStartText] = useState(() => hhmmLocal(new Date(meeting.start)));
+  const [endText, setEndText] = useState(() => hhmmLocal(new Date(meeting.end)));
+  const [picker, setPicker] = useState<null | "date" | "start" | "end">(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const resolve = (): { s: Date; e: Date } | null => {
+    if (Platform.OS === "web") {
+      const s = parseLocal(dateText, startText);
+      const e = parseLocal(dateText, endText);
+      if (!s || !e) return null;
+      return { s, e };
+    }
+    return { s: start, e: end };
+  };
+
+  const save = async () => {
+    setErr(null);
+    const r = resolve();
+    if (!r || r.e.getTime() <= r.s.getTime()) {
+      setErr(t("mtg.endBeforeStart"));
+      return;
+    }
+    setBusy(true);
+    try {
+      await apiJson(`/api/atelier/me/calendar/internal/${meeting.id}`, {
+        method: "PATCH",
+        body: { start: r.s.toISOString(), end: r.e.toISOString() },
+      });
+      await onDone();
+    } catch {
+      setErr(t("mtg.rescheduleError"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const label = {
+    color: c.mutedForeground,
+    fontFamily: "PlusJakartaSans_500Medium" as const,
+    fontSize: 13,
+    textAlign: rtl.textAlign,
+  };
+  const fieldBox = {
+    backgroundColor: c.secondary,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: c.borderSoft ?? c.border,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  };
+  const fieldText = {
+    color: c.foreground,
+    fontFamily: "PlusJakartaSans_500Medium" as const,
+    fontSize: 15,
+  };
+
+  const nativeField = (
+    key: "date" | "start" | "end",
+    labelKey: string,
+    value: string,
+  ) => (
+    <View style={{ flex: 1, gap: 6 }}>
+      <Text style={label}>{t(labelKey)}</Text>
+      <Pressable
+        onPress={() => {
+          hapticLight();
+          setPicker(picker === key ? null : key);
+        }}
+        style={fieldBox}
+      >
+        <Text style={fieldText}>{value}</Text>
+      </Pressable>
+    </View>
+  );
+
+  return (
+    <View style={{ gap: 12 }}>
+      <SectionHeading label={t("mtg.reschedule")} />
+      {Platform.OS === "web" ? (
+        <>
+          <View style={{ gap: 6 }}>
+            <Text style={label}>{t("mtg.date")}</Text>
+            <TextInput
+              value={dateText}
+              onChangeText={setDateText}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={c.mutedForeground}
+              style={[fieldBox, fieldText]}
+            />
+          </View>
+          <View style={{ flexDirection: rtl.row, gap: 10 }}>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={label}>{t("mtg.startTime")}</Text>
+              <TextInput
+                value={startText}
+                onChangeText={setStartText}
+                placeholder="HH:MM"
+                placeholderTextColor={c.mutedForeground}
+                style={[fieldBox, fieldText]}
+              />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={label}>{t("mtg.endTime")}</Text>
+              <TextInput
+                value={endText}
+                onChangeText={setEndText}
+                placeholder="HH:MM"
+                placeholderTextColor={c.mutedForeground}
+                style={[fieldBox, fieldText]}
+              />
+            </View>
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={{ flexDirection: rtl.row, gap: 10 }}>
+            {nativeField("date", "mtg.date", isoDateLocal(start))}
+          </View>
+          <View style={{ flexDirection: rtl.row, gap: 10 }}>
+            {nativeField("start", "mtg.startTime", hhmmLocal(start))}
+            {nativeField("end", "mtg.endTime", hhmmLocal(end))}
+          </View>
+          {picker === "date" ? (
+            <DateTimePicker
+              value={start}
+              mode="date"
+              display={Platform.OS === "ios" ? "inline" : "default"}
+              onChange={(event, selected) => {
+                if (Platform.OS === "android") setPicker(null);
+                if (event.type === "dismissed") {
+                  setPicker(null);
+                  return;
+                }
+                if (selected) {
+                  const apply = (d: Date) => {
+                    const n = new Date(d);
+                    n.setFullYear(
+                      selected.getFullYear(),
+                      selected.getMonth(),
+                      selected.getDate(),
+                    );
+                    return n;
+                  };
+                  setStart((d) => apply(d));
+                  setEnd((d) => apply(d));
+                  if (Platform.OS === "ios") setPicker(null);
+                }
+              }}
+            />
+          ) : null}
+          {picker === "start" || picker === "end" ? (
+            <DateTimePicker
+              value={picker === "start" ? start : end}
+              mode="time"
+              display={Platform.OS === "ios" ? "spinner" : "default"}
+              onChange={(event, selected) => {
+                if (Platform.OS === "android") setPicker(null);
+                if (event.type === "dismissed") {
+                  setPicker(null);
+                  return;
+                }
+                if (selected) {
+                  if (picker === "start") setStart(selected);
+                  else setEnd(selected);
+                  if (Platform.OS === "ios") setPicker(null);
+                }
+              }}
+            />
+          ) : null}
+        </>
+      )}
+      {err ? (
+        <Text
+          style={{
+            color: c.destructive,
+            fontFamily: "PlusJakartaSans_400Regular",
+            fontSize: 13,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {err}
+        </Text>
+      ) : null}
+      <Button label={t("common.save")} onPress={() => void save()} loading={busy} />
+    </View>
+  );
+}
+
+/** Full-screen sheet with everything about one meeting. Internal meetings
+ * the viewer manages get reschedule/cancel; Outlook rows are view-only. */
+function MeetingDetailSheet({
+  meeting,
+  onClose,
+  onChanged,
+}: {
+  meeting: AtelierCalendarMeeting | null;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const insets = useSafeAreaInsets();
+  const [briefAccountId, setBriefAccountId] = useState<string | null>(null);
+  const [showReschedule, setShowReschedule] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelErr, setCancelErr] = useState<string | null>(null);
+
+  // Reset per-meeting state when a different meeting opens.
+  const meetingId = meeting?.id ?? null;
+  useEffect(() => {
+    setBriefAccountId(null);
+    setShowReschedule(false);
+    setCancelBusy(false);
+    setCancelErr(null);
+  }, [meetingId]);
+
+  const doCancel = useCallback(async () => {
+    if (!meeting) return;
+    setCancelErr(null);
+    setCancelBusy(true);
+    try {
+      await apiJson(`/api/atelier/me/calendar/internal/${meeting.id}`, {
+        method: "DELETE",
+      });
+      await onChanged();
+      onClose();
+    } catch {
+      setCancelErr(t("mtg.cancelError"));
+    } finally {
+      setCancelBusy(false);
+    }
+  }, [meeting, onChanged, onClose, t]);
+
+  const confirmCancel = () => {
+    hapticLight();
+    if (Platform.OS === "web") {
+      if (window.confirm(t("mtg.cancelConfirm"))) void doCancel();
+      return;
+    }
+    Alert.alert(t("mtg.cancelMeeting"), t("mtg.cancelConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("common.confirm"), style: "destructive", onPress: () => void doCancel() },
+    ]);
+  };
+
+  if (!meeting) return null;
+
+  const uniqueAccounts = (() => {
+    const seen = new Map<string, string>();
+    for (const match of meeting.matches) {
+      if (!seen.has(match.accountId)) seen.set(match.accountId, match.accountName);
+    }
+    return [...seen.entries()].map(([accountId, accountName]) => ({
+      accountId,
+      accountName,
+    }));
+  })();
+  const manageable = Boolean(meeting.internal && meeting.canManage);
+  const line = {
+    color: c.mutedForeground,
+    fontFamily: "PlusJakartaSans_400Regular" as const,
+    fontSize: 13,
+    textAlign: rtl.textAlign,
   };
 
   return (
-    <View style={{ height: 24 * HOUR_H, position: "relative" }}>
-      {Array.from({ length: 24 }, (_, h) => (
-        <View
-          key={h}
-          style={{
-            position: "absolute",
-            top: h * HOUR_H,
-            left: 0,
-            right: 0,
-            flexDirection: "row",
-            alignItems: "flex-start",
-          }}
-        >
-          <Text
-            style={{
-              width: GUTTER - 8,
-              color: c.mutedForeground,
-              fontFamily: "PlusJakartaSans_400Regular",
-              fontSize: 10,
-              textAlign: "right",
-              transform: [{ translateY: -6 }],
-            }}
-          >
-            {hourLabel(h)}
-          </Text>
-          <View
-            style={{
-              flex: 1,
-              marginLeft: 8,
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: c.border,
-            }}
-          />
-        </View>
-      ))}
-
-      {/* Lane area: blocks use % geometry relative to this container. */}
+    <Modal
+      visible
+      animationType="slide"
+      presentationStyle={Platform.OS === "web" ? undefined : "pageSheet"}
+      transparent={Platform.OS === "web"}
+      onRequestClose={onClose}
+    >
       <View
         style={{
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: GUTTER,
-          right: 4,
+          flex: 1,
+          backgroundColor: Platform.OS === "web" ? c.scrim ?? "rgba(0,0,0,0.5)" : c.background,
+          justifyContent: "flex-end",
         }}
       >
-        {blocks.map(({ m, top, height, col, cols }) => {
-          const selected = selectedId === m.id;
-          const matched = m.matches.length > 0;
-          return (
+        <View
+          style={{
+            flex: Platform.OS === "web" ? undefined : 1,
+            maxHeight: "92%",
+            backgroundColor: c.background,
+            borderTopLeftRadius: Platform.OS === "web" ? 24 : 0,
+            borderTopRightRadius: Platform.OS === "web" ? 24 : 0,
+            overflow: "hidden",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: rtl.row,
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: 16,
+              paddingTop: 14,
+              paddingBottom: 10,
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: c.border,
+            }}
+          >
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_700Bold",
+                fontSize: 17,
+              }}
+            >
+              {t("mtg.details")}
+            </Text>
             <Pressable
-              key={m.id}
               onPress={() => {
                 hapticLight();
-                onSelect(selected ? null : m.id);
+                onClose();
               }}
+              hitSlop={10}
               style={({ pressed }) => ({
-                position: "absolute",
-                top,
-                height,
-                left: `${(col / cols) * 100}%`,
-                width: `${100 / cols}%`,
-                paddingRight: col === cols - 1 ? 0 : 3,
-                opacity: pressed ? 0.8 : 1,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: c.secondary,
+                opacity: pressed ? 0.6 : 1,
               })}
             >
+              <Feather name="x" size={18} color={c.foreground} />
+            </Pressable>
+          </View>
+          <ScrollView
+            contentContainerStyle={{
+              padding: 16,
+              gap: 14,
+              paddingBottom: insets.bottom + 32,
+            }}
+          >
+            <Text
+              style={{
+                color: c.foreground,
+                fontFamily: "PlusJakartaSans_700Bold",
+                fontSize: 20,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {meeting.subject || t("mtg.noSubject")}
+            </Text>
+            <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+              <Feather name="clock" size={14} color={c.mutedForeground} />
+              <Text style={line}>
+                {fmtDay(meeting.start, t)}
+                {" · "}
+                {meeting.isAllDay
+                  ? t("mtg.allDay")
+                  : `${fmtTime(meeting.start)} – ${fmtTime(meeting.end)}`}
+              </Text>
+            </View>
+            {meeting.location ? (
+              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+                <Feather name="map-pin" size={14} color={c.mutedForeground} />
+                <Text style={line} numberOfLines={2}>
+                  {meeting.location}
+                </Text>
+              </View>
+            ) : null}
+            <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 6 }}>
+              {meeting.internal ? (
+                <Chip label={t("mtg.internal")} color={c.primary} />
+              ) : null}
+              {meeting.matches.map((match) => (
+                <Chip
+                  key={`detail-${meeting.id}-${match.contactId}`}
+                  label={`${match.contactName} · ${match.accountName}`}
+                  color={c.primary}
+                />
+              ))}
+            </View>
+            {!meeting.internal ? (
               <View
                 style={{
-                  flex: 1,
-                  borderRadius: 8,
-                  borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
-                  borderColor: selected ? c.primary : c.border,
-                  backgroundColor: matched ? c.primary + "22" : c.secondary,
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  overflow: "hidden",
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 8,
+                  backgroundColor: c.secondary,
+                  borderRadius: 12,
+                  padding: 10,
                 }}
               >
-                <Text
-                  numberOfLines={height > 40 ? 2 : 1}
-                  style={{
-                    color: c.foreground,
-                    fontFamily: "PlusJakartaSans_600SemiBold",
-                    fontSize: 12,
-                  }}
-                >
-                  {m.subject || t("mtg.noSubject")}
-                </Text>
-                {height > 44 ? (
+                <Feather name="info" size={14} color={c.mutedForeground} />
+                <Text style={[line, { flex: 1 }]}>{t("mtg.managedInOutlook")}</Text>
+              </View>
+            ) : null}
+            {meeting.joinUrl ? (
+              <Button
+                label={t("mtg.join")}
+                icon="video"
+                onPress={() => {
+                  void openJoinUrl(meeting.joinUrl!, t("mtg.joinError"));
+                }}
+              />
+            ) : null}
+
+            {meeting.attendees.length > 0 ? (
+              <View style={{ gap: 6 }}>
+                <SectionHeading label={t("mtg.attendees")} />
+                {meeting.attendees.map((a, i) => (
+                  <Text key={`${a.email}-${i}`} style={line} numberOfLines={1}>
+                    {a.name ? `${a.name} · ${a.email}` : a.email}
+                  </Text>
+                ))}
+              </View>
+            ) : null}
+
+            {uniqueAccounts.length > 0 ? (
+              <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 12 }}>
+                  {uniqueAccounts.map((acc) => {
+                    const open = briefAccountId === acc.accountId;
+                    return (
+                      <Pressable
+                        key={`detail-brief-${acc.accountId}`}
+                        onPress={() => {
+                          hapticLight();
+                          setBriefAccountId(open ? null : acc.accountId);
+                        }}
+                        style={({ pressed }) => ({
+                          flexDirection: rtl.row,
+                          alignItems: "center",
+                          gap: 6,
+                          opacity: pressed ? 0.6 : 1,
+                        })}
+                      >
+                        <Feather name="file-text" size={14} color={c.primary} />
+                        <Text
+                          style={{
+                            color: c.primary,
+                            fontFamily: "PlusJakartaSans_600SemiBold",
+                            fontSize: 13,
+                          }}
+                        >
+                          {uniqueAccounts.length > 1
+                            ? t("mtg.briefFor", { name: acc.accountName })
+                            : t("mtg.brief")}
+                        </Text>
+                        <Feather
+                          name={open ? "chevron-up" : "chevron-down"}
+                          size={14}
+                          color={c.primary}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {briefAccountId ? <MeetingBriefPanel accountId={briefAccountId} /> : null}
+              </View>
+            ) : null}
+
+            {manageable ? (
+              <View style={{ gap: 12, marginTop: 4 }}>
+                {showReschedule ? (
+                  <RescheduleForm
+                    meeting={meeting}
+                    onDone={async () => {
+                      await onChanged();
+                      onClose();
+                    }}
+                  />
+                ) : (
+                  <Button
+                    label={t("mtg.reschedule")}
+                    icon="edit"
+                    variant="secondary"
+                    onPress={() => {
+                      hapticLight();
+                      setShowReschedule(true);
+                    }}
+                  />
+                )}
+                <Button
+                  label={t("mtg.cancelMeeting")}
+                  icon="trash-2"
+                  variant="destructive"
+                  loading={cancelBusy}
+                  onPress={confirmCancel}
+                />
+                {cancelErr ? (
                   <Text
-                    numberOfLines={1}
                     style={{
-                      color: c.mutedForeground,
+                      color: c.destructive,
                       fontFamily: "PlusJakartaSans_400Regular",
-                      fontSize: 11,
+                      fontSize: 13,
+                      textAlign: rtl.textAlign,
                     }}
                   >
-                    {fmtTime(m.start)} – {fmtTime(m.end)}
-                    {m.joinUrl ? "  ·  " + t("mtg.join") : ""}
+                    {cancelErr}
                   </Text>
                 ) : null}
               </View>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* Current-time indicator (today only). */}
-      {nowTop !== null ? (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            top: nowTop,
-            left: GUTTER - 4,
-            right: 0,
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: c.destructive,
-            }}
-          />
-          <View style={{ flex: 1, height: 2, backgroundColor: c.destructive }} />
+            ) : null}
+          </ScrollView>
         </View>
-      ) : null}
-    </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -877,7 +1433,10 @@ export default function MeetingsScreen() {
   // navigator can move beyond the list's 7-day range (past or future).
   const [view, setView] = useState<"list" | "day">("list");
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
-  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  // Full detail sheet, opened by tapping any meeting card in either view.
+  const [detailMeeting, setDetailMeeting] = useState<AtelierCalendarMeeting | null>(
+    null,
+  );
   const dayWin = useMemo(() => {
     const s = startOfDay(selectedDate);
     const e = new Date(s);
@@ -898,31 +1457,60 @@ export default function MeetingsScreen() {
   const meetings = calendar.data?.meetings ?? [];
 
   const dayMeetings = dayCalendar.data?.meetings ?? [];
-  const allDayMeetings = dayMeetings.filter((m) => m.isAllDay);
-  const timedMeetings = dayMeetings.filter((m) => !m.isAllDay);
-  const selectedMeeting =
-    dayMeetings.find((m) => m.id === selectedMeetingId) ?? null;
+  const connected = Boolean(conn.data?.configured && conn.data.connected);
 
-  // When entering day view or changing day, scroll near the first meeting
-  // (or 8am when the day is empty) so the user isn't staring at midnight.
-  useEffect(() => {
-    if (view !== "day") return;
-    let hour = 8;
-    if (timedMeetings.length > 0) {
-      const first = Math.min(
-        ...timedMeetings.map((m) =>
-          Math.max(
-            0,
-            (new Date(m.start).getTime() - startOfDay(selectedDate).getTime()) /
-              3600000,
-          ),
-        ),
-      );
-      hour = Math.max(0, Math.floor(first) - 1);
-    }
-    scrollRef.current?.scrollTo({ y: hour * HOUR_H, animated: false });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, dayWin.start, dayCalendar.isSuccess]);
+  // Subtle fade when the day changes (arrows or swipe).
+  const dayFade = useRef(new Animated.Value(1)).current;
+  const changeDay = useCallback(
+    (d: Date) => {
+      setSelectedDate(d);
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+      dayFade.setValue(0.25);
+      Animated.timing(dayFade, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    },
+    [dayFade],
+  );
+
+  const shiftDay = useCallback(
+    (days: number) => {
+      hapticLight();
+      const d = new Date(selectedDate);
+      d.setDate(d.getDate() + days);
+      changeDay(startOfDay(d));
+    },
+    [selectedDate, changeDay],
+  );
+
+  // Swipe left/right anywhere on the day content to change days. Horizontal
+  // activation offsets keep vertical scrolling and taps unaffected. In RTL
+  // the reading direction flips, so the swipe direction flips with it.
+  const rtlFlip = rtl.row === "row-reverse" ? -1 : 1;
+  const swipeDay = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(view === "day" && connected)
+        .activeOffsetX([-24, 24])
+        .failOffsetY([-16, 16])
+        .runOnJS(true)
+        .onEnd((e) => {
+          if (e.translationX <= -60) shiftDay(rtlFlip);
+          else if (e.translationX >= 60) shiftDay(-rtlFlip);
+        }),
+    [view, connected, shiftDay, rtlFlip],
+  );
+
+  // After an internal-meeting reschedule/cancel, refresh whichever calendar
+  // windows are on screen.
+  const refreshCalendars = useCallback(async () => {
+    await Promise.all([
+      calendar.refetch(),
+      view === "day" ? dayCalendar.refetch() : Promise.resolve(),
+    ]);
+  }, [calendar, dayCalendar, view]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -973,24 +1561,11 @@ export default function MeetingsScreen() {
         </Text>
       </View>
 
-      <ScrollView
-        ref={scrollRef}
-        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad }}
-        refreshControl={
-          enabled ? (
-            <RefreshControl
-              refreshing={
-                view === "day" ? dayCalendar.isRefetching : calendar.isRefetching
-              }
-              onRefresh={() =>
-                view === "day" ? dayCalendar.refetch() : calendar.refetch()
-              }
-              tintColor={c.mutedForeground}
-            />
-          ) : undefined
-        }
-      >
-        {enabled && !conn.isLoading ? (
+      {/* Pinned controls: view toggle plus, in day view, the date navigator.
+          They live outside the ScrollView so they stay locked while the
+          day's content scrolls. */}
+      {enabled && !conn.isLoading ? (
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
           <View
             style={{
               flexDirection: rtl.row,
@@ -1040,7 +1615,30 @@ export default function MeetingsScreen() {
               );
             })}
           </View>
-        ) : null}
+          {connected && view === "day" ? (
+            <DayNavigator date={selectedDate} onChange={changeDay} />
+          ) : null}
+        </View>
+      ) : null}
+
+      <GestureDetector gesture={swipeDay}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad }}
+        refreshControl={
+          enabled ? (
+            <RefreshControl
+              refreshing={
+                view === "day" ? dayCalendar.isRefetching : calendar.isRefetching
+              }
+              onRefresh={() =>
+                view === "day" ? dayCalendar.refetch() : calendar.refetch()
+              }
+              tintColor={c.mutedForeground}
+            />
+          ) : undefined
+        }
+      >
         {conn.isLoading ? (
           <View style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (
@@ -1112,20 +1710,18 @@ export default function MeetingsScreen() {
             {meetings.length > 0 ? (
               <View style={{ alignSelf: "stretch", gap: 12, marginTop: 16 }}>
                 {meetings.map((m) => (
-                  <MeetingRow key={m.id} m={m} initialBriefAccountId={null} />
+                  <MeetingRow
+                    key={m.id}
+                    m={m}
+                    initialBriefAccountId={null}
+                    onOpen={() => setDetailMeeting(m)}
+                  />
                 ))}
               </View>
             ) : null}
           </View>
         ) : view === "day" ? (
-          <>
-            <DayNavigator
-              date={selectedDate}
-              onChange={(d) => {
-                setSelectedDate(d);
-                setSelectedMeetingId(null);
-              }}
-            />
+          <Animated.View style={{ opacity: dayFade, gap: 12 }}>
             {dayCalendar.isLoading ? (
               <View style={{ gap: 12 }}>
                 {[0, 1, 2].map((i) => (
@@ -1140,73 +1736,20 @@ export default function MeetingsScreen() {
                 onRetry={() => dayCalendar.refetch()}
                 message={t("mtg.error")}
               />
+            ) : dayMeetings.length === 0 ? (
+              <EmptyState
+                icon="calendar"
+                title={t("mtg.empty")}
+                body={t("mtg.emptyDay")}
+              />
             ) : (
-              <>
-                {allDayMeetings.length > 0 ? (
-                  <View style={{ gap: 6 }}>
-                    <SectionHeading label={t("mtg.allDay")} />
-                    {allDayMeetings.map((m) => {
-                      const selected = selectedMeetingId === m.id;
-                      return (
-                        <Pressable
-                          key={m.id}
-                          onPress={() => {
-                            hapticLight();
-                            setSelectedMeetingId(selected ? null : m.id);
-                          }}
-                          style={({ pressed }) => ({
-                            borderRadius: 8,
-                            borderWidth: selected
-                              ? 1.5
-                              : StyleSheet.hairlineWidth,
-                            borderColor: selected ? c.primary : c.border,
-                            backgroundColor:
-                              m.matches.length > 0
-                                ? c.primary + "22"
-                                : c.secondary,
-                            paddingHorizontal: 10,
-                            paddingVertical: 8,
-                            opacity: pressed ? 0.8 : 1,
-                          })}
-                        >
-                          <Text
-                            numberOfLines={1}
-                            style={{
-                              color: c.foreground,
-                              fontFamily: "PlusJakartaSans_600SemiBold",
-                              fontSize: 13,
-                              textAlign: rtl.textAlign,
-                            }}
-                          >
-                            {m.subject || t("mtg.noSubject")}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : null}
-                {selectedMeeting ? <MeetingRow m={selectedMeeting} /> : null}
-                {dayMeetings.length === 0 ? (
-                  <EmptyState
-                    icon="calendar"
-                    title={t("mtg.empty")}
-                    body={t("mtg.emptyDay")}
-                  />
-                ) : null}
-                <DayTimeline
-                  meetings={timedMeetings}
-                  date={selectedDate}
-                  selectedId={selectedMeetingId}
-                  onSelect={(id) => {
-                    setSelectedMeetingId(id);
-                    // The detail card renders above the timeline — bring it
-                    // into view when a block is picked.
-                    if (id) scrollRef.current?.scrollTo({ y: 0, animated: true });
-                  }}
-                />
-              </>
+              <DayCards
+                meetings={dayMeetings}
+                date={selectedDate}
+                onOpen={(m) => setDetailMeeting(m)}
+              />
             )}
-          </>
+          </Animated.View>
         ) : calendar.isLoading ? (
           <View style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (
@@ -1228,10 +1771,20 @@ export default function MeetingsScreen() {
               }
               m={m}
               initialBriefAccountId={m.id === focusMeetingId ? focusAccountId : null}
+              onOpen={() => setDetailMeeting(m)}
             />
           ))
         )}
       </ScrollView>
+      </GestureDetector>
+
+      {detailMeeting ? (
+        <MeetingDetailSheet
+          meeting={detailMeeting}
+          onClose={() => setDetailMeeting(null)}
+          onChanged={refreshCalendars}
+        />
+      ) : null}
     </View>
   );
 }
