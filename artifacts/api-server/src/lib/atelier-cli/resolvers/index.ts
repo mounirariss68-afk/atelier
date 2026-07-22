@@ -109,15 +109,42 @@ export async function resolveContact(
     .from(atelierContacts)
     .where(where)
     .limit(MAX_CHOICES + 1);
-  if (rows.length === 0) return { kind: "none" };
-  if (rows.length === 1) {
-    const r = rows[0]!;
+  // Task #570 — accent-insensitive fallback: SQL ILIKE can't fold
+  // ö/ü/ş/ı ("gokhan" vs "Gökhan"); on a miss, fold-compare in JS over
+  // the org's contacts.
+  let candidates = rows;
+  if (candidates.length === 0) {
+    const needle = foldRosterName(q);
+    if (needle) {
+      const all = await db
+        .select({
+          id: atelierContacts.id,
+          name: atelierContacts.fullName,
+          email: atelierContacts.email,
+          title: atelierContacts.title,
+        })
+        .from(atelierContacts)
+        .where(
+          and(
+            eq(atelierContacts.orgId, persona.orgId),
+            isNull(atelierContacts.deletedAt),
+            opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
+          ),
+        );
+      candidates = all
+        .filter((r) => foldRosterName(r.name ?? "").includes(needle))
+        .slice(0, MAX_CHOICES + 1);
+    }
+  }
+  if (candidates.length === 0) return { kind: "none" };
+  if (candidates.length === 1) {
+    const r = candidates[0]!;
     return { kind: "match", id: r.id, label: r.name ?? r.email ?? r.id };
   }
   return {
     kind: "choices",
     prompt: `Which contact did you mean by "${q}"?`,
-    options: rows.slice(0, MAX_CHOICES).map((r) => ({
+    options: candidates.slice(0, MAX_CHOICES).map((r) => ({
       id: r.id,
       label: r.name ?? r.email ?? r.id,
       secondary: r.title ?? r.email ?? undefined,

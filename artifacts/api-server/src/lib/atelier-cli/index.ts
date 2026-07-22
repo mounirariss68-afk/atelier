@@ -62,6 +62,7 @@ import {
   wrapAttachment,
 } from "./prompt-guard.js";
 import { stripLocalePreamble } from "./locale.js";
+import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
 // Task #484 — static import of DISPATCH_TABLE so getToolsForPersona can
 // strip legacy chat-writes whose (kind, verb) is now owned by
 // propose_write. The capability-retriever filter at line 215 only
@@ -1219,8 +1220,14 @@ const SYSTEM_PROMPT = [
   "  ONCE with the person's name. It returns their account-team roles, active engagement",
   "  staffings with allocation %, and open opportunities they own or lead. Do NOT chain",
   "  separate roster/engagement/opportunity reads for this.",
-  "- Availability / capacity questions ('does X have bandwidth?', 'can X take on more?',",
-  "  'is X free?') are workload questions — call `person_workload` and lead your answer",
+  // Task #570 — calendar-availability vs workload split: "is X free at
+  // 3pm / tomorrow?" is a CALENDAR question, not a staffing question.
+  "- CALENDAR availability questions — tied to a specific date/time ('is X free tomorrow",
+  "  at 3pm?', 'what does my Thursday look like?', 'when are X and I both free?') — use",
+  "  `check_availability` (specific time or whole-day busy blocks) or `find_free_slot`",
+  "  (earliest common free slot). These check real Outlook calendars and book nothing.",
+  "- WORKLOAD / capacity questions ('does X have bandwidth?', 'can X take on more",
+  "  work?') are staffing questions — call `person_workload` and lead your answer",
   "  with the capacity signal from `totalAllocationPct` / `capacityStatus`: state the",
   "  total allocation plainly (e.g. '120% allocated — overallocated by 20%' or '60%",
   "  allocated — about 40% available'). If `hiddenAccountCount` > 0, note the visible",
@@ -2312,6 +2319,47 @@ export function mergeClarificationAnswer(
   return { ...base, [head]: mergeClarificationAnswer(childObj, rest, value) };
 }
 
+// Task #570 — mid-flow corrections. While a scheduling clarification is
+// pending (e.g. asked for the TOPIC), the user may instead correct a
+// DIFFERENT field: "actually make it 9am", "move it to Friday",
+// "make it in person". Detect the correction, route the value to the
+// field it belongs to, and DON'T pollute the asked field with it.
+// Pure + exported for probes. Restricted to the scheduling tools whose
+// schemas share these field names.
+export const CLARIFICATION_REROUTE_TOOLS = new Set([
+  "schedule_internal_meeting",
+  "schedule_client_meeting",
+]);
+
+export function reRouteClarificationAnswer(
+  askedField: string,
+  raw: string,
+): { field: string; value: string } | null {
+  const p = (raw ?? "").trim();
+  if (!p) return null;
+  const lower = p.toLowerCase();
+  // Correction cue — "actually…", "no,…", "wait…", "change it to…",
+  // "make it…" — OR a bare re-typed value of another known field type.
+  const cued = /^(actually|nope|no|wait|instead|change (it|that)|make (it|that)|move (it|that)|rather)\b/.test(lower);
+  // Time correction: an explicit clock time somewhere in the answer.
+  const timeMatch = lower.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|\d{1,2}:\d{2})\b/);
+  if (askedField !== "time" && timeMatch && (cued || /\b(at|to)\s*$|\b(at|to)\s+\d/.test(lower) || lower.replace(timeMatch[0], "").trim().length <= 24)) {
+    const norm = normalizeTimeInput(timeMatch[1] ?? "");
+    if (norm) return { field: "time", value: norm };
+  }
+  // Date correction: explicit YYYY-MM-DD in the answer.
+  const dateMatch = p.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (askedField !== "date" && dateMatch && cued) {
+    return { field: "date", value: dateMatch[1]! };
+  }
+  // Location correction: "make it in person" / "actually online".
+  if (askedField !== "locationType" && cued) {
+    const loc = normalizeLocationAnswer(p.replace(/^(actually|no[, ]|nope|wait|instead|change (it|that) to|make (it|that)|rather)\b[:,]?\s*/i, ""));
+    if (loc) return { field: "locationType", value: loc };
+  }
+  return null;
+}
+
 /** Validate an untrusted `fields` array from a persisted frame/body. */
 export function sanitizeClarificationFields(
   raw: unknown,
@@ -3127,7 +3175,17 @@ export async function runTurn(
           }
         }
         if (!usedMultiValues) {
-          mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
+          // Task #570 — mid-flow correction: "actually make it 9am" while
+          // being asked for the topic routes to `time`, not `topic`. The
+          // asked field stays unanswered, so the tool re-asks it.
+          const reroute = CLARIFICATION_REROUTE_TOOLS.has(pc.tool)
+            ? reRouteClarificationAnswer(pc.field, answer)
+            : null;
+          if (reroute) {
+            mergedInput = mergeClarificationAnswer(mergedInput, reroute.field, reroute.value);
+          } else {
+            mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
+          }
         }
         const ctx0: ToolContext = {
           persona,

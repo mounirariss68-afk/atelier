@@ -18,7 +18,7 @@
  * never silently out of sync. Meetings whose organizer never had a Graph
  * event (msEventId null) update locally only.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db, atelierMeetings, atelierAuditEvents } from "@workspace/db";
 import {
   SchedulingError,
@@ -54,11 +54,17 @@ export class MeetingLifecycleError extends Error {
   }
 }
 
-/** Load an internal meeting the actor is allowed to manage (organizer or
- *  founding partner), org-scoped. Throws MeetingLifecycleError. */
+/** Which meetings a lifecycle call may touch. REST keeps the historical
+ *  "internal"-only scope; chat (Task #570) manages client meetings too
+ *  (parentType opportunity/engagement booked via schedule_client_meeting). */
+export type MeetingScope = "internal" | "any";
+
+/** Load a meeting the actor is allowed to manage (organizer or founding
+ *  partner), org-scoped. Throws MeetingLifecycleError. */
 export async function loadManagedInternalMeeting(
   actor: MeetingActor,
   meetingId: string,
+  scope: MeetingScope = "internal",
 ): Promise<InternalMeetingRow> {
   const [row] = await db
     .select()
@@ -67,13 +73,15 @@ export async function loadManagedInternalMeeting(
       and(
         eq(atelierMeetings.id, meetingId),
         eq(atelierMeetings.orgId, actor.orgId),
-        eq(atelierMeetings.parentType, "internal"),
+        scope === "any"
+          ? inArray(atelierMeetings.parentType, ["internal", "opportunity", "engagement"])
+          : eq(atelierMeetings.parentType, "internal"),
         isNull(atelierMeetings.deletedAt),
       ),
     )
     .limit(1);
   if (!row) {
-    throw new MeetingLifecycleError("Internal meeting not found.", "not_found");
+    throw new MeetingLifecycleError("Meeting not found.", "not_found");
   }
   if (row.status === "cancelled") {
     throw new MeetingLifecycleError(
@@ -131,8 +139,9 @@ export async function rescheduleInternalMeeting(args: {
   end: Date;
   via: "rest" | "cli";
   turnId?: string;
+  scope?: MeetingScope;
 }): Promise<{ meeting: InternalMeetingRow; graphUpdated: boolean }> {
-  const row = await loadManagedInternalMeeting(args.actor, args.meetingId);
+  const row = await loadManagedInternalMeeting(args.actor, args.meetingId, args.scope ?? "internal");
   if (!(args.end > args.start)) {
     throw new MeetingLifecycleError("End must be after start.", "invalid_input");
   }
@@ -175,7 +184,7 @@ export async function rescheduleInternalMeeting(args: {
       via: args.via,
       ...(args.turnId ? { turnId: args.turnId } : {}),
     },
-    summary: `${args.actor.name} rescheduled internal meeting "${row.title}" to ${whenLabel}.`,
+    summary: `${args.actor.name} rescheduled ${row.parentType === "internal" ? "internal " : ""}meeting "${row.title}" to ${whenLabel}.`,
   });
   const [fresh] = await db
     .select()
@@ -201,11 +210,21 @@ export async function updateInternalMeetingDetails(args: {
   internalAttendees?: Array<{ userId: string; name: string; email: string | null }>;
   via: "rest" | "cli";
   turnId?: string;
+  scope?: MeetingScope;
 }): Promise<{ meeting: InternalMeetingRow; graphUpdated: boolean }> {
-  const row = await loadManagedInternalMeeting(args.actor, args.meetingId);
+  const row = await loadManagedInternalMeeting(args.actor, args.meetingId, args.scope ?? "internal");
   const newTitle = args.title?.trim();
   if (!newTitle && !args.internalAttendees) {
     throw new MeetingLifecycleError("Nothing to change.", "invalid_input");
+  }
+  // Task #570 — attendee-list replacement is internal-only: a client
+  // meeting's Graph attendee list includes client contacts that are NOT
+  // in internalAttendees, so a replacement would silently drop them.
+  if (args.internalAttendees && row.parentType !== "internal") {
+    throw new MeetingLifecycleError(
+      "Attendees on a client meeting can't be edited from here — reschedule or cancel it, or update the invite in Outlook directly.",
+      "invalid_input",
+    );
   }
   if (args.internalAttendees && args.internalAttendees.length === 0) {
     throw new MeetingLifecycleError(
@@ -255,7 +274,7 @@ export async function updateInternalMeetingDetails(args: {
       via: args.via,
       ...(args.turnId ? { turnId: args.turnId } : {}),
     },
-    summary: `${args.actor.name} updated internal meeting "${newTitle ?? prevTitle}"${
+    summary: `${args.actor.name} updated ${row.parentType === "internal" ? "internal " : ""}meeting "${newTitle ?? prevTitle}"${
       args.internalAttendees ? " (attendees changed)" : ""
     }.`,
   });
@@ -276,8 +295,9 @@ export async function cancelInternalMeeting(args: {
   meetingId: string;
   via: "rest" | "cli";
   turnId?: string;
+  scope?: MeetingScope;
 }): Promise<{ meeting: InternalMeetingRow; graphCancelled: boolean }> {
-  const row = await loadManagedInternalMeeting(args.actor, args.meetingId);
+  const row = await loadManagedInternalMeeting(args.actor, args.meetingId, args.scope ?? "internal");
   const organizerId = row.createdByUserId;
   let graphCancelled = false;
   if (row.msEventId && organizerId) {
@@ -306,7 +326,7 @@ export async function cancelInternalMeeting(args: {
       via: args.via,
       ...(args.turnId ? { turnId: args.turnId } : {}),
     },
-    summary: `${args.actor.name} cancelled internal meeting "${row.title}".`,
+    summary: `${args.actor.name} cancelled ${row.parentType === "internal" ? "internal " : ""}meeting "${row.title}".`,
   });
   return { meeting: row, graphCancelled };
 }

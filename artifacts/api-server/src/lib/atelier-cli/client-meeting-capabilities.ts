@@ -17,7 +17,6 @@
 import { and, eq, ilike, isNull } from "drizzle-orm";
 import {
   db,
-  atelierUsers,
   atelierMeetings,
   atelierAuditEvents,
   atelierAccounts,
@@ -30,6 +29,14 @@ import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.j
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { rid } from "./index.js";
 import { resolveAccount, resolveContact } from "./resolvers/index.js";
+import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
+import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
+import {
+  buildDuplicateWarning,
+  findSameSlotMeetings,
+  isPastSlot,
+  pickReplayMatch,
+} from "./meeting-reliability.js";
 import type { CliPersona } from "./index.js";
 import {
   SchedulingError,
@@ -39,6 +46,7 @@ import {
   dubaiWallToUtc,
   findEarliestCommonSlot,
   fmtDubai,
+  cancelInternalInvite,
   sendInternalInvite,
   type AvailabilityPerson,
 } from "../msScheduling.js";
@@ -283,6 +291,11 @@ defineCapability({
       time: { type: "string", description: "Optional explicit start time HH:MM (Dubai). Omit to find the earliest free slot for the internal side." },
       durationMinutes: { type: "integer", minimum: 15, maximum: 480 },
       topic: { type: "string", maxLength: 200 },
+      agenda: {
+        type: "string",
+        maxLength: 2000,
+        description: "Optional agenda / description — included in the invite body.",
+      },
       kind: { enum: [...MEETING_KINDS], description: "Meeting kind; defaults to discovery." },
       locationType: { enum: ["online", "in_person"] },
       confirm: { type: "boolean" },
@@ -322,11 +335,12 @@ defineCapability({
     }
     const durationMin = Math.max(15, Math.min(480, Number(input.durationMinutes ?? 60)));
     const topic = typeof input.topic === "string" ? input.topic.trim() : "";
+    const agenda = typeof input.agenda === "string" ? input.agenda.trim().slice(0, 2000) : "";
     const kind = MEETING_KINDS.includes(input.kind as (typeof MEETING_KINDS)[number])
       ? (input.kind as (typeof MEETING_KINDS)[number])
       : "discovery";
-    const locationType =
-      input.locationType === "in_person" ? "in_person" : input.locationType === "online" ? "online" : null;
+    // Task #570 — tolerant location parsing (shared with internal tool).
+    const locationType = normalizeLocationAnswer(input.locationType);
 
     // ---- parent (opportunity/engagement, disambiguated) ----
     const parentOutcome = await resolveClientMeetingParent(ctx.persona, input);
@@ -375,35 +389,11 @@ defineCapability({
     const colleagueNames = Array.isArray(input.colleagues)
       ? input.colleagues.map((n) => String(n).trim()).filter(Boolean)
       : [];
-    const colleagues: AvailabilityPerson[] = [];
-    for (const name of colleagueNames) {
-      const matches = await db
-        .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
-        .from(atelierUsers)
-        .where(
-          and(
-            eq(atelierUsers.orgId, ctx.persona.orgId),
-            ilike(atelierUsers.name, `%${name}%`),
-          ),
-        )
-        .limit(6);
-      const nonSelf = matches.filter((m) => m.id !== ctx.persona.id);
-      if (nonSelf.length === 0) {
-        return { ok: false, errorCode: "not_found", errorMessage: `I couldn't find a colleague named "${name}" on the roster.` };
-      }
-      if (nonSelf.length > 1) {
-        const options = nonSelf.slice(0, 5).map((m) => ({ id: m.id, label: m.name, secondary: m.email }));
-        return {
-          ok: true,
-          data: { prompt: `Which "${name}" did you mean?`, options },
-          disambiguation: { kind: "user", options },
-        };
-      }
-      const m = nonSelf[0]!;
-      if (!colleagues.some((c) => c.userId === m.id)) {
-        colleagues.push({ userId: m.id, name: m.name, email: m.email });
-      }
-    }
+    // Task #570 — shared accent-insensitive resolver ("gokhan" finds
+    // "Gökhan Güney"); raw email addresses are refused gracefully.
+    const colleagueResolution = await resolveRosterAttendees(colleagueNames, ctx.persona);
+    if (colleagueResolution.kind === "result") return colleagueResolution.result as never;
+    const colleagues: AvailabilityPerson[] = colleagueResolution.people;
 
     // ---- clarifications: topic then online/in-person ----
     const partial = {
@@ -415,6 +405,7 @@ defineCapability({
       durationMinutes: durationMin,
       kind,
       topic: topic || undefined,
+      agenda: agenda || undefined,
       locationType: locationType ?? undefined,
     };
     if (!topic) {
@@ -445,7 +436,8 @@ defineCapability({
     // ---- slot: explicit time OR earliest internal availability.
     // Client calendars can't be read — availability covers the internal
     // side only, and the preview says so. ----
-    const timeStr = typeof input.time === "string" ? input.time.trim() : "";
+    const timeRaw = typeof input.time === "string" ? input.time.trim() : "";
+    const timeStr = timeRaw ? normalizeTimeInput(timeRaw) ?? timeRaw : "";
     let slotStart: Date;
     let slotEnd: Date;
     let availabilityNote = "";
@@ -456,7 +448,15 @@ defineCapability({
     if (timeStr) {
       const s = dubaiWallToUtc(dateStr, timeStr);
       if (!s) {
-        return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeStr}" — use HH:MM.` };
+        return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
+      }
+      // Task #570 — reject times that are already in the past.
+      if (isPastSlot(s)) {
+        return {
+          ok: false,
+          errorCode: "past_time",
+          errorMessage: `${fmtDubai(s)} (Dubai) is already in the past — give me a future date/time and I'll book it.`,
+        };
       }
       slotStart = s;
       slotEnd = new Date(s.getTime() + durationMin * 60 * 1000);
@@ -492,7 +492,13 @@ defineCapability({
     const clientNames = clientContacts.map((c) => c.name).join(", ");
     const colleagueLabel = colleagues.length > 0 ? ` plus ${colleagues.map((c) => c.name).join(", ")}` : "";
     const whenLabel = `${fmtDubai(slotStart)}–${fmtDubai(slotEnd).slice(-5)} (Dubai)`;
+    // Task #570 — duplicate-booking awareness + idempotent confirm replay.
+    const sameSlot = await findSameSlotMeetings(ctx.persona.orgId, slotStart);
     if (input.confirm !== true) {
+      availabilityNote += buildDuplicateWarning(sameSlot, {
+        title: topic,
+        attendeeUserIds: colleagues.map((c) => c.userId),
+      });
       return {
         ok: true,
         data: {
@@ -540,10 +546,44 @@ defineCapability({
               durationMinutes: durationMin,
               kind,
               topic,
+              ...(agenda ? { agenda } : {}),
               locationType,
               confirm: true,
             },
           },
+        },
+      };
+    }
+
+    // ---- commit: idempotency first — a replayed confirm (double-tap /
+    // retried request) must NOT send a second Outlook invite. ----
+    const replay = pickReplayMatch(sameSlot, {
+      createdByUserId: ctx.persona.id,
+      title: topic,
+      parentType: parent.kind,
+    });
+    if (replay) {
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: replay.id,
+            title: replay.title,
+            date: fmtDubai(slotStart).slice(0, 10),
+            kind,
+            status: "scheduled",
+            startAt: slotStart.toISOString(),
+            endAt: replay.endAt?.toISOString() ?? slotEnd.toISOString(),
+            whenLabel,
+            locationType: replay.locationType ?? locationType,
+            joinUrl: replay.joinUrl,
+            summary: "Already booked — this confirmation was a repeat, so no second invite was sent.",
+            decisions: [],
+            actionItems: [],
+          },
+          parent: { kind: parent.kind, id: parent.id, name: parent.name },
+          href: parent.kind === "opportunity" ? `/accounts/${parent.accountId}?tab=opportunities` : `/engagements/${parent.id}`,
+          navigateTo: null,
         },
       };
     }
@@ -557,7 +597,9 @@ defineCapability({
       const { event } = await sendInternalInvite({
         requesterUserId: ctx.persona.id,
         subject: topic,
-        bodyText: `Client meeting on ${parent.accountName} (${parent.kind} "${parent.name}") scheduled via the Atelier by ${ctx.persona.name}.`,
+        bodyText: agenda
+          ? `Agenda:\n${agenda}\n\nClient meeting on ${parent.accountName} scheduled via the Atelier by ${ctx.persona.name}.`
+          : `Client meeting on ${parent.accountName} (${parent.kind} "${parent.name}") scheduled via the Atelier by ${ctx.persona.name}.`,
         start: slotStart,
         end: slotEnd,
         attendees: [
@@ -578,27 +620,50 @@ defineCapability({
     }
 
     const id = rid("mtg");
-    await db.insert(atelierMeetings).values({
-      id,
-      orgId: ctx.persona.orgId,
-      parentType: parent.kind,
-      parentId: parent.id,
-      mode: "scheduled",
-      kind,
-      title: topic,
-      date: fmtDubai(slotStart).slice(0, 10),
-      startAt: slotStart,
-      endAt: slotEnd,
-      locationType,
-      joinUrl,
-      webLink,
-      msEventId: eventId,
-      msEventUid: eventUid,
-      attendees: [...clientContacts.map((c) => c.name), ...colleagues.map((c) => c.name), ctx.persona.name],
-      internalAttendees: colleagues.map((c) => ({ userId: c.userId, name: c.name, email: c.email })),
-      status: "scheduled",
-      createdByUserId: ctx.persona.id,
-    });
+    try {
+      await db.insert(atelierMeetings).values({
+        id,
+        orgId: ctx.persona.orgId,
+        parentType: parent.kind,
+        parentId: parent.id,
+        mode: "scheduled",
+        kind,
+        title: topic,
+        date: fmtDubai(slotStart).slice(0, 10),
+        startAt: slotStart,
+        endAt: slotEnd,
+        locationType,
+        joinUrl,
+        webLink,
+        msEventId: eventId,
+        msEventUid: eventUid,
+        attendees: [...clientContacts.map((c) => c.name), ...colleagues.map((c) => c.name), ctx.persona.name],
+        internalAttendees: colleagues.map((c) => ({ userId: c.userId, name: c.name, email: c.email })),
+        status: "scheduled",
+        createdByUserId: ctx.persona.id,
+      });
+    } catch (err) {
+      // Task #570 — never leave an orphaned Outlook event: if the Atelier
+      // row can't be written, best-effort delete the Graph event we just
+      // created and fail loudly.
+      if (eventId) {
+        try {
+          await cancelInternalInvite({
+            organizerUserId: ctx.persona.id,
+            actingUserId: ctx.persona.id,
+            msEventId: eventId,
+          });
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      return {
+        ok: false,
+        errorCode: "internal",
+        errorMessage:
+          "The Outlook invite couldn't be recorded in the Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
+      };
+    }
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "meeting",
@@ -609,6 +674,7 @@ defineCapability({
       action: "meeting.scheduled.cli",
       payload: {
         topic,
+        ...(agenda ? { agenda } : {}),
         kind,
         parentType: parent.kind,
         parentId: parent.id,

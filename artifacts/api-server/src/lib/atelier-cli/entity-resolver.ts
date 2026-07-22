@@ -50,6 +50,7 @@ import {
   atelierPartnerFirmResources,
 } from "@workspace/db";
 import { cosine, embedText } from "./embeddings.js";
+import { foldRosterName } from "./chat-normalizers.js";
 
 export type ResolverKind =
   | "account"
@@ -603,7 +604,47 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
     }));
   });
   const [e, p] = await Promise.all([employees, partners]);
-  return [...e, ...p];
+  const merged = [...e, ...p];
+  if (merged.length > 0) return merged;
+  // Task #570 — accent-insensitive fallback: trigram/ILIKE can't fold
+  // ö/ü/ş/ı ("gokhan" vs "Gökhan"). On a total miss, fold-compare in JS
+  // over both rosters.
+  const needle = foldRosterName(query);
+  if (!needle) return merged;
+  const [emps, prs] = await Promise.all([
+    db
+      .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, title: atelierEmployees.title })
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.orgId, orgId), isNull(atelierEmployees.deletedAt))),
+    db
+      .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, role: atelierPartnerFirmResources.role })
+      .from(atelierPartnerFirmResources)
+      .where(and(eq(atelierPartnerFirmResources.orgId, orgId), isNull(atelierPartnerFirmResources.deletedAt))),
+  ]);
+  return [
+    ...emps
+      .filter((r) => foldRosterName(r.fullName).includes(needle))
+      .slice(0, TOP_K)
+      .map((r) => ({
+        id: r.id,
+        label: r.fullName,
+        secondary: r.title ? `Employee — ${r.title}` : "Employee",
+        score: 0.4,
+        via: "trgm" as const,
+        roster: "employee" as const,
+      })),
+    ...prs
+      .filter((r) => foldRosterName(r.fullName).includes(needle))
+      .slice(0, TOP_K)
+      .map((r) => ({
+        id: r.id,
+        label: r.fullName,
+        secondary: r.role ? `Partner resource — ${r.role}` : "Partner resource",
+        score: 0.4,
+        via: "trgm" as const,
+        roster: "partner_resource" as const,
+      })),
+  ];
 }
 
 async function safeTrigram<T>(primary: () => Promise<T[]>, fallback: () => Promise<T[]>): Promise<T[]> {

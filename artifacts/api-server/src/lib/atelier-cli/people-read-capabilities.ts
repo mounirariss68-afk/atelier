@@ -33,6 +33,7 @@ import {
   atelierRosterReportsTo,
   atelierAccountTeamMembers,
   atelierEngagementAccess,
+  atelierMsConnections,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -54,6 +55,9 @@ import {
 } from "../../routes/atelier/rosterRoutes.js";
 import { isRestrictedPersona } from "../../routes/atelier/personaRoles.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
+import { freshAccessToken, fmtDubai } from "../msScheduling.js";
+import { foldRosterName } from "./chat-normalizers.js";
+import { getCalendarView } from "../msGraph.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -205,9 +209,25 @@ function isToolResult(v: unknown): v is ToolResult {
  */
 async function scopedPersonMatches(me: MeRow, q: string): Promise<PersonWire[]> {
   const scope = await resolveRosterScope(me);
-  const matches = (
+  let matches = (
     await listPersons({ workerType: "all", q, includeComp: false })
   ).filter((p) => p.status !== "inactive");
+  // Task #570 — accent-insensitive fallback: a plain substring match
+  // can't fold ö/ü/ş/ı ("gokhan" vs "Gökhan"), so on a miss re-fetch the
+  // roster unfiltered and fold-compare in JS.
+  if (matches.length === 0 && q.trim()) {
+    const needle = foldRosterName(q);
+    if (needle) {
+      matches = (
+        await listPersons({ workerType: "all", includeComp: false })
+      ).filter(
+        (p) =>
+          p.status !== "inactive" &&
+          (foldRosterName(p.fullName ?? "").includes(needle) ||
+            foldRosterName(p.preferredName ?? "").includes(needle)),
+      );
+    }
+  }
   if (scope.kind === "full") return matches;
   return matches.filter(
     (p) =>
@@ -934,13 +954,15 @@ defineCapability({
   module: "engagement",
   toolName: "meeting_list",
   description:
-    "List recorded meetings the caller may see, optionally filtered to an account or engagement. Returns title, date, kind, and parent per meeting.",
+    "List meetings the caller may see, optionally filtered to an account or engagement and/or a date range (dateFrom/dateTo, YYYY-MM-DD). Unfiltered-by-parent listings also merge the caller's upcoming Outlook calendar events (deduplicated against Atelier-booked meetings).",
   slashAliases: { en: ["/meetings"], fr: ["/reunions"] },
   inputSchema: {
     type: "object",
     properties: {
       accountName: { type: "string" },
       engagementName: { type: "string" },
+      dateFrom: { type: "string", description: "Inclusive start date YYYY-MM-DD." },
+      dateTo: { type: "string", description: "Inclusive end date YYYY-MM-DD." },
       limit: { type: "integer", minimum: 1, maximum: 50 },
     },
     additionalProperties: false,
@@ -959,6 +981,14 @@ defineCapability({
   },
   async run(input, ctx) {
     const limit = Math.max(1, Math.min(50, Number(input.limit ?? 15)));
+    // Task #570 — optional inclusive date range (meeting.date is YYYY-MM-DD,
+    // so lexicographic comparison is correct).
+    const ymd = /^\d{4}-\d{2}-\d{2}$/;
+    const dateFrom = typeof input.dateFrom === "string" && ymd.test(input.dateFrom.trim()) ? input.dateFrom.trim() : null;
+    const dateTo = typeof input.dateTo === "string" && ymd.test(input.dateTo.trim()) ? input.dateTo.trim() : null;
+    if ((typeof input.dateFrom === "string" && input.dateFrom.trim() && !dateFrom) || (typeof input.dateTo === "string" && input.dateTo.trim() && !dateTo)) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "dateFrom/dateTo must be YYYY-MM-DD — resolve relative dates against today's date first." };
+    }
     let engagementFilter: string | null = null;
     let accountFilter: string | null = null;
     if (typeof input.engagementName === "string" && input.engagementName.trim()) {
@@ -988,6 +1018,8 @@ defineCapability({
         and(
           eq(atelierMeetings.orgId, ctx.persona.orgId),
           isNull(atelierMeetings.deletedAt),
+          ...(dateFrom ? [sql`${atelierMeetings.date} >= ${dateFrom}`] : []),
+          ...(dateTo ? [sql`${atelierMeetings.date} <= ${dateTo}`] : []),
         ),
       )
       .orderBy(desc(atelierMeetings.date))
@@ -1029,7 +1061,59 @@ defineCapability({
         href: parent.kind === "engagement" ? `/engagements/${parent.id}` : `/opportunities/${parent.id}`,
       });
     }
-    return { ok: true, data: { items, total: items.length } };
+
+    // Task #570 — merge the caller's own Outlook calendar into
+    // unfiltered-by-parent listings, deduplicated against Atelier-booked
+    // rows via msEventId / iCalUId. Best-effort: a Graph failure degrades
+    // to Atelier-only results with an honest note.
+    let note: string | undefined;
+    if (!engagementFilter && !accountFilter) {
+      try {
+        const [conn] = await db
+          .select()
+          .from(atelierMsConnections)
+          .where(eq(atelierMsConnections.userId, ctx.persona.id))
+          .limit(1);
+        if (conn) {
+          const now = new Date();
+          const rangeStart = dateFrom ? new Date(`${dateFrom}T00:00:00+04:00`) : now;
+          const rangeEnd = dateTo
+            ? new Date(`${dateTo}T23:59:59+04:00`)
+            : new Date((dateFrom ? rangeStart.getTime() : now.getTime()) + 14 * 24 * 3600 * 1000);
+          if (rangeEnd > rangeStart) {
+            const { accessToken } = await freshAccessToken(conn);
+            const events = await getCalendarView(accessToken, rangeStart.toISOString(), rangeEnd.toISOString());
+            const knownIds = new Set<string>();
+            for (const m of rows) {
+              if (m.msEventId) knownIds.add(m.msEventId);
+              if (m.msEventUid) knownIds.add(m.msEventUid);
+            }
+            for (const ev of events) {
+              if (items.length >= limit) break;
+              if (ev.isCancelled || ev.isAllDay) continue;
+              if (ev.id && knownIds.has(ev.id)) continue;
+              if (ev.iCalUId && knownIds.has(ev.iCalUId)) continue;
+              if (!ev.start?.dateTime) continue;
+              const startAt = new Date(`${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`);
+              if (Number.isNaN(startAt.getTime())) continue;
+              items.push({
+                id: `outlook:${ev.id ?? ev.iCalUId ?? ""}`,
+                label: ev.subject || "(no subject)",
+                date: fmtDubai(startAt).slice(0, 10),
+                kind: "outlook",
+                status: "scheduled",
+                parentType: "outlook",
+                parentName: "Outlook calendar",
+                href: "/me?tab=calendar",
+              });
+            }
+          }
+        }
+      } catch {
+        note = "Couldn't reach your Outlook calendar just now — showing Atelier meetings only.";
+      }
+    }
+    return { ok: true, data: { items, total: items.length, ...(note ? { note } : {}) } };
   },
 });
 

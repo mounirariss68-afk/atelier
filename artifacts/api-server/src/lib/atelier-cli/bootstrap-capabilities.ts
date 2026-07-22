@@ -67,6 +67,8 @@ import "./finance-ops-capabilities.js";
 import "./people-read-capabilities.js";
 // Task #553 — internal-meeting scheduling assistant (Microsoft calendars).
 import "./internal-meeting-capabilities.js";
+// Task #570 — read-only availability / free-slot lookups.
+import "./meeting-availability-capabilities.js";
 // Task #568 — client meetings from chat: attach to an opportunity or
 // engagement (account references disambiguate), invite client contacts
 // by email + roster colleagues, same availability/preview/confirm flow.

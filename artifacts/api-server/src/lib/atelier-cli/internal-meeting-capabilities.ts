@@ -18,8 +18,15 @@
  *
  * Out of scope: rooms, recurring meetings, external attendees.
  */
-import { and, eq, gte, ilike, isNull, ne } from "drizzle-orm";
-import { db, atelierUsers, atelierMeetings, atelierAuditEvents } from "@workspace/db";
+import { and, eq, gte, ilike, inArray, isNull, ne } from "drizzle-orm";
+import { db, atelierMeetings, atelierAuditEvents } from "@workspace/db";
+import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
+import {
+  buildDuplicateWarning,
+  findSameSlotMeetings,
+  isPastSlot,
+  pickReplayMatch,
+} from "./meeting-reliability.js";
 import {
   MeetingLifecycleError,
   cancelInternalMeeting,
@@ -33,6 +40,7 @@ import {
   SchedulingError,
   WORK_END_HOUR,
   WORK_START_HOUR,
+  cancelInternalInvite,
   collectBusyTimes,
   dubaiWallToUtc,
   findEarliestCommonSlot,
@@ -71,7 +79,7 @@ defineCapability({
   module: "engagement",
   toolName: "schedule_internal_meeting",
   description:
-    "Schedule a ONE-OFF internal meeting with colleagues: checks their Microsoft 365 availability (when connected), finds the earliest common free slot or uses an explicit time, and on confirm sends a real Outlook calendar invite (Teams link when online). Attendees are roster colleagues by name; date must be an absolute YYYY-MM-DD (resolve relative dates yourself from the current date). Not for client meetings — use schedule_client_meeting for those. Recurring/repeating meetings (e.g. \"every Monday\") are NOT supported — tell the user honestly that recurring series must be set up in Outlook directly; never book only the first occurrence as a workaround unless the user explicitly agrees.",
+    "Schedule a ONE-OFF internal meeting with colleagues: checks their Microsoft 365 availability (when connected), finds the earliest common free slot or uses an explicit time, and on confirm sends a real Outlook calendar invite (Teams link when online). Attendees are roster colleagues by name; date must be an absolute YYYY-MM-DD (resolve relative dates yourself from the current date). Not for client meetings — use schedule_client_meeting for those. Recurring/repeating meetings (e.g. \"every Monday\") are NOT supported — tell the user honestly that recurring series must be set up in Outlook directly; never book only the first occurrence as a workaround unless the user explicitly agrees. Meeting-room booking is also NOT supported — say so honestly rather than pretending a room was reserved.",
   slashAliases: { en: ["/schedule", "/schedule-meeting"], fr: ["/planifier"] },
   inputSchema: {
     type: "object",
@@ -89,6 +97,11 @@ defineCapability({
       },
       durationMinutes: { type: "integer", minimum: 15, maximum: 480 },
       topic: { type: "string", maxLength: 200 },
+      agenda: {
+        type: "string",
+        maxLength: 2000,
+        description: "Optional agenda / description — included in the invite body.",
+      },
       locationType: { enum: ["online", "in_person"] },
       confirm: { type: "boolean" },
     },
@@ -127,48 +140,19 @@ defineCapability({
     }
     const durationMin = Math.max(15, Math.min(480, Number(input.durationMinutes ?? 30)));
     const topic = typeof input.topic === "string" ? input.topic.trim() : "";
+    const agenda = typeof input.agenda === "string" ? input.agenda.trim().slice(0, 2000) : "";
     // Task #567 — tolerant location parsing: "teams"/"virtual" → online,
     // "in person"/"face to face"/"office" → in_person, etc.
     const locationType = normalizeLocationAnswer(input.locationType);
 
     // ---- attendee resolution (roster users, org-scoped, never self) ----
-    // Task #567 — accent-insensitive matching: fetch the org roster and
-    // filter with foldRosterName so "gokhan" finds "Gökhan Güney". A raw
-    // ILIKE can't fold diacritics (and Turkish ı needs an explicit map).
-    const roster = await db
-      .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
-      .from(atelierUsers)
-      .where(
-        and(
-          eq(atelierUsers.orgId, ctx.persona.orgId),
-          ne(atelierUsers.id, ctx.persona.id),
-        ),
-      );
-    const resolved: ResolvedAttendee[] = [];
-    for (const name of names) {
-      const needle = foldRosterName(name);
-      const matches = roster
-        .filter((u) => needle.length > 0 && foldRosterName(u.name).includes(needle))
-        .slice(0, 6);
-      if (matches.length === 0) {
-        return {
-          ok: false,
-          errorCode: "not_found",
-          errorMessage: `I couldn't find a colleague named "${name}" on the roster.`,
-        };
-      }
-      if (matches.length > 1) {
-        const options = matches.slice(0, 5).map((m) => ({ id: m.id, label: m.name, secondary: m.email }));
-        return {
-          ok: true,
-          data: { prompt: `Which "${name}" did you mean?`, options },
-          disambiguation: { kind: "user", options },
-        };
-      }
-      const m = matches[0]!;
-      if (!resolved.some((r) => r.userId === m.id)) {
-        resolved.push({ userId: m.id, name: m.name, email: m.email });
-      }
+    // Task #570 — ONE shared accent-insensitive resolver for every
+    // meeting surface ("gokhan" finds "Gökhan Güney"; raw emails refused).
+    const resolution = await resolveRosterAttendees(names, ctx.persona);
+    if (resolution.kind === "result") return resolution.result as never;
+    const resolved: ResolvedAttendee[] = resolution.people;
+    if (resolved.length === 0) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "At least one attendee name is required." };
     }
 
     // ---- clarifications: topic then online/in-person ----
@@ -178,6 +162,7 @@ defineCapability({
       time: typeof input.time === "string" ? input.time : undefined,
       durationMinutes: durationMin,
       topic: topic || undefined,
+      agenda: agenda || undefined,
       locationType: locationType ?? undefined,
     };
     if (!topic) {
@@ -224,6 +209,14 @@ defineCapability({
       if (!s) {
         return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
       }
+      // Task #570 — reject times that are already in the past.
+      if (isPastSlot(s)) {
+        return {
+          ok: false,
+          errorCode: "past_time",
+          errorMessage: `${fmtDubai(s)} (Dubai) is already in the past — give me a future date/time and I'll book it.`,
+        };
+      }
       // An explicit user-stated time is honored even outside working hours.
       slotStart = s;
       slotEnd = new Date(s.getTime() + durationMin * 60 * 1000);
@@ -268,7 +261,14 @@ defineCapability({
     // ---- two-phase confirm ----
     const attendeeNames = resolved.map((r) => r.name).join(", ");
     const whenLabel = `${fmtDubai(slotStart)}–${fmtDubai(slotEnd).slice(-5)} (Dubai)`;
+    // Task #570 — duplicate-booking awareness + idempotent confirm replay.
+    const sameSlot = await findSameSlotMeetings(ctx.persona.orgId, slotStart);
     if (input.confirm !== true) {
+      const dupWarning = buildDuplicateWarning(sameSlot, {
+        title: topic,
+        attendeeUserIds: resolved.map((r) => r.userId),
+      });
+      availabilityNote = `${availabilityNote}${dupWarning}`;
       return {
         ok: true,
         data: {
@@ -303,10 +303,45 @@ defineCapability({
               time: `${fmtDubai(slotStart).slice(-5)}`,
               durationMinutes: durationMin,
               topic,
+              ...(agenda ? { agenda } : {}),
               locationType,
               confirm: true,
             },
           },
+        },
+      };
+    }
+
+    // ---- commit: idempotency first — a replayed confirm (double-tap /
+    // retried request) must NOT send a second Outlook invite. ----
+    const replay = pickReplayMatch(sameSlot, {
+      createdByUserId: ctx.persona.id,
+      title: topic,
+      parentType: "internal",
+    });
+    if (replay) {
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: replay.id,
+            title: replay.title,
+            date: fmtDubai(slotStart).slice(0, 10),
+            kind: "internal",
+            status: "scheduled",
+            attendees: (replay.internalAttendees ?? []).map((a) => a.name).filter(Boolean),
+            startAt: slotStart.toISOString(),
+            endAt: replay.endAt?.toISOString() ?? slotEnd.toISOString(),
+            whenLabel,
+            locationType: replay.locationType ?? locationType,
+            joinUrl: replay.joinUrl,
+            summary: "Already booked — this confirmation was a repeat, so no second invite was sent.",
+            decisions: [],
+            actionItems: [],
+          },
+          parent: { kind: "internal", id: "internal", name: "Internal" },
+          href: "/me?tab=calendar",
+          navigateTo: null,
         },
       };
     }
@@ -320,7 +355,9 @@ defineCapability({
       const { event } = await sendInternalInvite({
         requesterUserId: ctx.persona.id,
         subject: topic,
-        bodyText: `Internal meeting scheduled via the Atelier by ${ctx.persona.name}.`,
+        bodyText: agenda
+          ? `Agenda:\n${agenda}\n\nScheduled via the Atelier by ${ctx.persona.name}.`
+          : `Internal meeting scheduled via the Atelier by ${ctx.persona.name}.`,
         start: slotStart,
         end: slotEnd,
         attendees: resolved.map((r) => ({ email: r.email, name: r.name })),
@@ -338,26 +375,49 @@ defineCapability({
     }
 
     const id = rid("mtg");
-    await db.insert(atelierMeetings).values({
-      id,
-      orgId: ctx.persona.orgId,
-      parentType: "internal",
-      parentId: "internal",
-      mode: "scheduled",
-      kind: "internal",
-      title: topic,
-      date: fmtDubai(slotStart).slice(0, 10),
-      startAt: slotStart,
-      endAt: slotEnd,
-      locationType,
-      joinUrl,
-      webLink,
-      msEventId: eventId,
-      msEventUid: eventUid,
-      internalAttendees: resolved.map((r) => ({ userId: r.userId, name: r.name, email: r.email })),
-      status: "scheduled",
-      createdByUserId: ctx.persona.id,
-    });
+    try {
+      await db.insert(atelierMeetings).values({
+        id,
+        orgId: ctx.persona.orgId,
+        parentType: "internal",
+        parentId: "internal",
+        mode: "scheduled",
+        kind: "internal",
+        title: topic,
+        date: fmtDubai(slotStart).slice(0, 10),
+        startAt: slotStart,
+        endAt: slotEnd,
+        locationType,
+        joinUrl,
+        webLink,
+        msEventId: eventId,
+        msEventUid: eventUid,
+        internalAttendees: resolved.map((r) => ({ userId: r.userId, name: r.name, email: r.email })),
+        status: "scheduled",
+        createdByUserId: ctx.persona.id,
+      });
+    } catch (err) {
+      // Task #570 — never leave an orphaned Outlook event: if the Atelier
+      // row can't be written, best-effort delete the Graph event we just
+      // created and fail loudly.
+      if (eventId) {
+        try {
+          await cancelInternalInvite({
+            organizerUserId: ctx.persona.id,
+            actingUserId: ctx.persona.id,
+            msEventId: eventId,
+          });
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      return {
+        ok: false,
+        errorCode: "internal",
+        errorMessage:
+          "The Outlook invite couldn't be recorded in the Atelier, so I removed it from your calendar again — nothing was booked. Please try once more.",
+      };
+    }
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
       entityType: "meeting",
@@ -368,6 +428,7 @@ defineCapability({
       action: "meeting.scheduled.cli",
       payload: {
         topic,
+        ...(agenda ? { agenda } : {}),
         attendees: resolved.map((r) => r.name),
         start: slotStart.toISOString(),
         end: slotEnd.toISOString(),
@@ -413,6 +474,7 @@ defineCapability({
 interface ManagedMeetingRow {
   id: string;
   title: string;
+  parentType: string;
   startAt: Date | null;
   endAt: Date | null;
   createdByUserId: string | null;
@@ -420,9 +482,12 @@ interface ManagedMeetingRow {
 }
 
 /**
- * Upcoming (or started within the last hour) internal meetings the
- * requester may manage — organizer's own meetings, or all for a founding
- * partner. Optional case-insensitive title filter.
+ * Upcoming (or started within the last hour) meetings the requester may
+ * manage — organizer's own meetings, or all for a founding partner.
+ * Task #570: covers BOTH standalone internal meetings AND client
+ * meetings scheduled via chat (parentType opportunity/engagement, mode
+ * "scheduled" so recorded-transcript rows never surface here). Optional
+ * case-insensitive title filter.
  */
 async function findManagedMeetings(
   persona: { id: string; orgId: string; role: string },
@@ -431,7 +496,8 @@ async function findManagedMeetings(
   const cutoff = new Date(Date.now() - 3600 * 1000);
   const conds = [
     eq(atelierMeetings.orgId, persona.orgId),
-    eq(atelierMeetings.parentType, "internal"),
+    inArray(atelierMeetings.parentType, ["internal", "opportunity", "engagement"]),
+    eq(atelierMeetings.mode, "scheduled"),
     isNull(atelierMeetings.deletedAt),
     ne(atelierMeetings.status, "cancelled"),
     gte(atelierMeetings.startAt, cutoff),
@@ -441,6 +507,7 @@ async function findManagedMeetings(
     .select({
       id: atelierMeetings.id,
       title: atelierMeetings.title,
+      parentType: atelierMeetings.parentType,
       startAt: atelierMeetings.startAt,
       endAt: atelierMeetings.endAt,
       createdByUserId: atelierMeetings.createdByUserId,
@@ -455,9 +522,10 @@ async function findManagedMeetings(
 }
 
 function meetingLabel(m: ManagedMeetingRow): string {
+  const tag = m.parentType === "internal" ? "" : " (client meeting)";
   return m.startAt
-    ? `"${m.title}" — ${fmtDubai(m.startAt)} (Dubai)`
-    : `"${m.title}"`;
+    ? `"${m.title}"${tag} — ${fmtDubai(m.startAt)} (Dubai)`
+    : `"${m.title}"${tag}`;
 }
 
 /**
@@ -534,7 +602,7 @@ async function resolveTargetMeeting(
         result: {
           ok: false,
           errorCode: "not_found",
-          errorMessage: "I couldn't find that upcoming internal meeting (it may have been cancelled already, or you may not be its organizer).",
+          errorMessage: "I couldn't find that upcoming meeting (it may have been cancelled already, or you may not be its organizer).",
         },
       };
     }
@@ -546,8 +614,8 @@ async function resolveTargetMeeting(
         ok: false,
         errorCode: "not_found",
         errorMessage: query
-          ? `I couldn't find an upcoming internal meeting matching "${query}" that you can manage. Only the organizer (or a founding partner) can change a meeting.`
-          : "You have no upcoming internal meetings that you can manage.",
+          ? `I couldn't find an upcoming meeting matching "${query}" that you can manage. Only the organizer (or a founding partner) can change a meeting.`
+          : "You have no upcoming meetings that you can manage.",
       },
     };
   }
@@ -574,7 +642,7 @@ defineCapability({
   module: "engagement",
   toolName: "reschedule_internal_meeting",
   description:
-    "Move an internal meeting you organized (founding partners can move anyone's) to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words; date must be an absolute YYYY-MM-DD and time HH:MM (Dubai).",
+    "Move a meeting you organized via the Atelier — internal OR client (founding partners can move anyone's) — to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words; date must be an absolute YYYY-MM-DD and time HH:MM (Dubai).",
   slashAliases: { en: ["/reschedule"], fr: ["/replanifier"] },
   inputSchema: {
     type: "object",
@@ -613,6 +681,14 @@ defineCapability({
     const newStart = dubaiWallToUtc(dateStr, timeStr);
     if (!newStart) {
       return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
+    }
+    // Task #570 — reject moves into the past.
+    if (isPastSlot(newStart)) {
+      return {
+        ok: false,
+        errorCode: "past_time",
+        errorMessage: `${fmtDubai(newStart)} (Dubai) is already in the past — give me a future date/time.`,
+      };
     }
     const target = await resolveTargetMeeting(ctx.persona, input);
     if ("result" in target) return target.result as never;
@@ -670,6 +746,7 @@ defineCapability({
         end: newEnd,
         via: "cli",
         turnId: ctx.turnId,
+        scope: "any",
       });
       return {
         ok: true,
@@ -712,7 +789,7 @@ defineCapability({
   module: "engagement",
   toolName: "cancel_internal_meeting",
   description:
-    "Cancel an internal meeting you organized (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words.",
+    "Cancel a meeting you organized via the Atelier — internal OR client (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words.",
   slashAliases: { en: ["/cancel-meeting"], fr: ["/annuler-reunion"] },
   inputSchema: {
     type: "object",
@@ -777,6 +854,7 @@ defineCapability({
         meetingId: row.id,
         via: "cli",
         turnId: ctx.turnId,
+        scope: "any",
       });
       return {
         ok: true,
@@ -821,7 +899,7 @@ defineCapability({
   module: "engagement",
   toolName: "update_internal_meeting",
   description:
-    "Change an internal meeting you organized (founding partners can change anyone's): rename the topic and/or add or remove roster attendees. Updates the real Outlook invite — attendees get a standard meeting update, newly added colleagues receive the invite. Identify the meeting by topic words. Time changes go through reschedule_internal_meeting instead. Recurring meetings are NOT supported — say so honestly.",
+    "Change a meeting you organized via the Atelier (founding partners can change anyone's): rename the topic and/or — for INTERNAL meetings only — add or remove roster attendees (client-meeting attendee lists can't be edited from chat; say so honestly). Updates the real Outlook invite — attendees get a standard meeting update, newly added colleagues receive the invite. Identify the meeting by topic words. Time changes go through reschedule_internal_meeting instead. Recurring meetings are NOT supported — say so honestly.",
   slashAliases: { en: ["/edit-meeting"], fr: ["/modifier-reunion"] },
   inputSchema: {
     type: "object",
@@ -878,51 +956,40 @@ defineCapability({
     if ("result" in target) return target.result as never;
     const row = target.row;
 
+    // Task #570 — attendee edits are internal-only: a client meeting's
+    // Outlook invite includes client contacts that aren't stored as
+    // roster attendees, so a replacement would silently drop them.
+    if (row.parentType !== "internal" && (addNames.length > 0 || removeNames.length > 0)) {
+      return {
+        ok: false,
+        errorCode: "unsupported",
+        errorMessage:
+          `${meetingLabel(row)} is a client meeting — I can rename, reschedule, or cancel it, but I can't edit its attendee list from chat (the client invitees live on the Outlook invite). Update the invite in Outlook directly.`,
+      };
+    }
+
     const current = (row.internalAttendees ?? [])
       .filter((a) => a.userId && a.name)
       .map((a) => ({ userId: a.userId as string, name: a.name as string, email: a.email ?? null }));
 
     // ---- resolve additions against the roster (never self — the
     // organizer is on the event implicitly) ----
+    // Task #570 — shared accent-insensitive resolver ("gokhan" finds
+    // "Gökhan Güney"); raw email addresses are refused gracefully.
     const additions: Array<{ userId: string; name: string; email: string | null }> = [];
-    for (const name of addNames) {
-      const matches = await db
-        .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
-        .from(atelierUsers)
-        .where(
-          and(
-            eq(atelierUsers.orgId, ctx.persona.orgId),
-            ne(atelierUsers.id, ctx.persona.id),
-            ilike(atelierUsers.name, `%${name}%`),
-          ),
-        )
-        .limit(6);
-      if (matches.length === 0) {
-        return {
-          ok: false,
-          errorCode: "not_found",
-          errorMessage: `I couldn't find a colleague named "${name}" on the roster.`,
-        };
-      }
-      if (matches.length > 1) {
-        const options = matches.slice(0, 5).map((m) => ({ id: m.id, label: m.name, secondary: m.email }));
-        return {
-          ok: true,
-          data: { prompt: `Which "${name}" did you mean?`, options },
-          disambiguation: { kind: "user", options },
-        };
-      }
-      const m = matches[0]!;
-      if (!current.some((a) => a.userId === m.id) && !additions.some((a) => a.userId === m.id)) {
-        additions.push({ userId: m.id, name: m.name, email: m.email });
+    const addResolution = await resolveRosterAttendees(addNames, ctx.persona);
+    if (addResolution.kind === "result") return addResolution.result as never;
+    for (const m of addResolution.people) {
+      if (!current.some((a) => a.userId === m.userId) && !additions.some((a) => a.userId === m.userId)) {
+        additions.push({ userId: m.userId, name: m.name, email: m.email });
       }
     }
 
     // ---- resolve removals against the CURRENT attendee list ----
     const removals: Array<{ userId: string; name: string }> = [];
     for (const name of removeNames) {
-      const lower = name.toLowerCase();
-      const matches = current.filter((a) => a.name.toLowerCase().includes(lower));
+      const needle = foldRosterName(name);
+      const matches = current.filter((a) => foldRosterName(a.name).includes(needle));
       if (matches.length === 0) {
         return {
           ok: false,
@@ -1020,6 +1087,7 @@ defineCapability({
         internalAttendees: attendeesChanged ? nextAttendees : undefined,
         via: "cli",
         turnId: ctx.turnId,
+        scope: "any",
       });
       return {
         ok: true,
