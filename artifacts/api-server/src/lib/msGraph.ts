@@ -436,6 +436,33 @@ export function extractMeetingUrl(text: string | null | undefined): string | nul
   return m[0].replace(/[.,;:!?)\]}>"']+$/, "");
 }
 
+/** Resolve the join URL + physical location for a calendar event.
+ *
+ * Join URL preference: Graph's explicit onlineMeeting.joinUrl, then the
+ * legacy onlineMeetingUrl field, then a meeting link scanned out of the
+ * location text, then one scanned out of the HTML body. If the location
+ * text IS the meeting link, it is moved to joinUrl and NOT repeated as a
+ * physical location. Used by GET /me/calendar in msAuthRoutes. */
+export function resolveJoinAndLocation(
+  ev: Pick<
+    MsCalendarEvent,
+    "location" | "body" | "onlineMeeting" | "onlineMeetingUrl"
+  >,
+): { joinUrl: string | null; location: string | null } {
+  const rawLocation = ev.location?.displayName ?? null;
+  const locationUrl = extractMeetingUrl(rawLocation);
+  const joinUrl =
+    ev.onlineMeeting?.joinUrl ??
+    ev.onlineMeetingUrl ??
+    locationUrl ??
+    extractMeetingUrl(ev.body?.content);
+  const location =
+    rawLocation && locationUrl && rawLocation.trim() === locationUrl
+      ? null
+      : rawLocation;
+  return { joinUrl, location };
+}
+
 export async function getCalendarView(
   accessToken: string,
   startIso: string,

@@ -15,6 +15,7 @@
     "atelier:spine-backfill": "tsx ./src/scripts/atelier-spine-backfill.ts",
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "test:merchant-parse": "tsx ./tests/merchant-parse/run.ts",
+    "test:meeting-link": "tsx ./tests/meeting-link/run.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",

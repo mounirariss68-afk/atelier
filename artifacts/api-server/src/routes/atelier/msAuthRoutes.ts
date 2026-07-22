@@ -42,7 +42,7 @@ import {
   makePkce,
   msConfigured,
   refreshTokens,
-  extractMeetingUrl,
+  resolveJoinAndLocation,
   signState,
   verifyState,
   type MsCalendarEvent,
@@ -785,17 +785,7 @@ router.get("/me/calendar", async (req, res, next) => {
       // Meet, Zoom, Webex) — e.g. Meet URLs that Outlook renders as a plain
       // location. If the location itself is the meeting link, don't repeat
       // it as a physical location.
-      const rawLocation = ev.location?.displayName ?? null;
-      const locationUrl = extractMeetingUrl(rawLocation);
-      const joinUrl =
-        ev.onlineMeeting?.joinUrl ??
-        ev.onlineMeetingUrl ??
-        locationUrl ??
-        extractMeetingUrl(ev.body?.content);
-      const location =
-        rawLocation && locationUrl && rawLocation.trim() === locationUrl
-          ? null
-          : rawLocation;
+      const { joinUrl, location } = resolveJoinAndLocation(ev);
       meetings.push({
         id: ev.id,
         subject: ev.subject ?? "(no subject)",
