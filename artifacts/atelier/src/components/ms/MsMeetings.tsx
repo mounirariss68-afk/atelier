@@ -66,6 +66,24 @@ function msErrorMessage(code: string): string {
   return MS_ERROR_MESSAGES[code] ?? "Microsoft sign-in failed. Please try again.";
 }
 
+// Stored-connection lastError codes → plain-language explanations. The raw
+// code stays visible as secondary detail; these are the primary messages.
+const MS_CONNECTION_ERROR_MESSAGES: Record<string, string> = {
+  "admin-consent-required":
+    "Your Microsoft 365 administrator needs to approve the app again. Reconnecting after approval fixes this.",
+  "refresh-failed":
+    "Your Microsoft sign-in expired or was revoked. Reconnecting fixes this — nothing else changes.",
+  "graph-unavailable":
+    "We couldn't reach Microsoft 365 last time we tried. If this keeps happening, reconnecting usually fixes it.",
+};
+
+function msConnectionErrorMessage(code: string): string {
+  return (
+    MS_CONNECTION_ERROR_MESSAGES[code] ??
+    "Your Microsoft 365 connection isn't working right now. Reconnecting usually fixes this."
+  );
+}
+
 function fmtLastSynced(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
@@ -874,6 +892,7 @@ export function ConnectedAccountsCard() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);
+  const [reconnecting, setReconnecting] = React.useState(false);
   const { data: conn, isPending } = useAtelierGetMyMsConnection();
   const disconnect = useAtelierDisconnectMyMsConnection({
     mutation: {
@@ -884,6 +903,23 @@ export function ConnectedAccountsCard() {
       },
       onError: () =>
         toast({ title: "Could not disconnect", variant: "destructive" }),
+    },
+  });
+  // One-click reconnect: clear the stale sign-in link, then immediately
+  // restart the Microsoft sign-in flow (disconnect + connect in one step).
+  const reconnect = useAtelierDisconnectMyMsConnection({
+    mutation: {
+      onSuccess: () => {
+        window.location.href = `${API_BASE}/me/msauth/start`;
+      },
+      onError: () => {
+        setReconnecting(false);
+        toast({
+          title: "Could not reconnect",
+          description: "Please try again, or disconnect and connect manually.",
+          variant: "destructive",
+        });
+      },
     },
   });
 
@@ -933,14 +969,22 @@ export function ConnectedAccountsCard() {
                 : "Not synced yet"}
             </div>
             {conn.lastError && (
-              <div className="text-xs text-red-400 mt-1">
-                Connection needs attention: {conn.lastError}
+              <div className="mt-1" data-testid="ms-connection-error">
+                <div className="text-xs text-red-400">
+                  Connection needs attention: {msConnectionErrorMessage(conn.lastError)}
+                </div>
+                <div className="text-[10px] font-mono text-text-faint mt-0.5">
+                  {conn.lastError}
+                </div>
               </div>
             )}
           </div>
           {confirmingDisconnect ? (
-            <div className="shrink-0 flex items-center gap-2">
-              <span className="text-xs text-text-mute">Disconnect and delete stored tokens?</span>
+            <div className="shrink-0 flex items-center gap-2 sm:max-w-sm">
+              <span className="text-xs text-text-mute">
+                This only removes this account's sign-in link to Microsoft 365. Your Microsoft
+                app settings and admin consent are not affected — you can reconnect anytime.
+              </span>
               <PillButton
                 variant="ghost"
                 onClick={() => setConfirmingDisconnect(false)}
@@ -959,14 +1003,36 @@ export function ConnectedAccountsCard() {
               </PillButton>
             </div>
           ) : (
-            <PillButton
-              variant="ghost"
-              className="shrink-0"
-              onClick={() => setConfirmingDisconnect(true)}
-              data-testid="button-ms-disconnect"
-            >
-              <Unplug className="w-4 h-4 mr-1" /> Disconnect
-            </PillButton>
+            <div className="shrink-0 flex flex-col items-stretch sm:items-end gap-2">
+              {conn.lastError && (
+                <>
+                  <PillButton
+                    className="shrink-0"
+                    onClick={() => {
+                      setReconnecting(true);
+                      reconnect.mutate();
+                    }}
+                    disabled={reconnecting || reconnect.isPending}
+                    data-testid="button-ms-reconnect"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-1" />
+                    {reconnecting || reconnect.isPending ? "Reconnecting…" : "Reconnect"}
+                  </PillButton>
+                  <span className="text-[10px] text-text-faint sm:text-right max-w-[220px]">
+                    Reconnecting signs you in to Microsoft again — nothing else changes.
+                  </span>
+                </>
+              )}
+              <PillButton
+                variant="ghost"
+                className="shrink-0"
+                onClick={() => setConfirmingDisconnect(true)}
+                disabled={reconnecting || reconnect.isPending}
+                data-testid="button-ms-disconnect"
+              >
+                <Unplug className="w-4 h-4 mr-1" /> Disconnect
+              </PillButton>
+            </div>
           )}
         </div>
       ) : (
