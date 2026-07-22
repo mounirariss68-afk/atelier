@@ -35,6 +35,7 @@ const BOARD_UID = `p_test_ssboard_${STAMP}`;
 const EMP_PERSON = `emp_test_ss_${STAMP}`;
 const OTHER_PERSON = `emp_test_ssother_${STAMP}`;
 const CON_PERSON = `ctr_test_ss_${STAMP}`;
+const FP_UID = `p_test_ssfp_${STAMP}`;
 const TAG = `__t583_${STAMP}`;
 
 const failures: string[] = [];
@@ -69,6 +70,8 @@ async function main(): Promise<void> {
     atelierSelfNotifications,
     atelierCliAttachments,
     atelierAuditEvents,
+    atelierExpensePolicies,
+    atelierMerchantCategoryMap,
   } = D as any;
 
   const catalog = await import("../../src/lib/atelier-cli/capability-catalog.js");
@@ -85,6 +88,7 @@ async function main(): Promise<void> {
   const WRITE_TOOLS = [
     "request_leave",
     "create_my_expense",
+    "submit_my_expense",
     "log_my_time",
     "submit_my_timesheet",
     "update_my_profile",
@@ -151,6 +155,7 @@ async function main(): Promise<void> {
       { id: CON_UID, role: "contractor", roleLabel: "Contractor", name: `SS Con ${TAG}`, email: `sscon${STAMP}@test.local` },
       { id: OTHER_UID, role: "employee", roleLabel: "Employee", name: `SS Other ${TAG}`, email: `ssother${STAMP}@test.local` },
       { id: BOARD_UID, role: "board_observer", roleLabel: "Board Observer", name: `SS Board ${TAG}`, email: `ssboard${STAMP}@test.local` },
+      { id: FP_UID, role: "founding_partner", roleLabel: "Founding Partner", name: `SS Founder ${TAG}`, email: `ssfp${STAMP}@test.local` },
     ];
     for (const u of users) {
       await db.insert(atelierUsers).values({
@@ -408,6 +413,245 @@ async function main(): Promise<void> {
       JSON.stringify(otherKinds.map((n: any) => ({ kind: n.kind, userId: n.userId }))),
     );
 
+    // ---------------- 5c. expense submit (Task #595) ------------------
+    // Chat submit must mirror POST /me/expenses/:id/submit exactly:
+    // attribution gate, deterministic policy (red block / amber
+    // rationale), merchant-memory learning, submitter self-notification
+    // AND founder notifications.
+    group("Expense submit");
+    // Deterministic policy rules on a probe-only category.
+    const POLCAT = `probecat_${STAMP}`;
+    await db.insert(atelierExpensePolicies).values({
+      id: `pol_${TAG}`,
+      category: POLCAT,
+      appliesToRole: null,
+      appliesToCountry: null,
+      capAmountUsd: 50,
+      hardBlockAmountUsd: 200,
+      active: true,
+    });
+    // The only draft so far is the Taxi one from section 4 (category
+    // "other", no policy rules → green). Submit WITHOUT an expenseId —
+    // the single draft must be auto-selected.
+    const taxiId = expRows[0].id;
+    // Give it category codes so merchant-memory learning fires on submit.
+    await db
+      .update(atelierExpenses)
+      .set({ categoryCode: "travel", subCategoryCode: "taxi" })
+      .where(eq(atelierExpenses.id, taxiId));
+    const subExp = await runConfirmed("submit_my_expense", empPersona, {});
+    check("submit confirm frame first (no write yet)", Boolean(subExp.first.confirmation));
+    const [taxiRow] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, taxiId));
+    check(
+      "green submit: status submitted, policy green, rationale null",
+      subExp.second?.ok === true &&
+        taxiRow.status === "submitted" &&
+        taxiRow.policyStatus === "green" &&
+        taxiRow.overrideRationale === null &&
+        taxiRow.submittedAt !== null,
+      JSON.stringify({ status: taxiRow.status, policy: taxiRow.policyStatus }),
+    );
+    const expSelfNotifs = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(
+        and(
+          eq(atelierSelfNotifications.userId, EMP_UID),
+          eq(atelierSelfNotifications.kind, "expense_submitted"),
+        ),
+      );
+    check(
+      "submitter got ONE expense_submitted self-notification",
+      expSelfNotifs.length === 1 && expSelfNotifs[0].href === "/me",
+      JSON.stringify(expSelfNotifs.map((n: any) => n.title)),
+    );
+    const founderNotifs = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(
+        and(
+          eq(atelierSelfNotifications.userId, FP_UID),
+          eq(atelierSelfNotifications.kind, "expense_submitted"),
+        ),
+      );
+    check(
+      "founder notified of the submitted claim (standing rule)",
+      founderNotifs.length === 1 && founderNotifs[0].href === "/wallet/expenses",
+      JSON.stringify(founderNotifs.map((n: any) => n.title)),
+    );
+    const learned = await db
+      .select()
+      .from(atelierMerchantCategoryMap)
+      .where(eq(atelierMerchantCategoryMap.orgId, ORG));
+    check(
+      "merchant memory learned the confirmed category pair",
+      learned.some(
+        (m: any) => m.categoryCode === "travel" && m.subCategoryCode === "taxi",
+      ),
+      JSON.stringify(learned.map((m: any) => m.merchantKey)),
+    );
+    // Already-submitted claim can't be re-submitted.
+    const resub = await runTool("submit_my_expense", empPersona, {
+      expenseId: taxiId,
+      confirm: true,
+    });
+    check(
+      "re-submit of a submitted claim refused",
+      resub.ok === false && resub.errorCode === "expense_not_found",
+    );
+    // Foreign draft is invisible to the caller.
+    await db.insert(atelierExpenses).values({
+      id: `exp_${TAG}_foreign`,
+      personId: OTHER_UID,
+      personType: "employee",
+      expenseDate: "2026-07-20",
+      captureSource: "manual",
+      merchant: `Foreign ${TAG}`,
+      category: "other",
+      amount: 10,
+      currency: "USD",
+      usdAmount: 10,
+      contextType: "bd",
+      status: "draft",
+      policyStatus: "green",
+      createdByUserId: OTHER_UID,
+    });
+    const subForeign = await runTool("submit_my_expense", empPersona, {
+      expenseId: `exp_${TAG}_foreign`,
+      confirm: true,
+    });
+    check(
+      "another user's draft cannot be submitted",
+      subForeign.ok === false && subForeign.errorCode === "expense_not_found",
+    );
+    // Attribution gate: internal spend without entity + cost center.
+    await db.insert(atelierExpenses).values({
+      id: `exp_${TAG}_internal`,
+      personId: EMP_UID,
+      personType: "employee",
+      expenseDate: "2026-07-20",
+      captureSource: "manual",
+      merchant: `Internal ${TAG}`,
+      category: "other",
+      amount: 20,
+      currency: "USD",
+      usdAmount: 20,
+      contextType: "internal",
+      internalProjectLabel: "Probe project",
+      status: "draft",
+      policyStatus: "green",
+      createdByUserId: EMP_UID,
+    });
+    const subInternal = await runTool("submit_my_expense", empPersona, {
+      expenseId: `exp_${TAG}_internal`,
+      confirm: true,
+    });
+    check(
+      "internal spend without entity+cost center blocked (attribution gate)",
+      subInternal.ok === false && subInternal.errorCode === "attribution_incomplete",
+    );
+    // Multiple drafts without an id → deterministic refusal listing them.
+    await db.insert(atelierExpenses).values({
+      id: `exp_${TAG}_amber`,
+      personId: EMP_UID,
+      personType: "employee",
+      expenseDate: "2026-07-21",
+      captureSource: "manual",
+      merchant: `Amber ${TAG}`,
+      category: POLCAT,
+      amount: 100,
+      currency: "USD",
+      usdAmount: 100,
+      contextType: "bd",
+      status: "draft",
+      policyStatus: "green",
+      createdByUserId: EMP_UID,
+    });
+    const subAmbiguous = await runTool("submit_my_expense", empPersona, {});
+    check(
+      "multiple drafts without an id refused with a listing",
+      subAmbiguous.ok === false && subAmbiguous.errorCode === "multiple_drafts",
+      JSON.stringify(subAmbiguous),
+    );
+    // AMBER: over cap → rationale required; row stamped amber, stays draft.
+    const subAmber = await runTool("submit_my_expense", empPersona, {
+      expenseId: `exp_${TAG}_amber`,
+      confirm: true,
+    });
+    const [amberRow1] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, `exp_${TAG}_amber`));
+    check(
+      "amber without rationale refused; row stamped amber, still draft",
+      subAmber.ok === false &&
+        subAmber.errorCode === "amber_requires_rationale" &&
+        amberRow1.status === "draft" &&
+        amberRow1.policyStatus === "amber" &&
+        (amberRow1.policyFindings as any[]).length > 0,
+      JSON.stringify({ status: amberRow1.status, policy: amberRow1.policyStatus }),
+    );
+    // AMBER with rationale → submits with the override recorded.
+    const subAmberOk = await runConfirmed("submit_my_expense", empPersona, {
+      expenseId: `exp_${TAG}_amber`,
+      overrideRationale: "Client workshop ran long — approved by lead.",
+    });
+    const [amberRow2] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, `exp_${TAG}_amber`));
+    check(
+      "amber with rationale submits and records the override",
+      subAmberOk.second?.ok === true &&
+        amberRow2.status === "submitted" &&
+        amberRow2.policyStatus === "amber" &&
+        typeof amberRow2.overrideRationale === "string",
+      JSON.stringify({ status: amberRow2.status, rationale: amberRow2.overrideRationale }),
+    );
+    // RED: over hard block → refused outright, stamped red, stays draft.
+    await db.insert(atelierExpenses).values({
+      id: `exp_${TAG}_red`,
+      personId: EMP_UID,
+      personType: "employee",
+      expenseDate: "2026-07-21",
+      captureSource: "manual",
+      merchant: `Red ${TAG}`,
+      category: POLCAT,
+      amount: 500,
+      currency: "USD",
+      usdAmount: 500,
+      contextType: "bd",
+      status: "draft",
+      policyStatus: "green",
+      createdByUserId: EMP_UID,
+    });
+    const subRed = await runTool("submit_my_expense", empPersona, {
+      expenseId: `exp_${TAG}_red`,
+      confirm: true,
+      overrideRationale: "trying to force it through",
+    });
+    const [redRow] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.id, `exp_${TAG}_red`));
+    check(
+      "red block refused even with a rationale; row stamped red, still draft",
+      subRed.ok === false &&
+        subRed.errorCode === "policy_red_block" &&
+        redRow.status === "draft" &&
+        redRow.policyStatus === "red",
+      JSON.stringify({ status: redRow.status, policy: redRow.policyStatus }),
+    );
+    // navigateTo contract for commit success (chat write-capability rule).
+    check(
+      "commit success carries navigateTo",
+      subAmberOk.second?.data?.navigateTo?.path === "/me/expenses",
+      JSON.stringify(subAmberOk.second?.data),
+    );
+
     // ---------------- 6. profile update -------------------------------
     group("Profile self-edit");
     const prof = await runConfirmed("update_my_profile", empPersona, {
@@ -657,9 +901,18 @@ async function main(): Promise<void> {
       atelierSelfNotifications: SN,
       atelierCliAttachments: ATT,
       atelierAuditEvents: AE,
+      atelierExpensePolicies: EP,
+      atelierMerchantCategoryMap: MM,
     } = D2 as any;
     try {
       await dbx.delete(AE).where(inArray(AE.actorId, [EMP_UID, CON_UID]));
+      await dbx.delete(EP).where(like(EP.id, `pol_${TAG}%`));
+      await dbx
+        .delete(MM)
+        .where(inArray(MM.lastConfirmedByUserId, [EMP_UID, CON_UID]));
+      await dbx
+        .delete(SN)
+        .where(inArray(SN.userId, [EMP_UID, CON_UID, OTHER_UID, FP_UID]));
       await dbx.delete(TE).where(eq(TE.personId, EMP_PERSON));
       await dbx.delete(TW).where(eq(TW.personId, EMP_PERSON));
       await dbx.delete(EX).where(like(EX.merchant, `%${TAG}`));

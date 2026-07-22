@@ -69,7 +69,13 @@ import {
   resolveCategoryPair,
   policyKeyFor,
 } from "../atelier-expense-taxonomy.js";
-import { lookupMerchantMemory } from "../atelier-expense-categorizer.js";
+import {
+  lookupMerchantMemory,
+  learnMerchantMapping,
+} from "../atelier-expense-categorizer.js";
+import { evaluateExpense } from "../atelier-expense-policy.js";
+// Task #595 — every expense submit surface must notify founders.
+import { notifyFoundersOfSubmittedExpense } from "../../routes/atelier/walletRoutes.js";
 import { writePersonAndSync } from "../atelier-person-sync";
 import type { ToolContext, ToolResult } from "./index.js";
 
@@ -497,6 +503,234 @@ defineSelfWriteCapability({
         href: "/me/expenses",
         navigateTo: { path: "/me/expenses", when: "on_commit" as const },
         note: "Saved as a draft — submit it from your expenses page when ready.",
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.expense_submit — submit own draft expense for approval
+// (mirrors POST /me/expenses/:id/submit — Task #595). Same gates as the
+// REST route: attribution completeness for internal spend, deterministic
+// policy evaluation (red block / amber rationale), merchant-memory
+// learning on submit, submitter self-notification AND founder
+// notifications (standing rule: every submit surface notifies founders).
+// ---------------------------------------------------------------------
+defineSelfWriteCapability({
+  id: "me.expense_submit",
+  module: "roster",
+  toolName: "submit_my_expense",
+  description:
+    "Submit one of the signed-in user's own draft expense claims for approval. Runs the same policy checks as the Me page: internal spend needs entity + cost center, policy RED blocks, and AMBER warnings need an override rationale. If no expense id is given and exactly one draft exists, that draft is submitted.",
+  slashAliases: { en: ["/submit-expense"], fr: ["/soumettre-depense"] },
+  representativePrompts: {
+    en: ["Submit my expense claim", "Send my taxi expense for approval"],
+    ar: ["أرسل مطالبة المصروفات"],
+    fr: ["Soumettre ma note de frais"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "entity_card",
+  examplePhrases: {
+    en: ["Submit my draft expense for approval"],
+    ar: ["أرسل مطالبة المصروفات"],
+    fr: ["Soumettre ma note de frais"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      expenseId: {
+        type: "string",
+        description:
+          "Id of the caller's own draft expense (optional when they have exactly one draft).",
+      },
+      overrideRationale: {
+        type: "string",
+        description:
+          "Required only when policy raises an AMBER warning — a short business rationale for the override.",
+      },
+      confirm: { type: "boolean" },
+    },
+    additionalProperties: false,
+  },
+  twoPhaseConfirm: true,
+  irreversible: false,
+  async runSelf(input, subject) {
+    // Resolve the caller's OWN draft/rejected expense — never anyone else's.
+    const drafts = await db
+      .select()
+      .from(atelierExpenses)
+      .where(
+        and(
+          eq(atelierExpenses.personId, subject.user.id),
+          inArray(atelierExpenses.status, ["draft", "rejected"]),
+          isNull(atelierExpenses.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierExpenses.createdAt));
+    let row: (typeof drafts)[number] | undefined;
+    if (typeof input.expenseId === "string" && input.expenseId) {
+      row = drafts.find((d) => d.id === input.expenseId);
+      if (!row) {
+        return {
+          ok: false,
+          errorCode: "expense_not_found",
+          errorMessage:
+            "That expense was not found among your own draft claims (it may already be submitted).",
+        };
+      }
+    } else if (drafts.length === 1) {
+      row = drafts[0];
+    } else if (drafts.length === 0) {
+      return {
+        ok: false,
+        errorCode: "no_draft_expense",
+        errorMessage: "You have no draft expense claims to submit.",
+      };
+    } else {
+      return {
+        ok: false,
+        errorCode: "multiple_drafts",
+        errorMessage: `You have ${drafts.length} draft claims — say which one to submit: ${drafts
+          .map((d) => `${d.merchant ?? d.id} (${d.currency} ${d.amount.toFixed(2)}, id ${d.id})`)
+          .join("; ")}.`,
+      };
+    }
+
+    // Attribution completeness — internal spend must carry entity + cost
+    // center before entering the approval flow (mirrors the REST 409).
+    if (row.contextType === "internal" && (!row.entityId || !row.costCenter)) {
+      return {
+        ok: false,
+        errorCode: "attribution_incomplete",
+        errorMessage:
+          "Internal expenses need a legal entity and a cost center before submitting — complete them on your expenses page first.",
+      };
+    }
+
+    // Deterministic policy evaluation — identical inputs to the REST route.
+    const policy = await evaluateExpense({
+      category: row.category,
+      usdAmount: row.usdAmount,
+      amount: row.amount,
+      currency: row.currency,
+      country: row.vatCountry ?? null,
+      role: subject.user.role,
+      flightClass: null,
+    });
+    const overrideRationale =
+      typeof input.overrideRationale === "string"
+        ? input.overrideRationale.slice(0, 2000)
+        : null;
+    if (policy.status === "red") {
+      await db
+        .update(atelierExpenses)
+        .set({ policyStatus: "red", policyFindings: policy.findings, updatedAt: new Date() })
+        .where(eq(atelierExpenses.id, row.id));
+      return {
+        ok: false,
+        errorCode: "policy_red_block",
+        errorMessage: `Policy blocks this claim: ${policy.findings
+          .filter((f) => f.severity === "red")
+          .map((f) => f.message)
+          .join("; ")}`,
+      };
+    }
+    if (policy.status === "amber" && !overrideRationale) {
+      await db
+        .update(atelierExpenses)
+        .set({ policyStatus: "amber", policyFindings: policy.findings, updatedAt: new Date() })
+        .where(eq(atelierExpenses.id, row.id));
+      return {
+        ok: false,
+        errorCode: "amber_requires_rationale",
+        errorMessage: `Policy AMBER warning — resubmit with an override rationale. Findings: ${policy.findings
+          .map((f) => f.message)
+          .join("; ")}`,
+      };
+    }
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            expenseId: row.id,
+            merchant: row.merchant,
+            amount: row.amount,
+            currency: row.currency,
+            expenseDate: row.expenseDate,
+            policyStatus: policy.status,
+          },
+        },
+        confirmation: {
+          summary: `Submit expense ${row.merchant ?? row.id} (${row.currency} ${row.amount.toFixed(2)}, ${row.expenseDate}) for approval?${policy.status === "amber" ? " Policy AMBER warning will be overridden with your rationale." : ""}`,
+          diff: {
+            update: {
+              table: "atelier_expenses",
+              values: { status: "submitted", policyStatus: policy.status },
+            },
+          },
+          pending: {
+            tool: "submit_my_expense",
+            input: { ...input, expenseId: row.id, confirm: true },
+          },
+        },
+      };
+    }
+
+    const [updated] = await db
+      .update(atelierExpenses)
+      .set({
+        status: "submitted",
+        submittedAt: new Date(),
+        policyStatus: policy.status,
+        policyFindings: policy.findings,
+        overrideRationale,
+        rejectedAt: null,
+        rejectedReason: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierExpenses.id, row.id))
+      .returning();
+    await audit({
+      subject,
+      entityType: "expense",
+      entityId: row.id,
+      action: "expense.submit",
+      payload: { policyStatus: policy.status, via: "chat", override: !!overrideRationale },
+      summary: `${subject.user.name} submitted claim ${row.merchant ?? row.id} from chat`,
+    });
+    // A submitted category pair is a CONFIRMED choice — feed the org-wide
+    // merchant memory (mirrors the REST submit).
+    if (row.merchant && updated.categoryCode && updated.subCategoryCode) {
+      await learnMerchantMapping({
+        merchant: row.merchant,
+        categoryCode: updated.categoryCode,
+        subCategoryCode: updated.subCategoryCode,
+        userId: subject.user.id,
+        orgId: subject.user.orgId,
+      });
+    }
+    await emitSelfNotification({
+      orgId: subject.user.orgId,
+      userId: subject.user.id,
+      kind: "expense_submitted",
+      title: `Expense claim submitted`,
+      body: `${row.merchant} — ${row.currency} ${row.amount.toFixed(2)} is with the approvers.`,
+      href: "/me",
+    });
+    // Standing rule — every submitted claim lands in both founders' queues.
+    await notifyFoundersOfSubmittedExpense(updated);
+    return {
+      ok: true,
+      data: {
+        id: row.id,
+        label: `${row.merchant ?? "Expense"} — ${row.currency} ${row.amount.toFixed(2)}`,
+        status: "submitted",
+        policyStatus: policy.status,
+        href: "/me/expenses",
+        navigateTo: { path: "/me/expenses", when: "on_commit" as const },
+        note: "Your claim is now with the approvers.",
       },
     };
   },
