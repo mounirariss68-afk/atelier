@@ -111,7 +111,13 @@ router.post("/cli/turn", async (req, res) => {
     reset?: boolean;
     continuesTurnId?: string | null;
     clarificationValues?: Record<string, unknown> | null;
+    timezone?: string | null;
   };
+  // Task #581 — device IANA timezone (validated downstream; bounded here).
+  const timezone =
+    typeof body.timezone === "string" && body.timezone.length > 0 && body.timezone.length <= 64
+      ? body.timezone
+      : null;
   // Multi-field clarification answers — sanitize to a bounded map of
   // string → string before it reaches the orchestrator.
   let clarificationValues: Record<string, string> | null = null;
@@ -183,6 +189,7 @@ router.post("/cli/turn", async (req, res) => {
         cancelInflight: body.cancelInflight === true,
         intent: body.intent ?? null,
         clientTurnKey: body.clientTurnKey ?? null,
+        timezone,
         async: body.async === true,
         continuesTurnId:
           typeof body.continuesTurnId === "string" && body.continuesTurnId.length > 0

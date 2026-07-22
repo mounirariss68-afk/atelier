@@ -39,6 +39,16 @@ function isTransientStatus(status: number): boolean {
 
 const RETRY_DELAYS_MS = [1_500, 3_000, 5_000];
 
+/** Task #581 — device IANA timezone sent with each turn so the server
+ * interprets typed times ("move my 7am") the way the user sees them. */
+function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => resolve(), ms);
@@ -288,6 +298,7 @@ export function useChat() {
           pageContext: null,
           dryRun: false,
           clientTurnKey: key,
+          timezone: deviceTimeZone(),
         },
         key,
       );
@@ -321,6 +332,7 @@ export function useChat() {
           continuesTurnId: turn?.serverTurnId ?? null,
           clarificationValues: values,
           clientTurnKey: key,
+          timezone: deviceTimeZone(),
         },
         key,
       );

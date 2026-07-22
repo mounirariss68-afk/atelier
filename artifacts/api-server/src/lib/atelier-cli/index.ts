@@ -63,6 +63,7 @@ import {
 } from "./prompt-guard.js";
 import { stripLocalePreamble } from "./locale.js";
 import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
+import { DEFAULT_CHAT_TZ, normalizeChatTz, wallParts as tzWallParts } from "./chat-tz.js";
 // Task #484 — static import of DISPATCH_TABLE so getToolsForPersona can
 // strip legacy chat-writes whose (kind, verb) is now owned by
 // propose_write. The capability-retriever filter at line 215 only
@@ -148,6 +149,12 @@ export interface RunTurnInput {
   cancelInflight?: boolean;
   intent?: string | null;
   clientTurnKey?: string | null;
+  /**
+   * Task #581 — device IANA timezone sent by the chat client. Drives
+   * date math in the system prompt and wall-clock parsing/labels in the
+   * meeting tools. Invalid/missing → Asia/Dubai.
+   */
+  timezone?: string | null;
   /**
    * Clarification continuation: when the client answers a restored
    * clarification card, this carries the paused turn's id so the
@@ -404,6 +411,9 @@ export interface ToolContext {
   persona: CliPersona;
   turnId: string;
   sessionId: string;
+  /** Task #581 — validated device timezone for this turn (IANA). Absent
+   * on confirm replays, where the pending input carries `tz` instead. */
+  timezone?: string;
   /** Step index used for idempotency keys + partial-success bookkeeping. */
   stepIdx: number;
   /**
@@ -2418,6 +2428,8 @@ export async function runTurn(
   status: CliTurnStatus;
 }> {
   const { persona, emit } = deps;
+  // Task #581 — device timezone for this turn (validated; Dubai fallback).
+  const turnTz = normalizeChatTz(input.timezone);
 
   let aborted = false;
   await enterQueue(persona.id, {
@@ -3017,18 +3029,21 @@ export async function runTurn(
     // ahead, walk the FK graph to build a `<context>` block. The
     // model gets the resolved id + a typed neighbourhood without
     // having to call `resolve_entity` for the obvious cases.
-    // Task #553 — per-turn date/timezone context. Asia/Dubai is the firm
-    // default timezone (fixed UTC+4, no DST).
+    // Task #553 — per-turn date/timezone context. Task #581 — the chat
+    // client sends the DEVICE timezone with each turn; all date math and
+    // typed times are interpreted in it (Asia/Dubai fallback).
     const buildDateContextBlock = (): string => {
-      const nowDubai = new Date(Date.now() + 4 * 3600 * 1000);
+      const p = tzWallParts(new Date(), turnTz);
       const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const pad = (n: number) => String(n).padStart(2, "0");
-      const ymd = `${nowDubai.getUTCFullYear()}-${pad(nowDubai.getUTCMonth() + 1)}-${pad(nowDubai.getUTCDate())}`;
-      const hm = `${pad(nowDubai.getUTCHours())}:${pad(nowDubai.getUTCMinutes())}`;
+      const tzNote =
+        turnTz === DEFAULT_CHAT_TZ
+          ? "Asia/Dubai, UTC+4 — the firm's default timezone"
+          : `${turnTz} — the user's device timezone`;
       return [
         "<current_datetime>",
-        `Today is ${days[nowDubai.getUTCDay()]}, ${ymd}. Local time: ${hm} (Asia/Dubai, UTC+4 — the firm's default timezone).`,
+        `Today is ${days[p.weekday]}, ${p.ymd}. Local time: ${p.hm} (${tzNote}).`,
         "Resolve relative dates like \"tomorrow\" or \"next Tuesday\" against this date yourself; do not ask the user what the date is.",
+        "Any times the user mentions are in this timezone — pass them through as-is (do not convert them), and echo times back in this timezone.",
         "</current_datetime>",
       ].join("\n");
     };
@@ -3191,6 +3206,7 @@ export async function runTurn(
           persona,
           turnId,
           sessionId: session.id,
+          timezone: turnTz,
           stepIdx: 0,
           progress: (pct, message, data) =>
             record({ type: "progress", data: { pct, message, ...(data ?? {}) } }),
@@ -3562,6 +3578,7 @@ export async function runTurn(
         persona,
         turnId,
         sessionId: session.id,
+        timezone: turnTz,
         stepIdx: step,
         progress: (pct, message, data) =>
           record({ type: "progress", data: { pct, message, ...(data ?? {}) } }),

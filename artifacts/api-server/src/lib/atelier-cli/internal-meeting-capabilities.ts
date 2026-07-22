@@ -19,7 +19,18 @@
  * Out of scope: rooms, recurring meetings, external attendees.
  */
 import { and, eq, gte, ilike, inArray, isNull, ne } from "drizzle-orm";
-import { db, atelierMeetings, atelierAuditEvents } from "@workspace/db";
+import { db, atelierMeetings, atelierAuditEvents, atelierMsConnections } from "@workspace/db";
+import { getCalendarView } from "../msGraph.js";
+import {
+  DEFAULT_CHAT_TZ,
+  fmtInTz,
+  normalizeChatTz,
+  tzShortLabel,
+  todayInTz,
+  tomorrowInTz,
+  wallParts,
+  wallToUtcInTz,
+} from "./chat-tz.js";
 import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
 import {
   buildDuplicateWarning,
@@ -479,6 +490,8 @@ interface ManagedMeetingRow {
   endAt: Date | null;
   createdByUserId: string | null;
   internalAttendees: Array<{ userId?: string; name?: string; email?: string | null }> | null;
+  msEventId?: string | null;
+  msEventUid?: string | null;
 }
 
 /**
@@ -489,13 +502,13 @@ interface ManagedMeetingRow {
  * "scheduled" so recorded-transcript rows never surface here). Optional
  * case-insensitive title filter.
  */
-async function findManagedMeetings(
-  persona: { id: string; orgId: string; role: string },
+async function findUpcomingMeetingRows(
+  orgId: string,
   titleQuery: string,
 ): Promise<ManagedMeetingRow[]> {
   const cutoff = new Date(Date.now() - 3600 * 1000);
   const conds = [
-    eq(atelierMeetings.orgId, persona.orgId),
+    eq(atelierMeetings.orgId, orgId),
     inArray(atelierMeetings.parentType, ["internal", "opportunity", "engagement"]),
     eq(atelierMeetings.mode, "scheduled"),
     isNull(atelierMeetings.deletedAt),
@@ -512,19 +525,26 @@ async function findManagedMeetings(
       endAt: atelierMeetings.endAt,
       createdByUserId: atelierMeetings.createdByUserId,
       internalAttendees: atelierMeetings.internalAttendees,
+      msEventId: atelierMeetings.msEventId,
+      msEventUid: atelierMeetings.msEventUid,
     })
     .from(atelierMeetings)
     .where(and(...conds));
-  return rows
-    .filter((m) => canManageInternalMeeting(persona, m))
-    .sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0))
-    .slice(0, 10);
+  return rows.sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0));
 }
 
-function meetingLabel(m: ManagedMeetingRow): string {
+async function findManagedMeetings(
+  persona: { id: string; orgId: string; role: string },
+  titleQuery: string,
+): Promise<ManagedMeetingRow[]> {
+  const rows = await findUpcomingMeetingRows(persona.orgId, titleQuery);
+  return rows.filter((m) => canManageInternalMeeting(persona, m)).slice(0, 10);
+}
+
+function meetingLabel(m: ManagedMeetingRow, tz: string = DEFAULT_CHAT_TZ): string {
   const tag = m.parentType === "internal" ? "" : " (client meeting)";
   return m.startAt
-    ? `"${m.title}"${tag} — ${fmtDubai(m.startAt)} (Dubai)`
+    ? `"${m.title}"${tag} — ${fmtInTz(m.startAt, tz)} (${tzShortLabel(tz)})`
     : `"${m.title}"${tag}`;
 }
 
@@ -539,10 +559,10 @@ function meetingLabel(m: ManagedMeetingRow): string {
  * never match. Extract a time-of-day from the query so we can instead
  * match candidates on their Dubai-wall-clock start time.
  */
-export function timeFromMeetingQuery(query: string): string | null {
+export function timesFromMeetingQuery(query: string): string[] {
   // Whole query is a time ("7", "8:30", "0800") — unambiguous.
   const direct = normalizeTimeInput(query);
-  if (direct) return direct;
+  if (direct) return [direct];
   // Strip date-like tokens so year/day numbers are never read as times
   // ("2026-07-22", "12/09/2026", "22.07.2026", bare years).
   const s = query
@@ -551,27 +571,123 @@ export function timeFromMeetingQuery(query: string): string | null {
     .replace(/\b\d{1,2}[/.]\d{1,2}([/.]\d{2,4})?\b/g, " ")
     .replace(/\b(19|20)\d{2}\b/g, " ");
   // Only EXPLICIT time forms may fire inside a longer phrase: "H:MM"
-  // (am/pm optional), "H am/pm", or "at H"/"at HHMM". Bare numbers
-  // without such context ("phase 2 planning") are NOT times.
-  const m =
-    s.match(/\b(\d{1,2}:\d{2})\s*(am|pm|a\.m\.|p\.m\.)?(?!\w)/) ??
-    s.match(/\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)(?!\w)/) ??
-    s.match(/\bat\s+(\d{3,4}|\d{1,2})(?!\w)()/);
-  if (!m) return null;
-  // "7 p.m." → "7pm"; normalizeTimeInput handles the rest ("0800"…).
-  const token = `${m[1]!}${m[2] ?? ""}`.replace(/([ap])\.m\./, "$1m");
-  return normalizeTimeInput(token);
+  // (am/pm optional), "H am/pm", or "at H"/"at HHMM"/"to H". Bare
+  // numbers without such context ("phase 2 planning") are NOT times.
+  // Task #581 — return ALL such times in order of appearance so "move
+  // the 7am to 9am" splits into identify-by-7am + new-start-9am.
+  const re =
+    /\b(\d{1,2}:\d{2})\s*(am|pm|a\.m\.|p\.m\.)?(?!\w)|\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)(?!\w)|\b(?:at|to)\s+(\d{3,4}|\d{1,2})(?!\w)/g;
+  const out: string[] = [];
+  for (const m of s.matchAll(re)) {
+    const token = m[1] !== undefined
+      ? `${m[1]}${m[2] ?? ""}`
+      : m[3] !== undefined
+        ? `${m[3]}${m[4] ?? ""}`
+        : m[5]!;
+    const hm = normalizeTimeInput(token.replace(/([ap])\.m\./, "$1m"));
+    if (hm) out.push(hm);
+  }
+  return out;
 }
 
-/** Explicit YYYY-MM-DD in the query (if any) for date-aware narrowing. */
-export function dateFromMeetingQuery(query: string): string | null {
+export function timeFromMeetingQuery(query: string): string | null {
+  return timesFromMeetingQuery(query)[0] ?? null;
+}
+
+/**
+ * Explicit YYYY-MM-DD in the query — or "today"/"tomorrow" resolved
+ * against the user's timezone wall clock — for date-aware narrowing.
+ */
+export function dateFromMeetingQuery(
+  query: string,
+  tz: string = DEFAULT_CHAT_TZ,
+  now: Date = new Date(),
+): string | null {
   const m = query.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-  return m ? m[1]! : null;
+  if (m) return m[1]!;
+  const s = query.toLowerCase();
+  if (/\btomorrow\b/.test(s)) return tomorrowInTz(tz, now);
+  if (/\btoday\b|\btonight\b/.test(s)) return todayInTz(tz, now);
+  return null;
+}
+
+/** Minutes since midnight for an "HH:MM" string. */
+function hmToMinutes(hm: string): number {
+  return Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+}
+
+/**
+ * Task #581 — pure time-match splitter probed without a DB: given the
+ * caller's timezone, a typed "HH:MM" and optional wall date, classify
+ * candidate rows into exact matches and near misses (±60 min on the
+ * narrowed day).
+ */
+export function matchMeetingsByTime<T extends { startAt: Date | null }>(
+  rows: T[],
+  hm: string,
+  ymd: string | null,
+  tz: string,
+): { exact: T[]; near: T[] } {
+  const want = hmToMinutes(hm);
+  const onDay = rows.filter(
+    (m) => m.startAt && (!ymd || wallParts(m.startAt, tz).ymd === ymd),
+  );
+  const exact = onDay.filter((m) => wallParts(m.startAt!, tz).hm === hm);
+  const near = onDay.filter((m) => {
+    const p = wallParts(m.startAt!, tz);
+    const diff = Math.abs(hmToMinutes(p.hm) - want);
+    return diff > 0 && diff <= 60;
+  });
+  return { exact, near };
+}
+
+/**
+ * Honest dead-end for merged-calendar events: when the typed time
+ * matches an OUTLOOK event on the caller's own calendar that isn't an
+ * Atelier-managed meeting, say so instead of a misleading not-found.
+ * Best-effort — any Graph failure just returns null.
+ */
+async function findOutlookEventAt(
+  userId: string,
+  hm: string,
+  ymd: string | null,
+  tz: string,
+  knownEventIds: Set<string>,
+): Promise<{ subject: string; start: Date } | null> {
+  try {
+    const [conn] = await db
+      .select()
+      .from(atelierMsConnections)
+      .where(eq(atelierMsConnections.userId, userId))
+      .limit(1);
+    if (!conn) return null;
+    const { freshAccessToken } = await import("../msScheduling.js");
+    const { accessToken } = await freshAccessToken(conn);
+    const winStart = ymd
+      ? wallToUtcInTz(ymd, "00:00", tz)!
+      : new Date(Date.now() - 3600 * 1000);
+    const winEnd = new Date(winStart.getTime() + (ymd ? 24 : 7 * 24) * 3600 * 1000);
+    const events = await getCalendarView(accessToken, winStart.toISOString(), winEnd.toISOString());
+    for (const ev of events) {
+      if (ev.isCancelled || ev.isAllDay || !ev.start?.dateTime) continue;
+      if (knownEventIds.has(ev.id) || (ev.iCalUId && knownEventIds.has(ev.iCalUId))) continue;
+      const start = new Date(`${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`);
+      if (Number.isNaN(start.getTime()) || start.getTime() < Date.now() - 3600 * 1000) continue;
+      const p = wallParts(start, tz);
+      if (p.hm === hm && (!ymd || p.ymd === ymd)) {
+        return { subject: ev.subject || "(no subject)", start };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 async function resolveTargetMeeting(
   persona: { id: string; orgId: string; role: string },
   input: Record<string, unknown>,
+  tz: string = DEFAULT_CHAT_TZ,
 ): Promise<
   | { row: ManagedMeetingRow }
   | { result: { ok: boolean; [k: string]: unknown } }
@@ -579,20 +695,78 @@ async function resolveTargetMeeting(
   const meetingId = typeof input.meetingId === "string" ? input.meetingId.trim() : "";
   const query = typeof input.meeting === "string" ? input.meeting.trim() : "";
   let candidates = await findManagedMeetings(persona, meetingId ? "" : query);
-  // Title match came up empty but the query looks like a time (e.g.
-  // "7:00am") — retry against ALL manageable meetings, matching on the
-  // Dubai start time instead of the title.
+  // Task #581 — title match came up empty but the query contains a time
+  // ("tomorrow's 7am", "the 8:30"): match candidates on their start time
+  // as the USER sees it (device timezone; Dubai fallback). Fetched
+  // WITHOUT the manage filter or row cap so we can (a) never miss a
+  // match to an arbitrary cap and (b) tell honest "you're not the
+  // organizer" apart from "nothing at that time".
   if (!meetingId && query && candidates.length === 0) {
     const hm = timeFromMeetingQuery(query);
     if (hm) {
-      const ymd = dateFromMeetingQuery(query);
-      const all = await findManagedMeetings(persona, "");
-      candidates = all.filter(
-        (m) =>
-          m.startAt &&
-          fmtDubai(m.startAt).slice(-5) === hm &&
-          (!ymd || fmtDubai(m.startAt).slice(0, 10) === ymd),
-      );
+      const ymd = dateFromMeetingQuery(query, tz);
+      const all = await findUpcomingMeetingRows(persona.orgId, "");
+      const { exact, near } = matchMeetingsByTime(all, hm, ymd, tz);
+      const exactManageable = exact.filter((m) => canManageInternalMeeting(persona, m));
+      if (exactManageable.length > 0) {
+        candidates = exactManageable;
+      } else if (exact.length > 0) {
+        // A meeting genuinely starts then — the user just can't manage it.
+        return {
+          result: {
+            ok: false,
+            errorCode: "forbidden",
+            errorMessage: `${meetingLabel(exact[0]!, tz)} starts at that time, but only its organizer (or a founding partner) can change it.`,
+          },
+        };
+      } else {
+        const nearManageable = near
+          .filter((m) => canManageInternalMeeting(persona, m))
+          .slice(0, 5);
+        if (nearManageable.length > 0) {
+          // Near miss (±1h): offer the close-by meetings instead of a
+          // dead-end, labelled with their start times in the user's tz.
+          const options = nearManageable.map((m) => ({
+            id: m.id,
+            label: meetingLabel(m, tz),
+            secondary: m.internalAttendees?.map((a) => a.name).filter(Boolean).join(", ") || undefined,
+          }));
+          return {
+            result: {
+              ok: true,
+              data: {
+                prompt: `I couldn't find a meeting at exactly ${hm} (${tzShortLabel(tz)}), but these start close to it — which one do you mean?`,
+                options,
+              },
+              disambiguation: { kind: "meeting", options, field: "meetingId" },
+            },
+          };
+        }
+        // Nothing in the Atelier at/near that time. If the user's own
+        // Outlook calendar has an event then, say so honestly.
+        const known = new Set<string>();
+        for (const m of all) {
+          if (m.msEventId) known.add(m.msEventId);
+          if (m.msEventUid) known.add(m.msEventUid);
+        }
+        const outlook = await findOutlookEventAt(persona.id, hm, ymd, tz, known);
+        if (outlook) {
+          return {
+            result: {
+              ok: false,
+              errorCode: "not_managed_here",
+              errorMessage: `"${outlook.subject}" at ${fmtInTz(outlook.start, tz)} (${tzShortLabel(tz)}) is on your Outlook calendar but wasn't scheduled through the Atelier, so I can't change it here — please edit it in Outlook.`,
+            },
+          };
+        }
+        return {
+          result: {
+            ok: false,
+            errorCode: "not_found",
+            errorMessage: `I couldn't find an upcoming meeting at ${hm}${ymd ? ` on ${ymd}` : ""} (${tzShortLabel(tz)}).`,
+          },
+        };
+      }
     }
   }
   if (meetingId) {
@@ -609,12 +783,29 @@ async function resolveTargetMeeting(
     return { row };
   }
   if (candidates.length === 0) {
+    // Task #581 — only mention organizer permissions when an
+    // unmanageable meeting actually matches the words; otherwise the
+    // honest answer is simply "no match".
+    if (query) {
+      const anyMatch = (await findUpcomingMeetingRows(persona.orgId, query)).filter(
+        (m) => !canManageInternalMeeting(persona, m),
+      );
+      if (anyMatch.length > 0) {
+        return {
+          result: {
+            ok: false,
+            errorCode: "forbidden",
+            errorMessage: `${meetingLabel(anyMatch[0]!, tz)} matches, but only its organizer (or a founding partner) can change it.`,
+          },
+        };
+      }
+    }
     return {
       result: {
         ok: false,
         errorCode: "not_found",
         errorMessage: query
-          ? `I couldn't find an upcoming meeting matching "${query}" that you can manage. Only the organizer (or a founding partner) can change a meeting.`
+          ? `I couldn't find an upcoming meeting matching "${query}".`
           : "You have no upcoming meetings that you can manage.",
       },
     };
@@ -622,7 +813,7 @@ async function resolveTargetMeeting(
   if (candidates.length > 1) {
     const options = candidates.slice(0, 5).map((m) => ({
       id: m.id,
-      label: meetingLabel(m),
+      label: meetingLabel(m, tz),
       secondary: m.internalAttendees?.map((a) => a.name).filter(Boolean).join(", ") || undefined,
     }));
     return {
@@ -636,21 +827,27 @@ async function resolveTargetMeeting(
   return { row: candidates[0]! };
 }
 
+/** Task #581 — timezone for this tool call: replayed pending input wins
+ * (so confirm turns are tz-stable), else the live turn's client tz. */
+function resolveToolTz(input: Record<string, unknown>, ctx: { timezone?: string }): string {
+  return normalizeChatTz(typeof input.tz === "string" ? input.tz : ctx.timezone);
+}
+
 defineCapability({
   id: "meeting.reschedule_internal",
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "engagement",
   toolName: "reschedule_internal_meeting",
   description:
-    "Move a meeting you organized via the Atelier — internal OR client (founding partners can move anyone's) — to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words; date must be an absolute YYYY-MM-DD and time HH:MM (Dubai).",
+    "Move a meeting you organized via the Atelier — internal OR client (founding partners can move anyone's) — to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\"). For \"move the X meeting to Y\" phrasings, the FIRST time identifies the meeting (put it in `meeting`) and the SECOND is the new start (put it in `time`). date must be an absolute YYYY-MM-DD and time HH:MM, both in the user's local timezone.",
   slashAliases: { en: ["/reschedule"], fr: ["/replanifier"] },
   inputSchema: {
     type: "object",
     properties: {
-      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meeting: { type: "string", description: "Words from the meeting topic/title, OR the time/day phrase the user used to identify it (e.g. \"tomorrow 7am\", \"the 8:30\"). In \"X to Y\" phrasings pass the FIRST time here." },
       meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
-      date: { type: "string", description: "New date YYYY-MM-DD (Dubai)." },
-      time: { type: "string", description: "New start time HH:MM (Dubai)." },
+      date: { type: "string", description: "New date YYYY-MM-DD (user's local timezone)." },
+      time: { type: "string", description: "New start time HH:MM in the user's local timezone (the SECOND time in \"X to Y\" phrasings)." },
       durationMinutes: { type: "integer", minimum: 15, maximum: 480, description: "Optional new duration; defaults to the meeting's current length." },
       confirm: { type: "boolean" },
     },
@@ -671,6 +868,10 @@ defineCapability({
   outboundChannel: null,
   resultCard: "meeting_card",
   async run(input, ctx) {
+    // Task #581 — all wall-clock parsing/labels use the device timezone
+    // sent with the turn (Dubai fallback). Confirm replays carry `tz`
+    // baked into the pending input so the commit is tz-stable.
+    const tz = resolveToolTz(input, ctx);
     const dateStr = String(input.date ?? "").trim();
     // Task #567 — tolerant time parsing ("8am", "0800", "8.00"…).
     const timeRaw = String(input.time ?? "").trim();
@@ -678,7 +879,7 @@ defineCapability({
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       return { ok: false, errorCode: "invalid_input", errorMessage: "date must be YYYY-MM-DD — resolve relative dates against today's date first." };
     }
-    const newStart = dubaiWallToUtc(dateStr, timeStr);
+    const newStart = timeStr ? wallToUtcInTz(dateStr, timeStr, tz) : null;
     if (!newStart) {
       return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
     }
@@ -687,10 +888,10 @@ defineCapability({
       return {
         ok: false,
         errorCode: "past_time",
-        errorMessage: `${fmtDubai(newStart)} (Dubai) is already in the past — give me a future date/time.`,
+        errorMessage: `${fmtInTz(newStart, tz)} (${tzShortLabel(tz)}) is already in the past — give me a future date/time.`,
       };
     }
-    const target = await resolveTargetMeeting(ctx.persona, input);
+    const target = await resolveTargetMeeting(ctx.persona, input, tz);
     if ("result" in target) return target.result as never;
     const row = target.row;
     const currentDurMin =
@@ -699,7 +900,7 @@ defineCapability({
         : 30;
     const durationMin = Math.max(15, Math.min(480, Number(input.durationMinutes ?? currentDurMin)));
     const newEnd = new Date(newStart.getTime() + durationMin * 60 * 1000);
-    const whenLabel = `${fmtDubai(newStart)}–${fmtDubai(newEnd).slice(-5)} (Dubai)`;
+    const whenLabel = `${fmtInTz(newStart, tz)}–${fmtInTz(newEnd, tz).slice(-5)} (${tzShortLabel(tz)})`;
 
     if (input.confirm !== true) {
       return {
@@ -715,7 +916,7 @@ defineCapability({
         },
         confirmation: {
           summary:
-            `Move ${meetingLabel(row)} to ${whenLabel}. ` +
+            `Move ${meetingLabel(row, tz)} to ${whenLabel}. ` +
             "Attendees will receive a standard Outlook meeting update.",
           diff: {
             update: {
@@ -728,8 +929,9 @@ defineCapability({
             tool: "reschedule_internal_meeting",
             input: {
               meetingId: row.id,
-              date: dateStr,
-              time: `${fmtDubai(newStart).slice(-5)}`,
+              date: fmtInTz(newStart, tz).slice(0, 10),
+              time: fmtInTz(newStart, tz).slice(-5),
+              tz,
               durationMinutes: durationMin,
               confirm: true,
             },
@@ -754,7 +956,7 @@ defineCapability({
           meeting: {
             id: meeting.id,
             title: meeting.title,
-            date: fmtDubai(newStart).slice(0, 10),
+            date: fmtInTz(newStart, tz).slice(0, 10),
             kind: "internal",
             status: "scheduled",
             startAt: newStart.toISOString(),
@@ -789,12 +991,12 @@ defineCapability({
   module: "engagement",
   toolName: "cancel_internal_meeting",
   description:
-    "Cancel a meeting you organized via the Atelier — internal OR client (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words.",
+    "Cancel a meeting you organized via the Atelier — internal OR client (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words OR by the time/day the user said (e.g. meeting:\"tomorrow 7am\", meeting:\"my 3pm\").",
   slashAliases: { en: ["/cancel-meeting"], fr: ["/annuler-reunion"] },
   inputSchema: {
     type: "object",
     properties: {
-      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meeting: { type: "string", description: "Words from the meeting topic/title, OR the time/day phrase the user used to identify it (e.g. \"tomorrow 7am\", \"the 8:30\")." },
       meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
       confirm: { type: "boolean" },
     },
@@ -815,7 +1017,8 @@ defineCapability({
   outboundChannel: null,
   resultCard: "meeting_card",
   async run(input, ctx) {
-    const target = await resolveTargetMeeting(ctx.persona, input);
+    const tz = resolveToolTz(input, ctx);
+    const target = await resolveTargetMeeting(ctx.persona, input, tz);
     if ("result" in target) return target.result as never;
     const row = target.row;
 
@@ -831,7 +1034,7 @@ defineCapability({
         },
         confirmation: {
           summary:
-            `Cancel ${meetingLabel(row)}. ` +
+            `Cancel ${meetingLabel(row, tz)}. ` +
             "Attendees will receive a standard Outlook cancellation notice. This can't be undone.",
           diff: {
             delete: {
@@ -842,7 +1045,7 @@ defineCapability({
           },
           pending: {
             tool: "cancel_internal_meeting",
-            input: { meetingId: row.id, confirm: true },
+            input: { meetingId: row.id, tz, confirm: true },
           },
         },
       };
@@ -952,7 +1155,8 @@ defineCapability({
       };
     }
 
-    const target = await resolveTargetMeeting(ctx.persona, input);
+    const tz = resolveToolTz(input, ctx);
+    const target = await resolveTargetMeeting(ctx.persona, input, tz);
     if ("result" in target) return target.result as never;
     const row = target.row;
 
@@ -1053,7 +1257,7 @@ defineCapability({
         },
         confirmation: {
           summary:
-            `Update ${meetingLabel(row)}: ${changeBits.join(", ")}. ` +
+            `Update ${meetingLabel(row, tz)}: ${changeBits.join(", ")}. ` +
             "The Outlook invite will be updated — attendees get a standard meeting update.",
           diff: {
             update: {
@@ -1069,6 +1273,7 @@ defineCapability({
             tool: "update_internal_meeting",
             input: {
               meetingId: row.id,
+              tz,
               ...(topicChanged ? { topic: newTopic } : {}),
               ...(additions.length > 0 ? { addAttendees: additions.map((a) => a.name) } : {}),
               ...(removals.length > 0 ? { removeAttendees: removals.map((r) => r.name) } : {}),

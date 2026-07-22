@@ -37,6 +37,16 @@ function uuid(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Task #581 — device IANA timezone sent with each turn so the server
+ * interprets typed times ("move my 7am") the way the user sees them. */
+function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Only http(s) URLs are safe to render as clickable anchors. Source URLs
  * arrive from untrusted web-search results, so any other scheme (notably
@@ -792,6 +802,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
             intent: args.intent ?? null,
             continuesTurnId: args.continuesTurnId ?? null,
             clarificationValues: args.clarificationValues ?? null,
+            timezone: deviceTimeZone(),
           }),
           signal: ctrl.signal,
         });

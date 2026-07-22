@@ -25,7 +25,22 @@ import {
   reRouteClarificationAnswer,
   CLARIFICATION_REROUTE_TOOLS,
 } from "../../src/lib/atelier-cli/index.js";
-import { dateFromMeetingQuery, timeFromMeetingQuery } from "../../src/lib/atelier-cli/internal-meeting-capabilities.js";
+import {
+  dateFromMeetingQuery,
+  timeFromMeetingQuery,
+  timesFromMeetingQuery,
+  matchMeetingsByTime,
+} from "../../src/lib/atelier-cli/internal-meeting-capabilities.js";
+import {
+  DEFAULT_CHAT_TZ,
+  fmtInTz,
+  isValidTimeZone,
+  normalizeChatTz,
+  todayInTz,
+  tomorrowInTz,
+  tzShortLabel,
+  wallToUtcInTz,
+} from "../../src/lib/atelier-cli/chat-tz.js";
 import {
   isPastSlot,
   pickReplayMatch,
@@ -140,7 +155,80 @@ ok(timeFromMeetingQuery("review 12/09") === null, "MM/DD not a time");
 ok(timeFromMeetingQuery("phase 2 planning") === null, "bare number without time context");
 ok(timeFromMeetingQuery("on 2026-07-22 at 7pm") === "19:00", "date + time → time wins");
 ok(dateFromMeetingQuery("on 2026-07-22 at 7pm") === "2026-07-22", "explicit date extracted");
-ok(dateFromMeetingQuery("tomorrow's 7:00am meeting") === null, "no explicit date → null");
+ok(dateFromMeetingQuery("catch up friday") === null, "no explicit/relative date → null");
+
+console.log("6c. Task #581 — timezone helpers");
+{
+  ok(isValidTimeZone("Europe/Istanbul") && isValidTimeZone("Asia/Dubai"), "valid IANA zones accepted");
+  ok(!isValidTimeZone("Mars/Olympus") && !isValidTimeZone("") && !isValidTimeZone(null), "garbage zones rejected");
+  ok(normalizeChatTz(undefined) === DEFAULT_CHAT_TZ, "missing tz falls back to Dubai");
+  ok(normalizeChatTz("Not/AZone") === DEFAULT_CHAT_TZ, "invalid tz falls back to Dubai");
+  ok(normalizeChatTz("America/New_York") === "America/New_York", "valid tz passes through");
+
+  // Fixed-offset checks: Dubai is UTC+4 (no DST); Istanbul is UTC+3.
+  const dxb = wallToUtcInTz("2026-07-23", "07:00", "Asia/Dubai")!;
+  ok(dxb.toISOString() === "2026-07-23T03:00:00.000Z", "Dubai 07:00 wall → 03:00Z");
+  const ist = wallToUtcInTz("2026-07-23", "07:00", "Europe/Istanbul")!;
+  ok(ist.toISOString() === "2026-07-23T04:00:00.000Z", "Istanbul 07:00 wall → 04:00Z");
+  // DST zone: London in July is UTC+1.
+  const lon = wallToUtcInTz("2026-07-23", "07:00", "Europe/London")!;
+  ok(lon.toISOString() === "2026-07-23T06:00:00.000Z", "London (BST) 07:00 wall → 06:00Z");
+  // Round trip: rendering the instant back in the same tz reproduces the wall clock.
+  ok(fmtInTz(ist, "Europe/Istanbul") === "2026-07-23 07:00", "fmtInTz round-trips the wall clock");
+  ok(fmtInTz(ist, "Asia/Dubai") === "2026-07-23 08:00", "same instant is 08:00 in Dubai");
+  ok(wallToUtcInTz("not-a-date", "07:00", "Asia/Dubai") === null, "bad date → null");
+
+  ok(tzShortLabel("Asia/Dubai") === "Dubai", "firm default labels as Dubai");
+  ok(tzShortLabel("Europe/Istanbul").includes("Europe/Istanbul"), "other zones label with the IANA name");
+
+  // today/tomorrow in tz: pick an instant where Dubai has rolled to the
+  // next day but London hasn't (22:30Z).
+  const now = new Date("2026-07-22T22:30:00Z");
+  ok(todayInTz("Asia/Dubai", now) === "2026-07-23", "Dubai already on the 23rd at 22:30Z");
+  ok(todayInTz("Europe/London", now) === "2026-07-22", "London still on the 22nd");
+  ok(tomorrowInTz("Asia/Dubai", now) === "2026-07-24", "Dubai tomorrow = 24th");
+  ok(tomorrowInTz("Europe/London", now) === "2026-07-23", "London tomorrow = 23rd");
+
+  // Relative-day narrowing flows through dateFromMeetingQuery.
+  ok(dateFromMeetingQuery("tomorrow's 7:00am meeting", "Asia/Dubai", now) === "2026-07-24", "\"tomorrow\" narrows in the caller's tz");
+  ok(dateFromMeetingQuery("cancel today's standup", "Europe/London", now) === "2026-07-22", "\"today\" narrows in the caller's tz");
+}
+
+console.log("6d. Task #581 — two-time phrases + time matching");
+{
+  ok(
+    JSON.stringify(timesFromMeetingQuery("move the 7am meeting to 9am")) === JSON.stringify(["07:00", "09:00"]),
+    "\"7am to 9am\" splits in order",
+  );
+  ok(timeFromMeetingQuery("move the 7am meeting to 9am") === "07:00", "FIRST time identifies the meeting");
+  ok(
+    JSON.stringify(timesFromMeetingQuery("shift tomorrow's 7:30 to 10")) === JSON.stringify(["07:30", "10:00"]),
+    "\"to 10\" counts as an explicit time (cued by \"to\")",
+  );
+  ok(timesFromMeetingQuery("phase 2 planning").length === 0, "bare numbers still never read as times");
+  ok(timesFromMeetingQuery("review 12/09").length === 0, "dates still never read as times");
+
+  const tz = "Europe/Istanbul"; // UTC+3 in July
+  const rows = [
+    { id: "a", startAt: new Date("2026-07-23T04:00:00Z") }, // 07:00 Istanbul
+    { id: "b", startAt: new Date("2026-07-23T04:30:00Z") }, // 07:30 Istanbul
+    { id: "c", startAt: new Date("2026-07-24T04:00:00Z") }, // 07:00 next day
+    { id: "d", startAt: new Date("2026-07-23T09:00:00Z") }, // 12:00 Istanbul
+    { id: "e", startAt: null },
+  ];
+  const m1 = matchMeetingsByTime(rows, "07:00", "2026-07-23", tz);
+  ok(m1.exact.length === 1 && m1.exact[0]!.id === "a", "exact match in caller's tz on narrowed day");
+  ok(m1.near.length === 1 && m1.near[0]!.id === "b", "±1h near miss offered, exact excluded");
+  const m2 = matchMeetingsByTime(rows, "07:00", null, tz);
+  ok(m2.exact.map((r) => r.id).join(",") === "a,c", "no day → all days' exact matches");
+  const m3 = matchMeetingsByTime(rows, "11:00", "2026-07-23", tz);
+  ok(m3.exact.length === 0 && m3.near.length === 1 && m3.near[0]!.id === "d", "12:00 is a near miss for 11:00");
+  const m4 = matchMeetingsByTime(rows, "20:00", "2026-07-23", tz);
+  ok(m4.exact.length === 0 && m4.near.length === 0, "nothing near → honest empty");
+  // The same rows matched in Dubai wall clock (UTC+4) land an hour later.
+  const m5 = matchMeetingsByTime(rows, "08:00", "2026-07-23", "Asia/Dubai");
+  ok(m5.exact.length === 1 && m5.exact[0]!.id === "a", "same instant matches 08:00 in Dubai");
+}
 
 console.log("6b. reliability helpers (Task #570)");
 {
@@ -286,6 +374,19 @@ console.log("11. intent utterance matrix (accented × unaccented × refusals)");
   const schedDesc = byTool.get("schedule_internal_meeting")!.description.toLowerCase();
   ok(schedDesc.includes("recurring"), "internal scheduler description declares recurring unsupported");
   ok(schedDesc.includes("room"), "internal scheduler description declares room booking unsupported");
+
+  // Task #581 — the model must be TAUGHT the time-identification path
+  // and the "X to Y" split, and that times are in the user's timezone.
+  const reschedCap = byTool.get("reschedule_internal_meeting")!;
+  const reschedDesc = reschedCap.description;
+  ok(/time\/day/i.test(reschedDesc), "reschedule description teaches identify-by-time");
+  ok(/FIRST time/.test(reschedDesc) && /SECOND/.test(reschedDesc), "reschedule description teaches X-to-Y splitting");
+  ok(/local timezone/i.test(reschedDesc), "reschedule description says times are user-local");
+  const reschedProps = (reschedCap.inputSchema as { properties: Record<string, { description?: string }> }).properties;
+  ok(/FIRST time/.test(reschedProps.meeting!.description ?? ""), "meeting field teaches first-time-identifies");
+  ok(/SECOND time/.test(reschedProps.time!.description ?? ""), "time field teaches second-time-is-new-start");
+  const cancelCap = byTool.get("cancel_internal_meeting")!;
+  ok(/time\/day/i.test(cancelCap.description), "cancel description teaches identify-by-time (parity)");
 
   // Screenshot utterance from the task: "setup a meeting with gokhan
   // tomorrow at 8" — must be treated as a fresh command (not a
