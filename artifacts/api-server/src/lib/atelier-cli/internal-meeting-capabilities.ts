@@ -465,6 +465,42 @@ function meetingLabel(m: ManagedMeetingRow): string {
  * title match. Returns a ToolResult envelope for the not-found and
  * ambiguous cases, or the single matching row.
  */
+/**
+ * When the user identifies a meeting by TIME rather than topic
+ * ("tomorrow's 7:00am meeting", "the 8:30"), the title ILIKE filter can
+ * never match. Extract a time-of-day from the query so we can instead
+ * match candidates on their Dubai-wall-clock start time.
+ */
+export function timeFromMeetingQuery(query: string): string | null {
+  // Whole query is a time ("7", "8:30", "0800") — unambiguous.
+  const direct = normalizeTimeInput(query);
+  if (direct) return direct;
+  // Strip date-like tokens so year/day numbers are never read as times
+  // ("2026-07-22", "12/09/2026", "22.07.2026", bare years).
+  const s = query
+    .toLowerCase()
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
+    .replace(/\b\d{1,2}[/.]\d{1,2}([/.]\d{2,4})?\b/g, " ")
+    .replace(/\b(19|20)\d{2}\b/g, " ");
+  // Only EXPLICIT time forms may fire inside a longer phrase: "H:MM"
+  // (am/pm optional), "H am/pm", or "at H"/"at HHMM". Bare numbers
+  // without such context ("phase 2 planning") are NOT times.
+  const m =
+    s.match(/\b(\d{1,2}:\d{2})\s*(am|pm|a\.m\.|p\.m\.)?(?!\w)/) ??
+    s.match(/\b(\d{1,2})\s*(am|pm|a\.m\.|p\.m\.)(?!\w)/) ??
+    s.match(/\bat\s+(\d{3,4}|\d{1,2})(?!\w)()/);
+  if (!m) return null;
+  // "7 p.m." → "7pm"; normalizeTimeInput handles the rest ("0800"…).
+  const token = `${m[1]!}${m[2] ?? ""}`.replace(/([ap])\.m\./, "$1m");
+  return normalizeTimeInput(token);
+}
+
+/** Explicit YYYY-MM-DD in the query (if any) for date-aware narrowing. */
+export function dateFromMeetingQuery(query: string): string | null {
+  const m = query.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  return m ? m[1]! : null;
+}
+
 async function resolveTargetMeeting(
   persona: { id: string; orgId: string; role: string },
   input: Record<string, unknown>,
@@ -474,7 +510,23 @@ async function resolveTargetMeeting(
 > {
   const meetingId = typeof input.meetingId === "string" ? input.meetingId.trim() : "";
   const query = typeof input.meeting === "string" ? input.meeting.trim() : "";
-  const candidates = await findManagedMeetings(persona, meetingId ? "" : query);
+  let candidates = await findManagedMeetings(persona, meetingId ? "" : query);
+  // Title match came up empty but the query looks like a time (e.g.
+  // "7:00am") — retry against ALL manageable meetings, matching on the
+  // Dubai start time instead of the title.
+  if (!meetingId && query && candidates.length === 0) {
+    const hm = timeFromMeetingQuery(query);
+    if (hm) {
+      const ymd = dateFromMeetingQuery(query);
+      const all = await findManagedMeetings(persona, "");
+      candidates = all.filter(
+        (m) =>
+          m.startAt &&
+          fmtDubai(m.startAt).slice(-5) === hm &&
+          (!ymd || fmtDubai(m.startAt).slice(0, 10) === ymd),
+      );
+    }
+  }
   if (meetingId) {
     const row = candidates.find((m) => m.id === meetingId);
     if (!row) {

@@ -21,6 +21,7 @@ import {
   LOCATION_SUGGESTIONS,
 } from "../../src/lib/atelier-cli/chat-normalizers.js";
 import { looksLikeClarificationAnswer } from "../../src/lib/atelier-cli/index.js";
+import { dateFromMeetingQuery, timeFromMeetingQuery } from "../../src/lib/atelier-cli/internal-meeting-capabilities.js";
 
 let passed = 0;
 function ok(cond: boolean, label: string): void {
@@ -101,5 +102,28 @@ for (const cmd of [
 for (const answer of ["in person", "online", "8am", "Gökhan", "tomorrow at 8", "yes"]) {
   ok(looksLikeClarificationAnswer(answer), `plausible answer accepted: "${answer}"`);
 }
+
+console.log("6. timeFromMeetingQuery (find meetings by time, not title)");
+for (const [raw, want] of [
+  ["7:00am", "07:00"],
+  ["tomorrow's 7:00am meeting", "07:00"],
+  ["the 8:30", "08:30"],
+  ["7 p.m.", "19:00"],
+  ["meeting at 0800", "08:00"],
+  ["9am one", "09:00"],
+  ["7", "07:00"],
+] as const) {
+  ok(timeFromMeetingQuery(raw) === want, `"${raw}" → ${want}`);
+}
+ok(timeFromMeetingQuery("catch up") === null, "topic words stay a title query");
+ok(timeFromMeetingQuery("pipeline review") === null, "no digits → null");
+// Date-like numbers must never be read as times (mis-targeting guard).
+ok(timeFromMeetingQuery("2026-07-22 review") === null, "ISO date not a time");
+ok(timeFromMeetingQuery("meeting on 2026/07/22") === null, "slash date not a time");
+ok(timeFromMeetingQuery("review 12/09") === null, "MM/DD not a time");
+ok(timeFromMeetingQuery("phase 2 planning") === null, "bare number without time context");
+ok(timeFromMeetingQuery("on 2026-07-22 at 7pm") === "19:00", "date + time → time wins");
+ok(dateFromMeetingQuery("on 2026-07-22 at 7pm") === "2026-07-22", "explicit date extracted");
+ok(dateFromMeetingQuery("tomorrow's 7:00am meeting") === null, "no explicit date → null");
 
 console.log(`\nAll ${passed} probes passed.`);
