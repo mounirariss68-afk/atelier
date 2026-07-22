@@ -39,7 +39,6 @@ import {
   ListTodo,
   Plus,
   Trash2,
-  Pencil,
   Check,
   X,
   MessageSquare,
@@ -371,17 +370,21 @@ function ActivityRow({
   }
 
   return (
-    <div className="rounded-lg border border-border-soft bg-bg-base p-3">
+    <div
+      className={`rounded-lg border border-border-soft bg-bg-base p-3 ${canMutate ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+      onClick={canMutate ? () => setEditing(true) : undefined}
+    >
       <div className="flex items-start gap-3">
         {canMutate ? (
           <button
-            onClick={() =>
+            onClick={(e) => {
+              e.stopPropagation();
               updateMut.mutate({
                 accountId,
                 activityId: activity.id,
                 data: { status: done ? "open" : "done" },
-              })
-            }
+              });
+            }}
             disabled={updateMut.isPending}
             className={`mt-0.5 shrink-0 w-4 h-4 rounded border flex items-center justify-center ${
               done
@@ -431,14 +434,7 @@ function ActivityRow({
           </div>
         </div>
         {canMutate && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => setEditing(true)}
-              className="text-text-faint hover:text-gold p-1"
-              title="Edit activity"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => deleteMut.mutate({ accountId, activityId: activity.id })}
               className="text-text-faint hover:text-red-400 p-1"

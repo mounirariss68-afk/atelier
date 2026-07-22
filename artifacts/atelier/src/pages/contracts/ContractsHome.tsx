@@ -42,7 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Upload, Download, FileText, Pencil } from "lucide-react";
+import { Plus, Upload, Download, FileText } from "lucide-react";
 import {
   ContractRow,
   CONTRACT_STATUS_META,
@@ -531,7 +531,11 @@ function TemplateCard({
   const statusTone =
     template.status === "active" ? "green" : template.status === "archived" ? "default" : "amber";
   return (
-    <Card className="p-4" data-testid={`card-template-${template.id}`}>
+    <Card
+      className={`p-4 ${canManage ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+      onClick={canManage ? onReview : undefined}
+      data-testid={`card-template-${template.id}`}
+    >
       <div className="flex items-start gap-3">
         <FileText className="w-5 h-5 text-text-faint mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
@@ -545,7 +549,7 @@ function TemplateCard({
             {v ? ` · v${v.versionNumber} · ${v.fieldSchema.length} fields · ${v.fileName}` : " · no version"}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           <a
             href={`${API_BASE}/contract-templates/${template.id}/download`}
             className="p-1.5 text-text-mute hover:text-gold"
@@ -556,10 +560,6 @@ function TemplateCard({
           </a>
           {canManage && (
             <>
-              <Button size="sm" variant="ghost" onClick={onReview} data-testid={`button-review-${template.id}`}>
-                <Pencil className="w-3.5 h-3.5 mr-1" />
-                Fields
-              </Button>
               <Button size="sm" variant="ghost" onClick={onNewVersion}>
                 <Upload className="w-3.5 h-3.5 mr-1" />
                 New version

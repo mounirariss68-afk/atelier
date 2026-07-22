@@ -3970,7 +3970,18 @@ function InsightCard({
     });
   };
   return (
-    <Card className="p-4">
+    <Card
+      className={`p-4 ${isAuthor && !editing ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+      onClick={
+        isAuthor && !editing
+          ? () => {
+              setDraft(insight.body);
+              setDraftCat(insight.category ?? "");
+              setEditing(true);
+            }
+          : undefined
+      }
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-7 h-7 rounded-full bg-gold/10 border border-gold/20 flex items-center justify-center text-[10px] font-mono text-gold shrink-0">
@@ -3993,19 +4004,7 @@ function InsightCard({
             </span>
           )}
           {isAuthor && !editing && (
-            <>
-              <button
-                onClick={() => {
-                  setDraft(insight.body);
-                  setDraftCat(insight.category ?? "");
-                  setEditing(true);
-                }}
-                className="text-text-faint hover:text-gold transition"
-                title="Edit"
-                data-testid={`insight-edit-${insight.id}`}
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
+            <span onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() =>
                   deleteMut.mutate({ accountId, insightId: insight.id })
@@ -4017,7 +4016,7 @@ function InsightCard({
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
-            </>
+            </span>
           )}
         </div>
       </div>

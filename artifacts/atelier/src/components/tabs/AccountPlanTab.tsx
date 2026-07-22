@@ -43,7 +43,6 @@ import {
   Download,
   Sparkles,
   Check,
-  Pencil,
   X,
 } from "lucide-react";
 const apiBase = `${import.meta.env?.BASE_URL ?? "/"}api`;
@@ -385,7 +384,10 @@ function ActionRow({
   }
 
   return (
-    <div className="rounded-lg border border-border-soft bg-bg-base p-3">
+    <div
+      className={`rounded-lg border border-border-soft bg-bg-base p-3 ${canManage ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+      onClick={canManage ? () => setEditing(true) : undefined}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -409,7 +411,7 @@ function ActionRow({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {canManage ? (
             <select
               value={action.status}
@@ -434,22 +436,13 @@ function ActionRow({
             </Pill>
           )}
           {canManage && (
-            <>
-              <button
-                onClick={() => setEditing(true)}
-                className="text-text-faint hover:text-gold p-1"
-                title="Edit action"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => deleteMut.mutate({ accountId, actionId: action.id })}
-                className="text-text-faint hover:text-red-400 p-1"
-                title="Delete action"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
+            <button
+              onClick={() => deleteMut.mutate({ accountId, actionId: action.id })}
+              className="text-text-faint hover:text-red-400 p-1"
+              title="Delete action"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
       </div>
@@ -721,7 +714,10 @@ function RiskRow({
   }
 
   return (
-    <div className="rounded-lg border border-border-soft bg-bg-base p-3">
+    <div
+      className={`rounded-lg border border-border-soft bg-bg-base p-3 ${canManage ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+      onClick={canManage ? () => setEditing(true) : undefined}
+    >
       <div className="flex items-start gap-3">
         <span
           className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${SEVERITY_TONE[risk.severity] ?? SEVERITY_TONE.amber}`}
@@ -741,7 +737,7 @@ function RiskRow({
             {risk.mitigation && <span className="italic">Mitigation: {risk.mitigation}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
           {canManage ? (
             <select
               value={risk.status}
@@ -766,22 +762,13 @@ function RiskRow({
             </Pill>
           )}
           {canManage && (
-            <>
-              <button
-                onClick={() => setEditing(true)}
-                className="text-text-faint hover:text-gold p-1"
-                title="Edit risk"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => deleteMut.mutate({ accountId, riskId: risk.id })}
-                className="text-text-faint hover:text-red-400 p-1"
-                title="Delete risk"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </>
+            <button
+              onClick={() => deleteMut.mutate({ accountId, riskId: risk.id })}
+              className="text-text-faint hover:text-red-400 p-1"
+              title="Delete risk"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
       </div>

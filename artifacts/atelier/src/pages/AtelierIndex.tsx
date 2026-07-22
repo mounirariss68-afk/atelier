@@ -334,7 +334,12 @@ function CredentialsView() {
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {list.map((c) => (
-          <Card key={c.id} className="p-5 border-border" data-testid={`credential-${c.id}`}>
+          <Card
+            key={c.id}
+            className={`p-5 border-border ${isPartner ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+            onClick={isPartner ? () => editCredential(c.id) : undefined}
+            data-testid={`credential-${c.id}`}
+          >
             <div className="flex items-center gap-2 mb-2">
               <KeyRound className="w-4 h-4 text-gold" />
               <MonoChip>{c.engagementType}</MonoChip>
@@ -360,14 +365,10 @@ function CredentialsView() {
               </div>
             )}
             {isPartner && (
-              <div className="mt-4 pt-3 border-t border-border-soft flex justify-end gap-2">
-                <button
-                  onClick={() => editCredential(c.id)}
-                  className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-gold hover:text-gold"
-                  data-testid={`button-edit-credential-${c.id}`}
-                >
-                  Edit
-                </button>
+              <div
+                className="mt-4 pt-3 border-t border-border-soft flex justify-end gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
                   onClick={() => deleteCredential(c.id, c.title)}
                   className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-red-500 hover:text-red-400"

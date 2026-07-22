@@ -87,7 +87,12 @@ export default function WalletPolicy() {
         </div>
         <div className="grid grid-cols-1 gap-3">
           {rules.map((r) => (
-            <Card key={r.id} className={`p-4 ${r.active ? "" : "opacity-60"}`} data-testid={`policy-${r.id}`}>
+            <Card
+              key={r.id}
+              className={`p-4 ${r.active ? "" : "opacity-60"} ${editing === r.id ? "" : "cursor-pointer hover:bg-bg-elevate-2 transition-colors"}`}
+              onClick={editing === r.id ? undefined : () => setEditing(r.id)}
+              data-testid={`policy-${r.id}`}
+            >
               <div className="flex justify-between items-start gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
@@ -101,10 +106,12 @@ export default function WalletPolicy() {
                   </div>
                   {r.rationale && <p className="text-sm text-text-mute italic">{r.rationale}</p>}
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => setEditing(editing === r.id ? null : r.id)} className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-gold hover:text-gold" data-testid={`button-edit-${r.id}`}>
-                    {editing === r.id ? "Cancel" : "Edit caps"}
-                  </button>
+                <div className="flex gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                  {editing === r.id && (
+                    <button onClick={() => setEditing(null)} className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-gold hover:text-gold" data-testid={`button-cancel-edit-${r.id}`}>
+                      Cancel
+                    </button>
+                  )}
                   <button onClick={() => remove(r.id)} className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border border-border text-text-mute hover:border-red-500 hover:text-red-400">
                     Retire
                   </button>

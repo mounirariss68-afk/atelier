@@ -1154,7 +1154,12 @@ function QualifyView() {
                   (u) => u.status === "pending" && u.field === "fitScorecard",
                 );
                 return (
-                  <tr key={f.id} className="border-b border-border-soft last:border-0" data-testid={`row-qualify-${f.id}`}>
+                  <tr
+                    key={f.id}
+                    className={`border-b border-border-soft last:border-0 ${canEdit && hasScorecard && !editing ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+                    onClick={canEdit && hasScorecard && !editing ? () => startEdit(f) : undefined}
+                    data-testid={`row-qualify-${f.id}`}
+                  >
                     <td className="px-4 py-3 font-medium text-text">
                       <span className="inline-flex items-center gap-2">
                         {f.name}
@@ -1166,7 +1171,7 @@ function QualifyView() {
                         </span>
                       )}
                       {!isRunning && pendingScorecard && (
-                        <span className="mt-0.5 flex items-center gap-2 text-[10px] text-gold/90" data-testid={`row-qualify-proposal-${f.id}`}>
+                        <span className="mt-0.5 flex items-center gap-2 text-[10px] text-gold/90" onClick={(e) => e.stopPropagation()} data-testid={`row-qualify-proposal-${f.id}`}>
                           scorecard proposal awaiting review
                           {canEdit && (
                             <>
@@ -1257,7 +1262,7 @@ function QualifyView() {
                       )}
                     </td>
                     {canEdit && (
-                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                      <td className="px-3 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {editing ? (
                           <span className="inline-flex gap-2">
                             <button className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80" onClick={() => saveEdit(f)} disabled={adjust.isPending} data-testid={`button-save-fit-${f.id}`}>
@@ -1267,11 +1272,6 @@ function QualifyView() {
                           </span>
                         ) : (
                           <span className="inline-flex gap-3">
-                            {hasScorecard && (
-                              <button className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold" onClick={() => startEdit(f)} data-testid={`button-score-${f.id}`}>
-                                adjust
-                              </button>
-                            )}
                             <button
                               className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold disabled:opacity-50 inline-flex items-center gap-1"
                               disabled={isRunning}
@@ -1914,7 +1914,12 @@ function GovernView() {
                 }
               />
             ) : (
-              <Card key={c.id} className="p-3" data-testid={`card-cert-${c.id}`}>
+              <Card
+                key={c.id}
+                className={`p-3 ${canEdit ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+                onClick={canEdit ? () => { setEditingCertId(c.id); setErr(null); } : undefined}
+                data-testid={`card-cert-${c.id}`}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium text-text">{c.credential}</div>
@@ -1927,8 +1932,7 @@ function GovernView() {
                     {c.expiresAt && <span className="text-xs text-text-faint">expires {c.expiresAt.slice(0, 10)}</span>}
                     <MonoChip tone={c.status === "active" ? "green" : c.status === "lapsing" ? "amber" : "red"}>{c.status}</MonoChip>
                     {canEdit && (
-                      <span className="inline-flex gap-2 text-xs">
-                        <button className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold" onClick={() => { setEditingCertId(c.id); setErr(null); }}>edit</button>
+                      <span className="inline-flex gap-2 text-xs" onClick={(e) => e.stopPropagation()}>
                         <button
                           className="font-mono uppercase tracking-widest text-text-faint hover:text-red-400"
                           onClick={() => {
@@ -1938,6 +1942,7 @@ function GovernView() {
                               onError: (e) => setErr(errMessage(e)),
                             });
                           }}
+                          data-testid={`button-archive-cert-${c.id}`}
                         >
                           archive
                         </button>
@@ -2014,7 +2019,8 @@ function GovernView() {
           ) : (
             <Card
               key={c.id}
-              className={`p-4 border-l-4 ${c.status === "resolved" ? "border-l-border" : "border-l-amber-400"}`}
+              className={`p-4 border-l-4 ${c.status === "resolved" ? "border-l-border" : "border-l-amber-400"} ${canEdit ? "cursor-pointer hover:bg-bg-elevate-2 transition-colors" : ""}`}
+              onClick={canEdit ? () => { setEditingConflictId(c.id); setErr(null); } : undefined}
               data-testid={`card-conflict-${c.id}`}
             >
               <div className="flex items-start justify-between gap-4">
@@ -2033,7 +2039,7 @@ function GovernView() {
                   </MonoChip>
                   <MonoChip tone={c.status === "resolved" ? "green" : "amber"}>{c.status}</MonoChip>
                   {canEdit && (
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
                       {c.status === "open" && (
                         <button
                           className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold"
@@ -2049,12 +2055,6 @@ function GovernView() {
                           resolve
                         </button>
                       )}
-                      <button
-                        className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold"
-                        onClick={() => { setEditingConflictId(c.id); setErr(null); }}
-                      >
-                        edit
-                      </button>
                       <button
                         className="font-mono uppercase tracking-widest text-text-faint hover:text-red-400"
                         onClick={() => {

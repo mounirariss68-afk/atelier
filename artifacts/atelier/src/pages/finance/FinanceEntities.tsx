@@ -24,7 +24,7 @@ import {
   useLegalEntityDetail,
   type LegalEntityRow,
 } from "@/lib/v5-hooks";
-import { Plus, Pencil, Archive, Sparkles, Loader2 } from "lucide-react";
+import { Plus, Archive, Sparkles, Loader2, ArrowUpRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 const API_BASE = "/api/atelier";
@@ -821,7 +821,7 @@ function LegalEntityCard(props: {
   const canAct = props.canWrite && e.status !== "archived";
   return (
     <RecordCard
-      onClick={() => navigate(`/finance/entities/${e.id}`)}
+      onClick={canAct ? props.onEdit : () => navigate(`/finance/entities/${e.id}`)}
       data-testid={`entity-card-${e.id}`}
       title={
         <span data-testid={`text-entity-name-${e.id}`}>{e.legalNameEn}</span>
@@ -846,8 +846,11 @@ function LegalEntityCard(props: {
       actions={
         canAct ? (
           <>
-            <RecordCardAction onClick={props.onEdit} data-testid={`button-edit-${e.id}`}>
-              <Pencil className="w-3 h-3" /> edit
+            <RecordCardAction
+              onClick={() => navigate(`/finance/entities/${e.id}`)}
+              data-testid={`button-details-${e.id}`}
+            >
+              <ArrowUpRight className="w-3 h-3" /> details
             </RecordCardAction>
             <RecordCardAction danger onClick={props.onArchive} data-testid={`button-archive-${e.id}`}>
               <Archive className="w-3 h-3" /> archive
