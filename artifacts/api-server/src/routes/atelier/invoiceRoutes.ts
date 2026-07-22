@@ -55,6 +55,7 @@ import {
   type ClientInvoicePdfArgs,
 } from "../../lib/clientInvoicePdf.js";
 import { sendEmail } from "../../lib/email.js";
+import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
 
 const router: IRouter = Router();
 
@@ -707,19 +708,26 @@ router.post("/wallet/invoices/:id/send", async (req, res) => {
     return;
   }
   const clientName = inv.billTo?.name || loaded.args.accountName || "Client";
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const pdf = await renderClientInvoicePdfBuffer(loaded.args);
+  const built = buildCogniriseEmail({
+    title: `Invoice ${inv.invoiceNumber}`,
+    greeting: `Dear ${clientName},`,
+    paragraphs: [
+      `Please find attached invoice ${inv.invoiceNumber ?? ""} for ${inv.currency} ${inv.total.toFixed(2)}${inv.dueDate ? `, due ${inv.dueDate}` : ""}.`,
+      "Please quote the invoice number with your remittance.",
+    ],
+    footerText: "Cognirise Finance",
+  });
   const result = await sendEmail({
     sender: { actor: { name: me.name, email: me.email } },
     to,
     subject: `Invoice ${inv.invoiceNumber} from Cognirise`,
-    html: `
-      <p>Dear ${esc(clientName)},</p>
-      <p>Please find attached invoice <strong>${esc(inv.invoiceNumber ?? "")}</strong>
-      for <strong>${inv.currency} ${inv.total.toFixed(2)}</strong>${inv.dueDate ? `, due <strong>${esc(inv.dueDate)}</strong>` : ""}.</p>
-      <p>Please quote the invoice number with your remittance.</p>
-      <p>— Cognirise Finance</p>`,
-    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString("base64") }],
+    html: built.html,
+    text: built.text,
+    attachments: [
+      ...built.attachments,
+      { filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString("base64") },
+    ],
   });
   // Honest delivery semantics: only ok && via==="resend" means the email
   // was actually accepted for delivery; log-only means NOT delivered.

@@ -52,6 +52,7 @@ import {
 } from "../../lib/atelier-agents/closeController.js";
 import { runCollectionsAgent } from "../../lib/atelier-agents/collections.js";
 import { sendEmail } from "../../lib/email.js";
+import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
 
 const router: IRouter = Router();
 
@@ -476,7 +477,20 @@ router.post("/collections/drafts/:id/approve-send", async (req, res) => {
   if (!recipient)
     return res.status(400).json({ error: "no_recipient", message: "Invoice bill-to has no contact email. Add one before sending." });
 
-  const sendResult = await sendEmail({ sender: { actor: { name: me.name, email: me.email } }, to: recipient, subject: draft.subject, html: `<pre style="font-family:inherit;white-space:pre-wrap">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>` });
+  const chase = buildCogniriseEmail({
+    title: draft.subject,
+    bodyHtml: `<div style="font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#3a4360;white-space:pre-wrap;">${draft.bodyText.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`,
+    footerText: "Cognirise Finance",
+    bodyText: draft.bodyText,
+  });
+  const sendResult = await sendEmail({
+    sender: { actor: { name: me.name, email: me.email } },
+    to: recipient,
+    subject: draft.subject,
+    html: chase.html,
+    text: chase.text,
+    attachments: chase.attachments,
+  });
   const via = sendResult.ok ? sendResult.via : "log-only";
 
   const eventId = rid("dun");

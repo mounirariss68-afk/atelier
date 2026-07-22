@@ -50,6 +50,7 @@ import {
   type SignaturePlacement,
   type ExtraSignerField,
 } from "./docuseal.js";
+import { buildCogniriseEmail } from "./cognirise-email-templates.js";
 import { createDocument } from "./atelier-documents.js";
 import { legalNamesByEmail } from "./atelier-person-sync.js";
 
@@ -194,26 +195,35 @@ async function deliverBrandedInvite(args: {
   } else {
     try {
       const intro = args.reminder
-        ? `This is a reminder that your signature is still needed on <strong>${esc(row.title)}</strong>.`
-        : `You have been asked to review and sign <strong>${esc(row.title)}</strong>.`;
-      const message = row.message
-        ? `<p style="white-space:pre-wrap;">${esc(row.message)}</p>`
-        : "";
-      const expiry = row.expiresAt
-        ? `<p>This request expires on ${row.expiresAt.toISOString().slice(0, 10)}.</p>`
-        : "";
+        ? `This is a reminder that your signature is still needed on "${row.title}".`
+        : `You have been asked to review and sign "${row.title}".`;
+      const paragraphs = [
+        intro,
+        ...(row.message ? [row.message] : []),
+        ...(row.expiresAt
+          ? [`This request expires on ${row.expiresAt.toISOString().slice(0, 10)}.`]
+          : []),
+      ];
+      const built = buildCogniriseEmail({
+        title: args.reminder ? "Reminder: your signature is needed" : "Signature requested",
+        greeting: `Dear ${signer.name || "Signer"},`,
+        paragraphs,
+        bodyHtml: `<p style="margin:0 0 8px;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;color:#8a93ad;">Or open this link directly:<br/><a href="${esc(signingLink)}" style="color:#8A5BD6;word-break:break-all;">${esc(signingLink)}</a></p>`,
+        cta: { label: "Review & sign", url: signingLink },
+        bodyText: [
+          `Dear ${signer.name || "Signer"},`,
+          "",
+          ...paragraphs.flatMap((p) => [p, ""]),
+          `Review & sign: ${signingLink}`,
+        ].join("\n"),
+      });
       const result = await sendEmail({
         sender,
         to: signer.email,
         subject: `${args.reminder ? "Reminder — signature" : "Signature"} requested: ${row.title}`,
-        html:
-          `<p>Dear ${esc(signer.name || "Signer")},</p>` +
-          `<p>${intro}</p>` +
-          message +
-          `<p><a href="${signingLink}" style="display:inline-block;padding:10px 18px;background:#101828;color:#ffffff;text-decoration:none;border-radius:6px;">Review &amp; sign</a></p>` +
-          `<p>Or open this link directly:<br/><a href="${signingLink}">${signingLink}</a></p>` +
-          expiry +
-          `<p>Kind regards,<br/>Cognirise</p>`,
+        html: built.html,
+        text: built.text,
+        attachments: built.attachments,
       });
       // Honest delivery semantics: only a real Resend send counts.
       status = result.ok && result.via === "resend" ? "delivered" : "undelivered";
@@ -638,19 +648,24 @@ async function notifyRequesterOfTerminalStatus(
       );
       return;
     }
-    const esc = (s: string) =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const extra =
       status === "completed"
         ? "Sign in to the portal to view it in the Document Library."
         : status === "declined"
           ? "Open Agreements in the portal to review and follow up."
           : "Open Agreements in the portal to resend if needed.";
+    const built = buildCogniriseEmail({
+      title: wording.title,
+      greeting: `Hi ${creator.name || "there"},`,
+      paragraphs: [wording.body, extra],
+    });
     const result = await sendEmail({
       sender: "system",
       to: creator.email,
       subject: wording.title,
-      html: `<p>Hi ${esc(creator.name || "there")},</p><p>${esc(wording.body)}</p><p>${esc(extra)}</p><p>— The Atelier</p>`,
+      html: built.html,
+      text: built.text,
+      attachments: built.attachments,
     });
     if (!result.ok) {
       console.error(

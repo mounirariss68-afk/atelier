@@ -20,6 +20,7 @@
 import { db, atelierSelfBilledInvoices, atelierAuditEvents, type SelfBilledEmailEvent } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { sendEmail, type EmailSender } from "./email";
+import { buildCogniriseEmail } from "./cognirise-email-templates";
 import { renderSelfBilledInvoicePdfBuffer } from "./selfBilledInvoicePdf";
 import { logger } from "./logger";
 
@@ -29,36 +30,39 @@ function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
 
-function approvalHtml(inv: SelfBilledInvoice): { subject: string; html: string } {
+type BuiltEmail = ReturnType<typeof buildCogniriseEmail>;
+
+function approvalEmail(inv: SelfBilledInvoice): { subject: string; built: BuiltEmail } {
   return {
     subject: `Self-billed invoice ${inv.invoiceNumber} — ${inv.weekIso}`,
-    html: `
-      <p>Dear ${esc(inv.supplierName)},</p>
-      <p>Your self-billed invoice <strong>${esc(inv.invoiceNumber)}</strong> for the week
-      <strong>${esc(inv.weekIso)}</strong> has been approved by Cognirise.</p>
-      <p>Total: <strong>${esc(inv.currency)} ${inv.totalAmount.toFixed(2)}</strong></p>
-      <p>The invoice PDF is attached for your records. You can also view it any time in the
-      Cognirise portal under My Pay &rarr; Self-billing.</p>
-      <p>— Cognirise Finance</p>`,
+    built: buildCogniriseEmail({
+      title: "Your self-billed invoice was approved",
+      greeting: `Dear ${inv.supplierName},`,
+      paragraphs: [
+        `Your self-billed invoice ${inv.invoiceNumber} for the week ${inv.weekIso} has been approved by Cognirise.`,
+        `Total: ${inv.currency} ${inv.totalAmount.toFixed(2)}`,
+        "The invoice PDF is attached for your records. You can also view it any time in the Cognirise portal under My Pay → Self-billing.",
+      ],
+      footerText: "Cognirise Finance — The Atelier",
+    }),
   };
 }
 
-function remittanceHtml(inv: SelfBilledInvoice): { subject: string; html: string } {
+function remittanceEmail(inv: SelfBilledInvoice): { subject: string; built: BuiltEmail } {
   const paid = inv.paidAt ? inv.paidAt.toISOString().slice(0, 10) : "today";
   return {
     subject: `Payment sent — remittance advice for ${inv.invoiceNumber}`,
-    html: `
-      <p>Dear ${esc(inv.supplierName)},</p>
-      <p>Payment for self-billed invoice <strong>${esc(inv.invoiceNumber)}</strong>
-      (week ${esc(inv.weekIso)}) was released on <strong>${esc(paid)}</strong>.</p>
-      <p>Amount: <strong>${esc(inv.currency)} ${inv.totalAmount.toFixed(2)}</strong><br/>
-      ${inv.remittanceRef ? `Remittance reference: <strong>${esc(inv.remittanceRef)}</strong>` : ""}</p>
-      <p>The updated invoice PDF is attached as your remittance advice.</p>
-      <p>— Cognirise Finance</p>`,
+    built: buildCogniriseEmail({
+      title: "Payment sent — remittance advice",
+      greeting: `Dear ${inv.supplierName},`,
+      paragraphs: [
+        `Payment for self-billed invoice ${inv.invoiceNumber} (week ${inv.weekIso}) was released on ${paid}.`,
+        `Amount: ${inv.currency} ${inv.totalAmount.toFixed(2)}${inv.remittanceRef ? ` · Remittance reference: ${inv.remittanceRef}` : ""}`,
+        "The updated invoice PDF is attached as your remittance advice.",
+      ],
+      footerText: "Cognirise Finance — The Atelier",
+    }),
   };
 }
 
@@ -83,14 +87,18 @@ export async function notifySupplierOfInvoice(
     if (!to) {
       event = { kind, to: null, status: "no_email", via: "none", at: new Date().toISOString() };
     } else {
-      const { subject, html } = kind === "approval" ? approvalHtml(inv) : remittanceHtml(inv);
+      const { subject, built } = kind === "approval" ? approvalEmail(inv) : remittanceEmail(inv);
       const pdf = await renderSelfBilledInvoicePdfBuffer(inv);
       const result = await sendEmail({
         sender,
         to,
         subject,
-        html,
-        attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString("base64") }],
+        html: built.html,
+        text: built.text,
+        attachments: [
+          ...built.attachments,
+          { filename: `${inv.invoiceNumber}.pdf`, content: pdf.toString("base64") },
+        ],
       });
       const status: SelfBilledEmailEvent["status"] =
         result.ok && result.via === "resend" ? "sent" : result.ok ? "not_configured" : "failed";

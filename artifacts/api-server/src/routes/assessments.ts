@@ -18,6 +18,7 @@ import {
 } from "@workspace/assessments";
 import { generateExecutiveMemo } from "../lib/aiMemo";
 import { sendEmail } from "../lib/email";
+import { buildCogniriseEmail } from "../lib/cognirise-email-templates";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -205,13 +206,42 @@ router.post("/submissions/:publicId/email", async (req, res) => {
       : profile.language === "tr"
         ? `${profile.name} için Cognirise ${def.code} raporu`
         : `Your Cognirise ${def.code} report`;
-  const html =
+  const hasUrl = url.startsWith("http");
+  const content =
     profile.language === "ar"
-      ? `<p>عزيزي ${profile.name},</p><p>تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).</p><p><a href="${url}">عرض التقرير الكامل</a></p><p>— شراكة Cognirise</p>`
+      ? {
+          title: `تقرير ${def.title.ar}`,
+          greeting: `عزيزي ${profile.name},`,
+          paragraphs: [`تجدون تقرير ${def.title.ar} (${row.tier}, ${row.overallScore}/5).`],
+          cta: hasUrl ? { label: "عرض التقرير الكامل", url } : undefined,
+          footerText: "شراكة Cognirise",
+        }
       : profile.language === "tr"
-        ? `<p>Merhaba ${profile.name},</p><p>${trTitle} raporunuz hazır (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">Tam raporu görüntüle</a></p><p>— Cognirise ortaklığı</p>`
-        : `<p>Hi ${profile.name},</p><p>Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).</p><p><a href="${url}">View the full report</a></p><p>— The Cognirise partnership</p>`;
-  const sent = await sendEmail({ sender: "system", to: profile.email, subject, html });
+        ? {
+            title: `${trTitle} raporunuz hazır`,
+            greeting: `Merhaba ${profile.name},`,
+            paragraphs: [`${trTitle} raporunuz hazır (${row.tier} — ${row.overallScore}/5).`],
+            cta: hasUrl ? { label: "Tam raporu görüntüle", url } : undefined,
+            footerText: "Cognirise ortaklığı",
+          }
+        : {
+            title: `Your ${def.title.en} report is ready`,
+            greeting: `Hi ${profile.name},`,
+            paragraphs: [
+              `Your ${def.title.en} report is ready (${row.tier} — ${row.overallScore}/5).${hasUrl ? "" : ` ${url}`}`,
+            ],
+            cta: hasUrl ? { label: "View the full report", url } : undefined,
+            footerText: "The Cognirise partnership",
+          };
+  const built = buildCogniriseEmail(content);
+  const sent = await sendEmail({
+    sender: "system",
+    to: profile.email,
+    subject,
+    html: built.html,
+    text: built.text,
+    attachments: built.attachments,
+  });
   res.json(sent);
 });
 
@@ -233,13 +263,21 @@ router.post("/book-call", async (req, res) => {
     return;
   }
   const [row] = await db.insert(callRequestsTable).values(parsed.data).returning();
+  const notify = buildCogniriseEmail({
+    title: "New 30-min readout request",
+    paragraphs: [
+      `${row.name} (${row.email}) at ${row.company} requested a readout.`,
+      `Submission: ${row.submissionPublicId ?? "—"} · Preferred: ${row.preferredTime ?? "—"}`,
+      ...(row.message ? [row.message] : []),
+    ],
+  });
   await sendEmail({
     sender: "system",
     to: process.env["FOUNDERS_EMAIL"] ?? "info@cognirise.com",
     subject: `New 30-min readout request — ${row.company}`,
-    html: `<p><b>${row.name}</b> (${row.email}) at <b>${row.company}</b> requested a readout.</p>
-<p>Submission: ${row.submissionPublicId ?? "—"}<br/>Preferred: ${row.preferredTime ?? "—"}</p>
-<p>${row.message ?? ""}</p>`,
+    html: notify.html,
+    text: notify.text,
+    attachments: notify.attachments,
   });
   res.json({ ok: true, id: row.id });
 });

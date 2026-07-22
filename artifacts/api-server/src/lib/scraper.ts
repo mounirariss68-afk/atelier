@@ -19,6 +19,7 @@ import {
   logHealthEvaluation,
 } from "./scrape-health";
 import { sendEmail } from "./email";
+import { buildCogniriseEmail } from "./cognirise-email-templates";
 
 interface ScrapedPrice {
   modelCode: string;
@@ -3407,25 +3408,25 @@ export async function runPriceScrape(
       const alertEmail =
         process.env["SCRAPE_ALERT_EMAIL"] ?? process.env["ADMIN_EMAIL"];
       if (alertEmail) {
-        const html = `
-          <p><strong>${summary}</strong></p>
-          <p>Run: ${runId}</p>
-          <p>Threshold: ${Math.round(health.thresholdFraction * 100)}% of last ${health.baselineWindowDays}d average.</p>
-          <ul>
-            ${health.alerts
-              .map(
-                (a) =>
-                  `<li><strong>${a.marketplace}</strong>: this run produced ${a.currentCount}, baseline avg ${a.baselineAvg} (${a.baselineSamples} prior samples), drop ${a.dropPercent}% — reason: ${a.reason}</li>`,
-              )
-              .join("")}
-          </ul>
-          <p>Investigate selectors / category drift in <code>artifacts/api-server/src/lib/scraper.ts</code>.</p>
-        `;
+        const built = buildCogniriseEmail({
+          title: summary,
+          paragraphs: [
+            `Run: ${runId}`,
+            `Threshold: ${Math.round(health.thresholdFraction * 100)}% of last ${health.baselineWindowDays}d average.`,
+            ...health.alerts.map(
+              (a) =>
+                `${a.marketplace}: this run produced ${a.currentCount}, baseline avg ${a.baselineAvg} (${a.baselineSamples} prior samples), drop ${a.dropPercent}% — reason: ${a.reason}`,
+            ),
+            "Investigate selectors / category drift in artifacts/api-server/src/lib/scraper.ts.",
+          ],
+        });
         sendEmail({
           sender: "system",
           to: alertEmail,
           subject: `[Cognirise] ${summary}`,
-          html,
+          html: built.html,
+          text: built.text,
+          attachments: built.attachments,
         }).catch((err) => {
           logger.warn({ err, runId }, "Failed to send scrape health alert email");
         });

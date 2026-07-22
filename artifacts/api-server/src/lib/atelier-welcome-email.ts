@@ -1,4 +1,5 @@
 import { sendEmail, type EmailSender } from "./email";
+import { buildCogniriseEmail } from "./cognirise-email-templates";
 import { logger } from "./logger";
 
 export type WelcomeEmailStatus = "sent" | "failed" | "not_configured";
@@ -28,50 +29,69 @@ export interface WelcomeEmailArgs {
   sender: EmailSender;
 }
 
-export function buildWelcomeEmailHtml(args: WelcomeEmailArgs): string {
-  const firstName = esc(args.fullName.trim().split(/\s+/)[0] || "there");
+const SANS = "'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif";
+
+export function buildWelcomeEmail(args: WelcomeEmailArgs): {
+  html: string;
+  text: string;
+  attachments: { filename: string; content: string; content_id: string }[];
+} {
+  const firstName = args.fullName.trim().split(/\s+/)[0] || "there";
   const roleLine =
     args.workerType === "employee"
       ? "We're delighted to welcome you to the team as an employee."
       : "We're delighted to be working with you as a contractor.";
-  const signInBlock = args.signInUrl
-    ? `<p style="margin:24px 0;"><a href="${esc(args.signInUrl)}" style="display:inline-block;background:#0b1f3a;color:#c9a24b;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Sign in to The Atelier</a></p>`
-    : `<p style="margin:24px 0;">Sign in to The Atelier — the Cognirise portal — using the link your onboarding contact shares with you.</p>`;
-  return `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#f4f4f2;font-family:Georgia,'Times New Roman',serif;color:#1c1c1c;">
-    <div style="max-width:560px;margin:0 auto;padding:32px 24px;">
-      <div style="background:#0b1f3a;border-radius:8px 8px 0 0;padding:28px 32px;">
-        <div style="color:#c9a24b;font-size:20px;letter-spacing:2px;font-weight:600;">COGNIRISE</div>
-        <div style="color:#e8e6e1;font-size:13px;margin-top:4px;letter-spacing:1px;">THE ATELIER — EMPLOYEE PORTAL</div>
-      </div>
-      <div style="background:#ffffff;border-radius:0 0 8px 8px;padding:32px;">
-        <p style="font-size:16px;">Dear ${firstName},</p>
-        <p>Welcome to Cognirise. ${roleLine}</p>
-        <p>Your workspace in The Atelier is ready. Your sign-in email is:</p>
-        <div style="background:#f7f5f0;border:1px solid #e4ddcf;border-radius:6px;padding:16px 20px;margin:20px 0;font-family:Menlo,Consolas,monospace;font-size:14px;">
-          <div><span style="color:#6b6b6b;">Email:</span> ${esc(args.email)}</div>
-        </div>
-        ${
-          args.activationUrl
-            ? `<p style="margin:24px 0;"><a href="${esc(args.activationUrl)}" style="display:inline-block;background:#0b1f3a;color:#c9a24b;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:600;">Activate your account</a></p>
-        <p style="font-size:14px;color:#444;">This activation link is valid for ${esc(args.activationValidity ?? "72 hours")} and can be used once. It lets you choose your own password — we never send passwords by email.</p>`
-            : `<p style="font-size:14px;color:#444;">Your onboarding contact will share a one-time activation link with you so you can choose your own password — we never send passwords by email.</p>`
-        }
-        ${signInBlock}
-        <p style="font-weight:600;margin-bottom:8px;">Getting started</p>
-        <ol style="margin:0 0 20px;padding-left:20px;color:#333;">
-          <li style="margin-bottom:6px;">Open your activation link and set your password.</li>
-          <li style="margin-bottom:6px;">Review and complete your profile.</li>
-          <li style="margin-bottom:6px;">Explore your Time and Expenses tabs.</li>
-        </ol>
-        <p>If anything looks off or you have questions, just reply to this email or reach out to your onboarding contact.</p>
-        <p style="margin-top:28px;">Warm regards,<br/>The Cognirise team</p>
-      </div>
-      <p style="text-align:center;color:#9a9a9a;font-size:12px;margin-top:16px;">Cognirise — The Atelier</p>
+  const activationBlock = args.activationUrl
+    ? `<p style="margin:0 0 8px;font-family:${SANS};font-size:14px;color:#3a4360;">This activation link is valid for ${esc(args.activationValidity ?? "72 hours")} and can be used once. It lets you choose your own password — we never send passwords by email.</p>`
+    : `<p style="margin:0 0 8px;font-family:${SANS};font-size:14px;color:#3a4360;">Your onboarding contact will share a one-time activation link with you so you can choose your own password — we never send passwords by email.</p>`;
+  const signInLine = args.signInUrl
+    ? `<p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">You can sign in any time at <a href="${esc(args.signInUrl)}" style="color:#8A5BD6;">${esc(args.signInUrl)}</a>.</p>`
+    : `<p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">Sign in to The Atelier — the Cognirise portal — using the link your onboarding contact shares with you.</p>`;
+  const bodyHtml = `
+    <div style="background:#F3F4F8;border:1px solid #E4E7F0;border-radius:8px;padding:16px 20px;margin:0 0 20px;font-family:Menlo,Consolas,monospace;font-size:14px;color:#1c2440;">
+      <span style="color:#6b7490;">Email:</span> ${esc(args.email)}
     </div>
-  </body>
-</html>`;
+    ${activationBlock}
+    ${signInLine}
+    <p style="margin:16px 0 8px;font-family:${SANS};font-size:15px;font-weight:600;color:#0A1230;">Getting started</p>
+    <ol style="margin:0 0 20px;padding-left:20px;font-family:${SANS};font-size:14px;line-height:1.7;color:#3a4360;">
+      <li>Open your activation link and set your password.</li>
+      <li>Review and complete your profile.</li>
+      <li>Explore your Time and Expenses tabs.</li>
+    </ol>
+    <p style="margin:0 0 16px;font-family:${SANS};font-size:14px;color:#3a4360;">If anything looks off or you have questions, just reply to this email or reach out to your onboarding contact.</p>
+    <p style="margin:16px 0 0;font-family:${SANS};font-size:14px;color:#3a4360;">Warm regards,<br/>The Cognirise team</p>`;
+  const textLines = [
+    `Dear ${firstName},`,
+    "",
+    `Welcome to Cognirise. ${roleLine}`,
+    "",
+    `Your sign-in email: ${args.email}`,
+    "",
+    args.activationUrl
+      ? `Activate your account (valid ${args.activationValidity ?? "72 hours"}, single use): ${args.activationUrl}`
+      : "Your onboarding contact will share a one-time activation link so you can choose your own password.",
+    args.signInUrl ? `Sign in: ${args.signInUrl}` : "",
+    "",
+    "Getting started: 1) set your password 2) complete your profile 3) explore Time and Expenses.",
+    "",
+    "Warm regards, The Cognirise team",
+  ].filter((l) => l !== "");
+  return buildCogniriseEmail({
+    title: "Welcome to Cognirise",
+    greeting: `Dear ${firstName},`,
+    paragraphs: [
+      `Welcome to Cognirise. ${roleLine}`,
+      "Your workspace in The Atelier is ready. Your sign-in email is:",
+    ],
+    bodyHtml,
+    cta: args.activationUrl
+      ? { label: "Activate your account", url: args.activationUrl }
+      : args.signInUrl
+        ? { label: "Sign in to The Atelier", url: args.signInUrl }
+        : undefined,
+    bodyText: textLines.join("\n"),
+  });
 }
 
 /**
@@ -84,11 +104,14 @@ export async function sendJoinerWelcomeEmail(
   args: WelcomeEmailArgs,
 ): Promise<WelcomeEmailStatus> {
   try {
+    const built = buildWelcomeEmail(args);
     const result = await sendEmail({
       sender: args.sender,
       to: args.email,
       subject: "Welcome to Cognirise — your Atelier login details",
-      html: buildWelcomeEmailHtml(args),
+      html: built.html,
+      text: built.text,
+      attachments: built.attachments,
     });
     if (result.via !== "resend") {
       // sendEmail returns ok:true in log-only mode; that still means the

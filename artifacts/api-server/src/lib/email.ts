@@ -18,7 +18,9 @@ export interface EmailArgs {
   to: string;
   subject: string;
   html: string;
-  attachments?: { filename: string; content: string }[];
+  attachments?: { filename: string; content: string; content_id?: string }[];
+  /** Optional plain-text alternative body. */
+  text?: string;
   /** Who this email is from — acting user or explicitly "system". */
   sender: EmailSender;
   /**
@@ -255,6 +257,7 @@ export async function sendEmail(args: EmailArgs): Promise<{ ok: boolean; via: st
         to: [args.to],
         subject: args.subject,
         html: args.html,
+        text: args.text,
         attachments: args.attachments,
         reply_to: args.replyTo ?? resolved.replyTo,
       }),
