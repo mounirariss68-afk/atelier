@@ -2142,7 +2142,12 @@ function ClarificationCard({
             <button
               key={sg.id}
               type="button"
-              onClick={() => onSubmit(sg.label)}
+              // Task #567 — chips submit the canonical id through the
+              // structured clarificationValues path (same as mobile),
+              // with the human label as the visible prompt text.
+              onClick={() =>
+                onSubmit(sg.label, { [clarification.field]: sg.id })
+              }
               className="text-xs bg-bg-deep border border-border hover:border-gold/50 rounded px-2 py-1"
               data-testid="cli-clarification-suggestion"
               title={sg.hint}

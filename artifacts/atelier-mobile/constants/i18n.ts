@@ -70,6 +70,7 @@ const en: Dict = {
   "chat.typeName": "Type your full name to confirm",
   "chat.answer": "Answer",
   "chat.send": "Send",
+  "chat.pickOne": "Which one did you mean?",
   // expenses
   "exp.title": "Expenses",
   "exp.empty": "No expense claims yet",
@@ -328,6 +329,7 @@ const tr: Dict = {
   "chat.typeName": "Onaylamak için tam adınızı yazın",
   "chat.answer": "Yanıtla",
   "chat.send": "Gönder",
+  "chat.pickOne": "Hangisini kastettiniz?",
   "exp.title": "Masraflar",
   "exp.empty": "Henüz masraf talebi yok",
   "exp.emptyBody": "Bir fiş çekin veya manuel olarak talep ekleyin.",
@@ -577,6 +579,7 @@ const ar: Dict = {
   "chat.typeName": "اكتب اسمك الكامل للتأكيد",
   "chat.answer": "إجابة",
   "chat.send": "إرسال",
+  "chat.pickOne": "أيّها تقصد؟",
   "exp.title": "المصاريف",
   "exp.empty": "لا توجد مطالبات مصاريف بعد",
   "exp.emptyBody": "التقط صورة إيصال أو أضف مطالبة يدويًا.",

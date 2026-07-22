@@ -26,6 +26,7 @@ import {
   atelierUsers,
 } from "@workspace/db";
 import { accessibleEngagementIds } from "../../../routes/atelier/engagementRoutes.js";
+import { foldRosterName } from "../chat-normalizers.js";
 import type { CliPersona } from "../index.js";
 
 export type ResolverResult<T> =
@@ -172,7 +173,10 @@ export async function resolvePerson(
 ): Promise<ResolverResult<unknown>> {
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
-  const rows = await db
+  // Task #567 — accent-insensitive matching ("gokhan" → "Gökhan Güney"):
+  // fetch the org roster and fold diacritics in JS; a raw ILIKE cannot
+  // fold ö/ü/ş/ı etc.
+  const all = await db
     .select({
       id: atelierUsers.id,
       name: atelierUsers.name,
@@ -180,13 +184,15 @@ export async function resolvePerson(
       role: atelierUsers.role,
     })
     .from(atelierUsers)
-    .where(
-      and(
-        or(ilike(atelierUsers.name, `%${q}%`), ilike(atelierUsers.email, `%${q}%`)),
-        eq(atelierUsers.orgId, persona.orgId),
-      ),
+    .where(eq(atelierUsers.orgId, persona.orgId));
+  const needle = foldRosterName(q);
+  const rows = all
+    .filter(
+      (r) =>
+        foldRosterName(r.name ?? "").includes(needle) ||
+        foldRosterName(r.email ?? "").includes(needle),
     )
-    .limit(MAX_CHOICES + 1);
+    .slice(0, MAX_CHOICES + 1);
   if (rows.length === 0) return { kind: "none" };
   if (rows.length === 1) {
     const r = rows[0]!;

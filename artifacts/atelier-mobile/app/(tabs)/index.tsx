@@ -176,7 +176,20 @@ function ClarificationCard({
                     key={opt.value}
                     onPress={() => {
                       hapticLight();
-                      setValues((v) => ({ ...v, [f.field]: opt.value }));
+                      // Task #567 — fixed-choice chips submit directly:
+                      // once every field has a value after this tap,
+                      // fire the answer instead of requiring a separate
+                      // Send tap. Free-text fields keep the Send button.
+                      const next = { ...values, [f.field]: opt.value };
+                      const complete = fields.every(
+                        (fx) => (next[fx.field] ?? "").trim().length > 0,
+                      );
+                      if (complete) {
+                        setValues(next);
+                        onSubmit(next);
+                      } else {
+                        setValues(next);
+                      }
                     }}
                     style={{
                       paddingHorizontal: 14,
@@ -226,6 +239,80 @@ function ClarificationCard({
         );
       })}
       <Button label={t("chat.send")} onPress={() => onSubmit(values)} icon="send" />
+    </Card>
+  );
+}
+
+// Task #567 — tappable disambiguation options ("Which one did you
+// mean?"). Previously the mobile chat had NO renderer for this state,
+// so a multi-match name lookup was a dead end.
+function DisambigCard({
+  turn,
+  onPick,
+}: {
+  turn: ChatTurn;
+  onPick: (optionId: string, optionLabel: string) => void;
+}) {
+  const c = useColors();
+  const { t } = useI18n();
+  const rtl = useRTL();
+  const options = turn.disambig?.options ?? [];
+  if (options.length === 0) return null;
+  return (
+    <Card style={{ marginTop: 8, gap: 12 }}>
+      <Text
+        style={{
+          color: c.foreground,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 15,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {t("chat.pickOne")}
+      </Text>
+      <View style={{ gap: 8 }}>
+        {options.map((opt) => (
+          <Pressable
+            key={opt.id}
+            onPress={() => {
+              hapticLight();
+              onPick(opt.id, opt.label);
+            }}
+            style={{
+              backgroundColor: c.secondary,
+              borderRadius: c.radius + 2,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.border,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              gap: 2,
+            }}
+          >
+            <Text
+              style={{
+                color: c.secondaryForeground,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 14,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {opt.label}
+            </Text>
+            {opt.secondary ? (
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 12,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {opt.secondary}
+              </Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
     </Card>
   );
 }
@@ -317,12 +404,14 @@ function ConfirmCard({
 function TurnBlock({
   turn,
   onAnswer,
+  onPickOption,
   onConfirm,
   onCancel,
   onRetry,
 }: {
   turn: ChatTurn;
   onAnswer: (key: string, values: Record<string, string>) => void;
+  onPickOption: (key: string, optionId: string, optionLabel: string) => void;
   onConfirm: (key: string, typedName?: string) => void;
   onCancel: (key: string) => void;
   onRetry: (prompt: string) => void;
@@ -428,6 +517,13 @@ function TurnBlock({
         <ClarificationCard
           turn={turn}
           onSubmit={(values) => onAnswer(turn.key, values)}
+        />
+      ) : null}
+
+      {turn.status === "needs_disambiguation" ? (
+        <DisambigCard
+          turn={turn}
+          onPick={(id, label) => onPickOption(turn.key, id, label)}
         />
       ) : null}
 
@@ -677,6 +773,7 @@ export default function ChatScreen() {
               <TurnBlock
                 turn={item}
                 onAnswer={chat.answerClarification}
+                onPickOption={chat.pickDisambig}
                 onConfirm={chat.confirm}
                 onCancel={chat.cancelConfirmation}
                 onRetry={(prompt) => chat.submit(prompt)}

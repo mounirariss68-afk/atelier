@@ -2268,6 +2268,10 @@ const COMMAND_OPENERS = new Set([
   "run", "generate", "export", "pull", "give", "help", "what", "whats",
   "who", "whos", "how", "why", "when", "where", "which", "can", "could",
   "please", "tell",
+  // Task #567 — scheduling verbs: a fresh "setup a meeting…" /
+  // "book…" / "reschedule…" / "cancel…" while a clarification is
+  // pending is a NEW request, not an answer to the paused question.
+  "setup", "book", "reschedule", "cancel", "invite", "plan", "check",
 ]);
 export function looksLikeClarificationAnswer(raw: string): boolean {
   const p = (raw ?? "").trim();

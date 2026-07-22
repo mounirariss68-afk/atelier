@@ -24,6 +24,7 @@ export type {
   ChatTurn,
   ClarificationChoice,
   ClarificationField,
+  DisambigOption,
   PendingConfirmation,
   ResultCard,
   ToolResult,
@@ -299,7 +300,19 @@ export function useChat() {
       const turn = turns.find((t) => t.key === key);
       const question = turn?.clarification?.question ?? "";
       const prompt = Object.values(values).join(", ") || question;
-      upsert(key, (t) => ({ ...t, status: "streaming", clarification: undefined }));
+      // Task #567 — reset streamed output on resubmit. The continuation
+      // reuses this turn key, so keeping old text/trace/toolResults made
+      // every re-asked clarification APPEND duplicate narration and
+      // stack duplicate result cards.
+      upsert(key, (t) => ({
+        ...t,
+        status: "streaming",
+        clarification: undefined,
+        text: "",
+        trace: [],
+        toolResults: [],
+        result: undefined,
+      }));
       await runStream(
         "/api/atelier/cli/turn",
         {
@@ -313,6 +326,23 @@ export function useChat() {
       );
     },
     [runStream, turns, upsert],
+  );
+
+  // Task #567 — disambiguation pick: mirror the web client, which
+  // re-enters the loop with the chosen id appended to the original
+  // prompt (the resolver layer treats `id <id>` as a deterministic
+  // match). Submits as a NEW turn; the picked turn's options are
+  // cleared so the chips can't be tapped twice.
+  const pickDisambig = useCallback(
+    async (key: string, optionId: string, optionLabel: string) => {
+      const turn = turns.find((t) => t.key === key);
+      if (!turn) return;
+      upsert(key, (t) => ({ ...t, status: "complete", disambig: undefined }));
+      await submit(
+        `${turn.prompt}\n\n(Use the one called "${optionLabel}" — id ${optionId})`,
+      );
+    },
+    [submit, turns, upsert],
   );
 
   const confirm = useCallback(
@@ -398,6 +428,7 @@ export function useChat() {
     uploadAttachment,
     submit,
     answerClarification,
+    pickDisambig,
     confirm,
     cancelConfirmation,
     stop,

@@ -51,7 +51,14 @@ export type TurnStatus =
   | "error"
   | "cancelled"
   | "needs_clarification"
-  | "needs_confirmation";
+  | "needs_confirmation"
+  | "needs_disambiguation";
+
+export interface DisambigOption {
+  id: string;
+  label: string;
+  secondary?: string;
+}
 
 export interface Trace {
   kind: string;
@@ -66,6 +73,8 @@ export interface ChatTurn {
   text: string;
   trace: Trace[];
   clarification?: { question: string; fields: ClarificationField[] };
+  /** Task #567 — "which one did you mean?" options (roster/meeting matches). */
+  disambig?: { kind: string; options: DisambigOption[] };
   pending?: PendingConfirmation;
   result?: ResultCard;
   toolResults: ToolResult[];
@@ -204,6 +213,30 @@ export function applyFrame(
     case "needs_confirmation": {
       return { ...turn, status: "needs_confirmation", pending: data as PendingConfirmation };
     }
+    case "needs_disambiguation": {
+      // Task #567 — previously unhandled on mobile (dead-end). Mirror
+      // the web client: surface tappable options.
+      const d = data as { kind?: string; options?: Array<Record<string, unknown>> };
+      const options: DisambigOption[] = Array.isArray(d.options)
+        ? d.options
+            .filter(
+              (o): o is { id: string; label: string; secondary?: string } =>
+                !!o && typeof o.id === "string" && typeof o.label === "string",
+            )
+            .map((o) => ({
+              id: o.id,
+              label: o.label,
+              ...(typeof o.secondary === "string" && o.secondary
+                ? { secondary: o.secondary }
+                : {}),
+            }))
+        : [];
+      return {
+        ...turn,
+        status: "needs_disambiguation",
+        disambig: { kind: d.kind ?? "entity", options },
+      };
+    }
     case "final": {
       const d = data as { status?: string; turnId?: string; result?: ResultCard };
       const ss = d.status;
@@ -212,7 +245,11 @@ export function applyFrame(
       else if (ss === "awaiting_clarification") next = "needs_clarification";
       else if (ss === "cancelled") next = "cancelled";
       else if (ss === "error") next = "error";
-      else next = "complete";
+      else if (turn.status === "needs_disambiguation") {
+        // Task #567 — the server reports "partial" for disambiguation
+        // pauses; preserve the interactive state (mirrors web).
+        next = "needs_disambiguation";
+      } else next = "complete";
       let text = turn.text;
       if (d.result && !text.trim()) {
         text = [d.result.title, d.result.summary].filter(Boolean).join("\n\n");

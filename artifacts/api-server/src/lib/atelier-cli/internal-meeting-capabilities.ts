@@ -54,6 +54,17 @@ const SCHEDULER_ROLES: AtelierRole[] = [
 
 interface ResolvedAttendee extends AvailabilityPerson {}
 
+// Task #567 — pure normalization helpers live in the side-effect-free
+// ./chat-normalizers.js so lightweight resolvers can use them without
+// pulling in this capability-registration module.
+import {
+  foldRosterName,
+  normalizeLocationAnswer,
+  normalizeTimeInput,
+  LOCATION_SUGGESTIONS,
+} from "./chat-normalizers.js";
+export { foldRosterName, normalizeLocationAnswer, normalizeTimeInput, LOCATION_SUGGESTIONS };
+
 defineCapability({
   id: "meeting.schedule_internal",
   schemaVersion: CATALOG_SCHEMA_VERSION,
@@ -116,22 +127,29 @@ defineCapability({
     }
     const durationMin = Math.max(15, Math.min(480, Number(input.durationMinutes ?? 30)));
     const topic = typeof input.topic === "string" ? input.topic.trim() : "";
-    const locationType = input.locationType === "in_person" ? "in_person" : input.locationType === "online" ? "online" : null;
+    // Task #567 — tolerant location parsing: "teams"/"virtual" → online,
+    // "in person"/"face to face"/"office" → in_person, etc.
+    const locationType = normalizeLocationAnswer(input.locationType);
 
     // ---- attendee resolution (roster users, org-scoped, never self) ----
+    // Task #567 — accent-insensitive matching: fetch the org roster and
+    // filter with foldRosterName so "gokhan" finds "Gökhan Güney". A raw
+    // ILIKE can't fold diacritics (and Turkish ı needs an explicit map).
+    const roster = await db
+      .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.orgId, ctx.persona.orgId),
+          ne(atelierUsers.id, ctx.persona.id),
+        ),
+      );
     const resolved: ResolvedAttendee[] = [];
     for (const name of names) {
-      const matches = await db
-        .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
-        .from(atelierUsers)
-        .where(
-          and(
-            eq(atelierUsers.orgId, ctx.persona.orgId),
-            ne(atelierUsers.id, ctx.persona.id),
-            ilike(atelierUsers.name, `%${name}%`),
-          ),
-        )
-        .limit(6);
+      const needle = foldRosterName(name);
+      const matches = roster
+        .filter((u) => needle.length > 0 && foldRosterName(u.name).includes(needle))
+        .slice(0, 6);
       if (matches.length === 0) {
         return {
           ok: false,
@@ -175,27 +193,36 @@ defineCapability({
       };
     }
     if (!locationType) {
+      // Task #567 — if the user DID answer but we couldn't parse it,
+      // re-ask with clearer wording (never the identical framing), and
+      // always attach tappable suggestions.
+      const rawLoc = typeof input.locationType === "string" ? input.locationType.trim() : "";
       return {
         ok: true,
         data: { partial },
         clarification: {
           field: "locationType",
-          question: 'Should this be online (Teams link) or in person? Reply "online" or "in person".',
+          question: rawLoc
+            ? `Sorry, I didn't recognize "${rawLoc}" as a meeting format. Tap an option below, or reply "online" (Teams link) or "in person".`
+            : 'Should this be online (Teams link) or in person? Tap an option below, or reply "online" or "in person".',
           tool: "schedule_internal_meeting",
           partial,
+          suggestions: LOCATION_SUGGESTIONS,
         },
       };
     }
 
     // ---- slot: explicit time OR earliest common availability ----
-    const timeStr = typeof input.time === "string" ? input.time.trim() : "";
+    // Task #567 — tolerant time parsing ("8am", "0800", "8.00"…).
+    const timeRaw = typeof input.time === "string" ? input.time.trim() : "";
+    const timeStr = timeRaw ? normalizeTimeInput(timeRaw) ?? timeRaw : "";
     let slotStart: Date;
     let slotEnd: Date;
     let availabilityNote = "";
     if (timeStr) {
       const s = dubaiWallToUtc(dateStr, timeStr);
       if (!s) {
-        return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeStr}" — use HH:MM.` };
+        return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
       }
       // An explicit user-stated time is honored even outside working hours.
       slotStart = s;
@@ -525,13 +552,15 @@ defineCapability({
   resultCard: "meeting_card",
   async run(input, ctx) {
     const dateStr = String(input.date ?? "").trim();
-    const timeStr = String(input.time ?? "").trim();
+    // Task #567 — tolerant time parsing ("8am", "0800", "8.00"…).
+    const timeRaw = String(input.time ?? "").trim();
+    const timeStr = timeRaw ? normalizeTimeInput(timeRaw) ?? timeRaw : "";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       return { ok: false, errorCode: "invalid_input", errorMessage: "date must be YYYY-MM-DD — resolve relative dates against today's date first." };
     }
     const newStart = dubaiWallToUtc(dateStr, timeStr);
     if (!newStart) {
-      return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeStr}" — use HH:MM.` };
+      return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeRaw}" — try something like "8am", "08:00" or "14:30".` };
     }
     const target = await resolveTargetMeeting(ctx.persona, input);
     if ("result" in target) return target.result as never;
