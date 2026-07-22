@@ -2346,12 +2346,19 @@ export const atelierPartnerFirms = pgTable(
           evidence: "evidenced" | "inferred" | "unverified";
           rationale?: string | null;
           sourceUrls?: string[];
+          // Task #530 — manual dimension adjustment stamp (absent on
+          // agent-produced scores; set whenever a user overrides the score).
+          adjustedByUserId?: string;
+          adjustedAt?: string;
         }>;
         weightedTotal: number;
         verdict: "proceed" | "limited" | "decline";
         watchouts: string[]; // two weakest dimension labels
         scoredAt: string;
         scoredBy: string; // agent id or user id
+        // Task #530 — last manual adjustment (top-level convenience stamp).
+        adjustedAt?: string;
+        adjustedByUserId?: string;
       } | null>()
       .default(null),
     // Stage 2 — due-diligence gates (pass | conditional | fail | to_verify).

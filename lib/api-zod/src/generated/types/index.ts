@@ -510,6 +510,8 @@ export * from "./atelierPartnerFirmRiskRegisterItemEvidence";
 export * from "./atelierPartnerFirmRiskRegisterItemSeverity";
 export * from "./atelierPartnerFirmStatus";
 export * from "./atelierPartnerFirmTier";
+export * from "./atelierPartnerFitScorecardAdjust";
+export * from "./atelierPartnerFitScorecardAdjustScores";
 export * from "./atelierPartnerPromoteResponse";
 export * from "./atelierPartnerTarget";
 export * from "./atelierPartnerTargetInput";

@@ -43,6 +43,10 @@ import {
   runAllianceCartographerAndQueue,
   runAllianceMapperAndQueue,
 } from "../../lib/atelier-agents/alliance-mapper-chain.js";
+import {
+  ALLIANCE_FIT_DIMENSIONS,
+  computeFitTotals,
+} from "../../lib/atelier-agents/alliance-cartographer.js";
 
 const router: IRouter = Router();
 
@@ -402,6 +406,108 @@ router.post("/partners/firms/:id/archive", async (req, res, next) => {
       summary: `Archived partner firm "${firm.name}"`,
     });
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// FIT-SCORECARD — manual dimension adjustment (Task #530)
+// =============================================================
+//
+// Lets an authorized editor override individual framework-dimension scores
+// on an existing Cartographer-produced scorecard. The server recomputes
+// weightedTotal / verdict / watchouts with the SAME shared computation the
+// Cartographer uses (computeFitTotals) and stamps who adjusted which
+// dimension and when, so manual scores stay distinguishable from
+// agent-produced ones.
+
+const fitAdjustSchema = z.object({
+  scores: z
+    .record(z.number().int().min(1).max(5))
+    .refine((m) => Object.keys(m).length > 0, "at least one dimension score is required"),
+});
+
+// @cli-skip: Task #530 REST surface behind the Partners Qualify UI
+router.patch("/partners/firms/:id/fit-scorecard", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!ensureEditor(me, res)) return;
+    const parsed = fitAdjustSchema.safeParse(req.body ?? {});
+    if (!parsed.success) return invalidBody(res, parsed.error);
+    const validIds = new Set(ALLIANCE_FIT_DIMENSIONS.map((d) => d.id));
+    const unknown = Object.keys(parsed.data.scores).filter((k) => !validIds.has(k));
+    if (unknown.length > 0) {
+      return void res.status(400).json({
+        error: "unknown-dimension",
+        message: `Unknown fit dimension(s): ${unknown.join(", ")}`,
+      });
+    }
+    const result = await db.transaction(async (tx) => {
+      const [firm] = await tx
+        .select()
+        .from(atelierPartnerFirms)
+        .where(and(eq(atelierPartnerFirms.id, req.params.id), firmScope(me)))
+        .for("update");
+      if (!firm) return { code: 404 as const };
+      const sc = firm.fitScorecard;
+      if (!sc || !Array.isArray(sc.dimensions) || sc.dimensions.length === 0) {
+        return { code: 409 as const };
+      }
+      const now = new Date().toISOString();
+      const changes: Record<string, { from: number; to: number }> = {};
+      const dimensions = sc.dimensions.map((d) => {
+        const to = parsed.data.scores[d.id];
+        if (to == null || to === d.score) return d;
+        changes[d.id] = { from: d.score, to };
+        return { ...d, score: to, adjustedByUserId: me.id, adjustedAt: now };
+      });
+      if (Object.keys(changes).length === 0) {
+        return { code: 200 as const, firm, noop: true };
+      }
+      const { weightedTotal, verdict, watchouts } = computeFitTotals(dimensions);
+      const fitScorecard: typeof sc = {
+        ...sc,
+        dimensions,
+        weightedTotal,
+        verdict,
+        watchouts,
+        adjustedAt: now,
+        adjustedByUserId: me.id,
+      };
+      const [row] = await tx
+        .update(atelierPartnerFirms)
+        .set({ fitScorecard, updatedAt: new Date() })
+        .where(eq(atelierPartnerFirms.id, firm.id))
+        .returning();
+      return { code: 200 as const, firm: row, changes, weightedTotal, verdict };
+    });
+    if (result.code === 404) {
+      return void res.status(404).json({ error: "partner-firm-not-found" });
+    }
+    if (result.code === 409) {
+      return void res.status(409).json({
+        error: "no-fit-scorecard",
+        message:
+          "This partner has no fit scorecard yet — run the Alliance Cartographer evaluation first.",
+      });
+    }
+    if (!("noop" in result && result.noop)) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: req.params.id,
+        actor: me,
+        action: "partner_firm.fitScorecard.adjust",
+        payload: {
+          changes: result.changes,
+          weightedTotal: result.weightedTotal,
+          verdict: result.verdict,
+        },
+        summary: `${me.name} adjusted fit-scorecard dimension(s) ${Object.keys(result.changes ?? {}).join(", ")} on "${result.firm?.name}".`,
+      });
+    }
+    res.json(result.firm);
   } catch (err) {
     next(err);
   }

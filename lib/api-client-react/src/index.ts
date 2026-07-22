@@ -856,6 +856,8 @@ export {
   useAtelierGetPartnerFirm,
   useAtelierCreatePartnerFirm,
   useAtelierUpdatePartnerFirm,
+  // Task #530 — manual fit-scorecard dimension adjustment (Qualify tab)
+  useAtelierAdjustPartnerFitScorecard,
   useAtelierArchivePartnerFirm,
   useAtelierListPartnerTargets,
   useAtelierCreatePartnerTarget,

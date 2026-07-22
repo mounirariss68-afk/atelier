@@ -102,6 +102,24 @@ export function fitVerdict(weightedTotal: number): "proceed" | "limited" | "decl
   return "decline";
 }
 
+/**
+ * Shared framework computation — the ONLY place weighted totals, verdicts
+ * and watch-outs are derived from dimension scores. Used by the Cartographer
+ * output normaliser and by the manual dimension-adjust endpoint (Task #530),
+ * so both stay consistent with the framework weights/thresholds.
+ */
+export function computeFitTotals(
+  dimensions: ReadonlyArray<{ label: string; weight: number; score: number }>,
+): { weightedTotal: number; verdict: "proceed" | "limited" | "decline"; watchouts: string[] } {
+  const weightedTotal =
+    Math.round(dimensions.reduce((s, d) => s + d.score * d.weight, 0) * 100) / 100;
+  const watchouts = [...dimensions]
+    .sort((a, b) => a.score - b.score || b.weight - a.weight)
+    .slice(0, 2)
+    .map((d) => d.label);
+  return { weightedTotal, verdict: fitVerdict(weightedTotal), watchouts };
+}
+
 // ---------------------------------------------------------------------------
 // Alliance Cartographer
 // ---------------------------------------------------------------------------
@@ -258,16 +276,11 @@ export async function runAllianceCartographer(args: {
         sourceUrls: found ? normaliseUrls(found.sourceUrls) : [],
       };
     });
-    const weightedTotal =
-      Math.round(dimensions.reduce((s, d) => s + d.score * d.weight, 0) * 100) / 100;
-    const watchouts = [...dimensions]
-      .sort((a, b) => a.score - b.score || b.weight - a.weight)
-      .slice(0, 2)
-      .map((d) => d.label);
+    const { weightedTotal, verdict, watchouts } = computeFitTotals(dimensions);
     const fitScorecard: AllianceCartographerOutput["fitScorecard"] = {
       dimensions,
       weightedTotal,
-      verdict: fitVerdict(weightedTotal),
+      verdict,
       watchouts,
       scoredAt: now,
       scoredBy: "ag_alliance_cartographer",

@@ -5868,6 +5868,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/firms/{id}/fit-scorecard:
+    patch:
+      operationId: atelierAdjustPartnerFitScorecard
+      tags: [atelier]
+      summary: Manually adjust fit-scorecard dimension scores (server recomputes weighted total + verdict)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerFitScorecardAdjust" }
+      responses:
+        "200":
+          description: Updated partner firm with the recomputed scorecard
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "409":
+          description: Firm has no fit scorecard yet — run the Alliance Cartographer first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/partners/firms/{id}/archive:
     post:
       operationId: atelierArchivePartnerFirm
@@ -12020,6 +12048,9 @@ components:
               type: array
               items: { type: string }
             scoredAt: { type: string }
+            scoredBy: { type: string }
+            adjustedAt: { type: string }
+            adjustedByUserId: { type: string }
             dimensions:
               type: array
               items:
@@ -12035,6 +12066,8 @@ components:
                   sourceUrls:
                     type: array
                     items: { type: string }
+                  adjustedAt: { type: string }
+                  adjustedByUserId: { type: string }
         dueDiligence:
           type: object
           nullable: true
@@ -12126,6 +12159,14 @@ components:
         archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
         partnershipStage: { type: string, enum: [candidate, agreed] }
       required: [name]
+    AtelierPartnerFitScorecardAdjust:
+      type: object
+      description: Partial map of framework dimension id → new score (1–5). The server recomputes the weighted total, verdict and watch-outs.
+      properties:
+        scores:
+          type: object
+          additionalProperties: { type: integer, minimum: 1, maximum: 5 }
+      required: [scores]
     AtelierPartnerFirmPatch:
       type: object
       properties:

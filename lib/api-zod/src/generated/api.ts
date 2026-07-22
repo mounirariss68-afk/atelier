@@ -33399,6 +33399,9 @@ export const AtelierListPartnerFirmsResponse = zod.object({
           verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
           watchouts: zod.array(zod.string()).optional(),
           scoredAt: zod.string().optional(),
+          scoredBy: zod.string().optional(),
+          adjustedAt: zod.string().optional(),
+          adjustedByUserId: zod.string().optional(),
           dimensions: zod
             .array(
               zod.object({
@@ -33411,6 +33414,8 @@ export const AtelierListPartnerFirmsResponse = zod.object({
                   .optional(),
                 rationale: zod.string().nullish(),
                 sourceUrls: zod.array(zod.string()).optional(),
+                adjustedAt: zod.string().optional(),
+                adjustedByUserId: zod.string().optional(),
               }),
             )
             .optional(),
@@ -33612,6 +33617,9 @@ export const AtelierGetPartnerFirmResponse = zod.object({
       verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
       watchouts: zod.array(zod.string()).optional(),
       scoredAt: zod.string().optional(),
+      scoredBy: zod.string().optional(),
+      adjustedAt: zod.string().optional(),
+      adjustedByUserId: zod.string().optional(),
       dimensions: zod
         .array(
           zod.object({
@@ -33624,6 +33632,8 @@ export const AtelierGetPartnerFirmResponse = zod.object({
               .optional(),
             rationale: zod.string().nullish(),
             sourceUrls: zod.array(zod.string()).optional(),
+            adjustedAt: zod.string().optional(),
+            adjustedByUserId: zod.string().optional(),
           }),
         )
         .optional(),
@@ -33818,6 +33828,9 @@ export const AtelierUpdatePartnerFirmResponse = zod.object({
       verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
       watchouts: zod.array(zod.string()).optional(),
       scoredAt: zod.string().optional(),
+      scoredBy: zod.string().optional(),
+      adjustedAt: zod.string().optional(),
+      adjustedByUserId: zod.string().optional(),
       dimensions: zod
         .array(
           zod.object({
@@ -33830,6 +33843,180 @@ export const AtelierUpdatePartnerFirmResponse = zod.object({
               .optional(),
             rationale: zod.string().nullish(),
             sourceUrls: zod.array(zod.string()).optional(),
+            adjustedAt: zod.string().optional(),
+            adjustedByUserId: zod.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  dueDiligence: zod
+    .object({
+      overall: zod
+        .enum(["pass", "conditional", "fail", "to_verify"])
+        .optional(),
+      assessedAt: zod.string().optional(),
+      gates: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            status: zod
+              .enum(["pass", "conditional", "fail", "to_verify"])
+              .optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            notes: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        risk: zod.string().optional(),
+        mitigation: zod.string().optional(),
+        severity: zod.enum(["high", "med", "low"]).optional(),
+        evidence: zod.enum(["evidenced", "inferred", "unverified"]).optional(),
+      }),
+    )
+    .optional(),
+  phasing: zod
+    .object({
+      phase: zod.enum(["verify", "pilot", "convert"]).optional(),
+      milestone: zod.string().optional(),
+      note: zod.string().nullish(),
+    })
+    .nullish(),
+  pendingUpdates: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        proposedBy: zod.string().optional(),
+        proposedAt: zod.string().optional(),
+        field: zod.string().optional(),
+        rationale: zod.string().optional(),
+        status: zod.enum(["pending", "approved", "rejected"]).optional(),
+        decidedAt: zod.string().optional(),
+        decidedByUserId: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Manually adjust fit-scorecard dimension scores (server recomputes weighted total + verdict)
+ */
+export const AtelierAdjustPartnerFitScorecardParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const atelierAdjustPartnerFitScorecardBodyScoresMaxOne = 5;
+
+export const AtelierAdjustPartnerFitScorecardBody = zod
+  .object({
+    scores: zod.record(
+      zod.string(),
+      zod.number().min(1).max(atelierAdjustPartnerFitScorecardBodyScoresMaxOne),
+    ),
+  })
+  .describe(
+    "Partial map of framework dimension id → new score (1–5). The server recomputes the weighted total, verdict and watch-outs.",
+  );
+
+export const AtelierAdjustPartnerFitScorecardResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string().nullish(),
+  speciality: zod.string().nullish(),
+  country: zod.string().nullish(),
+  countryCode: zod.string().nullish(),
+  tier: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  status: zod.enum([
+    "active",
+    "renewal_due",
+    "paused",
+    "offboarded",
+    "terminated",
+  ]),
+  relationshipStrength: zod.number().nullish(),
+  anchorCognirise: zod.string().nullish(),
+  anchorPartner: zod.string().nullish(),
+  lastTouchAt: zod.string().nullish(),
+  capabilities: zod.record(zod.string(), zod.number()).optional(),
+  contacts: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        name: zod.string(),
+        role: zod.string().nullish(),
+        email: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  tierHistory: zod
+    .array(
+      zod.object({
+        fromTier: zod.string().nullish(),
+        toTier: zod.string(),
+        at: zod.string(),
+        byUserId: zod.string().nullish(),
+        reason: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  defaultPaymentTermsDays: zod.number().nullish(),
+  defaultBillingCurrency: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  activeResourceCount: zod.number().optional(),
+  archetype: zod
+    .union([
+      zod.literal("reference_brand"),
+      zod.literal("delivery_backbone"),
+      zod.literal("platform_capability"),
+      zod.literal("niche_subcontractor"),
+      zod.literal("market_access_jv"),
+      zod.literal("competitor_monitor"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  fitScorecard: zod
+    .object({
+      weightedTotal: zod.number().optional(),
+      verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
+      watchouts: zod.array(zod.string()).optional(),
+      scoredAt: zod.string().optional(),
+      scoredBy: zod.string().optional(),
+      adjustedAt: zod.string().optional(),
+      adjustedByUserId: zod.string().optional(),
+      dimensions: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            weight: zod.number().optional(),
+            score: zod.number().optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            rationale: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+            adjustedAt: zod.string().optional(),
+            adjustedByUserId: zod.string().optional(),
           }),
         )
         .optional(),
@@ -34115,6 +34302,9 @@ export const AtelierPromotePartnerTargetResponse = zod.object({
         verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
         watchouts: zod.array(zod.string()).optional(),
         scoredAt: zod.string().optional(),
+        scoredBy: zod.string().optional(),
+        adjustedAt: zod.string().optional(),
+        adjustedByUserId: zod.string().optional(),
         dimensions: zod
           .array(
             zod.object({
@@ -34127,6 +34317,8 @@ export const AtelierPromotePartnerTargetResponse = zod.object({
                 .optional(),
               rationale: zod.string().nullish(),
               sourceUrls: zod.array(zod.string()).optional(),
+              adjustedAt: zod.string().optional(),
+              adjustedByUserId: zod.string().optional(),
             }),
           )
           .optional(),

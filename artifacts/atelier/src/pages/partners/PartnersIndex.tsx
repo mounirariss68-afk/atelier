@@ -9,7 +9,7 @@
  * see docs/PARTNERS_BACKLOG.md.
  *
  *   Identify   — partner-firm directory (CRUD) + target partners (CRUD + promote)
- *   Qualify    — capability scores per firm (editable) + NDA status from real e-sign agreements
+ *   Qualify    — framework fit scorecard per firm (Cartographer-driven, adjustable) + NDA status from real e-sign agreements
  *   Co-sell    — joint pipeline linked to real CRM opportunities (CRUD)
  *   Co-deliver — real partner-firm-resource assignments + RCTI self-billing invoices
  *   Govern     — e-sign agreements with partner firms + certifications + conflicts (CRUD)
@@ -36,12 +36,16 @@ import {
   Plus,
   Archive,
   ArrowUpRight,
+  Sparkles,
+  Check,
+  X,
 } from "lucide-react";
 import {
   useAtelierGetMe,
   useAtelierListPartnerFirms,
   useAtelierCreatePartnerFirm,
   useAtelierUpdatePartnerFirm,
+  useAtelierAdjustPartnerFitScorecard,
   useAtelierArchivePartnerFirm,
   useAtelierListPartnerTargets,
   useAtelierCreatePartnerTarget,
@@ -84,7 +88,7 @@ import type {
 
 const STAGES = [
   { id: "identify", label: "Identify", href: "/partners/identify", icon: Search, blurb: "Partner-firm directory and target-partner funnel." },
-  { id: "qualify", label: "Qualify", href: "/partners/qualify", icon: CheckCircle2, blurb: "Capability scores and NDA status from real e-sign agreements." },
+  { id: "qualify", label: "Qualify", href: "/partners/qualify", icon: CheckCircle2, blurb: "Framework fit scorecard and NDA status from real e-sign agreements." },
   { id: "co-sell", label: "Co-sell", href: "/partners/co-sell", icon: GitMerge, blurb: "Joint pipeline linked to real CRM opportunities." },
   { id: "co-deliver", label: "Co-deliver", href: "/partners/co-deliver", icon: Wrench, blurb: "Partner-firm resources on engagements and RCTI self-billing." },
   { id: "govern", label: "Govern", href: "/partners/govern", icon: Shield, blurb: "Agreements, certifications, and conflict checks." },
@@ -98,7 +102,22 @@ const EDITOR_ROLES = new Set(["founding_partner", "partner", "senior_manager", "
 const TIERS = ["strategic", "preferred", "transactional"] as const;
 const FIRM_STATUSES = ["active", "renewal_due", "paused", "offboarded", "terminated"] as const;
 const TARGET_STATUSES = ["researching", "outreach", "intro_call", "evaluating", "promoted", "dropped"] as const;
-const CAP_DIMENSIONS = ["delivery", "sales", "geo_gcc", "geo_eu", "regulated", "agents"] as const;
+// Task #530 — the alliance framework's nine weighted fit dimensions (must
+// mirror ALLIANCE_FIT_DIMENSIONS on the server; scores are 1–5, weights sum
+// to 1.0; the weighted total + verdict are always computed server-side).
+const FIT_DIMENSIONS = [
+  { id: "service_alignment", label: "Service alignment", weight: 0.2 },
+  { id: "industry_coverage", label: "Industry coverage", weight: 0.15 },
+  { id: "delivery_economics", label: "Delivery economics", weight: 0.15 },
+  { id: "references", label: "References", weight: 0.1 },
+  { id: "footprint", label: "Regional footprint", weight: 0.1 },
+  { id: "ai_differentiation", label: "AI differentiation", weight: 0.1 },
+  { id: "relationship_fit", label: "Relationship fit", weight: 0.1 },
+  { id: "portfolio_complementarity", label: "Portfolio complementarity", weight: 0.05 },
+  { id: "region_relevance", label: "Region relevance", weight: 0.05 },
+] as const;
+
+const QUALIFY_API = `${import.meta.env.BASE_URL}api/atelier`;
 
 function useCanEdit(): boolean {
   const { data: me } = useAtelierGetMe();
@@ -767,8 +786,23 @@ function TargetsSection({ firms }: { firms: AtelierPartnerFirm[] }) {
 }
 
 // =============================================================
-// QUALIFY — capability scores (editable) + NDA from real agreements
+// QUALIFY — framework fit scorecard (Cartographer-driven) + NDA status
 // =============================================================
+//
+// Task #530: the legacy freeform "capabilities" grid was retired. Initial
+// scores come from the Alliance Cartographer (9-dimension weighted fit
+// scorecard); editors can adjust any dimension inline — the server
+// recomputes the weighted total + verdict with the shared framework
+// weights and stamps the adjuster, so manual scores stay distinguishable
+// from agent-produced ones (shown with a gold dot).
+
+function verdictChipTone(v?: string): "gold" | "green" | "amber" | "red" | "default" {
+  if (v === "proceed") return "green";
+  if (v === "limited") return "amber";
+  if (v === "decline") return "red";
+  return "default";
+}
+
 function QualifyView() {
   const canEdit = useCanEdit();
   const qc = useQueryClient();
@@ -777,10 +811,114 @@ function QualifyView() {
   const firms = (firmsData?.items ?? []).filter((f) => f.status !== "terminated");
   const agreements = agreementsData?.items ?? [];
 
-  const update = useAtelierUpdatePartnerFirm();
+  const adjust = useAtelierAdjustPartnerFitScorecard();
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [scores, setScores] = React.useState<Record<string, string>>({});
   const [err, setErr] = React.useState<string | null>(null);
+  const [deciding, setDeciding] = React.useState<string | null>(null);
+  // Alliance Cartographer runs launched (or observed running) from this tab.
+  const [running, setRunning] = React.useState<Record<string, string | null>>({});
+
+  const invalidateFirms = React.useCallback(() => {
+    void qc.invalidateQueries({ queryKey: getAtelierListPartnerFirmsQueryKey() });
+  }, [qc]);
+
+  // Poll the shared agent-status route for firms with a live run.
+  React.useEffect(() => {
+    const ids = Object.keys(running);
+    if (ids.length === 0) return;
+    const tick = async () => {
+      for (const id of ids) {
+        try {
+          const r = await fetch(`${QUALIFY_API}/partners/firms/${id}/agents/status`, {
+            credentials: "include",
+          });
+          if (!r.ok) continue;
+          const j = (await r.json()) as {
+            agents?: Record<string, { status?: string; phase?: string | null }>;
+          };
+          const carto = j.agents?.alliance_cartographer;
+          if (carto?.status === "running") {
+            setRunning((m) => ({ ...m, [id]: carto.phase ?? null }));
+          } else {
+            setRunning((m) => {
+              const { [id]: _gone, ...rest } = m;
+              return rest;
+            });
+            if (carto?.status === "failed") {
+              setErr(`Evaluation failed: ${carto.phase ?? "unknown error"}`);
+            }
+            invalidateFirms();
+          }
+        } catch {
+          /* transient poll failure — keep polling */
+        }
+      }
+    };
+    const iv = setInterval(() => void tick(), 5000);
+    return () => clearInterval(iv);
+  }, [Object.keys(running).join(","), invalidateFirms]);
+
+  const launchCartographer = async (f: AtelierPartnerFirm) => {
+    setErr(null);
+    setRunning((m) => ({ ...m, [f.id]: "Starting research…" }));
+    try {
+      const r = await fetch(
+        `${QUALIFY_API}/partners/firms/${f.id}/agents/alliance-cartographer/run`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: "{}",
+        },
+      );
+      if (r.status === 409) {
+        setErr("An evaluation is already running for this partner.");
+      } else if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { message?: string } | null;
+        setErr(j?.message ?? "Could not start the evaluation.");
+        setRunning((m) => {
+          const { [f.id]: _gone, ...rest } = m;
+          return rest;
+        });
+      }
+    } catch {
+      setErr("Could not start the evaluation.");
+      setRunning((m) => {
+        const { [f.id]: _gone, ...rest } = m;
+        return rest;
+      });
+    }
+  };
+
+  const decideProposal = async (
+    f: AtelierPartnerFirm,
+    proposalId: string,
+    action: "approve" | "reject",
+  ) => {
+    setErr(null);
+    setDeciding(proposalId);
+    try {
+      const r = await fetch(
+        `${QUALIFY_API}/partners/firms/${f.id}/proposals/${proposalId}/decide`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ action }),
+        },
+      );
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { message?: string } | null;
+        setErr(j?.message ?? `Could not ${action} the proposal.`);
+      }
+      invalidateFirms();
+    } catch {
+      setErr(`Could not ${action} the proposal.`);
+    } finally {
+      setDeciding(null);
+    }
+  };
 
   const ndaByFirm = React.useMemo(() => {
     const m = new Map<string, string>();
@@ -794,38 +932,55 @@ function QualifyView() {
     return m;
   }, [agreements]);
 
+  const dimScore = (f: AtelierPartnerFirm, dimId: string) =>
+    (f.fitScorecard?.dimensions ?? []).find((d) => d.id === dimId);
+
   const startEdit = (f: AtelierPartnerFirm) => {
     setEditingId(f.id);
     setErr(null);
     const s: Record<string, string> = {};
-    for (const d of CAP_DIMENSIONS) {
-      const v = (f.capabilities ?? {})[d];
-      s[d] = v != null ? String(v) : "";
+    for (const d of FIT_DIMENSIONS) {
+      const v = dimScore(f, d.id)?.score;
+      s[d.id] = v != null ? String(v) : "";
     }
     setScores(s);
   };
 
   const saveEdit = (f: AtelierPartnerFirm) => {
-    const capabilities: Record<string, number> = { ...(f.capabilities ?? {}) };
-    for (const d of CAP_DIMENSIONS) {
-      const raw = scores[d];
-      if (raw === "" || raw == null) delete capabilities[d];
-      else capabilities[d] = Number(raw);
+    const changed: Record<string, number> = {};
+    for (const d of FIT_DIMENSIONS) {
+      const raw = scores[d.id];
+      if (raw === "" || raw == null) continue;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 1 || n > 5) {
+        setErr(`${d.label}: scores must be whole numbers from 1 to 5.`);
+        return;
+      }
+      if (n !== dimScore(f, d.id)?.score) changed[d.id] = n;
     }
-    update.mutate({ id: f.id, data: { capabilities } }, {
-      onSuccess: () => {
-        setEditingId(null);
-        void qc.invalidateQueries({ queryKey: getAtelierListPartnerFirmsQueryKey() });
+    if (Object.keys(changed).length === 0) {
+      setEditingId(null);
+      return;
+    }
+    adjust.mutate(
+      { id: f.id, data: { scores: changed } },
+      {
+        onSuccess: () => {
+          setEditingId(null);
+          invalidateFirms();
+        },
+        onError: (e) => setErr(errMessage(e)),
       },
-      onError: (e) => setErr(errMessage(e)),
-    });
+    );
   };
 
   return (
     <div className="space-y-6">
       <p className="text-sm text-text-mute">
-        Capability scores (1–5 per dimension) are stored on the partner-firm
-        record. NDA status is read from real e-sign agreements with the firm —
+        Fit scores come from the Alliance Cartographer's nine-dimension weighted
+        framework (scores 1–5; the weighted total and verdict are recomputed
+        server-side). Editors can adjust any dimension — manual adjustments are
+        marked with a gold dot. NDA status is read from real e-sign agreements —
         send an NDA from the <Link href="/contracts" className="text-gold hover:underline">Contracts</Link> system
         with the firm as counterparty; it appears here automatically.
       </p>
@@ -836,9 +991,16 @@ function QualifyView() {
             <thead className="text-left text-xs uppercase tracking-widest text-text-faint">
               <tr className="border-b border-border">
                 <th className="px-4 py-3">Partner</th>
-                {CAP_DIMENSIONS.map((d) => (
-                  <th key={d} className="px-3 py-3 font-mono">{d.replace("_", " ")}</th>
+                {FIT_DIMENSIONS.map((d) => (
+                  <th key={d.id} className="px-2 py-3 font-mono whitespace-nowrap" title={d.label}>
+                    {d.label}
+                    <span className="block text-[9px] text-text-faint normal-case tracking-normal">
+                      w{Math.round(d.weight * 100)}%
+                    </span>
+                  </th>
                 ))}
+                <th className="px-3 py-3">Total</th>
+                <th className="px-3 py-3">Verdict</th>
                 <th className="px-3 py-3">NDA</th>
                 {canEdit && <th className="px-3 py-3"></th>}
               </tr>
@@ -847,6 +1009,13 @@ function QualifyView() {
               {firms.map((f) => {
                 const editing = editingId === f.id;
                 const nda = ndaByFirm.get(f.id);
+                const sc = f.fitScorecard;
+                const hasScorecard = !!sc?.dimensions?.length;
+                const runPhase = running[f.id];
+                const isRunning = f.id in running;
+                const pendingScorecard = (f.pendingUpdates ?? []).find(
+                  (u) => u.status === "pending" && u.field === "fitScorecard",
+                );
                 return (
                   <tr key={f.id} className="border-b border-border-soft last:border-0" data-testid={`row-qualify-${f.id}`}>
                     <td className="px-4 py-3 font-medium text-text">
@@ -854,31 +1023,94 @@ function QualifyView() {
                         {f.name}
                         <AllianceVerdictChip firm={f} />
                       </span>
+                      {isRunning && (
+                        <span className="block text-[10px] text-gold/90 animate-pulse" data-testid={`text-qualify-run-${f.id}`}>
+                          Cartographer — {runPhase ?? "working…"}
+                        </span>
+                      )}
+                      {!isRunning && pendingScorecard && (
+                        <span className="mt-0.5 flex items-center gap-2 text-[10px] text-gold/90" data-testid={`row-qualify-proposal-${f.id}`}>
+                          scorecard proposal awaiting review
+                          {canEdit && (
+                            <>
+                              <button
+                                className="inline-flex items-center gap-0.5 font-mono uppercase tracking-widest text-green-400/90 hover:text-green-300 disabled:opacity-50"
+                                disabled={deciding === pendingScorecard.id}
+                                onClick={() => void decideProposal(f, pendingScorecard.id!, "approve")}
+                                data-testid={`button-qualify-approve-${f.id}`}
+                              >
+                                <Check className="w-3 h-3" /> approve
+                              </button>
+                              <button
+                                className="inline-flex items-center gap-0.5 font-mono uppercase tracking-widest text-text-faint hover:text-red-400 disabled:opacity-50"
+                                disabled={deciding === pendingScorecard.id}
+                                onClick={() => void decideProposal(f, pendingScorecard.id!, "reject")}
+                                data-testid={`button-qualify-reject-${f.id}`}
+                              >
+                                <X className="w-3 h-3" /> reject
+                              </button>
+                            </>
+                          )}
+                        </span>
+                      )}
                     </td>
-                    {CAP_DIMENSIONS.map((d) => {
-                      if (editing) {
-                        return (
-                          <td key={d} className="px-2 py-2">
-                            <input
-                              type="number" min={0} max={5}
-                              className="w-14 bg-bg-deep border border-border rounded-sm px-1.5 py-1 text-sm text-text"
-                              value={scores[d] ?? ""}
-                              onChange={(e) => setScores({ ...scores, [d]: e.target.value })}
-                            />
-                          </td>
-                        );
-                      }
-                      const v = (f.capabilities ?? {})[d];
-                      return (
-                        <td key={d} className="px-3 py-3">
-                          {v == null ? (
-                            <span className="text-text-faint">—</span>
+                    {!hasScorecard ? (
+                      <td colSpan={FIT_DIMENSIONS.length + 2} className="px-3 py-3 text-text-faint">
+                        {isRunning
+                          ? "Evaluation in progress…"
+                          : pendingScorecard
+                            ? "Scores proposed — approve the scorecard proposal to apply them."
+                            : "No framework scorecard yet."}
+                      </td>
+                    ) : (
+                      <>
+                        {FIT_DIMENSIONS.map((d) => {
+                          if (editing) {
+                            return (
+                              <td key={d.id} className="px-1.5 py-2">
+                                <input
+                                  type="number" min={1} max={5}
+                                  className="w-12 bg-bg-deep border border-border rounded-sm px-1.5 py-1 text-sm text-text"
+                                  value={scores[d.id] ?? ""}
+                                  onChange={(e) => setScores({ ...scores, [d.id]: e.target.value })}
+                                  data-testid={`input-fit-${d.id}-${f.id}`}
+                                />
+                              </td>
+                            );
+                          }
+                          const dim = dimScore(f, d.id);
+                          const v = dim?.score;
+                          return (
+                            <td key={d.id} className="px-2 py-3" title={dim?.rationale ?? undefined}>
+                              {v == null ? (
+                                <span className="text-text-faint">—</span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1">
+                                  <MonoChip tone={v >= 4 ? "gold" : v >= 3 ? "green" : v >= 2 ? "amber" : "red"}>{v}</MonoChip>
+                                  {dim?.adjustedAt && (
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-full bg-gold inline-block"
+                                      title={`Manually adjusted ${dim.adjustedAt.slice(0, 10)}`}
+                                      data-testid={`dot-manual-${d.id}-${f.id}`}
+                                    />
+                                  )}
+                                </span>
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-3 font-mono text-text whitespace-nowrap" data-testid={`text-fit-total-${f.id}`}>
+                          {sc!.weightedTotal != null ? `${sc!.weightedTotal.toFixed(2)}/5` : "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          {sc!.verdict ? (
+                            <MonoChip tone={verdictChipTone(sc!.verdict)}>{sc!.verdict}</MonoChip>
                           ) : (
-                            <MonoChip tone={v >= 4 ? "gold" : v >= 3 ? "green" : v >= 2 ? "amber" : "red"}>{v}</MonoChip>
+                            <span className="text-text-faint">—</span>
                           )}
                         </td>
-                      );
-                    })}
+                      </>
+                    )}
                     <td className="px-3 py-3">
                       {nda ? (
                         <MonoChip tone={nda === "signed" ? "green" : "amber"}>{nda.replace(/_/g, " ")}</MonoChip>
@@ -890,15 +1122,28 @@ function QualifyView() {
                       <td className="px-3 py-3 text-right whitespace-nowrap">
                         {editing ? (
                           <span className="inline-flex gap-2">
-                            <button className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80" onClick={() => saveEdit(f)} disabled={update.isPending}>
-                              {update.isPending ? "saving…" : "save"}
+                            <button className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80" onClick={() => saveEdit(f)} disabled={adjust.isPending} data-testid={`button-save-fit-${f.id}`}>
+                              {adjust.isPending ? "saving…" : "save"}
                             </button>
                             <button className="text-xs font-mono uppercase tracking-widest text-text-faint" onClick={() => setEditingId(null)}>cancel</button>
                           </span>
                         ) : (
-                          <button className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold" onClick={() => startEdit(f)} data-testid={`button-score-${f.id}`}>
-                            score
-                          </button>
+                          <span className="inline-flex gap-3">
+                            {hasScorecard && (
+                              <button className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold" onClick={() => startEdit(f)} data-testid={`button-score-${f.id}`}>
+                                adjust
+                              </button>
+                            )}
+                            <button
+                              className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold disabled:opacity-50 inline-flex items-center gap-1"
+                              disabled={isRunning}
+                              onClick={() => void launchCartographer(f)}
+                              data-testid={`button-evaluate-${f.id}`}
+                            >
+                              <Sparkles className="w-3 h-3" />
+                              {hasScorecard ? "re-run" : "evaluate"}
+                            </button>
+                          </span>
                         )}
                       </td>
                     )}

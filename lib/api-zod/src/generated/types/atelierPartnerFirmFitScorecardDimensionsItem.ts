@@ -15,5 +15,7 @@ export type AtelierPartnerFirmFitScorecardDimensionsItem = {
   evidence?: AtelierPartnerFirmFitScorecardDimensionsItemEvidence;
   rationale?: string | null;
   sourceUrls?: string[];
+  adjustedAt?: string;
+  adjustedByUserId?: string;
   [key: string]: unknown;
 };

@@ -114,3 +114,4 @@
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design (UI fallback list); invitations source-restricted; login created only via onboarding step; People nav derives from peopleLifecycle.STAGES; auto-grant helper on assignment.
 - [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.
 - [National ID front/back sides](atelier-id-doc-sides.md) — back files valid ONLY for national_id; combined PDF = complete; `sides` wire field is national_id-only; new doc surfaces must be side-aware.
+- [Qualify fit-scorecard adjust](atelier-qualify-fit-scorecard.md) — total/verdict recomputed only via shared computeFitTotals; adjust stamps mark manual scores; noop = no audit; legacy capabilities column unused.

@@ -215,6 +215,7 @@ import type {
   AtelierPartnerFirmInput,
   AtelierPartnerFirmList,
   AtelierPartnerFirmPatch,
+  AtelierPartnerFitScorecardAdjust,
   AtelierPartnerPromoteResponse,
   AtelierPartnerTarget,
   AtelierPartnerTargetInput,
@@ -24731,6 +24732,100 @@ export const useAtelierUpdatePartnerFirm = <
   TContext
 > => {
   return useMutation(getAtelierUpdatePartnerFirmMutationOptions(options));
+};
+
+/**
+ * @summary Manually adjust fit-scorecard dimension scores (server recomputes weighted total + verdict)
+ */
+export const getAtelierAdjustPartnerFitScorecardUrl = (id: string) => {
+  return `/api/atelier/partners/firms/${id}/fit-scorecard`;
+};
+
+export const atelierAdjustPartnerFitScorecard = async (
+  id: string,
+  atelierPartnerFitScorecardAdjust: AtelierPartnerFitScorecardAdjust,
+  options?: RequestInit,
+): Promise<AtelierPartnerFirm> => {
+  return customFetch<AtelierPartnerFirm>(
+    getAtelierAdjustPartnerFitScorecardUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerFitScorecardAdjust),
+    },
+  );
+};
+
+export const getAtelierAdjustPartnerFitScorecardMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerFitScorecardAdjust> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerFitScorecardAdjust> },
+  TContext
+> => {
+  const mutationKey = ["atelierAdjustPartnerFitScorecard"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>,
+    { id: string; data: BodyType<AtelierPartnerFitScorecardAdjust> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierAdjustPartnerFitScorecard(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierAdjustPartnerFitScorecardMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>
+>;
+export type AtelierAdjustPartnerFitScorecardMutationBody =
+  BodyType<AtelierPartnerFitScorecardAdjust>;
+export type AtelierAdjustPartnerFitScorecardMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Manually adjust fit-scorecard dimension scores (server recomputes weighted total + verdict)
+ */
+export const useAtelierAdjustPartnerFitScorecard = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerFitScorecardAdjust> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierAdjustPartnerFitScorecard>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerFitScorecardAdjust> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierAdjustPartnerFitScorecardMutationOptions(options),
+  );
 };
 
 /**

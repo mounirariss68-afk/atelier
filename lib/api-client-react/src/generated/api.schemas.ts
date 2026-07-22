@@ -7437,6 +7437,8 @@ export type AtelierPartnerFirmFitScorecardDimensionsItem = {
   evidence?: AtelierPartnerFirmFitScorecardDimensionsItemEvidence;
   rationale?: string | null;
   sourceUrls?: string[];
+  adjustedAt?: string;
+  adjustedByUserId?: string;
   [key: string]: unknown;
 };
 
@@ -7445,6 +7447,9 @@ export type AtelierPartnerFirmFitScorecard = {
   verdict?: AtelierPartnerFirmFitScorecardVerdict;
   watchouts?: string[];
   scoredAt?: string;
+  scoredBy?: string;
+  adjustedAt?: string;
+  adjustedByUserId?: string;
   dimensions?: AtelierPartnerFirmFitScorecardDimensionsItem[];
   [key: string]: unknown;
 } | null;
@@ -7661,6 +7666,15 @@ export interface AtelierPartnerFirmInput {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmInputArchetype;
   partnershipStage?: AtelierPartnerFirmInputPartnershipStage;
+}
+
+export type AtelierPartnerFitScorecardAdjustScores = { [key: string]: number };
+
+/**
+ * Partial map of framework dimension id → new score (1–5). The server recomputes the weighted total, verdict and watch-outs.
+ */
+export interface AtelierPartnerFitScorecardAdjust {
+  scores: AtelierPartnerFitScorecardAdjustScores;
 }
 
 export type AtelierPartnerFirmPatchTier =

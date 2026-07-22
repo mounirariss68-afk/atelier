@@ -13,6 +13,9 @@ export type AtelierPartnerFirmFitScorecard = {
   verdict?: AtelierPartnerFirmFitScorecardVerdict;
   watchouts?: string[];
   scoredAt?: string;
+  scoredBy?: string;
+  adjustedAt?: string;
+  adjustedByUserId?: string;
   dimensions?: AtelierPartnerFirmFitScorecardDimensionsItem[];
   [key: string]: unknown;
 } | null;
