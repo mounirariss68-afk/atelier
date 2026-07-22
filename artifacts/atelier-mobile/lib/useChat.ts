@@ -362,7 +362,20 @@ export function useChat() {
       const turn = turns.find((t) => t.key === key);
       const turnId = turn?.pending?.turnId ?? turn?.serverTurnId;
       if (!turnId) return;
-      upsert(key, (t) => ({ ...t, status: "streaming", pending: undefined }));
+      // Task #597 — reset streamed output before re-streaming, mirroring
+      // the clarification resubmit reset above. The confirm response
+      // streams into this same turn key; keeping the pre-confirm preview
+      // tool_result + narration made every confirmed write render its
+      // result card (and narration) twice.
+      upsert(key, (t) => ({
+        ...t,
+        status: "streaming",
+        pending: undefined,
+        text: "",
+        trace: [],
+        toolResults: [],
+        result: undefined,
+      }));
       await runStream(`/api/atelier/cli/turn/${turnId}/confirm`, { typedName }, key, {
         allowRetry: false,
       });

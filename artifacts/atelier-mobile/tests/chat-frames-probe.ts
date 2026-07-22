@@ -115,5 +115,63 @@ check(
   freeText.clarification,
 );
 
+// 5. Task #597 — confirm flow duplicate-card pin. The confirm response
+// streams into the SAME turn key; tool_result frames APPEND. Without
+// the pre-stream reset in useChat.confirm the pre-confirm preview card
+// stacks with the committed card (two write_success cards).
+{
+  // Pre-confirm: preview tool_result + awaiting_confirmation final.
+  let t = freshTurn();
+  t = applyFrame(t, "tool_result", {
+    tool: "meeting_update",
+    ok: true,
+    data: { shape: "write_success", preview: true },
+  });
+  t = applyFrame(t, "final", { status: "awaiting_confirmation", turnId: "clit_c1" });
+  check("pre-confirm turn holds one preview card", t.toolResults.length === 1);
+
+  // The bug: streaming the confirm without reset appends a 2nd card.
+  const noReset = applyFrame(t, "tool_result", {
+    tool: "meeting_update",
+    ok: true,
+    data: { shape: "write_success" },
+  });
+  check(
+    "without reset the committed card would stack (documents the bug)",
+    noReset.toolResults.length === 2,
+  );
+
+  // The fix: useChat.confirm resets streamed output before re-streaming.
+  const reset: ChatTurn = {
+    ...t,
+    status: "streaming",
+    pending: undefined,
+    text: "",
+    trace: [],
+    toolResults: [],
+    result: undefined,
+  };
+  let done = applyFrame(reset, "tool_result", {
+    tool: "meeting_update",
+    ok: true,
+    data: { shape: "write_success" },
+  });
+  done = applyFrame(done, "final", {
+    status: "success",
+    turnId: "clit_c1",
+    result: { title: "Meeting rescheduled", summary: "Moved to 9am" },
+  });
+  check(
+    "after reset exactly one committed card renders",
+    done.toolResults.length === 1 && done.status === "complete",
+    done.toolResults,
+  );
+  check(
+    "post-confirm narration is fresh (no pre-confirm concat)",
+    done.text === "Meeting rescheduled\n\nMoved to 9am",
+    done.text,
+  );
+}
+
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
