@@ -292,14 +292,32 @@ export async function exchangeCode(opts: {
 }
 
 export async function refreshTokens(refreshToken: string): Promise<MsTokenSet> {
-  return tokenRequest(
-    {
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      scope: MS_SCOPES.join(" "),
-    },
-    "refresh-failed",
-  );
+  // First try requesting the full current scope list — when consent for a
+  // newly-added scope already exists, this silently upgrades the token.
+  try {
+    return await tokenRequest(
+      {
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        scope: MS_SCOPES.join(" "),
+      },
+      "refresh-failed",
+    );
+  } catch (err) {
+    // Task #605 — connections consented BEFORE a new scope was added to
+    // MS_SCOPES fail the upgrade attempt with AADSTS65001. Fall back to a
+    // refresh WITHOUT the scope parameter, which re-issues a token with the
+    // scopes originally consented. Features needing the new scope keep
+    // degrading gracefully (hasMailboxSettingsScope etc.) until the user
+    // reconnects; everything else keeps working.
+    if (err instanceof MsAuthError && err.code === "admin-consent-required") {
+      return tokenRequest(
+        { grant_type: "refresh_token", refresh_token: refreshToken },
+        "refresh-failed",
+      );
+    }
+    throw err;
+  }
 }
 
 // ------------------------------------------------------------------
