@@ -39,8 +39,24 @@ import { ToolResultCards } from "@/components/ResultCards";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
-import { MAX_ATTACHMENT_BYTES } from "@/lib/api";
+import { AttachmentRejectedError, MAX_ATTACHMENT_BYTES } from "@/lib/api";
 import { type ChatTurn, useCapabilityShapes, useChat } from "@/lib/useChat";
+
+const KNOWN_ATTACH_REJECTIONS = new Set([
+  "over-size-cap",
+  "mime-not-allowed",
+  "empty-file",
+  "unreadable-document",
+  "executable-or-macro",
+  "mime-extension-mismatch",
+]);
+
+function attachErrorMessage(err: unknown, t: (key: string) => string): string {
+  if (err instanceof AttachmentRejectedError && KNOWN_ATTACH_REJECTIONS.has(err.reason)) {
+    return t(`attach.rejected.${err.reason}`);
+  }
+  return t("attach.failed");
+}
 
 interface PendingAttachment {
   id: string;
@@ -550,6 +566,7 @@ export default function ChatScreen() {
     const asset = res.assets[0];
     if (asset.fileSize && asset.fileSize > MAX_ATTACHMENT_BYTES) {
       hapticError();
+      feedback.toast(t("attach.tooLarge"), "error");
       return;
     }
     setUploading(true);
@@ -560,8 +577,9 @@ export default function ChatScreen() {
         mime: asset.mimeType ?? "image/jpeg",
       });
       setAttachments((a) => [...a, up]);
-    } catch {
+    } catch (err) {
       hapticError();
+      feedback.toast(attachErrorMessage(err, t), "error");
     } finally {
       setUploading(false);
     }
@@ -583,6 +601,7 @@ export default function ChatScreen() {
     const asset = res.assets[0];
     if (asset.size && asset.size > MAX_ATTACHMENT_BYTES) {
       hapticError();
+      feedback.toast(t("attach.tooLarge"), "error");
       return;
     }
     setUploading(true);
@@ -593,8 +612,9 @@ export default function ChatScreen() {
         mime: asset.mimeType ?? "application/octet-stream",
       });
       setAttachments((a) => [...a, up]);
-    } catch {
+    } catch (err) {
       hapticError();
+      feedback.toast(attachErrorMessage(err, t), "error");
     } finally {
       setUploading(false);
     }

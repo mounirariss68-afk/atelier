@@ -73,6 +73,19 @@ export interface UploadedAttachment {
 }
 
 /**
+ * Thrown when the server accepted the upload request but rejected the file
+ * itself (unsupported type, size cap, unreadable, …). Carries the server's
+ * machine-readable `reason` so the UI can show a specific message.
+ */
+export class AttachmentRejectedError extends Error {
+  reason: string;
+  constructor(reason: string) {
+    super(`attachment rejected: ${reason}`);
+    this.reason = reason;
+  }
+}
+
+/**
  * Upload a single file to the CLI attachment endpoint via multipart/form-data.
  * Returns the server-assigned attachment id, ready to ride on a chat turn.
  */
@@ -107,8 +120,15 @@ export async function uploadCliAttachment(
     }
   }
   if (!res.ok) throw new HttpError(res.status, data);
-  const d = data as { attachmentId?: string; results?: { attachmentId?: string }[] };
-  const id = d.attachmentId ?? d.results?.[0]?.attachmentId;
+  const d = data as {
+    attachmentIds?: string[];
+    attachments?: { ok?: boolean; attachmentId?: string; reason?: string }[];
+  };
+  const entry = d.attachments?.[0];
+  if (entry && entry.ok === false) {
+    throw new AttachmentRejectedError(entry.reason ?? "unknown");
+  }
+  const id = d.attachmentIds?.[0] ?? (entry?.ok ? entry.attachmentId : undefined);
   if (!id) throw new HttpError(500, data);
   return { id, name: file.name };
 }
