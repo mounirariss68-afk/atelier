@@ -869,6 +869,75 @@ function RescheduleForm({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Original meeting duration, used to keep the end anchored to the start.
+  const durationMs = Math.max(
+    60_000,
+    new Date(meeting.end).getTime() - new Date(meeting.start).getTime(),
+  );
+
+  /** Current start↔end gap; falls back to the meeting's original duration. */
+  const currentDurationMs = (): number => {
+    if (Platform.OS === "web") {
+      const s = parseLocal(dateText, startText);
+      const e = parseLocal(dateText, endText);
+      if (s && e && e.getTime() > s.getTime()) return e.getTime() - s.getTime();
+      return durationMs;
+    }
+    return end.getTime() > start.getTime() ? end.getTime() - start.getTime() : durationMs;
+  };
+
+  /** Move the start (and shift end to preserve duration). */
+  const setStartPreservingDuration = (nextStart: Date) => {
+    const dur = currentDurationMs();
+    const nextEnd = new Date(nextStart.getTime() + dur);
+    setStart(nextStart);
+    setEnd(nextEnd);
+    setDateText(isoDateLocal(nextStart));
+    setStartText(hhmmLocal(nextStart));
+    setEndText(hhmmLocal(nextEnd));
+    setErr(null);
+  };
+
+  /** Resolve the current start across platforms (web falls back to state). */
+  const currentStart = (): Date => {
+    if (Platform.OS === "web") {
+      const s = parseLocal(dateText, startText);
+      if (s) return s;
+    }
+    return start;
+  };
+
+  const presets: { key: string; labelKey: string; apply: () => Date }[] = [
+    {
+      key: "plus30m",
+      labelKey: "mtg.preset.plus30m",
+      apply: () => new Date(currentStart().getTime() + 30 * 60_000),
+    },
+    {
+      key: "plus1h",
+      labelKey: "mtg.preset.plus1h",
+      apply: () => new Date(currentStart().getTime() + 60 * 60_000),
+    },
+    {
+      key: "tomorrow",
+      labelKey: "mtg.preset.tomorrow",
+      apply: () => {
+        const d = new Date(currentStart());
+        d.setDate(d.getDate() + 1);
+        return d;
+      },
+    },
+    {
+      key: "nextWeek",
+      labelKey: "mtg.preset.nextWeek",
+      apply: () => {
+        const d = new Date(currentStart());
+        d.setDate(d.getDate() + 7);
+        return d;
+      },
+    },
+  ];
+
   const resolve = (): { s: Date; e: Date } | null => {
     if (Platform.OS === "web") {
       const s = parseLocal(dateText, startText);
@@ -942,6 +1011,39 @@ function RescheduleForm({
   return (
     <View style={{ gap: 12 }}>
       <SectionHeading label={t("mtg.reschedule")} />
+      <View style={{ gap: 6 }}>
+        <Text style={label}>{t("mtg.quickMoves")}</Text>
+        <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 8 }}>
+          {presets.map((p) => (
+            <Pressable
+              key={p.key}
+              onPress={() => {
+                hapticLight();
+                setPicker(null);
+                setStartPreservingDuration(p.apply());
+              }}
+              style={{
+                backgroundColor: c.secondary,
+                borderRadius: 999,
+                borderWidth: 1.5,
+                borderColor: c.borderSoft ?? c.border,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+              }}
+            >
+              <Text
+                style={{
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontSize: 13,
+                }}
+              >
+                {t(p.labelKey)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       {Platform.OS === "web" ? (
         <>
           <View style={{ gap: 6 }}>
@@ -959,7 +1061,12 @@ function RescheduleForm({
               <Text style={label}>{t("mtg.startTime")}</Text>
               <TextInput
                 value={startText}
-                onChangeText={setStartText}
+                onChangeText={(text) => {
+                  const dur = currentDurationMs();
+                  setStartText(text);
+                  const s = parseLocal(dateText, text);
+                  if (s) setEndText(hhmmLocal(new Date(s.getTime() + dur)));
+                }}
                 placeholder="HH:MM"
                 placeholderTextColor={c.mutedForeground}
                 style={[fieldBox, fieldText]}
@@ -1026,7 +1133,7 @@ function RescheduleForm({
                   return;
                 }
                 if (selected) {
-                  if (picker === "start") setStart(selected);
+                  if (picker === "start") setStartPreservingDuration(selected);
                   else setEnd(selected);
                   if (Platform.OS === "ios") setPicker(null);
                 }
