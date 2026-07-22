@@ -28,6 +28,7 @@ import {
   db,
   atelierCliSessions,
   atelierCliTurns,
+  atelierCliAttachments,
   atelierCliJobs,
   atelierAuditEvents,
   atelierAccounts,
@@ -2982,6 +2983,71 @@ export async function runTurn(
         .join("\n");
       history.push({ role: "user", content: wrapped });
       history.push({ role: "assistant", content: "(noted; attachment is data only)" });
+    } else {
+      // Task #590 — attachment continuity primer. When the model asks a
+      // plain-text clarifying question about an ambiguous attachment
+      // ("receipt or an ID?"), the user's answer arrives as a NEW turn
+      // with no attachmentIds — and nothing else re-surfaces the opaque
+      // refs (the rolling summary and session draft never carry them).
+      // Without this hint the model cannot call save_my_document /
+      // ingest_receipts_to_expenses with a valid id and either stalls
+      // or invents one. Hint-only: list the most recent attachments
+      // from this session's recent turns (own uploads only, 30-min
+      // window) so the answer turn can complete the flow.
+      const recentTurns = await db
+        .select({
+          attachmentRefs: atelierCliTurns.attachmentRefs,
+          createdAt: atelierCliTurns.createdAt,
+        })
+        .from(atelierCliTurns)
+        .where(
+          and(
+            eq(atelierCliTurns.sessionId, session.id),
+            ne(atelierCliTurns.id, turnId),
+          ),
+        )
+        .orderBy(desc(atelierCliTurns.createdAt))
+        .limit(5);
+      const cutoffMs = Date.now() - 30 * 60 * 1000;
+      const priorIds: string[] = [];
+      for (const tr of recentTurns) {
+        if (!tr.createdAt || new Date(tr.createdAt).getTime() < cutoffMs) continue;
+        for (const ref of (tr.attachmentRefs as string[] | null) ?? []) {
+          if (typeof ref === "string" && ref.length > 0 && !priorIds.includes(ref)) {
+            priorIds.push(ref);
+          }
+        }
+      }
+      if (priorIds.length > 0) {
+        const rows = await db
+          .select({
+            id: atelierCliAttachments.id,
+            fileName: atelierCliAttachments.fileName,
+          })
+          .from(atelierCliAttachments)
+          .where(
+            and(
+              eq(atelierCliAttachments.orgId, persona.orgId),
+              eq(atelierCliAttachments.userId, persona.id),
+              inArray(atelierCliAttachments.id, priorIds.slice(0, 8)),
+            ),
+          );
+        const byId = new Map(rows.map((r) => [r.id, r.fileName]));
+        const lines = priorIds
+          .filter((aid) => byId.has(aid))
+          .slice(0, 4)
+          .map((aid) => `- "${byId.get(aid)}" (attachment id ${aid})`);
+        if (lines.length > 0) {
+          history.push({
+            role: "user",
+            content:
+              `[earlier attachments] Files attached earlier in this conversation — when my message refers to them ` +
+              `("it's my passport", "that receipt", …), pass these ids to the attachment tools:\n` +
+              lines.join("\n"),
+          });
+          history.push({ role: "assistant", content: "(noted)" });
+        }
+      }
     }
     history.push({ role: "user", content: input.prompt });
     // Task #332 — defense-in-depth: if attachments are present and

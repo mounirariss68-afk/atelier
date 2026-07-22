@@ -123,3 +123,4 @@
 - [Chat meeting lookup by time](atelier-meeting-time-lookup.md) — title-miss falls back to Dubai start-time match; only explicit time forms count (dates/bare numbers rejected) to avoid mis-targeted reschedule/cancel.
 - [Mobile meetings day view](atelier-mobile-meetings-dayview.md) — day view is cards (no hour grid); internal reschedule/cancel via raw fetch (routes not in openapi); mobile typecheck may show phantom type errors until api-zod/api-client-react dist rebuilt.
 - [Chat write-capability contract](chat-write-capability-contract.md) — isWrite tools must return navigateTo on commit-success (validator throws); self-only writes are selector-free + attachment.userId ownership; refusals scrubbed.
+- [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
