@@ -873,7 +873,7 @@ export default function MeExpenses() {
             </span>
             <input
               type="file"
-              accept="image/*,application/pdf"
+              accept="image/*,.heic,.heif,application/pdf"
               capture="environment"
               className="block w-full text-sm text-text-mute file:mr-3 file:rounded-md file:border file:border-border file:bg-bg file:px-3 file:py-2 file:text-sm file:text-text min-h-[44px]"
               onChange={(e) => {

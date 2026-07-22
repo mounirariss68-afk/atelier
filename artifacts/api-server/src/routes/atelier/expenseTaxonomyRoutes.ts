@@ -35,6 +35,7 @@ import {
 } from "../../lib/atelier-expense-taxonomy.js";
 import { suggestCategory } from "../../lib/atelier-expense-categorizer.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
+import { isHeicPayload, convertHeicToJpeg } from "../../lib/atelier-heic.js";
 
 const router: IRouter = Router();
 type Me = typeof atelierUsers.$inferSelect;
@@ -742,6 +743,14 @@ router.get("/wallet/expenses/export", async (req, res) => {
             const bytes = Buffer.from(await dl.arrayBuffer());
             doc.image(bytes, 48, 80, { fit: [500, 680], align: "center" });
             embedded = true;
+          } else {
+            // Task #554 — HEIC receipts convert to JPEG for the appendix.
+            const bytes = Buffer.from(await dl.arrayBuffer());
+            if (isHeicPayload(bytes, mediaType)) {
+              const jpeg = await convertHeicToJpeg(bytes);
+              doc.image(jpeg, 48, 80, { fit: [500, 680], align: "center" });
+              embedded = true;
+            }
           }
         } catch (err) {
           if (!(err instanceof ObjectNotFoundError)) {

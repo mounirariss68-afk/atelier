@@ -241,7 +241,7 @@ export default function MeAssist() {
               <input placeholder="Currency (e.g. USD)" className={inputCls} value={form.currency ?? ""} onChange={(e) => setForm({ ...form, currency: e.target.value })} data-testid="assist-currency" />
               <input type="date" className={inputCls} value={form.expenseDate ?? ""} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} data-testid="assist-expensedate" />
               <input placeholder="Description (optional)" className={inputCls} value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} data-testid="assist-description" />
-              <input type="file" accept="image/*,application/pdf" className="text-sm text-text-mute" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} data-testid="assist-receipt" />
+              <input type="file" accept="image/*,.heic,.heif,application/pdf" className="text-sm text-text-mute" onChange={(e) => setReceiptFile(e.target.files?.[0] ?? null)} data-testid="assist-receipt" />
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">

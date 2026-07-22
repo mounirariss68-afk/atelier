@@ -297,7 +297,7 @@ export default function WalletNewExpense() {
                       <label className={labelCls}>Receipt file (image / PDF — name only is captured for the encrypted ref)</label>
                       <input
                         type="file"
-                        accept="image/*,application/pdf"
+                        accept="image/*,.heic,.heif,application/pdf"
                         className={inputCls}
                         onChange={(e) => setReceiptFileName(e.target.files?.[0]?.name ?? "")}
                         data-testid="input-receipt-file"

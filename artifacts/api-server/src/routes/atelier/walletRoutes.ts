@@ -57,6 +57,7 @@ import { runPaymentProposer } from "../../lib/atelier-payment-proposer.js";
 import { runInvoiceComposer, expensePublishSentinelChecks } from "../../lib/atelier-invoice-composer.js";
 // Task #76 — stream stored receipt images to approvers/finance.
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
+import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
 // Task #396 — shared receipt/invoice parse pipeline + merchant enrichment.
 import { parseReceiptForExpense } from "../../lib/atelier-receipt-parse.js";
 import { runMerchantEnrichment } from "../../lib/atelier-merchant/enrichment.js";
@@ -601,10 +602,8 @@ router.get("/wallet/expenses/:id/receipt", async (req, res) => {
     const svc = new ObjectStorageService();
     const file = await svc.getObjectEntityFile(row.receiptFileRef);
     const response = await svc.downloadObject(file, 60);
-    res.status(response.status);
-    response.headers.forEach((v, k) => res.setHeader(k, v));
-    const buf = Buffer.from(await response.arrayBuffer());
-    res.end(buf);
+    // Task #554 — HEIC receipts convert to JPEG on the fly for display.
+    await sendReceiptForDisplay(res, response);
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "no-receipt" });

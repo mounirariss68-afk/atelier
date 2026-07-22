@@ -61,6 +61,11 @@ async function buildAll() {
       // is not a constructor) — keep it external so the dynamic import in
       // atelier-merchant/pdf.ts resolves the real package at runtime.
       "pdfjs-dist",
+      // heic-convert pulls in libheif-js (WASM loaded via runtime path
+      // resolution) — keep it external so the WASM assets resolve from
+      // node_modules at runtime (Task #554).
+      "heic-convert",
+      "libheif-js",
       "mammoth",
       "exceljs",
       "@tensorflow/*",

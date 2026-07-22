@@ -200,11 +200,42 @@ async function main() {
   const { RECEIPT_PARSE_MEDIA, sanitizeReceiptDetails, formatReceiptDetails, composeEnrichedSummary } = await import(
     "../../src/lib/atelier-receipt-parse.js"
   );
-  for (const m of ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"]) {
+  for (const m of ["image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif", "application/pdf"]) {
     check(`media allows ${m}`, RECEIPT_PARSE_MEDIA.has(m));
   }
   check("media rejects octet-stream", !RECEIPT_PARSE_MEDIA.has("application/octet-stream"));
   check("media rejects svg", !RECEIPT_PARSE_MEDIA.has("image/svg+xml"));
+
+  // 7b. Task #554 — HEIC detection + conversion
+  {
+    const { looksLikeHeic, isHeicPayload, convertHeicToJpeg } = await import("../../src/lib/atelier-heic.js");
+    const { readFileSync } = await import("node:fs");
+    const { fileURLToPath } = await import("node:url");
+    const path = await import("node:path");
+    const fixtureDir = path.dirname(fileURLToPath(import.meta.url));
+    const heicBytes = readFileSync(path.join(fixtureDir, "fixtures/receipt.heic"));
+
+    check("heic magic bytes detected", looksLikeHeic(heicBytes));
+    check("heic payload via declared type", isHeicPayload(Buffer.from("x".repeat(16)), "image/heic"));
+    check("heic payload via magic under octet-stream", isHeicPayload(heicBytes, "application/octet-stream"));
+    check("jpeg bytes not heic", !looksLikeHeic(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0])));
+    check("declared jpeg never treated as heic", !isHeicPayload(heicBytes, "image/jpeg"));
+    check("avif brand not heic", !looksLikeHeic(Buffer.from("\0\0\0\x1cftypavif\0\0\0\0", "latin1")));
+    check("short buffer not heic", !looksLikeHeic(Buffer.from("ftyp")));
+
+    const jpeg = await convertHeicToJpeg(heicBytes);
+    check("heic converts to jpeg magic", jpeg.length > 100 && jpeg[0] === 0xff && jpeg[1] === 0xd8);
+
+    // Garbage with a valid HEIC header must fail loudly, not silently pass.
+    const garbage = Buffer.concat([heicBytes.subarray(0, 24), Buffer.from("garbage".repeat(20))]);
+    let garbageThrew = false;
+    try {
+      await convertHeicToJpeg(garbage);
+    } catch {
+      garbageThrew = true;
+    }
+    check("garbage heic fails cleanly", garbageThrew);
+  }
 
   // 8. Seed alias maps
   const eu = mapEuLabel("Food and drinks", "Restaurants and cafes");

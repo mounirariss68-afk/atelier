@@ -65,6 +65,7 @@ import {
   ObjectStorageService,
   ObjectNotFoundError,
 } from "../../lib/objectStorage.js";
+import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
 
 const router: IRouter = Router();
 
@@ -1385,10 +1386,8 @@ router.get("/me/ea-items/:id/receipt", async (req, res, next) => {
     const svc = new ObjectStorageService();
     const file = await svc.getObjectEntityFile(item.receiptFileRef);
     const response = await svc.downloadObject(file, 60);
-    res.status(response.status);
-    response.headers.forEach((v, k) => res.setHeader(k, v));
-    const buf = Buffer.from(await response.arrayBuffer());
-    res.end(buf);
+    // Task #554 — HEIC receipts convert to JPEG on the fly for display.
+    await sendReceiptForDisplay(res, response);
   } catch (err) {
     if (err instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "no-receipt" });

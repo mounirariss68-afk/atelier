@@ -16,6 +16,7 @@
 import { eq } from "drizzle-orm";
 import { db, atelierExpenses, atelierAuditEvents, type atelierUsers } from "@workspace/db";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage.js";
+import { isHeicPayload, convertHeicToJpeg } from "./atelier-heic.js";
 import { extractPdfText, renderPdfPageImage } from "./atelier-merchant/pdf.js";
 import { matchMerchant } from "./atelier-merchant/matcher.js";
 import { normalizeMerchant } from "./atelier-merchant/normalizer.js";
@@ -37,6 +38,8 @@ export const RECEIPT_PARSE_MEDIA = new Set([
   "image/png",
   "image/webp",
   "image/gif",
+  "image/heic",
+  "image/heif",
   "application/pdf",
 ]);
 
@@ -376,13 +379,42 @@ export async function parseReceiptForExpense(args: {
     }
     throw err;
   }
+  // Task #554 — iPhone photos arrive as HEIC (sometimes with a generic
+  // content type from object storage): convert to JPEG before the vision
+  // extractor, which doesn't accept HEIC.
+  if (isHeicPayload(bytes, mediaType)) {
+    if (bytes.length > 8 * 1024 * 1024) {
+      return {
+        ok: false,
+        status: 422,
+        body: {
+          error: "receipt-too-large",
+          message: "Receipt image exceeds 8MB — retake at lower resolution.",
+        },
+      };
+    }
+    try {
+      bytes = await convertHeicToJpeg(bytes);
+    } catch {
+      return {
+        ok: false,
+        status: 422,
+        body: {
+          error: "unreadable-receipt-image",
+          message: "This HEIC photo couldn't be decoded — retake it or export it as JPEG and re-upload.",
+          mediaType: mediaType || "image/heic",
+        },
+      };
+    }
+    mediaType = "image/jpeg";
+  }
   if (!RECEIPT_PARSE_MEDIA.has(mediaType)) {
     return {
       ok: false,
       status: 422,
       body: {
         error: "unsupported-receipt-type",
-        message: "Receipt parsing supports photos (JPEG/PNG/WebP/GIF) and PDF invoices.",
+        message: "Receipt parsing supports photos (JPEG/PNG/WebP/GIF/HEIC) and PDF invoices.",
         mediaType,
       },
     };
