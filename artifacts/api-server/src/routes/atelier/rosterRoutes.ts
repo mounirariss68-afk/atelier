@@ -1867,6 +1867,21 @@ router.get("/roster/people/:id/documents", async (req, res, next) => {
         uploadedAt: d.uploadedAt.toISOString(),
         expiresAt: d.expiresAt?.toISOString() ?? null,
         downloadUrl: `/api/atelier/roster/people/${person.id}/documents/${d.id}/download?${signDocToken(person.id, d.id, me.id)}`,
+        // Task #531 — national ID cards can carry a labeled back-side scan.
+        // `sides` tells HR what is on file (combined = one PDF for both).
+        sides:
+          d.kind === "national_id"
+            ? d.backFileRef
+              ? "front_back"
+              : d.fileRef || d.fileUrl
+                ? d.mime === "application/pdf"
+                  ? "combined"
+                  : "front_only"
+                : "none"
+            : null,
+        backDownloadUrl: d.backFileRef
+          ? `/api/atelier/roster/people/${person.id}/documents/${d.id}/download?${signDocToken(person.id, d.id, me.id)}&side=back`
+          : null,
       })),
     });
   } catch (err) {
@@ -1959,6 +1974,12 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       res.status(404).json({ error: "doc-not-found" });
       return;
     }
+    // Task #531 — `?side=back` streams the back of a national ID card.
+    const side = String(req.query.side ?? "front");
+    if (side !== "front" && side !== "back") {
+      res.status(400).json({ error: "invalid-side", allowed: ["front", "back"] });
+      return;
+    }
     assertAuditAction("document.downloaded");
     await db.insert(atelierAuditEvents).values({
       id: rid("aud"),
@@ -1968,9 +1989,28 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       actorId: me.id,
       actorLabel: me.name,
       action: "document.downloaded",
-      payload: { personId: person.id, docId: doc.id, kind: doc.kind },
+      payload: { personId: person.id, docId: doc.id, kind: doc.kind, side },
       payloadSummary: `${me.name} downloaded ${doc.kind} document for ${person.fullName}`,
     });
+    if (side === "back") {
+      if (!doc.backFileRef || !doc.backFileRef.startsWith(PERSON_DOC_PREFIX)) {
+        res.status(404).json({ error: "no-file" });
+        return;
+      }
+      const bytes = await loadPersonDocBytes(doc.backFileRef);
+      if (!bytes) {
+        res.status(404).json({ error: "file-missing" });
+        return;
+      }
+      res.setHeader("Content-Type", doc.backMime || "application/octet-stream");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${(doc.backFileName || "document-back").replace(/[^\w.\- ]+/g, "_")}"`,
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(bytes);
+      return;
+    }
     // Task #51 — self-uploaded scans live in private object storage under
     // a `persondoc:` fileRef; stream those bytes directly.
     if (doc.fileRef && doc.fileRef.startsWith(PERSON_DOC_PREFIX)) {

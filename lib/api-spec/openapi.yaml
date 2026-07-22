@@ -297,7 +297,8 @@ paths:
                 issuingCountry: { type: string, maxLength: 100 }
                 dependentId: { type: string }
                 notes: { type: string, maxLength: 2000 }
-                file: { type: string, format: binary, description: "PDF/JPEG/PNG/WebP scan, ≤15 MB" }
+                file: { type: string, format: binary, description: "PDF/JPEG/PNG/WebP scan, ≤15 MB. For national_id this is the FRONT side (or a single combined PDF)." }
+                fileBack: { type: string, format: binary, description: "Back side of a national ID card (national_id only). Required with `file` unless `file` is a combined PDF." }
       responses:
         "201":
           description: Created document (expiry countdown included)
@@ -380,6 +381,7 @@ paths:
               required: [file]
               properties:
                 file: { type: string, format: binary, description: "PDF/JPEG/PNG/WebP scan, ≤15 MB" }
+                side: { type: string, enum: [front, back], description: "Which side to replace/attach (back is national_id only; default front)" }
       responses:
         "200":
           description: Document with the new scan attached
@@ -400,6 +402,11 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: side
+          in: query
+          required: false
+          description: Which side to stream (back is national_id only; default front)
+          schema: { type: string, enum: [front, back] }
       responses:
         "200":
           description: The stored scan bytes
@@ -8308,6 +8315,14 @@ components:
         mime: { type: ["string", "null"] }
         sizeBytes: { type: ["number", "null"] }
         hasFile: { type: boolean }
+        hasBackFile: { type: boolean }
+        backFileName: { type: ["string", "null"] }
+        backMime: { type: ["string", "null"] }
+        backSizeBytes: { type: ["number", "null"] }
+        sides:
+          type: ["string", "null"]
+          enum: [front_back, combined, front_only, none, null]
+          description: National ID only — which sides are on file (combined = single PDF covers both)
         uploadedAt: { type: string }
         notes: { type: ["string", "null"] }
 

@@ -14,6 +14,7 @@ export type {
   AtelierUploadCandidateDocumentBody,
   AtelierListDocumentsParams,
   AtelierDownloadDocumentParams,
+  AtelierDownloadMyDocumentParams,
   AtelierSubmitMyExpenseBody,
   AtelierReplaceBankSignatoriesBody,
   AtelierReplaceExpenseGlMappingsBody,

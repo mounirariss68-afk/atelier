@@ -2519,6 +2519,14 @@ export const atelierPersonDocuments = pgTable(
     fileName: text("file_name"),
     mime: text("mime"),
     sizeBytes: integer("size_bytes"),
+    // Task #531 — national ID cards carry a second labeled scan (the back
+    // side). `fileRef` stays the front (or a single combined PDF); these
+    // columns hold the back side. NULL for every other document kind and
+    // for legacy single-scan rows, so existing records stay valid.
+    backFileRef: text("back_file_ref"),
+    backFileName: text("back_file_name"),
+    backMime: text("back_mime"),
+    backSizeBytes: integer("back_size_bytes"),
     signedAt: timestamp("signed_at"), // PRD §2.1
     uploadedByUserId: text("uploaded_by_user_id"),
     uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),

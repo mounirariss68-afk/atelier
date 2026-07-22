@@ -1099,7 +1099,17 @@ interface DocRow {
   downloadUrl: string;
   uploadedAt: string;
   expiresAt: string | null;
+  // Task #531 — national ID cards carry a labeled back side.
+  sides: "front_back" | "combined" | "front_only" | "none" | null;
+  backDownloadUrl: string | null;
 }
+
+const SIDES_LABEL: Record<string, string> = {
+  front_back: "front + back on file",
+  combined: "combined PDF on file",
+  front_only: "back side missing",
+  none: "no scan on file",
+};
 
 function DocumentsTab({ personId }: { personId: string }) {
   const [docs, setDocs] = React.useState<DocRow[] | null>(null);
@@ -1126,6 +1136,14 @@ function DocumentsTab({ personId }: { personId: string }) {
             <div className="text-xs text-text-faint">
               {d.kind} · uploaded {new Date(d.uploadedAt).toLocaleDateString()}
               {d.expiresAt && ` · expires ${new Date(d.expiresAt).toLocaleDateString()}`}
+              {d.sides ? (
+                <span
+                  className={d.sides === "front_only" ? "text-amber-400" : undefined}
+                  data-testid={`doc-sides-${d.id}`}
+                >
+                  {" "}· {SIDES_LABEL[d.sides] ?? d.sides}
+                </span>
+              ) : null}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -1137,8 +1155,19 @@ function DocumentsTab({ personId }: { personId: string }) {
               className="font-mono text-xs uppercase text-accent hover:underline"
               data-testid={`doc-download-${d.id}`}
             >
-              Download ↓
+              {d.backDownloadUrl ? "Front ↓" : "Download ↓"}
             </a>
+            {d.backDownloadUrl ? (
+              <a
+                href={d.backDownloadUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-xs uppercase text-accent hover:underline"
+                data-testid={`doc-download-back-${d.id}`}
+              >
+                Back ↓
+              </a>
+            ) : null}
           </div>
         </Card>
       ))}

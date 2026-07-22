@@ -286,6 +286,11 @@ const docUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: DOC_MAX_BYTES, files: 1 },
 });
+// Task #531 — national ID uploads carry two labeled files (front + back).
+const docPairUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: DOC_MAX_BYTES, files: 2 },
+});
 const photoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: PHOTO_MAX_BYTES, files: 1 },
@@ -337,6 +342,22 @@ function docWire(d: typeof atelierPersonDocuments.$inferSelect) {
     mime: d.mime ?? null,
     sizeBytes: d.sizeBytes ?? null,
     hasFile: !!d.fileRef || !!d.fileUrl,
+    // Task #531 — national ID back side. `combined` means a single PDF was
+    // accepted in place of separate front/back scans.
+    hasBackFile: !!d.backFileRef,
+    backFileName: d.backFileName ?? null,
+    backMime: d.backMime ?? null,
+    backSizeBytes: d.backSizeBytes ?? null,
+    sides:
+      d.kind === "national_id"
+        ? d.backFileRef
+          ? "front_back"
+          : d.fileRef || d.fileUrl
+            ? d.mime === "application/pdf"
+              ? "combined"
+              : "front_only"
+            : "none"
+        : null,
     uploadedAt: d.uploadedAt.toISOString(),
     notes: d.notes ?? null,
   };
@@ -389,7 +410,12 @@ router.get("/me/documents", async (req, res, next) => {
 // @cli-skip: self-scope multipart upload; no CLI shape (Task #51)
 router.post(
   "/me/documents",
-  multerWrapped(docUpload.single("file")),
+  multerWrapped(
+    docPairUpload.fields([
+      { name: "file", maxCount: 1 },
+      { name: "fileBack", maxCount: 1 },
+    ]) as unknown as ReturnType<typeof docUpload.single>,
+  ),
   async (req, res, next) => {
     try {
       const ctx = await requireSelfPerson(req, res);
@@ -434,21 +460,62 @@ router.post(
         }
         dependentId = dep.id;
       }
-      const file = (req as Request & { file?: Express.Multer.File }).file;
+      const files = (req as Request & {
+        files?: Record<string, Express.Multer.File[]>;
+      }).files;
+      const file = files?.file?.[0];
+      const fileBack = files?.fileBack?.[0];
+      // Task #531 — national ID cards need both sides: either two labeled
+      // files (front + back) or a single combined PDF. Other kinds keep the
+      // single-file contract and never accept a back side.
+      if (fileBack && kind !== "national_id") {
+        res.status(400).json({ error: "back-side-not-allowed", kind });
+        return;
+      }
+      if (fileBack && !file) {
+        res.status(400).json({ error: "front-side-required" });
+        return;
+      }
+      if (
+        kind === "national_id" &&
+        file &&
+        !fileBack &&
+        file.mimetype !== "application/pdf"
+      ) {
+        res.status(400).json({
+          error: "back-side-required",
+          message:
+            "Upload both the front and back of the national ID card, or a single combined PDF.",
+        });
+        return;
+      }
+      for (const f of [file, fileBack]) {
+        if (f && !DOC_MIMES.has(f.mimetype)) {
+          res.status(415).json({ error: "unsupported-file-type", allowed: [...DOC_MIMES] });
+          return;
+        }
+      }
       let fileRef: string | null = null;
       let fileName: string | null = null;
       let mime: string | null = null;
       let sizeBytes: number | null = null;
       if (file) {
-        if (!DOC_MIMES.has(file.mimetype)) {
-          res.status(415).json({ error: "unsupported-file-type", allowed: [...DOC_MIMES] });
-          return;
-        }
         const stored = await storePersonDocBytes(file.buffer, file.mimetype);
         fileRef = stored.fileRef;
         fileName = file.originalname || "scan";
         mime = file.mimetype;
         sizeBytes = stored.sizeBytes;
+      }
+      let backFileRef: string | null = null;
+      let backFileName: string | null = null;
+      let backMime: string | null = null;
+      let backSizeBytes: number | null = null;
+      if (fileBack) {
+        const stored = await storePersonDocBytes(fileBack.buffer, fileBack.mimetype);
+        backFileRef = stored.fileRef;
+        backFileName = fileBack.originalname || "scan-back";
+        backMime = fileBack.mimetype;
+        backSizeBytes = stored.sizeBytes;
       }
       const id = rid("pdoc");
       const [doc] = await db
@@ -469,6 +536,10 @@ router.post(
           fileName,
           mime,
           sizeBytes,
+          backFileRef,
+          backFileName,
+          backMime,
+          backSizeBytes,
           notes: b.notes ? String(b.notes).slice(0, 2000) : null,
           uploadedByUserId: ctx.me.id,
           createdByUserId: ctx.me.id,
@@ -479,7 +550,7 @@ router.post(
         entityType: "person_document",
         entityId: id,
         action: "person_document.self_uploaded",
-        payload: { kind, title, dependentId, hasFile: !!fileRef },
+        payload: { kind, title, dependentId, hasFile: !!fileRef, hasBackFile: !!backFileRef },
         summary: `${ctx.me.name} added their own ${kind} document "${title}"`,
       });
       res.status(201).json({ document: docWire(doc) });
@@ -594,15 +665,37 @@ router.post(
         res.status(415).json({ error: "unsupported-file-type", allowed: [...DOC_MIMES] });
         return;
       }
+      // Task #531 — `side=back` attaches/replaces the back of a national ID
+      // without touching the front or the record metadata.
+      const side = String((req.body as Record<string, string> | undefined)?.side ?? "front");
+      if (side !== "front" && side !== "back") {
+        res.status(400).json({ error: "invalid-side", allowed: ["front", "back"] });
+        return;
+      }
+      if (side === "back" && doc.kind !== "national_id") {
+        res.status(400).json({ error: "back-side-not-allowed", kind: doc.kind });
+        return;
+      }
       const stored = await storePersonDocBytes(file.buffer, file.mimetype);
-      const oldRef = doc.fileRef;
+      const oldRef = side === "back" ? doc.backFileRef : doc.fileRef;
+      const upd =
+        side === "back"
+          ? {
+              backFileRef: stored.fileRef,
+              backFileName: file.originalname || "scan-back",
+              backMime: file.mimetype,
+              backSizeBytes: stored.sizeBytes,
+            }
+          : {
+              fileRef: stored.fileRef,
+              fileName: file.originalname || "scan",
+              mime: file.mimetype,
+              sizeBytes: stored.sizeBytes,
+            };
       const [updated] = await db
         .update(atelierPersonDocuments)
         .set({
-          fileRef: stored.fileRef,
-          fileName: file.originalname || "scan",
-          mime: file.mimetype,
-          sizeBytes: stored.sizeBytes,
+          ...upd,
           uploadedAt: new Date(),
           uploadedByUserId: ctx.me.id,
           updatedAt: new Date(),
@@ -619,8 +712,8 @@ router.post(
         entityType: "person_document",
         entityId: doc.id,
         action: "person_document.self_scan_replaced",
-        payload: { kind: doc.kind, title: doc.title, replaced: !!oldRef },
-        summary: `${ctx.me.name} replaced the scan on their ${doc.kind} document "${doc.title}"`,
+        payload: { kind: doc.kind, title: doc.title, replaced: !!oldRef, side },
+        summary: `${ctx.me.name} replaced the ${side} scan on their ${doc.kind} document "${doc.title}"`,
       });
       res.json({ document: docWire(updated) });
     } catch (err) {
@@ -639,7 +732,18 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
       res.status(404).json({ error: "doc-not-found" });
       return;
     }
-    if (!doc.fileRef || !doc.fileRef.startsWith(PERSON_DOC_PREFIX)) {
+    // Task #531 — `?side=back` streams the back of a national ID card.
+    const side = String(req.query.side ?? "front");
+    if (side !== "front" && side !== "back") {
+      res.status(400).json({ error: "invalid-side", allowed: ["front", "back"] });
+      return;
+    }
+    if (side === "back") {
+      if (!doc.backFileRef || !doc.backFileRef.startsWith(PERSON_DOC_PREFIX)) {
+        res.status(404).json({ error: "no-file" });
+        return;
+      }
+    } else if (!doc.fileRef || !doc.fileRef.startsWith(PERSON_DOC_PREFIX)) {
       if (doc.fileUrl) {
         res.redirect(302, doc.fileUrl);
         return;
@@ -647,7 +751,8 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
       res.status(404).json({ error: "no-file" });
       return;
     }
-    const bytes = await loadPersonDocBytes(doc.fileRef);
+    const ref = side === "back" ? doc.backFileRef! : doc.fileRef!;
+    const bytes = await loadPersonDocBytes(ref);
     if (!bytes) {
       res.status(404).json({ error: "file-missing" });
       return;
@@ -657,13 +762,15 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
       entityType: "person_document",
       entityId: doc.id,
       action: "document.downloaded",
-      payload: { personId: ctx.person.row.id, docId: doc.id, kind: doc.kind, self: true },
+      payload: { personId: ctx.person.row.id, docId: doc.id, kind: doc.kind, self: true, side },
       summary: `${ctx.me.name} downloaded their own ${doc.kind} document`,
     });
-    res.setHeader("Content-Type", doc.mime || "application/octet-stream");
+    const mime = side === "back" ? doc.backMime : doc.mime;
+    const fname = side === "back" ? doc.backFileName : doc.fileName;
+    res.setHeader("Content-Type", mime || "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${(doc.fileName || "document").replace(/[^\w.\- ]+/g, "_")}"`,
+      `attachment; filename="${(fname || "document").replace(/[^\w.\- ]+/g, "_")}"`,
     );
     res.setHeader("Cache-Control", "private, no-store");
     res.send(bytes);

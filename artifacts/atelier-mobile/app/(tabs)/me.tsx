@@ -331,20 +331,22 @@ export default function MeScreen() {
   }, [uploadPhoto, profile, t, feedback]);
 
   const openDocument = useCallback(
-    async (doc: AtelierSelfDocument) => {
-      if (!doc.hasFile) return;
+    async (doc: AtelierSelfDocument, side: "front" | "back" = "front") => {
+      if (side === "back" ? !doc.hasBackFile : !doc.hasFile) return;
       const path = getAtelierDownloadMyDocumentUrl(doc.id);
-      const url = `${API_BASE}${path}`;
+      const url = `${API_BASE}${path}${side === "back" ? "?side=back" : ""}`;
       if (Platform.OS === "web") {
         Linking.openURL(url);
         return;
       }
-      setDownloadingId(doc.id);
+      setDownloadingId(`${doc.id}:${side}`);
       try {
         const FileSystem = await import("expo-file-system/legacy");
         const Sharing = await import("expo-sharing");
         const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
-        const safeName = (doc.fileName ?? `${doc.title}`).replace(/[^\w.\-]+/g, "_");
+        const rawName =
+          side === "back" ? (doc.backFileName ?? `${doc.title}-back`) : (doc.fileName ?? `${doc.title}`);
+        const safeName = rawName.replace(/[^\w.\-]+/g, "_");
         const dest = `${dir}${Date.now()}_${safeName}`;
         const result = await FileSystem.downloadAsync(url, dest, {
           headers: authHeader(),
@@ -582,12 +584,62 @@ export default function MeScreen() {
                       />
                     ) : null}
                   </View>
-                  {downloadingId === doc.id ? (
+                  {downloadingId === `${doc.id}:front` ? (
                     <ActivityIndicator size="small" color={c.primary} />
                   ) : doc.hasFile ? (
                     <Feather name={Platform.OS === "web" ? "external-link" : "download"} size={18} color={c.mutedForeground} />
                   ) : null}
                 </Card>
+                {doc.kind === "national_id" && doc.hasBackFile ? (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openDocument(doc, "back");
+                    }}
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.7 : 1,
+                      flexDirection: rtl.row,
+                      alignItems: "center",
+                      gap: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                    })}
+                  >
+                    <Feather name="rotate-cw" size={14} color={c.mutedForeground} />
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 13,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t("me.idBackSide")}
+                    </Text>
+                    {downloadingId === `${doc.id}:back` ? (
+                      <ActivityIndicator size="small" color={c.primary} />
+                    ) : (
+                      <Feather
+                        name={Platform.OS === "web" ? "external-link" : "download"}
+                        size={14}
+                        color={c.mutedForeground}
+                      />
+                    )}
+                  </Pressable>
+                ) : doc.kind === "national_id" && doc.sides === "front_only" ? (
+                  <View style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text
+                      style={{
+                        color: c.destructive,
+                        fontFamily: "PlusJakartaSans_500Medium",
+                        fontSize: 12,
+                        textAlign: rtl.textAlign,
+                      }}
+                    >
+                      {t("me.idBackMissing")}
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
             ))}
           </View>

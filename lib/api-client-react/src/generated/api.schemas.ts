@@ -2666,6 +2666,21 @@ export interface AtelierEsignUpstreamError {
   message: string;
 }
 
+/**
+ * National ID only — which sides are on file (combined = single PDF covers both)
+ * @nullable
+ */
+export type AtelierSelfDocumentSides =
+  | (typeof AtelierSelfDocumentSides)[keyof typeof AtelierSelfDocumentSides]
+  | null;
+
+export const AtelierSelfDocumentSides = {
+  front_back: "front_back",
+  combined: "combined",
+  front_only: "front_only",
+  none: "none",
+} as const;
+
 export interface AtelierSelfDocument {
   id: string;
   kind: string;
@@ -2689,6 +2704,18 @@ export interface AtelierSelfDocument {
   /** @nullable */
   sizeBytes?: number | null;
   hasFile: boolean;
+  hasBackFile?: boolean;
+  /** @nullable */
+  backFileName?: string | null;
+  /** @nullable */
+  backMime?: string | null;
+  /** @nullable */
+  backSizeBytes?: number | null;
+  /**
+   * National ID only — which sides are on file (combined = single PDF covers both)
+   * @nullable
+   */
+  sides?: AtelierSelfDocumentSides;
   uploadedAt: string;
   /** @nullable */
   notes?: string | null;
@@ -8192,8 +8219,10 @@ export type AtelierCreateMyDocumentBody = {
   dependentId?: string;
   /** @maxLength 2000 */
   notes?: string;
-  /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
+  /** PDF/JPEG/PNG/WebP scan, ≤15 MB. For national_id this is the FRONT side (or a single combined PDF). */
   file?: Blob;
+  /** Back side of a national ID card (national_id only). Required with `file` unless `file` is a combined PDF. */
+  fileBack?: Blob;
 };
 
 export type AtelierCreateMyDocument201 = {
@@ -8204,14 +8233,42 @@ export type AtelierUpdateMyDocument200 = {
   document: AtelierSelfDocument;
 };
 
+/**
+ * Which side to replace/attach (back is national_id only; default front)
+ */
+export type AtelierReplaceMyDocumentScanBodySide =
+  (typeof AtelierReplaceMyDocumentScanBodySide)[keyof typeof AtelierReplaceMyDocumentScanBodySide];
+
+export const AtelierReplaceMyDocumentScanBodySide = {
+  front: "front",
+  back: "back",
+} as const;
+
 export type AtelierReplaceMyDocumentScanBody = {
   /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
   file: Blob;
+  /** Which side to replace/attach (back is national_id only; default front) */
+  side?: AtelierReplaceMyDocumentScanBodySide;
 };
 
 export type AtelierReplaceMyDocumentScan200 = {
   document: AtelierSelfDocument;
 };
+
+export type AtelierDownloadMyDocumentParams = {
+  /**
+   * Which side to stream (back is national_id only; default front)
+   */
+  side?: AtelierDownloadMyDocumentSide;
+};
+
+export type AtelierDownloadMyDocumentSide =
+  (typeof AtelierDownloadMyDocumentSide)[keyof typeof AtelierDownloadMyDocumentSide];
+
+export const AtelierDownloadMyDocumentSide = {
+  front: "front",
+  back: "back",
+} as const;
 
 export type AtelierListMyExpenses200 = {
   expenses: AtelierSelfExpense[];

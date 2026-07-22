@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierSelfDocumentSides } from "./atelierSelfDocumentSides";
 
 export interface AtelierSelfDocument {
   id: string;
@@ -29,6 +30,18 @@ export interface AtelierSelfDocument {
   /** @nullable */
   sizeBytes?: number | null;
   hasFile: boolean;
+  hasBackFile?: boolean;
+  /** @nullable */
+  backFileName?: string | null;
+  /** @nullable */
+  backMime?: string | null;
+  /** @nullable */
+  backSizeBytes?: number | null;
+  /**
+   * National ID only — which sides are on file (combined = single PDF covers both)
+   * @nullable
+   */
+  sides?: AtelierSelfDocumentSides;
   uploadedAt: string;
   /** @nullable */
   notes?: string | null;

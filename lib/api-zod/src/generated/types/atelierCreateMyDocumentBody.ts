@@ -20,6 +20,8 @@ export type AtelierCreateMyDocumentBody = {
   dependentId?: string;
   /** @maxLength 2000 */
   notes?: string;
-  /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
+  /** PDF/JPEG/PNG/WebP scan, ≤15 MB. For national_id this is the FRONT side (or a single combined PDF). */
   file?: Blob;
+  /** Back side of a national ID card (national_id only). Required with `file` unless `file` is a combined PDF. */
+  fileBack?: Blob;
 };

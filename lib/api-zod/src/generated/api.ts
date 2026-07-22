@@ -481,7 +481,15 @@ export const AtelierCreateMyDocumentBody = zod.object({
   file: zod
     .instanceof(File)
     .optional()
-    .describe("PDF\/JPEG\/PNG\/WebP scan, ≤15 MB"),
+    .describe(
+      "PDF\/JPEG\/PNG\/WebP scan, ≤15 MB. For national_id this is the FRONT side (or a single combined PDF).",
+    ),
+  fileBack: zod
+    .instanceof(File)
+    .optional()
+    .describe(
+      "Back side of a national ID card (national_id only). Required with `file` unless `file` is a combined PDF.",
+    ),
 });
 
 /**
@@ -503,6 +511,22 @@ export const AtelierListMyDocumentsResponse = zod.object({
       mime: zod.string().nullish(),
       sizeBytes: zod.number().nullish(),
       hasFile: zod.boolean(),
+      hasBackFile: zod.boolean().optional(),
+      backFileName: zod.string().nullish(),
+      backMime: zod.string().nullish(),
+      backSizeBytes: zod.number().nullish(),
+      sides: zod
+        .union([
+          zod.literal("front_back"),
+          zod.literal("combined"),
+          zod.literal("front_only"),
+          zod.literal("none"),
+          zod.literal(null),
+        ])
+        .nullish()
+        .describe(
+          "National ID only — which sides are on file (combined = single PDF covers both)",
+        ),
       uploadedAt: zod.string(),
       notes: zod.string().nullish(),
     }),
@@ -558,6 +582,22 @@ export const AtelierUpdateMyDocumentResponse = zod.object({
     mime: zod.string().nullish(),
     sizeBytes: zod.number().nullish(),
     hasFile: zod.boolean(),
+    hasBackFile: zod.boolean().optional(),
+    backFileName: zod.string().nullish(),
+    backMime: zod.string().nullish(),
+    backSizeBytes: zod.number().nullish(),
+    sides: zod
+      .union([
+        zod.literal("front_back"),
+        zod.literal("combined"),
+        zod.literal("front_only"),
+        zod.literal("none"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe(
+        "National ID only — which sides are on file (combined = single PDF covers both)",
+      ),
     uploadedAt: zod.string(),
     notes: zod.string().nullish(),
   }),
@@ -583,6 +623,12 @@ export const AtelierReplaceMyDocumentScanParams = zod.object({
 
 export const AtelierReplaceMyDocumentScanBody = zod.object({
   file: zod.instanceof(File).describe("PDF\/JPEG\/PNG\/WebP scan, ≤15 MB"),
+  side: zod
+    .enum(["front", "back"])
+    .optional()
+    .describe(
+      "Which side to replace\/attach (back is national_id only; default front)",
+    ),
 });
 
 export const AtelierReplaceMyDocumentScanResponse = zod.object({
@@ -600,6 +646,22 @@ export const AtelierReplaceMyDocumentScanResponse = zod.object({
     mime: zod.string().nullish(),
     sizeBytes: zod.number().nullish(),
     hasFile: zod.boolean(),
+    hasBackFile: zod.boolean().optional(),
+    backFileName: zod.string().nullish(),
+    backMime: zod.string().nullish(),
+    backSizeBytes: zod.number().nullish(),
+    sides: zod
+      .union([
+        zod.literal("front_back"),
+        zod.literal("combined"),
+        zod.literal("front_only"),
+        zod.literal("none"),
+        zod.literal(null),
+      ])
+      .nullish()
+      .describe(
+        "National ID only — which sides are on file (combined = single PDF covers both)",
+      ),
     uploadedAt: zod.string(),
     notes: zod.string().nullish(),
   }),
@@ -610,6 +672,13 @@ export const AtelierReplaceMyDocumentScanResponse = zod.object({
  */
 export const AtelierDownloadMyDocumentParams = zod.object({
   id: zod.coerce.string(),
+});
+
+export const AtelierDownloadMyDocumentQueryParams = zod.object({
+  side: zod
+    .enum(["front", "back"])
+    .optional()
+    .describe("Which side to stream (back is national_id only; default front)"),
 });
 
 /**

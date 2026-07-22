@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierReplaceMyDocumentScanBodySide } from "./atelierReplaceMyDocumentScanBodySide";
 
 export type AtelierReplaceMyDocumentScanBody = {
   /** PDF/JPEG/PNG/WebP scan, ≤15 MB */
   file: Blob;
+  /** Which side to replace/attach (back is national_id only; default front) */
+  side?: AtelierReplaceMyDocumentScanBodySide;
 };

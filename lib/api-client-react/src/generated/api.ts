@@ -121,6 +121,7 @@ import type {
   AtelierDependentList,
   AtelierDisconnectMyMsConnection200,
   AtelierDownloadDocumentParams,
+  AtelierDownloadMyDocumentParams,
   AtelierEditProposalSectionInput,
   AtelierEmergencyContactInput,
   AtelierEmergencyContactList,
@@ -1471,6 +1472,9 @@ export const atelierCreateMyDocument = async (
   if (atelierCreateMyDocumentBody.file !== undefined) {
     formData.append(`file`, atelierCreateMyDocumentBody.file);
   }
+  if (atelierCreateMyDocumentBody.fileBack !== undefined) {
+    formData.append(`fileBack`, atelierCreateMyDocumentBody.fileBack);
+  }
 
   return customFetch<AtelierCreateMyDocument201>(
     getAtelierCreateMyDocumentUrl(),
@@ -1815,6 +1819,9 @@ export const atelierReplaceMyDocumentScan = async (
 ): Promise<AtelierReplaceMyDocumentScan200> => {
   const formData = new FormData();
   formData.append(`file`, atelierReplaceMyDocumentScanBody.file);
+  if (atelierReplaceMyDocumentScanBody.side !== undefined) {
+    formData.append(`side`, atelierReplaceMyDocumentScanBody.side);
+  }
 
   return customFetch<AtelierReplaceMyDocumentScan200>(
     getAtelierReplaceMyDocumentScanUrl(id),
@@ -1897,22 +1904,44 @@ export const useAtelierReplaceMyDocumentScan = <
 /**
  * @summary Me lens — stream the scan of one of the caller's own documents
  */
-export const getAtelierDownloadMyDocumentUrl = (id: string) => {
-  return `/api/atelier/me/documents/${id}/download`;
+export const getAtelierDownloadMyDocumentUrl = (
+  id: string,
+  params?: AtelierDownloadMyDocumentParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/me/documents/${id}/download?${stringifiedParams}`
+    : `/api/atelier/me/documents/${id}/download`;
 };
 
 export const atelierDownloadMyDocument = async (
   id: string,
+  params?: AtelierDownloadMyDocumentParams,
   options?: RequestInit,
 ): Promise<Blob> => {
-  return customFetch<Blob>(getAtelierDownloadMyDocumentUrl(id), {
+  return customFetch<Blob>(getAtelierDownloadMyDocumentUrl(id, params), {
     ...options,
     method: "GET",
   });
 };
 
-export const getAtelierDownloadMyDocumentQueryKey = (id: string) => {
-  return [`/api/atelier/me/documents/${id}/download`] as const;
+export const getAtelierDownloadMyDocumentQueryKey = (
+  id: string,
+  params?: AtelierDownloadMyDocumentParams,
+) => {
+  return [
+    `/api/atelier/me/documents/${id}/download`,
+    ...(params ? [params] : []),
+  ] as const;
 };
 
 export const getAtelierDownloadMyDocumentQueryOptions = <
@@ -1920,6 +1949,7 @@ export const getAtelierDownloadMyDocumentQueryOptions = <
   TError = ErrorType<unknown>,
 >(
   id: string,
+  params?: AtelierDownloadMyDocumentParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
@@ -1932,12 +1962,12 @@ export const getAtelierDownloadMyDocumentQueryOptions = <
   const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey =
-    queryOptions?.queryKey ?? getAtelierDownloadMyDocumentQueryKey(id);
+    queryOptions?.queryKey ?? getAtelierDownloadMyDocumentQueryKey(id, params);
 
   const queryFn: QueryFunction<
     Awaited<ReturnType<typeof atelierDownloadMyDocument>>
   > = ({ signal }) =>
-    atelierDownloadMyDocument(id, { signal, ...requestOptions });
+    atelierDownloadMyDocument(id, params, { signal, ...requestOptions });
 
   return {
     queryKey,
@@ -1965,6 +1995,7 @@ export function useAtelierDownloadMyDocument<
   TError = ErrorType<unknown>,
 >(
   id: string,
+  params?: AtelierDownloadMyDocumentParams,
   options?: {
     query?: UseQueryOptions<
       Awaited<ReturnType<typeof atelierDownloadMyDocument>>,
@@ -1974,7 +2005,11 @@ export function useAtelierDownloadMyDocument<
     request?: SecondParameter<typeof customFetch>;
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
-  const queryOptions = getAtelierDownloadMyDocumentQueryOptions(id, options);
+  const queryOptions = getAtelierDownloadMyDocumentQueryOptions(
+    id,
+    params,
+    options,
+  );
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

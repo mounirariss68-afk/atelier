@@ -625,13 +625,27 @@ function DocumentsCard() {
     issuingCountry: "",
     dependentId: "",
     file: null as File | null,
+    fileBack: null as File | null,
   });
+
+  const isNationalId = form.kind === "national_id";
+  const frontIsPdf = form.file?.type === "application/pdf";
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setErr(null);
     try {
+      if (isNationalId) {
+        if (!form.file) {
+          throw new Error("Upload the front of the ID card (or a combined PDF).");
+        }
+        if (!frontIsPdf && !form.fileBack) {
+          throw new Error(
+            "Upload both the front and back of the national ID card, or a single combined PDF.",
+          );
+        }
+      }
       const fd = new FormData();
       fd.append("kind", form.kind);
       fd.append("title", form.title.trim());
@@ -641,6 +655,7 @@ function DocumentsCard() {
       if (form.issuingCountry.trim()) fd.append("issuingCountry", form.issuingCountry.trim());
       if (form.dependentId) fd.append("dependentId", form.dependentId);
       if (form.file) fd.append("file", form.file);
+      if (isNationalId && !frontIsPdf && form.fileBack) fd.append("fileBack", form.fileBack);
       const resp = await fetch(`${API_BASE}/me/documents`, {
         method: "POST",
         body: fd,
@@ -660,6 +675,7 @@ function DocumentsCard() {
         issuingCountry: "",
         dependentId: "",
         file: null,
+        fileBack: null,
       });
       invalidate();
     } catch (e2) {
@@ -767,7 +783,11 @@ function DocumentsCard() {
             </div>
           ) : null}
           <div className="md:col-span-2">
-            <label className={labelCls}>Scan (PDF / JPG / PNG / WebP, ≤15 MB)</label>
+            <label className={labelCls}>
+              {isNationalId
+                ? "Front side (or a single combined PDF) *"
+                : "Scan (PDF / JPG / PNG / WebP, ≤15 MB)"}
+            </label>
             <input
               className="block w-full text-xs text-text-mute file:mr-3 file:rounded file:border file:border-border-soft file:bg-transparent file:px-2 file:py-1 file:text-xs file:text-text"
               type="file"
@@ -776,6 +796,24 @@ function DocumentsCard() {
               data-testid="doc-file"
             />
           </div>
+          {isNationalId ? (
+            <div className="md:col-span-2">
+              <label className={labelCls}>
+                Back side {frontIsPdf ? "(optional — combined PDF selected)" : "*"}
+              </label>
+              <input
+                className="block w-full text-xs text-text-mute file:mr-3 file:rounded file:border file:border-border-soft file:bg-transparent file:px-2 file:py-1 file:text-xs file:text-text"
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                onChange={(e) => setForm({ ...form, fileBack: e.target.files?.[0] ?? null })}
+                data-testid="doc-file-back"
+              />
+              <p className="mt-1 text-[11px] text-text-faint">
+                National ID cards need both sides — upload the front and back separately,
+                or one combined PDF in the front field.
+              </p>
+            </div>
+          ) : null}
           <div className="md:col-span-3 flex gap-2">
             <button type="submit" className={btnGoldCls} disabled={busy} data-testid="save-document">
               {busy ? "Uploading…" : "Save document"}
@@ -814,6 +852,8 @@ function DocumentRow({
   const [err, setErr] = React.useState<string | null>(null);
   const [replacing, setReplacing] = React.useState(false);
   const replaceRef = React.useRef<HTMLInputElement>(null);
+  const backRef = React.useRef<HTMLInputElement>(null);
+  const [attachingBack, setAttachingBack] = React.useState(false);
   const [form, setForm] = React.useState({
     title: d.title,
     docNumber: d.docNumber ?? "",
@@ -832,12 +872,14 @@ function DocumentRow({
     },
   });
 
-  async function replaceScan(file: File) {
-    setReplacing(true);
+  async function uploadScan(file: File, side: "front" | "back") {
+    const setBusyFlag = side === "back" ? setAttachingBack : setReplacing;
+    setBusyFlag(true);
     setErr(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      if (side === "back") fd.append("side", "back");
       const resp = await fetch(`${API_BASE}/me/documents/${d.id}/file`, {
         method: "POST",
         body: fd,
@@ -851,7 +893,7 @@ function DocumentRow({
     } catch (e) {
       setErr(String((e as Error)?.message ?? e));
     } finally {
-      setReplacing(false);
+      setBusyFlag(false);
     }
   }
 
@@ -863,6 +905,20 @@ function DocumentRow({
           <div className="flex items-center gap-2">
             <MonoChip tone="gold">{d.kind}</MonoChip>
             <span className="text-sm text-text truncate">{d.title}</span>
+            {d.kind === "national_id" && d.sides ? (
+              <span
+                className={`text-[11px] ${d.sides === "front_only" ? "text-amber-400" : "text-text-faint"}`}
+                data-testid={`doc-sides-${d.id}`}
+              >
+                {d.sides === "front_back"
+                  ? "front + back on file"
+                  : d.sides === "combined"
+                    ? "combined PDF on file"
+                    : d.sides === "front_only"
+                      ? "back side missing"
+                      : "no scan on file"}
+              </span>
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-text-mute">
             {d.docNumber ? `№ ${d.docNumber} · ` : ""}
@@ -878,7 +934,16 @@ function DocumentRow({
               href={`${API_BASE}/me/documents/${d.id}/download`}
               data-testid={`download-${d.id}`}
             >
-              Download
+              {d.kind === "national_id" && d.hasBackFile ? "Front" : "Download"}
+            </a>
+          ) : null}
+          {d.kind === "national_id" && d.hasBackFile ? (
+            <a
+              className="text-xs text-gold hover:underline"
+              href={`${API_BASE}/me/documents/${d.id}/download?side=back`}
+              data-testid={`download-back-${d.id}`}
+            >
+              Back
             </a>
           ) : null}
           <button
@@ -887,8 +952,24 @@ function DocumentRow({
             disabled={replacing}
             data-testid={`replace-scan-${d.id}`}
           >
-            {replacing ? "Uploading…" : d.hasFile ? "Replace scan" : "Attach scan"}
+            {replacing
+              ? "Uploading…"
+              : d.hasFile
+                ? d.kind === "national_id"
+                  ? "Replace front"
+                  : "Replace scan"
+                : "Attach scan"}
           </button>
+          {d.kind === "national_id" && d.hasFile && d.mime !== "application/pdf" ? (
+            <button
+              className={`text-xs ${d.hasBackFile ? "text-text-mute" : "text-amber-400"} hover:text-gold`}
+              onClick={() => backRef.current?.click()}
+              disabled={attachingBack}
+              data-testid={`attach-back-${d.id}`}
+            >
+              {attachingBack ? "Uploading…" : d.hasBackFile ? "Replace back" : "Attach back"}
+            </button>
+          ) : null}
           <input
             ref={replaceRef}
             type="file"
@@ -896,7 +977,18 @@ function DocumentRow({
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void replaceScan(f);
+              if (f) void uploadScan(f, "front");
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={backRef}
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadScan(f, "back");
               e.target.value = "";
             }}
           />
