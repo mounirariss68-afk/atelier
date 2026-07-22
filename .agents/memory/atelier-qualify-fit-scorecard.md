@@ -7,3 +7,4 @@ description: Invariants for the Partners → Qualify manual fit-scorecard adjust
 - Per-dimension + top-level `adjustedAt/adjustedByUserId` distinguish manual vs agent scores; noop adjust (same values) returns 200 with NO audit row — tests rely on that.
 **Why:** two sources of truth for the weighted framework would drift silently.
 **How to apply:** any new surface writing fitScorecard scores must call computeFitTotals and stamp adjust fields.
+- Adjust history is an audit projection: GET /partners/firms/:id/fit-scorecard/history flattens adjust-event `changes` maps ({dim:{from,to}}); no history table. Revert = same PATCH with the recorded `from` (itself audited). UI popover uses raw fetch (route not in openapi).

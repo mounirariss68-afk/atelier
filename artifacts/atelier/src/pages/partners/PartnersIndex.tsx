@@ -803,6 +803,143 @@ function verdictChipTone(v?: string): "gold" | "green" | "amber" | "red" | "defa
   return "default";
 }
 
+// Task #541 — per-dimension "recent changes" popover for manually adjusted
+// fit scores. History is read from the audit-trail projection endpoint
+// (raw fetch — bespoke route, not in openapi, mirroring the agent-status
+// calls above); revert re-uses the codegen'd adjust mutation with the
+// recorded prior value, so the revert is itself audited.
+type FitAdjustHistoryItem = {
+  id: string;
+  dimensionId: string;
+  label: string;
+  actorLabel: string;
+  at: string;
+  from: number;
+  to: number;
+};
+
+function FitAdjustDot({
+  firm,
+  dimId,
+  canEdit,
+  onReverted,
+}: {
+  firm: AtelierPartnerFirm;
+  dimId: string;
+  canEdit: boolean;
+  onReverted: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [items, setItems] = React.useState<FitAdjustHistoryItem[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const revert = useAtelierAdjustPartnerFitScorecard();
+  const ref = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const load = async () => {
+    setError(null);
+    try {
+      const r = await fetch(
+        `${QUALIFY_API}/partners/firms/${firm.id}/fit-scorecard/history`,
+        { credentials: "include" },
+      );
+      if (!r.ok) throw new Error();
+      const j = (await r.json()) as { items?: FitAdjustHistoryItem[] };
+      setItems((j.items ?? []).filter((it) => it.dimensionId === dimId));
+    } catch {
+      setError("Could not load the change history.");
+    }
+  };
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && items == null) void load();
+  };
+
+  const doRevert = (entry: FitAdjustHistoryItem) => {
+    setError(null);
+    revert.mutate(
+      { id: firm.id, data: { scores: { [dimId]: entry.from } } },
+      {
+        onSuccess: () => {
+          setOpen(false);
+          setItems(null);
+          onReverted();
+        },
+        onError: (e) => setError(errMessage(e)),
+      },
+    );
+  };
+
+  const current = (firm.fitScorecard?.dimensions ?? []).find((d) => d.id === dimId)?.score;
+
+  return (
+    <span className="relative inline-flex" ref={ref}>
+      <button
+        type="button"
+        className="w-2.5 h-2.5 -m-0.5 p-0.5 inline-flex items-center justify-center"
+        title="Manually adjusted — click for details"
+        onClick={toggle}
+        data-testid={`dot-manual-${dimId}-${firm.id}`}
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-gold inline-block" />
+      </button>
+      {open && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 top-4 z-30 w-64 rounded-sm border border-border bg-bg-deep shadow-xl p-3 text-left"
+          data-testid={`popover-fit-history-${dimId}-${firm.id}`}
+        >
+          <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint mb-2">
+            Recent changes
+          </div>
+          {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
+          {items == null && !error && (
+            <p className="text-xs text-text-faint">Loading…</p>
+          )}
+          {items != null && items.length === 0 && (
+            <p className="text-xs text-text-faint">
+              No recorded changes for this dimension.
+            </p>
+          )}
+          {items != null && items.length > 0 && (
+            <ul className="space-y-2 max-h-48 overflow-y-auto">
+              {items.slice(0, 5).map((it, idx) => (
+                <li key={it.id} className="text-xs text-text" data-testid={`row-fit-history-${it.id}`}>
+                  <span className="font-medium">{it.actorLabel || "Unknown"}</span>{" "}
+                  <span className="text-text-faint">{it.at.slice(0, 10)}</span>
+                  <span className="block font-mono text-text-mute">
+                    {it.from} → {it.to}
+                  </span>
+                  {canEdit && idx === 0 && it.from !== current && (
+                    <button
+                      type="button"
+                      className="mt-0.5 text-[10px] font-mono uppercase tracking-widest text-gold/80 hover:text-gold disabled:opacity-50"
+                      disabled={revert.isPending}
+                      onClick={() => doRevert(it)}
+                      data-testid={`button-fit-revert-${dimId}-${firm.id}`}
+                    >
+                      {revert.isPending ? "reverting…" : `revert to ${it.from}`}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function QualifyView() {
   const canEdit = useCanEdit();
   const qc = useQueryClient();
@@ -1088,10 +1225,11 @@ function QualifyView() {
                                 <span className="inline-flex items-center gap-1">
                                   <MonoChip tone={v >= 4 ? "gold" : v >= 3 ? "green" : v >= 2 ? "amber" : "red"}>{v}</MonoChip>
                                   {dim?.adjustedAt && (
-                                    <span
-                                      className="w-1.5 h-1.5 rounded-full bg-gold inline-block"
-                                      title={`Manually adjusted ${dim.adjustedAt.slice(0, 10)}`}
-                                      data-testid={`dot-manual-${d.id}-${f.id}`}
+                                    <FitAdjustDot
+                                      firm={f}
+                                      dimId={d.id}
+                                      canEdit={canEdit}
+                                      onReverted={invalidateFirms}
                                     />
                                   )}
                                 </span>

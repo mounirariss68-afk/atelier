@@ -34,6 +34,7 @@ import {
   atelierCounterparty,
   atelierContract,
   atelierSelfBilledInvoices,
+  atelierAuditEvents,
 } from "@workspace/db";
 import { atelierAgentRuns } from "@workspace/db";
 import { desc } from "drizzle-orm";
@@ -508,6 +509,69 @@ router.patch("/partners/firms/:id/fit-scorecard", async (req, res, next) => {
       });
     }
     res.json(result.firm);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Recent manual fit-scorecard adjustments for one firm, reconstructed at
+// read time from the audit trail (same pattern as the account
+// firmographic-history feed): each `partner_firm.fitScorecard.adjust`
+// event carries a `changes` map of { dimensionId: { from, to } }, so the
+// history is a flat, newest-first projection of those rows. No separate
+// history table. Reverting re-uses the adjust PATCH with the recorded
+// `from` value, so the revert is itself audited as another adjust event.
+// @cli-skip: Task #541 REST surface behind the Partners Qualify UI
+router.get("/partners/firms/:id/fit-scorecard/history", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const [firm] = await db
+      .select()
+      .from(atelierPartnerFirms)
+      .where(and(eq(atelierPartnerFirms.id, req.params.id), firmScope(me)));
+    if (!firm) return void res.status(404).json({ error: "partner-firm-not-found" });
+    const events = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(
+        and(
+          eq(atelierAuditEvents.entityType, "partner_firm"),
+          eq(atelierAuditEvents.entityId, firm.id),
+          eq(atelierAuditEvents.action, "partner_firm.fitScorecard.adjust"),
+        ),
+      )
+      .orderBy(desc(atelierAuditEvents.createdAt))
+      .limit(50);
+    const labels = new Map(ALLIANCE_FIT_DIMENSIONS.map((d) => [d.id, d.label]));
+    const items: Array<{
+      id: string;
+      dimensionId: string;
+      label: string;
+      actorLabel: string;
+      at: string;
+      from: number;
+      to: number;
+    }> = [];
+    for (const e of events) {
+      const changes = (e.payload as { changes?: unknown } | null)?.changes;
+      if (!changes || typeof changes !== "object") continue;
+      for (const [dimId, ch] of Object.entries(
+        changes as Record<string, { from?: unknown; to?: unknown }>,
+      )) {
+        if (typeof ch?.from !== "number" || typeof ch?.to !== "number") continue;
+        items.push({
+          id: `${e.id}:${dimId}`,
+          dimensionId: dimId,
+          label: labels.get(dimId) ?? dimId,
+          actorLabel: e.actorLabel ?? "",
+          at: new Date(e.createdAt).toISOString(),
+          from: ch.from,
+          to: ch.to,
+        });
+      }
+    }
+    res.json({ items: items.slice(0, 40) });
   } catch (err) {
     next(err);
   }
