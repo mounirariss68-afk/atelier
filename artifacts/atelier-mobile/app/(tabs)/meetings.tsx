@@ -948,13 +948,7 @@ function RescheduleForm({
     return { s: start, e: end };
   };
 
-  const save = async () => {
-    setErr(null);
-    const r = resolve();
-    if (!r || r.e.getTime() <= r.s.getTime()) {
-      setErr(t("mtg.endBeforeStart"));
-      return;
-    }
+  const doSave = async (r: { s: Date; e: Date }) => {
     setBusy(true);
     try {
       await apiJson(`/api/atelier/me/calendar/internal/${meeting.id}`, {
@@ -967,6 +961,27 @@ function RescheduleForm({
     } finally {
       setBusy(false);
     }
+  };
+
+  const save = () => {
+    setErr(null);
+    const r = resolve();
+    if (!r || r.e.getTime() <= r.s.getTime()) {
+      setErr(t("mtg.endBeforeStart"));
+      return;
+    }
+    if (r.s.getTime() < Date.now()) {
+      if (Platform.OS === "web") {
+        if (window.confirm(t("mtg.pastConfirm"))) void doSave(r);
+        return;
+      }
+      Alert.alert(t("mtg.pastTitle"), t("mtg.pastConfirm"), [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("common.confirm"), onPress: () => void doSave(r) },
+      ]);
+      return;
+    }
+    void doSave(r);
   };
 
   const label = {
