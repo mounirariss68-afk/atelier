@@ -34,7 +34,6 @@ import {
   ChevronRight,
   CheckCircle2,
   Plus,
-  Pencil,
   Archive,
   ArrowUpRight,
 } from "lucide-react";
@@ -694,71 +693,71 @@ function TargetsSection({ firms }: { firms: AtelierPartnerFirm[] }) {
               }
             />
           ) : (
-            <Card key={t.id} className="p-4" data-testid={`card-target-${t.id}`}>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="font-medium text-text">{t.name}</div>
-                  <div className="text-xs text-text-faint mt-1">
-                    {[t.ecosystem, t.country].filter(Boolean).join(" · ") || "—"}
-                  </div>
-                  {t.thesis && <div className="text-sm text-text-mute mt-2">{t.thesis}</div>}
-                  {t.nextStep && (
-                    <div className="text-xs text-text-faint mt-2 border-l-2 border-l-border pl-2">
-                      Next: {t.nextStep}
-                    </div>
-                  )}
-                  {t.promotedFirmId && firmById.has(t.promotedFirmId) && (
-                    <div className="text-xs text-gold mt-2">
-                      Promoted → {firmById.get(t.promotedFirmId)!.name}
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1 text-xs">
+            <RecordCard
+              key={t.id}
+              data-testid={`card-target-${t.id}`}
+              onClick={canEdit ? () => { setEditingId(t.id); setErr(null); } : undefined}
+              title={t.name}
+              subtitle={[t.ecosystem, t.country].filter(Boolean).join(" · ") || "—"}
+              trailing={
+                <>
                   <MonoChip tone={t.priority === "high" ? "gold" : "default"}>{t.priority}</MonoChip>
                   <MonoChip tone={t.status === "promoted" ? "green" : t.status === "dropped" ? "red" : "default"}>
                     {t.status.replace("_", " ")}
                   </MonoChip>
-                  {t.tierHypothesis && <span className="text-text-faint">tier hypothesis · {t.tierHypothesis}</span>}
-                  {canEdit && (
-                    <div className="flex gap-2 pt-1">
-                      {t.status !== "promoted" && (
-                        <button
-                          className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                          onClick={() => {
-                            setErr(null);
-                            promote.mutate({ id: t.id }, {
-                              onSuccess: () => invalidate(),
-                              onError: (e) => setErr(errMessage(e)),
-                            });
-                          }}
-                          data-testid={`button-promote-target-${t.id}`}
-                        >
-                          <ArrowUpRight className="w-3 h-3" /> promote
-                        </button>
-                      )}
-                      <button
-                        className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                        onClick={() => { setEditingId(t.id); setErr(null); }}
-                      >
-                        <Pencil className="w-3 h-3" /> edit
-                      </button>
-                      <button
-                        className="font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1"
+                </>
+              }
+              actions={
+                canEdit ? (
+                  <>
+                    {t.status !== "promoted" && (
+                      <RecordCardAction
                         onClick={() => {
                           setErr(null);
-                          archive.mutate({ id: t.id }, {
+                          promote.mutate({ id: t.id }, {
                             onSuccess: () => invalidate(),
                             onError: (e) => setErr(errMessage(e)),
                           });
                         }}
+                        data-testid={`button-promote-target-${t.id}`}
                       >
-                        <Archive className="w-3 h-3" /> archive
-                      </button>
-                    </div>
-                  )}
+                        <ArrowUpRight className="w-3 h-3" /> promote
+                      </RecordCardAction>
+                    )}
+                    <RecordCardAction
+                      danger
+                      onClick={() => {
+                        setErr(null);
+                        archive.mutate({ id: t.id }, {
+                          onSuccess: () => invalidate(),
+                          onError: (e) => setErr(errMessage(e)),
+                        });
+                      }}
+                      data-testid={`button-archive-target-${t.id}`}
+                    >
+                      <Archive className="w-3 h-3" />
+                    </RecordCardAction>
+                  </>
+                ) : undefined
+              }
+              chips={
+                t.tierHypothesis ? (
+                  <MonoChip>tier hypothesis · {t.tierHypothesis}</MonoChip>
+                ) : undefined
+              }
+            >
+              {t.thesis && <div className="text-sm text-text-mute">{t.thesis}</div>}
+              {t.nextStep && (
+                <div className="text-xs text-text-faint border-l-2 border-l-border pl-2">
+                  Next: {t.nextStep}
                 </div>
-              </div>
-            </Card>
+              )}
+              {t.promotedFirmId && firmById.has(t.promotedFirmId) && (
+                <div className="text-xs text-gold">
+                  Promoted → {firmById.get(t.promotedFirmId)!.name}
+                </div>
+              )}
+            </RecordCard>
           ),
         )}
       </div>
@@ -1131,45 +1130,44 @@ function CoSellView() {
                 }
               />
             ) : (
-              <Card key={o.id} className="p-4" data-testid={`card-jp-${o.id}`}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="font-medium text-text">{o.opportunityName ?? o.opportunityId}</div>
-                    <div className="text-xs text-text-faint mt-1">
-                      {o.clientName ?? "—"} · with {o.partnerFirmName ?? o.partnerFirmId}
-                      {o.salesStage ? ` · ${o.salesStage.replace(/_/g, " ")}` : ""} · lead: {o.leadParty}
-                    </div>
-                    {o.splitRationale && <div className="text-sm text-text-mute mt-2">{o.splitRationale}</div>}
-                  </div>
-                  <div className="flex flex-col items-end gap-1 text-xs">
+              <RecordCard
+                key={o.id}
+                data-testid={`card-jp-${o.id}`}
+                onClick={canEdit ? () => { setEditingId(o.id); setErr(null); } : undefined}
+                title={o.opportunityName ?? o.opportunityId}
+                subtitle={
+                  <>
+                    {o.clientName ?? "—"} · with {o.partnerFirmName ?? o.partnerFirmId}
+                    {o.salesStage ? ` · ${o.salesStage.replace(/_/g, " ")}` : ""} · lead: {o.leadParty}
+                  </>
+                }
+                trailing={
+                  <>
                     <MonoChip tone="gold">Cognirise {o.cognirisePct}% · partner {o.partnerPct}%</MonoChip>
-                    <span className="text-text-faint">alliance letter · {o.allianceLetterStatus}</span>
                     {o.partnerSourced && <MonoChip tone="green">partner-sourced</MonoChip>}
-                    {canEdit && (
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          className="font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                          onClick={() => { setEditingId(o.id); setErr(null); }}
-                        >
-                          <Pencil className="w-3 h-3" /> edit
-                        </button>
-                        <button
-                          className="font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1"
-                          onClick={() => {
-                            setErr(null);
-                            archive.mutate({ id: o.id }, {
-                              onSuccess: () => invalidate(),
-                              onError: (e) => setErr(errMessage(e)),
-                            });
-                          }}
-                        >
-                          <Archive className="w-3 h-3" /> archive
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
+                  </>
+                }
+                actions={
+                  canEdit ? (
+                    <RecordCardAction
+                      danger
+                      onClick={() => {
+                        setErr(null);
+                        archive.mutate({ id: o.id }, {
+                          onSuccess: () => invalidate(),
+                          onError: (e) => setErr(errMessage(e)),
+                        });
+                      }}
+                      data-testid={`button-archive-jp-${o.id}`}
+                    >
+                      <Archive className="w-3 h-3" />
+                    </RecordCardAction>
+                  ) : undefined
+                }
+                chips={<MonoChip>alliance letter · {o.allianceLetterStatus}</MonoChip>}
+              >
+                {o.splitRationale && <div className="text-sm text-text-mute">{o.splitRationale}</div>}
+              </RecordCard>
             ),
           )}
         </div>
