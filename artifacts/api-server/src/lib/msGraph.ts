@@ -28,6 +28,9 @@ export const MS_SCOPES = [
   // Task #553 — required to create calendar events (send internal meeting
   // invites) from the requester's own mailbox. Delegated only.
   "Calendars.ReadWrite",
+  // Task #602 — required to set Outlook automatic replies (out-of-office)
+  // on the leave-taker's own mailbox when leave is approved. Delegated only.
+  "MailboxSettings.ReadWrite",
 ];
 
 /** Does a stored scope list include calendar write? Microsoft returns
@@ -35,6 +38,13 @@ export const MS_SCOPES = [
  *  lenient about a fully-qualified form. */
 export function hasCalendarWriteScope(scopes: readonly string[] | null | undefined): boolean {
   return (scopes ?? []).some((s) => /(^|\/)Calendars\.ReadWrite$/i.test(s.trim()));
+}
+
+/** Task #602 — does a stored scope list allow reading/writing mailbox
+ *  settings (Outlook automatic replies)? Connections made before this
+ *  scope was added won't have it until the user reconnects. */
+export function hasMailboxSettingsScope(scopes: readonly string[] | null | undefined): boolean {
+  return (scopes ?? []).some((s) => /(^|\/)MailboxSettings\.(ReadWrite|Read)$/i.test(s.trim()));
 }
 
 export function msConfigured(): boolean {
@@ -488,6 +498,8 @@ export interface MsCalendarEvent {
   }>;
   organizer?: { emailAddress?: { address?: string; name?: string } };
   webLink?: string;
+  /** Free/busy status ("free" | "tentative" | "busy" | "oof" | ...). */
+  showAs?: string;
 }
 
 // Known online-meeting URL shapes (Teams, Google Meet, Zoom, Webex). Used as
@@ -556,7 +568,7 @@ export async function getCalendarView(
     $orderby: "start/dateTime",
     $top: "100",
     $select:
-      "id,iCalUId,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink",
+      "id,iCalUId,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink,showAs",
   });
   const out: MsCalendarEvent[] = [];
   let path: string | null = `/me/calendarView?${qs.toString()}`;
@@ -571,4 +583,111 @@ export async function getCalendarView(
     if (path && !path.startsWith("/")) path = null; // absolute foreign URL — stop
   }
   return out;
+}
+// ------------------------------------------------------------------
+// Task #602 — leave → Outlook out-of-office surfaces.
+// ------------------------------------------------------------------
+
+/**
+ * Create an all-day "Out of office" event on the caller's own calendar,
+ * shown as OOF so colleagues see the absence in scheduling assistants.
+ * `startDate` inclusive, `endDateExclusive` exclusive (Graph all-day
+ * convention), both YYYY-MM-DD.
+ */
+export async function createAllDayOofEvent(
+  accessToken: string,
+  args: {
+    subject: string;
+    startDate: string;
+    endDateExclusive: string;
+    bodyText?: string;
+    /** IANA timezone of the leave taker (defaults to the firm's base). */
+    timeZone?: string;
+  },
+): Promise<MsCalendarEvent> {
+  const tz = args.timeZone ?? "Asia/Dubai";
+  return graphPost<MsCalendarEvent>(accessToken, "/me/events", {
+    subject: args.subject,
+    body: args.bodyText ? { contentType: "text", content: args.bodyText } : undefined,
+    start: { dateTime: `${args.startDate}T00:00:00`, timeZone: tz },
+    end: { dateTime: `${args.endDateExclusive}T00:00:00`, timeZone: tz },
+    isAllDay: true,
+    showAs: "oof",
+    isReminderOn: false,
+  });
+}
+
+export interface MsAutomaticRepliesSetting {
+  status?: "disabled" | "alwaysEnabled" | "scheduled";
+  externalAudience?: "none" | "contactsOnly" | "all";
+  scheduledStartDateTime?: { dateTime?: string; timeZone?: string };
+  scheduledEndDateTime?: { dateTime?: string; timeZone?: string };
+  internalReplyMessage?: string;
+  externalReplyMessage?: string;
+}
+
+/** Read the caller's mailbox automatic-replies setting (delegated). */
+export async function getAutomaticReplies(
+  accessToken: string,
+): Promise<MsAutomaticRepliesSetting> {
+  const out = await graphGet<{ automaticRepliesSetting?: MsAutomaticRepliesSetting }>(
+    accessToken,
+    "/me/mailboxSettings?$select=automaticRepliesSetting",
+  );
+  return out.automaticRepliesSetting ?? {};
+}
+
+/** Patch the caller's mailbox automatic-replies setting (delegated). */
+export async function setAutomaticReplies(
+  accessToken: string,
+  setting: MsAutomaticRepliesSetting,
+): Promise<void> {
+  await graphPatch(accessToken, "/me/mailboxSettings", {
+    automaticRepliesSetting: setting,
+  });
+}
+
+export interface MsCalendarInfo {
+  id: string;
+  name?: string;
+}
+
+/** List the caller's calendars (used to find subscribed holiday calendars). */
+export async function listCalendars(accessToken: string): Promise<MsCalendarInfo[]> {
+  const out: MsCalendarInfo[] = [];
+  let path: string | null = "/me/calendars?$top=50&$select=id,name";
+  let guard = 0;
+  while (path && guard < 5) {
+    guard += 1;
+    const page: { value: MsCalendarInfo[]; "@odata.nextLink"?: string } = await graphGet(
+      accessToken,
+      path,
+    );
+    out.push(...(page.value ?? []));
+    const next: string | undefined = page["@odata.nextLink"];
+    path = next ? next.replace(graphBase(), "") : null;
+    if (path && !path.startsWith("/")) path = null;
+  }
+  return out;
+}
+
+/** Calendar view scoped to one specific (non-default) calendar. */
+export async function getCalendarViewForCalendar(
+  accessToken: string,
+  calendarId: string,
+  startIso: string,
+  endIso: string,
+): Promise<MsCalendarEvent[]> {
+  const qs = new URLSearchParams({
+    startDateTime: startIso,
+    endDateTime: endIso,
+    $orderby: "start/dateTime",
+    $top: "100",
+    $select: "id,iCalUId,subject,isCancelled,isAllDay,start,end,showAs",
+  });
+  const page: { value: MsCalendarEvent[] } = await graphGet(
+    accessToken,
+    `/me/calendars/${encodeURIComponent(calendarId)}/calendarView?${qs.toString()}`,
+  );
+  return page.value ?? [];
 }

@@ -65,6 +65,14 @@ export const V3_AUDIT_ACTIONS = {
   LEAVE_REJECT: "leave.reject",
   LEAVE_CANCEL: "leave.cancel",
   LEAVE_ENTITLEMENT_SET: "leave.entitlement.set",
+  // Task #602 — auto out-of-office on approved leave -----------------------
+  LEAVE_AUTO_APPROVE: "leave.auto_approve",
+  LEAVE_REVOKE: "leave.revoke",
+  LEAVE_SHORTEN: "leave.shorten",
+  LEAVE_OOO_APPLIED: "leave.ooo.applied",
+  LEAVE_OOO_CLEARED: "leave.ooo.cleared",
+  LEAVE_OOO_SKIPPED: "leave.ooo.skipped",
+  LEAVE_OOO_FAILED: "leave.ooo.failed",
   ROSTER_REPORTS_TO_SET: "roster.reports_to.set",
   EXPENSE_REIMBURSE: "expense.reimburse",
 

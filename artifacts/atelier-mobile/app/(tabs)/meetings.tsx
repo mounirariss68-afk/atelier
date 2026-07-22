@@ -13,6 +13,7 @@ import {
   useAtelierGetMyMsConnection,
   type AtelierCalendarMeeting,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ExpoLinking from "expo-linking";
 import { useLocalSearchParams } from "expo-router";
@@ -384,6 +385,16 @@ function MeetingRow({
               <Chip label={t("mtg.internal")} color={c.primary} />
             </View>
           ) : null}
+          {meetingKind(m) === "ooo" ? (
+            <View style={{ flexDirection: rtl.row }}>
+              <Chip label={t("mtg.ooo")} color="#D97706" />
+            </View>
+          ) : null}
+          {meetingKind(m) === "holiday" ? (
+            <View style={{ flexDirection: rtl.row }}>
+              <Chip label={t("mtg.holiday")} color={c.mutedForeground} />
+            </View>
+          ) : null}
           {m.joinUrl ? (
             <Pressable
               onPress={() => {
@@ -505,6 +516,285 @@ function windowIso(days: number) {
   const start = new Date();
   const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// ------------------------------------------------------------------
+// Task #602 — "Away today" chips + public-holiday banners. The bespoke
+// /roster/on-leave-today and /me/holidays routes are not in the OpenAPI
+// spec, so these use apiJson raw fetch. The server also tags calendar
+// rows with kind: "ooo" | "holiday".
+// ------------------------------------------------------------------
+
+type MeetingKind = "ooo" | "holiday" | undefined;
+function meetingKind(m: AtelierCalendarMeeting): MeetingKind {
+  const k = (m as { kind?: string }).kind;
+  return k === "ooo" || k === "holiday" ? k : undefined;
+}
+
+interface AwayPerson {
+  personId: string;
+  personName: string;
+  initials: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  returnDate: string;
+}
+
+interface HolidayItem {
+  date: string;
+  endDate: string;
+  name: string;
+  country: string;
+  tentative: boolean;
+}
+
+function isoDateOnly(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function fmtDateShort(iso: string) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Slim horizontally-scrollable strip of partners on approved leave for
+ * the given date (default today). Avatar-initials chips; tapping one
+ * shows the leave span and return date. Pinned above the tab bar by the
+ * screen. The endpoint 403s for non-partner viewers — any error hides
+ * the strip. */
+function AwayTodayStrip({ date }: { date?: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  const { data } = useQuery({
+    queryKey: ["roster-on-leave-today", date ?? "today"],
+    queryFn: async (): Promise<{ away: AwayPerson[] } | null> => {
+      try {
+        return await apiJson<{ away: AwayPerson[] }>(
+          `/api/atelier/roster/on-leave-today${date ? `?date=${date}` : ""}`,
+        );
+      } catch {
+        return null;
+      }
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const away = data?.away ?? [];
+  if (away.length === 0) return null;
+  const openPerson =
+    away.find((a) => `${a.personId}-${a.startDate}` === openKey) ?? null;
+  return (
+    <View
+      style={{
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.border,
+        backgroundColor: c.secondary,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        gap: 6,
+      }}
+    >
+      <Text
+        style={{
+          color: c.mutedForeground,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {t("mtg.awayToday")}
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ flexDirection: rtl.row, gap: 8 }}
+      >
+        {away.map((a) => {
+          const key = `${a.personId}-${a.startDate}`;
+          const open = openKey === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => {
+                hapticLight();
+                setOpenKey(open ? null : key);
+              }}
+              style={({ pressed }) => ({
+                flexDirection: rtl.row,
+                alignItems: "center",
+                gap: 8,
+                borderRadius: 999,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: open ? c.primary : c.border,
+                backgroundColor: open ? c.primary + "18" : c.card,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 12,
+                  backgroundColor: c.primary + "26",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.primary,
+                    fontFamily: "PlusJakartaSans_700Bold",
+                    fontSize: 10,
+                  }}
+                >
+                  {a.initials || a.personName.slice(0, 2).toUpperCase()}
+                </Text>
+              </View>
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 12,
+                }}
+              >
+                {a.personName}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      {openPerson ? (
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "Inter_400Regular",
+            fontSize: 12,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {openPerson.personName} · {fmtDateShort(openPerson.startDate)} →{" "}
+          {fmtDateShort(openPerson.endDate)} · {t("mtg.awayUntil")}{" "}
+          {fmtDateShort(openPerson.returnDate)}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/** Public-holiday banner for a date window (curated TR/MENA dataset);
+ * the viewer's own market renders in the primary color. */
+function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const { data } = useQuery({
+    queryKey: ["me-holidays", startDate, endDate],
+    queryFn: async (): Promise<
+      { viewerCountry: string | null; holidays: HolidayItem[] } | null
+    > => {
+      try {
+        return await apiJson<{ viewerCountry: string | null; holidays: HolidayItem[] }>(
+          `/api/atelier/me/holidays?start=${startDate}&end=${endDate}`,
+        );
+      } catch {
+        return null;
+      }
+    },
+    retry: false,
+    staleTime: 60 * 60_000,
+  });
+  const [expanded, setExpanded] = useState(false);
+  const holidays = data?.holidays ?? [];
+  if (holidays.length === 0) return null;
+  const viewer = data?.viewerCountry ?? null;
+  // Viewer's own market up-front; other markets collapse into one
+  // expandable row to avoid clutter.
+  const mine = viewer ? holidays.filter((h) => h.country === viewer) : holidays;
+  const others = viewer ? holidays.filter((h) => h.country !== viewer) : [];
+  return (
+    <View
+      style={{
+        borderRadius: 10,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.border,
+        backgroundColor: c.secondary,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        gap: 6,
+      }}
+    >
+      <Text
+        style={{
+          color: c.mutedForeground,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: 0.6,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {t("mtg.holidays")}
+      </Text>
+      <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 6 }}>
+        {mine.map((h) => (
+          <Chip
+            key={`${h.country}-${h.date}-${h.name}`}
+            label={`${h.country} · ${h.name} (${fmtDateShort(h.date)})${h.tentative ? " *" : ""}`}
+            color={viewer ? c.primary : c.mutedForeground}
+          />
+        ))}
+        {others.length > 0 ? (
+          <Pressable
+            onPress={() => {
+              hapticLight();
+              setExpanded((v) => !v);
+            }}
+            style={({ pressed }) => ({
+              borderRadius: 999,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.border,
+              backgroundColor: c.card,
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 11,
+              }}
+            >
+              {expanded ? "−" : `+${others.length}`}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {expanded && others.length > 0 ? (
+        <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 6 }}>
+          {others.map((h) => (
+            <Chip
+              key={`${h.country}-${h.date}-${h.name}`}
+              label={`${h.country} · ${h.name} (${fmtDateShort(h.date)})${h.tentative ? " *" : ""}`}
+              color={c.mutedForeground}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 // ------------------------------------------------------------------
@@ -1891,6 +2181,10 @@ export default function MeetingsScreen() {
           </View>
         ) : view === "day" ? (
           <Animated.View style={{ opacity: dayFade, gap: 12 }}>
+            <HolidayBanner
+              startDate={isoDateOnly(selectedDate)}
+              endDate={isoDateOnly(selectedDate)}
+            />
             {dayCalendar.isLoading ? (
               <View style={{ gap: 12 }}>
                 {[0, 1, 2].map((i) => (
@@ -1922,7 +2216,11 @@ export default function MeetingsScreen() {
                           borderWidth: StyleSheet.hairlineWidth,
                           borderColor: c.border,
                           backgroundColor:
-                            m.matches.length > 0 ? c.primary + "22" : c.secondary,
+                            meetingKind(m) === "ooo"
+                              ? "#D9770622"
+                              : m.matches.length > 0
+                                ? c.primary + "22"
+                                : c.secondary,
                           paddingHorizontal: 10,
                           paddingVertical: 8,
                           opacity: pressed ? 0.8 : 1,
@@ -1970,9 +2268,20 @@ export default function MeetingsScreen() {
         ) : calendar.isError ? (
           <ErrorState onRetry={() => calendar.refetch()} message={t("mtg.error")} />
         ) : meetings.length === 0 ? (
-          <EmptyState icon="calendar" title={t("mtg.empty")} body={t("mtg.emptyBody")} />
+          <>
+            <HolidayBanner
+              startDate={isoDateOnly(new Date())}
+              endDate={isoDateOnly(new Date(Date.now() + 7 * 24 * 3600 * 1000))}
+            />
+            <EmptyState icon="calendar" title={t("mtg.empty")} body={t("mtg.emptyBody")} />
+          </>
         ) : (
-          meetings.map((m) => (
+          <>
+            <HolidayBanner
+              startDate={isoDateOnly(new Date())}
+              endDate={isoDateOnly(new Date(Date.now() + 7 * 24 * 3600 * 1000))}
+            />
+          {meetings.map((m) => (
             <MeetingRow
               key={
                 m.id === focusMeetingId ? `${m.id}-focus-${focusAccountId ?? ""}` : m.id
@@ -1981,10 +2290,19 @@ export default function MeetingsScreen() {
               initialBriefAccountId={m.id === focusMeetingId ? focusAccountId : null}
               onOpen={() => setDetailMeeting(m)}
             />
-          ))
+          ))}
+          </>
         )}
       </ScrollView>
       </GestureDetector>
+
+      {/* Task #602 — the "Away" strip is pinned above the tab bar (outside
+          the scroll content) and follows the selected day in day view. */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <AwayTodayStrip
+          date={view === "day" ? isoDateOnly(selectedDate) : undefined}
+        />
+      </View>
 
       {detailMeeting ? (
         <MeetingDetailSheet

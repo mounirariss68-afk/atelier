@@ -10,7 +10,7 @@
 // The calendar is always the *viewer's own* — the server matches attendee
 // emails against CRM contacts the viewer is allowed to see, so no extra
 // client-side permission logic is needed here.
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -494,6 +494,8 @@ function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; show
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-text font-medium truncate">{m.subject || "(no subject)"}</span>
           {m.internal && <MonoChip tone="gold">Internal</MonoChip>}
+          {meetingKind(m) === "ooo" && <MonoChip tone="amber">Out of office</MonoChip>}
+          {meetingKind(m) === "holiday" && <MonoChip>Holiday</MonoChip>}
           <JoinLink m={m} />
         </div>
         {m.location && !m.joinUrl && (
@@ -547,6 +549,191 @@ function windowIso(days: number) {
   const start = new Date();
   const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// ------------------------------------------------------------------
+// Task #602 — "Away today" strip + public-holiday banners. The bespoke
+// /roster/on-leave-today and /me/holidays routes are not in the OpenAPI
+// spec, so these use raw fetch (same convention as the autolog card).
+// The server also tags calendar rows with kind: "ooo" | "holiday".
+// ------------------------------------------------------------------
+
+type MeetingKind = "ooo" | "holiday" | undefined;
+function meetingKind(m: AtelierCalendarMeeting): MeetingKind {
+  const k = (m as { kind?: string }).kind;
+  return k === "ooo" || k === "holiday" ? k : undefined;
+}
+
+interface AwayPerson {
+  personId: string;
+  personName: string;
+  initials: string;
+  leaveType: string;
+  startDate: string;
+  endDate: string;
+  returnDate: string;
+}
+
+interface HolidayItem {
+  date: string;
+  endDate: string;
+  name: string;
+  country: string;
+  tentative: boolean;
+}
+
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  annual: "Annual leave",
+  sick: "Sick leave",
+  unpaid: "Unpaid leave",
+  parental: "Parental leave",
+  compassionate: "Compassionate leave",
+  other: "Leave",
+};
+
+function fmtDateShort(iso: string) {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** Slim horizontally-scrollable strip of partners on approved leave for
+ * the given date (default today). Avatar-initials chips; clicking one
+ * shows the leave span and return date. The endpoint 403s for
+ * non-partner viewers — treat any error as "hide". */
+export function AwayTodayStrip({ date }: { date?: string }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { data } = useQuery({
+    queryKey: ["roster-on-leave-today", date ?? "today"],
+    queryFn: async (): Promise<{ date: string; away: AwayPerson[] } | null> => {
+      const qs = date ? `?date=${date}` : "";
+      const r = await fetch(`${API_BASE}/roster/on-leave-today${qs}`, { credentials: "include" });
+      if (!r.ok) return null;
+      return r.json();
+    },
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const away = data?.away ?? [];
+  if (away.length === 0) return null;
+  const openPerson = away.find((a) => `${a.personId}-${a.startDate}` === openId) ?? null;
+  return (
+    <div
+      className="rounded-lg border border-border-soft bg-bg-soft px-3 py-2"
+      data-testid="away-today-strip"
+    >
+      <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1.5">
+        Away {date ? `on ${fmtDateShort(date)}` : "today"}
+      </div>
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:thin]">
+        {away.map((a) => {
+          const key = `${a.personId}-${a.startDate}`;
+          const open = openId === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setOpenId(open ? null : key)}
+              className={`shrink-0 inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs transition-colors ${
+                open
+                  ? "border-gold/60 bg-gold/10 text-text"
+                  : "border-border-soft bg-bg-elevate text-text-mute hover:text-text"
+              }`}
+              data-testid={`away-chip-${a.personId}`}
+            >
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gold/20 text-[10px] font-semibold text-gold">
+                {a.initials || a.personName.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="whitespace-nowrap">{a.personName}</span>
+            </button>
+          );
+        })}
+      </div>
+      {openPerson && (
+        <div
+          className="mt-2 rounded-md border border-border-soft bg-bg-elevate px-3 py-2 text-xs text-text-mute"
+          data-testid="away-chip-detail"
+        >
+          <span className="text-text font-medium">{openPerson.personName}</span>{" "}
+          — on leave {fmtDateShort(openPerson.startDate)} → {fmtDateShort(openPerson.endDate)},
+          back {fmtDateShort(openPerson.returnDate)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Public-holiday banner for a date window (curated TR/MENA dataset).
+ * The viewer's own market is highlighted in gold. */
+export function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const { data } = useQuery({
+    queryKey: ["me-holidays", startDate, endDate],
+    queryFn: async (): Promise<{ viewerCountry: string | null; holidays: HolidayItem[] } | null> => {
+      const r = await fetch(
+        `${API_BASE}/me/holidays?start=${startDate}&end=${endDate}`,
+        { credentials: "include" },
+      );
+      if (!r.ok) return null;
+      return r.json();
+    },
+    retry: false,
+    staleTime: 60 * 60_000,
+  });
+  const holidays = data?.holidays ?? [];
+  const [expanded, setExpanded] = useState(false);
+  if (holidays.length === 0) return null;
+  const viewer = data?.viewerCountry ?? null;
+  // The viewer's own market is shown up-front; the other 8 markets
+  // collapse into a single expandable row to avoid clutter.
+  const mine = viewer ? holidays.filter((h) => h.country === viewer) : holidays;
+  const others = viewer ? holidays.filter((h) => h.country !== viewer) : [];
+  const chip = (h: HolidayItem, highlight: boolean) => (
+    <MonoChip
+      key={`${h.country}-${h.date}-${h.name}`}
+      tone={highlight ? "gold" : "default"}
+      title={h.tentative ? "Date subject to moon sighting" : undefined}
+      data-testid={`holiday-chip-${h.country}-${h.date}`}
+    >
+      {h.country} · {h.name}
+      {h.endDate !== h.date
+        ? ` (${fmtDateShort(h.date)}–${fmtDateShort(h.endDate)})`
+        : ` (${fmtDateShort(h.date)})`}
+      {h.tentative ? " *" : ""}
+    </MonoChip>
+  );
+  return (
+    <div
+      className="rounded-lg border border-border-soft bg-bg-soft px-3 py-2"
+      data-testid="holiday-banner"
+    >
+      <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+        Public holidays
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {mine.map((h) => chip(h, Boolean(viewer)))}
+        {others.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-full border border-border-soft bg-bg-elevate px-2 py-0.5 text-[11px] font-mono text-text-mute hover:text-text transition-colors"
+            data-testid="holiday-others-toggle"
+          >
+            {expanded ? "Hide" : `+${others.length} in other markets`}
+          </button>
+        )}
+      </div>
+      {expanded && others.length > 0 && (
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap" data-testid="holiday-others-row">
+          {others.map((h) => chip(h, false))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isoDateOnly(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 // ------------------------------------------------------------------
@@ -828,6 +1015,11 @@ export function MeetingsDayView() {
           setSelectedMeetingId(null);
         }}
       />
+      <AwayTodayStrip date={isoDateOnly(selectedDate)} />
+      <HolidayBanner
+        startDate={isoDateOnly(selectedDate)}
+        endDate={isoDateOnly(selectedDate)}
+      />
       {isPending ? (
         <Skeleton className="h-40 bg-bg-elevate" />
       ) : error ? (
@@ -855,10 +1047,28 @@ export function MeetingsDayView() {
                       onClick={() => setSelectedMeetingId(selected ? null : m.id)}
                       className={`rounded-lg border px-3 py-2 text-left text-sm text-text ${
                         selected ? "border-gold" : "border-border-soft"
-                      } ${m.matches.length > 0 ? "bg-gold/15" : "bg-bg-soft"}`}
+                      } ${
+                        meetingKind(m) === "ooo"
+                          ? "bg-amber-500/10"
+                          : m.matches.length > 0
+                            ? "bg-gold/15"
+                            : "bg-bg-soft"
+                      }`}
                       data-testid={`meeting-allday-${m.id}`}
                     >
-                      <span className="truncate block">{m.subject || "(no subject)"}</span>
+                      <span className="truncate block">
+                        {m.subject || "(no subject)"}
+                        {meetingKind(m) === "ooo" && (
+                          <span className="ml-2 text-[10px] font-mono uppercase tracking-wide text-amber-400">
+                            Out of office
+                          </span>
+                        )}
+                        {meetingKind(m) === "holiday" && (
+                          <span className="ml-2 text-[10px] font-mono uppercase tracking-wide text-text-faint">
+                            Holiday
+                          </span>
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -981,6 +1191,18 @@ export function ConnectedAccountsCard() {
                 </div>
               </div>
             )}
+            {/* Task #602 — connections made before the mailbox-settings
+             * permission was added can't set Outlook auto-replies on
+             * approved leave; a one-click reconnect grants it. */}
+            {!conn.lastError &&
+              (conn as { mailboxSettingsGranted?: boolean }).mailboxSettingsGranted === false && (
+                <div className="mt-1" data-testid="ms-mailbox-scope-prompt">
+                  <div className="text-xs text-amber-400">
+                    Reconnect to enable automatic out-of-office replies when your leave is
+                    approved — your connection predates this permission.
+                  </div>
+                </div>
+              )}
           </div>
           {confirmingDisconnect ? (
             <div className="shrink-0 flex items-center gap-2 sm:max-w-sm">
@@ -1007,7 +1229,9 @@ export function ConnectedAccountsCard() {
             </div>
           ) : (
             <div className="shrink-0 flex flex-col items-stretch sm:items-end gap-2">
-              {conn.lastError && (
+              {(conn.lastError ||
+                (conn as { mailboxSettingsGranted?: boolean }).mailboxSettingsGranted ===
+                  false) && (
                 <>
                   <PillButton
                     className="shrink-0"
@@ -1126,6 +1350,15 @@ export function MyMeetingsCard() {
             })}
         </div>
       </div>
+      {view === "list" && (
+        <>
+          <AwayTodayStrip />
+          <HolidayBanner
+            startDate={isoDateOnly(new Date())}
+            endDate={isoDateOnly(new Date(Date.now() + 7 * 24 * 3600 * 1000))}
+          />
+        </>
+      )}
       <Card className="p-5">
         {conn.configured && !conn.connected && (
           <div className="text-sm text-text-mute mb-3">

@@ -102,6 +102,14 @@ import {
 } from "../../lib/objectStorage.js";
 import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
 import { ObjectPermission } from "../../lib/objectAcl.js";
+// Task #602 — auto out-of-office on approved leave + curated holidays.
+import { applyLeaveOoo, clearLeaveOoo } from "../../lib/atelierLeaveOoo.js";
+import {
+  holidaysInRange,
+  countryToCode,
+  nextWorkingDayAfter,
+  HOLIDAY_COUNTRIES,
+} from "../../lib/atelierHolidays.js";
 
 const router: IRouter = Router();
 
@@ -743,6 +751,9 @@ router.post("/me/leave", async (req, res, next) => {
       return;
     }
     const id = rid("leave");
+    // Task #602 — partner-tier requests need no approver: auto-approve on
+    // submission (stamped autoApproved) and kick off the OOO sync.
+    const autoApprove = isLeadership(me.role);
     const [row] = await db
       .insert(atelierLeaveRequests)
       .values({
@@ -756,7 +767,10 @@ router.post("/me/leave", async (req, res, next) => {
         endDate: b.endDate,
         workingDays,
         note: typeof b.note === "string" ? b.note.slice(0, 2000) : null,
-        status: "pending",
+        status: autoApprove ? "approved" : "pending",
+        ...(autoApprove
+          ? { autoApproved: true, decidedAt: new Date(), decidedByUserId: me.id }
+          : {}),
       })
       .returning();
     await audit({
@@ -767,34 +781,132 @@ router.post("/me/leave", async (req, res, next) => {
       payload: { leaveType, startDate: b.startDate, endDate: b.endDate, workingDays },
       summary: `${me.name} requested ${workingDays}d ${leaveType} leave (${b.startDate} → ${b.endDate})`,
     });
+    if (autoApprove) {
+      await audit({
+        entityType: "leave_request",
+        entityId: id,
+        actor: me,
+        action: "leave.auto_approve",
+        payload: { role: me.role },
+        summary: `${me.name}'s leave ${b.startDate} → ${b.endDate} auto-approved (partner tier)`,
+      });
+      setImmediate(() => void applyLeaveOoo(id));
+    }
     res.status(201).json({ request: leaveToWire(row) });
   } catch (err) {
     next(err);
   }
 });
 
+/**
+ * Task #602 — shared revoke/shorten for an APPROVED leave. Used by the
+ * self cancel route and the HR/approver revoke route. `newEndDate` (when
+ * given and inside the current range) shortens instead of revoking —
+ * an "early return". Both paths reconcile the Outlook OOO surfaces.
+ */
+async function revokeOrShortenApprovedLeave(args: {
+  me: typeof atelierUsers.$inferSelect;
+  row: typeof atelierLeaveRequests.$inferSelect;
+  newEndDate: string | null;
+  res: Response;
+}): Promise<void> {
+  const { me, row, newEndDate, res } = args;
+  if (newEndDate) {
+    if (!isIsoDate(newEndDate) || newEndDate < row.startDate || newEndDate >= row.endDate) {
+      res.status(400).json({
+        error: "invalid-new-end-date",
+        reason: "newEndDate must be a date within the leave, before its current end.",
+      });
+      return;
+    }
+    const workingDays = countWorkingDays(row.startDate, newEndDate);
+    const [updated] = await db
+      .update(atelierLeaveRequests)
+      .set({ endDate: newEndDate, workingDays, updatedAt: new Date() })
+      .where(eq(atelierLeaveRequests.id, row.id))
+      .returning();
+    await audit({
+      entityType: "leave_request",
+      entityId: row.id,
+      actor: me,
+      action: "leave.shorten",
+      payload: { previousEndDate: row.endDate, newEndDate, workingDays },
+      summary: `${me.name} shortened leave to ${row.startDate} → ${newEndDate}`,
+    });
+    if (row.userId !== me.id) {
+      await emitSelfNotification({
+        orgId: me.orgId,
+        userId: row.userId,
+        kind: "leave_shortened",
+        title: "Leave shortened",
+        body: `Your ${row.leaveType} leave now ends ${newEndDate} (was ${row.endDate}).`,
+        href: "/me",
+      });
+    }
+    setImmediate(() => void clearLeaveOoo(row.id, "shorten"));
+    res.json({ request: leaveToWire(updated) });
+    return;
+  }
+  const [updated] = await db
+    .update(atelierLeaveRequests)
+    .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierLeaveRequests.id, row.id))
+    .returning();
+  await audit({
+    entityType: "leave_request",
+    entityId: row.id,
+    actor: me,
+    action: "leave.revoke",
+    payload: { previousStatus: "approved" },
+    summary: `${me.name} revoked approved leave ${row.startDate} → ${row.endDate}`,
+  });
+  if (row.userId !== me.id) {
+    await emitSelfNotification({
+      orgId: me.orgId,
+      userId: row.userId,
+      kind: "leave_revoked",
+      title: "Leave revoked",
+      body: `Your ${row.leaveType} leave ${row.startDate} → ${row.endDate} was revoked by ${me.name}.`,
+      href: "/me",
+    });
+  }
+  setImmediate(() => void clearLeaveOoo(row.id, "revoke"));
+  res.json({ request: leaveToWire(updated) });
+}
+
 // @cli-skip: self-scope leave cancel; no CLI shape (Task #53)
 router.post("/me/leave/:id/cancel", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
     if (!me) return;
-    const [row] = await db
-      .update(atelierLeaveRequests)
-      .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+    const [existing] = await db
+      .select()
+      .from(atelierLeaveRequests)
       .where(
         and(
           eq(atelierLeaveRequests.id, req.params.id),
           eq(atelierLeaveRequests.orgId, me.orgId),
           eq(atelierLeaveRequests.userId, me.id),
-          eq(atelierLeaveRequests.status, "pending"),
           isNull(atelierLeaveRequests.deletedAt),
         ),
-      )
-      .returning();
-    if (!row) {
+      );
+    if (!existing || !["pending", "approved"].includes(existing.status)) {
       res.status(404).json({ error: "not-cancellable" });
       return;
     }
+    // Task #602 — approved leaves can now be revoked or shortened by the
+    // person themselves (early return); OOO surfaces are reconciled.
+    if (existing.status === "approved") {
+      const newEndDate =
+        typeof req.body?.newEndDate === "string" ? req.body.newEndDate : null;
+      await revokeOrShortenApprovedLeave({ me, row: existing, newEndDate, res });
+      return;
+    }
+    const [row] = await db
+      .update(atelierLeaveRequests)
+      .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date() })
+      .where(eq(atelierLeaveRequests.id, existing.id))
+      .returning();
     await audit({
       entityType: "leave_request",
       entityId: row.id,
@@ -1012,6 +1124,11 @@ async function decideLeave(
     body: `${existing.leaveType} leave ${existing.startDate} → ${existing.endDate} (${existing.workingDays}d) was ${decision}${reason ? `: ${reason}` : "."}`,
     href: "/me",
   });
+  // Task #602 — on approval, sync the Outlook out-of-office surfaces in the
+  // background using the LEAVE-TAKER's own connection (never the approver's).
+  if (decision === "approved") {
+    setImmediate(() => void applyLeaveOoo(existing.id));
+  }
   res.json({ request: leaveToWire(row) });
 }
 
@@ -1023,6 +1140,177 @@ router.post("/roster/leave-requests/:id/approve", (req, res, next) =>
 router.post("/roster/leave-requests/:id/reject", (req, res, next) =>
   decideLeave(req, res, "rejected").catch(next),
 );
+
+// Task #602 — HR / routed approvers can revoke or shorten an APPROVED
+// leave (e.g. an early return). Same org-chart routing as deciding, with
+// HR always allowed; self-revocation happens via /me/leave/:id/cancel.
+// @cli-skip: approver revoke backing PeopleApprovals UI (Task #602)
+router.post("/roster/leave-requests/:id/revoke", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canReachApproverSurface(me)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const [existing] = await db
+      .select()
+      .from(atelierLeaveRequests)
+      .where(
+        and(
+          eq(atelierLeaveRequests.id, String(req.params.id)),
+          eq(atelierLeaveRequests.orgId, me.orgId),
+          isNull(atelierLeaveRequests.deletedAt),
+        ),
+      );
+    if (!existing) {
+      res.status(404).json({ error: "not-found" });
+      return;
+    }
+    if (existing.status !== "approved") {
+      res.status(409).json({ error: "not-approved", status: existing.status });
+      return;
+    }
+    if (!isHr(me.role) && !(await canDecideLeaveFor(me, existing.personId))) {
+      res.status(403).json({ error: "not-your-report" });
+      return;
+    }
+    const newEndDate =
+      typeof req.body?.newEndDate === "string" ? req.body.newEndDate : null;
+    await revokeOrShortenApprovedLeave({ me, row: existing, newEndDate, res });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #602 — who is away today. Partner-tier viewers only (the "Away
+// today" strips are a leadership surface, not for the whole roster).
+// @cli-skip: leadership away-today strip read (Task #602)
+router.get("/roster/on-leave-today", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!isLeadership(me.role)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    // Selected-date driven (the strips follow the calendar's day
+    // navigator); defaults to today in the firm's base timezone.
+    const dateParam = req.query.date;
+    const date = isIsoDate(dateParam)
+      ? dateParam
+      : new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+    const rows = await db
+      .select()
+      .from(atelierLeaveRequests)
+      .where(
+        and(
+          eq(atelierLeaveRequests.orgId, me.orgId),
+          eq(atelierLeaveRequests.status, "approved"),
+          lte(atelierLeaveRequests.startDate, date),
+          gte(atelierLeaveRequests.endDate, date),
+          isNull(atelierLeaveRequests.deletedAt),
+        ),
+      )
+      .orderBy(atelierLeaveRequests.endDate);
+    // The strip shows PARTNERS on leave only (spec: partners/founding
+    // partners away that day), so filter by the requester's user role.
+    const userIds = Array.from(new Set(rows.map((r) => r.userId)));
+    const users = userIds.length
+      ? await db
+          .select({ id: atelierUsers.id, role: atelierUsers.role })
+          .from(atelierUsers)
+          .where(and(eq(atelierUsers.orgId, me.orgId), inArray(atelierUsers.id, userIds)))
+      : [];
+    const partnerUserIds = new Set(
+      users.filter((u) => u.role === "partner" || u.role === "founding_partner").map((u) => u.id),
+    );
+    const partnerRows = rows.filter((r) => partnerUserIds.has(r.userId));
+    const personIds = Array.from(new Set(partnerRows.map((r) => r.personId)));
+    const [emps, cons] = await Promise.all([
+      personIds.length
+        ? db.select().from(atelierEmployees).where(inArray(atelierEmployees.id, personIds))
+        : Promise.resolve([] as Array<typeof atelierEmployees.$inferSelect>),
+      personIds.length
+        ? db.select().from(atelierContractors).where(inArray(atelierContractors.id, personIds))
+        : Promise.resolve([] as Array<typeof atelierContractors.$inferSelect>),
+    ]);
+    const infoById = new Map<string, { name: string; country: string | null }>([
+      ...emps.map((e) => [e.id, { name: e.fullName, country: e.country ?? null }] as const),
+      ...cons.map((c) => [c.id, { name: c.fullName, country: c.country ?? null }] as const),
+    ]);
+    const initialsOf = (name: string) =>
+      name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((p) => p[0]?.toUpperCase() ?? "")
+        .join("");
+    res.json({
+      date,
+      away: partnerRows.map((r) => {
+        const info = infoById.get(r.personId);
+        const personName = info?.name ?? r.personId;
+        return {
+          personId: r.personId,
+          personName,
+          initials: initialsOf(personName),
+          leaveType: r.leaveType,
+          startDate: r.startDate,
+          endDate: r.endDate,
+          returnDate: nextWorkingDayAfter(r.endDate, info?.country ?? null),
+        };
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Task #602 — curated TR/MENA public-holiday range read. Any signed-in
+// persona may read (needed for the calendar banner on web + mobile).
+// Optional ?countries=TR,AE filter; defaults to the whole covered set.
+// @cli-skip: static holiday dataset read backing calendar banners (Task #602)
+router.get("/me/holidays", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const start = req.query.start;
+    const end = req.query.end;
+    if (!isIsoDate(start) || !isIsoDate(end) || start > end) {
+      res.status(400).json({ error: "invalid-window", detail: "start and end must be YYYY-MM-DD with start <= end" });
+      return;
+    }
+    const countriesParam = typeof req.query.countries === "string" ? req.query.countries : "";
+    const requested = countriesParam
+      .split(",")
+      .map((c) => countryToCode(c))
+      .filter((c): c is NonNullable<typeof c> => c !== null);
+    const countries = requested.length > 0 ? new Set<string>(requested) : null;
+    // Viewer's own market so clients can highlight "your" holidays.
+    let viewerCountry: string | null = null;
+    const [emp] = await db
+      .select({ country: atelierEmployees.country })
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.orgId, me.orgId), eq(atelierEmployees.email, me.email)));
+    if (emp) viewerCountry = countryToCode(emp.country);
+    if (!viewerCountry) {
+      const [con] = await db
+        .select({ country: atelierContractors.country })
+        .from(atelierContractors)
+        .where(and(eq(atelierContractors.orgId, me.orgId), eq(atelierContractors.email, me.email)));
+      if (con) viewerCountry = countryToCode(con.country);
+    }
+    res.json({
+      window: { start, end },
+      countries: Array.from(countries ?? HOLIDAY_COUNTRIES),
+      viewerCountry,
+      holidays: holidaysInRange(start, end, countries),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 function canConfigureEntitlements(me: typeof atelierUsers.$inferSelect): boolean {
   return isHr(me.role) || isLeadership(me.role) || isFinance(me.role);

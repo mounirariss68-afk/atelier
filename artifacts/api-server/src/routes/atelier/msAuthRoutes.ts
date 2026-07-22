@@ -38,7 +38,10 @@ import {
   encryptToken,
   exchangeCode,
   getCalendarView,
+  getCalendarViewForCalendar,
   getMsProfile,
+  hasMailboxSettingsScope,
+  listCalendars,
   makePkce,
   msConfigured,
   refreshTokens,
@@ -486,6 +489,9 @@ router.get("/me/msconnection", async (req, res, next) => {
       connectedAt: row?.connectedAt?.toISOString() ?? null,
       lastSyncedAt: row?.lastSyncedAt?.toISOString() ?? null,
       lastError: row?.lastError ?? null,
+      // Task #602 — false for connections made before the MailboxSettings
+      // scope was added; the UI prompts a reconnect so auto-replies work.
+      mailboxSettingsGranted: row ? hasMailboxSettingsScope(row.scopes) : false,
     });
   } catch (err) {
     next(err);
@@ -549,6 +555,9 @@ interface WireMeeting {
   /** Task #559 — the viewer may reschedule/cancel this internal meeting
    *  (organizer or founding partner). */
   canManage?: boolean;
+  /** Task #602 — "ooo" for out-of-office blocks (showAs=oof), "holiday"
+   *  for rows merged from subscribed Outlook holiday calendars. */
+  kind?: "ooo" | "holiday";
 }
 
 /**
@@ -647,8 +656,10 @@ router.get("/me/calendar", async (req, res, next) => {
 
     // Fresh access token from the stored refresh token (persist rotation).
     let events: MsCalendarEvent[];
+    let accessTokenForView = "";
     try {
       const tokens = await refreshTokens(decryptToken(row.encRefreshToken));
+      accessTokenForView = tokens.accessToken;
       if (tokens.refreshToken) {
         await db
           .update(atelierMsConnections)
@@ -809,7 +820,45 @@ router.get("/me/calendar", async (req, res, next) => {
         organizerEmail: ev.organizer?.emailAddress?.address?.toLowerCase() ?? null,
         attendees,
         matches,
+        // Task #602 — surface out-of-office blocks distinctly.
+        ...(ev.showAs === "oof" ? { kind: "ooo" as const } : {}),
       });
+    }
+
+    // Task #602 — merge subscribed Outlook holiday calendars (best-effort:
+    // a Graph hiccup here must never break the main calendar read).
+    if (!accountIdFilter) {
+      try {
+        const cals = await listCalendars(accessTokenForView);
+        const holidayCals = cals.filter((c) => /holiday|tatil/i.test(c.name ?? ""));
+        for (const cal of holidayCals.slice(0, 3)) {
+          const hEvents = await getCalendarViewForCalendar(
+            accessTokenForView,
+            cal.id,
+            start.toISOString(),
+            end.toISOString(),
+          );
+          for (const ev of hEvents) {
+            if (ev.isCancelled || !ev.start?.dateTime || !ev.end?.dateTime) continue;
+            meetings.push({
+              id: ev.id,
+              subject: ev.subject ?? "(holiday)",
+              start: `${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`,
+              end: `${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`,
+              isAllDay: Boolean(ev.isAllDay),
+              location: cal.name ?? null,
+              joinUrl: null,
+              webLink: null,
+              organizerEmail: null,
+              attendees: [],
+              matches: [],
+              kind: "holiday",
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[msauth] holiday-calendar merge failed (non-fatal)", e);
+      }
     }
 
     await db

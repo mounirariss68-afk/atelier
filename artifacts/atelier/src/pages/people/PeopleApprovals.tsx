@@ -222,6 +222,29 @@ function LeaveApprovalsCard() {
     return m;
   }, [rows, calendar]);
 
+  // Task #602 — HR/approvers can revoke an already-approved leave (e.g.
+  // plans changed). The server clears the Outlook OOO event + auto-reply.
+  const revoke = async (id: string) => {
+    if (!confirm("Revoke this approved leave? The person will be notified and their Outlook out-of-office will be removed.")) return;
+    setBusy(id);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/leave-requests/${id}/revoke`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.reason || j.error || `HTTP ${r.status}`);
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const decide = async (id: string, action: "approve" | "reject") => {
     const reason = action === "reject" ? prompt("Rejection reason (required):") : null;
     if (action === "reject" && !reason?.trim()) return;
@@ -320,6 +343,16 @@ function LeaveApprovalsCard() {
                   <MonoChip>{c.leaveType}</MonoChip>
                   <span className="text-text-mute">{c.startDate} → {c.endDate}</span>
                   <MonoChip tone={c.status === "approved" ? "green" : "gold"}>{c.status}</MonoChip>
+                  {c.status === "approved" && (
+                    <button
+                      className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-red-300 px-1"
+                      onClick={() => revoke(c.id)}
+                      disabled={busy === c.id}
+                      data-testid={`leave-revoke-${c.id}`}
+                    >
+                      Revoke
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

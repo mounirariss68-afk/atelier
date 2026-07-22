@@ -3272,6 +3272,12 @@ export const atelierLeaveRequests = pgTable(
     decidedByUserId: text("decided_by_user_id"),
     decisionReason: text("decision_reason"),
     cancelledAt: timestamp("cancelled_at"),
+    // Task #602 — partner/founding_partner requests auto-approve on
+    // submission; the stamp distinguishes them from manager decisions.
+    autoApproved: boolean("auto_approved").notNull().default(false),
+    // Task #602 — id of the all-day Outlook OOF event created on approval
+    // (on the leave-taker's own calendar) so revocation can remove it.
+    msOofEventId: text("ms_oof_event_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     deletedAt: timestamp("deleted_at"),

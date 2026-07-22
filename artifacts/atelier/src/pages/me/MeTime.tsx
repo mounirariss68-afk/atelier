@@ -138,12 +138,19 @@ function LeaveSection() {
     }
   };
 
-  const cancel = async (id: string) => {
+  // Task #602 — approved leave can be revoked (no newEndDate) or
+  // shortened (early return) through the same cancel endpoint.
+  const [shorteningId, setShorteningId] = React.useState<string | null>(null);
+  const [shortenDate, setShortenDate] = React.useState("");
+
+  const cancel = async (id: string, newEndDate?: string) => {
     setBusy(true);
     try {
       const r = await fetch(`${API}/leave/${id}/cancel`, {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newEndDate ? { newEndDate } : {}),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
@@ -272,6 +279,67 @@ function LeaveSection() {
                     Cancel
                   </button>
                 )}
+                {r.status === "approved" &&
+                  r.endDate >= new Date().toISOString().slice(0, 10) &&
+                  (shorteningId === r.id ? (
+                    <span className="ml-auto flex items-center gap-2">
+                      <input
+                        type="date"
+                        className={inputCls}
+                        value={shortenDate}
+                        min={r.startDate}
+                        max={r.endDate}
+                        onChange={(e) => setShortenDate(e.target.value)}
+                        data-testid={`leave-shorten-date-${r.id}`}
+                      />
+                      <button
+                        className="font-mono text-[10px] uppercase tracking-wider text-gold min-h-[44px] px-2"
+                        onClick={async () => {
+                          if (!shortenDate) return;
+                          await cancel(r.id, shortenDate);
+                          setShorteningId(null);
+                          setShortenDate("");
+                        }}
+                        disabled={busy || !shortenDate}
+                        data-testid={`leave-shorten-save-${r.id}`}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="font-mono text-[10px] uppercase tracking-wider text-text-faint min-h-[44px] px-2"
+                        onClick={() => {
+                          setShorteningId(null);
+                          setShortenDate("");
+                        }}
+                        disabled={busy}
+                        data-testid={`leave-shorten-abort-${r.id}`}
+                      >
+                        Back
+                      </button>
+                    </span>
+                  ) : (
+                    <span className="ml-auto flex items-center gap-1">
+                      <button
+                        className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-gold min-h-[44px] px-2"
+                        onClick={() => {
+                          setShorteningId(r.id);
+                          setShortenDate("");
+                        }}
+                        disabled={busy}
+                        data-testid={`leave-shorten-${r.id}`}
+                      >
+                        End early
+                      </button>
+                      <button
+                        className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-red-300 min-h-[44px] px-2"
+                        onClick={() => cancel(r.id)}
+                        disabled={busy}
+                        data-testid={`leave-revoke-${r.id}`}
+                      >
+                        Cancel leave
+                      </button>
+                    </span>
+                  ))}
               </li>
             ))}
           </ul>
