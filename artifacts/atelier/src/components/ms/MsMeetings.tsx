@@ -39,6 +39,10 @@ import {
   FileText,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  List,
+  Clock,
 } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
@@ -245,6 +249,49 @@ function MeetingBriefPanel({ meetingId, accountId }: { meetingId: string; accoun
   );
 }
 
+/**
+ * Join links open in a new tab. window.open returns null when a popup
+ * blocker (or an invalid URL) prevents the tab from opening — surface
+ * that as a visible toast instead of failing silently (Task #555).
+ */
+function useJoinMeeting() {
+  const { toast } = useToast();
+  return React.useCallback(
+    (url: string) => {
+      let opened: Window | null = null;
+      try {
+        opened = window.open(url, "_blank", "noopener,noreferrer");
+      } catch {
+        opened = null;
+      }
+      if (!opened) {
+        toast({
+          title: "Couldn't open the meeting link",
+          description:
+            "Your browser may have blocked the pop-up. Allow pop-ups for this site or copy the link from your calendar.",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast],
+  );
+}
+
+function JoinLink({ m }: { m: AtelierCalendarMeeting }) {
+  const join = useJoinMeeting();
+  if (!m.joinUrl) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => join(m.joinUrl!)}
+      className="inline-flex items-center gap-1 text-xs text-gold hover:underline"
+      data-testid={`meeting-join-${m.id}`}
+    >
+      <Video className="w-3.5 h-3.5" /> Join
+    </button>
+  );
+}
+
 function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; showMatches?: boolean }) {
   // One brief per matched account. Meetings usually match a single account;
   // when several are matched, the viewer picks which account to brief on.
@@ -270,17 +317,7 @@ function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; show
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-text font-medium truncate">{m.subject || "(no subject)"}</span>
           {m.internal && <MonoChip tone="gold">Internal</MonoChip>}
-          {m.joinUrl && (
-            <a
-              href={m.joinUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-gold hover:underline"
-              data-testid={`meeting-join-${m.id}`}
-            >
-              <Video className="w-3.5 h-3.5" /> Join
-            </a>
-          )}
+          <JoinLink m={m} />
         </div>
         {m.location && !m.joinUrl && (
           <div className="flex items-center gap-1 text-xs text-text-mute">
@@ -332,6 +369,347 @@ function windowIso(days: number) {
   const start = new Date();
   const end = new Date(start.getTime() + days * 24 * 60 * 60 * 1000);
   return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// ------------------------------------------------------------------
+// Task #555 — day calendar view for the web Home meetings card, matching
+// the mobile Meetings tab: full-day timeline with positioned meeting
+// blocks plus a date navigator.
+// ------------------------------------------------------------------
+
+const HOUR_H = 56;
+
+function startOfDay(d: Date) {
+  const s = new Date(d);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+
+function sameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function dayWindowIso(date: Date) {
+  const start = startOfDay(date);
+  const end = new Date(start.getTime() + 24 * 3600 * 1000);
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+interface TimedBlock {
+  m: AtelierCalendarMeeting;
+  top: number;
+  height: number;
+  col: number;
+  cols: number;
+}
+
+/** Position timed meetings for one day: clamp to day bounds, then greedy
+ * column assignment inside each overlapping cluster. (Mirror of the
+ * mobile layout algorithm.) */
+function layoutDayBlocks(
+  meetings: AtelierCalendarMeeting[],
+  dayStart: Date,
+): TimedBlock[] {
+  const dayStartMs = dayStart.getTime();
+  const dayEndMs = dayStartMs + 24 * 3600 * 1000;
+  const items = meetings
+    .map((m) => {
+      const s = Math.max(new Date(m.start).getTime(), dayStartMs);
+      const e = Math.min(new Date(m.end).getTime(), dayEndMs);
+      const startMin = (s - dayStartMs) / 60000;
+      const endMin = Math.max((e - dayStartMs) / 60000, startMin + 30);
+      return { m, startMin, endMin, col: 0, cols: 1 };
+    })
+    .filter((x) => x.endMin > 0 && x.startMin < 24 * 60)
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  let i = 0;
+  while (i < items.length) {
+    let clusterEnd = items[i].endMin;
+    let j = i + 1;
+    while (j < items.length && items[j].startMin < clusterEnd) {
+      clusterEnd = Math.max(clusterEnd, items[j].endMin);
+      j += 1;
+    }
+    const cluster = items.slice(i, j);
+    const colEnds: number[] = [];
+    for (const ev of cluster) {
+      let col = colEnds.findIndex((end) => end <= ev.startMin);
+      if (col === -1) {
+        col = colEnds.length;
+        colEnds.push(ev.endMin);
+      } else {
+        colEnds[col] = ev.endMin;
+      }
+      ev.col = col;
+    }
+    for (const ev of cluster) ev.cols = colEnds.length;
+    i = j;
+  }
+
+  return items.map((ev) => ({
+    m: ev.m,
+    top: (ev.startMin / 60) * HOUR_H,
+    height: Math.max(((ev.endMin - ev.startMin) / 60) * HOUR_H, 26),
+    col: ev.col,
+    cols: ev.cols,
+  }));
+}
+
+function DayNavigator({ date, onChange }: { date: Date; onChange: (d: Date) => void }) {
+  const isToday = sameDay(date, new Date());
+  const shift = (days: number) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    onChange(startOfDay(d));
+  };
+  return (
+    <div className="flex items-center gap-2" data-testid="meetings-day-navigator">
+      <PillButton
+        variant="ghost"
+        className="shrink-0 px-2"
+        onClick={() => shift(-1)}
+        aria-label="Previous day"
+        data-testid="button-meetings-prev-day"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </PillButton>
+      <div className="flex-1 text-center min-w-0">
+        <div className="text-sm text-text font-medium" data-testid="meetings-day-label">
+          {isToday
+            ? "Today"
+            : date.toLocaleDateString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+        </div>
+        {!isToday && (
+          <button
+            type="button"
+            className="text-xs text-gold hover:underline"
+            onClick={() => onChange(startOfDay(new Date()))}
+            data-testid="button-meetings-today"
+          >
+            Today
+          </button>
+        )}
+      </div>
+      <PillButton
+        variant="ghost"
+        className="shrink-0 px-2"
+        onClick={() => shift(1)}
+        aria-label="Next day"
+        data-testid="button-meetings-next-day"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </PillButton>
+    </div>
+  );
+}
+
+function DayTimeline({
+  meetings,
+  date,
+  selectedId,
+  onSelect,
+}: {
+  meetings: AtelierCalendarMeeting[];
+  date: Date;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const isToday = sameDay(date, new Date());
+  const blocks = React.useMemo(
+    () => layoutDayBlocks(meetings, startOfDay(date)),
+    [meetings, date],
+  );
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  // Scroll near the first meeting (or 8am on an empty day) so the viewer
+  // isn't staring at midnight.
+  React.useEffect(() => {
+    let hour = 8;
+    if (blocks.length > 0) {
+      const first = Math.min(...blocks.map((b) => b.top / HOUR_H));
+      hour = Math.max(0, Math.floor(first) - 1);
+    }
+    scrollRef.current?.scrollTo({ top: hour * HOUR_H });
+  }, [date, blocks.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const now = new Date();
+  const nowTop = isToday ? ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H : null;
+
+  const hourLabel = (h: number) => {
+    const d = new Date(date);
+    d.setHours(h, 0, 0, 0);
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div
+      ref={scrollRef}
+      className="relative overflow-y-auto max-h-[480px] rounded-lg border border-border-soft"
+      data-testid="meetings-day-timeline"
+    >
+      <div className="relative" style={{ height: 24 * HOUR_H }}>
+        {Array.from({ length: 24 }, (_, h) => (
+          <div
+            key={h}
+            className="absolute left-0 right-0 flex items-start"
+            style={{ top: h * HOUR_H }}
+          >
+            <span className="w-14 shrink-0 -translate-y-1.5 pr-2 text-right text-[10px] font-mono text-text-faint select-none">
+              {hourLabel(h)}
+            </span>
+            <div className="flex-1 border-t border-border-soft" />
+          </div>
+        ))}
+
+        {nowTop !== null && (
+          <div
+            className="absolute left-14 right-1 z-10 pointer-events-none"
+            style={{ top: nowTop }}
+            data-testid="meetings-now-line"
+          >
+            <div className="border-t-2 border-gold/70" />
+          </div>
+        )}
+
+        {/* Lane area: blocks use % geometry relative to this container. */}
+        <div className="absolute inset-y-0 left-14 right-1">
+          {blocks.map(({ m, top, height, col, cols }) => {
+            const selected = selectedId === m.id;
+            const matched = m.matches.length > 0;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onSelect(selected ? null : m.id)}
+                className="absolute text-left"
+                style={{
+                  top,
+                  height,
+                  left: `${(col / cols) * 100}%`,
+                  width: `${100 / cols}%`,
+                  paddingRight: col === cols - 1 ? 0 : 3,
+                }}
+                data-testid={`meeting-block-${m.id}`}
+              >
+                <div
+                  className={`h-full overflow-hidden rounded-lg border px-2 py-1 ${
+                    selected ? "border-gold" : "border-border-soft"
+                  } ${matched ? "bg-gold/15" : "bg-bg-soft"} hover:border-gold/60 transition-colors`}
+                >
+                  <div className="text-xs text-text font-medium truncate">
+                    {m.subject || "(no subject)"}
+                  </div>
+                  {height > 40 && (
+                    <div className="text-[10px] font-mono text-text-faint truncate">
+                      {fmtTime(m.start)} – {fmtTime(m.end)}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Day view for the Home meetings card: navigator + all-day strip +
+ * selected-meeting detail + positioned timeline. */
+export function MeetingsDayView() {
+  const [selectedDate, setSelectedDate] = React.useState(() => startOfDay(new Date()));
+  const [selectedMeetingId, setSelectedMeetingId] = React.useState<string | null>(null);
+  const dayWin = React.useMemo(() => dayWindowIso(selectedDate), [selectedDate]);
+  const { data, isPending, error } = useAtelierGetMyCalendar(dayWin, {
+    query: {
+      queryKey: getAtelierGetMyCalendarQueryKey(dayWin),
+      retry: false,
+    },
+  });
+
+  const meetings = data?.meetings ?? [];
+  const allDayMeetings = meetings.filter((m) => m.isAllDay);
+  const timedMeetings = meetings.filter((m) => !m.isAllDay);
+  const selectedMeeting = meetings.find((m) => m.id === selectedMeetingId) ?? null;
+
+  return (
+    <div className="space-y-3" data-testid="meetings-day-view">
+      <DayNavigator
+        date={selectedDate}
+        onChange={(d) => {
+          setSelectedDate(d);
+          setSelectedMeetingId(null);
+        }}
+      />
+      {isPending ? (
+        <Skeleton className="h-40 bg-bg-elevate" />
+      ) : error ? (
+        <div className="text-sm text-text-mute" data-testid="meetings-day-error">
+          Couldn't load your calendar right now.{" "}
+          <Link href="/me/profile" className="text-gold hover:underline">
+            Check your Microsoft connection
+          </Link>
+          .
+        </div>
+      ) : (
+        <>
+          {allDayMeetings.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+                All day
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {allDayMeetings.map((m) => {
+                  const selected = selectedMeetingId === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setSelectedMeetingId(selected ? null : m.id)}
+                      className={`rounded-lg border px-3 py-2 text-left text-sm text-text ${
+                        selected ? "border-gold" : "border-border-soft"
+                      } ${m.matches.length > 0 ? "bg-gold/15" : "bg-bg-soft"}`}
+                      data-testid={`meeting-allday-${m.id}`}
+                    >
+                      <span className="truncate block">{m.subject || "(no subject)"}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {selectedMeeting && (
+            <div
+              className="rounded-lg border border-border-soft bg-bg-soft px-3"
+              data-testid="meetings-day-detail"
+            >
+              <MeetingRow m={selectedMeeting} />
+            </div>
+          )}
+          {meetings.length === 0 && (
+            <div className="text-sm text-text-mute font-mono" data-testid="meetings-day-empty">
+              No meetings on this day.
+            </div>
+          )}
+          <DayTimeline
+            meetings={timedMeetings}
+            date={selectedDate}
+            selectedId={selectedMeetingId}
+            onSelect={setSelectedMeetingId}
+          />
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Me lens — connect / disconnect Microsoft 365. */
@@ -454,16 +832,20 @@ export function ConnectedAccountsCard() {
   );
 }
 
-/** Home — the viewer's next 7 days of meetings, CRM-matched. */
+/** Home — the viewer's next 7 days of meetings, CRM-matched, with a
+ * list/day-timeline toggle matching the mobile Meetings tab. */
 export function MyMeetingsCard() {
   const { data: conn } = useAtelierGetMyMsConnection();
+  const [view, setView] = React.useState<"list" | "day">("list");
   const win = React.useMemo(() => windowIso(7), []);
   // Task #553 — fetch even when not connected: the server still returns
   // Atelier-booked internal meetings the viewer created or attends.
+  // Task #555 — the day view runs its own per-day query, so the 7-day
+  // list query only runs while the list view is active.
   const { data, isPending, error } = useAtelierGetMyCalendar(win, {
     query: {
       queryKey: getAtelierGetMyCalendarQueryKey(win),
-      enabled: Boolean(conn),
+      enabled: Boolean(conn) && view === "list",
       retry: false,
     },
   });
@@ -472,11 +854,35 @@ export function MyMeetingsCard() {
 
   return (
     <div className="space-y-4" data-testid="home-my-meetings">
-      <SectionLabel>
-        <span className="inline-flex items-center gap-2">
-          <CalendarClock className="w-4 h-4 text-gold" /> My meetings
-        </span>
-      </SectionLabel>
+      <div className="flex items-center justify-between gap-3">
+        <SectionLabel>
+          <span className="inline-flex items-center gap-2">
+            <CalendarClock className="w-4 h-4 text-gold" /> My meetings
+          </span>
+        </SectionLabel>
+        <div
+          className="flex items-center gap-0.5 rounded-full border border-border-soft bg-bg-soft p-0.5"
+          data-testid="meetings-view-toggle"
+        >
+            {(["list", "day"] as const).map((v) => {
+              const active = view === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors ${
+                    active ? "bg-bg-elevate text-text" : "text-text-mute hover:text-text"
+                  }`}
+                  data-testid={`button-meetings-view-${v}`}
+                >
+                  {v === "list" ? <List className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                  {v === "list" ? "List" : "Day"}
+                </button>
+              );
+            })}
+        </div>
+      </div>
       <Card className="p-5">
         {conn.configured && !conn.connected && (
           <div className="text-sm text-text-mute mb-3">
@@ -486,7 +892,9 @@ export function MyMeetingsCard() {
             to see your full Outlook calendar here.
           </div>
         )}
-        {isPending ? (
+        {view === "day" ? (
+          <MeetingsDayView />
+        ) : isPending ? (
           <Skeleton className="h-24 bg-bg-elevate" />
         ) : error ? (
           <div className="text-sm text-text-mute">
