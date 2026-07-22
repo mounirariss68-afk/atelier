@@ -25,7 +25,25 @@ export type DocIntent =
   | "brand_deck"
   | "spreadsheet"
   | "email"
+  | "identity_doc"
   | "unknown";
+
+// Task #583 — identity documents (passport / national ID / residency /
+// visa scans) uploaded for the personal-documents flow. Images share
+// their kind with receipts, so both candidates surface on an ambiguous
+// image and the orchestrator asks ONE clarifying question.
+const IDENTITY_PATTERNS = [
+  /\bpassport\b/i,
+  /\bnational\s*id(entity)?\b/i,
+  /\bemirates\s*id\b/i,
+  /\biqama\b/i,
+  /\bresiden(ce|cy)\s*(permit|visa|card)?\b/i,
+  /\bvisa\b/i,
+  /\bdate of birth\b/i,
+  /\bnationality\b/i,
+  /\bplace of (birth|issue)\b/i,
+  /P<[A-Z]{3}/, // MRZ line
+];
 
 const RFP_PATTERNS = [
   /\brequest for proposal\b/i,
@@ -71,6 +89,14 @@ export function detectIntent(doc: ExtractedDoc): IntentCandidate[] {
       weight: 5,
       reason: "image attachment routed through OCR fixture",
     });
+    // Task #583 — an image could equally be an identity-document scan.
+    // Push a tying candidate so the orchestrator disambiguates with one
+    // clarifying question unless content markers break the tie below.
+    out.push({
+      intent: "identity_doc",
+      weight: 5,
+      reason: "image attachment could be an identity-document scan",
+    });
   }
   if (doc.kind === "csv" || doc.kind === "xlsx") {
     out.push({
@@ -110,6 +136,14 @@ export function detectIntent(doc: ExtractedDoc): IntentCandidate[] {
 
   const bd = score(text, BRAND_DECK_PATTERNS);
   if (bd >= 2) out.push({ intent: "brand_deck", weight: bd + 1, reason: `${bd} brand markers` });
+
+  const idm = score(text, IDENTITY_PATTERNS);
+  if (idm >= 2)
+    out.push({
+      intent: "identity_doc",
+      weight: idm + 4,
+      reason: `${idm} identity-document markers`,
+    });
 
   if (out.length === 0) {
     out.push({ intent: "unknown", weight: 1, reason: "no strong signal detected" });

@@ -47,6 +47,7 @@ import {
   SELF_ONLY_CHAT_ROLES,
   findByToolName,
   CATALOG_SCHEMA_VERSION,
+  scrubToolIdentifiers,
   getSessionDraft,
   recordSessionResult,
   ingestEntitiesFromToolResult,
@@ -1199,6 +1200,12 @@ const SYSTEM_PROMPT = [
   "   pick — do not guess.",
   "Finish with one short closing sentence that summarises what happened. Write plain prose only —",
   "NEVER prefix your reply with labels or markers like `final:`, `answer:`, or `narration:`.",
+  "7. ATTACHMENT INTENT: when an attached image or document could plausibly be EITHER a",
+  "   receipt OR an identity document (passport / national ID / residency / visa) and the",
+  "   user's message does not say which, ask ONE short clarifying question before calling",
+  "   any ingest or save tool. Never guess between those two flows.",
+  "8. CAPABILITY MISS: when you cannot do what the user asked, explain the limit in plain",
+  "   words. NEVER mention internal tool or capability names in refusals.",
   "",
   // Task #469 — person questions must route to the right domain and
   // cross-check the sibling domain before declaring anyone nonexistent.
@@ -3321,10 +3328,11 @@ export async function runTurn(
             type: "refusal",
             data: {
               step: 0,
-              reason: cont.refusal.reason,
+              // Task #583 — refusal frames never leak tool identifiers.
+              reason: scrubToolIdentifiers(cont.refusal.reason) ?? cont.refusal.reason,
               closestCapabilityId: cont.refusal.closestCapabilityId ?? null,
               pageHref: cont.refusal.pageHref ?? null,
-              suggestion: cont.refusal.suggestion ?? null,
+              suggestion: scrubToolIdentifiers(cont.refusal.suggestion ?? null),
               requestCapability: { tool: "request_feature", prompt: input.prompt },
             },
           });
@@ -3741,10 +3749,11 @@ export async function runTurn(
           type: "refusal",
           data: {
             step,
-            reason: rf.reason,
+            // Task #583 — refusal frames never leak tool identifiers.
+            reason: scrubToolIdentifiers(rf.reason) ?? rf.reason,
             closestCapabilityId: rf.closestCapabilityId ?? null,
             pageHref: rf.pageHref ?? null,
-            suggestion: rf.suggestion ?? null,
+            suggestion: scrubToolIdentifiers(rf.suggestion ?? null),
             requestCapability: { tool: "request_feature", prompt: input.prompt },
           },
         });

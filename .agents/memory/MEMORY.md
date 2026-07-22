@@ -122,3 +122,4 @@
 - [Atelier chat meeting tools](atelier-chat-meetings.md) — client-meeting parents only opp/eng (honest no_parent), email-required real invites, internal-only availability note; probe fixture notNull lists + Graph stub pattern.
 - [Chat meeting lookup by time](atelier-meeting-time-lookup.md) — title-miss falls back to Dubai start-time match; only explicit time forms count (dates/bare numbers rejected) to avoid mis-targeted reschedule/cancel.
 - [Mobile meetings day view](atelier-mobile-meetings-dayview.md) — day view is cards (no hour grid); internal reschedule/cancel via raw fetch (routes not in openapi); mobile typecheck may show phantom type errors until api-zod/api-client-react dist rebuilt.
+- [Chat write-capability contract](chat-write-capability-contract.md) — isWrite tools must return navigateTo on commit-success (validator throws); self-only writes are selector-free + attachment.userId ownership; refusals scrubbed.

@@ -508,10 +508,42 @@ export const SELF_ONLY_CHAT_ROLES: ReadonlySet<string> = new Set([
   "contractor",
 ]);
 
+/**
+ * Task #583 — capability-miss protocol. Refusal frames must never leak
+ * internal tool/capability identifiers to the user (they read as
+ * gibberish and reveal surface internals). Replaces any registered
+ * tool name or capability id — plus obvious snake_case tool tokens —
+ * with a neutral phrase. Backticks around the identifiers are eaten.
+ */
+export function scrubToolIdentifiers(text: string | null | undefined): string | null {
+  if (!text) return text ?? null;
+  let out = text;
+  for (const e of REGISTRY) {
+    const names = [e.toolName, e.id];
+    for (const n of names) {
+      if (!n) continue;
+      const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp("`?" + esc + "`?", "g"), "that action");
+    }
+  }
+  // Generic snake_case tool-token fallback (e.g. an unregistered or
+  // hallucinated name the model produced): two+ underscore segments.
+  out = out.replace(/`?\b[a-z][a-z0-9]*(?:_[a-z0-9]+){1,}\b`?/g, "that action");
+  // Collapse doubled phrases produced by adjacent replacements.
+  out = out.replace(/(that action)( \1)+/g, "$1").replace(/\s{2,}/g, " ").trim();
+  return out;
+}
+
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
   if (SELF_ONLY_CHAT_ROLES.has(role)) {
-    return REGISTRY.filter((e) => e.id.startsWith("me.") && !e.isWrite);
+    // Task #583 — self-only personas now get the identity-locked me.*
+    // WRITE capabilities too (leave request, expense create, timesheet
+    // log/submit, profile edit, personal documents, notification
+    // dismiss). Every me.* write resolves its subject from the session
+    // persona, mirrors the /me/* REST ACLs, and is confirm-gated —
+    // still strictly the /me lens, never an org-wide tool.
+    return REGISTRY.filter((e) => e.id.startsWith("me."));
   }
   const restrictedSet: ReadonlySet<AtelierRole> = new Set([
     "contractor",

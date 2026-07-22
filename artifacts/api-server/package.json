@@ -47,6 +47,7 @@
     "test:me-selfservice": "tsx ./tests/me-selfservice/run.ts",
     "test:self-billing": "tsx ./tests/self-billing/run.ts",
     "test:cli-me": "tsx ./tests/cli-me/run.ts",
+    "test:cli-selfservice": "tsx ./tests/cli-selfservice/run.ts",
     "test:critical-roles": "tsx ./tests/critical-roles/run.ts",
     "test:exec-mapper-critical": "tsx ./tests/crm/exec-mapper-critical-roles-probe.ts",
     "test:entity-registry": "tsx ./tests/crm/entity-registry-probe.ts",

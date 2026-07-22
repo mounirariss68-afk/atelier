@@ -55,7 +55,7 @@ import type { ToolContext, ToolResult } from "./index.js";
 
 type UserRow = typeof atelierUsers.$inferSelect;
 
-interface SelfSubject {
+export interface SelfSubject {
   user: UserRow;
   person: SelfPersonWire | null;
 }
@@ -77,7 +77,7 @@ const SELF_INPUT_SCHEMA: Record<string, unknown> = {
  * record. `ctx.persona.id` is the atelier_users id hydrated from the
  * session cookie by cliRoutes — never model-supplied.
  */
-async function resolveSelfSubject(ctx: ToolContext): Promise<SelfSubject | null> {
+export async function resolveSelfSubject(ctx: ToolContext): Promise<SelfSubject | null> {
   const [user] = await db
     .select()
     .from(atelierUsers)
