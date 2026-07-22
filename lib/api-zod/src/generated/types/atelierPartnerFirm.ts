@@ -6,7 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AtelierPartnerContact } from "./atelierPartnerContact";
+import type { AtelierPartnerFirmArchetype } from "./atelierPartnerFirmArchetype";
 import type { AtelierPartnerFirmCapabilities } from "./atelierPartnerFirmCapabilities";
+import type { AtelierPartnerFirmDueDiligence } from "./atelierPartnerFirmDueDiligence";
+import type { AtelierPartnerFirmFitScorecard } from "./atelierPartnerFirmFitScorecard";
+import type { AtelierPartnerFirmPartnershipStage } from "./atelierPartnerFirmPartnershipStage";
+import type { AtelierPartnerFirmPendingUpdatesItem } from "./atelierPartnerFirmPendingUpdatesItem";
+import type { AtelierPartnerFirmPhasing } from "./atelierPartnerFirmPhasing";
+import type { AtelierPartnerFirmRiskRegisterItem } from "./atelierPartnerFirmRiskRegisterItem";
 import type { AtelierPartnerFirmStatus } from "./atelierPartnerFirmStatus";
 import type { AtelierPartnerFirmTier } from "./atelierPartnerFirmTier";
 import type { AtelierPartnerTierChange } from "./atelierPartnerTierChange";
@@ -33,5 +40,12 @@ export interface AtelierPartnerFirm {
   defaultBillingCurrency?: string | null;
   notes?: string | null;
   activeResourceCount?: number;
+  archetype?: AtelierPartnerFirmArchetype;
+  partnershipStage?: AtelierPartnerFirmPartnershipStage;
+  fitScorecard?: AtelierPartnerFirmFitScorecard;
+  dueDiligence?: AtelierPartnerFirmDueDiligence;
+  riskRegister?: AtelierPartnerFirmRiskRegisterItem[];
+  phasing?: AtelierPartnerFirmPhasing;
+  pendingUpdates?: AtelierPartnerFirmPendingUpdatesItem[];
   [key: string]: unknown;
 }

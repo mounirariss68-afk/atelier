@@ -63,3 +63,13 @@ launch-map pattern used by other long-running agents.
   founding_partner / partner / senior_manager / finance.
 - Tier changes are auto-recorded in `tierHistory` on the firm record when
   tier is edited — future renewals work can build on that audit trail.
+
+### 8. Evaluation framework Stages 4–7 as agent output (Task #526 out-of-scope)
+The Alliance Cartographer covers framework Stages 1–2 + 8–9 (fit scorecard,
+due diligence, risk register, phasing) as pending proposals. Stages 4–7 —
+deal-structure selection, the commercial-model toolkit, protective terms,
+and compliance gates — stay human/legal for now (the agent may emit a short
+archetype + phasing note only). Rebuild: extend the Cartographer output
+schema with a suggested deal-structure + commercial-model section grounded
+in the archetype, and link protective-terms checklists to the e-sign
+contract flow; keep everything proposals-only behind partner review.

@@ -7363,6 +7363,175 @@ export const AtelierPartnerFirmStatus = {
 
 export type AtelierPartnerFirmCapabilities = { [key: string]: number };
 
+export type AtelierPartnerFirmArchetype =
+  | (typeof AtelierPartnerFirmArchetype)[keyof typeof AtelierPartnerFirmArchetype]
+  | null;
+
+export const AtelierPartnerFirmArchetype = {
+  reference_brand: "reference_brand",
+  delivery_backbone: "delivery_backbone",
+  platform_capability: "platform_capability",
+  niche_subcontractor: "niche_subcontractor",
+  market_access_jv: "market_access_jv",
+  competitor_monitor: "competitor_monitor",
+} as const;
+
+export type AtelierPartnerFirmPartnershipStage =
+  (typeof AtelierPartnerFirmPartnershipStage)[keyof typeof AtelierPartnerFirmPartnershipStage];
+
+export const AtelierPartnerFirmPartnershipStage = {
+  candidate: "candidate",
+  agreed: "agreed",
+} as const;
+
+export type AtelierPartnerFirmFitScorecardVerdict =
+  (typeof AtelierPartnerFirmFitScorecardVerdict)[keyof typeof AtelierPartnerFirmFitScorecardVerdict];
+
+export const AtelierPartnerFirmFitScorecardVerdict = {
+  proceed: "proceed",
+  limited: "limited",
+  decline: "decline",
+} as const;
+
+export type AtelierPartnerFirmFitScorecardDimensionsItemEvidence =
+  (typeof AtelierPartnerFirmFitScorecardDimensionsItemEvidence)[keyof typeof AtelierPartnerFirmFitScorecardDimensionsItemEvidence];
+
+export const AtelierPartnerFirmFitScorecardDimensionsItemEvidence = {
+  evidenced: "evidenced",
+  inferred: "inferred",
+  unverified: "unverified",
+} as const;
+
+export type AtelierPartnerFirmFitScorecardDimensionsItem = {
+  id?: string;
+  label?: string;
+  weight?: number;
+  score?: number;
+  evidence?: AtelierPartnerFirmFitScorecardDimensionsItemEvidence;
+  rationale?: string | null;
+  sourceUrls?: string[];
+  [key: string]: unknown;
+};
+
+export type AtelierPartnerFirmFitScorecard = {
+  weightedTotal?: number;
+  verdict?: AtelierPartnerFirmFitScorecardVerdict;
+  watchouts?: string[];
+  scoredAt?: string;
+  dimensions?: AtelierPartnerFirmFitScorecardDimensionsItem[];
+  [key: string]: unknown;
+} | null;
+
+export type AtelierPartnerFirmDueDiligenceOverall =
+  (typeof AtelierPartnerFirmDueDiligenceOverall)[keyof typeof AtelierPartnerFirmDueDiligenceOverall];
+
+export const AtelierPartnerFirmDueDiligenceOverall = {
+  pass: "pass",
+  conditional: "conditional",
+  fail: "fail",
+  to_verify: "to_verify",
+} as const;
+
+export type AtelierPartnerFirmDueDiligenceGatesItemStatus =
+  (typeof AtelierPartnerFirmDueDiligenceGatesItemStatus)[keyof typeof AtelierPartnerFirmDueDiligenceGatesItemStatus];
+
+export const AtelierPartnerFirmDueDiligenceGatesItemStatus = {
+  pass: "pass",
+  conditional: "conditional",
+  fail: "fail",
+  to_verify: "to_verify",
+} as const;
+
+export type AtelierPartnerFirmDueDiligenceGatesItemEvidence =
+  (typeof AtelierPartnerFirmDueDiligenceGatesItemEvidence)[keyof typeof AtelierPartnerFirmDueDiligenceGatesItemEvidence];
+
+export const AtelierPartnerFirmDueDiligenceGatesItemEvidence = {
+  evidenced: "evidenced",
+  inferred: "inferred",
+  unverified: "unverified",
+} as const;
+
+export type AtelierPartnerFirmDueDiligenceGatesItem = {
+  id?: string;
+  label?: string;
+  status?: AtelierPartnerFirmDueDiligenceGatesItemStatus;
+  evidence?: AtelierPartnerFirmDueDiligenceGatesItemEvidence;
+  notes?: string | null;
+  sourceUrls?: string[];
+  [key: string]: unknown;
+};
+
+export type AtelierPartnerFirmDueDiligence = {
+  overall?: AtelierPartnerFirmDueDiligenceOverall;
+  assessedAt?: string;
+  gates?: AtelierPartnerFirmDueDiligenceGatesItem[];
+  [key: string]: unknown;
+} | null;
+
+export type AtelierPartnerFirmRiskRegisterItemSeverity =
+  (typeof AtelierPartnerFirmRiskRegisterItemSeverity)[keyof typeof AtelierPartnerFirmRiskRegisterItemSeverity];
+
+export const AtelierPartnerFirmRiskRegisterItemSeverity = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerFirmRiskRegisterItemEvidence =
+  (typeof AtelierPartnerFirmRiskRegisterItemEvidence)[keyof typeof AtelierPartnerFirmRiskRegisterItemEvidence];
+
+export const AtelierPartnerFirmRiskRegisterItemEvidence = {
+  evidenced: "evidenced",
+  inferred: "inferred",
+  unverified: "unverified",
+} as const;
+
+export type AtelierPartnerFirmRiskRegisterItem = {
+  id?: string;
+  risk?: string;
+  mitigation?: string;
+  severity?: AtelierPartnerFirmRiskRegisterItemSeverity;
+  evidence?: AtelierPartnerFirmRiskRegisterItemEvidence;
+  [key: string]: unknown;
+};
+
+export type AtelierPartnerFirmPhasingPhase =
+  (typeof AtelierPartnerFirmPhasingPhase)[keyof typeof AtelierPartnerFirmPhasingPhase];
+
+export const AtelierPartnerFirmPhasingPhase = {
+  verify: "verify",
+  pilot: "pilot",
+  convert: "convert",
+} as const;
+
+export type AtelierPartnerFirmPhasing = {
+  phase?: AtelierPartnerFirmPhasingPhase;
+  milestone?: string;
+  note?: string | null;
+  [key: string]: unknown;
+} | null;
+
+export type AtelierPartnerFirmPendingUpdatesItemStatus =
+  (typeof AtelierPartnerFirmPendingUpdatesItemStatus)[keyof typeof AtelierPartnerFirmPendingUpdatesItemStatus];
+
+export const AtelierPartnerFirmPendingUpdatesItemStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export type AtelierPartnerFirmPendingUpdatesItem = {
+  id?: string;
+  proposedBy?: string;
+  proposedAt?: string;
+  field?: string;
+  rationale?: string;
+  status?: AtelierPartnerFirmPendingUpdatesItemStatus;
+  decidedAt?: string;
+  decidedByUserId?: string;
+  [key: string]: unknown;
+};
+
 export interface AtelierPartnerFirm {
   id: string;
   name: string;
@@ -7385,6 +7554,13 @@ export interface AtelierPartnerFirm {
   defaultBillingCurrency?: string | null;
   notes?: string | null;
   activeResourceCount?: number;
+  archetype?: AtelierPartnerFirmArchetype;
+  partnershipStage?: AtelierPartnerFirmPartnershipStage;
+  fitScorecard?: AtelierPartnerFirmFitScorecard;
+  dueDiligence?: AtelierPartnerFirmDueDiligence;
+  riskRegister?: AtelierPartnerFirmRiskRegisterItem[];
+  phasing?: AtelierPartnerFirmPhasing;
+  pendingUpdates?: AtelierPartnerFirmPendingUpdatesItem[];
   [key: string]: unknown;
 }
 
@@ -7415,6 +7591,27 @@ export const AtelierPartnerFirmInputStatus = {
 
 export type AtelierPartnerFirmInputCapabilities = { [key: string]: number };
 
+export type AtelierPartnerFirmInputArchetype =
+  | (typeof AtelierPartnerFirmInputArchetype)[keyof typeof AtelierPartnerFirmInputArchetype]
+  | null;
+
+export const AtelierPartnerFirmInputArchetype = {
+  reference_brand: "reference_brand",
+  delivery_backbone: "delivery_backbone",
+  platform_capability: "platform_capability",
+  niche_subcontractor: "niche_subcontractor",
+  market_access_jv: "market_access_jv",
+  competitor_monitor: "competitor_monitor",
+} as const;
+
+export type AtelierPartnerFirmInputPartnershipStage =
+  (typeof AtelierPartnerFirmInputPartnershipStage)[keyof typeof AtelierPartnerFirmInputPartnershipStage];
+
+export const AtelierPartnerFirmInputPartnershipStage = {
+  candidate: "candidate",
+  agreed: "agreed",
+} as const;
+
 export interface AtelierPartnerFirmInput {
   name: string;
   kind?: string | null;
@@ -7435,6 +7632,8 @@ export interface AtelierPartnerFirmInput {
   defaultBillingCurrency?: string | null;
   notes?: string | null;
   tierChangeReason?: string | null;
+  archetype?: AtelierPartnerFirmInputArchetype;
+  partnershipStage?: AtelierPartnerFirmInputPartnershipStage;
 }
 
 export type AtelierPartnerFirmPatchTier =
@@ -7460,6 +7659,27 @@ export const AtelierPartnerFirmPatchStatus = {
 
 export type AtelierPartnerFirmPatchCapabilities = { [key: string]: number };
 
+export type AtelierPartnerFirmPatchArchetype =
+  | (typeof AtelierPartnerFirmPatchArchetype)[keyof typeof AtelierPartnerFirmPatchArchetype]
+  | null;
+
+export const AtelierPartnerFirmPatchArchetype = {
+  reference_brand: "reference_brand",
+  delivery_backbone: "delivery_backbone",
+  platform_capability: "platform_capability",
+  niche_subcontractor: "niche_subcontractor",
+  market_access_jv: "market_access_jv",
+  competitor_monitor: "competitor_monitor",
+} as const;
+
+export type AtelierPartnerFirmPatchPartnershipStage =
+  (typeof AtelierPartnerFirmPatchPartnershipStage)[keyof typeof AtelierPartnerFirmPatchPartnershipStage];
+
+export const AtelierPartnerFirmPatchPartnershipStage = {
+  candidate: "candidate",
+  agreed: "agreed",
+} as const;
+
 export interface AtelierPartnerFirmPatch {
   name?: string;
   kind?: string | null;
@@ -7480,6 +7700,8 @@ export interface AtelierPartnerFirmPatch {
   defaultBillingCurrency?: string | null;
   notes?: string | null;
   tierChangeReason?: string | null;
+  archetype?: AtelierPartnerFirmPatchArchetype;
+  partnershipStage?: AtelierPartnerFirmPatchPartnershipStage;
 }
 
 export type AtelierPartnerTargetPriority =

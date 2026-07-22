@@ -11992,6 +11992,88 @@ components:
         defaultBillingCurrency: { type: string, nullable: true }
         notes: { type: string, nullable: true }
         activeResourceCount: { type: number }
+        archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
+        partnershipStage: { type: string, enum: [candidate, agreed] }
+        fitScorecard:
+          type: object
+          nullable: true
+          additionalProperties: true
+          properties:
+            weightedTotal: { type: number }
+            verdict: { type: string, enum: [proceed, limited, decline] }
+            watchouts:
+              type: array
+              items: { type: string }
+            scoredAt: { type: string }
+            dimensions:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  label: { type: string }
+                  weight: { type: number }
+                  score: { type: number }
+                  evidence: { type: string, enum: [evidenced, inferred, unverified] }
+                  rationale: { type: string, nullable: true }
+                  sourceUrls:
+                    type: array
+                    items: { type: string }
+        dueDiligence:
+          type: object
+          nullable: true
+          additionalProperties: true
+          properties:
+            overall: { type: string, enum: [pass, conditional, fail, to_verify] }
+            assessedAt: { type: string }
+            gates:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+                properties:
+                  id: { type: string }
+                  label: { type: string }
+                  status: { type: string, enum: [pass, conditional, fail, to_verify] }
+                  evidence: { type: string, enum: [evidenced, inferred, unverified] }
+                  notes: { type: string, nullable: true }
+                  sourceUrls:
+                    type: array
+                    items: { type: string }
+        riskRegister:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              id: { type: string }
+              risk: { type: string }
+              mitigation: { type: string }
+              severity: { type: string, enum: [high, med, low] }
+              evidence: { type: string, enum: [evidenced, inferred, unverified] }
+        phasing:
+          type: object
+          nullable: true
+          additionalProperties: true
+          properties:
+            phase: { type: string, enum: [verify, pilot, convert] }
+            milestone: { type: string }
+            note: { type: string, nullable: true }
+        pendingUpdates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              id: { type: string }
+              proposedBy: { type: string }
+              proposedAt: { type: string }
+              field: { type: string }
+              rationale: { type: string }
+              status: { type: string, enum: [pending, approved, rejected] }
+              decidedAt: { type: string }
+              decidedByUserId: { type: string }
       required: [id, name, status]
     AtelierPartnerFirmList:
       type: object
@@ -12026,6 +12108,8 @@ components:
         defaultBillingCurrency: { type: string, nullable: true }
         notes: { type: string, nullable: true }
         tierChangeReason: { type: string, nullable: true }
+        archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
+        partnershipStage: { type: string, enum: [candidate, agreed] }
       required: [name]
     AtelierPartnerFirmPatch:
       type: object
@@ -12053,6 +12137,8 @@ components:
         defaultBillingCurrency: { type: string, nullable: true }
         notes: { type: string, nullable: true }
         tierChangeReason: { type: string, nullable: true }
+        archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
+        partnershipStage: { type: string, enum: [candidate, agreed] }
     AtelierPartnerTarget:
       type: object
       additionalProperties: true

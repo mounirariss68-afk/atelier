@@ -33312,6 +33312,99 @@ export const AtelierListPartnerFirmsResponse = zod.object({
       defaultBillingCurrency: zod.string().nullish(),
       notes: zod.string().nullish(),
       activeResourceCount: zod.number().optional(),
+      archetype: zod
+        .union([
+          zod.literal("reference_brand"),
+          zod.literal("delivery_backbone"),
+          zod.literal("platform_capability"),
+          zod.literal("niche_subcontractor"),
+          zod.literal("market_access_jv"),
+          zod.literal("competitor_monitor"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+      fitScorecard: zod
+        .object({
+          weightedTotal: zod.number().optional(),
+          verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
+          watchouts: zod.array(zod.string()).optional(),
+          scoredAt: zod.string().optional(),
+          dimensions: zod
+            .array(
+              zod.object({
+                id: zod.string().optional(),
+                label: zod.string().optional(),
+                weight: zod.number().optional(),
+                score: zod.number().optional(),
+                evidence: zod
+                  .enum(["evidenced", "inferred", "unverified"])
+                  .optional(),
+                rationale: zod.string().nullish(),
+                sourceUrls: zod.array(zod.string()).optional(),
+              }),
+            )
+            .optional(),
+        })
+        .nullish(),
+      dueDiligence: zod
+        .object({
+          overall: zod
+            .enum(["pass", "conditional", "fail", "to_verify"])
+            .optional(),
+          assessedAt: zod.string().optional(),
+          gates: zod
+            .array(
+              zod.object({
+                id: zod.string().optional(),
+                label: zod.string().optional(),
+                status: zod
+                  .enum(["pass", "conditional", "fail", "to_verify"])
+                  .optional(),
+                evidence: zod
+                  .enum(["evidenced", "inferred", "unverified"])
+                  .optional(),
+                notes: zod.string().nullish(),
+                sourceUrls: zod.array(zod.string()).optional(),
+              }),
+            )
+            .optional(),
+        })
+        .nullish(),
+      riskRegister: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            risk: zod.string().optional(),
+            mitigation: zod.string().optional(),
+            severity: zod.enum(["high", "med", "low"]).optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+          }),
+        )
+        .optional(),
+      phasing: zod
+        .object({
+          phase: zod.enum(["verify", "pilot", "convert"]).optional(),
+          milestone: zod.string().optional(),
+          note: zod.string().nullish(),
+        })
+        .nullish(),
+      pendingUpdates: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            proposedBy: zod.string().optional(),
+            proposedAt: zod.string().optional(),
+            field: zod.string().optional(),
+            rationale: zod.string().optional(),
+            status: zod.enum(["pending", "approved", "rejected"]).optional(),
+            decidedAt: zod.string().optional(),
+            decidedByUserId: zod.string().optional(),
+          }),
+        )
+        .optional(),
     }),
   ),
 });
@@ -33357,6 +33450,18 @@ export const AtelierCreatePartnerFirmBody = zod.object({
   defaultBillingCurrency: zod.string().nullish(),
   notes: zod.string().nullish(),
   tierChangeReason: zod.string().nullish(),
+  archetype: zod
+    .union([
+      zod.literal("reference_brand"),
+      zod.literal("delivery_backbone"),
+      zod.literal("platform_capability"),
+      zod.literal("niche_subcontractor"),
+      zod.literal("market_access_jv"),
+      zod.literal("competitor_monitor"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
 });
 
 /**
@@ -33420,6 +33525,97 @@ export const AtelierGetPartnerFirmResponse = zod.object({
   defaultBillingCurrency: zod.string().nullish(),
   notes: zod.string().nullish(),
   activeResourceCount: zod.number().optional(),
+  archetype: zod
+    .union([
+      zod.literal("reference_brand"),
+      zod.literal("delivery_backbone"),
+      zod.literal("platform_capability"),
+      zod.literal("niche_subcontractor"),
+      zod.literal("market_access_jv"),
+      zod.literal("competitor_monitor"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  fitScorecard: zod
+    .object({
+      weightedTotal: zod.number().optional(),
+      verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
+      watchouts: zod.array(zod.string()).optional(),
+      scoredAt: zod.string().optional(),
+      dimensions: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            weight: zod.number().optional(),
+            score: zod.number().optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            rationale: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  dueDiligence: zod
+    .object({
+      overall: zod
+        .enum(["pass", "conditional", "fail", "to_verify"])
+        .optional(),
+      assessedAt: zod.string().optional(),
+      gates: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            status: zod
+              .enum(["pass", "conditional", "fail", "to_verify"])
+              .optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            notes: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        risk: zod.string().optional(),
+        mitigation: zod.string().optional(),
+        severity: zod.enum(["high", "med", "low"]).optional(),
+        evidence: zod.enum(["evidenced", "inferred", "unverified"]).optional(),
+      }),
+    )
+    .optional(),
+  phasing: zod
+    .object({
+      phase: zod.enum(["verify", "pilot", "convert"]).optional(),
+      milestone: zod.string().optional(),
+      note: zod.string().nullish(),
+    })
+    .nullish(),
+  pendingUpdates: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        proposedBy: zod.string().optional(),
+        proposedAt: zod.string().optional(),
+        field: zod.string().optional(),
+        rationale: zod.string().optional(),
+        status: zod.enum(["pending", "approved", "rejected"]).optional(),
+        decidedAt: zod.string().optional(),
+        decidedByUserId: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -33467,6 +33663,18 @@ export const AtelierUpdatePartnerFirmBody = zod.object({
   defaultBillingCurrency: zod.string().nullish(),
   notes: zod.string().nullish(),
   tierChangeReason: zod.string().nullish(),
+  archetype: zod
+    .union([
+      zod.literal("reference_brand"),
+      zod.literal("delivery_backbone"),
+      zod.literal("platform_capability"),
+      zod.literal("niche_subcontractor"),
+      zod.literal("market_access_jv"),
+      zod.literal("competitor_monitor"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
 });
 
 export const AtelierUpdatePartnerFirmResponse = zod.object({
@@ -33523,6 +33731,97 @@ export const AtelierUpdatePartnerFirmResponse = zod.object({
   defaultBillingCurrency: zod.string().nullish(),
   notes: zod.string().nullish(),
   activeResourceCount: zod.number().optional(),
+  archetype: zod
+    .union([
+      zod.literal("reference_brand"),
+      zod.literal("delivery_backbone"),
+      zod.literal("platform_capability"),
+      zod.literal("niche_subcontractor"),
+      zod.literal("market_access_jv"),
+      zod.literal("competitor_monitor"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  fitScorecard: zod
+    .object({
+      weightedTotal: zod.number().optional(),
+      verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
+      watchouts: zod.array(zod.string()).optional(),
+      scoredAt: zod.string().optional(),
+      dimensions: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            weight: zod.number().optional(),
+            score: zod.number().optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            rationale: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  dueDiligence: zod
+    .object({
+      overall: zod
+        .enum(["pass", "conditional", "fail", "to_verify"])
+        .optional(),
+      assessedAt: zod.string().optional(),
+      gates: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            label: zod.string().optional(),
+            status: zod
+              .enum(["pass", "conditional", "fail", "to_verify"])
+              .optional(),
+            evidence: zod
+              .enum(["evidenced", "inferred", "unverified"])
+              .optional(),
+            notes: zod.string().nullish(),
+            sourceUrls: zod.array(zod.string()).optional(),
+          }),
+        )
+        .optional(),
+    })
+    .nullish(),
+  riskRegister: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        risk: zod.string().optional(),
+        mitigation: zod.string().optional(),
+        severity: zod.enum(["high", "med", "low"]).optional(),
+        evidence: zod.enum(["evidenced", "inferred", "unverified"]).optional(),
+      }),
+    )
+    .optional(),
+  phasing: zod
+    .object({
+      phase: zod.enum(["verify", "pilot", "convert"]).optional(),
+      milestone: zod.string().optional(),
+      note: zod.string().nullish(),
+    })
+    .nullish(),
+  pendingUpdates: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        proposedBy: zod.string().optional(),
+        proposedAt: zod.string().optional(),
+        field: zod.string().optional(),
+        rationale: zod.string().optional(),
+        status: zod.enum(["pending", "approved", "rejected"]).optional(),
+        decidedAt: zod.string().optional(),
+        decidedByUserId: zod.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 /**
@@ -33729,6 +34028,99 @@ export const AtelierPromotePartnerTargetResponse = zod.object({
     defaultBillingCurrency: zod.string().nullish(),
     notes: zod.string().nullish(),
     activeResourceCount: zod.number().optional(),
+    archetype: zod
+      .union([
+        zod.literal("reference_brand"),
+        zod.literal("delivery_backbone"),
+        zod.literal("platform_capability"),
+        zod.literal("niche_subcontractor"),
+        zod.literal("market_access_jv"),
+        zod.literal("competitor_monitor"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+    fitScorecard: zod
+      .object({
+        weightedTotal: zod.number().optional(),
+        verdict: zod.enum(["proceed", "limited", "decline"]).optional(),
+        watchouts: zod.array(zod.string()).optional(),
+        scoredAt: zod.string().optional(),
+        dimensions: zod
+          .array(
+            zod.object({
+              id: zod.string().optional(),
+              label: zod.string().optional(),
+              weight: zod.number().optional(),
+              score: zod.number().optional(),
+              evidence: zod
+                .enum(["evidenced", "inferred", "unverified"])
+                .optional(),
+              rationale: zod.string().nullish(),
+              sourceUrls: zod.array(zod.string()).optional(),
+            }),
+          )
+          .optional(),
+      })
+      .nullish(),
+    dueDiligence: zod
+      .object({
+        overall: zod
+          .enum(["pass", "conditional", "fail", "to_verify"])
+          .optional(),
+        assessedAt: zod.string().optional(),
+        gates: zod
+          .array(
+            zod.object({
+              id: zod.string().optional(),
+              label: zod.string().optional(),
+              status: zod
+                .enum(["pass", "conditional", "fail", "to_verify"])
+                .optional(),
+              evidence: zod
+                .enum(["evidenced", "inferred", "unverified"])
+                .optional(),
+              notes: zod.string().nullish(),
+              sourceUrls: zod.array(zod.string()).optional(),
+            }),
+          )
+          .optional(),
+      })
+      .nullish(),
+    riskRegister: zod
+      .array(
+        zod.object({
+          id: zod.string().optional(),
+          risk: zod.string().optional(),
+          mitigation: zod.string().optional(),
+          severity: zod.enum(["high", "med", "low"]).optional(),
+          evidence: zod
+            .enum(["evidenced", "inferred", "unverified"])
+            .optional(),
+        }),
+      )
+      .optional(),
+    phasing: zod
+      .object({
+        phase: zod.enum(["verify", "pilot", "convert"]).optional(),
+        milestone: zod.string().optional(),
+        note: zod.string().nullish(),
+      })
+      .nullish(),
+    pendingUpdates: zod
+      .array(
+        zod.object({
+          id: zod.string().optional(),
+          proposedBy: zod.string().optional(),
+          proposedAt: zod.string().optional(),
+          field: zod.string().optional(),
+          rationale: zod.string().optional(),
+          status: zod.enum(["pending", "approved", "rejected"]).optional(),
+          decidedAt: zod.string().optional(),
+          decidedByUserId: zod.string().optional(),
+        }),
+      )
+      .optional(),
   }),
   target: zod.object({
     id: zod.string(),

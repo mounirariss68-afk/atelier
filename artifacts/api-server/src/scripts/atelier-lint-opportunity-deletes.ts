@@ -34,6 +34,9 @@ const SCAN_DIRS = ["src", "tests"];
 const ALLOWED_FILES = new Set([
   "src/lib/atelier-opportunity-delete.ts",             // the shared cascade helper
   "tests/crm/probe-winloss-orphans.ts",                // intentionally simulates an orphaning delete
+  "tests/crm/pricing-structures-probe.ts",             // scratch-DB cleanup: children deleted explicitly first, belt + suspenders only
+  "tests/cli-catalog/workload-scope.ts",               // scratch-DB cleanup of its own fixture rows
+  "tests/crm/margin-reports-probe.ts",                 // scratch-DB cleanup of its own fixture rows
   "src/scripts/atelier-lint-opportunity-deletes.ts",   // this lint (pattern appears in docs/regex)
 ]);
 

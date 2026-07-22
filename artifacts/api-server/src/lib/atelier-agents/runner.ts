@@ -2246,7 +2246,7 @@ type _AssertEverySubStepHasSection = AssertNever<SubStepKeysWithoutSection>;
  * URLs from any `web_search_tool_result` blocks so callers can append
  * them to source signals even if the model forgot to inline them.
  */
-async function callClaudeJsonWithWebSearch<T>(
+export async function callClaudeJsonWithWebSearch<T>(
   model: string,
   systemPrompt: string,
   userPrompt: string,

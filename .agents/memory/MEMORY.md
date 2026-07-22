@@ -112,3 +112,4 @@
 - [Partner NDA → firm linkage](atelier-partner-nda-linkage.md) — no FK between contracts and partner-firm registry; /partners/agreements joins by normalized name → partnerFirmId; UI keys on that, never counterpartyId.
 - [Receipt enrichment details](atelier-receipt-enrichment.md) — category details are baked into `summary` at parse time (ocrPayload gets redacted at 90d); sanitizer+formatter pair owns the format, never the auditor LLM.
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design (UI fallback list); invitations source-restricted; login created only via onboarding step; People nav derives from peopleLifecycle.STAGES; auto-grant helper on assignment.
+- [Alliance evaluation agents](alliance-agents.md) — proposal keys strip volatile fields; chained mapper terminal status is "complete"; 5 candidates ingested live 2026-07-22, never re-seed.

@@ -35,8 +35,14 @@ import {
   atelierContract,
   atelierSelfBilledInvoices,
 } from "@workspace/db";
+import { atelierAgentRuns } from "@workspace/db";
+import { desc } from "drizzle-orm";
 import { audit } from "./engagementRoutes";
 import { canEditPartnersLens } from "./personaRoles";
+import {
+  runAllianceCartographerAndQueue,
+  runAllianceMapperAndQueue,
+} from "../../lib/atelier-agents/alliance-mapper-chain.js";
 
 const router: IRouter = Router();
 
@@ -114,6 +120,19 @@ const firmBaseSchema = z.object({
   defaultBillingCurrency: z.string().max(10).nullish(),
   notes: z.string().max(5000).nullish(),
   tierChangeReason: z.string().max(1000).nullish(),
+  // Task #526 — Alliance Partner Evaluation Framework: human-editable fields.
+  // Scorecard/DD/risks/phasing arrive ONLY via the agent proposal queue.
+  archetype: z
+    .enum([
+      "reference_brand",
+      "delivery_backbone",
+      "platform_capability",
+      "niche_subcontractor",
+      "market_access_jv",
+      "competitor_monitor",
+    ])
+    .nullish(),
+  partnershipStage: z.enum(["candidate", "agreed"]).optional(),
 });
 
 function normalizeContacts(
@@ -232,6 +251,8 @@ router.post("/partners/firms", async (req, res, next) => {
         defaultPaymentTermsDays: b.defaultPaymentTermsDays ?? null,
         defaultBillingCurrency: b.defaultBillingCurrency ?? null,
         notes: b.notes ?? null,
+        archetype: b.archetype ?? null,
+        partnershipStage: b.partnershipStage ?? "candidate",
         tierHistory,
         createdByUserId: me.id,
       })
@@ -290,6 +311,8 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
     assign("defaultPaymentTermsDays", "defaultPaymentTermsDays");
     assign("defaultBillingCurrency", "defaultBillingCurrency");
     assign("notes", "notes");
+    assign("archetype", "archetype");
+    assign("partnershipStage", "partnershipStage");
     if (b.contacts !== undefined) {
       const to = normalizeContacts(b.contacts);
       patch.contacts = to;
@@ -1369,6 +1392,385 @@ router.get("/partners/co-deliver", async (req, res, next) => {
         partnerFirmName: firmById.get(i.supplierId) ?? i.supplierName,
       })),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// =============================================================
+// ALLIANCE EVALUATION AGENTS (Task #526) — async start-then-poll
+// =============================================================
+// Long LLM runs must NOT hold the HTTP request open (the proxy 502s held
+// requests at ~60s). Record an in-process launch entry, run in the
+// background, return 202 immediately; the client polls the status route.
+// Bespoke raw-fetch routes — deliberately NOT in the OpenAPI spec.
+
+type AllianceLaunchState = {
+  status: "running" | "succeeded" | "failed";
+  error: string | null;
+  runId: string | null;
+  proposedCount: number | null;
+  summary: Record<string, unknown> | null;
+  startedAt: number;
+};
+const allianceLaunches = new Map<string, AllianceLaunchState>();
+const allianceLaunchKey = (agentId: string, firmId: string) => `${agentId}:${firmId}`;
+// Watchdog: a launch entry stuck "running" past 30 minutes is dead (process
+// kept going but the promise never settled) — treat as failed on read.
+const LAUNCH_STALE_MS = 30 * 60 * 1000;
+
+function readLaunch(agentId: string, firmId: string): AllianceLaunchState | null {
+  const launch = allianceLaunches.get(allianceLaunchKey(agentId, firmId));
+  if (!launch) return null;
+  if (launch.status === "running" && Date.now() - launch.startedAt > LAUNCH_STALE_MS) {
+    return { ...launch, status: "failed", error: "The run timed out — please retry." };
+  }
+  return launch;
+}
+
+async function alreadyRunningInDb(agentId: string, firmId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: atelierAgentRuns.id })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, agentId),
+        eq(atelierAgentRuns.targetId, firmId),
+        eq(atelierAgentRuns.status, "running"),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+function launchAllianceAgent(args: {
+  agentId: "alliance_cartographer" | "alliance_executive_mapper";
+  firmId: string;
+  run: () => Promise<{ runId: string; proposedCount: number } & Record<string, unknown>>;
+}): void {
+  const key = allianceLaunchKey(args.agentId, args.firmId);
+  allianceLaunches.set(key, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    summary: null,
+    startedAt: Date.now(),
+  });
+  void (async () => {
+    try {
+      const result = await args.run();
+      const { runId, proposedCount, ...rest } = result;
+      allianceLaunches.set(key, {
+        status: "succeeded",
+        error: null,
+        runId,
+        proposedCount,
+        summary: rest,
+        startedAt: Date.now(),
+      });
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      allianceLaunches.set(key, {
+        status: "failed",
+        error: raw,
+        runId: null,
+        proposedCount: null,
+        summary: null,
+        startedAt: Date.now(),
+      });
+      console.warn(`[atelier] ${args.agentId} run failed for firm ${args.firmId}`, raw);
+    }
+  })();
+}
+
+// Launch the full framework evaluation (Cartographer → auto-chains Mapper).
+// @cli-skip: long-running agent trigger behind the Partners Evaluation UI; raw-fetch 202/poll
+router.post("/partners/firms/:id/agents/alliance-cartographer/run", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!ensureEditor(me, res)) return;
+    const firm = await getFirm(me, req.params.id);
+    if (!firm) return void res.status(404).json({ error: "not-found" });
+    const launch = readLaunch("alliance_cartographer", firm.id);
+    if (launch?.status === "running" || (await alreadyRunningInDb("alliance_cartographer", firm.id))) {
+      return void res.status(409).json({
+        error: "alliance-cartographer-already-running",
+        message: "A framework evaluation is already running for this partner.",
+      });
+    }
+    const contextNotes =
+      typeof req.body?.contextNotes === "string" ? req.body.contextNotes.slice(0, 2000) : null;
+    launchAllianceAgent({
+      agentId: "alliance_cartographer",
+      firmId: firm.id,
+      run: () => runAllianceCartographerAndQueue(firm.id, me.id, { contextNotes }),
+    });
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.agentRun.start",
+      payload: { agentId: "alliance_cartographer" },
+      summary: `${me.name} launched the Alliance Cartographer evaluation for "${firm.name}".`,
+    });
+    res.status(202).json({ started: true, status: "running" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Launch the people sweep on its own (normally auto-chained).
+// @cli-skip: long-running agent trigger behind the Partners Evaluation UI; raw-fetch 202/poll
+router.post("/partners/firms/:id/agents/alliance-mapper/run", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!ensureEditor(me, res)) return;
+    const firm = await getFirm(me, req.params.id);
+    if (!firm) return void res.status(404).json({ error: "not-found" });
+    const launch = readLaunch("alliance_executive_mapper", firm.id);
+    if (
+      launch?.status === "running" ||
+      (await alreadyRunningInDb("alliance_executive_mapper", firm.id))
+    ) {
+      return void res.status(409).json({
+        error: "alliance-mapper-already-running",
+        message: "An alliance executive sweep is already running for this partner.",
+      });
+    }
+    launchAllianceAgent({
+      agentId: "alliance_executive_mapper",
+      firmId: firm.id,
+      run: () => runAllianceMapperAndQueue(firm.id, me.id),
+    });
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.agentRun.start",
+      payload: { agentId: "alliance_executive_mapper" },
+      summary: `${me.name} launched the Alliance Executive Mapper for "${firm.name}".`,
+    });
+    res.status(202).json({ started: true, status: "running" });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Merged run status for both alliance agents (launch map + durable run rows).
+// @cli-skip: bespoke agent-status poll route, surfaced in the Partners UI only
+router.get("/partners/firms/:id/agents/status", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const firm = await getFirm(me, req.params.id);
+    if (!firm) return void res.status(404).json({ error: "not-found" });
+    const agents = ["alliance_cartographer", "alliance_executive_mapper"] as const;
+    const out: Record<string, unknown> = {};
+    for (const agentId of agents) {
+      const launch = readLaunch(agentId, firm.id);
+      const [latest] = await db
+        .select({
+          id: atelierAgentRuns.id,
+          status: atelierAgentRuns.status,
+          statusMessage: atelierAgentRuns.statusMessage,
+          createdAt: atelierAgentRuns.createdAt,
+        })
+        .from(atelierAgentRuns)
+        .where(
+          and(
+            eq(atelierAgentRuns.agentId, agentId),
+            eq(atelierAgentRuns.targetId, firm.id),
+            isNull(atelierAgentRuns.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierAgentRuns.createdAt))
+        .limit(1);
+      if (launch?.status === "running") {
+        out[agentId] = {
+          status: "running",
+          phase:
+            latest?.status === "running" ? (latest.statusMessage ?? null) : "Starting research…",
+          runId: latest?.status === "running" ? latest.id : null,
+        };
+      } else if (launch?.status === "failed") {
+        out[agentId] = { status: "failed", phase: launch.error, runId: null };
+      } else if (launch?.status === "succeeded") {
+        out[agentId] = {
+          status: "succeeded",
+          runId: launch.runId,
+          proposedCount: launch.proposedCount,
+          summary: launch.summary,
+        };
+      } else if (latest?.status === "running") {
+        // Server restarted mid-run: no launch entry, durable row still running.
+        out[agentId] = {
+          status: "running",
+          phase: latest.statusMessage ?? null,
+          runId: latest.id,
+        };
+      } else {
+        out[agentId] = {
+          status: latest ? latest.status : "idle",
+          runId: latest?.id ?? null,
+          phase: latest?.statusMessage ?? null,
+        };
+      }
+    }
+    const pendingCount = (firm.pendingUpdates ?? []).filter((u) => u.status === "pending").length;
+    res.json({ agents: out, pendingProposals: pendingCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------- proposal review (approve applies + audits, reject records) ----------
+
+function applyPartnerProposal(
+  firm: NonNullable<Awaited<ReturnType<typeof getFirm>>>,
+  proposal: (typeof firm.pendingUpdates)[number],
+  me: Me,
+): Partial<typeof atelierPartnerFirms.$inferInsert> {
+  const v = proposal.toValue;
+  switch (proposal.field) {
+    case "archetype":
+      return { archetype: typeof v === "string" ? v : null };
+    case "tier": {
+      const toTier = typeof v === "string" ? v : null;
+      if (!toTier) return {};
+      return {
+        tier: toTier,
+        tierHistory: [
+          ...(firm.tierHistory ?? []),
+          {
+            fromTier: firm.tier ?? null,
+            toTier,
+            at: new Date().toISOString(),
+            byUserId: me.id,
+            reason: `Approved Alliance Cartographer proposal ${proposal.id}`,
+          },
+        ],
+      };
+    }
+    case "fitScorecard":
+      return { fitScorecard: v as (typeof firm)["fitScorecard"] };
+    case "dueDiligence":
+      return { dueDiligence: v as (typeof firm)["dueDiligence"] };
+    case "riskRegister":
+      return { riskRegister: (v ?? []) as (typeof firm)["riskRegister"] };
+    case "phasing":
+      return { phasing: v as (typeof firm)["phasing"] };
+    case "capabilities":
+      return { capabilities: (v ?? {}) as Record<string, number> };
+    case "speciality":
+      return { speciality: typeof v === "string" ? v : null };
+    case "kind":
+      return { kind: typeof v === "string" ? v : null };
+    case "country": {
+      const meta = (proposal.meta ?? {}) as { countryCode?: unknown };
+      return {
+        country: typeof v === "string" ? v : null,
+        ...(typeof meta.countryCode === "string" && meta.countryCode.length === 2
+          ? { countryCode: meta.countryCode }
+          : {}),
+      };
+    }
+    case "contact": {
+      const c = (v ?? {}) as { name?: unknown; role?: unknown; email?: unknown };
+      if (typeof c.name !== "string" || !c.name.trim()) return {};
+      const contacts = [...(firm.contacts ?? [])];
+      const norm = (s: string) => s.trim().toLowerCase();
+      const existing = contacts.find((x) => norm(x.name) === norm(c.name as string));
+      if (existing) {
+        if (typeof c.role === "string" && c.role.trim()) existing.role = c.role;
+        if (typeof c.email === "string" && c.email.trim()) existing.email = c.email;
+      } else {
+        contacts.push({
+          id: rid("pfc"),
+          name: (c.name as string).trim(),
+          role: typeof c.role === "string" ? c.role : null,
+          email: typeof c.email === "string" ? c.email : null,
+        });
+      }
+      return { contacts };
+    }
+    default:
+      throw new Error(`unsupported-proposal-field:${proposal.field}`);
+  }
+}
+
+// Approve or reject a queued agent proposal. Approve applies the change to
+// the live firm record; both decisions are stamped on the queue + audited.
+// @cli-skip: bespoke proposal-review route behind the Partners Evaluation UI
+router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!ensureEditor(me, res)) return;
+    const action = req.body?.action;
+    if (action !== "approve" && action !== "reject") {
+      return void res.status(400).json({ error: "invalid-body", message: "action must be approve or reject" });
+    }
+    const result = await db.transaction(async (tx) => {
+      const [firm] = await tx
+        .select()
+        .from(atelierPartnerFirms)
+        .where(and(eq(atelierPartnerFirms.id, req.params.id), firmScope(me)))
+        .for("update");
+      if (!firm) return { code: 404 as const };
+      const queue = [...(firm.pendingUpdates ?? [])];
+      const idx = queue.findIndex((u) => u.id === req.params.proposalId);
+      if (idx === -1) return { code: 404 as const };
+      const proposal = queue[idx];
+      if (proposal.status !== "pending") {
+        return { code: 200 as const, proposal, idempotent: true };
+      }
+      const decided = {
+        ...proposal,
+        status: (action === "approve" ? "approved" : "rejected") as "approved" | "rejected",
+        decidedAt: new Date().toISOString(),
+        decidedByUserId: me.id,
+      };
+      queue[idx] = decided;
+      let patch: Partial<typeof atelierPartnerFirms.$inferInsert> = {};
+      if (action === "approve") {
+        try {
+          patch = applyPartnerProposal(firm, proposal, me);
+        } catch (err) {
+          return {
+            code: 422 as const,
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
+      await tx
+        .update(atelierPartnerFirms)
+        .set({ ...patch, pendingUpdates: queue, updatedAt: new Date() })
+        .where(eq(atelierPartnerFirms.id, firm.id));
+      return { code: 200 as const, proposal: decided, appliedFields: Object.keys(patch) };
+    });
+    if (result.code === 404) return void res.status(404).json({ error: "not-found" });
+    if (result.code === 422) {
+      return void res.status(422).json({ error: "proposal-apply-failed", message: result.message });
+    }
+    if (!("idempotent" in result && result.idempotent)) {
+      await audit({
+        entityType: "partner_firm",
+        entityId: req.params.id,
+        actor: me,
+        action: `partner_firm.proposal.${action}`,
+        payload: {
+          proposalId: req.params.proposalId,
+          field: result.proposal?.field,
+          appliedFields: "appliedFields" in result ? result.appliedFields : [],
+        },
+        summary: `${me.name} ${action === "approve" ? "approved" : "rejected"} an agent proposal (${result.proposal?.field}).`,
+      });
+    }
+    res.json({ ok: true, proposal: result.proposal });
   } catch (err) {
     next(err);
   }

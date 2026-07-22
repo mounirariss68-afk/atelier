@@ -65,6 +65,10 @@ import "./finance-ops-capabilities.js";
 // Task #404 — read-only people / contact / meeting / document /
 // opportunity / engagement / expense chat reads (ACL-parity with REST).
 import "./people-read-capabilities.js";
+// Task #526 — Alliance partner chat flow: "add alliance partner <X>"
+// (dedupe → candidate/agreed clarification → confirm → create + launch
+// Alliance Cartographer, mapper auto-chains) + evaluation read.
+import "./alliance-partner-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

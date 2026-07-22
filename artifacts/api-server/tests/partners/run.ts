@@ -24,7 +24,7 @@
 import "../crm/scratch-db.js";
 
 import type { AddressInfo } from "node:net";
-import { inArray, like } from "drizzle-orm";
+import { eq, inArray, like } from "drizzle-orm";
 
 const STAMP = Date.now();
 const ORG = "aico";
@@ -308,6 +308,117 @@ async function main(): Promise<void> {
         "NDA agreement resolves partnerFirmId via counterparty name",
         agr.status === 200 && agrItem?.partnerFirmId === firmId,
         `status=${agr.status} item=${JSON.stringify(agrItem)?.slice(0, 200)}`,
+      );
+
+      // ---- alliance evaluation agents (Task #526) — role gates + proposal review ----
+      group("alliance agents \u2014 role gates");
+      const consRun = await call("POST", `/partners/firms/${firmId}/agents/alliance-cartographer/run`, CONS_ID, {});
+      check("consultant \u2192 403 on cartographer run", consRun.status === 403, `status=${consRun.status}`);
+      const consMapRun = await call("POST", `/partners/firms/${firmId}/agents/alliance-mapper/run`, CONS_ID, {});
+      check("consultant \u2192 403 on mapper run", consMapRun.status === 403, `status=${consMapRun.status}`);
+      const consStatus = await call("GET", `/partners/firms/${firmId}/agents/status`, CONS_ID);
+      check(
+        "consultant can read agent status (idle)",
+        consStatus.status === 200 &&
+          consStatus.body?.agents?.alliance_cartographer?.status === "idle" &&
+          consStatus.body?.agents?.alliance_executive_mapper?.status === "idle",
+        `status=${consStatus.status} body=${JSON.stringify(consStatus.body)?.slice(0, 200)}`,
+      );
+      const runMissing = await call("POST", "/partners/firms/pf_does_not_exist/agents/alliance-cartographer/run", FP_ID, {});
+      check("cartographer run on unknown firm \u2192 404", runMissing.status === 404, `status=${runMissing.status}`);
+
+      group("alliance proposals \u2014 approve applies, reject records, idempotent");
+      // Seed a pending queue directly on the firm row (no LLM run needed).
+      const propApprove = `pp_test_appr_${STAMP}`;
+      const propReject = `pp_test_rej_${STAMP}`;
+      const nowIso = new Date().toISOString();
+      await db
+        .update(atelierPartnerFirms)
+        .set({
+          pendingUpdates: [
+            {
+              id: propApprove,
+              proposedBy: "ag_alliance_cartographer",
+              proposedAt: nowIso,
+              field: "archetype",
+              fromValue: null,
+              toValue: "delivery_backbone",
+              rationale: "probe seed",
+              status: "pending",
+            },
+            {
+              id: propReject,
+              proposedBy: "ag_alliance_cartographer",
+              proposedAt: nowIso,
+              field: "tier",
+              fromValue: "preferred",
+              toValue: "strategic",
+              rationale: "probe seed",
+              status: "pending",
+            },
+          ],
+        })
+        .where(eq(atelierPartnerFirms.id, firmId));
+
+      const statusWithPending = await call("GET", `/partners/firms/${firmId}/agents/status`, FP_ID);
+      check(
+        "status surfaces pendingProposals count",
+        statusWithPending.status === 200 && statusWithPending.body?.pendingProposals === 2,
+        `body=${JSON.stringify(statusWithPending.body)?.slice(0, 200)}`,
+      );
+
+      const consDecide = await call("POST", `/partners/firms/${firmId}/proposals/${propApprove}/decide`, CONS_ID, { action: "approve" });
+      check("consultant \u2192 403 on proposal decide", consDecide.status === 403, `status=${consDecide.status}`);
+
+      const badAction = await call("POST", `/partners/firms/${firmId}/proposals/${propApprove}/decide`, FP_ID, { action: "maybe" });
+      check("invalid action \u2192 400", badAction.status === 400, `status=${badAction.status}`);
+
+      const approved = await call("POST", `/partners/firms/${firmId}/proposals/${propApprove}/decide`, FP_ID, { action: "approve" });
+      check(
+        "approve \u2192 200 with decided proposal",
+        approved.status === 200 && approved.body?.proposal?.status === "approved",
+        `status=${approved.status} body=${JSON.stringify(approved.body)?.slice(0, 200)}`,
+      );
+      const firmAfterApprove = await call("GET", `/partners/firms/${firmId}`, FP_ID);
+      check(
+        "approved archetype applied to the live firm",
+        firmAfterApprove.body?.archetype === "delivery_backbone",
+        `archetype=${firmAfterApprove.body?.archetype}`,
+      );
+
+      const rejected = await call("POST", `/partners/firms/${firmId}/proposals/${propReject}/decide`, FP_ID, { action: "reject" });
+      check(
+        "reject \u2192 200, recorded but NOT applied",
+        rejected.status === 200 && rejected.body?.proposal?.status === "rejected",
+        `status=${rejected.status}`,
+      );
+      const firmAfterReject = await call("GET", `/partners/firms/${firmId}`, FP_ID);
+      check(
+        "rejected tier change not applied",
+        firmAfterReject.body?.tier === "preferred",
+        `tier=${firmAfterReject.body?.tier}`,
+      );
+
+      const reDecide = await call("POST", `/partners/firms/${firmId}/proposals/${propApprove}/decide`, FP_ID, { action: "reject" });
+      check(
+        "re-deciding a settled proposal is idempotent (keeps first decision)",
+        reDecide.status === 200 && reDecide.body?.proposal?.status === "approved",
+        `status=${reDecide.status} body=${JSON.stringify(reDecide.body)?.slice(0, 200)}`,
+      );
+
+      const decideMissing = await call("POST", `/partners/firms/${firmId}/proposals/pp_does_not_exist/decide`, FP_ID, { action: "approve" });
+      check("decide on unknown proposal \u2192 404", decideMissing.status === 404, `status=${decideMissing.status}`);
+
+      // Audit trail: approve + reject both stamped.
+      const auditRows = await db
+        .select({ action: atelierAuditEvents.action })
+        .from(atelierAuditEvents)
+        .where(like(atelierAuditEvents.actorId, `p_test_pn_%_${STAMP}`));
+      const auditActions = auditRows.map((r: any) => r.action);
+      check(
+        "proposal decisions audited",
+        auditActions.includes("partner_firm.proposal.approve") && auditActions.includes("partner_firm.proposal.reject"),
+        `actions=${auditActions.filter((a: string) => a.includes("proposal")).join(",")}`,
       );
 
       // ---- archive ----

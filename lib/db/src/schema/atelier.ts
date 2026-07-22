@@ -2325,6 +2325,94 @@ export const atelierPartnerFirms = pgTable(
       .$type<Array<{ fromTier: string | null; toTier: string; at: string; byUserId: string; reason?: string | null }>>()
       .notNull()
       .default([]),
+    // Task #526 — Alliance Partner Evaluation Framework v2.0 fields.
+    // One of the six framework archetypes:
+    // reference_brand | delivery_backbone | platform_capability |
+    // niche_subcontractor | market_access_jv | competitor_monitor
+    archetype: text("archetype"),
+    // Framework lifecycle position: candidate (under evaluation) | agreed
+    // (signed / active partner). Distinct from `status` (ops lifecycle).
+    partnershipStage: text("partnership_stage").notNull().default("candidate"),
+    // Stage 1 — nine-dimension weighted fit scorecard. Scores 1–5, weights
+    // sum to 1.0; weightedTotal + verdict computed in code, never trusted
+    // from the model.
+    fitScorecard: jsonb("fit_scorecard")
+      .$type<{
+        dimensions: Array<{
+          id: string; // e.g. service_alignment
+          label: string;
+          weight: number; // 0..1
+          score: number; // 1..5
+          evidence: "evidenced" | "inferred" | "unverified";
+          rationale?: string | null;
+          sourceUrls?: string[];
+        }>;
+        weightedTotal: number;
+        verdict: "proceed" | "limited" | "decline";
+        watchouts: string[]; // two weakest dimension labels
+        scoredAt: string;
+        scoredBy: string; // agent id or user id
+      } | null>()
+      .default(null),
+    // Stage 2 — due-diligence gates (pass | conditional | fail | to_verify).
+    dueDiligence: jsonb("due_diligence")
+      .$type<{
+        gates: Array<{
+          id: string; // e.g. legal_standing
+          label: string;
+          status: "pass" | "conditional" | "fail" | "to_verify";
+          evidence: "evidenced" | "inferred" | "unverified";
+          notes?: string | null;
+          sourceUrls?: string[];
+        }>;
+        overall: "pass" | "conditional" | "fail" | "to_verify";
+        assessedAt: string;
+        assessedBy: string;
+      } | null>()
+      .default(null),
+    // Stage 8 — risk register (top risks + mitigations).
+    riskRegister: jsonb("risk_register")
+      .$type<
+        Array<{
+          id: string;
+          risk: string;
+          mitigation: string;
+          severity: "high" | "med" | "low";
+          evidence: "evidenced" | "inferred" | "unverified";
+          sourceUrls?: string[];
+        }>
+      >()
+      .notNull()
+      .default([]),
+    // Stage 9 — phasing: current phase + milestone to convert.
+    phasing: jsonb("phasing")
+      .$type<{
+        phase: "verify" | "pilot" | "convert";
+        milestone: string;
+        note?: string | null;
+      } | null>()
+      .default(null),
+    // Agent proposal queue — mirrors accounts.pendingProfileUpdates. Agents
+    // NEVER write archetype/scorecard/DD/risks/phasing/capabilities directly;
+    // everything lands here for partner review (approve applies + audits).
+    pendingUpdates: jsonb("pending_updates")
+      .$type<
+        Array<{
+          id: string;
+          proposedBy: string; // e.g. ag_alliance_cartographer
+          proposedAt: string;
+          field: string; // 'archetype' | 'fitScorecard' | 'dueDiligence' | 'riskRegister' | 'phasing' | 'capabilities' | 'tier' | 'contact' | 'speciality' | 'notes'
+          fromValue: unknown;
+          toValue: unknown;
+          rationale: string;
+          status: "pending" | "approved" | "rejected";
+          meta?: Record<string, unknown>;
+          decidedAt?: string;
+          decidedByUserId?: string;
+        }>
+      >()
+      .notNull()
+      .default([]),
     // Lifecycle: active | renewal_due | paused | offboarded | terminated
     status: text("status").notNull().default("active"),
     notes: text("notes"),

@@ -52,6 +52,9 @@ export type AtelierAgentId =
   | "field_notes_scheduler"
   // v5 — Alliances (Task #513: alliance_choreographer removed to backlog)
   | "certification_tracker"
+  // Task #526 — Alliance Partner Evaluation Framework agents
+  | "alliance_cartographer"
+  | "alliance_executive_mapper"
   // v5 — Studio (recruiting)
   | "interview_designer"
   | "reference_caller"

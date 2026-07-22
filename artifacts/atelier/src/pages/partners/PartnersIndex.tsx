@@ -20,6 +20,7 @@ import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
+import { AllianceEvaluationPanel, AllianceVerdictChip } from "./AllianceEvaluation";
 import {
   Handshake,
   GitMerge,
@@ -379,6 +380,7 @@ function IdentifyView() {
   const create = useAtelierCreatePartnerFirm();
   const update = useAtelierUpdatePartnerFirm();
   const archive = useAtelierArchivePartnerFirm();
+  const [evalOpenId, setEvalOpenId] = React.useState<string | null>(null);
 
   return (
     <div className="space-y-8">
@@ -448,6 +450,8 @@ function IdentifyView() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {f.partnershipStage === "candidate" && <MonoChip tone="amber">candidate</MonoChip>}
+                    <AllianceVerdictChip firm={f} />
                     {f.tier && <MonoChip tone={f.tier === "strategic" ? "gold" : "default"}>{f.tier}</MonoChip>}
                     <MonoChip tone={f.status === "active" ? "green" : f.status === "renewal_due" ? "amber" : "default"}>
                       {f.status.replace("_", " ")}
@@ -478,30 +482,41 @@ function IdentifyView() {
                 {f.notes && (
                   <div className="text-xs text-text-faint border-l-2 border-l-border pl-2">{f.notes}</div>
                 )}
-                {canEdit && (
-                  <div className="flex gap-2 pt-1">
-                    <button
-                      className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                      onClick={() => { setEditingId(f.id); setErr(null); }}
-                      data-testid={`button-edit-firm-${f.id}`}
-                    >
-                      <Pencil className="w-3 h-3" /> edit
-                    </button>
-                    <button
-                      className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1"
-                      onClick={() => {
-                        setErr(null);
-                        archive.mutate({ id: f.id }, {
-                          onSuccess: () => invalidateFirms(),
-                          onError: (e) => setErr(errMessage(e)),
-                        });
-                      }}
-                      data-testid={`button-archive-firm-${f.id}`}
-                    >
-                      <Archive className="w-3 h-3" /> archive
-                    </button>
-                  </div>
-                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
+                    onClick={() => setEvalOpenId(evalOpenId === f.id ? null : f.id)}
+                    data-testid={`button-evaluation-${f.id}`}
+                  >
+                    <ChevronRight className={`w-3 h-3 transition-transform ${evalOpenId === f.id ? "rotate-90" : ""}`} />
+                    evaluation
+                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
+                        onClick={() => { setEditingId(f.id); setErr(null); }}
+                        data-testid={`button-edit-firm-${f.id}`}
+                      >
+                        <Pencil className="w-3 h-3" /> edit
+                      </button>
+                      <button
+                        className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1"
+                        onClick={() => {
+                          setErr(null);
+                          archive.mutate({ id: f.id }, {
+                            onSuccess: () => invalidateFirms(),
+                            onError: (e) => setErr(errMessage(e)),
+                          });
+                        }}
+                        data-testid={`button-archive-firm-${f.id}`}
+                      >
+                        <Archive className="w-3 h-3" /> archive
+                      </button>
+                    </>
+                  )}
+                </div>
+                {evalOpenId === f.id && <AllianceEvaluationPanel firm={f} canEdit={canEdit} />}
               </Card>
             ),
           )}
@@ -836,7 +851,12 @@ function QualifyView() {
                 const nda = ndaByFirm.get(f.id);
                 return (
                   <tr key={f.id} className="border-b border-border-soft last:border-0" data-testid={`row-qualify-${f.id}`}>
-                    <td className="px-4 py-3 font-medium text-text">{f.name}</td>
+                    <td className="px-4 py-3 font-medium text-text">
+                      <span className="inline-flex items-center gap-2">
+                        {f.name}
+                        <AllianceVerdictChip firm={f} />
+                      </span>
+                    </td>
                     {CAP_DIMENSIONS.map((d) => {
                       if (editing) {
                         return (
