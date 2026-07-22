@@ -46,6 +46,9 @@ import {
   type CapabilityInput,
 } from "./capability-catalog.js";
 import { resolveSelfSubject, type SelfSubject } from "./me-capabilities.js";
+// Task #589 — chat submits must fire the same notification rows as the
+// Me-lens REST submit paths so requests don't sit invisible.
+import { emitSelfNotification } from "../../routes/atelier/meRoutes.js";
 import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
 import { storePersonDocBytes } from "../personDocStorage.js";
 import {
@@ -755,6 +758,16 @@ defineSelfWriteCapability({
       action: "ledger.submit",
       payload: { flags, acknowledged: flags.length > 0, via: "chat" },
       summary: `${subject.user.name} submitted week ${weekIso}${flags.length ? ` (acknowledged ${flags.length} flag(s))` : ""}`,
+    });
+    // Task #589 — mirror the Me-lens REST submit's self-notification so the
+    // submitter's home shows the week is with the approvers.
+    await emitSelfNotification({
+      orgId: subject.user.orgId,
+      userId: subject.user.id,
+      kind: "timesheet_submitted",
+      title: `Timesheet ${weekIso} submitted`,
+      body: "Your week is now with the approvers.",
+      href: "/me",
     });
     return {
       ok: true,

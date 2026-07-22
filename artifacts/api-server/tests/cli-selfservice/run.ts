@@ -368,6 +368,46 @@ async function main(): Promise<void> {
     const subAgain = await runTool("submit_my_timesheet", empPersona, { confirm: true });
     check("re-submit refused (week_locked)", subAgain.ok === false && subAgain.errorCode === "week_locked");
 
+    // ---------------- 5b. notification parity with REST (Task #589) ---
+    // Chat writes must produce the SAME notification rows as their REST
+    // equivalents: timesheet submit drops a timesheet_submitted card on
+    // the submitter's home (mirrors POST /me/timesheets/:weekId/submit);
+    // leave create and expense DRAFT create send nothing (neither do the
+    // REST paths — founders are notified only at expense SUBMIT, which
+    // stays on the Me page).
+    group("Notification parity with REST");
+    const tsNotifs = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(
+        and(
+          eq(atelierSelfNotifications.userId, EMP_UID),
+          eq(atelierSelfNotifications.kind, "timesheet_submitted"),
+        ),
+      );
+    check(
+      "chat timesheet submit emitted ONE timesheet_submitted self-notification",
+      tsNotifs.length === 1 &&
+        tsNotifs[0].title === `Timesheet ${CUR_ISO} submitted` &&
+        tsNotifs[0].href === "/me",
+      JSON.stringify(tsNotifs.map((n: any) => ({ kind: n.kind, title: n.title }))),
+    );
+    const otherKinds = await db
+      .select()
+      .from(atelierSelfNotifications)
+      .where(
+        inArray(atelierSelfNotifications.kind, [
+          "leave_requested",
+          "expense_submitted",
+          "expense_drafted",
+        ]),
+      );
+    check(
+      "leave create + expense draft emit no notification rows (REST parity)",
+      otherKinds.length === 0,
+      JSON.stringify(otherKinds.map((n: any) => ({ kind: n.kind, userId: n.userId }))),
+    );
+
     // ---------------- 6. profile update -------------------------------
     group("Profile self-edit");
     const prof = await runConfirmed("update_my_profile", empPersona, {
