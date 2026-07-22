@@ -47,6 +47,9 @@ import {
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
+// Task #592 — per-browser preference for the Home meetings list/day toggle.
+const MEETINGS_VIEW_STORAGE_KEY = "atelier-meetings-view";
+
 // Redirect error codes from the OAuth callback → human guidance. The server
 // only ever emits these fixed codes (never raw AADSTS strings), but map
 // defensively so an unknown code still reads sensibly.
@@ -1059,7 +1062,24 @@ export function ConnectedAccountsCard() {
  * list/day-timeline toggle matching the mobile Meetings tab. */
 export function MyMeetingsCard() {
   const { data: conn } = useAtelierGetMyMsConnection();
-  const [view, setView] = React.useState<"list" | "day">("list");
+  // Task #592 — remember the list/day choice per browser (like the theme
+  // and rail-width preferences); invalid or missing values fall back to list.
+  const [view, setView] = React.useState<"list" | "day">(() => {
+    try {
+      const raw = window.localStorage.getItem(MEETINGS_VIEW_STORAGE_KEY);
+      return raw === "day" ? "day" : "list";
+    } catch {
+      return "list";
+    }
+  });
+  const setViewPersisted = React.useCallback((v: "list" | "day") => {
+    setView(v);
+    try {
+      window.localStorage.setItem(MEETINGS_VIEW_STORAGE_KEY, v);
+    } catch {
+      /* localStorage unavailable — non-fatal */
+    }
+  }, []);
   const win = React.useMemo(() => windowIso(7), []);
   // Task #553 — fetch even when not connected: the server still returns
   // Atelier-booked internal meetings the viewer created or attends.
@@ -1093,7 +1113,7 @@ export function MyMeetingsCard() {
                 <button
                   key={v}
                   type="button"
-                  onClick={() => setView(v)}
+                  onClick={() => setViewPersisted(v)}
                   className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors ${
                     active ? "bg-bg-elevate text-text" : "text-text-mute hover:text-text"
                   }`}
