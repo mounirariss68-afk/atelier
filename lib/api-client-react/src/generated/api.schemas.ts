@@ -7313,6 +7313,598 @@ export interface AtelierContractPrepareError {
   fields?: AtelierContractTemplateField[];
 }
 
+export interface AtelierPartnerContact {
+  id?: string;
+  name: string;
+  role?: string | null;
+  email?: string | null;
+}
+
+export interface AtelierPartnerTierChange {
+  fromTier?: string | null;
+  toTier: string;
+  at: string;
+  byUserId?: string | null;
+  reason?: string | null;
+}
+
+export type AtelierPartnerFirmTier =
+  | (typeof AtelierPartnerFirmTier)[keyof typeof AtelierPartnerFirmTier]
+  | null;
+
+export const AtelierPartnerFirmTier = {
+  strategic: "strategic",
+  preferred: "preferred",
+  transactional: "transactional",
+} as const;
+
+export type AtelierPartnerFirmStatus =
+  (typeof AtelierPartnerFirmStatus)[keyof typeof AtelierPartnerFirmStatus];
+
+export const AtelierPartnerFirmStatus = {
+  active: "active",
+  renewal_due: "renewal_due",
+  paused: "paused",
+  offboarded: "offboarded",
+  terminated: "terminated",
+} as const;
+
+export type AtelierPartnerFirmCapabilities = { [key: string]: number };
+
+export interface AtelierPartnerFirm {
+  id: string;
+  name: string;
+  kind?: string | null;
+  speciality?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  tier?: AtelierPartnerFirmTier;
+  status: AtelierPartnerFirmStatus;
+  relationshipStrength?: number | null;
+  anchorCognirise?: string | null;
+  anchorPartner?: string | null;
+  lastTouchAt?: string | null;
+  capabilities?: AtelierPartnerFirmCapabilities;
+  contacts?: AtelierPartnerContact[];
+  tierHistory?: AtelierPartnerTierChange[];
+  contactName?: string | null;
+  contactEmail?: string | null;
+  defaultPaymentTermsDays?: number | null;
+  defaultBillingCurrency?: string | null;
+  notes?: string | null;
+  activeResourceCount?: number;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerFirmList {
+  items: AtelierPartnerFirm[];
+}
+
+export type AtelierPartnerFirmInputTier =
+  | (typeof AtelierPartnerFirmInputTier)[keyof typeof AtelierPartnerFirmInputTier]
+  | null;
+
+export const AtelierPartnerFirmInputTier = {
+  strategic: "strategic",
+  preferred: "preferred",
+  transactional: "transactional",
+} as const;
+
+export type AtelierPartnerFirmInputStatus =
+  (typeof AtelierPartnerFirmInputStatus)[keyof typeof AtelierPartnerFirmInputStatus];
+
+export const AtelierPartnerFirmInputStatus = {
+  active: "active",
+  renewal_due: "renewal_due",
+  paused: "paused",
+  offboarded: "offboarded",
+  terminated: "terminated",
+} as const;
+
+export type AtelierPartnerFirmInputCapabilities = { [key: string]: number };
+
+export interface AtelierPartnerFirmInput {
+  name: string;
+  kind?: string | null;
+  speciality?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  tier?: AtelierPartnerFirmInputTier;
+  status?: AtelierPartnerFirmInputStatus;
+  relationshipStrength?: number | null;
+  anchorCognirise?: string | null;
+  anchorPartner?: string | null;
+  lastTouchAt?: string | null;
+  capabilities?: AtelierPartnerFirmInputCapabilities;
+  contacts?: AtelierPartnerContact[];
+  contactName?: string | null;
+  contactEmail?: string | null;
+  defaultPaymentTermsDays?: number | null;
+  defaultBillingCurrency?: string | null;
+  notes?: string | null;
+  tierChangeReason?: string | null;
+}
+
+export type AtelierPartnerFirmPatchTier =
+  | (typeof AtelierPartnerFirmPatchTier)[keyof typeof AtelierPartnerFirmPatchTier]
+  | null;
+
+export const AtelierPartnerFirmPatchTier = {
+  strategic: "strategic",
+  preferred: "preferred",
+  transactional: "transactional",
+} as const;
+
+export type AtelierPartnerFirmPatchStatus =
+  (typeof AtelierPartnerFirmPatchStatus)[keyof typeof AtelierPartnerFirmPatchStatus];
+
+export const AtelierPartnerFirmPatchStatus = {
+  active: "active",
+  renewal_due: "renewal_due",
+  paused: "paused",
+  offboarded: "offboarded",
+  terminated: "terminated",
+} as const;
+
+export type AtelierPartnerFirmPatchCapabilities = { [key: string]: number };
+
+export interface AtelierPartnerFirmPatch {
+  name?: string;
+  kind?: string | null;
+  speciality?: string | null;
+  country?: string | null;
+  countryCode?: string | null;
+  tier?: AtelierPartnerFirmPatchTier;
+  status?: AtelierPartnerFirmPatchStatus;
+  relationshipStrength?: number | null;
+  anchorCognirise?: string | null;
+  anchorPartner?: string | null;
+  lastTouchAt?: string | null;
+  capabilities?: AtelierPartnerFirmPatchCapabilities;
+  contacts?: AtelierPartnerContact[];
+  contactName?: string | null;
+  contactEmail?: string | null;
+  defaultPaymentTermsDays?: number | null;
+  defaultBillingCurrency?: string | null;
+  notes?: string | null;
+  tierChangeReason?: string | null;
+}
+
+export type AtelierPartnerTargetPriority =
+  (typeof AtelierPartnerTargetPriority)[keyof typeof AtelierPartnerTargetPriority];
+
+export const AtelierPartnerTargetPriority = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerTargetStatus =
+  (typeof AtelierPartnerTargetStatus)[keyof typeof AtelierPartnerTargetStatus];
+
+export const AtelierPartnerTargetStatus = {
+  researching: "researching",
+  outreach: "outreach",
+  intro_call: "intro_call",
+  evaluating: "evaluating",
+  promoted: "promoted",
+  dropped: "dropped",
+} as const;
+
+export interface AtelierPartnerTarget {
+  id: string;
+  name: string;
+  ecosystem?: string | null;
+  country?: string | null;
+  thesis?: string | null;
+  tierHypothesis?: string | null;
+  priority?: AtelierPartnerTargetPriority;
+  status: AtelierPartnerTargetStatus;
+  ownerUserId?: string | null;
+  nextStep?: string | null;
+  lastContactAt?: string | null;
+  promotedFirmId?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerTargetList {
+  items: AtelierPartnerTarget[];
+}
+
+export type AtelierPartnerTargetInputTierHypothesis =
+  | (typeof AtelierPartnerTargetInputTierHypothesis)[keyof typeof AtelierPartnerTargetInputTierHypothesis]
+  | null;
+
+export const AtelierPartnerTargetInputTierHypothesis = {
+  strategic: "strategic",
+  preferred: "preferred",
+  transactional: "transactional",
+} as const;
+
+export type AtelierPartnerTargetInputPriority =
+  (typeof AtelierPartnerTargetInputPriority)[keyof typeof AtelierPartnerTargetInputPriority];
+
+export const AtelierPartnerTargetInputPriority = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerTargetInputStatus =
+  (typeof AtelierPartnerTargetInputStatus)[keyof typeof AtelierPartnerTargetInputStatus];
+
+export const AtelierPartnerTargetInputStatus = {
+  researching: "researching",
+  outreach: "outreach",
+  intro_call: "intro_call",
+  evaluating: "evaluating",
+  promoted: "promoted",
+  dropped: "dropped",
+} as const;
+
+export interface AtelierPartnerTargetInput {
+  name: string;
+  ecosystem?: string | null;
+  country?: string | null;
+  thesis?: string | null;
+  tierHypothesis?: AtelierPartnerTargetInputTierHypothesis;
+  priority?: AtelierPartnerTargetInputPriority;
+  status?: AtelierPartnerTargetInputStatus;
+  ownerUserId?: string | null;
+  nextStep?: string | null;
+  lastContactAt?: string | null;
+}
+
+export type AtelierPartnerTargetPatchTierHypothesis =
+  | (typeof AtelierPartnerTargetPatchTierHypothesis)[keyof typeof AtelierPartnerTargetPatchTierHypothesis]
+  | null;
+
+export const AtelierPartnerTargetPatchTierHypothesis = {
+  strategic: "strategic",
+  preferred: "preferred",
+  transactional: "transactional",
+} as const;
+
+export type AtelierPartnerTargetPatchPriority =
+  (typeof AtelierPartnerTargetPatchPriority)[keyof typeof AtelierPartnerTargetPatchPriority];
+
+export const AtelierPartnerTargetPatchPriority = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerTargetPatchStatus =
+  (typeof AtelierPartnerTargetPatchStatus)[keyof typeof AtelierPartnerTargetPatchStatus];
+
+export const AtelierPartnerTargetPatchStatus = {
+  researching: "researching",
+  outreach: "outreach",
+  intro_call: "intro_call",
+  evaluating: "evaluating",
+  promoted: "promoted",
+  dropped: "dropped",
+} as const;
+
+export interface AtelierPartnerTargetPatch {
+  name?: string;
+  ecosystem?: string | null;
+  country?: string | null;
+  thesis?: string | null;
+  tierHypothesis?: AtelierPartnerTargetPatchTierHypothesis;
+  priority?: AtelierPartnerTargetPatchPriority;
+  status?: AtelierPartnerTargetPatchStatus;
+  ownerUserId?: string | null;
+  nextStep?: string | null;
+  lastContactAt?: string | null;
+}
+
+export interface AtelierPartnerPromoteResponse {
+  alreadyPromoted?: boolean;
+  firm: AtelierPartnerFirm;
+  target: AtelierPartnerTarget;
+}
+
+export type AtelierJointPipelineEntryLeadParty =
+  (typeof AtelierJointPipelineEntryLeadParty)[keyof typeof AtelierJointPipelineEntryLeadParty];
+
+export const AtelierJointPipelineEntryLeadParty = {
+  cognirise: "cognirise",
+  partner: "partner",
+  joint: "joint",
+} as const;
+
+export type AtelierJointPipelineEntryAllianceLetterStatus =
+  (typeof AtelierJointPipelineEntryAllianceLetterStatus)[keyof typeof AtelierJointPipelineEntryAllianceLetterStatus];
+
+export const AtelierJointPipelineEntryAllianceLetterStatus = {
+  none: "none",
+  drafting: "drafting",
+  signed: "signed",
+} as const;
+
+export interface AtelierJointPipelineEntry {
+  id: string;
+  opportunityId: string;
+  partnerFirmId: string;
+  leadParty?: AtelierJointPipelineEntryLeadParty;
+  cognirisePct?: number;
+  partnerPct?: number;
+  splitRationale?: string | null;
+  allianceLetterStatus?: AtelierJointPipelineEntryAllianceLetterStatus;
+  partnerSourced?: boolean;
+  opportunityName?: string | null;
+  clientName?: string | null;
+  salesStage?: string | null;
+  dealSizeHypothesis?: string | null;
+  partnerFirmName?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AtelierJointPipelineList {
+  items: AtelierJointPipelineEntry[];
+}
+
+export type AtelierJointPipelineInputLeadParty =
+  (typeof AtelierJointPipelineInputLeadParty)[keyof typeof AtelierJointPipelineInputLeadParty];
+
+export const AtelierJointPipelineInputLeadParty = {
+  cognirise: "cognirise",
+  partner: "partner",
+  joint: "joint",
+} as const;
+
+export type AtelierJointPipelineInputAllianceLetterStatus =
+  (typeof AtelierJointPipelineInputAllianceLetterStatus)[keyof typeof AtelierJointPipelineInputAllianceLetterStatus];
+
+export const AtelierJointPipelineInputAllianceLetterStatus = {
+  none: "none",
+  drafting: "drafting",
+  signed: "signed",
+} as const;
+
+export interface AtelierJointPipelineInput {
+  opportunityId: string;
+  partnerFirmId: string;
+  leadParty?: AtelierJointPipelineInputLeadParty;
+  cognirisePct?: number;
+  partnerPct?: number;
+  splitRationale?: string;
+  allianceLetterStatus?: AtelierJointPipelineInputAllianceLetterStatus;
+  partnerSourced?: boolean;
+}
+
+export type AtelierJointPipelinePatchLeadParty =
+  (typeof AtelierJointPipelinePatchLeadParty)[keyof typeof AtelierJointPipelinePatchLeadParty];
+
+export const AtelierJointPipelinePatchLeadParty = {
+  cognirise: "cognirise",
+  partner: "partner",
+  joint: "joint",
+} as const;
+
+export type AtelierJointPipelinePatchAllianceLetterStatus =
+  (typeof AtelierJointPipelinePatchAllianceLetterStatus)[keyof typeof AtelierJointPipelinePatchAllianceLetterStatus];
+
+export const AtelierJointPipelinePatchAllianceLetterStatus = {
+  none: "none",
+  drafting: "drafting",
+  signed: "signed",
+} as const;
+
+export interface AtelierJointPipelinePatch {
+  leadParty?: AtelierJointPipelinePatchLeadParty;
+  cognirisePct?: number;
+  partnerPct?: number;
+  splitRationale?: string;
+  allianceLetterStatus?: AtelierJointPipelinePatchAllianceLetterStatus;
+  partnerSourced?: boolean;
+}
+
+export type AtelierPartnerCertificationStatus =
+  (typeof AtelierPartnerCertificationStatus)[keyof typeof AtelierPartnerCertificationStatus];
+
+export const AtelierPartnerCertificationStatus = {
+  active: "active",
+  lapsing: "lapsing",
+  lapsed: "lapsed",
+} as const;
+
+export interface AtelierPartnerCertification {
+  id: string;
+  partnerFirmId: string;
+  credential: string;
+  platform: string;
+  holderPersonId?: string | null;
+  holder?: string | null;
+  status: AtelierPartnerCertificationStatus;
+  expiresAt?: string | null;
+  partnerFirmName?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerCertificationList {
+  items: AtelierPartnerCertification[];
+}
+
+export type AtelierPartnerCertificationInputStatus =
+  (typeof AtelierPartnerCertificationInputStatus)[keyof typeof AtelierPartnerCertificationInputStatus];
+
+export const AtelierPartnerCertificationInputStatus = {
+  active: "active",
+  lapsing: "lapsing",
+  lapsed: "lapsed",
+} as const;
+
+export interface AtelierPartnerCertificationInput {
+  partnerFirmId: string;
+  credential: string;
+  platform: string;
+  holderPersonId?: string | null;
+  holder?: string | null;
+  status?: AtelierPartnerCertificationInputStatus;
+  expiresAt?: string | null;
+}
+
+export type AtelierPartnerCertificationPatchStatus =
+  (typeof AtelierPartnerCertificationPatchStatus)[keyof typeof AtelierPartnerCertificationPatchStatus];
+
+export const AtelierPartnerCertificationPatchStatus = {
+  active: "active",
+  lapsing: "lapsing",
+  lapsed: "lapsed",
+} as const;
+
+export interface AtelierPartnerCertificationPatch {
+  partnerFirmId?: string;
+  credential?: string;
+  platform?: string;
+  holderPersonId?: string | null;
+  holder?: string | null;
+  status?: AtelierPartnerCertificationPatchStatus;
+  expiresAt?: string | null;
+}
+
+export type AtelierPartnerConflictSeverity =
+  (typeof AtelierPartnerConflictSeverity)[keyof typeof AtelierPartnerConflictSeverity];
+
+export const AtelierPartnerConflictSeverity = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerConflictStatus =
+  (typeof AtelierPartnerConflictStatus)[keyof typeof AtelierPartnerConflictStatus];
+
+export const AtelierPartnerConflictStatus = {
+  open: "open",
+  resolved: "resolved",
+} as const;
+
+export interface AtelierPartnerConflict {
+  id: string;
+  partnerFirmId: string;
+  headline: string;
+  detectedAt?: string | null;
+  severity?: AtelierPartnerConflictSeverity;
+  detail?: string | null;
+  recommendation?: string | null;
+  status: AtelierPartnerConflictStatus;
+  resolvedAt?: string | null;
+  partnerFirmName?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerConflictList {
+  items: AtelierPartnerConflict[];
+}
+
+export type AtelierPartnerConflictInputSeverity =
+  (typeof AtelierPartnerConflictInputSeverity)[keyof typeof AtelierPartnerConflictInputSeverity];
+
+export const AtelierPartnerConflictInputSeverity = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerConflictInputStatus =
+  (typeof AtelierPartnerConflictInputStatus)[keyof typeof AtelierPartnerConflictInputStatus];
+
+export const AtelierPartnerConflictInputStatus = {
+  open: "open",
+  resolved: "resolved",
+} as const;
+
+export interface AtelierPartnerConflictInput {
+  partnerFirmId: string;
+  headline: string;
+  detectedAt?: string;
+  severity?: AtelierPartnerConflictInputSeverity;
+  detail?: string;
+  recommendation?: string;
+  status?: AtelierPartnerConflictInputStatus;
+}
+
+export type AtelierPartnerConflictPatchSeverity =
+  (typeof AtelierPartnerConflictPatchSeverity)[keyof typeof AtelierPartnerConflictPatchSeverity];
+
+export const AtelierPartnerConflictPatchSeverity = {
+  high: "high",
+  med: "med",
+  low: "low",
+} as const;
+
+export type AtelierPartnerConflictPatchStatus =
+  (typeof AtelierPartnerConflictPatchStatus)[keyof typeof AtelierPartnerConflictPatchStatus];
+
+export const AtelierPartnerConflictPatchStatus = {
+  open: "open",
+  resolved: "resolved",
+} as const;
+
+export interface AtelierPartnerConflictPatch {
+  partnerFirmId?: string;
+  headline?: string;
+  detectedAt?: string;
+  severity?: AtelierPartnerConflictPatchSeverity;
+  detail?: string;
+  recommendation?: string;
+  status?: AtelierPartnerConflictPatchStatus;
+}
+
+export interface AtelierPartnerAgreement {
+  id: string;
+  instrumentType: string;
+  counterpartyId: string;
+  counterpartyName?: string | null;
+  partnerFirmId?: string | null;
+  title: string;
+  status: string;
+  governingLaw?: string | null;
+  termStart?: string | null;
+  termEnd?: string | null;
+  fullyExecutedAt?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerAgreementList {
+  items: AtelierPartnerAgreement[];
+}
+
+export interface AtelierPartnerCoDeliverResource {
+  id: string;
+  partnerFirmId: string;
+  partnerFirmName?: string | null;
+  fullName: string;
+  role?: string | null;
+  seniority?: string | null;
+  country?: string | null;
+  startDate?: string | null;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerCoDeliverInvoice {
+  id: string;
+  invoiceNumber?: string | null;
+  supplierId: string;
+  supplierName?: string | null;
+  partnerFirmName?: string | null;
+  weekIso?: string | null;
+  currency?: string | null;
+  totalAmount?: string | null;
+  totalUsd?: string | null;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface AtelierPartnerCoDeliver {
+  resources: AtelierPartnerCoDeliverResource[];
+  invoices: AtelierPartnerCoDeliverInvoice[];
+}
+
 export type AuthLogout200 = {
   ok: boolean;
 };
@@ -7839,3 +8431,7 @@ export type AtelierCreateRateCardVersion201 = {
 export type AtelierOverridePricing200 = { [key: string]: unknown };
 
 export type AtelierCountersignPricing200 = { [key: string]: unknown };
+
+export type AtelierListJointPipelineParams = {
+  opportunityId?: string;
+};

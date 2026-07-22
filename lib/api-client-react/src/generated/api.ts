@@ -161,6 +161,10 @@ import type {
   AtelierHome,
   AtelierHypothesisTree,
   AtelierJoiner,
+  AtelierJointPipelineEntry,
+  AtelierJointPipelineInput,
+  AtelierJointPipelineList,
+  AtelierJointPipelinePatch,
   AtelierLeaverHandover,
   AtelierLeaverReassignInput,
   AtelierLibraryDocumentDetail,
@@ -171,6 +175,7 @@ import type {
   AtelierListContractsParams,
   AtelierListDocuments200,
   AtelierListDocumentsParams,
+  AtelierListJointPipelineParams,
   AtelierListMyExpenseContexts200,
   AtelierListMyExpenseContextsParams,
   AtelierListMyExpenses200,
@@ -195,6 +200,25 @@ import type {
   AtelierOpportunityDuplicateError,
   AtelierOverridePricing200,
   AtelierOverrideProposalPricingInput,
+  AtelierPartnerAgreementList,
+  AtelierPartnerCertification,
+  AtelierPartnerCertificationInput,
+  AtelierPartnerCertificationList,
+  AtelierPartnerCertificationPatch,
+  AtelierPartnerCoDeliver,
+  AtelierPartnerConflict,
+  AtelierPartnerConflictInput,
+  AtelierPartnerConflictList,
+  AtelierPartnerConflictPatch,
+  AtelierPartnerFirm,
+  AtelierPartnerFirmInput,
+  AtelierPartnerFirmList,
+  AtelierPartnerFirmPatch,
+  AtelierPartnerPromoteResponse,
+  AtelierPartnerTarget,
+  AtelierPartnerTargetInput,
+  AtelierPartnerTargetList,
+  AtelierPartnerTargetPatch,
   AtelierPayDocumentAdmin,
   AtelierPerformanceGoal,
   AtelierPerformanceGoalInput,
@@ -24334,3 +24358,2100 @@ export const useAtelierCountersignPricing = <
 > => {
   return useMutation(getAtelierCountersignPricingMutationOptions(options));
 };
+
+/**
+ * @summary Unified partner-firm registry (with active resource counts)
+ */
+export const getAtelierListPartnerFirmsUrl = () => {
+  return `/api/atelier/partners/firms`;
+};
+
+export const atelierListPartnerFirms = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerFirmList> => {
+  return customFetch<AtelierPartnerFirmList>(getAtelierListPartnerFirmsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierListPartnerFirmsQueryKey = () => {
+  return [`/api/atelier/partners/firms`] as const;
+};
+
+export const getAtelierListPartnerFirmsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerFirms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerFirms>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerFirmsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerFirms>>
+  > = ({ signal }) => atelierListPartnerFirms({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerFirms>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerFirmsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerFirms>>
+>;
+export type AtelierListPartnerFirmsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Unified partner-firm registry (with active resource counts)
+ */
+
+export function useAtelierListPartnerFirms<
+  TData = Awaited<ReturnType<typeof atelierListPartnerFirms>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerFirms>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerFirmsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a partner firm
+ */
+export const getAtelierCreatePartnerFirmUrl = () => {
+  return `/api/atelier/partners/firms`;
+};
+
+export const atelierCreatePartnerFirm = async (
+  atelierPartnerFirmInput: AtelierPartnerFirmInput,
+  options?: RequestInit,
+): Promise<AtelierPartnerFirm> => {
+  return customFetch<AtelierPartnerFirm>(getAtelierCreatePartnerFirmUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPartnerFirmInput),
+  });
+};
+
+export const getAtelierCreatePartnerFirmMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerFirm>>,
+    TError,
+    { data: BodyType<AtelierPartnerFirmInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePartnerFirm>>,
+  TError,
+  { data: BodyType<AtelierPartnerFirmInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePartnerFirm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePartnerFirm>>,
+    { data: BodyType<AtelierPartnerFirmInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePartnerFirm(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePartnerFirmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePartnerFirm>>
+>;
+export type AtelierCreatePartnerFirmMutationBody =
+  BodyType<AtelierPartnerFirmInput>;
+export type AtelierCreatePartnerFirmMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Create a partner firm
+ */
+export const useAtelierCreatePartnerFirm = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerFirm>>,
+    TError,
+    { data: BodyType<AtelierPartnerFirmInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePartnerFirm>>,
+  TError,
+  { data: BodyType<AtelierPartnerFirmInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreatePartnerFirmMutationOptions(options));
+};
+
+/**
+ * @summary Partner firm detail
+ */
+export const getAtelierGetPartnerFirmUrl = (id: string) => {
+  return `/api/atelier/partners/firms/${id}`;
+};
+
+export const atelierGetPartnerFirm = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierPartnerFirm> => {
+  return customFetch<AtelierPartnerFirm>(getAtelierGetPartnerFirmUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAtelierGetPartnerFirmQueryKey = (id: string) => {
+  return [`/api/atelier/partners/firms/${id}`] as const;
+};
+
+export const getAtelierGetPartnerFirmQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetPartnerFirm>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetPartnerFirm>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetPartnerFirmQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetPartnerFirm>>
+  > = ({ signal }) => atelierGetPartnerFirm(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPartnerFirm>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetPartnerFirmQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetPartnerFirm>>
+>;
+export type AtelierGetPartnerFirmQueryError = ErrorType<AtelierError>;
+
+/**
+ * @summary Partner firm detail
+ */
+
+export function useAtelierGetPartnerFirm<
+  TData = Awaited<ReturnType<typeof atelierGetPartnerFirm>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierGetPartnerFirm>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetPartnerFirmQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a partner firm (tier changes append to tierHistory)
+ */
+export const getAtelierUpdatePartnerFirmUrl = (id: string) => {
+  return `/api/atelier/partners/firms/${id}`;
+};
+
+export const atelierUpdatePartnerFirm = async (
+  id: string,
+  atelierPartnerFirmPatch: AtelierPartnerFirmPatch,
+  options?: RequestInit,
+): Promise<AtelierPartnerFirm> => {
+  return customFetch<AtelierPartnerFirm>(getAtelierUpdatePartnerFirmUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPartnerFirmPatch),
+  });
+};
+
+export const getAtelierUpdatePartnerFirmMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerFirmPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerFirmPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePartnerFirm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>,
+    { id: string; data: BodyType<AtelierPartnerFirmPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePartnerFirm(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePartnerFirmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>
+>;
+export type AtelierUpdatePartnerFirmMutationBody =
+  BodyType<AtelierPartnerFirmPatch>;
+export type AtelierUpdatePartnerFirmMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Update a partner firm (tier changes append to tierHistory)
+ */
+export const useAtelierUpdatePartnerFirm = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerFirmPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePartnerFirm>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerFirmPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePartnerFirmMutationOptions(options));
+};
+
+/**
+ * @summary Archive a partner firm (blocked while it has active resources)
+ */
+export const getAtelierArchivePartnerFirmUrl = (id: string) => {
+  return `/api/atelier/partners/firms/${id}/archive`;
+};
+
+export const atelierArchivePartnerFirm = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierArchivePartnerFirmUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAtelierArchivePartnerFirmMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerFirm>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchivePartnerFirm>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchivePartnerFirm"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchivePartnerFirm>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchivePartnerFirm(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchivePartnerFirmMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchivePartnerFirm>>
+>;
+
+export type AtelierArchivePartnerFirmMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Archive a partner firm (blocked while it has active resources)
+ */
+export const useAtelierArchivePartnerFirm = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerFirm>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchivePartnerFirm>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchivePartnerFirmMutationOptions(options));
+};
+
+/**
+ * @summary Target partners (Identify pipeline)
+ */
+export const getAtelierListPartnerTargetsUrl = () => {
+  return `/api/atelier/partners/targets`;
+};
+
+export const atelierListPartnerTargets = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerTargetList> => {
+  return customFetch<AtelierPartnerTargetList>(
+    getAtelierListPartnerTargetsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPartnerTargetsQueryKey = () => {
+  return [`/api/atelier/partners/targets`] as const;
+};
+
+export const getAtelierListPartnerTargetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerTargets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerTargets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerTargetsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerTargets>>
+  > = ({ signal }) => atelierListPartnerTargets({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerTargets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerTargetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerTargets>>
+>;
+export type AtelierListPartnerTargetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Target partners (Identify pipeline)
+ */
+
+export function useAtelierListPartnerTargets<
+  TData = Awaited<ReturnType<typeof atelierListPartnerTargets>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerTargets>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerTargetsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a target partner
+ */
+export const getAtelierCreatePartnerTargetUrl = () => {
+  return `/api/atelier/partners/targets`;
+};
+
+export const atelierCreatePartnerTarget = async (
+  atelierPartnerTargetInput: AtelierPartnerTargetInput,
+  options?: RequestInit,
+): Promise<AtelierPartnerTarget> => {
+  return customFetch<AtelierPartnerTarget>(getAtelierCreatePartnerTargetUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierPartnerTargetInput),
+  });
+};
+
+export const getAtelierCreatePartnerTargetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerTarget>>,
+    TError,
+    { data: BodyType<AtelierPartnerTargetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePartnerTarget>>,
+  TError,
+  { data: BodyType<AtelierPartnerTargetInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePartnerTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePartnerTarget>>,
+    { data: BodyType<AtelierPartnerTargetInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePartnerTarget(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePartnerTargetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePartnerTarget>>
+>;
+export type AtelierCreatePartnerTargetMutationBody =
+  BodyType<AtelierPartnerTargetInput>;
+export type AtelierCreatePartnerTargetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add a target partner
+ */
+export const useAtelierCreatePartnerTarget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerTarget>>,
+    TError,
+    { data: BodyType<AtelierPartnerTargetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePartnerTarget>>,
+  TError,
+  { data: BodyType<AtelierPartnerTargetInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreatePartnerTargetMutationOptions(options));
+};
+
+/**
+ * @summary Update a target partner
+ */
+export const getAtelierUpdatePartnerTargetUrl = (id: string) => {
+  return `/api/atelier/partners/targets/${id}`;
+};
+
+export const atelierUpdatePartnerTarget = async (
+  id: string,
+  atelierPartnerTargetPatch: AtelierPartnerTargetPatch,
+  options?: RequestInit,
+): Promise<AtelierPartnerTarget> => {
+  return customFetch<AtelierPartnerTarget>(
+    getAtelierUpdatePartnerTargetUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerTargetPatch),
+    },
+  );
+};
+
+export const getAtelierUpdatePartnerTargetMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerTargetPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerTargetPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePartnerTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>,
+    { id: string; data: BodyType<AtelierPartnerTargetPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePartnerTarget(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePartnerTargetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>
+>;
+export type AtelierUpdatePartnerTargetMutationBody =
+  BodyType<AtelierPartnerTargetPatch>;
+export type AtelierUpdatePartnerTargetMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Update a target partner
+ */
+export const useAtelierUpdatePartnerTarget = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerTargetPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePartnerTarget>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerTargetPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePartnerTargetMutationOptions(options));
+};
+
+/**
+ * @summary Archive a target partner
+ */
+export const getAtelierArchivePartnerTargetUrl = (id: string) => {
+  return `/api/atelier/partners/targets/${id}/archive`;
+};
+
+export const atelierArchivePartnerTarget = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(getAtelierArchivePartnerTargetUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAtelierArchivePartnerTargetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerTarget>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchivePartnerTarget>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchivePartnerTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchivePartnerTarget>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchivePartnerTarget(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchivePartnerTargetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchivePartnerTarget>>
+>;
+
+export type AtelierArchivePartnerTargetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive a target partner
+ */
+export const useAtelierArchivePartnerTarget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerTarget>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchivePartnerTarget>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchivePartnerTargetMutationOptions(options));
+};
+
+/**
+ * @summary Promote a target into the partner-firm registry
+ */
+export const getAtelierPromotePartnerTargetUrl = (id: string) => {
+  return `/api/atelier/partners/targets/${id}/promote`;
+};
+
+export const atelierPromotePartnerTarget = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierPartnerPromoteResponse> => {
+  return customFetch<AtelierPartnerPromoteResponse>(
+    getAtelierPromotePartnerTargetUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierPromotePartnerTargetMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromotePartnerTarget>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierPromotePartnerTarget>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierPromotePartnerTarget"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierPromotePartnerTarget>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierPromotePartnerTarget(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierPromotePartnerTargetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierPromotePartnerTarget>>
+>;
+
+export type AtelierPromotePartnerTargetMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Promote a target into the partner-firm registry
+ */
+export const useAtelierPromotePartnerTarget = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierPromotePartnerTarget>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierPromotePartnerTarget>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierPromotePartnerTargetMutationOptions(options));
+};
+
+/**
+ * @summary CRM-linked co-sell entries (optionally by opportunity)
+ */
+export const getAtelierListJointPipelineUrl = (
+  params?: AtelierListJointPipelineParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/atelier/partners/joint-pipeline?${stringifiedParams}`
+    : `/api/atelier/partners/joint-pipeline`;
+};
+
+export const atelierListJointPipeline = async (
+  params?: AtelierListJointPipelineParams,
+  options?: RequestInit,
+): Promise<AtelierJointPipelineList> => {
+  return customFetch<AtelierJointPipelineList>(
+    getAtelierListJointPipelineUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListJointPipelineQueryKey = (
+  params?: AtelierListJointPipelineParams,
+) => {
+  return [
+    `/api/atelier/partners/joint-pipeline`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAtelierListJointPipelineQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListJointPipeline>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListJointPipelineParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListJointPipeline>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListJointPipelineQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListJointPipeline>>
+  > = ({ signal }) =>
+    atelierListJointPipeline(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListJointPipeline>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListJointPipelineQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListJointPipeline>>
+>;
+export type AtelierListJointPipelineQueryError = ErrorType<unknown>;
+
+/**
+ * @summary CRM-linked co-sell entries (optionally by opportunity)
+ */
+
+export function useAtelierListJointPipeline<
+  TData = Awaited<ReturnType<typeof atelierListJointPipeline>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AtelierListJointPipelineParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListJointPipeline>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListJointPipelineQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Link a partner firm to a CRM opportunity (co-sell)
+ */
+export const getAtelierCreateJointPipelineEntryUrl = () => {
+  return `/api/atelier/partners/joint-pipeline`;
+};
+
+export const atelierCreateJointPipelineEntry = async (
+  atelierJointPipelineInput: AtelierJointPipelineInput,
+  options?: RequestInit,
+): Promise<AtelierJointPipelineEntry> => {
+  return customFetch<AtelierJointPipelineEntry>(
+    getAtelierCreateJointPipelineEntryUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierJointPipelineInput),
+    },
+  );
+};
+
+export const getAtelierCreateJointPipelineEntryMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>,
+    TError,
+    { data: BodyType<AtelierJointPipelineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>,
+  TError,
+  { data: BodyType<AtelierJointPipelineInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreateJointPipelineEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>,
+    { data: BodyType<AtelierJointPipelineInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreateJointPipelineEntry(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreateJointPipelineEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>
+>;
+export type AtelierCreateJointPipelineEntryMutationBody =
+  BodyType<AtelierJointPipelineInput>;
+export type AtelierCreateJointPipelineEntryMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Link a partner firm to a CRM opportunity (co-sell)
+ */
+export const useAtelierCreateJointPipelineEntry = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>,
+    TError,
+    { data: BodyType<AtelierJointPipelineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreateJointPipelineEntry>>,
+  TError,
+  { data: BodyType<AtelierJointPipelineInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierCreateJointPipelineEntryMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Update split/lead/status fields on a co-sell entry
+ */
+export const getAtelierUpdateJointPipelineEntryUrl = (id: string) => {
+  return `/api/atelier/partners/joint-pipeline/${id}`;
+};
+
+export const atelierUpdateJointPipelineEntry = async (
+  id: string,
+  atelierJointPipelinePatch: AtelierJointPipelinePatch,
+  options?: RequestInit,
+): Promise<AtelierJointPipelineEntry> => {
+  return customFetch<AtelierJointPipelineEntry>(
+    getAtelierUpdateJointPipelineEntryUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierJointPipelinePatch),
+    },
+  );
+};
+
+export const getAtelierUpdateJointPipelineEntryMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>,
+    TError,
+    { id: string; data: BodyType<AtelierJointPipelinePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>,
+  TError,
+  { id: string; data: BodyType<AtelierJointPipelinePatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateJointPipelineEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>,
+    { id: string; data: BodyType<AtelierJointPipelinePatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdateJointPipelineEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateJointPipelineEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>
+>;
+export type AtelierUpdateJointPipelineEntryMutationBody =
+  BodyType<AtelierJointPipelinePatch>;
+export type AtelierUpdateJointPipelineEntryMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Update split/lead/status fields on a co-sell entry
+ */
+export const useAtelierUpdateJointPipelineEntry = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>,
+    TError,
+    { id: string; data: BodyType<AtelierJointPipelinePatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateJointPipelineEntry>>,
+  TError,
+  { id: string; data: BodyType<AtelierJointPipelinePatch> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateJointPipelineEntryMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Archive a co-sell entry
+ */
+export const getAtelierArchiveJointPipelineEntryUrl = (id: string) => {
+  return `/api/atelier/partners/joint-pipeline/${id}/archive`;
+};
+
+export const atelierArchiveJointPipelineEntry = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(
+    getAtelierArchiveJointPipelineEntryUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierArchiveJointPipelineEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchiveJointPipelineEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchiveJointPipelineEntry(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchiveJointPipelineEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>
+>;
+
+export type AtelierArchiveJointPipelineEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive a co-sell entry
+ */
+export const useAtelierArchiveJointPipelineEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchiveJointPipelineEntry>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(
+    getAtelierArchiveJointPipelineEntryMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Partner certifications (registry-linked)
+ */
+export const getAtelierListPartnerCertificationsUrl = () => {
+  return `/api/atelier/partners/certifications`;
+};
+
+export const atelierListPartnerCertifications = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerCertificationList> => {
+  return customFetch<AtelierPartnerCertificationList>(
+    getAtelierListPartnerCertificationsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPartnerCertificationsQueryKey = () => {
+  return [`/api/atelier/partners/certifications`] as const;
+};
+
+export const getAtelierListPartnerCertificationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerCertificationsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerCertifications>>
+  > = ({ signal }) =>
+    atelierListPartnerCertifications({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerCertifications>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerCertificationsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerCertifications>>
+>;
+export type AtelierListPartnerCertificationsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Partner certifications (registry-linked)
+ */
+
+export function useAtelierListPartnerCertifications<
+  TData = Awaited<ReturnType<typeof atelierListPartnerCertifications>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerCertifications>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerCertificationsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add a certification for a partner firm
+ */
+export const getAtelierCreatePartnerCertificationUrl = () => {
+  return `/api/atelier/partners/certifications`;
+};
+
+export const atelierCreatePartnerCertification = async (
+  atelierPartnerCertificationInput: AtelierPartnerCertificationInput,
+  options?: RequestInit,
+): Promise<AtelierPartnerCertification> => {
+  return customFetch<AtelierPartnerCertification>(
+    getAtelierCreatePartnerCertificationUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerCertificationInput),
+    },
+  );
+};
+
+export const getAtelierCreatePartnerCertificationMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerCertification>>,
+    TError,
+    { data: BodyType<AtelierPartnerCertificationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePartnerCertification>>,
+  TError,
+  { data: BodyType<AtelierPartnerCertificationInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePartnerCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePartnerCertification>>,
+    { data: BodyType<AtelierPartnerCertificationInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePartnerCertification(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePartnerCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePartnerCertification>>
+>;
+export type AtelierCreatePartnerCertificationMutationBody =
+  BodyType<AtelierPartnerCertificationInput>;
+export type AtelierCreatePartnerCertificationMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Add a certification for a partner firm
+ */
+export const useAtelierCreatePartnerCertification = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerCertification>>,
+    TError,
+    { data: BodyType<AtelierPartnerCertificationInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePartnerCertification>>,
+  TError,
+  { data: BodyType<AtelierPartnerCertificationInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierCreatePartnerCertificationMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Update a certification
+ */
+export const getAtelierUpdatePartnerCertificationUrl = (id: string) => {
+  return `/api/atelier/partners/certifications/${id}`;
+};
+
+export const atelierUpdatePartnerCertification = async (
+  id: string,
+  atelierPartnerCertificationPatch: AtelierPartnerCertificationPatch,
+  options?: RequestInit,
+): Promise<AtelierPartnerCertification> => {
+  return customFetch<AtelierPartnerCertification>(
+    getAtelierUpdatePartnerCertificationUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerCertificationPatch),
+    },
+  );
+};
+
+export const getAtelierUpdatePartnerCertificationMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerCertificationPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerCertificationPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePartnerCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>,
+    { id: string; data: BodyType<AtelierPartnerCertificationPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePartnerCertification(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePartnerCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>
+>;
+export type AtelierUpdatePartnerCertificationMutationBody =
+  BodyType<AtelierPartnerCertificationPatch>;
+export type AtelierUpdatePartnerCertificationMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Update a certification
+ */
+export const useAtelierUpdatePartnerCertification = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerCertificationPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePartnerCertification>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerCertificationPatch> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdatePartnerCertificationMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Archive a certification
+ */
+export const getAtelierArchivePartnerCertificationUrl = (id: string) => {
+  return `/api/atelier/partners/certifications/${id}/archive`;
+};
+
+export const atelierArchivePartnerCertification = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(
+    getAtelierArchivePartnerCertificationUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierArchivePartnerCertificationMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerCertification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchivePartnerCertification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchivePartnerCertification"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchivePartnerCertification>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchivePartnerCertification(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchivePartnerCertificationMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchivePartnerCertification>>
+>;
+
+export type AtelierArchivePartnerCertificationMutationError =
+  ErrorType<unknown>;
+
+/**
+ * @summary Archive a certification
+ */
+export const useAtelierArchivePartnerCertification = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerCertification>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchivePartnerCertification>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(
+    getAtelierArchivePartnerCertificationMutationOptions(options),
+  );
+};
+
+/**
+ * @summary Partner conflicts (open/resolved lifecycle)
+ */
+export const getAtelierListPartnerConflictsUrl = () => {
+  return `/api/atelier/partners/conflicts`;
+};
+
+export const atelierListPartnerConflicts = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerConflictList> => {
+  return customFetch<AtelierPartnerConflictList>(
+    getAtelierListPartnerConflictsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPartnerConflictsQueryKey = () => {
+  return [`/api/atelier/partners/conflicts`] as const;
+};
+
+export const getAtelierListPartnerConflictsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerConflicts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerConflicts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerConflictsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerConflicts>>
+  > = ({ signal }) =>
+    atelierListPartnerConflicts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerConflicts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerConflictsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerConflicts>>
+>;
+export type AtelierListPartnerConflictsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Partner conflicts (open/resolved lifecycle)
+ */
+
+export function useAtelierListPartnerConflicts<
+  TData = Awaited<ReturnType<typeof atelierListPartnerConflicts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerConflicts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerConflictsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Log a conflict for a partner firm
+ */
+export const getAtelierCreatePartnerConflictUrl = () => {
+  return `/api/atelier/partners/conflicts`;
+};
+
+export const atelierCreatePartnerConflict = async (
+  atelierPartnerConflictInput: AtelierPartnerConflictInput,
+  options?: RequestInit,
+): Promise<AtelierPartnerConflict> => {
+  return customFetch<AtelierPartnerConflict>(
+    getAtelierCreatePartnerConflictUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerConflictInput),
+    },
+  );
+};
+
+export const getAtelierCreatePartnerConflictMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerConflict>>,
+    TError,
+    { data: BodyType<AtelierPartnerConflictInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierCreatePartnerConflict>>,
+  TError,
+  { data: BodyType<AtelierPartnerConflictInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierCreatePartnerConflict"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierCreatePartnerConflict>>,
+    { data: BodyType<AtelierPartnerConflictInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierCreatePartnerConflict(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierCreatePartnerConflictMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierCreatePartnerConflict>>
+>;
+export type AtelierCreatePartnerConflictMutationBody =
+  BodyType<AtelierPartnerConflictInput>;
+export type AtelierCreatePartnerConflictMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Log a conflict for a partner firm
+ */
+export const useAtelierCreatePartnerConflict = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierCreatePartnerConflict>>,
+    TError,
+    { data: BodyType<AtelierPartnerConflictInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierCreatePartnerConflict>>,
+  TError,
+  { data: BodyType<AtelierPartnerConflictInput> },
+  TContext
+> => {
+  return useMutation(getAtelierCreatePartnerConflictMutationOptions(options));
+};
+
+/**
+ * @summary Update / resolve a conflict
+ */
+export const getAtelierUpdatePartnerConflictUrl = (id: string) => {
+  return `/api/atelier/partners/conflicts/${id}`;
+};
+
+export const atelierUpdatePartnerConflict = async (
+  id: string,
+  atelierPartnerConflictPatch: AtelierPartnerConflictPatch,
+  options?: RequestInit,
+): Promise<AtelierPartnerConflict> => {
+  return customFetch<AtelierPartnerConflict>(
+    getAtelierUpdatePartnerConflictUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierPartnerConflictPatch),
+    },
+  );
+};
+
+export const getAtelierUpdatePartnerConflictMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerConflictPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerConflictPatch> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePartnerConflict"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>,
+    { id: string; data: BodyType<AtelierPartnerConflictPatch> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return atelierUpdatePartnerConflict(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePartnerConflictMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>
+>;
+export type AtelierUpdatePartnerConflictMutationBody =
+  BodyType<AtelierPartnerConflictPatch>;
+export type AtelierUpdatePartnerConflictMutationError = ErrorType<AtelierError>;
+
+/**
+ * @summary Update / resolve a conflict
+ */
+export const useAtelierUpdatePartnerConflict = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>,
+    TError,
+    { id: string; data: BodyType<AtelierPartnerConflictPatch> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePartnerConflict>>,
+  TError,
+  { id: string; data: BodyType<AtelierPartnerConflictPatch> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePartnerConflictMutationOptions(options));
+};
+
+/**
+ * @summary Archive a conflict
+ */
+export const getAtelierArchivePartnerConflictUrl = (id: string) => {
+  return `/api/atelier/partners/conflicts/${id}/archive`;
+};
+
+export const atelierArchivePartnerConflict = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierOkResponse> => {
+  return customFetch<AtelierOkResponse>(
+    getAtelierArchivePartnerConflictUrl(id),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getAtelierArchivePartnerConflictMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerConflict>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierArchivePartnerConflict>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["atelierArchivePartnerConflict"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierArchivePartnerConflict>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return atelierArchivePartnerConflict(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierArchivePartnerConflictMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierArchivePartnerConflict>>
+>;
+
+export type AtelierArchivePartnerConflictMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Archive a conflict
+ */
+export const useAtelierArchivePartnerConflict = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierArchivePartnerConflict>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierArchivePartnerConflict>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAtelierArchivePartnerConflictMutationOptions(options));
+};
+
+/**
+ * @summary Real e-sign contracts with partner-firm counterparties
+ */
+export const getAtelierListPartnerAgreementsUrl = () => {
+  return `/api/atelier/partners/agreements`;
+};
+
+export const atelierListPartnerAgreements = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerAgreementList> => {
+  return customFetch<AtelierPartnerAgreementList>(
+    getAtelierListPartnerAgreementsUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPartnerAgreementsQueryKey = () => {
+  return [`/api/atelier/partners/agreements`] as const;
+};
+
+export const getAtelierListPartnerAgreementsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerAgreements>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerAgreements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerAgreementsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerAgreements>>
+  > = ({ signal }) =>
+    atelierListPartnerAgreements({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerAgreements>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerAgreementsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerAgreements>>
+>;
+export type AtelierListPartnerAgreementsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Real e-sign contracts with partner-firm counterparties
+ */
+
+export function useAtelierListPartnerAgreements<
+  TData = Awaited<ReturnType<typeof atelierListPartnerAgreements>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerAgreements>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerAgreementsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Partner-firm resource assignments + RCTI cost lines
+ */
+export const getAtelierGetPartnerCoDeliverUrl = () => {
+  return `/api/atelier/partners/co-deliver`;
+};
+
+export const atelierGetPartnerCoDeliver = async (
+  options?: RequestInit,
+): Promise<AtelierPartnerCoDeliver> => {
+  return customFetch<AtelierPartnerCoDeliver>(
+    getAtelierGetPartnerCoDeliverUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetPartnerCoDeliverQueryKey = () => {
+  return [`/api/atelier/partners/co-deliver`] as const;
+};
+
+export const getAtelierGetPartnerCoDeliverQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetPartnerCoDeliverQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>
+  > = ({ signal }) => atelierGetPartnerCoDeliver({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetPartnerCoDeliverQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>
+>;
+export type AtelierGetPartnerCoDeliverQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Partner-firm resource assignments + RCTI cost lines
+ */
+
+export function useAtelierGetPartnerCoDeliver<
+  TData = Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetPartnerCoDeliver>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetPartnerCoDeliverQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

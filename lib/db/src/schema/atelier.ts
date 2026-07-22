@@ -2300,7 +2300,33 @@ export const atelierPartnerFirms = pgTable(
     insuranceStatus: text("insurance_status"), // PRD §2.1
     contactName: text("contact_name"),
     contactEmail: text("contact_email"),
-    status: text("status").notNull().default("active"), // active | paused | terminated
+    // Task #513 — unified partner-firm registry. The alliance-lens fields
+    // previously on `atelier_alliance_partner_firms` (now retired) live
+    // here so roster flows and the Partners lens read the same record.
+    kind: text("kind"), // e.g. hyperscaler | boutique_si | strategy | staffing
+    speciality: text("speciality"),
+    tier: text("tier"), // strategic | preferred | transactional
+    relationshipStrength: integer("relationship_strength"), // 1..5
+    anchorCognirise: text("anchor_cognirise"), // named anchor on our side
+    anchorPartner: text("anchor_partner"), // named anchor on their side
+    lastTouchAt: text("last_touch_at"), // ISO date of last meaningful touch
+    // Qualify — per-dimension capability scores (1..5), editable in the lens.
+    capabilities: jsonb("capabilities")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    // Lightweight partner contacts (NOT a parallel CRM): name/role/email.
+    contacts: jsonb("contacts")
+      .$type<Array<{ id: string; name: string; role?: string | null; email?: string | null }>>()
+      .notNull()
+      .default([]),
+    // Renew — tier-change history, append-only.
+    tierHistory: jsonb("tier_history")
+      .$type<Array<{ fromTier: string | null; toTier: string; at: string; byUserId: string; reason?: string | null }>>()
+      .notNull()
+      .default([]),
+    // Lifecycle: active | renewal_due | paused | offboarded | terminated
+    status: text("status").notNull().default("active"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -2352,35 +2378,8 @@ export const atelierPartnerFirmResources = pgTable(
   ],
 );
 
-// Placeholder per PRD §2.1 — full schema lands in a later task.
-export const atelierPartnerEconomics = pgTable(
-  "atelier_partner_economics",
-  {
-    id: text("id").primaryKey(),
-    orgId: ORG("org_id"),
-    employeeId: text("employee_id").notNull(),
-    model: text("model"), // PRD §2.1: equal_partnership | eat_what_you_kill | base_plus_share
-    revenueSharePct: doublePrecision("revenue_share_pct"), // PRD §2.1
-    baseAmount: doublePrecision("base_amount"), // PRD §2.1
-    currency: text("currency"), // PRD §2.1
-    effectiveFrom: text("effective_from"), // PRD §2.1
-    effectiveTo: text("effective_to"), // PRD §2.1
-    profitShareBps: integer("profit_share_bps").notNull().default(0),
-    vestingSchedule: jsonb("vesting_schedule")
-      .$type<Array<{ date: string; bps: number }>>()
-      .notNull()
-      .default([]),
-    notes: text("notes"),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-    updatedAt: timestamp("updated_at").notNull().defaultNow(),
-    createdByUserId: text("created_by_user_id"),
-    deletedAt: timestamp("deleted_at"),
-  },
-  (t) => [
-    index("idx_atelier_partner_econ_org").on(t.orgId),
-    index("idx_atelier_partner_econ_emp").on(t.employeeId),
-  ],
-);
+// Task #513 — `atelier_partner_economics` (a never-built placeholder) was
+// dropped; see docs/PARTNERS_BACKLOG.md for the real-build notes.
 
 export const atelierConflictDisclosures = pgTable(
   "atelier_conflict_disclosures",

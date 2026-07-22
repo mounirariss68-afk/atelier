@@ -37,6 +37,7 @@ import {
   setPersonaCookie,
   rejectClientRealm,
 } from "./personaCookie";
+import { canAccessPartnersLens } from "./personaRoles";
 import { attachRls, registerAtelierRlsDefaults, withRls } from "./rls";
 import { auditPdfHandler, personAuditPdfHandler } from "./auditPdf";
 import { accountPlanPdfHandler } from "./accountPlanPdf";
@@ -92,6 +93,7 @@ import esignRoutes from "./esignRoutes";
 import contractLifecycleRoutes from "./contractLifecycleRoutes";
 import cliAdminRoutes from "./cliAdminRoutes";
 import v5Routes from "./v5Routes";
+import partnersRoutes from "./partnersRoutes";
 import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
@@ -259,6 +261,29 @@ router.use((req, res, next) => {
   });
 });
 
+// Task #513 — Partners lens boundary. Firm-wide alliance intel (/partners,
+// legacy /alliances) is internal-only: the shared `canAccessPartnersLens`
+// predicate allows partner-tier / consultant-tier / finance / hr /
+// compliance_officer. External personas (partner_firm_resource above all),
+// recruiters, self-only personas and board observers are denied here at
+// the gate — per-route checks in partnersRoutes remain as defense-in-depth.
+router.use((req, res, next) => {
+  const me = req.atelierPersona;
+  if (!me) return next();
+  const p = req.path;
+  const isPartnersSurface =
+    p === "/partners" ||
+    p.startsWith("/partners/") ||
+    p === "/alliances" ||
+    p.startsWith("/alliances/");
+  if (!isPartnersSurface) return next();
+  if (canAccessPartnersLens(me.role)) return next();
+  res.status(403).json({
+    error: "partners-lens-restricted",
+    message: "The Partners lens is restricted to internal roles.",
+  });
+});
+
 // Audit PDF export — registered before /audit JSON to win the route match.
 router.get("/audit/export.pdf", auditPdfHandler);
 // Task #261 — Per-Person audit pack PDF (Roster).
@@ -345,6 +370,9 @@ router.use(cliAdminRoutes);
 // Task #354 — v5 firm-wide knowledge surfaces (Press / Alliances / Studio /
 // Guardhouse / IP catalog) backed by Postgres.
 router.use(v5Routes);
+// Task #513 — Partners lens CRUD (unified registry, co-sell, certs,
+// conflicts, e-sign/RCTI projections). Central Partners gate above applies.
+router.use(partnersRoutes);
 router.use(financeEntitiesRoutes);
 // Task #383 — expense taxonomy, categorization suggestions, GL/VAT
 // mappings, bank signatory register, client-ready exports.

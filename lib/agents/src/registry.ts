@@ -1058,34 +1058,9 @@ export const FieldNotesScheduler = defineAgent({
 });
 
 // --- Alliances ---
-
-export const AllianceChoreographer = defineAgent({
-  id: "ag_alliance_choreographer",
-  name: "Alliance Choreographer",
-  group: "Front of House",
-  stage: "Pursue",
-  purpose: "Drives joint pursuits with partner firms — split, comms cadence, conflict-of-interest checks.",
-  model: "claude-sonnet-4-6",
-  starred: false,
-  status: "registered",
-  systemPromptRef: "prompts/alliance_choreographer/v1.md",
-  inputSchema: z.object({
-    opportunityId: z.string(),
-    partnerFirmId: z.string(),
-    leadParty: z.enum(["cognirise", "partner"]).optional(),
-    proposedSplitPct: z.number().min(0).max(100).optional(),
-  }).passthrough(),
-  outputSchema: v5Output({
-    opportunityId: z.string(),
-    partnerFirmId: z.string(),
-    split: z.unknown(),
-    conflicts: z.array(z.unknown()),
-  }),
-  tools: ["knowledge.search"],
-  guardrails: ["Flag split outside 50–70% band", "Require signed alliance letter", "Cite every conflict signal"],
-  humanCheckpoints: [partnerCheck("Partner approves split"), partnerCheck("Partner approves alliance letter")],
-  evals: [{ id: "ev_conflict_cited", description: "Every conflict has evidence", threshold: 1 }],
-});
+// Task #513 — `ag_alliance_choreographer` removed to backlog: it had a
+// runner + prompt but no trigger, UI, or golden fixture (an orphan).
+// See docs/PARTNERS_BACKLOG.md for what a real build needs.
 
 export const CertificationTracker = defineAgent({
   id: "ag_certification_tracker",
@@ -2053,7 +2028,6 @@ export const ATELIER_AGENTS: Agent[] = [
   LinkedInComposer,
   PressMonitor,
   FieldNotesScheduler,
-  AllianceChoreographer,
   CertificationTracker,
   InterviewDesigner,
   ReferenceCaller,

@@ -162,47 +162,59 @@ export const atelierPressMentions = pgTable(
 // ALLIANCES
 // ============================================================
 
-export const atelierAlliancePartnerFirms = pgTable(
-  "atelier_alliance_partner_firms",
+// Task #513 — `atelier_alliance_partner_firms` was retired. The roster
+// registry `atelier_partner_firms` (schema/atelier.ts) is the single
+// canonical partner-firm table; it carries the alliance fields now.
+
+// Identify — minimal real target-partner pipeline (pre-registry firms).
+// Status: researching | outreach | intro_call | evaluating | promoted | dropped
+export const atelierPartnerTargets = pgTable(
+  "atelier_partner_targets",
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     name: text("name").notNull(),
-    kind: text("kind").notNull(),
-    country: text("country").notNull(),
-    speciality: text("speciality").notNull().default(""),
-    relationshipStrength: integer("relationship_strength").notNull().default(0),
-    anchorCognirise: text("anchor_cognirise").notNull().default(""),
-    anchorPartner: text("anchor_partner").notNull().default(""),
-    lastTouchAt: text("last_touch_at"),
-    openJointOpps: integer("open_joint_opps").notNull().default(0),
-    lifetimeJointRevenueMm: doublePrecision("lifetime_joint_revenue_mm")
-      .notNull()
-      .default(0),
-    recentMoves: jsonb("recent_moves").$type<string[]>().notNull().default([]),
+    ecosystem: text("ecosystem"),
+    country: text("country"),
+    thesis: text("thesis").notNull().default(""),
+    tierHypothesis: text("tier_hypothesis"), // strategic | preferred | transactional
+    priority: text("priority").notNull().default("med"), // high | med | low
+    status: text("status").notNull().default("researching"),
+    ownerUserId: text("owner_user_id"),
+    nextStep: text("next_step"),
+    lastContactAt: text("last_contact_at"),
+    // Set when promoted into the registry — links to atelier_partner_firms.id.
+    promotedFirmId: text("promoted_firm_id"),
     ...COMMON,
   },
-  (t) => [index("idx_atelier_alliance_pf_org").on(t.orgId)],
+  (t) => [index("idx_atelier_partner_targets_org").on(t.orgId)],
 );
 
+// Co-sell — joint pipeline entries link a real CRM opportunity to a
+// registry partner firm (Task #513). Client + stage + value derive from
+// the opportunity; only the split economics live here.
 export const atelierAllianceJointPipeline = pgTable(
   "atelier_alliance_joint_pipeline",
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
-    opportunityName: text("opportunity_name").notNull(),
-    client: text("client").notNull(),
-    partnerFirm: text("partner_firm").notNull(),
-    leadParty: text("lead_party").notNull(),
-    stage: text("stage").notNull(),
-    acvUsdK: integer("acv_usd_k").notNull().default(0),
+    opportunityId: text("opportunity_id").notNull(),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    leadParty: text("lead_party").notNull().default("cognirise"), // cognirise | partner | joint
     cognirisePct: integer("cognirise_pct").notNull().default(0),
     partnerPct: integer("partner_pct").notNull().default(0),
     splitRationale: text("split_rationale").notNull().default(""),
-    allianceLetterStatus: text("alliance_letter_status").notNull(),
+    // none | drafting | signed
+    allianceLetterStatus: text("alliance_letter_status").notNull().default("none"),
+    // partner_sourced marks the attribution on the opportunity view.
+    partnerSourced: boolean("partner_sourced").notNull().default(false),
     ...COMMON,
   },
-  (t) => [index("idx_atelier_alliance_jp_org").on(t.orgId)],
+  (t) => [
+    index("idx_atelier_alliance_jp_org").on(t.orgId),
+    index("idx_atelier_alliance_jp_opp").on(t.opportunityId),
+    index("idx_atelier_alliance_jp_firm").on(t.partnerFirmId),
+  ],
 );
 
 export const atelierAllianceCertifications = pgTable(
@@ -210,14 +222,20 @@ export const atelierAllianceCertifications = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(), // registry FK (Task #513)
     credential: text("credential").notNull(),
     platform: text("platform").notNull(),
-    holder: text("holder").notNull(),
-    status: text("status").notNull(),
-    expiresAt: text("expires_at").notNull(),
+    // Firm-level when null; otherwise a roster person id (employee/PFR).
+    holderPersonId: text("holder_person_id"),
+    holder: text("holder").notNull().default(""), // display label
+    status: text("status").notNull().default("active"), // active | lapsing | lapsed
+    expiresAt: text("expires_at"),
     ...COMMON,
   },
-  (t) => [index("idx_atelier_alliance_cert_org").on(t.orgId)],
+  (t) => [
+    index("idx_atelier_alliance_cert_org").on(t.orgId),
+    index("idx_atelier_alliance_cert_firm").on(t.partnerFirmId),
+  ],
 );
 
 export const atelierAllianceConflicts = pgTable(
@@ -225,15 +243,20 @@ export const atelierAllianceConflicts = pgTable(
   {
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(), // registry FK (Task #513)
     headline: text("headline").notNull(),
-    partnerFirm: text("partner_firm").notNull(),
     detectedAt: text("detected_at").notNull(),
-    severity: text("severity").notNull(),
+    severity: text("severity").notNull().default("med"), // high | med | low
     detail: text("detail").notNull().default(""),
     recommendation: text("recommendation").notNull().default(""),
+    status: text("status").notNull().default("open"), // open | resolved
+    resolvedAt: text("resolved_at"),
     ...COMMON,
   },
-  (t) => [index("idx_atelier_alliance_conf_org").on(t.orgId)],
+  (t) => [
+    index("idx_atelier_alliance_conf_org").on(t.orgId),
+    index("idx_atelier_alliance_conf_firm").on(t.partnerFirmId),
+  ],
 );
 
 // ============================================================

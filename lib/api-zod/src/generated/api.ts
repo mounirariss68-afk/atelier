@@ -33200,3 +33200,789 @@ export const AtelierCountersignPricingResponse = zod.record(
   zod.string(),
   zod.unknown(),
 );
+
+/**
+ * @summary Unified partner-firm registry (with active resource counts)
+ */
+export const AtelierListPartnerFirmsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      kind: zod.string().nullish(),
+      speciality: zod.string().nullish(),
+      country: zod.string().nullish(),
+      countryCode: zod.string().nullish(),
+      tier: zod
+        .union([
+          zod.literal("strategic"),
+          zod.literal("preferred"),
+          zod.literal("transactional"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      status: zod.enum([
+        "active",
+        "renewal_due",
+        "paused",
+        "offboarded",
+        "terminated",
+      ]),
+      relationshipStrength: zod.number().nullish(),
+      anchorCognirise: zod.string().nullish(),
+      anchorPartner: zod.string().nullish(),
+      lastTouchAt: zod.string().nullish(),
+      capabilities: zod.record(zod.string(), zod.number()).optional(),
+      contacts: zod
+        .array(
+          zod.object({
+            id: zod.string().optional(),
+            name: zod.string(),
+            role: zod.string().nullish(),
+            email: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      tierHistory: zod
+        .array(
+          zod.object({
+            fromTier: zod.string().nullish(),
+            toTier: zod.string(),
+            at: zod.string(),
+            byUserId: zod.string().nullish(),
+            reason: zod.string().nullish(),
+          }),
+        )
+        .optional(),
+      contactName: zod.string().nullish(),
+      contactEmail: zod.string().nullish(),
+      defaultPaymentTermsDays: zod.number().nullish(),
+      defaultBillingCurrency: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      activeResourceCount: zod.number().optional(),
+    }),
+  ),
+});
+
+/**
+ * @summary Create a partner firm
+ */
+export const AtelierCreatePartnerFirmBody = zod.object({
+  name: zod.string(),
+  kind: zod.string().nullish(),
+  speciality: zod.string().nullish(),
+  country: zod.string().nullish(),
+  countryCode: zod.string().nullish(),
+  tier: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  status: zod
+    .enum(["active", "renewal_due", "paused", "offboarded", "terminated"])
+    .optional(),
+  relationshipStrength: zod.number().nullish(),
+  anchorCognirise: zod.string().nullish(),
+  anchorPartner: zod.string().nullish(),
+  lastTouchAt: zod.string().nullish(),
+  capabilities: zod.record(zod.string(), zod.number()).optional(),
+  contacts: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        name: zod.string(),
+        role: zod.string().nullish(),
+        email: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  defaultPaymentTermsDays: zod.number().nullish(),
+  defaultBillingCurrency: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  tierChangeReason: zod.string().nullish(),
+});
+
+/**
+ * @summary Partner firm detail
+ */
+export const AtelierGetPartnerFirmParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierGetPartnerFirmResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string().nullish(),
+  speciality: zod.string().nullish(),
+  country: zod.string().nullish(),
+  countryCode: zod.string().nullish(),
+  tier: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  status: zod.enum([
+    "active",
+    "renewal_due",
+    "paused",
+    "offboarded",
+    "terminated",
+  ]),
+  relationshipStrength: zod.number().nullish(),
+  anchorCognirise: zod.string().nullish(),
+  anchorPartner: zod.string().nullish(),
+  lastTouchAt: zod.string().nullish(),
+  capabilities: zod.record(zod.string(), zod.number()).optional(),
+  contacts: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        name: zod.string(),
+        role: zod.string().nullish(),
+        email: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  tierHistory: zod
+    .array(
+      zod.object({
+        fromTier: zod.string().nullish(),
+        toTier: zod.string(),
+        at: zod.string(),
+        byUserId: zod.string().nullish(),
+        reason: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  defaultPaymentTermsDays: zod.number().nullish(),
+  defaultBillingCurrency: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  activeResourceCount: zod.number().optional(),
+});
+
+/**
+ * @summary Update a partner firm (tier changes append to tierHistory)
+ */
+export const AtelierUpdatePartnerFirmParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUpdatePartnerFirmBody = zod.object({
+  name: zod.string().optional(),
+  kind: zod.string().nullish(),
+  speciality: zod.string().nullish(),
+  country: zod.string().nullish(),
+  countryCode: zod.string().nullish(),
+  tier: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  status: zod
+    .enum(["active", "renewal_due", "paused", "offboarded", "terminated"])
+    .optional(),
+  relationshipStrength: zod.number().nullish(),
+  anchorCognirise: zod.string().nullish(),
+  anchorPartner: zod.string().nullish(),
+  lastTouchAt: zod.string().nullish(),
+  capabilities: zod.record(zod.string(), zod.number()).optional(),
+  contacts: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        name: zod.string(),
+        role: zod.string().nullish(),
+        email: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  defaultPaymentTermsDays: zod.number().nullish(),
+  defaultBillingCurrency: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  tierChangeReason: zod.string().nullish(),
+});
+
+export const AtelierUpdatePartnerFirmResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  kind: zod.string().nullish(),
+  speciality: zod.string().nullish(),
+  country: zod.string().nullish(),
+  countryCode: zod.string().nullish(),
+  tier: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  status: zod.enum([
+    "active",
+    "renewal_due",
+    "paused",
+    "offboarded",
+    "terminated",
+  ]),
+  relationshipStrength: zod.number().nullish(),
+  anchorCognirise: zod.string().nullish(),
+  anchorPartner: zod.string().nullish(),
+  lastTouchAt: zod.string().nullish(),
+  capabilities: zod.record(zod.string(), zod.number()).optional(),
+  contacts: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        name: zod.string(),
+        role: zod.string().nullish(),
+        email: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  tierHistory: zod
+    .array(
+      zod.object({
+        fromTier: zod.string().nullish(),
+        toTier: zod.string(),
+        at: zod.string(),
+        byUserId: zod.string().nullish(),
+        reason: zod.string().nullish(),
+      }),
+    )
+    .optional(),
+  contactName: zod.string().nullish(),
+  contactEmail: zod.string().nullish(),
+  defaultPaymentTermsDays: zod.number().nullish(),
+  defaultBillingCurrency: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  activeResourceCount: zod.number().optional(),
+});
+
+/**
+ * @summary Archive a partner firm (blocked while it has active resources)
+ */
+export const AtelierArchivePartnerFirmParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchivePartnerFirmResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Target partners (Identify pipeline)
+ */
+export const AtelierListPartnerTargetsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      ecosystem: zod.string().nullish(),
+      country: zod.string().nullish(),
+      thesis: zod.string().nullish(),
+      tierHypothesis: zod.string().nullish(),
+      priority: zod.enum(["high", "med", "low"]).optional(),
+      status: zod.enum([
+        "researching",
+        "outreach",
+        "intro_call",
+        "evaluating",
+        "promoted",
+        "dropped",
+      ]),
+      ownerUserId: zod.string().nullish(),
+      nextStep: zod.string().nullish(),
+      lastContactAt: zod.string().nullish(),
+      promotedFirmId: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add a target partner
+ */
+export const AtelierCreatePartnerTargetBody = zod.object({
+  name: zod.string(),
+  ecosystem: zod.string().nullish(),
+  country: zod.string().nullish(),
+  thesis: zod.string().nullish(),
+  tierHypothesis: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  priority: zod.enum(["high", "med", "low"]).optional(),
+  status: zod
+    .enum([
+      "researching",
+      "outreach",
+      "intro_call",
+      "evaluating",
+      "promoted",
+      "dropped",
+    ])
+    .optional(),
+  ownerUserId: zod.string().nullish(),
+  nextStep: zod.string().nullish(),
+  lastContactAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a target partner
+ */
+export const AtelierUpdatePartnerTargetParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUpdatePartnerTargetBody = zod.object({
+  name: zod.string().optional(),
+  ecosystem: zod.string().nullish(),
+  country: zod.string().nullish(),
+  thesis: zod.string().nullish(),
+  tierHypothesis: zod
+    .union([
+      zod.literal("strategic"),
+      zod.literal("preferred"),
+      zod.literal("transactional"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  priority: zod.enum(["high", "med", "low"]).optional(),
+  status: zod
+    .enum([
+      "researching",
+      "outreach",
+      "intro_call",
+      "evaluating",
+      "promoted",
+      "dropped",
+    ])
+    .optional(),
+  ownerUserId: zod.string().nullish(),
+  nextStep: zod.string().nullish(),
+  lastContactAt: zod.string().nullish(),
+});
+
+export const AtelierUpdatePartnerTargetResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  ecosystem: zod.string().nullish(),
+  country: zod.string().nullish(),
+  thesis: zod.string().nullish(),
+  tierHypothesis: zod.string().nullish(),
+  priority: zod.enum(["high", "med", "low"]).optional(),
+  status: zod.enum([
+    "researching",
+    "outreach",
+    "intro_call",
+    "evaluating",
+    "promoted",
+    "dropped",
+  ]),
+  ownerUserId: zod.string().nullish(),
+  nextStep: zod.string().nullish(),
+  lastContactAt: zod.string().nullish(),
+  promotedFirmId: zod.string().nullish(),
+});
+
+/**
+ * @summary Archive a target partner
+ */
+export const AtelierArchivePartnerTargetParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchivePartnerTargetResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Promote a target into the partner-firm registry
+ */
+export const AtelierPromotePartnerTargetParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierPromotePartnerTargetResponse = zod.object({
+  alreadyPromoted: zod.boolean().optional(),
+  firm: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    kind: zod.string().nullish(),
+    speciality: zod.string().nullish(),
+    country: zod.string().nullish(),
+    countryCode: zod.string().nullish(),
+    tier: zod
+      .union([
+        zod.literal("strategic"),
+        zod.literal("preferred"),
+        zod.literal("transactional"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    status: zod.enum([
+      "active",
+      "renewal_due",
+      "paused",
+      "offboarded",
+      "terminated",
+    ]),
+    relationshipStrength: zod.number().nullish(),
+    anchorCognirise: zod.string().nullish(),
+    anchorPartner: zod.string().nullish(),
+    lastTouchAt: zod.string().nullish(),
+    capabilities: zod.record(zod.string(), zod.number()).optional(),
+    contacts: zod
+      .array(
+        zod.object({
+          id: zod.string().optional(),
+          name: zod.string(),
+          role: zod.string().nullish(),
+          email: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+    tierHistory: zod
+      .array(
+        zod.object({
+          fromTier: zod.string().nullish(),
+          toTier: zod.string(),
+          at: zod.string(),
+          byUserId: zod.string().nullish(),
+          reason: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+    contactName: zod.string().nullish(),
+    contactEmail: zod.string().nullish(),
+    defaultPaymentTermsDays: zod.number().nullish(),
+    defaultBillingCurrency: zod.string().nullish(),
+    notes: zod.string().nullish(),
+    activeResourceCount: zod.number().optional(),
+  }),
+  target: zod.object({
+    id: zod.string(),
+    name: zod.string(),
+    ecosystem: zod.string().nullish(),
+    country: zod.string().nullish(),
+    thesis: zod.string().nullish(),
+    tierHypothesis: zod.string().nullish(),
+    priority: zod.enum(["high", "med", "low"]).optional(),
+    status: zod.enum([
+      "researching",
+      "outreach",
+      "intro_call",
+      "evaluating",
+      "promoted",
+      "dropped",
+    ]),
+    ownerUserId: zod.string().nullish(),
+    nextStep: zod.string().nullish(),
+    lastContactAt: zod.string().nullish(),
+    promotedFirmId: zod.string().nullish(),
+  }),
+});
+
+/**
+ * @summary CRM-linked co-sell entries (optionally by opportunity)
+ */
+export const AtelierListJointPipelineQueryParams = zod.object({
+  opportunityId: zod.coerce.string().optional(),
+});
+
+export const AtelierListJointPipelineResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      opportunityId: zod.string(),
+      partnerFirmId: zod.string(),
+      leadParty: zod.enum(["cognirise", "partner", "joint"]).optional(),
+      cognirisePct: zod.number().optional(),
+      partnerPct: zod.number().optional(),
+      splitRationale: zod.string().nullish(),
+      allianceLetterStatus: zod.enum(["none", "drafting", "signed"]).optional(),
+      partnerSourced: zod.boolean().optional(),
+      opportunityName: zod.string().nullish(),
+      clientName: zod.string().nullish(),
+      salesStage: zod.string().nullish(),
+      dealSizeHypothesis: zod.string().nullish(),
+      partnerFirmName: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Link a partner firm to a CRM opportunity (co-sell)
+ */
+export const AtelierCreateJointPipelineEntryBody = zod.object({
+  opportunityId: zod.string(),
+  partnerFirmId: zod.string(),
+  leadParty: zod.enum(["cognirise", "partner", "joint"]).optional(),
+  cognirisePct: zod.number().optional(),
+  partnerPct: zod.number().optional(),
+  splitRationale: zod.string().optional(),
+  allianceLetterStatus: zod.enum(["none", "drafting", "signed"]).optional(),
+  partnerSourced: zod.boolean().optional(),
+});
+
+/**
+ * @summary Update split/lead/status fields on a co-sell entry
+ */
+export const AtelierUpdateJointPipelineEntryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUpdateJointPipelineEntryBody = zod.object({
+  leadParty: zod.enum(["cognirise", "partner", "joint"]).optional(),
+  cognirisePct: zod.number().optional(),
+  partnerPct: zod.number().optional(),
+  splitRationale: zod.string().optional(),
+  allianceLetterStatus: zod.enum(["none", "drafting", "signed"]).optional(),
+  partnerSourced: zod.boolean().optional(),
+});
+
+export const AtelierUpdateJointPipelineEntryResponse = zod.object({
+  id: zod.string(),
+  opportunityId: zod.string(),
+  partnerFirmId: zod.string(),
+  leadParty: zod.enum(["cognirise", "partner", "joint"]).optional(),
+  cognirisePct: zod.number().optional(),
+  partnerPct: zod.number().optional(),
+  splitRationale: zod.string().nullish(),
+  allianceLetterStatus: zod.enum(["none", "drafting", "signed"]).optional(),
+  partnerSourced: zod.boolean().optional(),
+  opportunityName: zod.string().nullish(),
+  clientName: zod.string().nullish(),
+  salesStage: zod.string().nullish(),
+  dealSizeHypothesis: zod.string().nullish(),
+  partnerFirmName: zod.string().nullish(),
+});
+
+/**
+ * @summary Archive a co-sell entry
+ */
+export const AtelierArchiveJointPipelineEntryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchiveJointPipelineEntryResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Partner certifications (registry-linked)
+ */
+export const AtelierListPartnerCertificationsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      partnerFirmId: zod.string(),
+      credential: zod.string(),
+      platform: zod.string(),
+      holderPersonId: zod.string().nullish(),
+      holder: zod.string().nullish(),
+      status: zod.enum(["active", "lapsing", "lapsed"]),
+      expiresAt: zod.string().nullish(),
+      partnerFirmName: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add a certification for a partner firm
+ */
+export const AtelierCreatePartnerCertificationBody = zod.object({
+  partnerFirmId: zod.string(),
+  credential: zod.string(),
+  platform: zod.string(),
+  holderPersonId: zod.string().nullish(),
+  holder: zod.string().nullish(),
+  status: zod.enum(["active", "lapsing", "lapsed"]).optional(),
+  expiresAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Update a certification
+ */
+export const AtelierUpdatePartnerCertificationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUpdatePartnerCertificationBody = zod.object({
+  partnerFirmId: zod.string().optional(),
+  credential: zod.string().optional(),
+  platform: zod.string().optional(),
+  holderPersonId: zod.string().nullish(),
+  holder: zod.string().nullish(),
+  status: zod.enum(["active", "lapsing", "lapsed"]).optional(),
+  expiresAt: zod.string().nullish(),
+});
+
+export const AtelierUpdatePartnerCertificationResponse = zod.object({
+  id: zod.string(),
+  partnerFirmId: zod.string(),
+  credential: zod.string(),
+  platform: zod.string(),
+  holderPersonId: zod.string().nullish(),
+  holder: zod.string().nullish(),
+  status: zod.enum(["active", "lapsing", "lapsed"]),
+  expiresAt: zod.string().nullish(),
+  partnerFirmName: zod.string().nullish(),
+});
+
+/**
+ * @summary Archive a certification
+ */
+export const AtelierArchivePartnerCertificationParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchivePartnerCertificationResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Partner conflicts (open/resolved lifecycle)
+ */
+export const AtelierListPartnerConflictsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      partnerFirmId: zod.string(),
+      headline: zod.string(),
+      detectedAt: zod.string().nullish(),
+      severity: zod.enum(["high", "med", "low"]).optional(),
+      detail: zod.string().nullish(),
+      recommendation: zod.string().nullish(),
+      status: zod.enum(["open", "resolved"]),
+      resolvedAt: zod.string().nullish(),
+      partnerFirmName: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Log a conflict for a partner firm
+ */
+export const AtelierCreatePartnerConflictBody = zod.object({
+  partnerFirmId: zod.string(),
+  headline: zod.string(),
+  detectedAt: zod.string().optional(),
+  severity: zod.enum(["high", "med", "low"]).optional(),
+  detail: zod.string().optional(),
+  recommendation: zod.string().optional(),
+  status: zod.enum(["open", "resolved"]).optional(),
+});
+
+/**
+ * @summary Update / resolve a conflict
+ */
+export const AtelierUpdatePartnerConflictParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierUpdatePartnerConflictBody = zod.object({
+  partnerFirmId: zod.string().optional(),
+  headline: zod.string().optional(),
+  detectedAt: zod.string().optional(),
+  severity: zod.enum(["high", "med", "low"]).optional(),
+  detail: zod.string().optional(),
+  recommendation: zod.string().optional(),
+  status: zod.enum(["open", "resolved"]).optional(),
+});
+
+export const AtelierUpdatePartnerConflictResponse = zod.object({
+  id: zod.string(),
+  partnerFirmId: zod.string(),
+  headline: zod.string(),
+  detectedAt: zod.string().nullish(),
+  severity: zod.enum(["high", "med", "low"]).optional(),
+  detail: zod.string().nullish(),
+  recommendation: zod.string().nullish(),
+  status: zod.enum(["open", "resolved"]),
+  resolvedAt: zod.string().nullish(),
+  partnerFirmName: zod.string().nullish(),
+});
+
+/**
+ * @summary Archive a conflict
+ */
+export const AtelierArchivePartnerConflictParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierArchivePartnerConflictResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Real e-sign contracts with partner-firm counterparties
+ */
+export const AtelierListPartnerAgreementsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      instrumentType: zod.string(),
+      counterpartyId: zod.string(),
+      counterpartyName: zod.string().nullish(),
+      partnerFirmId: zod.string().nullish(),
+      title: zod.string(),
+      status: zod.string(),
+      governingLaw: zod.string().nullish(),
+      termStart: zod.string().nullish(),
+      termEnd: zod.string().nullish(),
+      fullyExecutedAt: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Partner-firm resource assignments + RCTI cost lines
+ */
+export const AtelierGetPartnerCoDeliverResponse = zod.object({
+  resources: zod.array(
+    zod.object({
+      id: zod.string(),
+      partnerFirmId: zod.string(),
+      partnerFirmName: zod.string().nullish(),
+      fullName: zod.string(),
+      role: zod.string().nullish(),
+      seniority: zod.string().nullish(),
+      country: zod.string().nullish(),
+      startDate: zod.string().nullish(),
+      status: zod.string(),
+    }),
+  ),
+  invoices: zod.array(
+    zod.object({
+      id: zod.string(),
+      invoiceNumber: zod.string().nullish(),
+      supplierId: zod.string(),
+      supplierName: zod.string().nullish(),
+      partnerFirmName: zod.string().nullish(),
+      weekIso: zod.string().nullish(),
+      currency: zod.string().nullish(),
+      totalAmount: zod.string().nullish(),
+      totalUsd: zod.string().nullish(),
+      status: zod.string(),
+    }),
+  ),
+});

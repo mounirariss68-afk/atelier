@@ -59,7 +59,11 @@ DECLARE
     'atelier_account_actions','atelier_account_risks',
     'atelier_account_goal_progress',
     -- Task #327 — per-user Microsoft 365 connections (encrypted tokens).
-    'atelier_ms_connections'
+    'atelier_ms_connections',
+    -- Task #513 — unified partner registry + alliance lifecycle tables.
+    'atelier_partner_firms','atelier_partner_firm_resources',
+    'atelier_partner_targets','atelier_alliance_joint_pipeline',
+    'atelier_alliance_certifications','atelier_alliance_conflicts'
   ];
   -- Tables with a direct engagement_id FK (meetings/transcripts/artifacts
   -- use a polymorphic parent_type/parent_id and are scoped through their
@@ -108,7 +112,7 @@ END $$;
 --      compensation         -> atelier_employees_v.base_compensation,
 --                              atelier_contractors_v.day_rate_internal_cost,
 --                              atelier_partner_firm_resources_v.cost_to_cognirise_per_day,
---                              atelier_partner_economics_v.* (revenue_share, base_amount, ...),
+--                              (partner-economics view dropped in Task #513),
 --                              iban / swift / notice / payment_terms / day_rate_amount
 --                              Allow-list: founding_partner | partner | finance | hr.
 --      personnel_contract   -> atelier_person_documents_v.title/file_ref/file_url/notes

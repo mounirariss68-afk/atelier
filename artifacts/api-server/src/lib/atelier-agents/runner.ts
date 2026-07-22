@@ -5636,26 +5636,8 @@ export async function runFieldNotesScheduler(
   });
 }
 
-export async function runAllianceChoreographer(
-  input: { opportunityId: string; partnerFirmId: string; leadParty?: "cognirise" | "partner"; proposedSplitPct?: number } & V5RunCommonArgs,
-): Promise<V5GenericResult> {
-  return runV5GenericAgent({
-    agentId: "ag_alliance_choreographer",
-    promptId: "alliance_choreographer",
-    model: "claude-sonnet-4-5",
-    input: {
-      opportunityId: input.opportunityId,
-      partnerFirmId: input.partnerFirmId,
-      leadParty: input.leadParty,
-      proposedSplitPct: input.proposedSplitPct,
-    },
-    triggeredByUserId: input.triggeredByUserId,
-    targetType: "opportunity",
-    targetId: input.opportunityId,
-    targetLabel: `Alliance — ${input.opportunityId}`,
-    actorLabel: input.actorLabel ?? "Alliance Choreographer",
-  });
-}
+// Task #513 — runAllianceChoreographer removed with the orphaned
+// ag_alliance_choreographer agent (see docs/PARTNERS_BACKLOG.md).
 
 export async function runCertificationTracker(
   input: { lookbackDays?: number; lookaheadDays?: number; firmPartnerTiers?: unknown[] } & V5RunCommonArgs,
@@ -6224,7 +6206,6 @@ export const ATELIER_V5_DISPATCH: Record<string, V5DispatcherFn> = {
   ag_linkedin_composer: (i) => runLinkedInComposer(i as never),
   ag_press_monitor: (i) => runPressMonitor(i as never),
   ag_field_notes_scheduler: (i) => runFieldNotesScheduler(i as never),
-  ag_alliance_choreographer: (i) => runAllianceChoreographer(i as never),
   ag_certification_tracker: (i) => runCertificationTracker(i as never),
   ag_interview_designer: (i) => runInterviewDesigner(i as never),
   ag_reference_caller: (i) => runReferenceCaller(i as never),

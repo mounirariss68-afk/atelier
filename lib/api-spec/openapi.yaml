@@ -5790,6 +5790,412 @@ paths:
             application/json:
               schema: { type: object, additionalProperties: true }
 
+  /atelier/partners/firms:
+    get:
+      operationId: atelierListPartnerFirms
+      tags: [atelier]
+      summary: Unified partner-firm registry (with active resource counts)
+      responses:
+        "200":
+          description: Partner firms
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerFirmList" }
+    post:
+      operationId: atelierCreatePartnerFirm
+      tags: [atelier]
+      summary: Create a partner firm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerFirmInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+        "403":
+          description: Not a partners editor
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/firms/{id}:
+    get:
+      operationId: atelierGetPartnerFirm
+      tags: [atelier]
+      summary: Partner firm detail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Partner firm
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+    patch:
+      operationId: atelierUpdatePartnerFirm
+      tags: [atelier]
+      summary: Update a partner firm (tier changes append to tierHistory)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerFirmPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/firms/{id}/archive:
+    post:
+      operationId: atelierArchivePartnerFirm
+      tags: [atelier]
+      summary: Archive a partner firm (blocked while it has active resources)
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+        "409":
+          description: Firm has active secondee resources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/targets:
+    get:
+      operationId: atelierListPartnerTargets
+      tags: [atelier]
+      summary: Target partners (Identify pipeline)
+      responses:
+        "200":
+          description: Targets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerTargetList" }
+    post:
+      operationId: atelierCreatePartnerTarget
+      tags: [atelier]
+      summary: Add a target partner
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerTargetInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerTarget" }
+  /atelier/partners/targets/{id}:
+    patch:
+      operationId: atelierUpdatePartnerTarget
+      tags: [atelier]
+      summary: Update a target partner
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerTargetPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerTarget" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/targets/{id}/archive:
+    post:
+      operationId: atelierArchivePartnerTarget
+      tags: [atelier]
+      summary: Archive a target partner
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+  /atelier/partners/targets/{id}/promote:
+    post:
+      operationId: atelierPromotePartnerTarget
+      tags: [atelier]
+      summary: Promote a target into the partner-firm registry
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Already promoted (idempotent)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerPromoteResponse" }
+        "201":
+          description: Promoted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerPromoteResponse" }
+  /atelier/partners/joint-pipeline:
+    get:
+      operationId: atelierListJointPipeline
+      tags: [atelier]
+      summary: CRM-linked co-sell entries (optionally by opportunity)
+      parameters:
+        - { in: query, name: opportunityId, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Joint-pipeline entries with opportunity/client/firm names
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierJointPipelineList" }
+    post:
+      operationId: atelierCreateJointPipelineEntry
+      tags: [atelier]
+      summary: Link a partner firm to a CRM opportunity (co-sell)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierJointPipelineInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierJointPipelineEntry" }
+        "409":
+          description: Entry already exists for this opportunity + firm
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "422":
+          description: Unknown opportunity/firm or split exceeds 100
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/joint-pipeline/{id}:
+    patch:
+      operationId: atelierUpdateJointPipelineEntry
+      tags: [atelier]
+      summary: Update split/lead/status fields on a co-sell entry
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierJointPipelinePatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierJointPipelineEntry" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "422":
+          description: Split exceeds 100
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/joint-pipeline/{id}/archive:
+    post:
+      operationId: atelierArchiveJointPipelineEntry
+      tags: [atelier]
+      summary: Archive a co-sell entry
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+  /atelier/partners/certifications:
+    get:
+      operationId: atelierListPartnerCertifications
+      tags: [atelier]
+      summary: Partner certifications (registry-linked)
+      responses:
+        "200":
+          description: Certifications
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerCertificationList" }
+    post:
+      operationId: atelierCreatePartnerCertification
+      tags: [atelier]
+      summary: Add a certification for a partner firm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerCertificationInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerCertification" }
+        "422":
+          description: Unknown partner firm
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/certifications/{id}:
+    patch:
+      operationId: atelierUpdatePartnerCertification
+      tags: [atelier]
+      summary: Update a certification
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerCertificationPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerCertification" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/certifications/{id}/archive:
+    post:
+      operationId: atelierArchivePartnerCertification
+      tags: [atelier]
+      summary: Archive a certification
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+  /atelier/partners/conflicts:
+    get:
+      operationId: atelierListPartnerConflicts
+      tags: [atelier]
+      summary: Partner conflicts (open/resolved lifecycle)
+      responses:
+        "200":
+          description: Conflicts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerConflictList" }
+    post:
+      operationId: atelierCreatePartnerConflict
+      tags: [atelier]
+      summary: Log a conflict for a partner firm
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerConflictInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerConflict" }
+        "422":
+          description: Unknown partner firm
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/conflicts/{id}:
+    patch:
+      operationId: atelierUpdatePartnerConflict
+      tags: [atelier]
+      summary: Update / resolve a conflict
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AtelierPartnerConflictPatch" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerConflict" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/conflicts/{id}/archive:
+    post:
+      operationId: atelierArchivePartnerConflict
+      tags: [atelier]
+      summary: Archive a conflict
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierOkResponse" }
+  /atelier/partners/agreements:
+    get:
+      operationId: atelierListPartnerAgreements
+      tags: [atelier]
+      summary: Real e-sign contracts with partner-firm counterparties
+      responses:
+        "200":
+          description: Partner agreements (NDAs, framework agreements, ...)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerAgreementList" }
+  /atelier/partners/co-deliver:
+    get:
+      operationId: atelierGetPartnerCoDeliver
+      tags: [atelier]
+      summary: Partner-firm resource assignments + RCTI cost lines
+      responses:
+        "200":
+          description: Co-deliver view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierPartnerCoDeliver" }
+
+
 components:
   schemas:
     HealthStatus:
@@ -11525,3 +11931,364 @@ components:
         fields:
           type: array
           items: { $ref: "#/components/schemas/AtelierContractTemplateField" }
+    AtelierPartnerContact:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        role: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+      required: [name]
+    AtelierPartnerTierChange:
+      type: object
+      properties:
+        fromTier: { type: string, nullable: true }
+        toTier: { type: string }
+        at: { type: string }
+        byUserId: { type: string, nullable: true }
+        reason: { type: string, nullable: true }
+      required: [toTier, at]
+    AtelierPartnerFirm:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, nullable: true }
+        speciality: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true }
+        tier: { type: string, nullable: true, enum: [strategic, preferred, transactional, null] }
+        status: { type: string, enum: [active, renewal_due, paused, offboarded, terminated] }
+        relationshipStrength: { type: number, nullable: true }
+        anchorCognirise: { type: string, nullable: true }
+        anchorPartner: { type: string, nullable: true }
+        lastTouchAt: { type: string, nullable: true }
+        capabilities:
+          type: object
+          additionalProperties: { type: number }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerContact" }
+        tierHistory:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerTierChange" }
+        contactName: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        defaultPaymentTermsDays: { type: number, nullable: true }
+        defaultBillingCurrency: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        activeResourceCount: { type: number }
+      required: [id, name, status]
+    AtelierPartnerFirmList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+      required: [items]
+    AtelierPartnerFirmInput:
+      type: object
+      properties:
+        name: { type: string }
+        kind: { type: string, nullable: true }
+        speciality: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true }
+        tier: { type: string, nullable: true, enum: [strategic, preferred, transactional, null] }
+        status: { type: string, enum: [active, renewal_due, paused, offboarded, terminated] }
+        relationshipStrength: { type: number, nullable: true }
+        anchorCognirise: { type: string, nullable: true }
+        anchorPartner: { type: string, nullable: true }
+        lastTouchAt: { type: string, nullable: true }
+        capabilities:
+          type: object
+          additionalProperties: { type: number }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerContact" }
+        contactName: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        defaultPaymentTermsDays: { type: number, nullable: true }
+        defaultBillingCurrency: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        tierChangeReason: { type: string, nullable: true }
+      required: [name]
+    AtelierPartnerFirmPatch:
+      type: object
+      properties:
+        name: { type: string }
+        kind: { type: string, nullable: true }
+        speciality: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        countryCode: { type: string, nullable: true }
+        tier: { type: string, nullable: true, enum: [strategic, preferred, transactional, null] }
+        status: { type: string, enum: [active, renewal_due, paused, offboarded, terminated] }
+        relationshipStrength: { type: number, nullable: true }
+        anchorCognirise: { type: string, nullable: true }
+        anchorPartner: { type: string, nullable: true }
+        lastTouchAt: { type: string, nullable: true }
+        capabilities:
+          type: object
+          additionalProperties: { type: number }
+        contacts:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerContact" }
+        contactName: { type: string, nullable: true }
+        contactEmail: { type: string, nullable: true }
+        defaultPaymentTermsDays: { type: number, nullable: true }
+        defaultBillingCurrency: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        tierChangeReason: { type: string, nullable: true }
+    AtelierPartnerTarget:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        ecosystem: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        thesis: { type: string, nullable: true }
+        tierHypothesis: { type: string, nullable: true }
+        priority: { type: string, enum: [high, med, low] }
+        status: { type: string, enum: [researching, outreach, intro_call, evaluating, promoted, dropped] }
+        ownerUserId: { type: string, nullable: true }
+        nextStep: { type: string, nullable: true }
+        lastContactAt: { type: string, nullable: true }
+        promotedFirmId: { type: string, nullable: true }
+      required: [id, name, status]
+    AtelierPartnerTargetList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerTarget" }
+      required: [items]
+    AtelierPartnerTargetInput:
+      type: object
+      properties:
+        name: { type: string }
+        ecosystem: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        thesis: { type: string, nullable: true }
+        tierHypothesis: { type: string, nullable: true, enum: [strategic, preferred, transactional, null] }
+        priority: { type: string, enum: [high, med, low] }
+        status: { type: string, enum: [researching, outreach, intro_call, evaluating, promoted, dropped] }
+        ownerUserId: { type: string, nullable: true }
+        nextStep: { type: string, nullable: true }
+        lastContactAt: { type: string, nullable: true }
+      required: [name]
+    AtelierPartnerTargetPatch:
+      type: object
+      properties:
+        name: { type: string }
+        ecosystem: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        thesis: { type: string, nullable: true }
+        tierHypothesis: { type: string, nullable: true, enum: [strategic, preferred, transactional, null] }
+        priority: { type: string, enum: [high, med, low] }
+        status: { type: string, enum: [researching, outreach, intro_call, evaluating, promoted, dropped] }
+        ownerUserId: { type: string, nullable: true }
+        nextStep: { type: string, nullable: true }
+        lastContactAt: { type: string, nullable: true }
+    AtelierPartnerPromoteResponse:
+      type: object
+      properties:
+        alreadyPromoted: { type: boolean }
+        firm: { $ref: "#/components/schemas/AtelierPartnerFirm" }
+        target: { $ref: "#/components/schemas/AtelierPartnerTarget" }
+      required: [firm, target]
+    AtelierJointPipelineEntry:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        opportunityId: { type: string }
+        partnerFirmId: { type: string }
+        leadParty: { type: string, enum: [cognirise, partner, joint] }
+        cognirisePct: { type: number }
+        partnerPct: { type: number }
+        splitRationale: { type: string, nullable: true }
+        allianceLetterStatus: { type: string, enum: [none, drafting, signed] }
+        partnerSourced: { type: boolean }
+        opportunityName: { type: string, nullable: true }
+        clientName: { type: string, nullable: true }
+        salesStage: { type: string, nullable: true }
+        dealSizeHypothesis: { type: string, nullable: true }
+        partnerFirmName: { type: string, nullable: true }
+      required: [id, opportunityId, partnerFirmId]
+    AtelierJointPipelineList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierJointPipelineEntry" }
+      required: [items]
+    AtelierJointPipelineInput:
+      type: object
+      properties:
+        opportunityId: { type: string }
+        partnerFirmId: { type: string }
+        leadParty: { type: string, enum: [cognirise, partner, joint] }
+        cognirisePct: { type: number }
+        partnerPct: { type: number }
+        splitRationale: { type: string }
+        allianceLetterStatus: { type: string, enum: [none, drafting, signed] }
+        partnerSourced: { type: boolean }
+      required: [opportunityId, partnerFirmId]
+    AtelierJointPipelinePatch:
+      type: object
+      properties:
+        leadParty: { type: string, enum: [cognirise, partner, joint] }
+        cognirisePct: { type: number }
+        partnerPct: { type: number }
+        splitRationale: { type: string }
+        allianceLetterStatus: { type: string, enum: [none, drafting, signed] }
+        partnerSourced: { type: boolean }
+    AtelierPartnerCertification:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        partnerFirmId: { type: string }
+        credential: { type: string }
+        platform: { type: string }
+        holderPersonId: { type: string, nullable: true }
+        holder: { type: string, nullable: true }
+        status: { type: string, enum: [active, lapsing, lapsed] }
+        expiresAt: { type: string, nullable: true }
+        partnerFirmName: { type: string, nullable: true }
+      required: [id, partnerFirmId, credential, platform, status]
+    AtelierPartnerCertificationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerCertification" }
+      required: [items]
+    AtelierPartnerCertificationInput:
+      type: object
+      properties:
+        partnerFirmId: { type: string }
+        credential: { type: string }
+        platform: { type: string }
+        holderPersonId: { type: string, nullable: true }
+        holder: { type: string, nullable: true }
+        status: { type: string, enum: [active, lapsing, lapsed] }
+        expiresAt: { type: string, nullable: true }
+      required: [partnerFirmId, credential, platform]
+    AtelierPartnerCertificationPatch:
+      type: object
+      properties:
+        partnerFirmId: { type: string }
+        credential: { type: string }
+        platform: { type: string }
+        holderPersonId: { type: string, nullable: true }
+        holder: { type: string, nullable: true }
+        status: { type: string, enum: [active, lapsing, lapsed] }
+        expiresAt: { type: string, nullable: true }
+    AtelierPartnerConflict:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        partnerFirmId: { type: string }
+        headline: { type: string }
+        detectedAt: { type: string, nullable: true }
+        severity: { type: string, enum: [high, med, low] }
+        detail: { type: string, nullable: true }
+        recommendation: { type: string, nullable: true }
+        status: { type: string, enum: [open, resolved] }
+        resolvedAt: { type: string, nullable: true }
+        partnerFirmName: { type: string, nullable: true }
+      required: [id, partnerFirmId, headline, status]
+    AtelierPartnerConflictList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerConflict" }
+      required: [items]
+    AtelierPartnerConflictInput:
+      type: object
+      properties:
+        partnerFirmId: { type: string }
+        headline: { type: string }
+        detectedAt: { type: string }
+        severity: { type: string, enum: [high, med, low] }
+        detail: { type: string }
+        recommendation: { type: string }
+        status: { type: string, enum: [open, resolved] }
+      required: [partnerFirmId, headline]
+    AtelierPartnerConflictPatch:
+      type: object
+      properties:
+        partnerFirmId: { type: string }
+        headline: { type: string }
+        detectedAt: { type: string }
+        severity: { type: string, enum: [high, med, low] }
+        detail: { type: string }
+        recommendation: { type: string }
+        status: { type: string, enum: [open, resolved] }
+    AtelierPartnerAgreement:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        instrumentType: { type: string }
+        counterpartyId: { type: string }
+        counterpartyName: { type: string, nullable: true }
+        partnerFirmId: { type: string, nullable: true }
+        title: { type: string }
+        status: { type: string }
+        governingLaw: { type: string, nullable: true }
+        termStart: { type: string, nullable: true }
+        termEnd: { type: string, nullable: true }
+        fullyExecutedAt: { type: string, nullable: true }
+      required: [id, instrumentType, counterpartyId, title, status]
+    AtelierPartnerAgreementList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerAgreement" }
+      required: [items]
+    AtelierPartnerCoDeliverResource:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        partnerFirmId: { type: string }
+        partnerFirmName: { type: string, nullable: true }
+        fullName: { type: string }
+        role: { type: string, nullable: true }
+        seniority: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        startDate: { type: string, nullable: true }
+        status: { type: string }
+      required: [id, partnerFirmId, fullName, status]
+    AtelierPartnerCoDeliverInvoice:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        invoiceNumber: { type: string, nullable: true }
+        supplierId: { type: string }
+        supplierName: { type: string, nullable: true }
+        partnerFirmName: { type: string, nullable: true }
+        weekIso: { type: string, nullable: true }
+        currency: { type: string, nullable: true }
+        totalAmount: { type: string, nullable: true }
+        totalUsd: { type: string, nullable: true }
+        status: { type: string }
+      required: [id, supplierId, status]
+    AtelierPartnerCoDeliver:
+      type: object
+      properties:
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerCoDeliverResource" }
+        invoices:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPartnerCoDeliverInvoice" }
+      required: [resources, invoices]

@@ -201,3 +201,26 @@ export const canViewPartnerFirmHours = (r: RoleLike): boolean =>
 /** Manage partner-firm definitions (leadership + finance). */
 export const canManagePartnerFirm = (r: RoleLike): boolean =>
   !!r && (LEADERSHIP.has(r) || r === "finance");
+
+// Task #513 — Partners lens (alliance lifecycle) readers. Internal roles
+// only: partner-tier + consultant-tier per the persona doctrine, plus
+// finance/hr (registry doubles as the roster partner-firm master) and
+// compliance_officer (firm-wide read for audit, per Task #354). External
+// personas — partner_firm_resource especially — must NEVER read firm-wide
+// alliance intel; recruiters stay scoped to /studio.
+const PARTNERS_LENS_READERS = SET(
+  "founding_partner",
+  "partner",
+  "senior_manager",
+  "consultant",
+  "finance",
+  "hr",
+  "compliance_officer",
+);
+export const canAccessPartnersLens = (r: RoleLike): boolean =>
+  !!r && PARTNERS_LENS_READERS.has(r);
+
+/** Partner-lens writers (create/edit/archive alliance records). */
+export const canEditPartnersLens = (r: RoleLike): boolean =>
+  !!r &&
+  (LEADERSHIP.has(r) || r === "senior_manager" || r === "finance");

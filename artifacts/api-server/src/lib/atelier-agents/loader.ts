@@ -50,8 +50,7 @@ export type AtelierAgentId =
   | "linkedin_composer"
   | "press_monitor"
   | "field_notes_scheduler"
-  // v5 — Alliances
-  | "alliance_choreographer"
+  // v5 — Alliances (Task #513: alliance_choreographer removed to backlog)
   | "certification_tracker"
   // v5 — Studio (recruiting)
   | "interview_designer"

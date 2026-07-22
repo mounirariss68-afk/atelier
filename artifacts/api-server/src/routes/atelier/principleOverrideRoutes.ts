@@ -31,7 +31,8 @@ const ALLOWED_TARGET_TABLES = new Set([
   "atelier_employees",
   "atelier_contractors",
   "atelier_partner_firm_resources",
-  "atelier_partner_economics",
+  // Task #513 — `atelier_partner_economics` removed: the placeholder table
+  // was dropped (see docs/PARTNERS_BACKLOG.md).
   "atelier_person_documents",
 ]);
 const ALLOWED_SENSITIVITY = new Set(["compensation", "personnel_contract"]);

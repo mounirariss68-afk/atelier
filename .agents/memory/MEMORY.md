@@ -109,5 +109,6 @@
 - [Atelier period-close & collections](atelier-period-close.md) — sign-off hard-block + distinct-partner lock semantics; Collections Agent reads ONLY isDefault dunning ladders per jurisdiction.
 - [Founder expense self-approval](founder-self-approval.md) — founders self-approve own claims (founder_self stamp), others 403 no-self-approval; new submit surfaces must notify founders.
 - [Atelier GL statements](atelier-gl-statements.md) — entity P&L/BS/CF from GL journals; BS/CF identities by construction (new stock buckets must wire into CF); IC tagged by account name; budget firm-level only.
+- [Partner NDA → firm linkage](atelier-partner-nda-linkage.md) — no FK between contracts and partner-firm registry; /partners/agreements joins by normalized name → partnerFirmId; UI keys on that, never counterpartyId.
 - [Receipt enrichment details](atelier-receipt-enrichment.md) — category details are baked into `summary` at parse time (ocrPayload gets redacted at 90d); sanitizer+formatter pair owns the format, never the auditor LLM.
 - [Atelier HR module invariants](atelier-hr-rationalization.md) — titles registry empty-by-design (UI fallback list); invitations source-restricted; login created only via onboarding step; People nav derives from peopleLifecycle.STAGES; auto-grant helper on assignment.

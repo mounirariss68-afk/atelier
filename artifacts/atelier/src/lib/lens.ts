@@ -216,15 +216,37 @@ export function canSeeContractsLens(role: string | null | undefined): boolean {
   return role === "founding_partner" || role === "partner";
 }
 
+/**
+ * Task #513 — the Partners lens (firm-wide alliance intel) is internal-only.
+ * Mirrors `canAccessPartnersLens` on the server: partner-tier, consultant-
+ * tier, finance, hr, compliance_officer. Partner-firm resources and
+ * recruiters must not see it.
+ */
+export function canSeePartnersLens(role: string | null | undefined): boolean {
+  return (
+    role === "founding_partner" ||
+    role === "partner" ||
+    role === "senior_manager" ||
+    role === "consultant" ||
+    role === "finance" ||
+    role === "hr" ||
+    role === "compliance_officer"
+  );
+}
+
 /** Lenses the picker should offer this persona. */
 export function visibleLensesForRole(
   role: string | null | undefined,
 ): readonly LensDef[] {
   if (isSelfOnlyRole(role)) return LENSES.filter((l) => l.id === "me");
+  let out: readonly LensDef[] = LENSES;
   if (!canSeeContractsLens(role)) {
-    return LENSES.filter((l) => l.id !== "contracts");
+    out = out.filter((l) => l.id !== "contracts");
   }
-  return LENSES;
+  if (!canSeePartnersLens(role)) {
+    out = out.filter((l) => l.id !== "partners");
+  }
+  return out;
 }
 
 const LENS_BY_ID: Record<LensId, LensDef> = LENSES.reduce(
@@ -259,9 +281,9 @@ export function lensFromPath(pathname: string): LensId | null {
  * Finance, anyone else → Clients. The 9-persona model in personaRoles.ts
  * doesn't have dedicated Agent Ops / Alliance Lead personas yet, so the
  * mapping below keeps the explicit categorical defaults (finance, hr,
- * recruiter, partner_firm_resource → Partners since PFRs work with
- * partner firms) and falls back to Clients for the commercial-loop
- * personas. We also accept future role ids by string match so that when
+ * recruiter; partner_firm_resource → Me per Task #513 — PFRs are
+ * external and never see firm-wide alliance intel) and falls back to
+ * Clients for the commercial-loop personas. We also accept future role ids by string match so that when
  * `agent_ops` and `alliance_lead` personas are introduced they slot
  * straight into Agents / Partners without another shell change.
  */
@@ -279,8 +301,10 @@ export function defaultLensForRole(role: string | null | undefined): LensId {
     case "hr":
     case "recruiter":
       return "people";
+    // Task #513 — PFRs must NOT land on the internal Partners lens; they
+    // are self-scope personas and default to Me.
     case "partner_firm_resource":
-      return "partners";
+      return "me";
     case "founding_partner":
     case "partner":
     case "senior_manager":
