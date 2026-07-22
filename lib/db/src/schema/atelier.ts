@@ -26,6 +26,57 @@ import {
 const ORG = (name: string) => text(name).notNull().default("aico");
 
 // ============================================================
+// PERSONS — Task #538 unified person model.
+//
+// One row per human, org-scoped. Domain tables (users, CRM contacts,
+// employees, contractors, partner-firm resources) each carry a nullable
+// `person_id` pointing here while keeping their own PKs — no downstream
+// FK changed. Structured name fields:
+//   honorific     — Mr | Ms | Dr | Sheikh | HE … (the user-facing "Title";
+//                   deliberately NOT named `title`, which means JOB title
+//                   on contacts/employees and would collide in joins).
+//   first_name    — required
+//   middle_name   — optional (patronymics like "bin Nasser" live here)
+//   last_name     — required (particles like "Al-" attach to the surname)
+//   preferred_name— optional; display falls back to first name
+//   display_name  — stored, ALWAYS recomputed server-side on write via the
+//                   shared helper (never trusted from clients).
+// Legacy fullName/name columns on domain tables stay synced from this
+// record during the transition and are derived read-only.
+// RLS: org-isolation policy applied via lib/db/src/atelier-rls.sql.
+// ============================================================
+export const atelierPersons = pgTable(
+  "atelier_persons",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    honorific: text("honorific"),
+    firstName: text("first_name").notNull(),
+    middleName: text("middle_name"),
+    lastName: text("last_name").notNull(),
+    preferredName: text("preferred_name"),
+    displayName: text("display_name").notNull(),
+    // Migration provenance — which domain row first created this person
+    // ("user" | "contact" | "employee" | "contractor" | "partner_firm_resource"
+    //  | "partner_firm_contact" | "manual"). Informational only.
+    sourceKind: text("source_kind"),
+    // Ambiguous-parse flag set by the one-time migration when the original
+    // free-text name needed a judgment call (single token, 4+ tokens,
+    // unrecognised leading honorific). Cleared on the first manual edit.
+    parseReview: text("parse_review"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    createdByUserId: text("created_by_user_id"),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_persons_org").on(t.orgId),
+    index("idx_atelier_persons_display").on(t.displayName),
+    index("idx_atelier_persons_last_first").on(t.lastName, t.firstName),
+  ],
+);
+
+// ============================================================
 // USERS / PERSONAS
 // ============================================================
 export const atelierUsers = pgTable(
@@ -36,6 +87,9 @@ export const atelierUsers = pgTable(
     email: text("email").notNull(),
     name: text("name").notNull(),
     initials: text("initials").notNull(),
+    // Task #538 — unified person model. Nullable during rollout; `name` and
+    // `initials` become derived read-only mirrors of the person record.
+    personId: text("person_id"),
     // Task #292 — 9-persona model: founding_partner | partner | finance | hr |
     // senior_manager | consultant | contractor | partner_firm_resource |
     // board_observer. Plain text (not pg enum) so the rolling migration in
@@ -288,6 +342,9 @@ export const atelierContacts = pgTable(
     orgId: ORG("org_id"),
     accountId: text("account_id").notNull(),
     fullName: text("full_name").notNull(),
+    // Task #538 — unified person model. Nullable during rollout; `fullName`
+    // becomes a derived read-only mirror of the linked person record.
+    personId: text("person_id"),
     title: text("title"),
     seniority: text("seniority"), // 'c_suite' | 'vp' | 'director' | 'manager' | 'ic'
     email: text("email"),
@@ -2148,6 +2205,9 @@ export const atelierEmployees = pgTable(
     employeeIdExternal: text("employee_id_external"),
     fullName: text("full_name").notNull(),
     preferredName: text("preferred_name"),
+    // Task #538 — unified person model. Nullable during rollout; fullName /
+    // preferredName become derived read-only mirrors of the person record.
+    personId: text("person_id"),
     email: text("email").notNull(),
     role: text("role").notNull(), // mirrors atelier_users.role
     seniority: text("seniority").notNull().default("consultant"),
@@ -2219,6 +2279,8 @@ export const atelierContractors = pgTable(
     id: text("id").primaryKey(),
     orgId: ORG("org_id"),
     fullName: text("full_name").notNull(),
+    // Task #538 — unified person model. Nullable during rollout.
+    personId: text("person_id"),
     email: text("email").notNull(),
     country: text("country"),
     // Task #291 — FK code (atelier_countries.iso_alpha_2); legacy `country` retained.
@@ -2438,6 +2500,9 @@ export const atelierPartnerFirmResources = pgTable(
     orgId: ORG("org_id"),
     partnerFirmId: text("partner_firm_id").notNull(),
     fullName: text("full_name").notNull(),
+    // Task #538 — unified person model. Nullable during rollout. Promoted
+    // partner-firm jsonb contacts land here as real rows backed by persons.
+    personId: text("person_id"),
     email: text("email"),
     role: text("role"),
     roleOnEngagement: text("role_on_engagement"), // PRD §2.1
@@ -2746,6 +2811,12 @@ export const atelierInvitations = pgTable(
     personDraft: jsonb("person_draft")
       .$type<{
         fullName: string;
+        // Task #538 — structured name fields captured at invitation time.
+        honorific?: string | null;
+        firstName?: string | null;
+        middleName?: string | null;
+        lastName?: string | null;
+        preferredName?: string | null;
         email: string;
         role?: string | null;
         seniority?: string | null;

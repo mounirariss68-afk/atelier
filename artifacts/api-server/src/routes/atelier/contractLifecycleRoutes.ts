@@ -30,7 +30,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { z } from "zod";
 import multer from "multer";
-import { and, desc, eq, ilike, inArray, isNotNull, or } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, isNotNull, or, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -1015,7 +1015,15 @@ router.get("/contracts/counterparty-search", async (req, res) => {
   if (kind === "person") {
     const conds = [eq(atelierEmployees.orgId, me.orgId)];
     if (q) {
-      conds.push(or(ilike(atelierEmployees.fullName, pat), ilike(atelierEmployees.email, pat))!);
+      conds.push(
+        or(
+          ilike(atelierEmployees.fullName, pat),
+          ilike(atelierEmployees.email, pat),
+          ilike(atelierEmployees.preferredName, pat),
+          // Task #538 — match structured person preferred/display name too.
+          sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierEmployees.personId} AND (p.preferred_name ILIKE ${pat} OR p.display_name ILIKE ${pat}))`,
+        )!,
+      );
     }
     const rows = await db
       .select({
@@ -1041,7 +1049,14 @@ router.get("/contracts/counterparty-search", async (req, res) => {
   } else if (kind === "contact") {
     const conds = [eq(atelierContacts.orgId, me.orgId)];
     if (q) {
-      conds.push(or(ilike(atelierContacts.fullName, pat), ilike(atelierContacts.email, pat))!);
+      conds.push(
+        or(
+          ilike(atelierContacts.fullName, pat),
+          ilike(atelierContacts.email, pat),
+          // Task #538 — match structured person preferred/display name too.
+          sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierContacts.personId} AND (p.preferred_name ILIKE ${pat} OR p.display_name ILIKE ${pat}))`,
+        )!,
+      );
     }
     const rows = await db
       .select({

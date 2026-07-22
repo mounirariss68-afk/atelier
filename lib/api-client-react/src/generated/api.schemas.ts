@@ -1167,6 +1167,20 @@ export interface AtelierContact {
   accountId: string;
   fullName: string;
   /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  honorific?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  middleName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  preferredName?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
   title?: string | null;
   /** @nullable */
   seniority?: AtelierContactSeniorityProperty;
@@ -1637,7 +1651,32 @@ export interface AtelierCreateContactInput {
    * @minLength 1
    * @maxLength 160
    */
-  fullName: string;
+  fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
   /** @nullable */
   title?: string | null;
   /** @nullable */
@@ -1697,6 +1736,31 @@ export interface AtelierUpdateContactInput {
    * @maxLength 160
    */
   fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
   /** @nullable */
   title?: string | null;
   /** @nullable */
@@ -2310,6 +2374,18 @@ export interface AtelierSelfPerson {
   id: string;
   workerType: AtelierSelfPersonWorkerType;
   fullName: string;
+  /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  honorific?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  middleName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  displayName?: string | null;
   email: string;
   /** @nullable */
   title?: string | null;
@@ -2922,6 +2998,26 @@ export interface AtelierRosterPersonEdit {
    * @maxLength 200
    */
   fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
   /**
    * @maxLength 120
    * @nullable
@@ -3586,7 +3682,32 @@ export interface AtelierAddJoinerInput {
    * @minLength 1
    * @maxLength 200
    */
-  fullName: string;
+  fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
   /**
    * @minLength 3
    * @maxLength 320

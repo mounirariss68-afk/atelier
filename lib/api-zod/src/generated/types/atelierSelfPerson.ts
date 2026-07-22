@@ -15,6 +15,18 @@ export interface AtelierSelfPerson {
   id: string;
   workerType: AtelierSelfPersonWorkerType;
   fullName: string;
+  /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  honorific?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  middleName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  displayName?: string | null;
   email: string;
   /** @nullable */
   title?: string | null;

@@ -217,6 +217,12 @@ export const AtelierGetMyProfileResponse = zod.object({
           id: zod.string(),
           workerType: zod.enum(["employee", "contractor"]),
           fullName: zod.string(),
+          personId: zod.string().nullish(),
+          honorific: zod.string().nullish(),
+          firstName: zod.string().nullish(),
+          middleName: zod.string().nullish(),
+          lastName: zod.string().nullish(),
+          displayName: zod.string().nullish(),
           email: zod.string(),
           title: zod.string().nullish(),
           startDate: zod.string().nullish(),
@@ -337,6 +343,12 @@ export const AtelierUpdateMyProfileResponse = zod.object({
         id: zod.string(),
         workerType: zod.enum(["employee", "contractor"]),
         fullName: zod.string(),
+        personId: zod.string().nullish(),
+        honorific: zod.string().nullish(),
+        firstName: zod.string().nullish(),
+        middleName: zod.string().nullish(),
+        lastName: zod.string().nullish(),
+        displayName: zod.string().nullish(),
         email: zod.string(),
         title: zod.string().nullish(),
         startDate: zod.string().nullish(),
@@ -4346,6 +4358,14 @@ export const AtelierUpdateRosterPersonParams = zod.object({
 
 export const atelierUpdateRosterPersonBodyFullNameMax = 200;
 
+export const atelierUpdateRosterPersonBodyHonorificMax = 40;
+
+export const atelierUpdateRosterPersonBodyFirstNameMax = 120;
+
+export const atelierUpdateRosterPersonBodyMiddleNameMax = 120;
+
+export const atelierUpdateRosterPersonBodyLastNameMax = 120;
+
 export const atelierUpdateRosterPersonBodyPreferredNameMax = 120;
 
 export const atelierUpdateRosterPersonBodyEmailMax = 320;
@@ -4388,6 +4408,24 @@ export const AtelierUpdateRosterPersonBody = zod
       .string()
       .min(1)
       .max(atelierUpdateRosterPersonBodyFullNameMax)
+      .optional(),
+    honorific: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyHonorificMax)
+      .nullish(),
+    firstName: zod
+      .string()
+      .min(1)
+      .max(atelierUpdateRosterPersonBodyFirstNameMax)
+      .optional(),
+    middleName: zod
+      .string()
+      .max(atelierUpdateRosterPersonBodyMiddleNameMax)
+      .nullish(),
+    lastName: zod
+      .string()
+      .min(1)
+      .max(atelierUpdateRosterPersonBodyLastNameMax)
       .optional(),
     preferredName: zod
       .string()
@@ -4657,6 +4695,12 @@ export const AtelierGetMyPayResponse = zod.object({
           id: zod.string(),
           workerType: zod.enum(["employee", "contractor"]),
           fullName: zod.string(),
+          personId: zod.string().nullish(),
+          honorific: zod.string().nullish(),
+          firstName: zod.string().nullish(),
+          middleName: zod.string().nullish(),
+          lastName: zod.string().nullish(),
+          displayName: zod.string().nullish(),
           email: zod.string(),
           title: zod.string().nullish(),
           startDate: zod.string().nullish(),
@@ -5727,6 +5771,16 @@ export const AtelierListJoinersResponse = zod.array(
  */
 export const atelierAddJoinerBodyFullNameMax = 200;
 
+export const atelierAddJoinerBodyHonorificMax = 40;
+
+export const atelierAddJoinerBodyFirstNameMax = 120;
+
+export const atelierAddJoinerBodyMiddleNameMax = 120;
+
+export const atelierAddJoinerBodyLastNameMax = 120;
+
+export const atelierAddJoinerBodyPreferredNameMax = 120;
+
 export const atelierAddJoinerBodyEmailMin = 3;
 export const atelierAddJoinerBodyEmailMax = 320;
 
@@ -5735,7 +5789,19 @@ export const atelierAddJoinerBodyTitleMax = 200;
 export const atelierAddJoinerBodyStartDateMax = 10;
 
 export const AtelierAddJoinerBody = zod.object({
-  fullName: zod.string().min(1).max(atelierAddJoinerBodyFullNameMax),
+  fullName: zod.string().min(1).max(atelierAddJoinerBodyFullNameMax).optional(),
+  honorific: zod.string().max(atelierAddJoinerBodyHonorificMax).nullish(),
+  firstName: zod
+    .string()
+    .min(1)
+    .max(atelierAddJoinerBodyFirstNameMax)
+    .optional(),
+  middleName: zod.string().max(atelierAddJoinerBodyMiddleNameMax).nullish(),
+  lastName: zod.string().min(1).max(atelierAddJoinerBodyLastNameMax).optional(),
+  preferredName: zod
+    .string()
+    .max(atelierAddJoinerBodyPreferredNameMax)
+    .nullish(),
   email: zod
     .string()
     .min(atelierAddJoinerBodyEmailMin)
@@ -10346,6 +10412,13 @@ export const AtelierMergeAccountsResponse = zod.object({
         id: zod.string(),
         accountId: zod.string(),
         fullName: zod.string(),
+        personId: zod.string().nullish(),
+        honorific: zod.string().nullish(),
+        firstName: zod.string().nullish(),
+        middleName: zod.string().nullish(),
+        lastName: zod.string().nullish(),
+        preferredName: zod.string().nullish(),
+        displayName: zod.string().nullish(),
         title: zod.string().nullish(),
         seniority: zod
           .union([
@@ -11425,6 +11498,13 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -12730,6 +12810,13 @@ export const AtelierUpdateAccountResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -13806,6 +13893,13 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -14156,6 +14250,13 @@ export const AtelierListAccountContactsResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -14296,13 +14397,43 @@ export const AtelierCreateContactParams = zod.object({
 
 export const atelierCreateContactBodyFullNameMax = 160;
 
+export const atelierCreateContactBodyHonorificMax = 40;
+
+export const atelierCreateContactBodyFirstNameMax = 120;
+
+export const atelierCreateContactBodyMiddleNameMax = 120;
+
+export const atelierCreateContactBodyLastNameMax = 120;
+
+export const atelierCreateContactBodyPreferredNameMax = 120;
+
 export const atelierCreateContactBodyInfluenceScoreMax = 5;
 
 export const atelierCreateContactBodyRelationshipStrengthMin = 0;
 export const atelierCreateContactBodyRelationshipStrengthMax = 100;
 
 export const AtelierCreateContactBody = zod.object({
-  fullName: zod.string().min(1).max(atelierCreateContactBodyFullNameMax),
+  fullName: zod
+    .string()
+    .min(1)
+    .max(atelierCreateContactBodyFullNameMax)
+    .optional(),
+  honorific: zod.string().max(atelierCreateContactBodyHonorificMax).nullish(),
+  firstName: zod
+    .string()
+    .min(1)
+    .max(atelierCreateContactBodyFirstNameMax)
+    .optional(),
+  middleName: zod.string().max(atelierCreateContactBodyMiddleNameMax).nullish(),
+  lastName: zod
+    .string()
+    .min(1)
+    .max(atelierCreateContactBodyLastNameMax)
+    .optional(),
+  preferredName: zod
+    .string()
+    .max(atelierCreateContactBodyPreferredNameMax)
+    .nullish(),
   title: zod.string().nullish(),
   seniority: zod
     .union([
@@ -14413,6 +14544,16 @@ export const AtelierUpdateContactParams = zod.object({
 
 export const atelierUpdateContactBodyFullNameMax = 160;
 
+export const atelierUpdateContactBodyHonorificMax = 40;
+
+export const atelierUpdateContactBodyFirstNameMax = 120;
+
+export const atelierUpdateContactBodyMiddleNameMax = 120;
+
+export const atelierUpdateContactBodyLastNameMax = 120;
+
+export const atelierUpdateContactBodyPreferredNameMax = 120;
+
 export const atelierUpdateContactBodyInfluenceScoreMax = 5;
 
 export const atelierUpdateContactBodyRelationshipStrengthMin = 0;
@@ -14424,6 +14565,22 @@ export const AtelierUpdateContactBody = zod.object({
     .min(1)
     .max(atelierUpdateContactBodyFullNameMax)
     .optional(),
+  honorific: zod.string().max(atelierUpdateContactBodyHonorificMax).nullish(),
+  firstName: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateContactBodyFirstNameMax)
+    .optional(),
+  middleName: zod.string().max(atelierUpdateContactBodyMiddleNameMax).nullish(),
+  lastName: zod
+    .string()
+    .min(1)
+    .max(atelierUpdateContactBodyLastNameMax)
+    .optional(),
+  preferredName: zod
+    .string()
+    .max(atelierUpdateContactBodyPreferredNameMax)
+    .nullish(),
   title: zod.string().nullish(),
   seniority: zod
     .union([
@@ -14473,6 +14630,13 @@ export const AtelierUpdateContactResponse = zod.object({
   id: zod.string(),
   accountId: zod.string(),
   fullName: zod.string(),
+  personId: zod.string().nullish(),
+  honorific: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  middleName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  preferredName: zod.string().nullish(),
+  displayName: zod.string().nullish(),
   title: zod.string().nullish(),
   seniority: zod
     .union([
@@ -15521,6 +15685,13 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -16602,6 +16773,13 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -17696,6 +17874,13 @@ export const AtelierCreateAccountInsightResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -18789,6 +18974,13 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -19866,6 +20058,13 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -20952,6 +21151,13 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -22038,6 +22244,13 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -23117,6 +23330,13 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -24208,6 +24428,13 @@ export const AtelierCreateAccountActionResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -25296,6 +25523,13 @@ export const AtelierUpdateAccountActionResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -26373,6 +26607,13 @@ export const AtelierDeleteAccountActionResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -27459,6 +27700,13 @@ export const AtelierCreateAccountRiskResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -28546,6 +28794,13 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -29623,6 +29878,13 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -30706,6 +30968,13 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
       id: zod.string(),
       accountId: zod.string(),
       fullName: zod.string(),
+      personId: zod.string().nullish(),
+      honorific: zod.string().nullish(),
+      firstName: zod.string().nullish(),
+      middleName: zod.string().nullish(),
+      lastName: zod.string().nullish(),
+      preferredName: zod.string().nullish(),
+      displayName: zod.string().nullish(),
       title: zod.string().nullish(),
       seniority: zod
         .union([
@@ -31516,6 +31785,13 @@ export const AtelierUpdateContactDispositionResponse = zod.object({
   id: zod.string(),
   accountId: zod.string(),
   fullName: zod.string(),
+  personId: zod.string().nullish(),
+  honorific: zod.string().nullish(),
+  firstName: zod.string().nullish(),
+  middleName: zod.string().nullish(),
+  lastName: zod.string().nullish(),
+  preferredName: zod.string().nullish(),
+  displayName: zod.string().nullish(),
   title: zod.string().nullish(),
   seniority: zod
     .union([

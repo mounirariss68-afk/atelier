@@ -51,6 +51,7 @@ import {
   type ExtraSignerField,
 } from "./docuseal.js";
 import { createDocument } from "./atelier-documents.js";
+import { legalNamesByEmail } from "./atelier-person-sync.js";
 
 export type SigRequestRow = typeof atelierSignatureRequests.$inferSelect;
 export type SigSignerRow = typeof atelierSignatureSigners.$inferSelect;
@@ -272,6 +273,27 @@ export async function sendSignatureRequest(args: {
    */
   clientPageCount?: number | null;
 }): Promise<{ request: SigRequestRow; signers: SigSignerRow[] }> {
+  // Task #538 — new signer snapshots use the full LEGAL name (honorific +
+  // first + middle + last) when the email maps to a linked person record.
+  // Idempotent when the caller (sendContract) already upgraded the names.
+  try {
+    const legal = await legalNamesByEmail(
+      args.orgId,
+      args.signers.map((s) => s.email),
+    );
+    args = {
+      ...args,
+      signers: args.signers.map((s) => ({
+        ...s,
+        name: legal.get(s.email.trim().toLowerCase()) ?? s.name,
+      })),
+    };
+  } catch (err) {
+    console.error(
+      "[esign] legal-name resolution failed — using provided signer names:",
+      err instanceof Error ? err.message : err,
+    );
+  }
   // Default: signature blocks go on the last page of the document.
   let lastPageIndex = 0;
   let pageCount: number | null = null;

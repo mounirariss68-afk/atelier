@@ -1,0 +1,226 @@
+[
+  {
+    "domain": "user",
+    "rowId": "p_mounir_ariss",
+    "name": "Mounir Ariss",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuro_1ovkwl2"
+  },
+  {
+    "domain": "user",
+    "rowId": "p_gokhan_guney",
+    "name": "Gökhan Güney",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuut7_2nxylqp"
+  },
+  {
+    "domain": "user",
+    "rowId": "p_joiner_mrs3d97c_cmtunx",
+    "name": "Nazgul Nejmi",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuti_3fe67qr"
+  },
+  {
+    "domain": "employee",
+    "rowId": "emp_mrs3d97u_3adyqp",
+    "name": "Nazgul Nejmi",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuti_3fe67qr"
+  },
+  {
+    "domain": "employee",
+    "rowId": "emp_link_p_mounir_ariss",
+    "name": "Mounir Ariss",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuro_1ovkwl2"
+  },
+  {
+    "domain": "employee",
+    "rowId": "emp_link_p_gokhan_guney",
+    "name": "Gökhan Güney",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuut7_2nxylqp"
+  },
+  {
+    "domain": "contact",
+    "rowId": "con_mrnvk6uv_1rvaxg",
+    "name": "Mohammed bin Nasser Al-Jasser",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuvd_72t33mt"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrl5m97_3k3hhy",
+    "name": "undefined",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuuo_4q12482"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrvszg49_vwhwtf",
+    "name": "Jeremy Briat",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuux_5he3zxw"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroy2yyk_6ed51m",
+    "name": "Saed Hussein",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuvw_993t8tk"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroh0i0h_wm5uno",
+    "name": "Hamad AlSaghir",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuv5_67mq965"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroy32kr_15c2dv",
+    "name": "Lena Önner",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuvl_8fcrc8o"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroy39i0_puxkge",
+    "name": "Mohammed Ghandorah",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuw6_aw3iwf5"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroy36ev_q73qey",
+    "name": "Cil Eng. Bandar Alkelsh",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuwf_bepu38h"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroh0i0e_u3p8uk",
+    "name": "Tariq ALYemni",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuwm_c4ps0pe"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrlcc8e_v8bogi",
+    "name": "Abdullah A. Aldrees",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuux2_dx08wf7"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrlcc8r_85vy44",
+    "name": "Naveed Hussain",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuxb_eqfc531"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrlcc96_2ppa8m",
+    "name": "Nomar Selira",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuxi_f4zsjp4"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrlcc99_s0t0v0",
+    "name": "Meshal Aldrees",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuz4_gtok3su"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxelhl_l4blbm",
+    "name": "Dr. Sultan Ahmed Al Jaber",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuzc_hk3mu97"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mroh0i0a_4v5juu",
+    "name": "Ahmed Alsugair",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuzk_iyk9tiq"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxell5_jir4jz",
+    "name": "Jasim Husain Thabet",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuuzr_jgfwiew"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrojqmor_tpv53a",
+    "name": "Nawaf Al Sahhaf",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv01_k6zypfv"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrq4_6x3xou",
+    "name": "Joe Brewster",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv3n_q64fb4l"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrq8_hapa5y",
+    "name": "Hamad Almenhali",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv3w_rzwdfgf"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrpg_vgovwt",
+    "name": "Farid Al Awlaqi",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv0b_lyzy4um"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrpo_xtx3qj",
+    "name": "Mohamed Jameel Al Ramahi",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv2e_mo1mlzo"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrpt_wjzvhn",
+    "name": "Mazin Khan",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv2w_nkv98ad"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrpx_d9z4nt",
+    "name": "Abdulaziz Alobaidli",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv36_olceo4v"
+  },
+  {
+    "domain": "contact",
+    "rowId": "ct_mrrxfrq1_zr9pe9",
+    "name": "Mark Sandy",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv3e_p433qul"
+  },
+  {
+    "domain": "partner_firm_resource",
+    "rowId": "pfr_pfc_pfc_OP9bgCxJRGvn",
+    "name": "Randall Orbon",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv4e_sfibso3"
+  },
+  {
+    "domain": "partner_firm_resource",
+    "rowId": "pfr_pfc_pfc_rX-0QwYNkwdN",
+    "name": "Hakan Çevik",
+    "action": "skipped_existing",
+    "personId": "pers_mrvyuv4w_tfjqgs3"
+  }
+]

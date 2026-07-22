@@ -22,6 +22,11 @@ export interface EditablePerson {
   id: string;
   workerType: "employee" | "contractor" | "partner_firm_resource";
   fullName: string;
+  // Task #538 — structured name fields (from the linked person record).
+  honorific?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
   email: string | null;
   role: string | null;
   seniority: string | null;
@@ -52,7 +57,10 @@ export interface EditablePerson {
 }
 
 type Draft = {
-  fullName: string;
+  honorific: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
   preferredName: string;
   email: string;
   personalEmail: string;
@@ -83,9 +91,21 @@ interface LegalEntityRow {
   country?: string | null;
 }
 
+// Best-effort split of a legacy full name when structured fields are absent.
+function splitLegacy(fullName: string | null | undefined): { first: string; middle: string; last: string } {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { first: "", middle: "", last: "" };
+  if (parts.length === 1) return { first: parts[0], middle: "", last: "" };
+  return { first: parts[0], middle: parts.slice(1, -1).join(" "), last: parts[parts.length - 1] };
+}
+
 function draftFrom(p: EditablePerson, personalEmail: string | null): Draft {
+  const legacy = p.firstName && p.lastName ? null : splitLegacy(p.fullName);
   return {
-    fullName: p.fullName ?? "",
+    honorific: p.honorific ?? "",
+    firstName: p.firstName ?? legacy?.first ?? "",
+    middleName: p.middleName ?? legacy?.middle ?? "",
+    lastName: p.lastName ?? legacy?.last ?? "",
     preferredName: p.preferredName ?? "",
     email: p.email ?? "",
     personalEmail: personalEmail ?? "",
@@ -203,7 +223,21 @@ export function EditPersonForm({
       patch[out] = nullable ? strOrNull(draft[key] as string) : (draft[key] as string).trim();
     };
 
-    diffStr("fullName", "fullName", false);
+    // Task #538 — structured name fields; if any name part changed, send
+    // the full structured set so the server recomputes fullName/displayName.
+    const nameChanged =
+      draft.honorific !== base.honorific ||
+      draft.firstName !== base.firstName ||
+      draft.middleName !== base.middleName ||
+      draft.lastName !== base.lastName;
+    if (nameChanged) {
+      if (!draft.firstName.trim() || !draft.lastName.trim())
+        return { error: "First and last name are required." };
+      patch.honorific = strOrNull(draft.honorific);
+      patch.firstName = draft.firstName.trim();
+      patch.middleName = strOrNull(draft.middleName);
+      patch.lastName = draft.lastName.trim();
+    }
     if (!isPfr) {
       diffStr("personalEmail", "personalEmail", true);
     }
@@ -259,7 +293,6 @@ export function EditPersonForm({
       diffStr("officeAddress", "officeAddress", true);
     }
 
-    if (patch.fullName === "") return { error: "Full name is required." };
     if ("title" in patch && patch.title === "") return { error: "Title cannot be blank." };
     if ("email" in patch && !isPfr && !String(patch.email ?? "").includes("@"))
       return { error: "Work email must be a valid email address." };
@@ -311,9 +344,22 @@ export function EditPersonForm({
       <section className="space-y-2">
         <div className={label}>Identity</div>
         <div className="grid gap-3 md:grid-cols-2">
-          <FieldWrap label="Full name">
-            <input className={input} value={draft.fullName} maxLength={200}
-              onChange={(e) => set({ fullName: e.target.value })} data-testid="edit-fullname" />
+          <FieldWrap label="Honorific">
+            <input className={input} value={draft.honorific} maxLength={40}
+              placeholder="Dr."
+              onChange={(e) => set({ honorific: e.target.value })} data-testid="edit-honorific" />
+          </FieldWrap>
+          <FieldWrap label="First name *">
+            <input className={input} value={draft.firstName} maxLength={120}
+              onChange={(e) => set({ firstName: e.target.value })} data-testid="edit-firstname" />
+          </FieldWrap>
+          <FieldWrap label="Middle name">
+            <input className={input} value={draft.middleName} maxLength={120}
+              onChange={(e) => set({ middleName: e.target.value })} data-testid="edit-middlename" />
+          </FieldWrap>
+          <FieldWrap label="Last name *">
+            <input className={input} value={draft.lastName} maxLength={120}
+              onChange={(e) => set({ lastName: e.target.value })} data-testid="edit-lastname" />
           </FieldWrap>
           {isEmployee && (
             <FieldWrap label="Preferred name">

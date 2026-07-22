@@ -11,7 +11,7 @@
 // person?". Deterministic, no network, unit-probe friendly.
 
 /** Honorifics/qualifications commonly prefixed to MENA/Western exec names. */
-const HONORIFICS = new Set([
+export const HONORIFICS = new Set([
   "mr", "mrs", "ms", "miss", "dr", "eng", "engr", "prof", "sir",
   "sheikh", "shaikh", "sheikha", "he", "hh", "hrh",
   "his", "her", "excellency", "highness", "royal",
@@ -22,7 +22,7 @@ const HONORIFICS = new Set([
  * "bin Nasser" (son of Nasser) is routinely dropped by Western databases, and
  * "Al-Jasser" appears as "Al Jasser" or "Aljasser".
  */
-const PARTICLES = new Set([
+export const PARTICLES = new Set([
   "bin", "bint", "ibn", "abu", "abd", "abdul", "al", "el", "as", "ad",
   "van", "von", "der", "den", "de", "da", "di", "del", "della", "la", "le",
 ]);

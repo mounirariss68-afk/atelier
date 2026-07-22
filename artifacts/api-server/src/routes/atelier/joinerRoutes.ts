@@ -42,6 +42,16 @@ import {
   AtelierReassignLeaverItemsBody,
   AtelierReassignLeaverItemsResponse,
 } from "@workspace/api-zod";
+// Task #538 — unified person model: joiner names resolve to a structured
+// person record; legacy fullName/initials are recomputed mirrors.
+import {
+  resolveStructuredNameInput,
+  composeFullName,
+  computeInitials,
+  PersonNameValidationError,
+  type StructuredName,
+} from "../../lib/atelier-person-model";
+import { writePerson } from "../../lib/atelier-person-sync";
 import { hashPassword } from "../../lib/auth/passwords";
 import { revokeAllSessions } from "../../lib/auth/session";
 import { personaToWire } from "./personaCookie";
@@ -195,7 +205,31 @@ router.post("/roster/joiners", async (req, res, next) => {
       res.status(400).json({ error: "invalid-body", details: parsed.error.flatten() });
       return;
     }
-    const fullName = parsed.data.fullName.trim();
+    // Task #538 — structured name fields win when present; a bare fullName
+    // is parsed through the shared particle/honorific parser. One of the
+    // two must be provided.
+    let structured: StructuredName | null = null;
+    try {
+      structured = resolveStructuredNameInput({
+        fullName: parsed.data.fullName ?? undefined,
+        honorific: parsed.data.honorific,
+        firstName: parsed.data.firstName ?? undefined,
+        middleName: parsed.data.middleName,
+        lastName: parsed.data.lastName ?? undefined,
+        preferredName: parsed.data.preferredName,
+      });
+    } catch (err) {
+      if (err instanceof PersonNameValidationError) {
+        res.status(400).json({ error: "invalid-body", message: err.message });
+        return;
+      }
+      throw err;
+    }
+    if (!structured) {
+      res.status(400).json({ error: "invalid-body", message: "A name (structured or full) is required." });
+      return;
+    }
+    const fullName = composeFullName(structured);
     const email = parsed.data.email.trim().toLowerCase();
     const workerType = parsed.data.workerType;
     const title =
@@ -237,15 +271,25 @@ router.post("/roster/joiners", async (req, res, next) => {
     // welcome card commit together or not at all — no half-created joiners
     // if any step fails mid-way.
     await db.transaction(async (tx) => {
+      // Task #538 — the person record is the identity source of truth;
+      // users/roster rows carry the legacy fullName mirror + personId link.
+      const personWrite = await writePerson(tx, {
+        orgId: me.orgId,
+        personId: null,
+        structured,
+        sourceKind: workerType === "employee" ? "employee" : "contractor",
+        createdByUserId: me.id,
+      });
       await tx.insert(atelierUsers).values({
         id: userId,
         orgId: me.orgId,
         email,
         name: fullName,
-        initials: initialsOf(fullName),
+        initials: computeInitials(structured),
         role,
         roleLabel,
         title,
+        personId: personWrite.personId,
       });
 
       // Roster record, linked to the identity: employees by user_id FK,
@@ -258,11 +302,13 @@ router.post("/roster/joiners", async (req, res, next) => {
           orgId: me.orgId,
           userId,
           fullName,
+          preferredName: structured.preferredName ?? null,
           email,
           role,
           title,
           startDate,
           isExecutiveAssistant,
+          personId: personWrite.personId,
         });
       } else {
         personId = rid("ct");
@@ -273,6 +319,7 @@ router.post("/roster/joiners", async (req, res, next) => {
           email,
           contractStart: startDate,
           isExecutiveAssistant,
+          personId: personWrite.personId,
         });
       }
 

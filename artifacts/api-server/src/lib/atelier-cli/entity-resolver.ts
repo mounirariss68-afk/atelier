@@ -419,7 +419,7 @@ async function trigramPass(
     deliverable: { col: sql.raw("name"), table: "atelier_deliverables" },
   };
   if (kind === "account") {
-    return safeTrigram(async () => {
+    return safeTrigram<ResolverCandidate>(async () => {
       const r = await db.execute<{ id: string; name: string; brand_name: string | null; country: string | null; sim: number }>(sql`
         SELECT id, name, brand_name, country,
                GREATEST(similarity(name, ${query}), similarity(coalesce(brand_name, ''), ${query})) AS sim
@@ -448,12 +448,18 @@ async function trigramPass(
   if (kind === "contact") {
     const [contacts, people] = await Promise.all([
       safeTrigram<ResolverCandidate>(async () => {
-        const scopeFilter = scopes.accountId ? sql` AND account_id = ${scopes.accountId}` : sql``;
+        const scopeFilter = scopes.accountId ? sql` AND c.account_id = ${scopes.accountId}` : sql``;
+        // Task #538 — also match structured person fields (preferred/display
+        // name) so "find Mo" hits Mohammed whose preferred name is Mo.
         const r = await db.execute<{ id: string; label: string; sim: number }>(sql`
-          SELECT id, full_name AS label, similarity(full_name, ${query}) AS sim
-            FROM atelier_contacts
-           WHERE org_id = ${orgId} AND deleted_at IS NULL
-             AND full_name % ${query}
+          SELECT c.id, c.full_name AS label,
+                 GREATEST(similarity(c.full_name, ${query}),
+                          COALESCE(similarity(p.preferred_name, ${query}), 0),
+                          COALESCE(similarity(p.display_name, ${query}), 0)) AS sim
+            FROM atelier_contacts c
+            LEFT JOIN atelier_persons p ON p.id = c.person_id
+           WHERE c.org_id = ${orgId} AND c.deleted_at IS NULL
+             AND (c.full_name % ${query} OR p.preferred_name % ${query} OR p.display_name % ${query})
              ${scopeFilter}
            ORDER BY sim DESC
            LIMIT ${TOP_K}
@@ -510,11 +516,18 @@ async function trigramPass(
  */
 async function internalPeoplePass(query: string, orgId: string): Promise<ResolverCandidate[]> {
   const employees = safeTrigram<ResolverCandidate>(async () => {
+    // Task #538 — also match preferred/display name from the person record.
     const r = await db.execute<{ id: string; label: string; title: string | null; sim: number }>(sql`
-      SELECT id, full_name AS label, title, similarity(full_name, ${query}) AS sim
-        FROM atelier_employees
-       WHERE org_id = ${orgId} AND deleted_at IS NULL
-         AND full_name % ${query}
+      SELECT e.id, e.full_name AS label, e.title,
+             GREATEST(similarity(e.full_name, ${query}),
+                      COALESCE(similarity(e.preferred_name, ${query}), 0),
+                      COALESCE(similarity(p.preferred_name, ${query}), 0),
+                      COALESCE(similarity(p.display_name, ${query}), 0)) AS sim
+        FROM atelier_employees e
+        LEFT JOIN atelier_persons p ON p.id = e.person_id
+       WHERE e.org_id = ${orgId} AND e.deleted_at IS NULL
+         AND (e.full_name % ${query} OR e.preferred_name % ${query}
+              OR p.preferred_name % ${query} OR p.display_name % ${query})
        ORDER BY sim DESC
        LIMIT ${TOP_K}
     `);
@@ -545,11 +558,16 @@ async function internalPeoplePass(query: string, orgId: string): Promise<Resolve
     }));
   });
   const partners = safeTrigram<ResolverCandidate>(async () => {
+    // Task #538 — also match preferred/display name from the person record.
     const r = await db.execute<{ id: string; label: string; role: string | null; sim: number }>(sql`
-      SELECT id, full_name AS label, role, similarity(full_name, ${query}) AS sim
-        FROM atelier_partner_firm_resources
-       WHERE org_id = ${orgId} AND deleted_at IS NULL
-         AND full_name % ${query}
+      SELECT pr.id, pr.full_name AS label, pr.role,
+             GREATEST(similarity(pr.full_name, ${query}),
+                      COALESCE(similarity(p.preferred_name, ${query}), 0),
+                      COALESCE(similarity(p.display_name, ${query}), 0)) AS sim
+        FROM atelier_partner_firm_resources pr
+        LEFT JOIN atelier_persons p ON p.id = pr.person_id
+       WHERE pr.org_id = ${orgId} AND pr.deleted_at IS NULL
+         AND (pr.full_name % ${query} OR p.preferred_name % ${query} OR p.display_name % ${query})
        ORDER BY sim DESC
        LIMIT ${TOP_K}
     `);
@@ -619,7 +637,11 @@ async function fallbackIlikeGeneric(
     return r.map((e) => ({ id: e.id, label: e.name, score: 0.4, via: "trgm" as const }));
   }
   if (kind === "contact") {
-    const conds = [eq(atelierContacts.orgId, orgId), isNull(atelierContacts.deletedAt), ilike(atelierContacts.fullName, like)];
+    const nameMatch = or(
+      ilike(atelierContacts.fullName, like),
+      sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierContacts.personId} AND (p.preferred_name ILIKE ${like} OR p.display_name ILIKE ${like}))`,
+    )!;
+    const conds = [eq(atelierContacts.orgId, orgId), isNull(atelierContacts.deletedAt), nameMatch];
     if (scopes.accountId) conds.push(eq(atelierContacts.accountId, scopes.accountId));
     const r = await db.select({ id: atelierContacts.id, fullName: atelierContacts.fullName, title: atelierContacts.title }).from(atelierContacts).where(and(...conds)).limit(TOP_K);
     return r.map((c) => ({ id: c.id, label: c.fullName, secondary: c.title ?? undefined, score: 0.4, via: "trgm" as const }));

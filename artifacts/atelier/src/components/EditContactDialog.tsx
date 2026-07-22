@@ -30,6 +30,11 @@ import {
   type AtelierContactDisposition,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  StructuredNameFields,
+  splitLegacyFullName,
+  type StructuredNameValue,
+} from "./StructuredNameFields";
 
 // input[type=date] needs yyyy-mm-dd; API stores ISO datetimes.
 function toDateInput(iso: string | null | undefined): string {
@@ -73,7 +78,21 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
   const { data: users } = useAtelierListUsers();
   const [confirmDelete, setConfirmDelete] = React.useState(false);
 
-  const [fullName, setFullName] = React.useState(contact.fullName);
+  // Task #538 — prefill structured fields; fall back to splitting the
+  // legacy fullName for contacts whose person record has no parts yet.
+  const initialName = React.useCallback((): StructuredNameValue => {
+    if (contact.firstName && contact.lastName) {
+      return {
+        honorific: contact.honorific ?? "",
+        firstName: contact.firstName,
+        middleName: contact.middleName ?? "",
+        lastName: contact.lastName,
+        preferredName: contact.preferredName ?? "",
+      };
+    }
+    return { ...splitLegacyFullName(contact.fullName), preferredName: contact.preferredName ?? "" };
+  }, [contact]);
+  const [name, setName] = React.useState<StructuredNameValue>(initialName);
   const [title, setTitle] = React.useState(contact.title ?? "");
   const [seniority, setSeniority] = React.useState(contact.seniority ?? "");
   const [email, setEmail] = React.useState(contact.email ?? "");
@@ -94,7 +113,7 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
 
   React.useEffect(() => {
     if (!open) return;
-    setFullName(contact.fullName);
+    setName(initialName());
     setTitle(contact.title ?? "");
     setSeniority(contact.seniority ?? "");
     setEmail(contact.email ?? "");
@@ -108,12 +127,12 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
     setContactOwnerId(contact.contactOwnerId ?? "");
     setLastContactAt(toDateInput(contact.lastContactAt));
     setNextTouchAt(toDateInput(contact.nextTouchAt));
-  }, [open, contact]);
+  }, [open, contact, initialName]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) {
-      toast({ title: "Name required", variant: "destructive" });
+    if (!name.firstName.trim() || !name.lastName.trim()) {
+      toast({ title: "First and last name required", variant: "destructive" });
       return;
     }
     const inf = Number(influenceScore);
@@ -125,7 +144,11 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
       await update.mutateAsync({
         contactId: contact.id,
         data: {
-          fullName: fullName.trim(),
+          honorific: name.honorific.trim() || null,
+          firstName: name.firstName.trim(),
+          middleName: name.middleName.trim() || null,
+          lastName: name.lastName.trim(),
+          preferredName: name.preferredName.trim() || null,
           title: title.trim() || null,
           seniority: (seniority || null) as
             | "board_chair"
@@ -192,17 +215,13 @@ export function EditContactDialog({ contact, accountId, open, onOpenChange }: Pr
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={save} className="grid gap-5 py-3">
-            <div className="grid gap-2">
-              <Label htmlFor="ec-name" className={labelCls}>Full name</Label>
-              <Input
-                id="ec-name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className={fieldCls}
-                required
-                data-testid="input-edit-contact-name"
-              />
-            </div>
+            <StructuredNameFields
+              value={name}
+              onChange={setName}
+              idPrefix="edit-contact"
+              labelCls={labelCls}
+              fieldCls={fieldCls}
+            />
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="ec-title" className={labelCls}>Title</Label>

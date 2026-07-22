@@ -54,6 +54,9 @@ import {
   atelierPartnerFirmResources,
   atelierUsers,
 } from "@workspace/db";
+// Task #538 — chat tools keep accepting free-text fullName; the server
+// parses it into a structured person record and mirrors legacy columns.
+import { writePersonFromFullName, syncLegacyColumns } from "../atelier-person-sync.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
@@ -1686,11 +1689,19 @@ defineCapability({
       return { ok: false, errorCode: "needs_confirm", errorMessage: "contact_create requires confirm:true." };
     }
     const id = rid("ct");
+    // Task #538 — back the contact with a structured person record.
+    const personWrite = await writePersonFromFullName(db, {
+      orgId: ctx.persona.orgId,
+      fullName: String(input.fullName),
+      sourceKind: "contact",
+      createdByUserId: ctx.persona.id,
+    });
     await db.insert(atelierContacts).values({
       id,
       orgId: ctx.persona.orgId,
       accountId: String(input.accountId),
-      fullName: String(input.fullName),
+      personId: personWrite.personId,
+      fullName: personWrite.fullName,
       title: input.title ? String(input.title) : null,
       seniority: input.seniority ? String(input.seniority) : null,
       email: input.email ? String(input.email) : null,
@@ -1754,7 +1765,23 @@ async function updateInternalPerson(
     const denied: string[] = [];
     let titleChanged: string | null = null;
     if (input.fullName !== undefined) {
-      if (canEditIdentity) { patch.fullName = String(input.fullName); applied.push("fullName"); }
+      if (canEditIdentity) {
+        // Task #538 — parse the free-text name into the person record and
+        // mirror the recomputed fullName onto the employee row (+ linked
+        // user via the legacy-column sync below).
+        const w = await writePersonFromFullName(db, {
+          orgId,
+          personId: emp.personId ?? null,
+          fullName: String(input.fullName),
+          preferredName: emp.preferredName ?? null,
+          sourceKind: "employee",
+          createdByUserId: ctx.persona.id,
+        });
+        patch.fullName = w.fullName;
+        if (!emp.personId) patch.personId = w.personId;
+        else await syncLegacyColumns(db, orgId, w.personId, w);
+        applied.push("fullName");
+      }
       else denied.push("fullName (HR or founding partner only)");
     }
     if (input.title !== undefined) {
@@ -1837,7 +1864,20 @@ async function updateInternalPerson(
     const patch: Partial<typeof atelierPartnerFirmResources.$inferInsert> = { updatedAt: new Date() };
     const applied: string[] = [];
     const skipped: string[] = [];
-    if (input.fullName !== undefined) { patch.fullName = String(input.fullName); applied.push("fullName"); }
+    if (input.fullName !== undefined) {
+      // Task #538 — route the name through the person record.
+      const w = await writePersonFromFullName(db, {
+        orgId,
+        personId: pr.personId ?? null,
+        fullName: String(input.fullName),
+        sourceKind: "partner_firm_resource",
+        createdByUserId: ctx.persona.id,
+      });
+      patch.fullName = w.fullName;
+      if (!pr.personId) patch.personId = w.personId;
+      else await syncLegacyColumns(db, orgId, w.personId, w);
+      applied.push("fullName");
+    }
     if (input.email !== undefined) { patch.email = input.email ? String(input.email) : null; applied.push("email"); }
     if (input.title !== undefined) { patch.role = input.title ? String(input.title) : null; applied.push("role"); }
     if (input.notes !== undefined) { patch.notes = input.notes ? String(input.notes) : null; applied.push("notes"); }
@@ -1933,7 +1973,19 @@ defineCapability({
       return { ok: false, errorCode: "forbidden", errorMessage: `not authorized to edit contact ${id}` };
     }
     const patch: Partial<typeof atelierContacts.$inferInsert> = { updatedAt: new Date() };
-    if (input.fullName !== undefined) patch.fullName = String(input.fullName);
+    if (input.fullName !== undefined) {
+      // Task #538 — route the name through the person record.
+      const w = await writePersonFromFullName(db, {
+        orgId: ctx.persona.orgId,
+        personId: existing.personId ?? null,
+        fullName: String(input.fullName),
+        sourceKind: "contact",
+        createdByUserId: ctx.persona.id,
+      });
+      patch.fullName = w.fullName;
+      if (!existing.personId) patch.personId = w.personId;
+      else await syncLegacyColumns(db, ctx.persona.orgId, w.personId, w);
+    }
     if (input.title !== undefined) patch.title = input.title ? String(input.title) : null;
     if (input.seniority !== undefined) patch.seniority = input.seniority ? String(input.seniority) : null;
     if (input.email !== undefined) patch.email = input.email ? String(input.email) : null;

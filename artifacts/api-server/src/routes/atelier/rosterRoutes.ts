@@ -39,7 +39,18 @@ import {
   atelierEmergencyContacts,
   atelierRosterReportsTo,
   atelierTitles,
+  atelierPersons,
 } from "@workspace/db";
+// Task #538 — unified person model: structured names resolve through the
+// shared parser/sanitizer and persist via the person-sync helper.
+import {
+  resolveStructuredNameInput,
+  composeFullName,
+  computeInitials,
+  PersonNameValidationError,
+  type StructuredName,
+} from "../../lib/atelier-person-model.js";
+import { writePersonAndSync } from "../../lib/atelier-person-sync.js";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
   loadPersonDocBytes,
@@ -65,6 +76,14 @@ export interface PersonWire {
   id: string;
   workerType: WorkerType;
   fullName: string;
+  // Task #538 — unified person model. Structured name fields for form
+  // prefill; displayName is server-recomputed and is what UIs render.
+  personId?: string | null;
+  honorific?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
   email: string | null;
   role: string | null;
   seniority: string | null;
@@ -229,6 +248,13 @@ export function toBusinessWire(p: PersonWire): PersonWire {
     id: p.id,
     workerType: p.workerType,
     fullName: p.fullName,
+    // Task #538 — structured name is business identity, safe for scoped viewers.
+    personId: p.personId ?? null,
+    honorific: p.honorific ?? null,
+    firstName: p.firstName ?? null,
+    middleName: p.middleName ?? null,
+    lastName: p.lastName ?? null,
+    displayName: p.displayName ?? null,
     email: p.email,
     role: p.role,
     seniority: p.seniority,
@@ -378,6 +404,27 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
 
   const out: PersonWire[] = [];
 
+  // Task #538 — name search also matches structured person fields
+  // (preferred name / display name), so "find Mo" hits Mohammed whose
+  // preferred name is Mo. Loaded once; roster tables are small.
+  const personNames = new Map<string, { preferredName: string | null; displayName: string }>();
+  if (q) {
+    const prs = await db
+      .select({
+        id: atelierPersons.id,
+        preferredName: atelierPersons.preferredName,
+        displayName: atelierPersons.displayName,
+      })
+      .from(atelierPersons);
+    for (const p of prs) personNames.set(p.id, { preferredName: p.preferredName, displayName: p.displayName });
+  }
+  const matchesPerson = (personId: string | null): boolean => {
+    if (!q || !personId) return false;
+    const p = personNames.get(personId);
+    if (!p) return false;
+    return matches(p.preferredName) || matches(p.displayName);
+  };
+
   if (wt === "all" || wt === "employee") {
     const rows = await db
       .select()
@@ -386,6 +433,8 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
     for (const r of rows) {
       if (
         !matches(r.fullName) &&
+        !matches(r.preferredName) &&
+        !matchesPerson(r.personId) &&
         !matches(r.email) &&
         !matches(r.title) &&
         !matches(r.role)
@@ -405,6 +454,7 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
     for (const r of rows) {
       if (
         !matches(r.fullName) &&
+        !matchesPerson(r.personId) &&
         !matches(r.email) &&
         !matches(r.vendorEntity)
       )
@@ -432,6 +482,7 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
     for (const { r, firmName } of rows) {
       if (
         !matches(r.fullName) &&
+        !matchesPerson(r.personId) &&
         !matches(r.email) &&
         !matches(r.role) &&
         !matches(firmName ?? "")
@@ -444,7 +495,32 @@ export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   }
 
   out.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  await attachStructuredNames(out);
   return out;
+}
+
+/**
+ * Task #538 — batch-attach structured name fields from atelier_persons
+ * onto roster wires (form prefill + display). Wires without a personId
+ * are left untouched.
+ */
+async function attachStructuredNames(wires: PersonWire[]): Promise<void> {
+  const ids = [...new Set(wires.map((w) => w.personId).filter((v): v is string => !!v))];
+  if (ids.length === 0) return;
+  const rows = await db.select().from(atelierPersons).where(inArray(atelierPersons.id, ids));
+  const byId = new Map(rows.map((p) => [p.id, p]));
+  for (const w of wires) {
+    const p = w.personId ? byId.get(w.personId) : undefined;
+    if (!p) continue;
+    w.honorific = p.honorific ?? null;
+    w.firstName = p.firstName;
+    w.middleName = p.middleName ?? null;
+    w.lastName = p.lastName;
+    w.displayName = p.displayName;
+    if (w.preferredName === undefined || w.preferredName === null) {
+      w.preferredName = p.preferredName ?? null;
+    }
+  }
 }
 
 function employeeToWire(
@@ -455,6 +531,7 @@ function employeeToWire(
     id: r.id,
     workerType: "employee",
     fullName: r.fullName,
+    personId: r.personId ?? null,
     email: r.email,
     role: r.role,
     seniority: r.seniority,
@@ -498,6 +575,7 @@ function contractorToWire(
     id: r.id,
     workerType: "contractor",
     fullName: r.fullName,
+    personId: r.personId ?? null,
     email: r.email,
     role: null,
     seniority: null,
@@ -531,6 +609,7 @@ function partnerResourceToWire(
     id: r.id,
     workerType: "partner_firm_resource",
     fullName: r.fullName,
+    personId: r.personId ?? null,
     email: r.email,
     role: r.role,
     seniority: r.seniority,
@@ -555,6 +634,15 @@ function partnerResourceToWire(
 }
 
 export async function getPerson(
+  id: string,
+  includeComp: boolean,
+): Promise<PersonWire | null> {
+  const wire = await getPersonRaw(id, includeComp);
+  if (wire) await attachStructuredNames([wire]);
+  return wire;
+}
+
+async function getPersonRaw(
   id: string,
   includeComp: boolean,
 ): Promise<PersonWire | null> {
@@ -1257,9 +1345,19 @@ const zNullableTrimmed = (max: number) =>
     .transform((s) => (s.trim() ? s.trim() : null))
     .nullable();
 
+// Task #538 — structured name fields accepted on all worker types; the
+// server recomputes the legacy fullName mirror from them.
+const zStructuredNameFields = {
+  honorific: zNullableTrimmed(40),
+  firstName: zTrimmed(120),
+  middleName: zNullableTrimmed(120),
+  lastName: zTrimmed(120),
+} as const;
+
 const employeeEditSchema = z
   .object({
     fullName: zTrimmed(200),
+    ...zStructuredNameFields,
     preferredName: zNullableTrimmed(120),
     email: z.string().trim().email().max(320),
     personalEmail: z.string().trim().email().max(320).nullable(),
@@ -1291,6 +1389,8 @@ const employeeEditSchema = z
 const contractorEditSchema = z
   .object({
     fullName: zTrimmed(200),
+    ...zStructuredNameFields,
+    preferredName: zNullableTrimmed(120),
     email: z.string().trim().email().max(320),
     personalEmail: z.string().trim().email().max(320).nullable(),
     country: zNullableTrimmed(120),
@@ -1309,6 +1409,8 @@ const contractorEditSchema = z
 const partnerResourceEditSchema = z
   .object({
     fullName: zTrimmed(200),
+    ...zStructuredNameFields,
+    preferredName: zNullableTrimmed(120),
     email: z.string().trim().email().max(320).nullable(),
     role: zNullableTrimmed(120),
     seniority: zNullableTrimmed(60),
@@ -1476,6 +1578,61 @@ router.patch("/roster/people/:id", async (req, res, next) => {
     }
     const raw = row as unknown as Record<string, unknown>;
 
+    // Task #538 — name fields flow through the person record. Pull them out
+    // of the column patch, resolve the structured name (structured fields
+    // win; bare fullName is parsed), and stage the legacy fullName mirror.
+    const nameInput: {
+      fullName?: string;
+      honorific?: string | null;
+      firstName?: string;
+      middleName?: string | null;
+      lastName?: string;
+      preferredName?: string | null;
+    } = {};
+    for (const k of ["honorific", "firstName", "middleName", "lastName", "preferredName", "fullName"] as const) {
+      if (k in patch) {
+        (nameInput as Record<string, unknown>)[k] = patch[k];
+        delete patch[k];
+      }
+    }
+    const existingPerson = raw.personId
+      ? (
+          await db
+            .select()
+            .from(atelierPersons)
+            .where(and(eq(atelierPersons.id, String(raw.personId)), eq(atelierPersons.orgId, me.orgId)))
+            .limit(1)
+        )[0] ?? null
+      : null;
+    let pendingStructured: StructuredName | null = null;
+    if (Object.keys(nameInput).length > 0) {
+      try {
+        pendingStructured = resolveStructuredNameInput(nameInput, existingPerson);
+      } catch (err) {
+        if (err instanceof PersonNameValidationError) {
+          res.status(422).json({ error: "invalid-body", issues: [{ path: "name", message: err.message }] });
+          return;
+        }
+        throw err;
+      }
+      if (pendingStructured) {
+        patch.fullName = composeFullName(pendingStructured);
+        // preferredName is a real column on employees only; other worker
+        // types keep it solely on the person record.
+        if (person.workerType === "employee") {
+          patch.preferredName = pendingStructured.preferredName ?? null;
+        }
+      }
+    }
+    const structuredChanged =
+      pendingStructured !== null &&
+      (!existingPerson ||
+        existingPerson.honorific !== (pendingStructured.honorific ?? null) ||
+        existingPerson.firstName !== pendingStructured.firstName ||
+        existingPerson.middleName !== (pendingStructured.middleName ?? null) ||
+        existingPerson.lastName !== pendingStructured.lastName ||
+        existingPerson.preferredName !== (pendingStructured.preferredName ?? null));
+
     // Partner-firm linkage must point at a live firm in this org.
     if ("partnerFirmId" in patch) {
       const [firm] = await db
@@ -1526,11 +1683,44 @@ router.patch("/roster/people/:id", async (req, res, next) => {
       update[k] = v;
       changes.push({ field: k, from: before, to: after });
     }
+    // Task #538 — a structured-name change (e.g. honorific or preferred
+    // name only) may leave the legacy fullName mirror untouched; surface it
+    // as its own change entry so the audit trail records it.
+    if (structuredChanged && !changes.some((c) => c.field === "fullName")) {
+      changes.push({
+        field: "name",
+        from: existingPerson
+          ? [existingPerson.honorific, existingPerson.firstName, existingPerson.middleName, existingPerson.lastName, existingPerson.preferredName]
+          : (raw.fullName as string | null),
+        to: pendingStructured
+          ? [pendingStructured.honorific, pendingStructured.firstName, pendingStructured.middleName, pendingStructured.lastName, pendingStructured.preferredName ?? null]
+          : null,
+      });
+    }
     if (changes.length === 0) {
       res.json({ person: await getPerson(person.id, canSeeComp(me.role)), changes: [] });
       return;
     }
     update.updatedAt = new Date();
+
+    // Task #538 — persist the person record and link the row if unlinked.
+    // writePersonAndSync so a person linked across domains (e.g. an
+    // employee with a login row) can never drift out of step.
+    if (pendingStructured && (structuredChanged || !raw.personId)) {
+      const w = await writePersonAndSync(db, {
+        orgId: me.orgId,
+        personId: (raw.personId as string | null) ?? null,
+        structured: pendingStructured,
+        sourceKind:
+          person.workerType === "employee"
+            ? "employee"
+            : person.workerType === "contractor"
+              ? "contractor"
+              : "partner_firm_resource",
+        createdByUserId: me.id,
+      });
+      if (!raw.personId) update.personId = w.personId;
+    }
 
     if (person.workerType === "employee") {
       await db
@@ -1543,6 +1733,11 @@ router.patch("/roster/people/:id", async (req, res, next) => {
       const userSync: Record<string, unknown> = {};
       if ("title" in update) userSync.title = update.title;
       if ("fullName" in update) userSync.name = update.fullName;
+      // Task #538 — keep login-row initials in step with the new name.
+      if (pendingStructured && ("fullName" in update || structuredChanged)) {
+        userSync.name = composeFullName(pendingStructured);
+        userSync.initials = computeInitials(pendingStructured);
+      }
       if (Object.keys(userSync).length > 0 && emp.userId) {
         userSync.updatedAt = new Date();
         await db

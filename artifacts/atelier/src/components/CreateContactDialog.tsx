@@ -20,6 +20,12 @@ import {
   type AtelierContactDuplicateCandidate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  StructuredNameFields,
+  EMPTY_NAME,
+  composeDisplayName,
+  type StructuredNameValue,
+} from "./StructuredNameFields";
 
 const SENIORITIES = ["board_chair", "board_member", "c_suite", "vp", "director", "manager", "ic"] as const;
 const DISPOSITIONS: AtelierContactDisposition[] = [
@@ -48,7 +54,7 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
   const create = useAtelierCreateContact();
   const checkDup = useAtelierCheckContactDuplicates();
 
-  const [fullName, setFullName] = React.useState("");
+  const [name, setName] = React.useState<StructuredNameValue>({ ...EMPTY_NAME });
   const [title, setTitle] = React.useState("");
   const [seniority, setSeniority] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -67,7 +73,7 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
   React.useEffect(() => {
     if (!open) return;
     setDupCandidates([]);
-    setFullName("");
+    setName({ ...EMPTY_NAME });
     setTitle("");
     setSeniority("");
     setEmail("");
@@ -81,7 +87,7 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
 
   // Task #632 — debounced fuzzy duplicate check, scoped to this account. Fires
   // once a meaningful name is entered. Non-blocking advisory only.
-  const dupName = fullName.trim();
+  const dupName = composeDisplayName(name);
   React.useEffect(() => {
     if (!open) return;
     if (dupName.length < 3) {
@@ -109,8 +115,8 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!fullName.trim()) {
-      toast({ title: "Name required", variant: "destructive" });
+    if (!name.firstName.trim() || !name.lastName.trim()) {
+      toast({ title: "First and last name required", variant: "destructive" });
       return;
     }
     const inf = Number(influenceScore);
@@ -118,7 +124,11 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
       await create.mutateAsync({
         accountId,
         data: {
-          fullName: fullName.trim(),
+          honorific: name.honorific.trim() || null,
+          firstName: name.firstName.trim(),
+          middleName: name.middleName.trim() || null,
+          lastName: name.lastName.trim(),
+          preferredName: name.preferredName.trim() || null,
           title: title.trim() || null,
           seniority: (seniority || null) as
             | "board_chair"
@@ -139,7 +149,7 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
         },
       });
       qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
-      toast({ title: "Contact added", description: `${fullName.trim()} added to this account.` });
+      toast({ title: "Contact added", description: `${composeDisplayName(name)} added to this account.` });
       setOpen(false);
     } catch (err: unknown) {
       toast({
@@ -164,19 +174,14 @@ export function CreateContactDialog({ accountId, trigger }: Props) {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-5 py-3">
-          <div className="grid gap-2">
-            <Label htmlFor="c-name" className={labelCls}>Full name</Label>
-            <Input
-              id="c-name"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              className={fieldCls}
-              placeholder="e.g. Jane Doe"
-              autoFocus
-              required
-              data-testid="input-contact-name"
-            />
-          </div>
+          <StructuredNameFields
+            value={name}
+            onChange={setName}
+            idPrefix="contact"
+            autoFocus
+            labelCls={labelCls}
+            fieldCls={fieldCls}
+          />
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label htmlFor="c-title" className={labelCls}>Title</Label>

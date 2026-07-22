@@ -16,7 +16,7 @@
  *     (`data`), which is not free-text-redacted like chat prose.
  */
 
-import { and, eq, isNull, ilike, or, desc, inArray } from "drizzle-orm";
+import { and, eq, isNull, ilike, or, desc, inArray, sql } from "drizzle-orm";
 import {
   db,
   atelierUsers,
@@ -59,6 +59,12 @@ import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 // ---------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------
+
+/** Task #538 — contact name search also matches the linked structured
+ *  person record's preferred/display name. */
+function contactPersonNameMatch(pat: string) {
+  return sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierContacts.personId} AND (p.preferred_name ILIKE ${pat} OR p.display_name ILIKE ${pat}))`;
+}
 
 function denyForbidden(reason: string): ToolResult {
   return { ok: false, errorCode: "forbidden", errorMessage: reason };
@@ -275,7 +281,11 @@ async function crmContactFallback(
     .from(atelierContacts)
     .where(
       and(
-        or(ilike(atelierContacts.fullName, `%${q}%`), ilike(atelierContacts.email, `%${q}%`)),
+        or(
+          ilike(atelierContacts.fullName, `%${q}%`),
+          ilike(atelierContacts.email, `%${q}%`),
+          contactPersonNameMatch(`%${q}%`),
+        ),
         eq(atelierContacts.orgId, ctx.persona.orgId),
         isNull(atelierContacts.deletedAt),
       ),
@@ -736,7 +746,11 @@ defineCapability({
         accountId = acc.id;
       }
       const where = and(
-        or(ilike(atelierContacts.fullName, `%${q}%`), ilike(atelierContacts.email, `%${q}%`)),
+        or(
+          ilike(atelierContacts.fullName, `%${q}%`),
+          ilike(atelierContacts.email, `%${q}%`),
+          contactPersonNameMatch(`%${q}%`),
+        ),
         eq(atelierContacts.orgId, ctx.persona.orgId),
         isNull(atelierContacts.deletedAt),
         accountId ? eq(atelierContacts.accountId, accountId) : undefined,

@@ -14,6 +14,13 @@ export interface VCardCell {
 
 export interface VCardInput {
   fullName: string;
+  /** Task #538 — structured name fields from the unified person record.
+   *  When present they produce an exact N: value instead of the
+   *  last-token guess. */
+  honorific?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
   title?: string | null;
   org?: string | null;
   email?: string | null;
@@ -67,7 +74,13 @@ function structuredName(fullName: string): string {
  */
 export function buildVCard(input: VCardInput): string {
   const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
-  lines.push(`N:${structuredName(input.fullName)}`);
+  // N: Family;Given;Additional;Prefix;Suffix — prefer real structured
+  // fields (Task #538); fall back to the last-token guess for legacy rows.
+  const n =
+    input.firstName && input.lastName
+      ? `${esc(input.lastName)};${esc(input.firstName)};${esc(input.middleName ?? "")};${esc(input.honorific ?? "")};`
+      : structuredName(input.fullName);
+  lines.push(`N:${n}`);
   lines.push(`FN:${esc(input.fullName)}`);
   if (input.org) lines.push(`ORG:${esc(input.org)}`);
   if (input.title) lines.push(`TITLE:${esc(input.title)}`);

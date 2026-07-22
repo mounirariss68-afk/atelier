@@ -7003,6 +7003,15 @@ components:
         id: { type: string }
         accountId: { type: string }
         fullName: { type: string }
+        # Task #538 — unified person model: structured name (read-only view;
+        # displayName is server-recomputed and is what UIs should render).
+        personId: { type: ["string", "null"] }
+        honorific: { type: ["string", "null"] }
+        firstName: { type: ["string", "null"] }
+        middleName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        preferredName: { type: ["string", "null"] }
+        displayName: { type: ["string", "null"] }
         title: { type: ["string", "null"] }
         seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
@@ -7097,9 +7106,16 @@ components:
 
     AtelierCreateContactInput:
       type: object
-      required: [fullName]
       properties:
+        # Task #538 — either send structured fields (preferred, forms) or a
+        # single fullName (agents/back-compat; server parses it). One of the
+        # two is required; the server rejects a payload with neither.
         fullName: { type: string, minLength: 1, maxLength: 160 }
+        honorific: { type: ["string", "null"], maxLength: 40 }
+        firstName: { type: string, minLength: 1, maxLength: 120 }
+        middleName: { type: ["string", "null"], maxLength: 120 }
+        lastName: { type: string, minLength: 1, maxLength: 120 }
+        preferredName: { type: ["string", "null"], maxLength: 120 }
         title: { type: ["string", "null"] }
         seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
@@ -7119,6 +7135,12 @@ components:
       type: object
       properties:
         fullName: { type: string, minLength: 1, maxLength: 160 }
+        # Task #538 — structured name fields (server recomputes display/full).
+        honorific: { type: ["string", "null"], maxLength: 40 }
+        firstName: { type: string, minLength: 1, maxLength: 120 }
+        middleName: { type: ["string", "null"], maxLength: 120 }
+        lastName: { type: string, minLength: 1, maxLength: 120 }
+        preferredName: { type: ["string", "null"], maxLength: 120 }
         title: { type: ["string", "null"] }
         seniority: { type: ["string", "null"], enum: [board_chair, board_member, c_suite, vp, director, manager, ic, unknown, null] }
         email: { type: ["string", "null"] }
@@ -8038,6 +8060,13 @@ components:
         id: { type: string }
         workerType: { type: string, enum: [employee, contractor] }
         fullName: { type: string }
+        # Task #538 — structured name fields from the unified person record.
+        personId: { type: ["string", "null"] }
+        honorific: { type: ["string", "null"] }
+        firstName: { type: ["string", "null"] }
+        middleName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        displayName: { type: ["string", "null"] }
         email: { type: string }
         title: { type: ["string", "null"] }
         startDate: { type: ["string", "null"] }
@@ -8471,6 +8500,11 @@ components:
         explicitly refuses pay/bank/lifecycle fields.
       properties:
         fullName: { type: string, minLength: 1, maxLength: 200 }
+        # Task #538 — structured name fields (server recomputes fullName).
+        honorific: { type: ["string", "null"], maxLength: 40 }
+        firstName: { type: string, minLength: 1, maxLength: 120 }
+        middleName: { type: ["string", "null"], maxLength: 120 }
+        lastName: { type: string, minLength: 1, maxLength: 120 }
         preferredName: { type: ["string", "null"], maxLength: 120 }
         email: { type: ["string", "null"], maxLength: 320 }
         personalEmail: { type: ["string", "null"], maxLength: 320 }
@@ -9110,9 +9144,16 @@ components:
 
     AtelierAddJoinerInput:
       type: object
-      required: [fullName, email, workerType]
+      required: [email, workerType]
       properties:
+        # Task #538 — either structured fields (preferred) or fullName
+        # (back-compat; server parses). One of the two is required.
         fullName: { type: string, minLength: 1, maxLength: 200 }
+        honorific: { type: ["string", "null"], maxLength: 40 }
+        firstName: { type: string, minLength: 1, maxLength: 120 }
+        middleName: { type: ["string", "null"], maxLength: 120 }
+        lastName: { type: string, minLength: 1, maxLength: 120 }
+        preferredName: { type: ["string", "null"], maxLength: 120 }
         email: { type: string, minLength: 3, maxLength: 320 }
         workerType: { type: string, enum: [employee, contractor] }
         title: { type: string, maxLength: 200 }

@@ -10,6 +10,10 @@ const FIRM = "Cognirise";
 interface ContactPerson {
   id: string;
   fullName: string;
+  honorific?: string | null;
+  firstName?: string | null;
+  middleName?: string | null;
+  lastName?: string | null;
   title?: string | null;
   email: string | null;
   cellPhones?: VCardCell[] | null;
@@ -46,13 +50,27 @@ export function BusinessCardQR({
     () =>
       buildVCard({
         fullName: person.fullName,
+        honorific: person.honorific,
+        firstName: person.firstName,
+        middleName: person.middleName,
+        lastName: person.lastName,
         title: person.title,
         org: FIRM,
         email: person.email,
         cellPhones: cells,
         officeAddress: person.officeAddress,
       }),
-    [person.fullName, person.title, person.email, cells, person.officeAddress],
+    [
+      person.fullName,
+      person.honorific,
+      person.firstName,
+      person.middleName,
+      person.lastName,
+      person.title,
+      person.email,
+      cells,
+      person.officeAddress,
+    ],
   );
 
   const [pngUrl, setPngUrl] = React.useState<string | null>(null);

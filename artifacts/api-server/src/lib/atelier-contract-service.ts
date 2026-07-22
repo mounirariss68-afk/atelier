@@ -44,6 +44,7 @@ import {
 import { createDocument } from "./atelier-documents.js";
 import { extractSignatureAnchors, computeAnchoredBoxes } from "./esign-anchors.js";
 import { sendSignatureRequest } from "./atelier-esign.js";
+import { legalNamesByEmail } from "./atelier-person-sync.js";
 import { DocusealError, docusealConfigured, defaultSignaturePlacement } from "./docuseal.js";
 
 export type TemplateRow = typeof atelierContractTemplates.$inferSelect;
@@ -740,6 +741,26 @@ export async function sendContract(args: {
   const emails = args.signers.map((s) => s.email.trim().toLowerCase());
   if (new Set(emails).size !== emails.length) {
     return { ok: false, code: "duplicate-signers", message: "Signer emails must be unique." };
+  }
+
+  // Task #538 — new signer snapshots carry the full LEGAL name (honorific +
+  // first + middle + last) whenever the signer's email maps to a linked
+  // person record (firm-side users/employees, CRM contacts). Free-text
+  // names for unknown counterparties pass through untouched.
+  try {
+    const legal = await legalNamesByEmail(args.orgId, emails);
+    args = {
+      ...args,
+      signers: args.signers.map((s) => ({
+        ...s,
+        name: legal.get(s.email.trim().toLowerCase()) ?? s.name,
+      })),
+    };
+  } catch (err) {
+    console.error(
+      "[contract-send] legal-name resolution failed — using provided signer names:",
+      err instanceof Error ? err.message : err,
+    );
   }
 
   // Task #345 — shared authorised-signatory gate (moved out of the REST

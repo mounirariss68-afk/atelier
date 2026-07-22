@@ -12,7 +12,32 @@ export interface AtelierAddJoinerInput {
    * @minLength 1
    * @maxLength 200
    */
-  fullName: string;
+  fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
   /**
    * @minLength 3
    * @maxLength 320

@@ -19,6 +19,20 @@ export interface AtelierContact {
   accountId: string;
   fullName: string;
   /** @nullable */
+  personId?: string | null;
+  /** @nullable */
+  honorific?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  middleName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  preferredName?: string | null;
+  /** @nullable */
+  displayName?: string | null;
+  /** @nullable */
   title?: string | null;
   /** @nullable */
   seniority?: AtelierContactSeniorityProperty;

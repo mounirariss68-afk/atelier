@@ -62,8 +62,47 @@ async function ensureFounderTitles(): Promise<void> {
   }
 }
 
+// Task #538 — unified person model. Idempotent repair: make sure each
+// founder login row (and their employee roster row) is linked to an
+// atelier_persons record. Data-only; never overwrites an existing link and
+// never rewrites names — it only parses the already-stored name when a
+// person row has to be created.
+async function ensureFounderPersonLinks(): Promise<void> {
+  const { writePersonFromFullName } = await import("./atelier-person-sync");
+  for (const u of USERS) {
+    const [user] = await db.select().from(atelierUsers).where(eq(atelierUsers.id, u.userId));
+    if (!user) continue;
+    let personId = user.personId;
+    if (!personId) {
+      const w = await writePersonFromFullName(db, {
+        orgId: user.orgId,
+        fullName: user.name,
+        sourceKind: "user",
+      });
+      personId = w.personId;
+      await db
+        .update(atelierUsers)
+        .set({ personId, updatedAt: new Date() })
+        .where(eq(atelierUsers.id, u.userId));
+      logger.info({ userId: u.userId, personId }, "founder person row created + linked");
+    }
+    const [emp] = await db
+      .select({ id: atelierEmployees.id, personId: atelierEmployees.personId })
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.userId, u.userId));
+    if (emp && !emp.personId) {
+      await db
+        .update(atelierEmployees)
+        .set({ personId, updatedAt: new Date() })
+        .where(eq(atelierEmployees.id, emp.id));
+      logger.info({ userId: u.userId, personId, employeeId: emp.id }, "founder employee row linked to person");
+    }
+  }
+}
+
 export async function ensureAtelierAuthSeed(): Promise<void> {
   await ensureFounderTitles();
+  await ensureFounderPersonLinks();
   for (const u of USERS) {
     const [existing] = await db
       .select()

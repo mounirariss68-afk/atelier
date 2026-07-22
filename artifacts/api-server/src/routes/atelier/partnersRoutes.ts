@@ -103,6 +103,8 @@ const contactSchema = z.object({
   name: z.string().min(1).max(200),
   role: z.string().max(200).nullish(),
   email: z.string().max(320).nullish(),
+  // Task #538 — round-tripped by the UI; server stamps it on write.
+  personId: z.string().max(80).nullish(),
 });
 
 const firmBaseSchema = z.object({
@@ -140,16 +142,67 @@ const firmBaseSchema = z.object({
   partnershipStage: z.enum(["candidate", "agreed"]).optional(),
 });
 
+// Task #538 — contact-list writes back every entry with a person record.
+import { writePersonFromFullName } from "../../lib/atelier-person-sync.js";
+
 function normalizeContacts(
   contacts: z.infer<typeof contactSchema>[] | undefined,
-): Array<{ id: string; name: string; role?: string | null; email?: string | null }> | undefined {
+): Array<{ id: string; name: string; role?: string | null; email?: string | null; personId?: string | null }> | undefined {
   if (!contacts) return undefined;
   return contacts.map((c) => ({
     id: c.id ?? rid("pfc"),
     name: c.name,
     role: c.role ?? null,
     email: c.email ?? null,
+    personId: c.personId ?? null,
   }));
+}
+
+/**
+ * Task #538 — every contact entry written to the jsonb list is backed by a
+ * real person record and a promoted partner_firm_resource row (mirroring
+ * the one-time migration). Entries that already carry a personId are left
+ * alone; new/unstamped entries get a person parsed from the free-text name
+ * plus a deterministic `pfr_pfc_<entryId>` resource row.
+ */
+async function stampContactPersons(
+  me: Me,
+  firmId: string,
+  contacts: NonNullable<ReturnType<typeof normalizeContacts>>,
+): Promise<typeof contacts> {
+  const out: typeof contacts = [];
+  for (const entry of contacts) {
+    if (entry.personId || !entry.name.trim()) {
+      out.push(entry);
+      continue;
+    }
+    const w = await writePersonFromFullName(db, {
+      orgId: me.orgId,
+      fullName: entry.name,
+      sourceKind: "partner_firm_contact",
+      createdByUserId: me.id,
+    });
+    const rowId = `pfr_pfc_${entry.id}`;
+    const [existing] = await db
+      .select({ id: atelierPartnerFirmResources.id })
+      .from(atelierPartnerFirmResources)
+      .where(and(eq(atelierPartnerFirmResources.id, rowId), eq(atelierPartnerFirmResources.orgId, me.orgId)));
+    if (!existing) {
+      await db.insert(atelierPartnerFirmResources).values({
+        id: rowId,
+        orgId: me.orgId,
+        partnerFirmId: firmId,
+        fullName: entry.name.trim(),
+        personId: w.personId,
+        email: entry.email ?? null,
+        role: entry.role ?? null,
+        status: "active",
+        notes: "Promoted from partner-firm contact list (Task #538).",
+      });
+    }
+    out.push({ ...entry, personId: w.personId });
+  }
+  return out;
 }
 
 function firmScope(me: Me) {
@@ -250,7 +303,7 @@ router.post("/partners/firms", async (req, res, next) => {
         anchorPartner: b.anchorPartner ?? null,
         lastTouchAt: b.lastTouchAt ?? null,
         capabilities: b.capabilities ?? {},
-        contacts: normalizeContacts(b.contacts) ?? [],
+        contacts: await stampContactPersons(me, id, normalizeContacts(b.contacts) ?? []),
         contactName: b.contactName ?? null,
         contactEmail: b.contactEmail ?? null,
         defaultPaymentTermsDays: b.defaultPaymentTermsDays ?? null,
@@ -319,7 +372,7 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
     assign("archetype", "archetype");
     assign("partnershipStage", "partnershipStage");
     if (b.contacts !== undefined) {
-      const to = normalizeContacts(b.contacts);
+      const to = await stampContactPersons(me, firm.id, normalizeContacts(b.contacts) ?? []);
       patch.contacts = to;
       changes.contacts = { from: firm.contacts, to };
     }
@@ -1925,6 +1978,33 @@ router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res,
     if (result.code === 404) return void res.status(404).json({ error: "not-found" });
     if (result.code === 422) {
       return void res.status(422).json({ error: "proposal-apply-failed", message: result.message });
+    }
+    // Task #538 — an approved contact proposal may have appended an
+    // unstamped jsonb entry; back it with a person record + promoted
+    // resource row (outside the row-lock tx; stamping is idempotent).
+    if (
+      action === "approve" &&
+      "appliedFields" in result &&
+      (result.appliedFields ?? []).includes("contacts")
+    ) {
+      const fresh = await getFirm(me, req.params.id);
+      if (fresh && Array.isArray(fresh.contacts)) {
+        const stamped = await stampContactPersons(
+          me,
+          fresh.id,
+          fresh.contacts.map((c) => ({
+            id: c.id,
+            name: c.name,
+            role: c.role ?? null,
+            email: c.email ?? null,
+            personId: (c as { personId?: string | null }).personId ?? null,
+          })),
+        );
+        await db
+          .update(atelierPartnerFirms)
+          .set({ contacts: stamped, updatedAt: new Date() })
+          .where(eq(atelierPartnerFirms.id, fresh.id));
+      }
     }
     if (!("idempotent" in result && result.idempotent)) {
       await audit({

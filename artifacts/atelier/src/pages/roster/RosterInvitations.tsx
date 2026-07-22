@@ -11,6 +11,7 @@ import {
   EmployingEntitySelect,
   type LegalEntity,
 } from "./rosterPickers";
+import { splitLegacyFullName } from "@/components/StructuredNameFields";
 
 type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 type SourceKind = "hired_candidate" | "accepted_offer" | "partner_firm_resource";
@@ -72,7 +73,11 @@ const STATUS_TONE: Record<string, "default" | "gold" | "green" | "amber" | "red"
 
 const emptyDraft = {
   workerType: "employee" as WorkerType,
-  fullName: "",
+  honorific: "",
+  firstName: "",
+  middleName: "",
+  lastName: "",
+  preferredName: "",
   email: "",
   role: "",
   seniority: "",
@@ -155,7 +160,7 @@ export default function RosterInvitations(): React.ReactElement {
           setDraft((d) => ({
             ...d,
             workerType: "employee",
-            fullName: c.name,
+            ...splitLegacyFullName(c.name),
             email: c.email,
             role: c.roleTitle,
             title: c.roleTitle,
@@ -166,7 +171,7 @@ export default function RosterInvitations(): React.ReactElement {
           setDraft((d) => ({
             ...d,
             workerType: "employee",
-            fullName: o.candidateName,
+            ...splitLegacyFullName(o.candidateName),
             role: o.roleTitle,
             title: o.roleTitle,
             startDate: o.startDate ?? d.startDate,
@@ -179,7 +184,7 @@ export default function RosterInvitations(): React.ReactElement {
           setDraft((d) => ({
             ...d,
             workerType: "partner_firm_resource",
-            fullName: pr.fullName,
+            ...splitLegacyFullName(pr.fullName),
             email: pr.email ?? d.email,
             role: pr.role ?? d.role,
             seniority: pr.seniority ?? d.seniority,
@@ -207,7 +212,11 @@ export default function RosterInvitations(): React.ReactElement {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workerType: draft.workerType,
-          fullName: draft.fullName,
+          honorific: draft.honorific.trim() || null,
+          firstName: draft.firstName.trim(),
+          middleName: draft.middleName.trim() || null,
+          lastName: draft.lastName.trim(),
+          preferredName: draft.preferredName.trim() || null,
           email: draft.email,
           role: draft.role || null,
           seniority: draft.seniority || null,
@@ -329,11 +338,45 @@ export default function RosterInvitations(): React.ReactElement {
             </select>
           </label>
           <label className="space-y-1">
-            <span className="font-mono text-[11px] uppercase text-text-mute">Full name</span>
+            <span className="font-mono text-[11px] uppercase text-text-mute">Honorific</span>
             <Input
-              value={draft.fullName}
-              onChange={(e) => setDraft({ ...draft, fullName: e.target.value })}
-              data-testid="invite-fullname"
+              value={draft.honorific}
+              placeholder="Dr."
+              onChange={(e) => setDraft({ ...draft, honorific: e.target.value })}
+              data-testid="invite-honorific"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">First name *</span>
+            <Input
+              value={draft.firstName}
+              onChange={(e) => setDraft({ ...draft, firstName: e.target.value })}
+              data-testid="invite-firstname"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">Middle name</span>
+            <Input
+              value={draft.middleName}
+              onChange={(e) => setDraft({ ...draft, middleName: e.target.value })}
+              data-testid="invite-middlename"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">Last name *</span>
+            <Input
+              value={draft.lastName}
+              onChange={(e) => setDraft({ ...draft, lastName: e.target.value })}
+              data-testid="invite-lastname"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="font-mono text-[11px] uppercase text-text-mute">Preferred name</span>
+            <Input
+              value={draft.preferredName}
+              placeholder="Goes by…"
+              onChange={(e) => setDraft({ ...draft, preferredName: e.target.value })}
+              data-testid="invite-preferredname"
             />
           </label>
           <label className="space-y-1">
@@ -408,7 +451,7 @@ export default function RosterInvitations(): React.ReactElement {
         {error && <div className="text-red-500 text-xs font-mono">{error}</div>}
         <Button
           onClick={submit}
-          disabled={busy || !sourceReady || !draft.fullName || !draft.email}
+          disabled={busy || !sourceReady || !draft.firstName.trim() || !draft.lastName.trim() || !draft.email}
           data-testid="invite-send"
         >
           {busy ? "Sending…" : "Send invitation"}

@@ -21,6 +21,8 @@ import {
 } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { runAccountCartographer } from "../lib/atelier-agents/runner.js";
+// Task #538 — backfilled contacts are backed by person records.
+import { writePersonFromFullName } from "../lib/atelier-person-sync.js";
 
 const ACCOUNT_IDS = [
   "acc_tasama",
@@ -127,10 +129,18 @@ async function backfillOne(accountId: string): Promise<void> {
         updated += 1;
       } else {
         const newId = rid("ct");
+        // Task #538 — parse the agent-emitted fullName into a person row.
+        const w = await writePersonFromFullName(tx, {
+          orgId: a.orgId,
+          fullName: dm.fullName,
+          sourceKind: "contact",
+          createdByUserId: "p_mounir_ariss",
+        });
         await tx.insert(atelierContacts).values({
           id: newId,
           accountId: a.id,
-          fullName: dm.fullName,
+          personId: w.personId,
+          fullName: w.fullName,
           title: dm.title ?? null,
           seniority: dm.seniority ?? null,
           buyerPersona: dm.buyerPersona ?? null,

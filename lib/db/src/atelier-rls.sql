@@ -60,6 +60,8 @@ DECLARE
     'atelier_account_goal_progress',
     -- Task #327 — per-user Microsoft 365 connections (encrypted tokens).
     'atelier_ms_connections',
+    -- Task #538 — unified person model core table.
+    'atelier_persons',
     -- Task #513 — unified partner registry + alliance lifecycle tables.
     'atelier_partner_firms','atelier_partner_firm_resources',
     'atelier_partner_targets','atelier_alliance_joint_pipeline',

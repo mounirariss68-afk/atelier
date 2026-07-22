@@ -45,6 +45,7 @@ import {
   atelierDependents,
   atelierEmergencyContacts,
   atelierAuditEvents,
+  atelierPersons,
 } from "@workspace/db";
 import {
   storePersonDocBytes,
@@ -59,6 +60,8 @@ import {
   PPTX_MIME,
 } from "../../lib/atelier-business-card.js";
 import { assertAuditAction } from "./auditContract";
+// Task #538 — mirror preferredName self-edits onto the person record.
+import { writePersonAndSync } from "../../lib/atelier-person-sync";
 
 const router: IRouter = Router();
 
@@ -244,6 +247,32 @@ router.patch("/me/profile", async (req, res, next) => {
           .update(atelierContractors)
           .set(upd)
           .where(eq(atelierContractors.id, ctx.person.row.id));
+      }
+      // Task #538 — mirror a preferredName self-edit onto the linked person
+      // record (employees only; the contractor skip above preserves the
+      // existing rule that contractors cannot edit preferredName).
+      if ("preferredName" in changes && ctx.person.workerType === "employee") {
+        const personId = (ctx.person.row as { personId?: string | null }).personId ?? null;
+        if (personId) {
+          const [p] = await db
+            .select()
+            .from(atelierPersons)
+            .where(and(eq(atelierPersons.id, personId), eq(atelierPersons.orgId, ctx.me.orgId)))
+            .limit(1);
+          if (p) {
+            await writePersonAndSync(db, {
+              orgId: ctx.me.orgId,
+              personId,
+              structured: {
+                honorific: p.honorific,
+                firstName: p.firstName,
+                middleName: p.middleName,
+                lastName: p.lastName,
+                preferredName: (patch.preferredName ?? null) as string | null,
+              },
+            });
+          }
+        }
       }
       await audit({
         me: ctx.me,

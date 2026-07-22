@@ -17,7 +17,7 @@
  * standard activity-code set ("delivery", "ramp-up", "internal", …).
  */
 
-import { and, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
@@ -88,7 +88,12 @@ export async function resolveContact(
   const q = query.trim();
   if (q.length < 2) return { kind: "none" };
   const where = and(
-    or(ilike(atelierContacts.fullName, `%${q}%`), ilike(atelierContacts.email, `%${q}%`)),
+    or(
+      ilike(atelierContacts.fullName, `%${q}%`),
+      ilike(atelierContacts.email, `%${q}%`),
+      // Task #538 — match structured person preferred/display name too.
+      sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierContacts.personId} AND (p.preferred_name ILIKE ${`%${q}%`} OR p.display_name ILIKE ${`%${q}%`}))`,
+    ),
     eq(atelierContacts.orgId, persona.orgId),
     isNull(atelierContacts.deletedAt),
     opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,

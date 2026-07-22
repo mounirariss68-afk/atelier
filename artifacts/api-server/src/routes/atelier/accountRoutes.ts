@@ -34,7 +34,18 @@ import {
   atelierAccountRisks,
   atelierAccountGoalProgress,
   atelierActivities,
+  atelierPersons,
 } from "@workspace/db";
+import {
+  resolveStructuredNameInput,
+  PersonNameValidationError,
+  type StructuredName,
+} from "../../lib/atelier-person-model.js";
+import {
+  writePerson,
+  writePersonAndSync,
+  writePersonFromFullName,
+} from "../../lib/atelier-person-sync.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { isRestrictedPersona, isBoardObserver, isFoundingPartner } from "./personaRoles.js";
 import {
@@ -466,11 +477,18 @@ async function persistReviewedResearch(args: {
         | "board_chair" | "board_member"
         | "c_suite" | "vp" | "director" | "manager" | "ic" | null;
       const id = rid("con");
+      // Task #538 — agent-emitted fullName is parsed into a person row.
+      const pw = await writePersonFromFullName(tx, {
+        orgId: account.orgId,
+        fullName: dm.fullName,
+        sourceKind: "contact",
+      });
       await tx.insert(atelierContacts).values({
         id,
         orgId: account.orgId,
         accountId: account.id,
-        fullName: dm.fullName.trim(),
+        personId: pw.personId,
+        fullName: pw.fullName,
         title: dm.title ?? null,
         seniority,
         entityName: dm.entityName ?? null,
@@ -807,11 +825,18 @@ router.post("/accounts", async (req, res) => {
           })
           .where(eq(atelierAccounts.id, inserted.id));
         for (const d of seedContacts) {
+          // Task #538 — agent-emitted fullName is parsed into a person row.
+          const pw = await writePersonFromFullName(tx, {
+            orgId: inserted.orgId,
+            fullName: d.fullName,
+            sourceKind: "contact",
+          });
           await tx.insert(atelierContacts).values({
             id: rid("con"),
             orgId: inserted.orgId,
             accountId: inserted.id,
-            fullName: d.fullName.trim(),
+            personId: pw.personId,
+            fullName: pw.fullName,
             title: d.title ?? null,
             seniority: d.seniority ?? null,
             entityName: d.entityName ?? null,
@@ -1356,7 +1381,13 @@ async function buildWorkspace(
         | "office"
         | null,
     },
-    contacts: contacts.map((c) => toContactWire(c, ownerName(c.contactOwnerId))),
+    contacts: await (async () => {
+      // Task #538 — batch-resolve linked person rows for structured names.
+      const persons = await loadPersonsByIds(contacts.map((c) => c.personId));
+      return contacts.map((c) =>
+        toContactWire(c, ownerName(c.contactOwnerId), persons.get(c.personId ?? "") ?? null),
+      );
+    })(),
     relationships: rels.map((r) => ({
       id: r.id,
       accountId: r.accountId,
@@ -4356,10 +4387,17 @@ async function applyProfileUpdateDecisions(args: {
                 .where(eq(atelierContacts.id, existingId));
             } else {
               const newId = rid("ct");
+              // Task #538 — agent-emitted fullName is parsed into a person row.
+              const pw = await writePersonFromFullName(tx, {
+                orgId: a.orgId,
+                fullName: dm.fullName,
+                sourceKind: "contact",
+              });
               await tx.insert(atelierContacts).values({
                 id: newId,
                 accountId: a.id,
-                fullName: dm.fullName,
+                personId: pw.personId,
+                fullName: pw.fullName,
                 title: dm.title ?? null,
                 seniority,
                 entityName: dm.entityName ?? null,
@@ -4623,18 +4661,43 @@ router.post("/contacts/:contactId/disposition", async (req, res) => {
     });
   });
   const [updated] = await db.select().from(atelierContacts).where(eq(atelierContacts.id, c.id));
-  res.json(toContactWire(updated, await resolveOwnerName(updated.contactOwnerId, updated.orgId)));
+  res.json(
+    toContactWire(
+      updated,
+      await resolveOwnerName(updated.contactOwnerId, updated.orgId),
+      (await loadPersonsByIds([updated.personId])).get(updated.personId ?? "") ?? null,
+    ),
+  );
 });
 
 // ---------- contact CRUD (Task #554) ----------
+// Task #538 — resolve the structured-name fields from a contact's linked
+// person row. Batch variant for list endpoints; single lookups elsewhere.
+type PersonRow = typeof atelierPersons.$inferSelect;
+export async function loadPersonsByIds(ids: Array<string | null | undefined>): Promise<Map<string, PersonRow>> {
+  const uniq = [...new Set(ids.filter((v): v is string => !!v))];
+  if (uniq.length === 0) return new Map();
+  const rows = await db.select().from(atelierPersons).where(inArray(atelierPersons.id, uniq));
+  return new Map(rows.map((r) => [r.id, r]));
+}
+
 function toContactWire(
   c: typeof atelierContacts.$inferSelect,
   ownerName?: string | null,
+  person?: PersonRow | null,
 ) {
   return {
     id: c.id,
     accountId: c.accountId,
     fullName: c.fullName,
+    // Task #538 — structured name (from the linked person row).
+    personId: c.personId ?? null,
+    honorific: person?.honorific ?? null,
+    firstName: person?.firstName ?? null,
+    middleName: person?.middleName ?? null,
+    lastName: person?.lastName ?? null,
+    preferredName: person?.preferredName ?? null,
+    displayName: person?.displayName ?? null,
     title: c.title ?? null,
     seniority: (c.seniority ?? null) as
       | "board_chair"
@@ -4800,8 +4863,18 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
     return;
   }
   const input = parsed.data;
-  const fullName = input.fullName.trim();
-  if (!fullName) {
+  // Task #538 — structured fields (forms) or fullName (agents/back-compat).
+  let structured: StructuredName | null;
+  try {
+    structured = resolveStructuredNameInput(input);
+  } catch (err) {
+    if (err instanceof PersonNameValidationError) {
+      res.status(400).json({ error: "name-required", reason: err.message });
+      return;
+    }
+    throw err;
+  }
+  if (!structured) {
     res.status(400).json({ error: "name-required" });
     return;
   }
@@ -4818,13 +4891,21 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
     return;
   }
   const created = await db.transaction(async (tx) => {
+    // Task #538 — person row first; the contact links + mirrors its fullName.
+    const person = await writePerson(tx, {
+      orgId: account.orgId,
+      structured,
+      sourceKind: "contact",
+      createdByUserId: me.id,
+    });
     const [row] = await tx
       .insert(atelierContacts)
       .values({
         id: contactId,
         orgId: account.orgId,
         accountId: account.id,
-        fullName,
+        fullName: person.fullName,
+        personId: person.personId,
         title: input.title?.trim() || null,
         seniority: input.seniority ?? null,
         email: input.email?.trim() || null,
@@ -4865,7 +4946,14 @@ router.post("/accounts/:accountId/contacts", async (req, res) => {
     });
     return row;
   });
-  res.status(201).json(toContactWire(created, await resolveOwnerName(created.contactOwnerId, created.orgId)));
+  const createdPersons = await loadPersonsByIds([created.personId]);
+  res.status(201).json(
+    toContactWire(
+      created,
+      await resolveOwnerName(created.contactOwnerId, created.orgId),
+      createdPersons.get(created.personId ?? "") ?? null,
+    ),
+  );
 });
 
 // Edit a contact's profile fields.
@@ -4894,14 +4982,31 @@ router.patch("/contacts/:contactId", async (req, res) => {
   const input = parsed.data;
   const patch: Partial<typeof atelierContacts.$inferInsert> = {};
   const changed: string[] = [];
-  if (input.fullName !== undefined) {
-    const name = input.fullName.trim();
-    if (!name) {
-      res.status(400).json({ error: "name-required" });
-      return;
+  // Task #538 — name edits flow through the person record. Structured
+  // fields win; a bare fullName is parsed. The person write itself happens
+  // inside the transaction below so contact + person stay consistent.
+  let nameStructured: StructuredName | null = null;
+  const nameTouched =
+    input.fullName !== undefined ||
+    input.firstName !== undefined ||
+    input.lastName !== undefined ||
+    input.middleName !== undefined ||
+    input.honorific !== undefined ||
+    input.preferredName !== undefined;
+  if (nameTouched) {
+    const existingPerson = c.personId
+      ? (await loadPersonsByIds([c.personId])).get(c.personId) ?? null
+      : null;
+    try {
+      nameStructured = resolveStructuredNameInput(input, existingPerson);
+    } catch (err) {
+      if (err instanceof PersonNameValidationError) {
+        res.status(400).json({ error: "name-required", reason: err.message });
+        return;
+      }
+      throw err;
     }
-    patch.fullName = name;
-    changed.push("fullName");
+    if (nameStructured) changed.push("fullName");
   }
   if (input.title !== undefined) {
     patch.title = input.title?.trim() || null;
@@ -4962,7 +5067,13 @@ router.patch("/contacts/:contactId", async (req, res) => {
     changed.push("notes");
   }
   if (changed.length === 0) {
-    res.json(toContactWire(c, await resolveOwnerName(c.contactOwnerId, c.orgId)));
+    res.json(
+      toContactWire(
+        c,
+        await resolveOwnerName(c.contactOwnerId, c.orgId),
+        (await loadPersonsByIds([c.personId])).get(c.personId ?? "") ?? null,
+      ),
+    );
     return;
   }
   // Task #567 — append a trend snapshot whenever strength or disposition moves.
@@ -4978,6 +5089,21 @@ router.patch("/contacts/:contactId", async (req, res) => {
   }
   patch.updatedAt = new Date();
   const updated = await db.transaction(async (tx) => {
+    // Task #538 — apply the name via the person record inside the tx so the
+    // contact's legacy fullName mirror can never drift from the person row.
+    // writePersonAndSync also refreshes any OTHER domain rows linked to the
+    // same person (roster/login mirrors).
+    if (nameStructured) {
+      const w = await writePersonAndSync(tx, {
+        orgId: c.orgId,
+        personId: c.personId ?? null,
+        structured: nameStructured,
+        sourceKind: "contact",
+        createdByUserId: me.id,
+      });
+      patch.personId = w.personId;
+      patch.fullName = w.fullName;
+    }
     const [row] = await tx
       .update(atelierContacts)
       .set(patch)
@@ -4996,7 +5122,13 @@ router.patch("/contacts/:contactId", async (req, res) => {
     });
     return row;
   });
-  res.json(toContactWire(updated, await resolveOwnerName(updated.contactOwnerId, updated.orgId)));
+  res.json(
+    toContactWire(
+      updated,
+      await resolveOwnerName(updated.contactOwnerId, updated.orgId),
+      (await loadPersonsByIds([updated.personId])).get(updated.personId ?? "") ?? null,
+    ),
+  );
 });
 
 // Soft-delete (remove) a contact.

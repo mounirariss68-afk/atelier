@@ -14,6 +14,31 @@ export interface AtelierUpdateContactInput {
    * @maxLength 160
    */
   fullName?: string;
+  /**
+   * @maxLength 40
+   * @nullable
+   */
+  honorific?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  firstName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  middleName?: string | null;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  lastName?: string;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  preferredName?: string | null;
   /** @nullable */
   title?: string | null;
   /** @nullable */

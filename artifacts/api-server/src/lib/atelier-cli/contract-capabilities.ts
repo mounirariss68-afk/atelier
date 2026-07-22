@@ -29,7 +29,7 @@
  * shape the confirm/clarification envelopes.
  */
 
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import {
   db,
   atelierEmployees,
@@ -139,7 +139,17 @@ async function resolveCounterpartyByName(
     const people = await db
       .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName })
       .from(atelierEmployees)
-      .where(and(eq(atelierEmployees.orgId, orgId), ilike(atelierEmployees.fullName, `%${q}%`)))
+      .where(
+        and(
+          eq(atelierEmployees.orgId, orgId),
+          or(
+            ilike(atelierEmployees.fullName, `%${q}%`),
+            ilike(atelierEmployees.preferredName, `%${q}%`),
+            // Task #538 — match structured person preferred/display name too.
+            sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierEmployees.personId} AND (p.preferred_name ILIKE ${`%${q}%`} OR p.display_name ILIKE ${`%${q}%`}))`,
+          ),
+        ),
+      )
       .limit(5);
     for (const p of people) {
       candidates.push({

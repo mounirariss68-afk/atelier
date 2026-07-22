@@ -1,6 +1,8 @@
 import { db, atelierUsers, atelierEmployees } from "@workspace/db";
 import { and, eq, isNull } from "drizzle-orm";
 import { logger } from "./logger";
+// Task #538 — repaired/created rows are backed by a person record.
+import { writePersonFromFullName } from "./atelier-person-sync.js";
 
 /**
  * Task #50 — user ↔ person linkage repair (boot-time, idempotent).
@@ -85,12 +87,33 @@ export async function ensureAtelierSelfLinkage(): Promise<void> {
     }
 
     const employeeId = `emp_link_${u.id}`;
+    // Task #538 — reuse the user's person record when it has one; otherwise
+    // parse the login name into a new person so the roster row is backed.
+    let personId = u.personId ?? null;
+    if (!personId) {
+      try {
+        const w = await writePersonFromFullName(db, {
+          orgId: u.orgId,
+          fullName: u.name,
+          sourceKind: "user",
+          createdByUserId: u.id,
+        });
+        personId = w.personId;
+        await db
+          .update(atelierUsers)
+          .set({ personId, updatedAt: new Date() })
+          .where(eq(atelierUsers.id, u.id));
+      } catch {
+        // empty/unparseable name — link without a person record.
+      }
+    }
     await db
       .insert(atelierEmployees)
       .values({
         id: employeeId,
         orgId: u.orgId,
         userId: u.id,
+        personId,
         fullName: u.name,
         email: u.email,
         role: u.role,

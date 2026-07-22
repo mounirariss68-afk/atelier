@@ -54,6 +54,15 @@ import { runAccessSentinel } from "./rosterRoutes.js";
 import { canViewSensitivePeopleData } from "./personaRoles.js";
 import { assertAuditAction } from "./auditContract.js";
 import { hashPassword } from "../../lib/auth/passwords.js";
+// Task #538 — invitation acceptance materialises a structured person
+// record; the draft fullName is parsed via the shared name parser.
+import { writePersonAndSync, writePersonFromFullName } from "../../lib/atelier-person-sync.js";
+import {
+  resolveStructuredNameInput,
+  composeFullName,
+  PersonNameValidationError,
+  type StructuredName,
+} from "../../lib/atelier-person-model.js";
 import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email.js";
 import { emitSelfNotification } from "./meRoutes.js";
 
@@ -128,19 +137,19 @@ async function audit(args: {
 // Resolve a person id across the three roster tables.
 async function findPerson(
   id: string,
-): Promise<{ id: string; workerType: WorkerType; fullName: string; email: string | null } | null> {
+): Promise<{ id: string; workerType: WorkerType; fullName: string; email: string | null; personId: string | null } | null> {
   const [emp] = await db
-    .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, email: atelierEmployees.email })
+    .select({ id: atelierEmployees.id, fullName: atelierEmployees.fullName, email: atelierEmployees.email, personId: atelierEmployees.personId })
     .from(atelierEmployees)
     .where(and(eq(atelierEmployees.id, id), isNull(atelierEmployees.deletedAt)));
   if (emp) return { ...emp, workerType: "employee" };
   const [ct] = await db
-    .select({ id: atelierContractors.id, fullName: atelierContractors.fullName, email: atelierContractors.email })
+    .select({ id: atelierContractors.id, fullName: atelierContractors.fullName, email: atelierContractors.email, personId: atelierContractors.personId })
     .from(atelierContractors)
     .where(and(eq(atelierContractors.id, id), isNull(atelierContractors.deletedAt)));
   if (ct) return { ...ct, workerType: "contractor" };
   const [pr] = await db
-    .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, email: atelierPartnerFirmResources.email })
+    .select({ id: atelierPartnerFirmResources.id, fullName: atelierPartnerFirmResources.fullName, email: atelierPartnerFirmResources.email, personId: atelierPartnerFirmResources.personId })
     .from(atelierPartnerFirmResources)
     .where(
       and(
@@ -534,6 +543,11 @@ router.post("/roster/invitations", async (req, res, next) => {
     const body = req.body as {
       workerType?: WorkerType;
       fullName?: string;
+      honorific?: string | null;
+      firstName?: string | null;
+      middleName?: string | null;
+      lastName?: string | null;
+      preferredName?: string | null;
       email?: string;
       role?: string | null;
       seniority?: string | null;
@@ -551,7 +565,27 @@ router.post("/roster/invitations", async (req, res, next) => {
       res.status(400).json({ error: "invalid-worker-type" });
       return;
     }
-    if (!body.fullName?.trim() || !body.email?.trim()) {
+    // Task #538 — structured name fields win when present; a bare fullName
+    // is parsed via the shared parser at accept-time. One of the two required.
+    let structuredDraft: StructuredName | null = null;
+    try {
+      structuredDraft = resolveStructuredNameInput({
+        fullName: body.fullName ?? undefined,
+        honorific: body.honorific,
+        firstName: body.firstName ?? undefined,
+        middleName: body.middleName,
+        lastName: body.lastName ?? undefined,
+        preferredName: body.preferredName,
+      });
+    } catch (err) {
+      if (err instanceof PersonNameValidationError) {
+        res.status(400).json({ error: "invalid-name", message: err.message });
+        return;
+      }
+      throw err;
+    }
+    const draftFullName = structuredDraft ? composeFullName(structuredDraft) : "";
+    if (!structuredDraft || !draftFullName || !body.email?.trim()) {
       res.status(400).json({ error: "fullName + email required" });
       return;
     }
@@ -640,7 +674,12 @@ router.post("/roster/invitations", async (req, res, next) => {
       id,
       workerType: wt,
       personDraft: {
-        fullName: body.fullName.trim(),
+        fullName: draftFullName,
+        honorific: structuredDraft.honorific ?? null,
+        firstName: structuredDraft.firstName,
+        middleName: structuredDraft.middleName ?? null,
+        lastName: structuredDraft.lastName,
+        preferredName: structuredDraft.preferredName ?? null,
         email: body.email.trim().toLowerCase(),
         role: body.role ?? null,
         seniority: body.seniority ?? null,
@@ -663,7 +702,7 @@ router.post("/roster/invitations", async (req, res, next) => {
       actor: me,
       action: "invitation.sent",
       payload: { workerType: wt, email: body.email, sourceKind, sourceId },
-      summary: `${me.name} invited ${body.fullName} (${wt}).`,
+      summary: `${me.name} invited ${draftFullName} (${wt}).`,
     });
     // Onboarding sequence is started immediately on invitation creation so the
     // pre-arrival compliance steps (background check, IT provisioning request,
@@ -799,12 +838,37 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       return;
     }
     const draft = inv.personDraft;
+    // Task #538 — create the person record first so the roster row links it.
+    // Structured fields captured at invitation time win; older invitations
+    // that only carry a fullName go through the shared parser.
+    const personWrite =
+      draft.firstName && draft.lastName
+        ? await writePersonAndSync(db, {
+            orgId: me.orgId,
+            structured: {
+              honorific: draft.honorific ?? null,
+              firstName: draft.firstName,
+              middleName: draft.middleName ?? null,
+              lastName: draft.lastName,
+              preferredName: draft.preferredName ?? null,
+            },
+            sourceKind: inv.workerType as string,
+            createdByUserId: me.id,
+          })
+        : await writePersonFromFullName(db, {
+            orgId: me.orgId,
+            fullName: draft.fullName,
+            sourceKind: inv.workerType as string,
+            createdByUserId: me.id,
+          });
     let personId: string;
     if (inv.workerType === "employee") {
       personId = `emp_${rid("x").slice(2)}`;
       await db.insert(atelierEmployees).values({
         id: personId,
-        fullName: draft.fullName,
+        personId: personWrite.personId,
+        fullName: personWrite.fullName,
+        preferredName: personWrite.structured.preferredName ?? null,
         email: draft.email,
         role: draft.role ?? "consultant",
         seniority: draft.seniority ?? "consultant",
@@ -818,7 +882,8 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       personId = `ctr_${rid("x").slice(2)}`;
       await db.insert(atelierContractors).values({
         id: personId,
-        fullName: draft.fullName,
+        personId: personWrite.personId,
+        fullName: personWrite.fullName,
         email: draft.email,
         country: draft.country ?? null,
         startDate: draft.startDate ?? null,
@@ -832,8 +897,9 @@ router.post("/roster/invitations/:id/accept", async (req, res, next) => {
       personId = `pfr_${rid("x").slice(2)}`;
       await db.insert(atelierPartnerFirmResources).values({
         id: personId,
+        personId: personWrite.personId,
         partnerFirmId: draft.partnerFirmId,
-        fullName: draft.fullName,
+        fullName: personWrite.fullName,
         email: draft.email,
         role: draft.role ?? null,
         seniority: draft.seniority ?? null,
@@ -1209,6 +1275,8 @@ router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
           orgId: me.orgId,
           email,
           name: person.fullName,
+          // Task #538 — link the login row to the roster person record.
+          personId: person.personId ?? null,
           initials,
           role,
           roleLabel,
