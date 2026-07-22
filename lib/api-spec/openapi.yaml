@@ -8148,6 +8148,14 @@ components:
         email: { type: string }
         signingOrder: { type: number }
         status: { type: string }
+        inviteEmailStatus:
+          type: ["string", "null"]
+          description: >-
+            Branded invite delivery truth — "delivered" only when Resend
+            actually accepted the email; "undelivered" when the send
+            failed or email is not configured; null before the signer's
+            turn (or on legacy DocuSeal-emailed requests).
+        inviteEmailAt: { type: ["string", "null"] }
         openedAt: { type: ["string", "null"] }
         completedAt: { type: ["string", "null"] }
         declinedAt: { type: ["string", "null"] }
@@ -8167,6 +8175,11 @@ components:
         contactId: { type: ["string", "null"] }
         personId: { type: ["string", "null"] }
         signedDocumentId: { type: ["string", "null"] }
+        emailMode:
+          type: ["string", "null"]
+          description: >-
+            "branded" = Atelier emails signers from the Cognirise address;
+            null = legacy request where DocuSeal emailed signers itself.
         expiresAt: { type: ["string", "null"] }
         createdBy: { type: string }
         createdByLabel: { type: string }

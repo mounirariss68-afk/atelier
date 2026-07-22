@@ -58,6 +58,12 @@ export const atelierSignatureRequests = pgTable(
     createdByLabel: text("created_by_label").notNull().default(""),
     /** Where the completed signed PDF landed in the Document Library. */
     signedDocumentId: text("signed_document_id"),
+    /**
+     * Task #514 — who emails the signers. "branded" = Atelier sends
+     * Cognirise-branded invites via Resend (DocuSeal send_email off);
+     * null = legacy requests where DocuSeal emailed signers itself.
+     */
+    emailMode: text("email_mode"),
     /** Non-null while the last sync attempt against DocuSeal failed. */
     lastSyncError: text("last_sync_error"),
     /** Last time signer emails were re-sent (manual OR automatic). */
@@ -91,6 +97,14 @@ export const atelierSignatureSigners = pgTable(
     /** pending | sent | opened | completed | declined */
     status: text("status").notNull().default("pending"),
     docusealSubmitterId: text("docuseal_submitter_id"),
+    /**
+     * Task #514 — delivery truth for the branded invite email:
+     * null = not yet attempted (or legacy DocuSeal-emailed signer),
+     * "delivered" = Resend accepted it, "undelivered" = send failed or
+     * email is not configured (UI offers the signing link instead).
+     */
+    inviteEmailStatus: text("invite_email_status"),
+    inviteEmailAt: timestamp("invite_email_at"),
     /** Raw per-signer status payload from the last sync (diagnostics). */
     lastPayload: jsonb("last_payload").$type<Record<string, unknown>>(),
     openedAt: timestamp("opened_at"),

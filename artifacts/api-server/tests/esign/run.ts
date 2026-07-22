@@ -74,6 +74,8 @@ const stub = {
   lastTemplateFields: null as
     | Array<{ name: string; type?: string; role: string; preferences?: { format?: string }; areas: Array<{ x: number; y: number; w: number; h: number; page: number }> }>
     | null,
+  /** Task #514 — send_email flag of the most recent POST /submissions. */
+  lastSubmissionSendEmail: null as boolean | null,
 };
 
 const SIGNED_PDF = Buffer.from("%PDF-1.4 signed-stub\n%%EOF");
@@ -99,6 +101,8 @@ function stubServer(): http.Server {
         return send(200, { id: stub.nextTemplateId++ });
       }
       if (req.method === "POST" && url === "/submissions") {
+        stub.lastSubmissionSendEmail =
+          typeof body?.send_email === "boolean" ? body.send_email : null;
         const sid = stub.nextSubmissionId++;
         const submitters: StubSubmitter[] = (body.submitters as Array<{ name: string; email: string }>).map(
           (s, i) => {
@@ -343,6 +347,32 @@ async function main(): Promise<void> {
         signers[0].status === "sent" &&
         signers[1].status === "pending",
       JSON.stringify(signers),
+    );
+
+    // Task #514 — branded email flow: DocuSeal must NOT email signers
+    // (send_email:false); the app emails signers itself. In this test env
+    // no branded delivery can succeed, so the first (actionable) signer
+    // is honestly "undelivered" while signer 2 stays untouched (null)
+    // until their turn.
+    check(
+      "submission created with send_email:false",
+      stub.lastSubmissionSendEmail === false,
+      `send_email=${String(stub.lastSubmissionSendEmail)}`,
+    );
+    check(
+      "request emailMode is branded",
+      rCreate.body?.request?.emailMode === "branded",
+      `emailMode=${String(rCreate.body?.request?.emailMode)}`,
+    );
+    check(
+      "signer 1 invite recorded (undelivered — honest semantics)",
+      signers[0]?.inviteEmailStatus === "undelivered" && !!signers[0]?.inviteEmailAt,
+      JSON.stringify(signers[0]),
+    );
+    check(
+      "signer 2 not invited before their turn",
+      signers[1]?.inviteEmailStatus == null,
+      JSON.stringify(signers[1]),
     );
 
     // Default placement: one signature field per signer, roles Signer N,
@@ -646,6 +676,27 @@ async function main(): Promise<void> {
       data: { submission_id: submissionId },
     });
     check("webhook after 1/2 signed → partially_signed", rHook1.status === 200 && rHook1.body?.status === "partially_signed", `status=${rHook1.status} body=${JSON.stringify(rHook1.body)}`);
+
+    // Task #514 — sequential branded invites: once signer 1 completed,
+    // the sync must attempt signer 2's invite (recording an honest
+    // delivery outcome), exactly once (idempotent across re-syncs).
+    {
+      const rSeq = await call("GET", `/api/atelier/esign/requests/${reqId}`, FP);
+      const seqSigners = rSeq.body?.request?.signers ?? [];
+      check(
+        "signer 2 invited after becoming actionable",
+        seqSigners[1]?.inviteEmailStatus != null && !!seqSigners[1]?.inviteEmailAt,
+        JSON.stringify(seqSigners[1]),
+      );
+      const firstAt = seqSigners[1]?.inviteEmailAt;
+      await call("POST", `/api/atelier/esign/requests/${reqId}/sync`, FP);
+      const rSeq2 = await call("GET", `/api/atelier/esign/requests/${reqId}`, FP);
+      check(
+        "re-sync does not re-email signer 2 (idempotent invite)",
+        rSeq2.body?.request?.signers?.[1]?.inviteEmailAt === firstAt,
+        `${rSeq2.body?.request?.signers?.[1]?.inviteEmailAt} vs ${firstAt}`,
+      );
+    }
 
     // Webhook payload is never trusted: a spoofed "completed" event for
     // this submission cannot complete it — state comes from the re-fetch.
@@ -997,6 +1048,46 @@ async function main(): Promise<void> {
         ctrAudits3.filter((a) => a.action === "contract.second_party_values").length === beforeCount,
       `before=${beforeCount} after=${ctrAudits3.filter((a) => a.action === "contract.second_party_values").length}`,
     );
+
+    console.log("— branded from-address selection (Task #514) —");
+    {
+      const { firstValidFromAddress, getBrandedFromAddress } = await import(
+        "../../src/lib/email.js"
+      );
+      // Selection semantics: malformed candidates (e.g. a pasted API key
+      // in RESEND_FROM) are skipped; first valid one wins; none → null.
+      check(
+        "malformed candidates skipped, first valid wins",
+        firstValidFromAddress("re_abc123secretkey", "Cognirise <sign@cognirise.ai>") ===
+          "Cognirise <sign@cognirise.ai>",
+        String(firstValidFromAddress("re_abc123secretkey", "Cognirise <sign@cognirise.ai>")),
+      );
+      check(
+        "no valid candidates → null (never dev fallback)",
+        firstValidFromAddress("re_abc123secretkey", undefined, "not-an-email") === null,
+        String(firstValidFromAddress("re_abc123secretkey", undefined, "not-an-email")),
+      );
+      // getBrandedFromAddress prefers RESEND_BRANDED_FROM over everything.
+      const savedBranded = process.env.RESEND_BRANDED_FROM;
+      try {
+        process.env.RESEND_BRANDED_FROM = "Cognirise <contracts@cognirise.ai>";
+        check(
+          "RESEND_BRANDED_FROM (valid) is preferred",
+          (await getBrandedFromAddress()) === "Cognirise <contracts@cognirise.ai>",
+          String(await getBrandedFromAddress()),
+        );
+        process.env.RESEND_BRANDED_FROM = "re_pasted_api_key_not_an_email";
+        const fallback = await getBrandedFromAddress();
+        check(
+          "malformed RESEND_BRANDED_FROM never used verbatim",
+          fallback !== "re_pasted_api_key_not_an_email",
+          String(fallback),
+        );
+      } finally {
+        if (savedBranded === undefined) delete process.env.RESEND_BRANDED_FROM;
+        else process.env.RESEND_BRANDED_FROM = savedBranded;
+      }
+    }
 
     console.log("— webhook secret gate —");
     process.env.DOCUSEAL_WEBHOOK_SECRET = "hook-secret";

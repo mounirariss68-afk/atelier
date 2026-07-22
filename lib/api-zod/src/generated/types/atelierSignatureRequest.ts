@@ -25,6 +25,11 @@ export interface AtelierSignatureRequest {
   personId?: string | null;
   /** @nullable */
   signedDocumentId?: string | null;
+  /**
+   * "branded" = Atelier emails signers from the Cognirise address; null = legacy request where DocuSeal emailed signers itself.
+   * @nullable
+   */
+  emailMode?: string | null;
   /** @nullable */
   expiresAt?: string | null;
   createdBy: string;

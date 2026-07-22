@@ -251,7 +251,7 @@ function SendSignatureDialog(props: {
           props.onSigned(requestId);
           return;
         }
-        toast({ title: "Sent for signature", description: "Signers will receive an email from DocuSeal." });
+        toast({ title: "Sent for signature", description: "Signers will receive an email from Cognirise. If delivery fails, a signing link is available on the Agreements page." });
         props.onDone();
         props.onClose();
       },

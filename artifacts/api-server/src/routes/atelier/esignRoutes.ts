@@ -39,6 +39,8 @@ import {
   syncAllOpenRequests,
   voidSignatureRequest,
   remindSignatureRequest,
+  currentActionableSigner,
+  signerSigningLink,
   PageCountUnknownError,
   type SigRequestRow,
   type SigSignerRow,
@@ -85,6 +87,8 @@ function signerShape(s: SigSignerRow) {
     email: s.email,
     signingOrder: s.signingOrder,
     status: s.status,
+    inviteEmailStatus: s.inviteEmailStatus,
+    inviteEmailAt: s.inviteEmailAt,
     openedAt: s.openedAt,
     completedAt: s.completedAt,
     declinedAt: s.declinedAt,
@@ -104,6 +108,7 @@ function requestShape(r: SigRequestRow, signers?: SigSignerRow[]) {
     contactId: r.contactId,
     personId: r.personId,
     signedDocumentId: r.signedDocumentId,
+    emailMode: r.emailMode,
     expiresAt: r.expiresAt,
     createdBy: r.createdBy,
     createdByLabel: r.createdByLabel,
@@ -488,6 +493,68 @@ router.get("/esign/requests/:id/signing-link", async (req, res) => {
       signerId: mine.id,
       signerStatus: submitter.status,
       signingOrder: mine.signingOrder,
+      requestId: row.id,
+    });
+  } catch (err) {
+    handleUpstreamError(res, err);
+  }
+});
+
+// Task #514 — live signing link for a SPECIFIC signer, for the sender.
+// Fallback when the branded invite email could not be delivered (Resend
+// unconfigured / restricted): the sender copies the link and shares it
+// through their own channel. Only the currently-actionable pending
+// signer's link is exposed — later signers must wait their turn.
+// @cli-skip: e-sign surfaces are UI-driven (Task #62)
+router.get("/esign/requests/:id/signers/:signerId/signing-link", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureEsignRole(me, res)) return;
+  const row = await loadOwnRequest(req, res, me);
+  if (!row) return;
+  if (row.status !== "sent" && row.status !== "partially_signed") {
+    res.status(409).json({
+      error: "request-not-open",
+      message: `This signature request is ${row.status} — there is nothing left to sign.`,
+    });
+    return;
+  }
+  const signerMap = await loadRequestSigners([row.id]);
+  const signers = signerMap.get(row.id) ?? [];
+  const signer = signers.find((s) => s.id === req.params.signerId);
+  if (!signer) {
+    res.status(404).json({ error: "signer-not-found" });
+    return;
+  }
+  if (signer.status === "completed" || signer.status === "declined") {
+    res.status(409).json({
+      error: "already-signed",
+      message: `This signer has already ${signer.status === "completed" ? "signed" : "declined"}.`,
+    });
+    return;
+  }
+  const actionable = currentActionableSigner(signers);
+  if (!actionable || actionable.id !== signer.id) {
+    res.status(409).json({
+      error: "not-signers-turn",
+      message:
+        "Signing is sequential — this signer's link becomes available once the previous signer has completed.",
+    });
+    return;
+  }
+  try {
+    const url = await signerSigningLink(row, signer);
+    if (!url) {
+      res.status(502).json({
+        error: "signing-link-unavailable",
+        message: "DocuSeal did not return a signing link for this signer.",
+      });
+      return;
+    }
+    res.json({
+      url,
+      signerId: signer.id,
+      signingOrder: signer.signingOrder,
       requestId: row.id,
     });
   } catch (err) {

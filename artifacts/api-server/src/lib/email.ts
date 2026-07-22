@@ -5,6 +5,12 @@ export interface EmailArgs {
   subject: string;
   html: string;
   attachments?: { filename: string; content: string }[];
+  /**
+   * Explicit from-address (already validated by the caller). When absent,
+   * the general fallback chain applies (RESEND_FROM → connector →
+   * onboarding default).
+   */
+  from?: string;
 }
 
 interface ResendCredentials {
@@ -73,11 +79,32 @@ export async function getEmailDeliveryStatus(): Promise<{ configured: boolean; v
 const FROM_RE = /^(?:[^<>]*<\s*)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+(?:\s*>)?$/;
 
 function pickFromAddress(...candidates: (string | undefined)[]): string {
+  return firstValidFromAddress(...candidates) ?? "Cognirise <onboarding@resend.dev>";
+}
+
+/** First syntactically valid from-address among the candidates, else null. */
+export function firstValidFromAddress(...candidates: (string | undefined)[]): string | null {
   for (const c of candidates) {
     if (c && FROM_RE.test(c.trim())) return c.trim();
     if (c) logger.warn({ value: "<redacted>" }, "Ignoring malformed email from-address candidate");
   }
-  return "Cognirise <onboarding@resend.dev>";
+  return null;
+}
+
+/**
+ * Task #514 — the Cognirise-branded sender for signer-facing emails
+ * (e-sign invites). Unlike the general chain, this NEVER falls back to
+ * the onboarding/dev default: RESEND_BRANDED_FROM → RESEND_FROM →
+ * connector from_email, each validated; null when none is a valid
+ * address. Callers must treat null as "cannot deliver branded email".
+ */
+export async function getBrandedFromAddress(): Promise<string | null> {
+  const creds = await getResendCredentials();
+  return firstValidFromAddress(
+    process.env["RESEND_BRANDED_FROM"],
+    process.env["RESEND_FROM"],
+    creds?.fromEmail,
+  );
 }
 
 export async function sendEmail(args: EmailArgs): Promise<{ ok: boolean; via: string }> {
@@ -97,7 +124,7 @@ export async function sendEmail(args: EmailArgs): Promise<{ ok: boolean; via: st
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: pickFromAddress(process.env["RESEND_FROM"], creds.fromEmail),
+        from: args.from ?? pickFromAddress(process.env["RESEND_FROM"], creds.fromEmail),
         to: [args.to],
         subject: args.subject,
         html: args.html,

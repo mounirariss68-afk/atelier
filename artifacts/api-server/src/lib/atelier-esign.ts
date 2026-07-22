@@ -32,13 +32,14 @@ import {
   atelierAuditEvents,
   atelierUsers,
 } from "@workspace/db";
-import { sendEmail } from "./email.js";
+import { sendEmail, getBrandedFromAddress } from "./email.js";
 import {
   createTemplateFromPdf,
   createSubmission,
   getSubmission,
   archiveSubmission,
   resendSubmitterEmail,
+  submitterEmbedSrc,
   downloadDocusealFile,
   type DocusealSubmission,
   type SignaturePlacement,
@@ -98,6 +99,124 @@ export async function auditSignatureRequest(args: {
     payload: args.payload,
     payloadSummary: args.summary,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Branded signer invites (Task #514)
+//
+// New requests are created with DocuSeal's own emails disabled
+// (send_email: false) and Atelier emails signers itself from the
+// Cognirise address via the Resend-backed sendEmail helper. Sequential
+// signing is preserved: only the currently-actionable signer (lowest
+// signing order with every earlier signer completed) is ever invited,
+// and the next one is emailed by the sync pass once the prior signer
+// completes. Delivery is recorded honestly on the signer row:
+// "delivered" only when Resend actually accepted the email — a log-only
+// send counts as "undelivered" and the UI offers the signing link.
+// ---------------------------------------------------------------------------
+
+const esc = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The signer who may act now: lowest order, all earlier ones completed. */
+export function currentActionableSigner(signers: SigSignerRow[]): SigSignerRow | null {
+  const ordered = [...signers].sort((a, b) => a.signingOrder - b.signingOrder);
+  for (const s of ordered) {
+    if (s.status === "completed") continue;
+    if (s.status === "declined") return null;
+    return s;
+  }
+  return null;
+}
+
+/**
+ * Live signing link for one signer — slugs are never persisted, so the
+ * submission is re-fetched from DocuSeal. Returns null when the signer
+ * cannot be matched or DocuSeal provides no link.
+ */
+export async function signerSigningLink(
+  row: SigRequestRow,
+  signer: SigSignerRow,
+): Promise<string | null> {
+  const submission = await getSubmission(Number(row.docusealSubmissionId));
+  const sub =
+    (submission.submitters ?? []).find(
+      (s) => signer.docusealSubmitterId != null && String(s.id) === signer.docusealSubmitterId,
+    ) ??
+    (submission.submitters ?? []).find(
+      (s) => s.email.toLowerCase() === signer.email.toLowerCase(),
+    );
+  return sub ? submitterEmbedSrc(sub) : null;
+}
+
+/**
+ * Send (or re-send) the Cognirise-branded invite email to one signer and
+ * record the delivery outcome on the signer row. Never throws — email
+ * failure must not fail the send/sync; it is surfaced via
+ * invite_email_status instead.
+ */
+async function deliverBrandedInvite(args: {
+  row: SigRequestRow;
+  signer: SigSignerRow;
+  signingLink: string | null;
+  reminder?: boolean;
+}): Promise<"delivered" | "undelivered"> {
+  const { row, signer, signingLink } = args;
+  let status: "delivered" | "undelivered" = "undelivered";
+  // Branded invites must come from a validated Cognirise address — never
+  // the onboarding/dev fallback sender. No valid address = undelivered.
+  const brandedFrom = await getBrandedFromAddress().catch(() => null);
+  if (!signingLink) {
+    console.error(
+      `[esign-email] no signing link available for signer ${signer.id} on request ${row.id}; invite not sent`,
+    );
+  } else if (!brandedFrom) {
+    console.error(
+      `[esign-email] invite to ${signer.email} for ${row.id} NOT sent: no valid branded from-address configured (set RESEND_BRANDED_FROM or RESEND_FROM to a real address) — surface the signing link to the sender`,
+    );
+  } else {
+    try {
+      const intro = args.reminder
+        ? `This is a reminder that your signature is still needed on <strong>${esc(row.title)}</strong>.`
+        : `You have been asked to review and sign <strong>${esc(row.title)}</strong>.`;
+      const message = row.message
+        ? `<p style="white-space:pre-wrap;">${esc(row.message)}</p>`
+        : "";
+      const expiry = row.expiresAt
+        ? `<p>This request expires on ${row.expiresAt.toISOString().slice(0, 10)}.</p>`
+        : "";
+      const result = await sendEmail({
+        from: brandedFrom,
+        to: signer.email,
+        subject: `${args.reminder ? "Reminder — signature" : "Signature"} requested: ${row.title}`,
+        html:
+          `<p>Dear ${esc(signer.name || "Signer")},</p>` +
+          `<p>${intro}</p>` +
+          message +
+          `<p><a href="${signingLink}" style="display:inline-block;padding:10px 18px;background:#101828;color:#ffffff;text-decoration:none;border-radius:6px;">Review &amp; sign</a></p>` +
+          `<p>Or open this link directly:<br/><a href="${signingLink}">${signingLink}</a></p>` +
+          expiry +
+          `<p>Kind regards,<br/>Cognirise</p>`,
+      });
+      // Honest delivery semantics: only a real Resend send counts.
+      status = result.ok && result.via === "resend" ? "delivered" : "undelivered";
+      if (status === "undelivered") {
+        console.error(
+          `[esign-email] invite to ${signer.email} for ${row.id} NOT delivered (via ${result.via}) — surface the signing link to the sender`,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[esign-email] invite to ${signer.email} for ${row.id} failed:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+  await db
+    .update(atelierSignatureSigners)
+    .set({ inviteEmailStatus: status, inviteEmailAt: new Date(), updatedAt: new Date() })
+    .where(eq(atelierSignatureSigners.id, signer.id));
+  return status;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +322,8 @@ export async function sendSignatureRequest(args: {
     message: args.message ?? null,
     subject: `Signature requested: ${args.title}`,
     expiresAt: args.expiresAt ?? null,
+    // Task #514 — Atelier emails signers itself (Cognirise-branded).
+    sendEmail: false,
   });
 
   const reqId = rid("sig");
@@ -220,6 +341,7 @@ export async function sendSignatureRequest(args: {
       contactId: args.contactId ?? null,
       personId: args.personId ?? null,
       status: "sent",
+      emailMode: "branded",
       docusealTemplateId: String(template.id),
       docusealSubmissionId: String(created.submissionId),
       expiresAt: args.expiresAt ?? null,
@@ -254,6 +376,26 @@ export async function sendSignatureRequest(args: {
       })
       .returning();
     signerRows.push(row);
+  }
+
+  // Task #514 — invite the FIRST signer only (sequential signing); the
+  // sync pass invites the next signer once the prior one completes. The
+  // signing link comes straight from the creation response so no extra
+  // DocuSeal round-trip is needed here.
+  if (signerRows.length > 0) {
+    const first = signerRows[0];
+    const sub =
+      created.submitters.find(
+        (s) => first.docusealSubmitterId != null && String(s.id) === first.docusealSubmitterId,
+      ) ??
+      created.submitters.find((s) => s.email.toLowerCase() === first.email.toLowerCase());
+    const outcome = await deliverBrandedInvite({
+      row: request,
+      signer: first,
+      signingLink: sub ? submitterEmbedSrc(sub) : null,
+    });
+    first.inviteEmailStatus = outcome;
+    first.inviteEmailAt = new Date();
   }
 
   await auditSignatureRequest({
@@ -571,6 +713,37 @@ export async function syncSignatureRequest(requestId: string): Promise<SyncOutco
     .where(eq(atelierSignatureRequests.id, row.id))
     .returning();
 
+  // Task #514 — branded sequential invites: once the prior signer has
+  // completed, email the next actionable signer (exactly once — the
+  // null invite_email_status is the idempotency guard). The signing
+  // link comes from the submission already fetched above.
+  if (
+    row.emailMode === "branded" &&
+    OPEN_STATUSES.includes(nextStatus as (typeof OPEN_STATUSES)[number])
+  ) {
+    const freshSigners = await db
+      .select()
+      .from(atelierSignatureSigners)
+      .where(eq(atelierSignatureSigners.requestId, row.id));
+    const actionable = currentActionableSigner(freshSigners);
+    if (actionable && actionable.inviteEmailStatus == null) {
+      const sub =
+        (submission.submitters ?? []).find(
+          (s) =>
+            actionable.docusealSubmitterId != null &&
+            String(s.id) === actionable.docusealSubmitterId,
+        ) ??
+        (submission.submitters ?? []).find(
+          (s) => s.email.toLowerCase() === actionable.email.toLowerCase(),
+        );
+      await deliverBrandedInvite({
+        row: updated,
+        signer: actionable,
+        signingLink: sub ? submitterEmbedSrc(sub) : null,
+      });
+    }
+  }
+
   if (changed && nextStatus !== row.status) {
     await notifyRequesterOfTerminalStatus(updated, nextStatus);
   }
@@ -649,12 +822,29 @@ export async function remindSignatureRequest(args: {
     .select()
     .from(atelierSignatureSigners)
     .where(eq(atelierSignatureSigners.requestId, args.row.id));
-  const pending = signers.filter(
-    (s) => s.status !== "completed" && s.status !== "declined" && s.docusealSubmitterId,
-  );
-  if (pending.length === 0) return { reminded: 0 };
-  for (const s of pending) {
-    await resendSubmitterEmail(Number(s.docusealSubmitterId));
+  let pending: SigSignerRow[];
+  if (args.row.emailMode === "branded") {
+    // Task #514 — branded requests: re-send OUR Cognirise email to the
+    // currently-actionable signer only (sequential signing; later
+    // signers must not be nudged before their turn).
+    const actionable = currentActionableSigner(signers);
+    pending = actionable ? [actionable] : [];
+    if (pending.length === 0) return { reminded: 0 };
+    const link = await signerSigningLink(args.row, pending[0]);
+    await deliverBrandedInvite({
+      row: args.row,
+      signer: pending[0],
+      signingLink: link,
+      reminder: true,
+    });
+  } else {
+    pending = signers.filter(
+      (s) => s.status !== "completed" && s.status !== "declined" && s.docusealSubmitterId,
+    );
+    if (pending.length === 0) return { reminded: 0 };
+    for (const s of pending) {
+      await resendSubmitterEmail(Number(s.docusealSubmitterId));
+    }
   }
   await db
     .update(atelierSignatureRequests)

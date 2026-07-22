@@ -614,11 +614,74 @@ export async function fillDocxTemplate(args: {
 
 export class PdfConversionError extends Error {}
 
+/**
+ * Task #514 — faithful fonts in docx→PDF conversion.
+ *
+ * The contract templates are set in "Plus Jakarta Sans ExtraLight"; the
+ * server environment only ships DejaVu, so LibreOffice silently
+ * substituted the body font. The Plus Jakarta Sans TTFs are bundled in
+ * `artifacts/api-server/fonts/` and exposed to LibreOffice via a
+ * dedicated HOME whose `.fonts/` links to them (fontconfig scans
+ * `$HOME/.fonts` by default). Prepared once per process; a missing
+ * bundle degrades to the old (substituted-font) behavior with a loud
+ * warning rather than failing the conversion.
+ */
+let fontHomePromise: Promise<string | null> | null = null;
+
+async function prepareFontHome(): Promise<string | null> {
+  const { readdir, mkdir, copyFile } = await import("node:fs/promises");
+  // dist/index.mjs → ../fonts ; src/lib/*.ts (tsx) → ../../fonts
+  const candidates = [
+    new URL("../fonts", import.meta.url),
+    new URL("../../fonts", import.meta.url),
+  ];
+  let fontsDir: string | null = null;
+  let ttfs: string[] = [];
+  for (const c of candidates) {
+    try {
+      const p = c.pathname;
+      const files = (await readdir(p)).filter((f) => f.toLowerCase().endsWith(".ttf"));
+      if (files.length > 0) {
+        fontsDir = p;
+        ttfs = files;
+        break;
+      }
+    } catch {
+      // try next candidate
+    }
+  }
+  if (!fontsDir) {
+    console.error(
+      "[contract-pdf] bundled fonts directory not found — LibreOffice will substitute fonts (PDF will not match the docx typeface)",
+    );
+    return null;
+  }
+  const home = path.join(tmpdir(), "atelier-lo-fonthome");
+  const dest = path.join(home, ".fonts");
+  await mkdir(dest, { recursive: true });
+  for (const f of ttfs) {
+    await copyFile(path.join(fontsDir, f), path.join(dest, f));
+  }
+  return home;
+}
+
+async function libreOfficeFontHome(): Promise<string | null> {
+  if (!fontHomePromise) fontHomePromise = prepareFontHome().catch((err) => {
+    console.error(
+      "[contract-pdf] failed to prepare font home:",
+      err instanceof Error ? err.message : err,
+    );
+    return null;
+  });
+  return fontHomePromise;
+}
+
 export async function convertDocxToPdf(docxBytes: Buffer): Promise<Buffer> {
   const dir = await mkdtemp(path.join(tmpdir(), "ctr-pdf-"));
   try {
     const src = path.join(dir, "contract.docx");
     await writeFile(src, docxBytes);
+    const fontHome = await libreOfficeFontHome();
     try {
       await execFileAsync(
         "soffice",
@@ -632,7 +695,10 @@ export async function convertDocxToPdf(docxBytes: Buffer): Promise<Buffer> {
           dir,
           src,
         ],
-        { timeout: 120_000 },
+        {
+          timeout: 120_000,
+          env: fontHome ? { ...process.env, HOME: fontHome } : process.env,
+        },
       );
     } catch (err) {
       throw new PdfConversionError(

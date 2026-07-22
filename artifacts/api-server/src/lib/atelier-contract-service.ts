@@ -42,6 +42,7 @@ import {
   rid,
 } from "./atelier-contracts.js";
 import { createDocument } from "./atelier-documents.js";
+import { extractSignatureAnchors, computeAnchoredBoxes } from "./esign-anchors.js";
 import { sendSignatureRequest } from "./atelier-esign.js";
 import { DocusealError, docusealConfigured, defaultSignaturePlacement } from "./docuseal.js";
 
@@ -838,7 +839,30 @@ export async function sendContract(args: {
     w: number;
     h: number;
   };
-  let extraFields: ContractExtraField[] | null = null;
+
+  // Task #514 — anchor the boxes to the document's actual signature
+  // block (the "Authorised Signatory" / "Signature" / "Date" lines on
+  // the last page) instead of the generic default layout. Falls back to
+  // the legacy defaults, with a logged warning, when no anchors can be
+  // found in the converted PDF.
+  const cpIndex = await resolveCounterpartySignerIndex(contract, args.signers);
+  let anchors: Awaited<ReturnType<typeof extractSignatureAnchors>> = null;
+  try {
+    anchors = await extractSignatureAnchors(pdfBytes);
+  } catch (err) {
+    console.error(
+      `[contract-send] signature-anchor extraction failed for ${contract.id}:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+  if (!anchors) {
+    console.error(
+      `[contract-send] no signature-block anchors found in "${contract.title}" — using the default box layout`,
+    );
+  }
+
+  let spTextFields: Array<{ label: string }> = [];
+  let hasSecondPartyDate = false;
   if (contract.templateVersionId) {
     const [tv] = await db
       .select()
@@ -847,8 +871,58 @@ export async function sendContract(args: {
     const spFields = normalizeFieldSchema(tv?.fieldSchema ?? []).filter(
       (f) => f.role === "second_party",
     );
-    const hasSecondPartyDate = spFields.some((f) => f.dataType === "date");
-    const spTextFields = spFields.filter((f) => f.dataType !== "date");
+    hasSecondPartyDate = spFields.some((f) => f.dataType === "date");
+    spTextFields = spFields
+      .filter((f) => f.dataType !== "date")
+      .map((f) => ({ label: f.label || f.key }));
+  }
+  // A "Date" line under the signature line means the signing date belongs
+  // there, template placeholder or not — DocuSeal fills date fields
+  // automatically at signing.
+  const wantDates =
+    hasSecondPartyDate || (anchors?.columns.some((c) => c.date) ?? false);
+
+  let placements: Array<{ page: number; x: number; y: number; w: number; h: number }> | null =
+    null;
+  let extraFields: ContractExtraField[] | null = null;
+  if (anchors) {
+    const boxes = computeAnchoredBoxes({
+      anchors,
+      signerCount: args.signers.length,
+      counterpartyIndex: cpIndex,
+      textFieldCount: spTextFields.length,
+      defaultPlacement: (i, page) => defaultSignaturePlacement(i, page),
+    });
+    if (boxes.unanchoredSignerIndexes.length > 0) {
+      console.error(
+        `[contract-send] ${boxes.unanchoredSignerIndexes.length} signer(s) exceed the document's signature columns on "${contract.title}" — default-placing the extras`,
+      );
+    }
+    placements = boxes.placements;
+    const built: ContractExtraField[] = [];
+    if (wantDates) {
+      for (const d of boxes.dateBoxes) {
+        built.push({ signerIndex: d.signerIndex, type: "date", ...{
+          page: d.page, x: d.x, y: d.y, w: d.w, h: d.h,
+        } });
+      }
+    }
+    boxes.textBoxes.forEach((b, k) => {
+      built.push({
+        signerIndex: cpIndex,
+        type: "text",
+        label: spTextFields[k]?.label ?? null,
+        page: b.page,
+        x: b.x,
+        y: b.y,
+        w: b.w,
+        h: b.h,
+      });
+    });
+    if (built.length > 0) extraFields = built;
+  } else {
+    // Legacy fallback: default two-column layout, date/text boxes hung
+    // beneath the default signature boxes on the last page.
     const built: ContractExtraField[] = [];
     if (hasSecondPartyDate) {
       for (let i = 0; i < args.signers.length; i++) {
@@ -867,18 +941,13 @@ export async function sendContract(args: {
       }
     }
     if (spTextFields.length > 0) {
-      // The counterparty is the signer whose email matches the contract's
-      // person/contact record; when no email matches (or the counterparty
-      // is a whole account), the first signer is assumed — the firm-side
-      // partner is added after the client in practice.
-      const cpIndex = await resolveCounterpartySignerIndex(contract, args.signers);
       const sig = defaultSignaturePlacement(cpIndex, 0);
       const base = sig.y + 0.055 + (hasSecondPartyDate ? 0.035 : 0);
       spTextFields.forEach((f, k) => {
         built.push({
           signerIndex: cpIndex,
           type: "text" as const,
-          label: f.label || f.key,
+          label: f.label,
           page: 9999,
           x: sig.x,
           y: Math.min(0.95, base + k * 0.035),
@@ -906,6 +975,7 @@ export async function sendContract(args: {
       contactId: contract.contactId,
       personId: contract.personId,
       expiresAt: args.expiresAt ?? null,
+      placements,
       extraFields,
     });
     const [updated] = await db

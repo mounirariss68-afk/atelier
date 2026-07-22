@@ -281,10 +281,16 @@ export async function createSubmission(args: {
   message?: string | null;
   subject?: string | null;
   expiresAt?: Date | null;
+  /**
+   * Task #514 — when false, DocuSeal sends NO signer emails; the caller
+   * emails signers itself (Cognirise-branded invites via Resend).
+   * Defaults to true for backwards compatibility.
+   */
+  sendEmail?: boolean;
 }): Promise<{ submissionId: number; submitters: DocusealSubmitter[] }> {
   const payload: Record<string, unknown> = {
     template_id: args.templateId,
-    send_email: true,
+    send_email: args.sendEmail ?? true,
     order: "preserved",
     submitters: args.signers.map((s, i) => ({
       name: s.name,

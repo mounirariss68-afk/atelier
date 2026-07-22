@@ -128,6 +128,37 @@ function RequestCard({
 
   const open = request.status === "sent" || request.status === "partially_signed";
 
+  // Task #514 — branded invite fallback: when the Cognirise email could
+  // not be delivered, the sender copies the live signing link instead.
+  const [copyingSigner, setCopyingSigner] = React.useState<string | null>(null);
+  const copySigningLink = async (signerId: string) => {
+    setCopyingSigner(signerId);
+    try {
+      const res = await fetch(
+        `${import.meta.env.BASE_URL}api/atelier/esign/requests/${request.id}/signers/${signerId}/signing-link`,
+        { credentials: "include" },
+      );
+      const body = (await res.json()) as { url?: string; message?: string; error?: string };
+      if (!res.ok || !body.url) {
+        toast({
+          title: "Signing link unavailable",
+          description: body.message ?? body.error ?? "Unexpected error",
+          variant: "destructive",
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(body.url);
+      toast({
+        title: "Signing link copied",
+        description: "Share it with the signer directly — the invite email was not delivered.",
+      });
+    } catch {
+      toast({ title: "Could not copy the signing link", variant: "destructive" });
+    } finally {
+      setCopyingSigner(null);
+    }
+  };
+
   return (
     <Card
       ref={cardRef}
@@ -206,9 +237,37 @@ function RequestCard({
               <span className="text-text">{s.name}</span>
               <span className="text-text-faint ml-2 text-xs">{s.email}</span>
             </div>
-            <span className="text-xs text-text-mute shrink-0 ml-3">
-              {SIGNER_STATUS[s.status] ?? s.status}
-              {s.completedAt ? ` · ${fmtDate(s.completedAt)}` : ""}
+            <span className="flex items-center gap-2 text-xs text-text-mute shrink-0 ml-3">
+              {request.emailMode === "branded" && s.inviteEmailStatus === "undelivered" &&
+              s.status !== "completed" && s.status !== "declined" && open ? (
+                <>
+                  <span
+                    className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-400"
+                    data-testid={`badge-undelivered-${s.id}`}
+                  >
+                    Email not delivered
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    disabled={copyingSigner === s.id}
+                    onClick={() => void copySigningLink(s.id)}
+                    data-testid={`button-copy-signlink-${s.id}`}
+                  >
+                    Copy signing link
+                  </Button>
+                </>
+              ) : null}
+              {request.emailMode === "branded" && s.inviteEmailStatus === "delivered" ? (
+                <span className="text-emerald-400/90" title="Invite email delivered">
+                  Emailed
+                </span>
+              ) : null}
+              <span>
+                {SIGNER_STATUS[s.status] ?? s.status}
+                {s.completedAt ? ` · ${fmtDate(s.completedAt)}` : ""}
+              </span>
             </span>
           </div>
         ))}
@@ -391,7 +450,7 @@ export default function Agreements() {
               the Document Library, and add yourself as the signer using a real email
               address you can check.
             </li>
-            <li>Open your inbox and confirm the DocuSeal signature email arrived (check spam too).</li>
+            <li>Open your inbox and confirm the Cognirise signature email arrived (check spam too).</li>
             <li>Follow the emailed link and sign the document.</li>
             <li>
               Back here, click <span className="text-text">Refresh statuses</span> — the

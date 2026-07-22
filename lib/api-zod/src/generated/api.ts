@@ -1523,6 +1523,12 @@ export const AtelierListSignatureRequestsResponse = zod.object({
       contactId: zod.string().nullish(),
       personId: zod.string().nullish(),
       signedDocumentId: zod.string().nullish(),
+      emailMode: zod
+        .string()
+        .nullish()
+        .describe(
+          '\"branded\" = Atelier emails signers from the Cognirise address; null = legacy request where DocuSeal emailed signers itself.',
+        ),
       expiresAt: zod.string().nullish(),
       createdBy: zod.string(),
       createdByLabel: zod.string(),
@@ -1542,6 +1548,13 @@ export const AtelierListSignatureRequestsResponse = zod.object({
             email: zod.string(),
             signingOrder: zod.number(),
             status: zod.string(),
+            inviteEmailStatus: zod
+              .string()
+              .nullish()
+              .describe(
+                'Branded invite delivery truth — \"delivered\" only when Resend actually accepted the email; \"undelivered\" when the send failed or email is not configured; null before the signer\'s turn (or on legacy DocuSeal-emailed requests).',
+              ),
+            inviteEmailAt: zod.string().nullish(),
             openedAt: zod.string().nullish(),
             completedAt: zod.string().nullish(),
             declinedAt: zod.string().nullish(),
@@ -1731,6 +1744,12 @@ export const AtelierGetSignatureRequestResponse = zod.object({
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),
+    emailMode: zod
+      .string()
+      .nullish()
+      .describe(
+        '\"branded\" = Atelier emails signers from the Cognirise address; null = legacy request where DocuSeal emailed signers itself.',
+      ),
     expiresAt: zod.string().nullish(),
     createdBy: zod.string(),
     createdByLabel: zod.string(),
@@ -1750,6 +1769,13 @@ export const AtelierGetSignatureRequestResponse = zod.object({
           email: zod.string(),
           signingOrder: zod.number(),
           status: zod.string(),
+          inviteEmailStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              'Branded invite delivery truth — \"delivered\" only when Resend actually accepted the email; \"undelivered\" when the send failed or email is not configured; null before the signer\'s turn (or on legacy DocuSeal-emailed requests).',
+            ),
+          inviteEmailAt: zod.string().nullish(),
           openedAt: zod.string().nullish(),
           completedAt: zod.string().nullish(),
           declinedAt: zod.string().nullish(),
@@ -1780,6 +1806,12 @@ export const AtelierVoidSignatureRequestResponse = zod.object({
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),
+    emailMode: zod
+      .string()
+      .nullish()
+      .describe(
+        '\"branded\" = Atelier emails signers from the Cognirise address; null = legacy request where DocuSeal emailed signers itself.',
+      ),
     expiresAt: zod.string().nullish(),
     createdBy: zod.string(),
     createdByLabel: zod.string(),
@@ -1799,6 +1831,13 @@ export const AtelierVoidSignatureRequestResponse = zod.object({
           email: zod.string(),
           signingOrder: zod.number(),
           status: zod.string(),
+          inviteEmailStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              'Branded invite delivery truth — \"delivered\" only when Resend actually accepted the email; \"undelivered\" when the send failed or email is not configured; null before the signer\'s turn (or on legacy DocuSeal-emailed requests).',
+            ),
+          inviteEmailAt: zod.string().nullish(),
           openedAt: zod.string().nullish(),
           completedAt: zod.string().nullish(),
           declinedAt: zod.string().nullish(),
@@ -1840,6 +1879,12 @@ export const AtelierSyncSignatureRequestResponse = zod.object({
     contactId: zod.string().nullish(),
     personId: zod.string().nullish(),
     signedDocumentId: zod.string().nullish(),
+    emailMode: zod
+      .string()
+      .nullish()
+      .describe(
+        '\"branded\" = Atelier emails signers from the Cognirise address; null = legacy request where DocuSeal emailed signers itself.',
+      ),
     expiresAt: zod.string().nullish(),
     createdBy: zod.string(),
     createdByLabel: zod.string(),
@@ -1859,6 +1904,13 @@ export const AtelierSyncSignatureRequestResponse = zod.object({
           email: zod.string(),
           signingOrder: zod.number(),
           status: zod.string(),
+          inviteEmailStatus: zod
+            .string()
+            .nullish()
+            .describe(
+              'Branded invite delivery truth — \"delivered\" only when Resend actually accepted the email; \"undelivered\" when the send failed or email is not configured; null before the signer\'s turn (or on legacy DocuSeal-emailed requests).',
+            ),
+          inviteEmailAt: zod.string().nullish(),
           openedAt: zod.string().nullish(),
           completedAt: zod.string().nullish(),
           declinedAt: zod.string().nullish(),

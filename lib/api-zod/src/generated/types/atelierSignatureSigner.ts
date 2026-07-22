@@ -12,6 +12,13 @@ export interface AtelierSignatureSigner {
   email: string;
   signingOrder: number;
   status: string;
+  /**
+   * Branded invite delivery truth — "delivered" only when Resend actually accepted the email; "undelivered" when the send failed or email is not configured; null before the signer's turn (or on legacy DocuSeal-emailed requests).
+   * @nullable
+   */
+  inviteEmailStatus?: string | null;
+  /** @nullable */
+  inviteEmailAt?: string | null;
   /** @nullable */
   openedAt?: string | null;
   /** @nullable */
