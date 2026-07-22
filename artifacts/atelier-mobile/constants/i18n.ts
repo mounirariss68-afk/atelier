@@ -259,6 +259,10 @@ const en: Dict = {
   "mtg.overdue": "Overdue",
   "mtg.due": "Due {d}",
   "mtg.reminderBody": "Starts in {mins} min · Tap for your {name} brief",
+  "mtg.viewList": "List",
+  "mtg.viewDay": "Day",
+  "mtg.joinError": "Couldn't open the meeting link. Try again.",
+  "mtg.emptyDay": "No meetings on this day.",
   // feedback / pickers
   "common.search": "Search…",
   "common.continue": "Continue",
@@ -502,6 +506,10 @@ const tr: Dict = {
   "mtg.overdue": "Gecikmiş",
   "mtg.due": "Son tarih {d}",
   "mtg.reminderBody": "{mins} dk sonra başlıyor · {name} brifingi için dokunun",
+  "mtg.viewList": "Liste",
+  "mtg.viewDay": "Gün",
+  "mtg.joinError": "Toplantı bağlantısı açılamadı. Tekrar deneyin.",
+  "mtg.emptyDay": "Bu günde toplantı yok.",
   // feedback / pickers
   "common.search": "Ara…",
   "common.continue": "Devam et",
@@ -745,6 +753,10 @@ const ar: Dict = {
   "mtg.overdue": "متأخر",
   "mtg.due": "الاستحقاق {d}",
   "mtg.reminderBody": "يبدأ خلال {mins} دقيقة · اضغط لعرض موجز {name}",
+  "mtg.viewList": "قائمة",
+  "mtg.viewDay": "يوم",
+  "mtg.joinError": "تعذّر فتح رابط الاجتماع. حاول مرة أخرى.",
+  "mtg.emptyDay": "لا توجد اجتماعات في هذا اليوم.",
   // feedback / pickers
   "common.search": "بحث…",
   "common.continue": "متابعة",

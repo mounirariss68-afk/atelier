@@ -319,6 +319,7 @@ export interface MsCalendarEvent {
   start?: { dateTime?: string; timeZone?: string };
   end?: { dateTime?: string; timeZone?: string };
   location?: { displayName?: string };
+  body?: { contentType?: string; content?: string } | null;
   onlineMeeting?: { joinUrl?: string } | null;
   onlineMeetingUrl?: string | null;
   attendees?: Array<{
@@ -327,6 +328,34 @@ export interface MsCalendarEvent {
   }>;
   organizer?: { emailAddress?: { address?: string; name?: string } };
   webLink?: string;
+}
+
+// Known online-meeting URL shapes (Teams, Google Meet, Zoom, Webex). Used as
+// a fallback when Graph doesn't expose onlineMeeting.joinUrl — organizers on
+// other platforms often put the link in the location text or the body HTML.
+const MEETING_URL_RE =
+  /https:\/\/(?:teams\.microsoft\.com\/l\/meetup-join\/[^\s"'<>()]+|teams\.live\.com\/meet\/[^\s"'<>()]+|meet\.google\.com\/[a-z0-9-]+(?:\?[^\s"'<>()]*)?|[\w.-]*zoom\.us\/(?:j|my|w|s)\/[^\s"'<>()]+|[\w-]+\.webex\.com\/(?:meet|join)\/[^\s"'<>()]+|[\w-]+\.webex\.com\/[\w-]+\/j\.php\?[^\s"'<>()]+)/i;
+
+function decodeHtmlEntities(s: string): string {
+  return s
+    .replace(/&amp;/gi, "&")
+    .replace(/&#38;/g, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&nbsp;/gi, " ");
+}
+
+/** Scan free text (location display name or event body) for a known
+ * online-meeting link. Returns the normalized URL or null. */
+export function extractMeetingUrl(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const decoded = decodeHtmlEntities(text);
+  const m = MEETING_URL_RE.exec(decoded);
+  if (!m) return null;
+  // Trim trailing punctuation that regularly rides along in prose/HTML.
+  return m[0].replace(/[.,;:!?)\]}>"']+$/, "");
 }
 
 export async function getCalendarView(
@@ -340,19 +369,17 @@ export async function getCalendarView(
     $orderby: "start/dateTime",
     $top: "100",
     $select:
-      "id,subject,isCancelled,isAllDay,start,end,location,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink",
+      "id,subject,isCancelled,isAllDay,start,end,location,body,onlineMeeting,onlineMeetingUrl,attendees,organizer,webLink",
   });
   const out: MsCalendarEvent[] = [];
   let path: string | null = `/me/calendarView?${qs.toString()}`;
   let guard = 0;
   while (path && guard < 5) {
     guard += 1;
-    const page = await graphGet<{
-      value: MsCalendarEvent[];
-      "@odata.nextLink"?: string;
-    }>(accessToken, path);
+    const page: { value: MsCalendarEvent[]; "@odata.nextLink"?: string } =
+      await graphGet(accessToken, path);
     out.push(...(page.value ?? []));
-    const next = page["@odata.nextLink"];
+    const next: string | undefined = page["@odata.nextLink"];
     path = next ? next.replace(graphBase(), "") : null;
     if (path && !path.startsWith("/")) path = null; // absolute foreign URL — stop
   }

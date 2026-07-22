@@ -16,9 +16,10 @@ import {
 import * as ExpoLinking from "expo-linking";
 import { useLocalSearchParams } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   Platform,
   Pressable,
@@ -44,6 +45,33 @@ import {
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
+
+// Open a meeting join link reliably: web opens a new tab (popup-blocker
+// aware), native tries the deep link (Teams/Meet/Zoom apps) and falls back
+// to the in-app browser. Any failure surfaces a visible error instead of
+// silent nothing.
+async function openJoinUrl(url: string, errorMsg: string) {
+  hapticLight();
+  try {
+    if (Platform.OS === "web") {
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) throw new Error("popup-blocked");
+      return;
+    }
+    const can = await Linking.canOpenURL(url).catch(() => false);
+    if (can) {
+      await Linking.openURL(url);
+      return;
+    }
+    await WebBrowser.openBrowserAsync(url);
+  } catch {
+    if (Platform.OS === "web") {
+      window.alert(errorMsg);
+    } else {
+      Alert.alert(errorMsg);
+    }
+  }
+}
 
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString(undefined, {
@@ -345,8 +373,7 @@ function MeetingRow({
           {m.joinUrl ? (
             <Pressable
               onPress={() => {
-                hapticLight();
-                Linking.openURL(m.joinUrl!);
+                void openJoinUrl(m.joinUrl!, t("mtg.joinError"));
               }}
               style={({ pressed }) => ({
                 flexDirection: rtl.row,
@@ -453,6 +480,336 @@ function windowIso(days: number) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
+// ------------------------------------------------------------------
+// Day calendar view — full-day timeline with positioned meeting blocks.
+// ------------------------------------------------------------------
+
+const HOUR_H = 56;
+const GUTTER = 52;
+
+function startOfDay(d: Date) {
+  const s = new Date(d);
+  s.setHours(0, 0, 0, 0);
+  return s;
+}
+
+function sameDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+interface TimedBlock {
+  m: AtelierCalendarMeeting;
+  top: number;
+  height: number;
+  col: number;
+  cols: number;
+}
+
+/** Position timed meetings for one day: clamp to day bounds, then greedy
+ * column assignment inside each overlapping cluster. */
+function layoutDayBlocks(
+  meetings: AtelierCalendarMeeting[],
+  dayStart: Date,
+): TimedBlock[] {
+  const dayStartMs = dayStart.getTime();
+  const dayEndMs = dayStartMs + 24 * 3600 * 1000;
+  const items = meetings
+    .map((m) => {
+      const s = Math.max(new Date(m.start).getTime(), dayStartMs);
+      const e = Math.min(new Date(m.end).getTime(), dayEndMs);
+      const startMin = (s - dayStartMs) / 60000;
+      const endMin = Math.max((e - dayStartMs) / 60000, startMin + 30);
+      return { m, startMin, endMin, col: 0, cols: 1 };
+    })
+    .filter((x) => x.endMin > 0 && x.startMin < 24 * 60)
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  // Cluster overlapping runs, then assign columns greedily.
+  let i = 0;
+  while (i < items.length) {
+    let clusterEnd = items[i].endMin;
+    let j = i + 1;
+    while (j < items.length && items[j].startMin < clusterEnd) {
+      clusterEnd = Math.max(clusterEnd, items[j].endMin);
+      j += 1;
+    }
+    const cluster = items.slice(i, j);
+    const colEnds: number[] = [];
+    for (const ev of cluster) {
+      let col = colEnds.findIndex((end) => end <= ev.startMin);
+      if (col === -1) {
+        col = colEnds.length;
+        colEnds.push(ev.endMin);
+      } else {
+        colEnds[col] = ev.endMin;
+      }
+      ev.col = col;
+    }
+    for (const ev of cluster) ev.cols = colEnds.length;
+    i = j;
+  }
+
+  return items.map((ev) => ({
+    m: ev.m,
+    top: (ev.startMin / 60) * HOUR_H,
+    height: Math.max(((ev.endMin - ev.startMin) / 60) * HOUR_H, 26),
+    col: ev.col,
+    cols: ev.cols,
+  }));
+}
+
+function DayNavigator({
+  date,
+  onChange,
+}: {
+  date: Date;
+  onChange: (d: Date) => void;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const { t } = useI18n();
+  const isToday = sameDay(date, new Date());
+  const shift = (days: number) => {
+    hapticLight();
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    onChange(startOfDay(d));
+  };
+  const arrow = (dir: -1 | 1, icon: "chevron-left" | "chevron-right") => (
+    <Pressable
+      onPress={() => shift(dir)}
+      hitSlop={8}
+      style={({ pressed }) => ({
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: c.secondary,
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      <Feather name={icon} size={18} color={c.foreground} />
+    </Pressable>
+  );
+  return (
+    <View
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "center",
+        gap: 10,
+      }}
+    >
+      {arrow(-1, rtl.row === "row-reverse" ? "chevron-right" : "chevron-left")}
+      <View style={{ flex: 1, alignItems: "center" }}>
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontSize: 15,
+          }}
+        >
+          {isToday
+            ? t("common.today")
+            : date.toLocaleDateString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+        </Text>
+        {!isToday ? (
+          <Pressable
+            onPress={() => {
+              hapticLight();
+              onChange(startOfDay(new Date()));
+            }}
+            hitSlop={6}
+          >
+            <Text
+              style={{
+                color: c.primary,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 12,
+              }}
+            >
+              {t("common.today")}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {arrow(1, rtl.row === "row-reverse" ? "chevron-left" : "chevron-right")}
+    </View>
+  );
+}
+
+function DayTimeline({
+  meetings,
+  date,
+  selectedId,
+  onSelect,
+}: {
+  meetings: AtelierCalendarMeeting[];
+  date: Date;
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const c = useColors();
+  const { t } = useI18n();
+  const isToday = sameDay(date, new Date());
+  const blocks = useMemo(
+    () => layoutDayBlocks(meetings.filter((m) => !m.isAllDay), startOfDay(date)),
+    [meetings, date],
+  );
+  const now = new Date();
+  const nowTop =
+    isToday ? ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_H : null;
+
+  const hourLabel = (h: number) => {
+    const d = new Date(date);
+    d.setHours(h, 0, 0, 0);
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <View style={{ height: 24 * HOUR_H, position: "relative" }}>
+      {Array.from({ length: 24 }, (_, h) => (
+        <View
+          key={h}
+          style={{
+            position: "absolute",
+            top: h * HOUR_H,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "flex-start",
+          }}
+        >
+          <Text
+            style={{
+              width: GUTTER - 8,
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_400Regular",
+              fontSize: 10,
+              textAlign: "right",
+              transform: [{ translateY: -6 }],
+            }}
+          >
+            {hourLabel(h)}
+          </Text>
+          <View
+            style={{
+              flex: 1,
+              marginLeft: 8,
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: c.border,
+            }}
+          />
+        </View>
+      ))}
+
+      {/* Lane area: blocks use % geometry relative to this container. */}
+      <View
+        style={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: GUTTER,
+          right: 4,
+        }}
+      >
+        {blocks.map(({ m, top, height, col, cols }) => {
+          const selected = selectedId === m.id;
+          const matched = m.matches.length > 0;
+          return (
+            <Pressable
+              key={m.id}
+              onPress={() => {
+                hapticLight();
+                onSelect(selected ? null : m.id);
+              }}
+              style={({ pressed }) => ({
+                position: "absolute",
+                top,
+                height,
+                left: `${(col / cols) * 100}%`,
+                width: `${100 / cols}%`,
+                paddingRight: col === cols - 1 ? 0 : 3,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <View
+                style={{
+                  flex: 1,
+                  borderRadius: 8,
+                  borderWidth: selected ? 1.5 : StyleSheet.hairlineWidth,
+                  borderColor: selected ? c.primary : c.border,
+                  backgroundColor: matched ? c.primary + "22" : c.secondary,
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  overflow: "hidden",
+                }}
+              >
+                <Text
+                  numberOfLines={height > 40 ? 2 : 1}
+                  style={{
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 12,
+                  }}
+                >
+                  {m.subject || t("mtg.noSubject")}
+                </Text>
+                {height > 44 ? (
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontSize: 11,
+                    }}
+                  >
+                    {fmtTime(m.start)} – {fmtTime(m.end)}
+                    {m.joinUrl ? "  ·  " + t("mtg.join") : ""}
+                  </Text>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* Current-time indicator (today only). */}
+      {nowTop !== null ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: nowTop,
+            left: GUTTER - 4,
+            right: 0,
+            flexDirection: "row",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: c.destructive,
+            }}
+          />
+          <View style={{ flex: 1, height: 2, backgroundColor: c.destructive }} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function MeetingsScreen() {
   const c = useColors();
   const rtl = useRTL();
@@ -509,9 +866,56 @@ export default function MeetingsScreen() {
     },
   });
 
+  // Day calendar view — the selected day is fetched as its own window so the
+  // navigator can move beyond the list's 7-day range (past or future).
+  const [view, setView] = useState<"list" | "day">("list");
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
+  const [selectedMeetingId, setSelectedMeetingId] = useState<string | null>(null);
+  const dayWin = useMemo(() => {
+    const s = startOfDay(selectedDate);
+    const e = new Date(s);
+    e.setDate(s.getDate() + 1);
+    return { start: s.toISOString(), end: e.toISOString() };
+  }, [selectedDate]);
+  const dayCalendar = useAtelierGetMyCalendar(dayWin, {
+    query: {
+      queryKey: getAtelierGetMyCalendarQueryKey(dayWin),
+      enabled: enabled && view === "day",
+      retry: false,
+    },
+  });
+  const scrollRef = useRef<ScrollView | null>(null);
+
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
   const meetings = calendar.data?.meetings ?? [];
+
+  const dayMeetings = dayCalendar.data?.meetings ?? [];
+  const allDayMeetings = dayMeetings.filter((m) => m.isAllDay);
+  const timedMeetings = dayMeetings.filter((m) => !m.isAllDay);
+  const selectedMeeting =
+    dayMeetings.find((m) => m.id === selectedMeetingId) ?? null;
+
+  // When entering day view or changing day, scroll near the first meeting
+  // (or 8am when the day is empty) so the user isn't staring at midnight.
+  useEffect(() => {
+    if (view !== "day") return;
+    let hour = 8;
+    if (timedMeetings.length > 0) {
+      const first = Math.min(
+        ...timedMeetings.map((m) =>
+          Math.max(
+            0,
+            (new Date(m.start).getTime() - startOfDay(selectedDate).getTime()) /
+              3600000,
+          ),
+        ),
+      );
+      hour = Math.max(0, Math.floor(first) - 1);
+    }
+    scrollRef.current?.scrollTo({ y: hour * HOUR_H, animated: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, dayWin.start, dayCalendar.isSuccess]);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -563,17 +967,73 @@ export default function MeetingsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad }}
         refreshControl={
           enabled ? (
             <RefreshControl
-              refreshing={calendar.isRefetching}
-              onRefresh={() => calendar.refetch()}
+              refreshing={
+                view === "day" ? dayCalendar.isRefetching : calendar.isRefetching
+              }
+              onRefresh={() =>
+                view === "day" ? dayCalendar.refetch() : calendar.refetch()
+              }
               tintColor={c.mutedForeground}
             />
           ) : undefined
         }
       >
+        {enabled && !conn.isLoading ? (
+          <View
+            style={{
+              flexDirection: rtl.row,
+              alignSelf: "flex-start",
+              borderRadius: c.radius,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: c.border,
+              backgroundColor: c.secondary,
+              padding: 3,
+              gap: 2,
+            }}
+          >
+            {(["list", "day"] as const).map((v) => {
+              const active = view === v;
+              return (
+                <Pressable
+                  key={v}
+                  onPress={() => {
+                    hapticLight();
+                    setView(v);
+                  }}
+                  style={{
+                    flexDirection: rtl.row,
+                    alignItems: "center",
+                    gap: 6,
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: c.radius - 3,
+                    backgroundColor: active ? c.card : "transparent",
+                  }}
+                >
+                  <Feather
+                    name={v === "list" ? "list" : "clock"}
+                    size={13}
+                    color={active ? c.foreground : c.mutedForeground}
+                  />
+                  <Text
+                    style={{
+                      color: active ? c.foreground : c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontSize: 13,
+                    }}
+                  >
+                    {v === "list" ? t("mtg.viewList") : t("mtg.viewDay")}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         {conn.isLoading ? (
           <View style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (
@@ -641,6 +1101,96 @@ export default function MeetingsScreen() {
               </Text>
             ) : null}
           </View>
+        ) : view === "day" ? (
+          <>
+            <DayNavigator
+              date={selectedDate}
+              onChange={(d) => {
+                setSelectedDate(d);
+                setSelectedMeetingId(null);
+              }}
+            />
+            {dayCalendar.isLoading ? (
+              <View style={{ gap: 12 }}>
+                {[0, 1, 2].map((i) => (
+                  <Card key={i} style={{ gap: 8 }}>
+                    <Skeleton height={14} width="30%" />
+                    <Skeleton height={16} width="80%" />
+                  </Card>
+                ))}
+              </View>
+            ) : dayCalendar.isError ? (
+              <ErrorState
+                onRetry={() => dayCalendar.refetch()}
+                message={t("mtg.error")}
+              />
+            ) : (
+              <>
+                {allDayMeetings.length > 0 ? (
+                  <View style={{ gap: 6 }}>
+                    <SectionHeading label={t("mtg.allDay")} />
+                    {allDayMeetings.map((m) => {
+                      const selected = selectedMeetingId === m.id;
+                      return (
+                        <Pressable
+                          key={m.id}
+                          onPress={() => {
+                            hapticLight();
+                            setSelectedMeetingId(selected ? null : m.id);
+                          }}
+                          style={({ pressed }) => ({
+                            borderRadius: 8,
+                            borderWidth: selected
+                              ? 1.5
+                              : StyleSheet.hairlineWidth,
+                            borderColor: selected ? c.primary : c.border,
+                            backgroundColor:
+                              m.matches.length > 0
+                                ? c.primary + "22"
+                                : c.secondary,
+                            paddingHorizontal: 10,
+                            paddingVertical: 8,
+                            opacity: pressed ? 0.8 : 1,
+                          })}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: c.foreground,
+                              fontFamily: "PlusJakartaSans_600SemiBold",
+                              fontSize: 13,
+                              textAlign: rtl.textAlign,
+                            }}
+                          >
+                            {m.subject || t("mtg.noSubject")}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+                {selectedMeeting ? <MeetingRow m={selectedMeeting} /> : null}
+                {dayMeetings.length === 0 ? (
+                  <EmptyState
+                    icon="calendar"
+                    title={t("mtg.empty")}
+                    body={t("mtg.emptyDay")}
+                  />
+                ) : null}
+                <DayTimeline
+                  meetings={timedMeetings}
+                  date={selectedDate}
+                  selectedId={selectedMeetingId}
+                  onSelect={(id) => {
+                    setSelectedMeetingId(id);
+                    // The detail card renders above the timeline — bring it
+                    // into view when a block is picked.
+                    if (id) scrollRef.current?.scrollTo({ y: 0, animated: true });
+                  }}
+                />
+              </>
+            )}
+          </>
         ) : calendar.isLoading ? (
           <View style={{ gap: 12 }}>
             {[0, 1, 2].map((i) => (

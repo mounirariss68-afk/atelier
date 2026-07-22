@@ -41,6 +41,7 @@ import {
   makePkce,
   msConfigured,
   refreshTokens,
+  extractMeetingUrl,
   signState,
   verifyState,
   type MsCalendarEvent,
@@ -711,14 +712,30 @@ router.get("/me/calendar", async (req, res, next) => {
       if (!ev.start?.dateTime || !ev.end?.dateTime) continue;
       const startIso = `${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`;
       const endIso = `${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`;
+      // Join URL: prefer Graph's explicit fields, then fall back to scanning
+      // the location text and body for known meeting links (Teams, Google
+      // Meet, Zoom, Webex) — e.g. Meet URLs that Outlook renders as a plain
+      // location. If the location itself is the meeting link, don't repeat
+      // it as a physical location.
+      const rawLocation = ev.location?.displayName ?? null;
+      const locationUrl = extractMeetingUrl(rawLocation);
+      const joinUrl =
+        ev.onlineMeeting?.joinUrl ??
+        ev.onlineMeetingUrl ??
+        locationUrl ??
+        extractMeetingUrl(ev.body?.content);
+      const location =
+        rawLocation && locationUrl && rawLocation.trim() === locationUrl
+          ? null
+          : rawLocation;
       meetings.push({
         id: ev.id,
         subject: ev.subject ?? "(no subject)",
         start: startIso,
         end: endIso,
         isAllDay: Boolean(ev.isAllDay),
-        location: ev.location?.displayName ?? null,
-        joinUrl: ev.onlineMeeting?.joinUrl ?? ev.onlineMeetingUrl ?? null,
+        location,
+        joinUrl,
         webLink: ev.webLink ?? null,
         organizerEmail: ev.organizer?.emailAddress?.address?.toLowerCase() ?? null,
         attendees,
