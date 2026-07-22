@@ -46,7 +46,7 @@ function TpCard({ row, entityName }: { row: TpRegisterRow; entityName: (id: stri
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Eyebrow>{row.id}</Eyebrow>
-          <h3 className="text-base font-semibold mt-1">
+          <h3 className="font-medium text-text mt-1">
             {entityName(row.entityAId)} <span className="text-text-faint mx-2">→</span> {entityName(row.entityBId)}
           </h3>
           <p className="text-sm text-text-mute mt-1">{row.relationship}</p>

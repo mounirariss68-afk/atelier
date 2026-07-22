@@ -19,6 +19,7 @@ import * as React from "react";
 import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { RecordCard, RecordCardAction } from "@/components/ui/record-card";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { AllianceEvaluationPanel, AllianceVerdictChip } from "./AllianceEvaluation";
 import {
@@ -441,67 +442,34 @@ function IdentifyView() {
                 />
               </div>
             ) : (
-              <Card key={f.id} className="p-4 space-y-2" data-testid={`card-firm-${f.id}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-text">{f.name}</div>
-                    <div className="text-xs text-text-faint">
-                      {[f.kind, f.country, f.speciality].filter(Boolean).join(" · ") || "—"}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
+              <RecordCard
+                key={f.id}
+                data-testid={`card-firm-${f.id}`}
+                onClick={canEdit ? () => { setEditingId(f.id); setErr(null); } : undefined}
+                title={f.name}
+                subtitle={[f.kind, f.country, f.speciality].filter(Boolean).join(" · ") || "—"}
+                trailing={
+                  <>
                     {f.partnershipStage === "candidate" && <MonoChip tone="amber">candidate</MonoChip>}
                     <AllianceVerdictChip firm={f} />
                     {f.tier && <MonoChip tone={f.tier === "strategic" ? "gold" : "default"}>{f.tier}</MonoChip>}
                     <MonoChip tone={f.status === "active" ? "green" : f.status === "renewal_due" ? "amber" : "default"}>
                       {f.status.replace("_", " ")}
                     </MonoChip>
-                  </div>
-                </div>
-                {(f.anchorCognirise || f.anchorPartner) && (
-                  <div className="text-sm text-text-mute">
-                    Anchor · Cognirise: <span className="text-text">{f.anchorCognirise ?? "—"}</span>
-                    {" ↔ "}
-                    Partner: <span className="text-text">{f.anchorPartner ?? "—"}</span>
-                  </div>
-                )}
-                <div className="flex gap-1 flex-wrap text-xs">
-                  {f.relationshipStrength != null && (
-                    <MonoChip tone={f.relationshipStrength >= 4 ? "gold" : f.relationshipStrength >= 3 ? "green" : "amber"}>
-                      strength {f.relationshipStrength}/5
-                    </MonoChip>
-                  )}
-                  {f.lastTouchAt && <MonoChip>last touch {f.lastTouchAt.slice(0, 10)}</MonoChip>}
-                  <MonoChip>{f.activeResourceCount} active resource{f.activeResourceCount === 1 ? "" : "s"}</MonoChip>
-                </div>
-                {(f.contactName || f.contactEmail) && (
-                  <div className="text-xs text-text-faint">
-                    Contact: {f.contactName ?? "—"}{f.contactEmail ? ` · ${f.contactEmail}` : ""}
-                  </div>
-                )}
-                {f.notes && (
-                  <div className="text-xs text-text-faint border-l-2 border-l-border pl-2">{f.notes}</div>
-                )}
-                <div className="flex gap-2 pt-1">
-                  <button
-                    className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                    onClick={() => setEvalOpenId(evalOpenId === f.id ? null : f.id)}
-                    data-testid={`button-evaluation-${f.id}`}
-                  >
-                    <ChevronRight className={`w-3 h-3 transition-transform ${evalOpenId === f.id ? "rotate-90" : ""}`} />
-                    evaluation
-                  </button>
-                  {canEdit && (
-                    <>
-                      <button
-                        className="text-xs font-mono uppercase tracking-widest text-gold/80 hover:text-gold inline-flex items-center gap-1"
-                        onClick={() => { setEditingId(f.id); setErr(null); }}
-                        data-testid={`button-edit-firm-${f.id}`}
-                      >
-                        <Pencil className="w-3 h-3" /> edit
-                      </button>
-                      <button
-                        className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-red-400 inline-flex items-center gap-1"
+                  </>
+                }
+                actions={
+                  <>
+                    <RecordCardAction
+                      onClick={() => setEvalOpenId(evalOpenId === f.id ? null : f.id)}
+                      data-testid={`button-evaluation-${f.id}`}
+                    >
+                      <ChevronRight className={`w-3 h-3 transition-transform ${evalOpenId === f.id ? "rotate-90" : ""}`} />
+                      eval
+                    </RecordCardAction>
+                    {canEdit && (
+                      <RecordCardAction
+                        danger
                         onClick={() => {
                           setErr(null);
                           archive.mutate({ id: f.id }, {
@@ -511,13 +479,44 @@ function IdentifyView() {
                         }}
                         data-testid={`button-archive-firm-${f.id}`}
                       >
-                        <Archive className="w-3 h-3" /> archive
-                      </button>
-                    </>
-                  )}
-                </div>
-                {evalOpenId === f.id && <AllianceEvaluationPanel firm={f} canEdit={canEdit} />}
-              </Card>
+                        <Archive className="w-3 h-3" />
+                      </RecordCardAction>
+                    )}
+                  </>
+                }
+                chips={
+                  <>
+                    {f.relationshipStrength != null && (
+                      <MonoChip tone={f.relationshipStrength >= 4 ? "gold" : f.relationshipStrength >= 3 ? "green" : "amber"}>
+                        strength {f.relationshipStrength}/5
+                      </MonoChip>
+                    )}
+                    {f.lastTouchAt && <MonoChip>last touch {f.lastTouchAt.slice(0, 10)}</MonoChip>}
+                    <MonoChip>{f.activeResourceCount} active resource{f.activeResourceCount === 1 ? "" : "s"}</MonoChip>
+                  </>
+                }
+              >
+                {(f.anchorCognirise || f.anchorPartner) && (
+                  <div className="text-sm text-text-mute">
+                    Anchor · Cognirise: <span className="text-text">{f.anchorCognirise ?? "—"}</span>
+                    {" ↔ "}
+                    Partner: <span className="text-text">{f.anchorPartner ?? "—"}</span>
+                  </div>
+                )}
+                {(f.contactName || f.contactEmail) && (
+                  <div className="text-xs text-text-faint">
+                    Contact: {f.contactName ?? "—"}{f.contactEmail ? ` · ${f.contactEmail}` : ""}
+                  </div>
+                )}
+                {f.notes && (
+                  <div className="text-xs text-text-faint border-l-2 border-l-border pl-2">{f.notes}</div>
+                )}
+                {evalOpenId === f.id && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <AllianceEvaluationPanel firm={f} canEdit={canEdit} />
+                  </div>
+                )}
+              </RecordCard>
             ),
           )}
         </div>

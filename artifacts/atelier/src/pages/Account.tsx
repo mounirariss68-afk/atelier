@@ -46,6 +46,7 @@ import {
   SectionLabel,
   PillButton,
 } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { Account360Tab } from "@/components/tabs/Account360Tab";
 import { AccountPlanTab } from "@/components/tabs/AccountPlanTab";
 import { ActivityTab } from "@/components/tabs/ActivityTab";
@@ -2599,90 +2600,85 @@ function DecisionMakersTab({
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {contacts.map((c) => (
-        <Card
+        <RecordCard
           key={c.id}
-          onClick={() => setSelectedId(c.id)}
-          className={`p-5 space-y-3 cursor-pointer transition-colors ${selectedId === c.id ? "border-gold/60" : "hover:border-border"}`}
+          onClick={() => setEditingId(c.id)}
+          selected={selectedId === c.id}
+          title={c.fullName}
+          subtitle={
+            <span className="font-mono">
+              {c.title ?? "—"}
+              {c.seniority && ` · ${c.seniority}`}
+            </span>
+          }
+          trailing={<MonoChip tone={DISPOSITION_TONE[c.disposition]}>{c.disposition}</MonoChip>}
+          chips={
+            <>
+              <EntityScopeChip contact={c} />
+              {c.buyerPersona && <MonoChip>{c.buyerPersona}</MonoChip>}
+              <MonoChip tone="gold">Influence {c.influenceScore}/5</MonoChip>
+              {c.email && <MonoChip>{c.email}</MonoChip>}
+              {c.sourceUrl ? (
+                <a
+                  href={c.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={c.sourceUrl}
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`link-contact-source-card-${c.id}`}
+                >
+                  <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
+                    {c.confidence}
+                  </MonoChip>
+                </a>
+              ) : (
+                <span title="No citation URL — title/role inferred from org-chart heuristics.">
+                  <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
+                    {c.confidence}
+                  </MonoChip>
+                </span>
+              )}
+            </>
+          }
+          footer={
+            <div
+              className="flex flex-wrap gap-1.5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {(["champion", "supporter", "neutral", "skeptic", "blocker"] as AtelierContactDisposition[]).map((d) => (
+                <button
+                  key={d}
+                  onClick={() =>
+                    updateDisp.mutate(
+                      { contactId: c.id, data: { disposition: d } },
+                      {
+                        onSuccess: () =>
+                          qc.invalidateQueries({
+                            queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
+                          }),
+                      },
+                    )
+                  }
+                  className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border transition-colors ${
+                    c.disposition === d
+                      ? "border-gold text-gold"
+                      : "border-border text-text-mute hover:border-text-mute hover:text-text"
+                  }`}
+                  data-testid={`button-disposition-${c.id}-${d}`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+          }
           data-testid={`card-contact-${c.id}`}
         >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-base font-semibold text-text">{c.fullName}</div>
-              <div className="text-xs font-mono text-text-mute mt-0.5">
-                {c.title ?? "—"}
-                {c.seniority && ` · ${c.seniority}`}
-              </div>
-            </div>
-            <MonoChip tone={DISPOSITION_TONE[c.disposition]}>{c.disposition}</MonoChip>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <EntityScopeChip contact={c} />
-            {c.buyerPersona && <MonoChip>{c.buyerPersona}</MonoChip>}
-            <MonoChip tone="gold">Influence {c.influenceScore}/5</MonoChip>
-            {c.email && <MonoChip>{c.email}</MonoChip>}
-            {c.sourceUrl ? (
-              <a
-                href={c.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={c.sourceUrl}
-                onClick={(e) => e.stopPropagation()}
-                data-testid={`link-contact-source-card-${c.id}`}
-              >
-                <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
-                  {c.confidence}
-                </MonoChip>
-              </a>
-            ) : (
-              <span title="No citation URL — title/role inferred from org-chart heuristics.">
-                <MonoChip tone={c.confidence === "verified" ? "green" : "amber"}>
-                  {c.confidence}
-                </MonoChip>
-              </span>
-            )}
-          </div>
           {c.notes && (
-            <p className="text-sm text-text-mute leading-snug border-t border-border-soft pt-3">
+            <p className="text-sm text-text-mute leading-snug">
               {c.notes}
             </p>
           )}
-          <div
-            className="flex flex-wrap gap-1.5 pt-2 border-t border-border-soft"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {(["champion", "supporter", "neutral", "skeptic", "blocker"] as AtelierContactDisposition[]).map((d) => (
-              <button
-                key={d}
-                onClick={() =>
-                  updateDisp.mutate(
-                    { contactId: c.id, data: { disposition: d } },
-                    {
-                      onSuccess: () =>
-                        qc.invalidateQueries({
-                          queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId),
-                        }),
-                    },
-                  )
-                }
-                className={`text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border transition-colors ${
-                  c.disposition === d
-                    ? "border-gold text-gold"
-                    : "border-border text-text-mute hover:border-text-mute hover:text-text"
-                }`}
-                data-testid={`button-disposition-${c.id}-${d}`}
-              >
-                {d}
-              </button>
-            ))}
-            <button
-              onClick={() => setEditingId(c.id)}
-              className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-gold/50 text-gold hover:bg-gold/10 transition-colors ml-auto"
-              data-testid={`button-edit-contact-card-${c.id}`}
-            >
-              edit
-            </button>
-          </div>
-        </Card>
+        </RecordCard>
       ))}
       </div>
     </div>

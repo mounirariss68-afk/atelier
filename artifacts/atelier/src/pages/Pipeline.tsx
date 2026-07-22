@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -100,8 +101,8 @@ function StageColumn({
 // names at build time; keep the lookup table inline so JIT picks them up.
 const RUNNER_AGE_BORDER: Record<RunnerAgeTier, string> = {
   fresh: "",
-  amber: "border-l-4 border-l-amber",
-  red: "border-l-4 border-l-danger",
+  amber: "border-l-amber",
+  red: "border-l-danger",
 };
 
 function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
@@ -122,77 +123,79 @@ function OppCard({ opp, onClick }: { opp: OppItem; onClick: () => void }) {
           ? `${runnerAge}d in Runner — chase legal/procurement (≥${RUNNER_AGE_AMBER_DAYS}d)`
           : `${runnerAge}d in Runner`;
   return (
-    <Card
-      className={`p-4 space-y-3 hover:border-gold/50 transition-all group ${ageClass}`}
-      title={ageTitle}
-      data-testid={`opp-card-${opp.id}`}
-      data-runner-age-tier={ageTier}
-    >
-      <div className="flex justify-between items-start gap-2">
-        <Link
-          href={`/opportunities/${opp.id}`}
-          className="font-medium text-text group-hover:text-gold transition-colors block leading-tight"
-        >
-          {opp.name}
-        </Link>
-        {isStalled && (
-          <span
-            className="shrink-0 inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
-            title={`${opp.daysInStage} days in stage — stalled`}
-          >
-            <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
-          </span>
-        )}
-      </div>
-      <div className="text-sm text-text-mute font-mono">{opp.accountName}</div>
-      {(subStatus || runnerAge !== null) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {subStatus && (
+    <div title={ageTitle} data-runner-age-tier={ageTier} className="h-full">
+      <RecordCard
+        href={`/opportunities/${opp.id}`}
+        accentClass={ageClass || undefined}
+        title={opp.name}
+        subtitle={<span className="font-mono text-sm">{opp.accountName}</span>}
+        trailing={
+          isStalled ? (
             <span
-              className="inline-flex items-center rounded-full border border-border-soft bg-bg-deep text-text-mute text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
-              data-testid={`sub-status-${opp.id}`}
+              className="shrink-0 inline-flex items-center gap-1 rounded-full border border-danger/60 bg-danger/15 text-danger text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
+              title={`${opp.daysInStage} days in stage — stalled`}
             >
-              {SUB_STATUS_LABEL[subStatus] ?? subStatus.replace(/_/g, " ")}
+              <AlertTriangle className="w-3 h-3" /> {opp.daysInStage}d
             </span>
-          )}
-          {runnerAge !== null && (
-            <span
-              className={`inline-flex items-center rounded-full text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 border ${
-                ageTier === "red" ? "border-danger/60 bg-danger/15 text-danger"
-                : ageTier === "amber" ? "border-amber/60 bg-amber/15 text-amber"
-                : "border-border-soft bg-bg-deep text-text-mute"
-              }`}
+          ) : undefined
+        }
+        chips={
+          (subStatus || runnerAge !== null) ? (
+            <>
+              {subStatus && (
+                <span
+                  className="inline-flex items-center rounded-full border border-border-soft bg-bg-deep text-text-mute text-[10px] font-mono uppercase tracking-wider px-2 py-0.5"
+                  data-testid={`sub-status-${opp.id}`}
+                >
+                  {SUB_STATUS_LABEL[subStatus] ?? subStatus.replace(/_/g, " ")}
+                </span>
+              )}
+              {runnerAge !== null && (
+                <span
+                  className={`inline-flex items-center rounded-full text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 border ${
+                    ageTier === "red" ? "border-danger/60 bg-danger/15 text-danger"
+                    : ageTier === "amber" ? "border-amber/60 bg-amber/15 text-amber"
+                    : "border-border-soft bg-bg-deep text-text-mute"
+                  }`}
+                >
+                  {runnerAge}d in runner
+                </span>
+              )}
+            </>
+          ) : undefined
+        }
+        footer={
+          <div className="flex justify-between items-end">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
+              <span className="text-sm font-semibold text-text">
+                {fmtOppMoney(opp.dealSizeUsd, (opp as { currency?: string }).currency)}
+                <span className="text-text-mute font-normal"> · </span>
+                <span className="text-gold">{fmtOppMoney((opp.dealSizeUsd * opp.probabilityPct) / 100, (opp as { currency?: string }).currency)}</span>
+              </span>
+            </div>
+            <div
+              className="flex items-center gap-2"
+              onClick={(e) => { e.stopPropagation(); e.preventDefault(); }}
             >
-              {runnerAge}d in runner
-            </span>
-          )}
-        </div>
-      )}
-      <div className="flex justify-between items-end pt-2 border-t border-border-soft">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-text-faint font-mono">Value · Weighted</span>
-          <span className="text-sm font-semibold text-text">
-            {fmtOppMoney(opp.dealSizeUsd, (opp as { currency?: string }).currency)}
-            <span className="text-text-mute font-normal"> · </span>
-            <span className="text-gold">{fmtOppMoney((opp.dealSizeUsd * opp.probabilityPct) / 100, (opp as { currency?: string }).currency)}</span>
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onClick}
-            className="text-[10px] font-mono uppercase tracking-wider text-text-mute hover:text-gold transition-colors border border-border-soft hover:border-gold/40 rounded px-2 py-1"
-          >
-            Move
-          </button>
-          <Avatar className="w-6 h-6 border-2 border-bg-elevate">
-            <AvatarFallback className="text-[10px] bg-bg-deep text-gold">
-              {opp.partnerOwnerName.split(" ").map((n: string) => n[0]).join("")}
-            </AvatarFallback>
-          </Avatar>
-        </div>
-      </div>
-    </Card>
+              <button
+                type="button"
+                onClick={onClick}
+                className="text-[10px] font-mono uppercase tracking-wider text-text-mute hover:text-gold transition-colors border border-border-soft hover:border-gold/40 rounded px-2 py-1"
+              >
+                Move
+              </button>
+              <Avatar className="w-6 h-6 border-2 border-bg-elevate">
+                <AvatarFallback className="text-[10px] bg-bg-deep text-gold">
+                  {opp.partnerOwnerName.split(" ").map((n: string) => n[0]).join("")}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          </div>
+        }
+        data-testid={`opp-card-${opp.id}`}
+      />
+    </div>
   );
 }
 

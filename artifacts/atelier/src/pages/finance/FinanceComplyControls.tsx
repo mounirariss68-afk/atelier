@@ -52,7 +52,7 @@ function ControlCard({ c }: { c: InternalControlRow }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Eyebrow>{AREA_LABEL[c.area]} · {c.id}</Eyebrow>
-          <h3 className="text-base font-semibold mt-1">{c.title}</h3>
+          <h3 className="font-medium text-text mt-1">{c.title}</h3>
           <p className="text-sm text-text-mute mt-1">{c.description}</p>
         </div>
         <div className="flex flex-wrap gap-1.5 shrink-0">

@@ -13,6 +13,7 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, Eyebrow, MonoChip } from "@/components/ui/primitives";
+import { RecordCard, RecordCardAction } from "@/components/ui/record-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -798,7 +799,7 @@ export function fmtAed(n: number | null | undefined): string | null {
 
 export { InfoRow };
 
-function EntityCard(props: {
+function LegalEntityCard(props: {
   entity: LegalEntityRow;
   canWrite: boolean;
   onEdit: () => void;
@@ -817,70 +818,62 @@ function EntityCard(props: {
   );
   const leaseEnd = e.lease?.endDate ?? null;
   const tradeLicense = e.registrations.find((r) => r.type === "trade_license") ?? null;
+  const canAct = props.canWrite && e.status !== "archived";
   return (
-    <Card
-      className="p-5 flex flex-col gap-3 cursor-pointer transition-colors hover:border-gold/50"
+    <RecordCard
       onClick={() => navigate(`/finance/entities/${e.id}`)}
       data-testid={`entity-card-${e.id}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Eyebrow>
+      title={
+        <span data-testid={`text-entity-name-${e.id}`}>{e.legalNameEn}</span>
+      }
+      subtitle={
+        <span className="block">
+          <span className="block font-mono uppercase tracking-widest text-[10px]">
             {e.shortName ? `${e.shortName} · ` : ""}{countryLabel(e.country)} · {e.legalForm || "—"}
-          </Eyebrow>
-          <Link href={`/finance/entities/${e.id}`} className="block group">
-            <h3 className="text-base text-text mt-0.5 group-hover:text-gold transition-colors" data-testid={`text-entity-name-${e.id}`}>
-              {e.legalNameEn}
-            </h3>
-          </Link>
-          {e.legalNameAr && <p className="text-xs text-text-mute" dir="rtl">{e.legalNameAr}</p>}
-          <p className="text-[11px] text-text-faint mt-0.5">
+          </span>
+          {e.legalNameAr && <span className="block" dir="rtl">{e.legalNameAr}</span>}
+          <span className="block text-[11px] text-text-faint mt-0.5">
             {e.jurisdiction}{e.incorporationDate ? ` · incorporated ${e.incorporationDate}` : ""}
             {e.baseCurrency ? ` · ${e.baseCurrency}` : ""}
-          </p>
-        </div>
+          </span>
+        </span>
+      }
+      trailing={
         <MonoChip tone={e.status === "active" ? "green" : e.status === "archived" ? "red" : "amber"}>
           {STATUS_LABEL[e.status]}
         </MonoChip>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 text-xs">
-        {tradeLicense && (
-          <MonoChip tone={tradeLicense.expiresOn ? expiryTone(tradeLicense.expiresOn) : undefined}>
-            TL {tradeLicense.number}
-            {tradeLicense.expiresOn ? ` · ${expiryText(tradeLicense.expiresOn)}` : ""}
-          </MonoChip>
-        )}
-        <MonoChip>{e.registrations.length} registration{e.registrations.length === 1 ? "" : "s"}</MonoChip>
-        {!tradeLicense && worst.iso && <MonoChip tone={expiryTone(worst.iso)}>license {expiryText(worst.iso)}</MonoChip>}
-        {leaseEnd && <MonoChip tone={expiryTone(leaseEnd)}>lease {expiryText(leaseEnd)}</MonoChip>}
-        <MonoChip>{documents.length} document{documents.length === 1 ? "" : "s"}</MonoChip>
-        {e.owners.length > 0 && <MonoChip>{e.owners.length} owner{e.owners.length === 1 ? "" : "s"}</MonoChip>}
-        {e.activities.length > 0 && (
-          <MonoChip>{e.activities.length} activit{e.activities.length === 1 ? "y" : "ies"}</MonoChip>
-        )}
-      </div>
-
-      <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-        <Link
-          href={`/finance/entities/${e.id}`}
-          className="text-xs font-mono uppercase tracking-widest text-gold hover:underline"
-          data-testid={`link-entity-detail-${e.id}`}
-        >
-          Open entity →
-        </Link>
-        {props.canWrite && e.status !== "archived" && (
-          <div className="flex items-center gap-1.5">
-            <Button size="sm" variant="outline" onClick={(ev) => { ev.stopPropagation(); props.onEdit(); }} data-testid={`button-edit-${e.id}`}>
-              <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
-            </Button>
-            <Button size="sm" variant="ghost" className="text-danger" onClick={(ev) => { ev.stopPropagation(); props.onArchive(); }} data-testid={`button-archive-${e.id}`}>
-              <Archive className="w-3.5 h-3.5 mr-1" /> Archive
-            </Button>
-          </div>
-        )}
-      </div>
-    </Card>
+      }
+      actions={
+        canAct ? (
+          <>
+            <RecordCardAction onClick={props.onEdit} data-testid={`button-edit-${e.id}`}>
+              <Pencil className="w-3 h-3" /> edit
+            </RecordCardAction>
+            <RecordCardAction danger onClick={props.onArchive} data-testid={`button-archive-${e.id}`}>
+              <Archive className="w-3 h-3" /> archive
+            </RecordCardAction>
+          </>
+        ) : undefined
+      }
+      chips={
+        <>
+          {tradeLicense && (
+            <MonoChip tone={tradeLicense.expiresOn ? expiryTone(tradeLicense.expiresOn) : undefined}>
+              TL {tradeLicense.number}
+              {tradeLicense.expiresOn ? ` · ${expiryText(tradeLicense.expiresOn)}` : ""}
+            </MonoChip>
+          )}
+          <MonoChip>{e.registrations.length} registration{e.registrations.length === 1 ? "" : "s"}</MonoChip>
+          {!tradeLicense && worst.iso && <MonoChip tone={expiryTone(worst.iso)}>license {expiryText(worst.iso)}</MonoChip>}
+          {leaseEnd && <MonoChip tone={expiryTone(leaseEnd)}>lease {expiryText(leaseEnd)}</MonoChip>}
+          <MonoChip>{documents.length} document{documents.length === 1 ? "" : "s"}</MonoChip>
+          {e.owners.length > 0 && <MonoChip>{e.owners.length} owner{e.owners.length === 1 ? "" : "s"}</MonoChip>}
+          {e.activities.length > 0 && (
+            <MonoChip>{e.activities.length} activit{e.activities.length === 1 ? "y" : "ies"}</MonoChip>
+          )}
+        </>
+      }
+    />
   );
 }
 
@@ -985,7 +978,7 @@ export default function FinanceEntities() {
 
       <div className="grid md:grid-cols-2 gap-4">
         {visible.map((e) => (
-          <EntityCard
+          <LegalEntityCard
             key={e.id}
             entity={e}
             canWrite={!!canWrite}

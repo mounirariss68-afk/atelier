@@ -379,7 +379,7 @@ export function BankChangesAdminView() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-text">{r.personName}</span>
+                <span className="font-medium text-text">{r.personName}</span>
                 <MonoChip tone={r.status === "pending" ? "gold" : undefined}>{r.status}</MonoChip>
               </div>
               <p className="mt-1 text-sm text-text">

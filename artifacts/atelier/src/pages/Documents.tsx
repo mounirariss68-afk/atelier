@@ -25,7 +25,8 @@ import {
   ApiError,
 } from "@workspace/api-client-react";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
-import { Card } from "@/components/ui/primitives";
+import { Card, MonoChip } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -703,31 +704,33 @@ export function DocumentLibraryPanel(props: {
       ) : (
         <div className="space-y-1.5">
           {docs.map((d) => (
-            <button
+            <RecordCard
               key={d.id}
-              type="button"
               onClick={() => setOpenId(d.id)}
-              className="w-full text-left rounded-md border border-border-soft hover:border-gold/40 px-3 py-2 flex items-center gap-3 transition-colors"
-              data-testid={`row-document-${d.id}`}
-            >
-              <FileText className="w-4 h-4 text-gold shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-text truncate">{d.title}</p>
-                <p className="text-[11px] text-text-faint truncate">
+              className="p-3"
+              title={
+                <span className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-gold shrink-0" />
+                  <span className="truncate">{d.title}</span>
+                </span>
+              }
+              subtitle={
+                <span className="truncate block">
                   {catLabel(d.category)} · {d.currentVersion?.fileName ?? "—"} ·{" "}
                   {fmtBytes(d.currentVersion?.sizeBytes)} · v
                   {d.currentVersion?.versionNumber ?? 1} · {d.uploaderLabel}
-                </p>
-              </div>
-              {!d.aiRetrieval && (
-                <span className="font-mono text-[10px] uppercase tracking-widest text-text-faint border border-border-soft rounded px-1.5 py-0.5">
-                  no&nbsp;AI
                 </span>
-              )}
-              <span className="text-[11px] text-text-faint whitespace-nowrap">
-                {fmtDate(d.updatedAt)}
-              </span>
-            </button>
+              }
+              trailing={
+                <>
+                  {!d.aiRetrieval && <MonoChip>no AI</MonoChip>}
+                  <span className="text-[11px] text-text-faint whitespace-nowrap">
+                    {fmtDate(d.updatedAt)}
+                  </span>
+                </>
+              }
+              data-testid={`row-document-${d.id}`}
+            />
           ))}
         </div>
       )}

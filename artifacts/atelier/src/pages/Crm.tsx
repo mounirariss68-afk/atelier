@@ -8,6 +8,7 @@ import {
   MonoChip,
   PillButton,
 } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp, UserX } from "lucide-react";
@@ -238,30 +239,51 @@ export default function Crm() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((a) => (
-            <Link
-              key={a.id}
-              href={`/accounts/${a.id}`}
-              className="block group"
-              data-testid={`card-account-${a.id}`}
-            >
-              <Card hover className="p-5 h-full flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-base font-semibold text-text group-hover:text-gold transition-colors">
-                      {a.brandName ?? a.name}
-                    </div>
+            <div key={a.id} data-testid={`card-account-${a.id}`} className="h-full">
+              <RecordCard
+                href={`/accounts/${a.id}`}
+                title={a.brandName ?? a.name}
+                subtitle={
+                  <>
                     {a.brandName && a.brandName !== a.name && (
-                      <div className="text-[11px] font-mono text-text-faint italic mt-0.5">
+                      <span className="block text-[11px] font-mono text-text-faint italic">
                         {a.name}
-                      </div>
+                      </span>
                     )}
-                    <div className="text-xs font-mono text-text-mute mt-0.5 flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 font-mono">
                       <Globe className="w-3 h-3" />
                       {a.country} · {a.sector}
-                    </div>
+                    </span>
+                  </>
+                }
+                trailing={<MonoChip tone={TIER_TONE[a.tier] ?? "default"}>{a.tier}</MonoChip>}
+                chips={
+                  <>
+                    {a.partnerOwnerName && (
+                      <MonoChip>Partner: {a.partnerOwnerName}</MonoChip>
+                    )}
+                    <MonoChip>{a.openOpportunityCount} open opp{a.openOpportunityCount === 1 ? "" : "s"}</MonoChip>
+                    <MonoChip>{a.activeEngagementCount} active eng{a.activeEngagementCount === 1 ? "" : "s"}</MonoChip>
+                    {(a.pendingUpdateCount ?? 0) > 0 && (
+                      <MonoChip tone="amber">{a.pendingUpdateCount} pending update{a.pendingUpdateCount === 1 ? "" : "s"}</MonoChip>
+                    )}
+                    {staleMapAges.has(a.id) && (
+                      <MonoChip tone="amber" data-testid={`chip-stale-map-${a.id}`}>
+                        <span className="inline-flex items-center gap-1">
+                          <UserX className="w-3 h-3" />
+                          buyer map stale · {staleMapAges.get(a.id)}d
+                        </span>
+                      </MonoChip>
+                    )}
+                  </>
+                }
+                footer={
+                  <div className="flex items-center justify-between text-xs font-mono text-text-faint">
+                    <span>{TIER_LABEL[a.tier] ?? a.tier}</span>
+                    <span>Strength {Math.round(a.relationshipStrength)}/100</span>
                   </div>
-                  <MonoChip tone={TIER_TONE[a.tier] ?? "default"}>{a.tier}</MonoChip>
-                </div>
+                }
+              >
                 {(a.employeeCount != null ||
                   a.entityRole ||
                   (a.countryPresence?.length ?? 0) > 0) && (
@@ -299,32 +321,8 @@ export default function Crm() {
                     )}
                   </div>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  {a.partnerOwnerName && (
-                    <MonoChip>Partner: {a.partnerOwnerName}</MonoChip>
-                  )}
-                  <MonoChip>{a.openOpportunityCount} open opp{a.openOpportunityCount === 1 ? "" : "s"}</MonoChip>
-                  <MonoChip>{a.activeEngagementCount} active eng{a.activeEngagementCount === 1 ? "" : "s"}</MonoChip>
-                  {(a.pendingUpdateCount ?? 0) > 0 && (
-                    <MonoChip tone="amber">{a.pendingUpdateCount} pending update{a.pendingUpdateCount === 1 ? "" : "s"}</MonoChip>
-                  )}
-                  {staleMapAges.has(a.id) && (
-                    <MonoChip tone="amber" data-testid={`chip-stale-map-${a.id}`}>
-                      <span className="inline-flex items-center gap-1">
-                        <UserX className="w-3 h-3" />
-                        buyer map stale · {staleMapAges.get(a.id)}d
-                      </span>
-                    </MonoChip>
-                  )}
-                </div>
-                <div className="mt-auto pt-3 border-t border-border-soft flex items-center justify-between text-xs font-mono text-text-faint">
-                  <span>{TIER_LABEL[a.tier] ?? a.tier}</span>
-                  <span>
-                    Strength {Math.round(a.relationshipStrength)}/100
-                  </span>
-                </div>
-              </Card>
-            </Link>
+              </RecordCard>
+            </div>
           ))}
           {!isLoading && filtered.length === 0 && (
             <Card className="p-8 text-center text-text-mute font-mono text-sm">

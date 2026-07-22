@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link, useLocation } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { Input } from "@/components/ui/input";
 import { Users, Filter, X } from "lucide-react";
 import { countryName } from "@/lib/countries";
@@ -236,37 +237,29 @@ export default function RosterPeople() {
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-6">
         {(people ?? []).map((p) => (
-          <Link key={p.id} href={`/roster/people/${p.id}`} className="block">
-              <Card
-                className={`p-4 space-y-2 border-l-4 ${WORKER_COLOR[p.workerType]} hover:bg-bg-elevate-2 cursor-pointer transition-colors`}
-                data-testid={`person-card-${p.id}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-medium text-text">{p.fullName}</div>
-                    {p.title && (
-                      <div className="text-xs text-text-mute">{p.title}</div>
-                    )}
-                  </div>
-                  <MonoChip>{WORKER_LABEL[p.workerType]}</MonoChip>
-                </div>
-                <div className="flex flex-wrap gap-1 text-xs">
-                  {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
-                  {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
-                  {p.nationality && <MonoChip>nat · {countryName(p.nationality)}</MonoChip>}
-                  {p.partnerFirmName && (
-                    <MonoChip>{p.partnerFirmName}</MonoChip>
-                  )}
-                  {p.vendorEntity && <MonoChip>{p.vendorEntity}</MonoChip>}
-                  <MonoChip>{p.status}</MonoChip>
-                </div>
-                {p.email && (
-                  <div className="text-xs text-text-faint truncate">
-                    {p.email}
-                  </div>
-                )}
-              </Card>
-          </Link>
+          <RecordCard
+            key={p.id}
+            href={`/roster/people/${p.id}`}
+            accentClass={WORKER_COLOR[p.workerType]}
+            title={p.fullName}
+            subtitle={p.title}
+            trailing={<MonoChip>{WORKER_LABEL[p.workerType]}</MonoChip>}
+            chips={
+              <>
+                {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
+                {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
+                {p.nationality && <MonoChip>nat · {countryName(p.nationality)}</MonoChip>}
+                {p.partnerFirmName && <MonoChip>{p.partnerFirmName}</MonoChip>}
+                {p.vendorEntity && <MonoChip>{p.vendorEntity}</MonoChip>}
+                <MonoChip>{p.status}</MonoChip>
+              </>
+            }
+            data-testid={`person-card-${p.id}`}
+          >
+            {p.email && (
+              <div className="text-xs text-text-faint truncate">{p.email}</div>
+            )}
+          </RecordCard>
         ))}
       </div>
       </div>

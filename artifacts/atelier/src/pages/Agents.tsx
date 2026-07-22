@@ -1,6 +1,6 @@
 import { useAtelierListAgents } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, SectionLabel } from "@/components/ui/primitives";
-import { Link } from "wouter";
+import { SectionHead, PageHero, MonoChip, SectionLabel } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, Activity, Cpu } from "lucide-react";
 
@@ -30,22 +30,22 @@ export default function Agents() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {groupAgents.map(agent => (
-                  <Link key={agent.id} href={`/agents/design/${agent.id}`}>
-                    <Card hover className="p-5 h-full flex flex-col justify-between group">
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start gap-2">
-                          <div className="flex items-center gap-2">
-                            {agent.starred && <Star className="w-4 h-4 text-gold fill-gold" />}
-                            <h4 className="font-semibold text-lg text-text group-hover:text-gold transition-colors">{agent.name}</h4>
-                          </div>
-                          <MonoChip tone={agent.status === 'mvp' ? 'green' : agent.status === 'registered' ? 'gold' : 'default'}>
-                            {agent.status}
-                          </MonoChip>
-                        </div>
-                        <p className="text-sm text-text-mute leading-relaxed">{agent.purpose}</p>
-                      </div>
-                      
-                      <div className="mt-4 pt-4 border-t border-border-soft flex items-center justify-between text-xs font-mono text-text-faint">
+                  <RecordCard
+                    key={agent.id}
+                    href={`/agents/design/${agent.id}`}
+                    title={
+                      <span className="flex items-center gap-2">
+                        {agent.starred && <Star className="w-4 h-4 text-gold fill-gold shrink-0" />}
+                        {agent.name}
+                      </span>
+                    }
+                    trailing={
+                      <MonoChip tone={agent.status === 'mvp' ? 'green' : agent.status === 'registered' ? 'gold' : 'default'}>
+                        {agent.status}
+                      </MonoChip>
+                    }
+                    footer={
+                      <div className="flex items-center justify-between text-xs font-mono text-text-faint">
                         <div className="flex items-center gap-1.5">
                           <Cpu className="w-3.5 h-3.5" />
                           {agent.model}
@@ -55,8 +55,10 @@ export default function Agents() {
                           {agent.runsLast30d} runs (30d)
                         </div>
                       </div>
-                    </Card>
-                  </Link>
+                    }
+                  >
+                    <p className="text-sm text-text-mute leading-relaxed">{agent.purpose}</p>
+                  </RecordCard>
                 ))}
               </div>
             </div>

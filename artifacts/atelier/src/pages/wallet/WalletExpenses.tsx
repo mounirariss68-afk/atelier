@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { RecordCard } from "@/components/ui/record-card";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 interface Expense {
@@ -248,44 +249,42 @@ export default function WalletExpenses() {
 
         <div className="grid grid-cols-1 gap-3">
           {filtered.map((e) => (
-            <Link
+            <RecordCard
               key={e.id}
               href={`/wallet/expenses/${e.id}`}
-              data-testid={`expense-row-${e.id}`}
-            >
-              <Card className="p-4 hover:border-gold/50 cursor-pointer transition-colors">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="font-semibold text-text">{e.merchant ?? "(no merchant)"}</div>
-                    <div className="text-xs font-mono text-text-mute">
-                      {e.expenseDate} · {e.captureSource} · {e.category}
-                    </div>
-                    {e.summary && <div className="text-sm text-text-mute italic">{e.summary}</div>}
-                  </div>
-                  <div className="text-right space-y-2 shrink-0">
-                    <div className="font-mono text-text">{fmt(e.usdAmount, e.currency, e.amount)}</div>
-                    <div className="flex gap-1 justify-end flex-wrap">
-                      <MonoChip tone={statusTone(e.status)}>{e.status}</MonoChip>
-                      <MonoChip tone={policyTone(e.policyStatus)}>policy {e.policyStatus}</MonoChip>
-                      {e.clientBillable && <MonoChip tone="gold">billable +{e.markupPct}%</MonoChip>}
-                      {e.vatTreatment !== "none" && <MonoChip>{e.vatTreatment}</MonoChip>}
-                    </div>
+              title={e.merchant ?? "(no merchant)"}
+              subtitle={
+                <span className="font-mono">
+                  {e.expenseDate} · {e.captureSource} · {e.category}
+                </span>
+              }
+              trailing={
+                <div className="text-right space-y-2">
+                  <div className="font-mono text-text">{fmt(e.usdAmount, e.currency, e.amount)}</div>
+                  <div className="flex gap-1 justify-end flex-wrap">
+                    <MonoChip tone={statusTone(e.status)}>{e.status}</MonoChip>
+                    <MonoChip tone={policyTone(e.policyStatus)}>policy {e.policyStatus}</MonoChip>
+                    {e.clientBillable && <MonoChip tone="gold">billable +{e.markupPct}%</MonoChip>}
+                    {e.vatTreatment !== "none" && <MonoChip>{e.vatTreatment}</MonoChip>}
                   </div>
                 </div>
-                {e.policyFindings && e.policyFindings.length > 0 && (
-                  <ul className="mt-2 text-xs font-mono space-y-0.5">
-                    {e.policyFindings.slice(0, 2).map((f, i) => (
-                      <li
-                        key={i}
-                        className={f.severity === "red" ? "text-red-400" : "text-amber-400"}
-                      >
-                        ⚑ {f.message}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Card>
-            </Link>
+              }
+              data-testid={`expense-row-${e.id}`}
+            >
+              {e.summary && <div className="text-sm text-text-mute italic">{e.summary}</div>}
+              {e.policyFindings && e.policyFindings.length > 0 && (
+                <ul className="text-xs font-mono space-y-0.5">
+                  {e.policyFindings.slice(0, 2).map((f, i) => (
+                    <li
+                      key={i}
+                      className={f.severity === "red" ? "text-red-400" : "text-amber-400"}
+                    >
+                      ⚑ {f.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </RecordCard>
           ))}
           {!loading && filtered.length === 0 && (
             <Card className="p-8 text-center text-text-mute border-dashed">
