@@ -457,6 +457,12 @@ export const AtelierGetMyCalendarResponse = zod.object({
         .boolean()
         .optional()
         .describe("True for Atelier-booked internal meetings (Task 553)."),
+      canManage: zod
+        .boolean()
+        .optional()
+        .describe(
+          "Viewer may reschedule\/cancel this internal meeting (organizer or founding partner, Task 559).",
+        ),
     }),
   ),
 });

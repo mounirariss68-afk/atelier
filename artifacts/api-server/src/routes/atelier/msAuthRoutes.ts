@@ -48,6 +48,13 @@ import {
   type MsCalendarEvent,
 } from "../../lib/msGraph.js";
 import { runMsMeetingAutolog } from "../../lib/msMeetingAutolog.js";
+import {
+  MeetingLifecycleError,
+  SchedulingError,
+  canManageInternalMeeting,
+  cancelInternalMeeting,
+  rescheduleInternalMeeting,
+} from "../../lib/internalMeetingLifecycle.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { assertAuditAction } from "./auditContract";
@@ -539,6 +546,9 @@ interface WireMeeting {
   }>;
   /** Task #553 — true for Atelier-booked internal meetings. */
   internal?: boolean;
+  /** Task #559 — the viewer may reschedule/cancel this internal meeting
+   *  (organizer or founding partner). */
+  canManage?: boolean;
 }
 
 /**
@@ -587,6 +597,7 @@ async function internalMeetingsForWindow(
       attendees: attendees.map((a) => ({ email: a.email ?? "", name: a.name })),
       matches: [],
       internal: true,
+      canManage: canManageInternalMeeting(me, m),
     });
   }
   wire.sort((a, b) => a.start.localeCompare(b.start));
@@ -812,6 +823,93 @@ router.get("/me/calendar", async (req, res, next) => {
     );
     res.json({ configured: true, connected: true, meetings: merged });
   } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------
+// Task #559 — reschedule / cancel internal meetings (organizer or
+// founding partner). Graph PATCH/DELETE happens on the ORGANIZER's
+// event first, so Outlook attendees get standard update/cancellation
+// notifications; only then does the Atelier row change (+ audit).
+// ------------------------------------------------------------------
+
+function meetingActor(me: typeof atelierUsers.$inferSelect) {
+  return { id: me.id, orgId: me.orgId, name: me.name, role: me.role };
+}
+
+function sendMeetingError(res: Response, err: unknown): boolean {
+  if (err instanceof MeetingLifecycleError) {
+    const status =
+      err.code === "not_found"
+        ? 404
+        : err.code === "forbidden"
+          ? 403
+          : err.code === "already_cancelled"
+            ? 409
+            : 400;
+    res.status(status).json({ error: err.code, message: err.message });
+    return true;
+  }
+  if (err instanceof SchedulingError) {
+    res.status(502).json({ error: err.code, message: err.message });
+    return true;
+  }
+  return false;
+}
+
+// PATCH /me/calendar/internal/:id — reschedule an internal meeting.
+// @cli-skip: chat parity via the meeting.reschedule_internal capability
+router.patch("/me/calendar/internal/:id", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const body = (req.body ?? {}) as { start?: unknown; end?: unknown };
+    const start = typeof body.start === "string" ? new Date(body.start) : null;
+    const end = typeof body.end === "string" ? new Date(body.end) : null;
+    if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      res.status(400).json({
+        error: "invalid_input",
+        message: "start and end must be ISO datetimes.",
+      });
+      return;
+    }
+    const { meeting, graphUpdated } = await rescheduleInternalMeeting({
+      actor: meetingActor(me),
+      meetingId: req.params.id,
+      start,
+      end,
+      via: "rest",
+    });
+    res.json({
+      ok: true,
+      graphUpdated,
+      meeting: {
+        id: meeting.id,
+        start: meeting.startAt?.toISOString() ?? null,
+        end: meeting.endAt?.toISOString() ?? null,
+      },
+    });
+  } catch (err) {
+    if (sendMeetingError(res, err)) return;
+    next(err);
+  }
+});
+
+// DELETE /me/calendar/internal/:id — cancel an internal meeting.
+// @cli-skip: chat parity via the meeting.cancel_internal capability
+router.delete("/me/calendar/internal/:id", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const { graphCancelled } = await cancelInternalMeeting({
+      actor: meetingActor(me),
+      meetingId: req.params.id,
+      via: "rest",
+    });
+    res.json({ ok: true, graphCancelled });
+  } catch (err) {
+    if (sendMeetingError(res, err)) return;
     next(err);
   }
 });

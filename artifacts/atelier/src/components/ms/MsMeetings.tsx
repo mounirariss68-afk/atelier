@@ -292,6 +292,162 @@ function JoinLink({ m }: { m: AtelierCalendarMeeting }) {
   );
 }
 
+// ------------------------------------------------------------------
+// Task #559 — reschedule / cancel Atelier-booked internal meetings.
+// Bespoke /me/calendar/internal/:id routes are not in the OpenAPI spec,
+// so this uses raw fetch (same convention as the autolog card). The
+// server PATCHes/DELETEs the organizer's real Outlook event first, so
+// attendees get standard Outlook update/cancellation notices.
+// ------------------------------------------------------------------
+
+function toLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function InternalMeetingManage({ m }: { m: AtelierCalendarMeeting }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [mode, setMode] = React.useState<"idle" | "reschedule" | "cancel">("idle");
+  const [startLocal, setStartLocal] = React.useState(() => toLocalInputValue(m.start));
+  const durationMs = React.useMemo(
+    () => Math.max(15 * 60 * 1000, new Date(m.end).getTime() - new Date(m.start).getTime()),
+    [m.start, m.end],
+  );
+
+  const invalidateCalendar = () =>
+    qc.invalidateQueries({
+      predicate: (q) =>
+        typeof q.queryKey[0] === "string" && String(q.queryKey[0]).includes("/me/calendar"),
+    });
+
+  const reschedule = useMutation({
+    mutationFn: async () => {
+      const start = new Date(startLocal);
+      if (Number.isNaN(start.getTime())) throw new Error("invalid-date");
+      const end = new Date(start.getTime() + durationMs);
+      const r = await fetch(`${API_BASE}/me/calendar/internal/${m.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ start: start.toISOString(), end: end.toISOString() }),
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => null);
+        throw new Error(body?.message ?? `reschedule-failed:${r.status}`);
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      setMode("idle");
+      invalidateCalendar();
+      toast({ title: "Meeting rescheduled", description: "Attendees get an Outlook meeting update." });
+    },
+    onError: (err: Error) =>
+      toast({
+        title: "Couldn't reschedule the meeting",
+        description: err.message === "invalid-date" ? "Pick a valid date and time." : err.message,
+        variant: "destructive",
+      }),
+  });
+
+  const cancel = useMutation({
+    mutationFn: async () => {
+      const r = await fetch(`${API_BASE}/me/calendar/internal/${m.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => null);
+        throw new Error(body?.message ?? `cancel-failed:${r.status}`);
+      }
+      return r.json();
+    },
+    onSuccess: () => {
+      invalidateCalendar();
+      toast({ title: "Meeting cancelled", description: "Attendees get an Outlook cancellation notice." });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Couldn't cancel the meeting", description: err.message, variant: "destructive" }),
+  });
+
+  if (mode === "reschedule") {
+    return (
+      <div className="flex items-center gap-2 flex-wrap" data-testid={`meeting-reschedule-form-${m.id}`}>
+        <input
+          type="datetime-local"
+          value={startLocal}
+          onChange={(e) => setStartLocal(e.target.value)}
+          className="text-xs bg-bg-elevate border border-border-soft rounded px-2 py-1 text-text"
+          data-testid={`meeting-reschedule-input-${m.id}`}
+        />
+        <PillButton
+          className="shrink-0"
+          onClick={() => reschedule.mutate()}
+          disabled={reschedule.isPending}
+          data-testid={`meeting-reschedule-save-${m.id}`}
+        >
+          {reschedule.isPending ? "Moving…" : "Move"}
+        </PillButton>
+        <PillButton
+          variant="ghost"
+          className="shrink-0"
+          onClick={() => setMode("idle")}
+          disabled={reschedule.isPending}
+          data-testid={`meeting-reschedule-abort-${m.id}`}
+        >
+          Back
+        </PillButton>
+      </div>
+    );
+  }
+  if (mode === "cancel") {
+    return (
+      <div className="flex items-center gap-2 flex-wrap" data-testid={`meeting-cancel-confirm-${m.id}`}>
+        <span className="text-xs text-text-mute">Cancel this meeting? Attendees will be notified.</span>
+        <PillButton
+          variant="ghost"
+          className="shrink-0"
+          onClick={() => setMode("idle")}
+          disabled={cancel.isPending}
+          data-testid={`meeting-cancel-abort-${m.id}`}
+        >
+          Keep
+        </PillButton>
+        <PillButton
+          className="shrink-0 border-red-500/40 text-red-400"
+          onClick={() => cancel.mutate()}
+          disabled={cancel.isPending}
+          data-testid={`meeting-cancel-confirm-button-${m.id}`}
+        >
+          {cancel.isPending ? "Cancelling…" : "Cancel meeting"}
+        </PillButton>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => setMode("reschedule")}
+        className="text-xs text-gold hover:underline"
+        data-testid={`meeting-reschedule-${m.id}`}
+      >
+        Reschedule
+      </button>
+      <button
+        type="button"
+        onClick={() => setMode("cancel")}
+        className="text-xs text-red-400 hover:underline"
+        data-testid={`meeting-cancel-${m.id}`}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
 function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; showMatches?: boolean }) {
   // One brief per matched account. Meetings usually match a single account;
   // when several are matched, the viewer picks which account to brief on.
@@ -359,6 +515,7 @@ function MeetingRow({ m, showMatches = true }: { m: AtelierCalendarMeeting; show
             })}
           </div>
         )}
+        {m.internal && m.canManage && <InternalMeetingManage m={m} />}
         {briefAccountId && <MeetingBriefPanel meetingId={m.id} accountId={briefAccountId} />}
       </div>
     </div>

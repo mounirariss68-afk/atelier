@@ -11,11 +11,21 @@
  * Atelier internal-meeting record carrying the Graph event id/iCalUId so
  * calendar views and the auto-logger never show it twice.
  *
- * Out of scope (per task): reschedule/cancel, rooms, recurring meetings,
- * external attendees.
+ * Task #559 adds reschedule/cancel of these meetings (organizer or
+ * founding partner) — Graph PATCH/DELETE on the organizer's event so
+ * Outlook attendees get standard update/cancellation notices, via the
+ * shared lifecycle helpers in `internalMeetingLifecycle.ts`.
+ *
+ * Out of scope: rooms, recurring meetings, external attendees.
  */
-import { and, eq, ilike, ne } from "drizzle-orm";
+import { and, eq, gte, ilike, isNull, ne } from "drizzle-orm";
 import { db, atelierUsers, atelierMeetings, atelierAuditEvents } from "@workspace/db";
+import {
+  MeetingLifecycleError,
+  cancelInternalMeeting,
+  canManageInternalMeeting,
+  rescheduleInternalMeeting,
+} from "../internalMeetingLifecycle.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { rid } from "./index.js";
 import {
@@ -365,6 +375,357 @@ defineCapability({
         navigateTo: null,
       },
     };
+  },
+});
+
+// ------------------------------------------------------------------
+// Task #559 — reschedule / cancel internal meetings from chat.
+// ------------------------------------------------------------------
+
+interface ManagedMeetingRow {
+  id: string;
+  title: string;
+  startAt: Date | null;
+  endAt: Date | null;
+  createdByUserId: string | null;
+  internalAttendees: Array<{ userId?: string; name?: string; email?: string | null }> | null;
+}
+
+/**
+ * Upcoming (or started within the last hour) internal meetings the
+ * requester may manage — organizer's own meetings, or all for a founding
+ * partner. Optional case-insensitive title filter.
+ */
+async function findManagedMeetings(
+  persona: { id: string; orgId: string; role: string },
+  titleQuery: string,
+): Promise<ManagedMeetingRow[]> {
+  const cutoff = new Date(Date.now() - 3600 * 1000);
+  const conds = [
+    eq(atelierMeetings.orgId, persona.orgId),
+    eq(atelierMeetings.parentType, "internal"),
+    isNull(atelierMeetings.deletedAt),
+    ne(atelierMeetings.status, "cancelled"),
+    gte(atelierMeetings.startAt, cutoff),
+  ];
+  if (titleQuery) conds.push(ilike(atelierMeetings.title, `%${titleQuery}%`));
+  const rows = await db
+    .select({
+      id: atelierMeetings.id,
+      title: atelierMeetings.title,
+      startAt: atelierMeetings.startAt,
+      endAt: atelierMeetings.endAt,
+      createdByUserId: atelierMeetings.createdByUserId,
+      internalAttendees: atelierMeetings.internalAttendees,
+    })
+    .from(atelierMeetings)
+    .where(and(...conds));
+  return rows
+    .filter((m) => canManageInternalMeeting(persona, m))
+    .sort((a, b) => (a.startAt?.getTime() ?? 0) - (b.startAt?.getTime() ?? 0))
+    .slice(0, 10);
+}
+
+function meetingLabel(m: ManagedMeetingRow): string {
+  return m.startAt
+    ? `"${m.title}" — ${fmtDubai(m.startAt)} (Dubai)`
+    : `"${m.title}"`;
+}
+
+/**
+ * Resolve which meeting the user means: by explicit meetingId, else by
+ * title match. Returns a ToolResult envelope for the not-found and
+ * ambiguous cases, or the single matching row.
+ */
+async function resolveTargetMeeting(
+  persona: { id: string; orgId: string; role: string },
+  input: Record<string, unknown>,
+): Promise<
+  | { row: ManagedMeetingRow }
+  | { result: { ok: boolean; [k: string]: unknown } }
+> {
+  const meetingId = typeof input.meetingId === "string" ? input.meetingId.trim() : "";
+  const query = typeof input.meeting === "string" ? input.meeting.trim() : "";
+  const candidates = await findManagedMeetings(persona, meetingId ? "" : query);
+  if (meetingId) {
+    const row = candidates.find((m) => m.id === meetingId);
+    if (!row) {
+      return {
+        result: {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: "I couldn't find that upcoming internal meeting (it may have been cancelled already, or you may not be its organizer).",
+        },
+      };
+    }
+    return { row };
+  }
+  if (candidates.length === 0) {
+    return {
+      result: {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: query
+          ? `I couldn't find an upcoming internal meeting matching "${query}" that you can manage. Only the organizer (or a founding partner) can change a meeting.`
+          : "You have no upcoming internal meetings that you can manage.",
+      },
+    };
+  }
+  if (candidates.length > 1) {
+    const options = candidates.slice(0, 5).map((m) => ({
+      id: m.id,
+      label: meetingLabel(m),
+      secondary: m.internalAttendees?.map((a) => a.name).filter(Boolean).join(", ") || undefined,
+    }));
+    return {
+      result: {
+        ok: true,
+        data: { prompt: "Which meeting do you mean?", options },
+        disambiguation: { kind: "meeting", options, field: "meetingId" },
+      },
+    };
+  }
+  return { row: candidates[0]! };
+}
+
+defineCapability({
+  id: "meeting.reschedule_internal",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "engagement",
+  toolName: "reschedule_internal_meeting",
+  description:
+    "Move an internal meeting you organized (founding partners can move anyone's) to a new date/time. Updates the real Outlook event so attendees get a standard meeting update. Identify the meeting by topic words; date must be an absolute YYYY-MM-DD and time HH:MM (Dubai).",
+  slashAliases: { en: ["/reschedule"], fr: ["/replanifier"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
+      date: { type: "string", description: "New date YYYY-MM-DD (Dubai)." },
+      time: { type: "string", description: "New start time HH:MM (Dubai)." },
+      durationMinutes: { type: "integer", minimum: 15, maximum: 480, description: "Optional new duration; defaults to the meeting's current length." },
+      confirm: { type: "boolean" },
+    },
+    required: ["date", "time"],
+  },
+  isWrite: true,
+  irreversible: false,
+  requiredRoles: [...SCHEDULER_ROLES],
+  surfaceOn: ["home", "global"],
+  examplePhrases: {
+    en: [
+      "Move my catch-up with Gokhan to Friday 14:00",
+      "Reschedule the pipeline review to tomorrow at 9",
+      "/reschedule strategy sync to 2026-07-30 10:30",
+    ],
+  },
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "meeting_card",
+  async run(input, ctx) {
+    const dateStr = String(input.date ?? "").trim();
+    const timeStr = String(input.time ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: "date must be YYYY-MM-DD — resolve relative dates against today's date first." };
+    }
+    const newStart = dubaiWallToUtc(dateStr, timeStr);
+    if (!newStart) {
+      return { ok: false, errorCode: "invalid_input", errorMessage: `Couldn't parse the time "${timeStr}" — use HH:MM.` };
+    }
+    const target = await resolveTargetMeeting(ctx.persona, input);
+    if ("result" in target) return target.result as never;
+    const row = target.row;
+    const currentDurMin =
+      row.startAt && row.endAt
+        ? Math.max(15, Math.round((row.endAt.getTime() - row.startAt.getTime()) / 60000))
+        : 30;
+    const durationMin = Math.max(15, Math.min(480, Number(input.durationMinutes ?? currentDurMin)));
+    const newEnd = new Date(newStart.getTime() + durationMin * 60 * 1000);
+    const whenLabel = `${fmtDubai(newStart)}–${fmtDubai(newEnd).slice(-5)} (Dubai)`;
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            topic: row.title,
+            currentStart: row.startAt?.toISOString() ?? null,
+            newStart: newStart.toISOString(),
+            newEnd: newEnd.toISOString(),
+            whenLabel,
+          },
+        },
+        confirmation: {
+          summary:
+            `Move ${meetingLabel(row)} to ${whenLabel}. ` +
+            "Attendees will receive a standard Outlook meeting update.",
+          diff: {
+            update: {
+              table: "atelier_meetings",
+              id: row.id,
+              values: { start: newStart.toISOString(), end: newEnd.toISOString() },
+            },
+          },
+          pending: {
+            tool: "reschedule_internal_meeting",
+            input: {
+              meetingId: row.id,
+              date: dateStr,
+              time: `${fmtDubai(newStart).slice(-5)}`,
+              durationMinutes: durationMin,
+              confirm: true,
+            },
+          },
+        },
+      };
+    }
+
+    try {
+      const { meeting, graphUpdated } = await rescheduleInternalMeeting({
+        actor: { id: ctx.persona.id, orgId: ctx.persona.orgId, name: ctx.persona.name, role: ctx.persona.role },
+        meetingId: row.id,
+        start: newStart,
+        end: newEnd,
+        via: "cli",
+        turnId: ctx.turnId,
+      });
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: meeting.id,
+            title: meeting.title,
+            date: fmtDubai(newStart).slice(0, 10),
+            kind: "internal",
+            status: "scheduled",
+            startAt: newStart.toISOString(),
+            endAt: newEnd.toISOString(),
+            whenLabel,
+            summary: graphUpdated
+              ? "Rescheduled — attendees get an Outlook meeting update."
+              : "Rescheduled in the Atelier (no linked Outlook event to update).",
+            decisions: [],
+            actionItems: [],
+          },
+          parent: { kind: "internal", id: "internal", name: "Internal" },
+          href: "/me?tab=calendar",
+          navigateTo: null,
+        },
+      };
+    } catch (err) {
+      if (err instanceof SchedulingError) {
+        return { ok: false, errorCode: `ms_${err.code}`, errorMessage: err.message };
+      }
+      if (err instanceof MeetingLifecycleError) {
+        return { ok: false, errorCode: err.code, errorMessage: err.message };
+      }
+      throw err;
+    }
+  },
+});
+
+defineCapability({
+  id: "meeting.cancel_internal",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "engagement",
+  toolName: "cancel_internal_meeting",
+  description:
+    "Cancel an internal meeting you organized (founding partners can cancel anyone's). Deletes the real Outlook event so attendees get a standard cancellation notice; the Atelier record is marked cancelled. Identify the meeting by topic words.",
+  slashAliases: { en: ["/cancel-meeting"], fr: ["/annuler-reunion"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
+      confirm: { type: "boolean" },
+    },
+    required: [],
+  },
+  isWrite: true,
+  irreversible: true,
+  requiredRoles: [...SCHEDULER_ROLES],
+  surfaceOn: ["home", "global"],
+  examplePhrases: {
+    en: [
+      "Cancel my catch-up with Gokhan tomorrow",
+      "Cancel the pipeline review meeting",
+      "/cancel-meeting strategy sync",
+    ],
+  },
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "meeting_card",
+  async run(input, ctx) {
+    const target = await resolveTargetMeeting(ctx.persona, input);
+    if ("result" in target) return target.result as never;
+    const row = target.row;
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            topic: row.title,
+            start: row.startAt?.toISOString() ?? null,
+            attendees: row.internalAttendees?.map((a) => a.name).filter(Boolean) ?? [],
+          },
+        },
+        confirmation: {
+          summary:
+            `Cancel ${meetingLabel(row)}. ` +
+            "Attendees will receive a standard Outlook cancellation notice. This can't be undone.",
+          diff: {
+            delete: {
+              table: "atelier_meetings",
+              id: row.id,
+              label: row.title,
+            },
+          },
+          pending: {
+            tool: "cancel_internal_meeting",
+            input: { meetingId: row.id, confirm: true },
+          },
+        },
+      };
+    }
+
+    try {
+      const { graphCancelled } = await cancelInternalMeeting({
+        actor: { id: ctx.persona.id, orgId: ctx.persona.orgId, name: ctx.persona.name, role: ctx.persona.role },
+        meetingId: row.id,
+        via: "cli",
+        turnId: ctx.turnId,
+      });
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: row.id,
+            title: row.title,
+            kind: "internal",
+            status: "cancelled",
+            startAt: row.startAt?.toISOString() ?? null,
+            endAt: row.endAt?.toISOString() ?? null,
+            summary: graphCancelled
+              ? "Cancelled — attendees get an Outlook cancellation notice."
+              : "Cancelled in the Atelier (no linked Outlook event to remove).",
+            decisions: [],
+            actionItems: [],
+          },
+          parent: { kind: "internal", id: "internal", name: "Internal" },
+          href: "/me?tab=calendar",
+          navigateTo: null,
+        },
+      };
+    } catch (err) {
+      if (err instanceof SchedulingError) {
+        return { ok: false, errorCode: `ms_${err.code}`, errorMessage: err.message };
+      }
+      if (err instanceof MeetingLifecycleError) {
+        return { ok: false, errorCode: err.code, errorMessage: err.message };
+      }
+      throw err;
+    }
   },
 });
 

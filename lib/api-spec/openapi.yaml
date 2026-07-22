@@ -8604,6 +8604,9 @@ components:
         internal:
           type: boolean
           description: True for Atelier-booked internal meetings (Task 553).
+        canManage:
+          type: boolean
+          description: Viewer may reschedule/cancel this internal meeting (organizer or founding partner, Task 559).
     AtelierCalendarResponse:
       type: object
       required: [configured, connected, meetings]

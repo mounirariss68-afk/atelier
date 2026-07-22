@@ -22,4 +22,6 @@ export interface AtelierCalendarMeeting {
   matches: AtelierCalendarMatch[];
   /** True for Atelier-booked internal meetings (Task 553). */
   internal?: boolean;
+  /** Viewer may reschedule/cancel this internal meeting (organizer or founding partner, Task 559). */
+  canManage?: boolean;
 }

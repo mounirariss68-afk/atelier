@@ -18,10 +18,12 @@ import {
   MsGraphError,
   createCalendarEvent,
   decryptToken,
+  deleteCalendarEvent,
   encryptToken,
   getCalendarView,
   hasCalendarWriteScope,
   refreshTokens,
+  updateCalendarEvent,
   type MsCalendarEvent,
 } from "./msGraph.js";
 import { logger } from "./logger";
@@ -251,27 +253,26 @@ export class SchedulingError extends Error {
 }
 
 /**
- * Create the invite on the requester's Microsoft calendar. Throws
- * SchedulingError with an actionable code — callers turn these into
- * friendly chat messages, never raw 403s.
+ * Fresh, write-capable Graph token for a user's stored connection.
+ * `whose` = "self" phrases errors at the caller; "organizer" phrases them
+ * about the meeting organizer (founding-partner acting on another's
+ * meeting — the Outlook event lives on the ORGANIZER's calendar, so we
+ * must always use the organizer's own delegated token).
  */
-export async function sendInternalInvite(args: {
-  requesterUserId: string;
-  subject: string;
-  bodyText?: string;
-  start: Date;
-  end: Date;
-  attendees: Array<{ email: string; name?: string | null }>;
-  online: boolean;
-}): Promise<{ event: MsCalendarEvent; organizerEmail: string }> {
+async function calendarWriteToken(
+  userId: string,
+  whose: "self" | "organizer",
+): Promise<{ accessToken: string; organizerEmail: string }> {
   const [conn] = await db
     .select()
     .from(atelierMsConnections)
-    .where(eq(atelierMsConnections.userId, args.requesterUserId))
+    .where(eq(atelierMsConnections.userId, userId))
     .limit(1);
   if (!conn) {
     throw new SchedulingError(
-      "You haven't connected Microsoft 365 yet — connect it from your profile to send calendar invites.",
+      whose === "self"
+        ? "You haven't connected Microsoft 365 yet — connect it from your profile to send calendar invites."
+        : "The meeting organizer no longer has a Microsoft 365 connection, so the Outlook event can't be updated from here.",
       "not-connected",
     );
   }
@@ -284,7 +285,9 @@ export async function sendInternalInvite(args: {
   } catch (err) {
     if (err instanceof MsAuthError) {
       throw new SchedulingError(
-        "Your Microsoft 365 connection has expired. Please disconnect and connect again from your profile.",
+        whose === "self"
+          ? "Your Microsoft 365 connection has expired. Please disconnect and connect again from your profile."
+          : "The meeting organizer's Microsoft 365 connection has expired, so the Outlook event can't be updated from here.",
         "reconnect-required",
       );
     }
@@ -292,10 +295,26 @@ export async function sendInternalInvite(args: {
   }
   if (!hasCalendarWriteScope(scopes)) {
     throw new SchedulingError(
-      "Sending invites needs the Calendars.ReadWrite permission. Please reconnect Microsoft 365 from your profile; if that doesn't help, ask your admin to add Calendars.ReadWrite to the Cognirise app in Microsoft Entra and grant consent.",
+      "This needs the Calendars.ReadWrite permission. Please reconnect Microsoft 365 from your profile; if that doesn't help, ask your admin to add Calendars.ReadWrite to the Cognirise app in Microsoft Entra and grant consent.",
       "missing-scope",
     );
   }
+  return { accessToken, organizerEmail: conn.msEmail };
+}
+
+export async function sendInternalInvite(args: {
+  requesterUserId: string;
+  subject: string;
+  bodyText?: string;
+  start: Date;
+  end: Date;
+  attendees: Array<{ email: string; name?: string | null }>;
+  online: boolean;
+}): Promise<{ event: MsCalendarEvent; organizerEmail: string }> {
+  const { accessToken, organizerEmail } = await calendarWriteToken(
+    args.requesterUserId,
+    "self",
+  );
   try {
     const event = await createCalendarEvent(accessToken, {
       subject: args.subject,
@@ -305,7 +324,7 @@ export async function sendInternalInvite(args: {
       attendees: args.attendees,
       online: args.online,
     });
-    return { event, organizerEmail: conn.msEmail };
+    return { event, organizerEmail };
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 403) {
       throw new SchedulingError(
@@ -315,6 +334,84 @@ export async function sendInternalInvite(args: {
     }
     throw new SchedulingError(
       "Microsoft 365 is unreachable right now — the invite was not sent. Try again shortly.",
+      "graph-failed",
+    );
+  }
+}
+
+/**
+ * Task #559 — reschedule the Outlook event behind an internal meeting.
+ * PATCHes the ORGANIZER's copy of the event (delegated) so attendees
+ * receive a standard Outlook meeting update. `actingUserId` only controls
+ * the error phrasing: when a founding partner moves someone else's
+ * meeting, the failure message talks about the organizer's connection.
+ */
+export async function updateInternalInvite(args: {
+  organizerUserId: string;
+  actingUserId: string;
+  msEventId: string;
+  start: Date;
+  end: Date;
+  subject?: string;
+}): Promise<void> {
+  const { accessToken } = await calendarWriteToken(
+    args.organizerUserId,
+    args.actingUserId === args.organizerUserId ? "self" : "organizer",
+  );
+  try {
+    await updateCalendarEvent(accessToken, args.msEventId, {
+      startUtcIso: args.start.toISOString(),
+      endUtcIso: args.end.toISOString(),
+      subject: args.subject,
+    });
+  } catch (err) {
+    if (err instanceof MsGraphError && err.status === 404) {
+      // Event vanished from the organizer's mailbox (deleted in Outlook).
+      // The Atelier row is being brought in line — nothing to move.
+      logger.warn(
+        { msEventId: args.msEventId },
+        "[ms-scheduling] reschedule: event already gone from organizer mailbox",
+      );
+      return;
+    }
+    if (err instanceof MsGraphError && err.status === 403) {
+      throw new SchedulingError(
+        "Microsoft blocked the update (missing Calendars.ReadWrite permission). Reconnect Microsoft 365 or ask your admin to grant Calendars.ReadWrite.",
+        "missing-scope",
+      );
+    }
+    throw new SchedulingError(
+      "Microsoft 365 is unreachable right now — the meeting was NOT moved. Try again shortly.",
+      "graph-failed",
+    );
+  }
+}
+
+/**
+ * Task #559 — cancel the Outlook event behind an internal meeting.
+ * Deleting the ORGANIZER's copy makes Outlook send every attendee a
+ * standard cancellation. A 404 counts as already-cancelled.
+ */
+export async function cancelInternalInvite(args: {
+  organizerUserId: string;
+  actingUserId: string;
+  msEventId: string;
+}): Promise<void> {
+  const { accessToken } = await calendarWriteToken(
+    args.organizerUserId,
+    args.actingUserId === args.organizerUserId ? "self" : "organizer",
+  );
+  try {
+    await deleteCalendarEvent(accessToken, args.msEventId);
+  } catch (err) {
+    if (err instanceof MsGraphError && err.status === 403) {
+      throw new SchedulingError(
+        "Microsoft blocked the cancellation (missing Calendars.ReadWrite permission). Reconnect Microsoft 365 or ask your admin to grant Calendars.ReadWrite.",
+        "missing-scope",
+      );
+    }
+    throw new SchedulingError(
+      "Microsoft 365 is unreachable right now — the meeting was NOT cancelled. Try again shortly.",
       "graph-failed",
     );
   }

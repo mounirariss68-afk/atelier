@@ -377,6 +377,77 @@ export async function createCalendarEvent(
   });
 }
 
+async function graphPatch<T>(
+  accessToken: string,
+  path: string,
+  body: unknown,
+): Promise<T> {
+  const resp = await fetch(`${graphBase()}${path}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      Prefer: 'outlook.timezone="UTC"',
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await resp.text();
+  if (!resp.ok) {
+    console.error(`[msGraph] PATCH ${path} → ${resp.status} ${text.slice(0, 300)}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+  }
+  return JSON.parse(text) as T;
+}
+
+async function graphDelete(accessToken: string, path: string): Promise<void> {
+  const resp = await fetch(`${graphBase()}${path}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!resp.ok && resp.status !== 404) {
+    const text = await resp.text();
+    console.error(`[msGraph] DELETE ${path} → ${resp.status} ${text.slice(0, 300)}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+  }
+}
+
+/**
+ * Task #559 — reschedule an existing event on the caller's own calendar
+ * (delegated PATCH). Outlook sends attendees a standard meeting update.
+ */
+export async function updateCalendarEvent(
+  accessToken: string,
+  eventId: string,
+  args: {
+    startUtcIso: string;
+    endUtcIso: string;
+    subject?: string;
+  },
+): Promise<MsCalendarEvent> {
+  const body: Record<string, unknown> = {
+    start: { dateTime: args.startUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
+    end: { dateTime: args.endUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
+  };
+  if (args.subject) body.subject = args.subject;
+  return graphPatch<MsCalendarEvent>(
+    accessToken,
+    `/me/events/${encodeURIComponent(eventId)}`,
+    body,
+  );
+}
+
+/**
+ * Task #559 — delete an event the caller organizes. When the organizer
+ * deletes a meeting, Outlook automatically sends attendees a cancellation.
+ * A 404 (already gone from the mailbox) is treated as success.
+ */
+export async function deleteCalendarEvent(
+  accessToken: string,
+  eventId: string,
+): Promise<void> {
+  await graphDelete(accessToken, `/me/events/${encodeURIComponent(eventId)}`);
+}
+
 export interface MsProfile {
   id: string;
   displayName?: string;
