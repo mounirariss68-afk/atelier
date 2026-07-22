@@ -25,6 +25,7 @@ import {
   cancelInternalMeeting,
   canManageInternalMeeting,
   rescheduleInternalMeeting,
+  updateInternalMeetingDetails,
 } from "../internalMeetingLifecycle.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
 import { rid } from "./index.js";
@@ -59,7 +60,7 @@ defineCapability({
   module: "engagement",
   toolName: "schedule_internal_meeting",
   description:
-    "Schedule an internal meeting with colleagues: checks their Microsoft 365 availability (when connected), finds the earliest common free slot or uses an explicit time, and on confirm sends a real Outlook calendar invite (Teams link when online). Attendees are roster colleagues by name; date must be an absolute YYYY-MM-DD (resolve relative dates yourself from the current date). Not for client meetings — those attach to an opportunity or engagement.",
+    "Schedule a ONE-OFF internal meeting with colleagues: checks their Microsoft 365 availability (when connected), finds the earliest common free slot or uses an explicit time, and on confirm sends a real Outlook calendar invite (Teams link when online). Attendees are roster colleagues by name; date must be an absolute YYYY-MM-DD (resolve relative dates yourself from the current date). Not for client meetings — use schedule_client_meeting for those. Recurring/repeating meetings (e.g. \"every Monday\") are NOT supported — tell the user honestly that recurring series must be set up in Outlook directly; never book only the first occurrence as a workaround unless the user explicitly agrees.",
   slashAliases: { en: ["/schedule", "/schedule-meeting"], fr: ["/planifier"] },
   inputSchema: {
     type: "object",
@@ -709,6 +710,250 @@ defineCapability({
             summary: graphCancelled
               ? "Cancelled — attendees get an Outlook cancellation notice."
               : "Cancelled in the Atelier (no linked Outlook event to remove).",
+            decisions: [],
+            actionItems: [],
+          },
+          parent: { kind: "internal", id: "internal", name: "Internal" },
+          href: "/me?tab=calendar",
+          navigateTo: null,
+        },
+      };
+    } catch (err) {
+      if (err instanceof SchedulingError) {
+        return { ok: false, errorCode: `ms_${err.code}`, errorMessage: err.message };
+      }
+      if (err instanceof MeetingLifecycleError) {
+        return { ok: false, errorCode: err.code, errorMessage: err.message };
+      }
+      throw err;
+    }
+  },
+});
+
+// ------------------------------------------------------------------
+// Task #568 — edit an internal meeting's topic / attendee list from chat.
+// ------------------------------------------------------------------
+
+defineCapability({
+  id: "meeting.update_internal",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "engagement",
+  toolName: "update_internal_meeting",
+  description:
+    "Change an internal meeting you organized (founding partners can change anyone's): rename the topic and/or add or remove roster attendees. Updates the real Outlook invite — attendees get a standard meeting update, newly added colleagues receive the invite. Identify the meeting by topic words. Time changes go through reschedule_internal_meeting instead. Recurring meetings are NOT supported — say so honestly.",
+  slashAliases: { en: ["/edit-meeting"], fr: ["/modifier-reunion"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
+      topic: { type: "string", maxLength: 200, description: "New meeting topic/subject." },
+      addAttendees: {
+        type: "array",
+        items: { type: "string" },
+        description: "Colleague names (roster) to add to the invite.",
+      },
+      removeAttendees: {
+        type: "array",
+        items: { type: "string" },
+        description: "Names of current attendees to remove from the invite.",
+      },
+      confirm: { type: "boolean" },
+    },
+    required: [],
+  },
+  isWrite: true,
+  irreversible: false,
+  requiredRoles: [...SCHEDULER_ROLES],
+  surfaceOn: ["home", "global"],
+  examplePhrases: {
+    en: [
+      "Rename my catch-up with Gokhan to 'Q3 planning'",
+      "Add Yavuz to the pipeline review meeting",
+      "Remove Mounir from tomorrow's strategy sync",
+    ],
+  },
+  twoPhaseConfirm: true,
+  outboundChannel: null,
+  resultCard: "meeting_card",
+  async run(input, ctx) {
+    const newTopic = typeof input.topic === "string" ? input.topic.trim() : "";
+    const addNames = Array.isArray(input.addAttendees)
+      ? input.addAttendees.map((n) => String(n).trim()).filter(Boolean)
+      : [];
+    const removeNames = Array.isArray(input.removeAttendees)
+      ? input.removeAttendees.map((n) => String(n).trim()).filter(Boolean)
+      : [];
+    if (!newTopic && addNames.length === 0 && removeNames.length === 0) {
+      return {
+        ok: false,
+        errorCode: "invalid_input",
+        errorMessage:
+          "Tell me what to change: a new topic, attendees to add, or attendees to remove. (To change the time, ask me to reschedule it.)",
+      };
+    }
+
+    const target = await resolveTargetMeeting(ctx.persona, input);
+    if ("result" in target) return target.result as never;
+    const row = target.row;
+
+    const current = (row.internalAttendees ?? [])
+      .filter((a) => a.userId && a.name)
+      .map((a) => ({ userId: a.userId as string, name: a.name as string, email: a.email ?? null }));
+
+    // ---- resolve additions against the roster (never self — the
+    // organizer is on the event implicitly) ----
+    const additions: Array<{ userId: string; name: string; email: string | null }> = [];
+    for (const name of addNames) {
+      const matches = await db
+        .select({ id: atelierUsers.id, name: atelierUsers.name, email: atelierUsers.email })
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.orgId, ctx.persona.orgId),
+            ne(atelierUsers.id, ctx.persona.id),
+            ilike(atelierUsers.name, `%${name}%`),
+          ),
+        )
+        .limit(6);
+      if (matches.length === 0) {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `I couldn't find a colleague named "${name}" on the roster.`,
+        };
+      }
+      if (matches.length > 1) {
+        const options = matches.slice(0, 5).map((m) => ({ id: m.id, label: m.name, secondary: m.email }));
+        return {
+          ok: true,
+          data: { prompt: `Which "${name}" did you mean?`, options },
+          disambiguation: { kind: "user", options },
+        };
+      }
+      const m = matches[0]!;
+      if (!current.some((a) => a.userId === m.id) && !additions.some((a) => a.userId === m.id)) {
+        additions.push({ userId: m.id, name: m.name, email: m.email });
+      }
+    }
+
+    // ---- resolve removals against the CURRENT attendee list ----
+    const removals: Array<{ userId: string; name: string }> = [];
+    for (const name of removeNames) {
+      const lower = name.toLowerCase();
+      const matches = current.filter((a) => a.name.toLowerCase().includes(lower));
+      if (matches.length === 0) {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `"${name}" isn't on ${meetingLabel(row)} — current attendees: ${
+            current.map((a) => a.name).join(", ") || "none"
+          }.`,
+        };
+      }
+      if (matches.length > 1) {
+        const options = matches.slice(0, 5).map((m) => ({ id: m.userId, label: m.name }));
+        return {
+          ok: true,
+          data: { prompt: `Which "${name}" should I remove?`, options },
+          disambiguation: { kind: "user", options },
+        };
+      }
+      const m = matches[0]!;
+      if (!removals.some((r) => r.userId === m.userId)) removals.push({ userId: m.userId, name: m.name });
+    }
+
+    const nextAttendees = [
+      ...current.filter((a) => !removals.some((r) => r.userId === a.userId)),
+      ...additions,
+    ];
+    const attendeesChanged = additions.length > 0 || removals.length > 0;
+    if (attendeesChanged && nextAttendees.length === 0) {
+      return {
+        ok: false,
+        errorCode: "invalid_input",
+        errorMessage:
+          "That would leave the meeting with no attendees besides you — cancel it instead if it's no longer needed.",
+      };
+    }
+    const topicChanged = Boolean(newTopic) && newTopic !== row.title;
+    if (!topicChanged && !attendeesChanged) {
+      return {
+        ok: false,
+        errorCode: "invalid_input",
+        errorMessage: `Nothing to change — ${meetingLabel(row)} already looks like that.`,
+      };
+    }
+
+    const changeBits: string[] = [];
+    if (topicChanged) changeBits.push(`rename it to "${newTopic}"`);
+    if (additions.length > 0) changeBits.push(`add ${additions.map((a) => a.name).join(", ")}`);
+    if (removals.length > 0) changeBits.push(`remove ${removals.map((r) => r.name).join(", ")}`);
+
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            topic: topicChanged ? newTopic : row.title,
+            previousTopic: row.title,
+            attendees: nextAttendees.map((a) => a.name),
+            added: additions.map((a) => a.name),
+            removed: removals.map((r) => r.name),
+            start: row.startAt?.toISOString() ?? null,
+          },
+        },
+        confirmation: {
+          summary:
+            `Update ${meetingLabel(row)}: ${changeBits.join(", ")}. ` +
+            "The Outlook invite will be updated — attendees get a standard meeting update.",
+          diff: {
+            update: {
+              table: "atelier_meetings",
+              id: row.id,
+              values: {
+                ...(topicChanged ? { title: newTopic } : {}),
+                ...(attendeesChanged ? { attendees: nextAttendees.map((a) => a.name).join(", ") } : {}),
+              },
+            },
+          },
+          pending: {
+            tool: "update_internal_meeting",
+            input: {
+              meetingId: row.id,
+              ...(topicChanged ? { topic: newTopic } : {}),
+              ...(additions.length > 0 ? { addAttendees: additions.map((a) => a.name) } : {}),
+              ...(removals.length > 0 ? { removeAttendees: removals.map((r) => r.name) } : {}),
+              confirm: true,
+            },
+          },
+        },
+      };
+    }
+
+    try {
+      const { meeting, graphUpdated } = await updateInternalMeetingDetails({
+        actor: { id: ctx.persona.id, orgId: ctx.persona.orgId, name: ctx.persona.name, role: ctx.persona.role },
+        meetingId: row.id,
+        title: topicChanged ? newTopic : undefined,
+        internalAttendees: attendeesChanged ? nextAttendees : undefined,
+        via: "cli",
+        turnId: ctx.turnId,
+      });
+      return {
+        ok: true,
+        data: {
+          meeting: {
+            id: meeting.id,
+            title: meeting.title,
+            kind: "internal",
+            status: "scheduled",
+            attendees: nextAttendees.map((a) => a.name),
+            startAt: meeting.startAt?.toISOString() ?? null,
+            endAt: meeting.endAt?.toISOString() ?? null,
+            summary: graphUpdated
+              ? "Updated — attendees get an Outlook meeting update."
+              : "Updated in the Atelier (no linked Outlook event to update).",
             decisions: [],
             actionItems: [],
           },

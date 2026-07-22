@@ -34,12 +34,17 @@ if (remindersSupported()) {
   });
 }
 
-function briefParams(data: unknown): { meetingId: string; accountId: string } | null {
+function briefParams(data: unknown): { meetingId: string; accountId: string | null } | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, unknown>;
   if (d.kind !== "meeting-brief") return null;
-  if (typeof d.meetingId !== "string" || typeof d.accountId !== "string") return null;
-  return { meetingId: d.meetingId, accountId: d.accountId };
+  if (typeof d.meetingId !== "string") return null;
+  // Internal meetings (Task #568) carry no account — deep-link to the
+  // meeting only.
+  return {
+    meetingId: d.meetingId,
+    accountId: typeof d.accountId === "string" ? d.accountId : null,
+  };
 }
 
 function windowIso(days: number) {
@@ -97,7 +102,10 @@ export function MeetingReminders() {
       if (!params) return;
       router.push({
         pathname: "/(tabs)/meetings",
-        params: { focusMeetingId: params.meetingId, focusAccountId: params.accountId },
+        params: {
+          focusMeetingId: params.meetingId,
+          ...(params.accountId ? { focusAccountId: params.accountId } : {}),
+        },
       });
     };
     Notifications.getLastNotificationResponseAsync()

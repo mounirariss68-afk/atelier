@@ -16,6 +16,8 @@
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "test:merchant-parse": "tsx ./tests/merchant-parse/run.ts",
     "test:meeting-link": "tsx ./tests/meeting-link/run.ts",
+    "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",
+    "test:client-meeting": "tsx ./tests/crm/client-meeting-probe.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",

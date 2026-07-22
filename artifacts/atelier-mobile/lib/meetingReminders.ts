@@ -1,18 +1,22 @@
-// Meeting reminders — local notifications ~15 minutes before CRM-matched
-// meetings from the viewer's Outlook calendar (GET /me/calendar).
+// Meeting reminders — local notifications ~15 minutes before meetings from
+// the viewer's Outlook calendar (GET /me/calendar). CRM-matched meetings
+// deep-link into the account brief; purely internal meetings (Task #568)
+// remind too and deep-link to the meeting itself.
 //
 // The preference lives in AsyncStorage; scheduling is re-synced whenever the
 // calendar query refreshes (see components/MeetingReminders.tsx). Tapping a
-// notification deep-links into the Meetings tab and auto-opens the brief for
-// the matched account (app/(tabs)/meetings.tsx reads the params).
+// notification deep-links into the Meetings tab (app/(tabs)/meetings.tsx
+// reads the params).
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AtelierCalendarMeeting } from "@workspace/api-client-react";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
+import { REMINDER_ID_PREFIX as ID_PREFIX, REMINDER_LEAD_MINUTES, planReminders } from "./reminderPlan";
+
+export { REMINDER_LEAD_MINUTES } from "./reminderPlan";
+
 const PREF_KEY = "atelier.meetingReminders.enabled";
-const ID_PREFIX = "mtgbrief-";
-export const REMINDER_LEAD_MINUTES = 15;
 
 // ---------------------------------------------------------------------------
 // Preference (module store + listeners so any screen can subscribe cheaply)
@@ -103,7 +107,8 @@ export async function cancelAllMeetingReminders(): Promise<void> {
 /**
  * Re-sync scheduled reminders against the latest calendar payload.
  * Cancels our stale reminders (moved/removed meetings) and schedules one
- * reminder per upcoming CRM-matched meeting, 15 minutes before start.
+ * reminder per upcoming meeting, 15 minutes before start — CRM-matched
+ * AND purely internal meetings (Task #568).
  */
 export async function syncMeetingReminders(
   meetings: AtelierCalendarMeeting[],
@@ -114,25 +119,7 @@ export async function syncMeetingReminders(
   if (!perm.granted) return;
   await ensureAndroidChannel();
 
-  const now = Date.now();
-  const wanted = new Map<
-    string,
-    { meeting: AtelierCalendarMeeting; fireAt: Date; accountId: string; accountName: string }
-  >();
-  for (const m of meetings) {
-    if (m.isAllDay || m.matches.length === 0) continue;
-    const start = new Date(m.start).getTime();
-    if (Number.isNaN(start)) continue;
-    const fireAtMs = start - REMINDER_LEAD_MINUTES * 60_000;
-    if (fireAtMs <= now) continue;
-    const first = m.matches[0];
-    wanted.set(`${ID_PREFIX}${m.id}`, {
-      meeting: m,
-      fireAt: new Date(fireAtMs),
-      accountId: first.accountId,
-      accountName: first.accountName,
-    });
-  }
+  const wanted = planReminders(meetings, Date.now());
 
   let existing: string[] = [];
   try {
@@ -159,22 +146,24 @@ export async function syncMeetingReminders(
       await Notifications.scheduleNotificationAsync({
         identifier,
         content: {
-          title: w.meeting.subject || t("mtg.noSubject"),
-          body: t("mtg.reminderBody", {
-            mins: REMINDER_LEAD_MINUTES,
-            name: w.accountName,
-          }),
+          title: w.subject || t("mtg.noSubject"),
+          body: w.accountName
+            ? t("mtg.reminderBody", {
+                mins: REMINDER_LEAD_MINUTES,
+                name: w.accountName,
+              })
+            : t("mtg.reminderBodyInternal", { mins: REMINDER_LEAD_MINUTES }),
           data: {
             kind: "meeting-brief",
-            meetingId: w.meeting.id,
+            meetingId: w.meetingId,
             accountId: w.accountId,
-            joinUrl: w.meeting.joinUrl ?? null,
+            joinUrl: w.joinUrl,
           },
           ...(Platform.OS === "android" ? { channelId: "meeting-reminders" } : {}),
         },
         trigger: {
           type: Notifications.SchedulableTriggerInputTypes.DATE,
-          date: w.fireAt,
+          date: new Date(w.fireAtMs),
         },
       });
     } catch {

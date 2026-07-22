@@ -67,6 +67,10 @@ import "./finance-ops-capabilities.js";
 import "./people-read-capabilities.js";
 // Task #553 — internal-meeting scheduling assistant (Microsoft calendars).
 import "./internal-meeting-capabilities.js";
+// Task #568 — client meetings from chat: attach to an opportunity or
+// engagement (account references disambiguate), invite client contacts
+// by email + roster colleagues, same availability/preview/confirm flow.
+import "./client-meeting-capabilities.js";
 // Task #526 — Alliance partner chat flow: "add alliance partner <X>"
 // (dedupe → candidate/agreed clarification → confirm → create + launch
 // Alliance Cartographer, mapper auto-chains) + evaluation read.

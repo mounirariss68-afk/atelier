@@ -350,9 +350,11 @@ export async function updateInternalInvite(args: {
   organizerUserId: string;
   actingUserId: string;
   msEventId: string;
-  start: Date;
-  end: Date;
+  start?: Date;
+  end?: Date;
   subject?: string;
+  /** Full replacement attendee list (Task #568 — attendee edits). */
+  attendees?: Array<{ email: string; name?: string | null }>;
 }): Promise<void> {
   const { accessToken } = await calendarWriteToken(
     args.organizerUserId,
@@ -360,9 +362,10 @@ export async function updateInternalInvite(args: {
   );
   try {
     await updateCalendarEvent(accessToken, args.msEventId, {
-      startUtcIso: args.start.toISOString(),
-      endUtcIso: args.end.toISOString(),
+      startUtcIso: args.start?.toISOString(),
+      endUtcIso: args.end?.toISOString(),
       subject: args.subject,
+      attendees: args.attendees,
     });
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 404) {

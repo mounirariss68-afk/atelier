@@ -419,16 +419,27 @@ export async function updateCalendarEvent(
   accessToken: string,
   eventId: string,
   args: {
-    startUtcIso: string;
-    endUtcIso: string;
+    startUtcIso?: string;
+    endUtcIso?: string;
     subject?: string;
+    /** Full replacement attendee list (Graph PATCH semantics). */
+    attendees?: Array<{ email: string; name?: string | null }>;
   },
 ): Promise<MsCalendarEvent> {
-  const body: Record<string, unknown> = {
-    start: { dateTime: args.startUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
-    end: { dateTime: args.endUtcIso.replace(/Z$/, ""), timeZone: "UTC" },
-  };
+  const body: Record<string, unknown> = {};
+  if (args.startUtcIso) {
+    body.start = { dateTime: args.startUtcIso.replace(/Z$/, ""), timeZone: "UTC" };
+  }
+  if (args.endUtcIso) {
+    body.end = { dateTime: args.endUtcIso.replace(/Z$/, ""), timeZone: "UTC" };
+  }
   if (args.subject) body.subject = args.subject;
+  if (args.attendees) {
+    body.attendees = args.attendees.map((a) => ({
+      emailAddress: { address: a.email, name: a.name ?? undefined },
+      type: "required",
+    }));
+  }
   return graphPatch<MsCalendarEvent>(
     accessToken,
     `/me/events/${encodeURIComponent(eventId)}`,

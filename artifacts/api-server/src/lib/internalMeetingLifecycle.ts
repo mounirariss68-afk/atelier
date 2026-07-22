@@ -186,6 +186,88 @@ export async function rescheduleInternalMeeting(args: {
 }
 
 /**
+ * Task #568 — edit an internal meeting's topic and/or attendee list.
+ * Graph-first: PATCHes the ORGANIZER's event (subject and/or replacement
+ * attendee list — Outlook sends attendees a standard meeting update, and
+ * newly added people receive the invite), then updates the Atelier row
+ * and audits. Time is untouched — use rescheduleInternalMeeting for that.
+ */
+export async function updateInternalMeetingDetails(args: {
+  actor: MeetingActor;
+  meetingId: string;
+  title?: string;
+  /** Full replacement roster attendee list (excluding nobody — exactly
+   *  what should end up on the meeting). */
+  internalAttendees?: Array<{ userId: string; name: string; email: string | null }>;
+  via: "rest" | "cli";
+  turnId?: string;
+}): Promise<{ meeting: InternalMeetingRow; graphUpdated: boolean }> {
+  const row = await loadManagedInternalMeeting(args.actor, args.meetingId);
+  const newTitle = args.title?.trim();
+  if (!newTitle && !args.internalAttendees) {
+    throw new MeetingLifecycleError("Nothing to change.", "invalid_input");
+  }
+  if (args.internalAttendees && args.internalAttendees.length === 0) {
+    throw new MeetingLifecycleError(
+      "A meeting needs at least one attendee besides the organizer — cancel it instead if it's no longer needed.",
+      "invalid_input",
+    );
+  }
+  const organizerId = row.createdByUserId;
+  let graphUpdated = false;
+  if (row.msEventId && organizerId) {
+    await updateInternalInvite({
+      organizerUserId: organizerId,
+      actingUserId: args.actor.id,
+      msEventId: row.msEventId,
+      subject: newTitle,
+      attendees: args.internalAttendees
+        ?.filter((a) => a.email)
+        .map((a) => ({ email: a.email as string, name: a.name })),
+    });
+    graphUpdated = true;
+  }
+  const prevTitle = row.title;
+  const prevAttendees = (row.internalAttendees ?? []).map((a) => a.name);
+  await db
+    .update(atelierMeetings)
+    .set({
+      ...(newTitle ? { title: newTitle } : {}),
+      ...(args.internalAttendees ? { internalAttendees: args.internalAttendees } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierMeetings.id, row.id));
+  await auditMeeting({
+    actor: args.actor,
+    meetingId: row.id,
+    action: "meeting.updated",
+    payload: {
+      previousTitle: prevTitle,
+      ...(newTitle ? { title: newTitle } : {}),
+      ...(args.internalAttendees
+        ? {
+            previousAttendees: prevAttendees,
+            attendees: args.internalAttendees.map((a) => a.name),
+          }
+        : {}),
+      msEventId: row.msEventId,
+      graphUpdated,
+      via: args.via,
+      ...(args.turnId ? { turnId: args.turnId } : {}),
+    },
+    summary: `${args.actor.name} updated internal meeting "${newTitle ?? prevTitle}"${
+      args.internalAttendees ? " (attendees changed)" : ""
+    }.`,
+  });
+  const [fresh] = await db
+    .select()
+    .from(atelierMeetings)
+    .where(eq(atelierMeetings.id, row.id))
+    .limit(1);
+  return { meeting: fresh ?? row, graphUpdated };
+}
+
+/**
  * Cancel: Graph DELETE on the organizer's event (attendees get a standard
  * Outlook cancellation), then soft-cancel the Atelier row + audit.
  */
