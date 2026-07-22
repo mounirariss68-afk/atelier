@@ -9,7 +9,7 @@ Employee and contractor personas can use chat (`/cli/turn`) but must only see se
 
 **Why:** Without the clamp, opening `/cli/*` to employees exposed ~93 org-wide tools (accounts, finance, roster). All three layers are needed — the legacy registry fallthrough silently re-adds tools even when the catalog filters correctly.
 
-**How to apply:** Any new chat-capable role or new tool-registration path must respect SELF_ONLY_CHAT_ROLES; there is no automated test pinning this yet (follow-up proposed).
+**How to apply:** Any new chat-capable role or new tool-registration path must respect SELF_ONLY_CHAT_ROLES. A FOURTH layer now exists in runTurn: any tool call outside the self-only surface (minus meta allowlist: recap/undo/refine/request_feature/present_choices) emits a plain-language refusal frame (pageHref = user's page) instead of resolving via the findToolByName catalog fallthrough or dying with `unknown_tool`. Pinned by `pnpm --filter @workspace/api-server run test:selfonly-refusal` (stub-Anthropic probe, 3 scenarios incl. the classifier-"other" fallback refusal).
 
 Related quirks found while verifying:
 - Web shell polls `/activity`, `/accounts`, `/reference/bootstrap` regardless of persona → constant 403s for employees (pre-existing; follow-up proposed).

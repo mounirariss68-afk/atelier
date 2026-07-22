@@ -3564,6 +3564,45 @@ export async function runTurn(
       }
 
       const tc = claudeStep.toolCall;
+      // Task #591 — self-only personas (employee / contractor) get a
+      // helpful, scrubbed refusal when the model reaches for anything
+      // outside their me.* surface (e-sign, HR admin, firm documents,
+      // org CRM, …). Without this gate the call would either surface a
+      // dead-end `unknown_tool` error (leaking the tool identifier) or
+      // — worse — resolve through the Task #484 catalog fallthrough in
+      // findToolByName and run an org-wide capability their clamp is
+      // supposed to hide. Meta post-processors stay allowed so recap /
+      // undo / request_feature keep working for these personas.
+      const SELF_ONLY_META_ALLOW = new Set([
+        "refine_last",
+        "recap",
+        "explain_last",
+        "undo_last",
+        "request_feature",
+        "present_choices",
+      ]);
+      if (
+        SELF_ONLY_CHAT_ROLES.has(persona.role) &&
+        !SELF_ONLY_META_ALLOW.has(tc.name) &&
+        !getToolsForPersona(persona).some((t) => t.name === tc.name)
+      ) {
+        const fallbackHref = (pageCtx as { href?: string } | null)?.href ?? null;
+        record({
+          type: "refusal",
+          data: {
+            step,
+            reason:
+              "That isn't something I can help with from your workspace — here I can only work with your own timesheets, expenses, leave, documents, payslips and profile.",
+            closestCapabilityId: null,
+            pageHref: fallbackHref,
+            suggestion:
+              "For anything beyond your own records, please reach out to HR or your partner — or tell me what you wanted and I'll log it as a feature request.",
+            requestCapability: { tool: "request_feature", prompt: input.prompt },
+          },
+        });
+        status = status === "streaming" ? "success" : status;
+        break;
+      }
       const tool = findToolByName(tc.name, persona);
       if (!tool) {
         record({
