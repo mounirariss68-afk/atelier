@@ -1,0 +1,239 @@
+2026-07-23T12:42:25Z info: Deployment: 3cac98e8-8557-49ed-88f9-b57a80cfea8e
+2026-07-23T12:42:25Z info: Build: 1cff6cae-45f3-4a6a-8cc7-b0406915f7ac
+2026-07-23T12:42:27Z info: Running Security Scan
+2026-07-23T12:42:35Z info: Installing packages
+2026-07-23T12:42:38Z info: Starting Build
+
+> @workspace/api-server@0.0.0 build /home/runner/workspace/artifacts/api-server
+> node ./build.mjs
+
+
+
+  dist/index.mjs                      12.3mb ⚠️
+  dist/pino-worker.mjs               153.4kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                  23.7mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.0kb
+  dist/pino-pretty.mjs.map           203.9kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 1776ms
+
+
+> @workspace/atelier@0.0.0 build /home/runner/workspace/artifacts/atelier
+> vite build --config vite.config.ts
+
+
+vite v7.3.2 building client environment for production...
+
+transforming...
+
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/collapsible.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+src/components/ui/command.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+
+✓ 4700 modules transformed.
+
+rendering chunks...
+
+computing gzip size...
+
+dist/public/index.html                                           2.36 kB │ gzip:   0.98 kB
+dist/public/assets/cognirise-mark-nB2bKu9p.png                 203.53 kB
+
+dist/public/assets/cognirise-logo-light-D2GsM5TR.png           646.88 kB
+dist/public/assets/cognirise-logo-C6ns2LYC.png                 755.14 kB
+dist/public/assets/pdf.worker.min-DEtVeC4l.mjs               1,255.07 kB
+dist/public/assets/index-DCbuIma3.css                          181.40 kB │ gzip:  28.33 kB
+dist/public/assets/channel-DXuw8tYn.js                           0.11 kB │ gzip:   0.12 kB
+dist/public/assets/chunk-QZHKN3VN-B8UX2hZp.js                    0.19 kB │ gzip:   0.16 kB
+dist/public/assets/chunk-4BX2VUAB-DwFlhUgp.js                    0.22 kB │ gzip:   0.17 kB
+dist/public/assets/chunk-55IACEB6-cYkbxha0.js                    0.23 kB │ gzip:   0.20 kB
+dist/public/assets/stateDiagram-v2-BHNVJYJU-CrWVkj47.js          0.36 kB │ gzip:   0.27 kB
+dist/public/assets/chunk-FMBD7UC4-CiBzuuwH.js                    0.36 kB │ gzip:   0.27 kB
+dist/public/assets/classDiagram-4FO5ZUOK-B7LTojNp.js             0.43 kB │ gzip:   0.30 kB
+dist/public/assets/classDiagram-v2-Q7XG4LA2-B7LTojNp.js          0.43 kB │ gzip:   0.30 kB
+dist/public/assets/chunk-2J33WTMH-63Xy_s2k.js                    0.50 kB │ gzip:   0.35 kB
+dist/public/assets/infoDiagram-5YYISTIA-DS3qtD71.js              0.55 kB │ gzip:   0.38 kB
+dist/public/assets/chunk-ND2GUHAM-CMb8nQRY.js                    1.88 kB │ gzip:   0.83 kB
+dist/public/assets/diagram-5GNKFQAL-Dx7JD0Hk.js                  2.72 kB │ gzip:   1.34 kB
+dist/public/assets/arc-BXRCSEcP.js                               3.43 kB │ gzip:   1.45 kB
+dist/public/assets/diagram-LMA3HP47-BnHFUk2V.js                  4.18 kB │ gzip:   1.80 kB
+dist/public/assets/pieDiagram-4H26LBE5-J9dd0mW2.js               5.17 kB │ gzip:   2.29 kB
+dist/public/assets/diagram-2AECGRRQ-BXwWiedO.js                  5.77 kB │ gzip:   2.42 kB
+dist/public/assets/stateDiagram-AJRCARHV-DuCcu_36.js            10.32 kB │ gzip:   3.60 kB
+dist/public/assets/diagram-KO2AKTUF-BtkHJiza.js                 10.68 kB │ gzip:   4.12 kB
+dist/public/assets/dagre-BM42HDAG-DeYO3Zk9.js                   11.10 kB │ gzip:   4.08 kB
+dist/public/assets/diagram-OG6HWLK6-C4-4ItUL.js                 15.67 kB │ gzip:   5.58 kB
+dist/public/assets/ishikawaDiagram-YF4QCWOH-n7oyURT0.js         17.43 kB │ gzip:   6.58 kB
+dist/public/assets/kanban-definition-UN3LZRKU-B5Pe303Y.js       20.26 kB │ gzip:   7.11 kB
+dist/public/assets/sankeyDiagram-5OEKKPKP-D80U9zDt.js           23.10 kB │ gzip:   8.46 kB
+dist/public/assets/mindmap-definition-RKZ34NQL-ngZxN-a9.js      23.14 kB │ gzip:   7.72 kB
+dist/public/assets/journeyDiagram-JHISSGLW-CiccxswK.js          23.54 kB │ gzip:   8.28 kB
+dist/public/assets/graph--OzhPTMs.js                            23.92 kB │ gzip:   8.30 kB
+dist/public/assets/wardleyDiagram-YWT4CUSO-BIL5nNJg.js          25.47 kB │ gzip:   6.73 kB
+dist/public/assets/erDiagram-TEJ5UH35-Bw9Rf8Fb.js               26.82 kB │ gzip:   9.23 kB
+dist/public/assets/gitGraphDiagram-PVQCEYII-DEAlIR1U.js         29.38 kB │ gzip:   8.65 kB
+dist/public/assets/timeline-definition-PNZ67QCA-0UNBdUGP.js     30.80 kB │ gzip:  10.08 kB
+dist/public/assets/requirementDiagram-4Y6WPE33-DlzSajI3.js      30.97 kB │ gzip:   9.59 kB
+dist/public/assets/quadrantDiagram-W4KKPZXB-D4a5i1pK.js         33.89 kB │ gzip:   9.80 kB
+dist/public/assets/layout-SsrduOYp.js                           35.84 kB │ gzip:  12.85 kB
+dist/public/assets/chunk-AQP2D5EJ-Drubhcdb.js                   37.10 kB │ gzip:  11.97 kB
+dist/public/assets/xychartDiagram-2RQKCTM6-0xQPhptF.js          38.97 kB │ gzip:  10.92 kB
+dist/public/assets/vennDiagram-CIIHVFJN-DkukUJUt.js             41.39 kB │ gzip:  15.31 kB
+dist/public/assets/chunk-727SXJPM-CJgAK3em.js                   48.93 kB │ gzip:  15.50 kB
+dist/public/assets/ganttDiagram-6RSMTGT7-ClJqxloU.js            54.58 kB │ gzip:  18.70 kB
+dist/public/assets/flowDiagram-I6XJVG4X-3-1jSfNe.js             60.46 kB │ gzip:  19.07 kB
+dist/public/assets/c4Diagram-AAUBKEIU-B_eZHNyK.js               69.91 kB │ gzip:  19.45 kB
+dist/public/assets/blockDiagram-GPEHLZMM-Dk5axaKM.js            73.50 kB │ gzip:  21.04 kB
+dist/public/assets/cose-bilkent-S5V4N54A-BStG_80y.js   
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+✓ built in 16.89s
+
+
+> @workspace/atelier-mobile@0.0.0 build /home/runner/workspace/artifacts/atelier-mobile
+> node scripts/build.js
+
+
+Building static Expo Go deployment...
+
+Preparing build directories...
+
+Build: 1784810581718-271
+Clearing Metro cache...
+Cache cleared
+
+Starting Metro...
+Setting EXPO_PUBLIC_DOMAIN=atelier-standalone-project.replit.app
+
+Setting EXPO_PUBLIC_REPL_ID=1cff6cae-45f3-4a6a-8cc7-b0406915f7ac
+
+[Metro] Starting project at /home/runner/workspace/artifacts/atelier-mobile
+
+[Metro] React Compiler enabled
+
+[Metro] Starting Metro Bundler
+
+Metro ready
+Downloading bundles and manifests...
+This may take several minutes for production builds...
+
+Fetching ios bundle...
+Downloading: http://localhost:8081/artifacts/atelier-mobile/node_modules/expo-router/entry.bundle?platform=ios&dev=false&hot=false&lazy=false&minify=true
+
+[Metro] Waiting on http://localhost:8081
+
+[Metro] Logs for your project will appear below.
+
+[Metro] iOS node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+
+[Metro] iOS node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓░░░░░░░░░░░ 32.5% (232/407)
+
+[Metro] iOS node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 66.9% (691/889)
+
+[Metro] iOS node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 85.1% (1201/1302)
+
+[Metro] iOS node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 90.6% (1600/1704)
+
+[Metro] iOS Bundled 17332ms node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js (2089 modules)
+
+ios bundle ready
+
+Fetching android bundle...
+Downloading: http://localhost:8081/artifacts/atelier-mobile/node_modules/expo-router/entry.bundle?platform=android&dev=false&hot=false&lazy=false&minify=true
+
+[Metro] Android node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓░░░░░░░░░░░░░░ 15.6% (17/43)
+
+[Metro] Android node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓░░░░░░░░░░ 42.9% ( 669/1021)
+
+[Metro] Android node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 80.3% (1263/1500)
+
+[Metro] Android node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 87.9% (1816/1941)
+
+[Metro] Android Bundled 12911ms node_modules/.pnpm/expo-router@6.0.24_@types+react-dom@19.1.11_@types+react@19.1.17__@types+react@19.1.17__62dda290e2bf1cb2973e51c7a79b8de4/node_modules/expo-router/entry.js (2095 modules)
+
+android bundle ready
+
+Fetching ios manifest...
+
+Fetching android manifest...
+
+ios manifest ready
+
+android manifest ready
+
+All downloads completed successfully
+Processing assets...
+
+Found 47 unique asset(s)
+
+Copying assets...
+
+Copied 47 assets
+
+Updated bundle URLs
+Updating manifests and creating landing page...
+
+Manifests updated
+
+Build complete! Deploy to: https://atelier-standalone-project.replit.app
+
+Lockfile is up to date, resolution step is skipped
+
+Already up to date
+
+
+devDependencies:
+- prettier 3.8.1
+- typescript 5.9.3
+
+
+. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; case "$npm_config_user_agent" in pnpm/*) ;; *) echo "Use pnpm instead" >&2; exit 1 ;; esac'
+
+. preinstall: Done
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: onnxruntime-node@1.21.0, protobufjs@7.6.4,          │
+│   sharp@0.34.5.                                                              │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+Removed all cached metadata files
+
+Removed 0 files
+
+Removed 0 packages
+
+2026-07-23T12:44:01Z info: Pushing pid1 binary layer...
+2026-07-23T12:44:08Z info: Created pid1 binary layer
+2026-07-23T12:44:10Z info: Pushing Repl layer...
+2026-07-23T12:44:10Z info: Pushing hosting layer...
+2026-07-23T12:44:10Z warning: Detected broken symlink! The path "/tmp/pulse-PKdhtXMmr18n" does not exist.
+2026-07-23T12:44:10Z warning: Detected broken symlink! The path "/tmp/pulse-PKdhtXMmr18n" does not exist.
+2026-07-23T12:44:10Z warning: Detected broken symlink! The path "/tmp/pulse-PKdhtXMmr18n" does not exist.
+2026-07-23T12:44:10Z info: Retrieved cached nix layer
+2026-07-23T12:44:11Z info: Created hosting layer
+2026-07-23T12:44:30Z info: Security Scan Complete
+2026-07-23T12:46:50Z info: Created Repl layer
+2026-07-23T12:46:50Z error: image size is over the limit of 8 GiB
