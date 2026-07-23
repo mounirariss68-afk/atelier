@@ -197,3 +197,9 @@ id = "pGE8GACFV0co8tlne0emS"
 uri = "file://docs/microsoft365-admin-brief.md"
 type = "text"
 title = "Microsoft 365 Connection — IT Admin Brief"
+
+[[outputs]]
+id = "tPbce0BR8GhiN-DoxvdRX"
+uri = "file://docs/app-store-submission-answers.md"
+type = "text"
+title = "App Store Submission — Prepared Answers"
