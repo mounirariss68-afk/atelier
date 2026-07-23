@@ -19,7 +19,7 @@ localPort = 20039
 run = "pnpm --filter @workspace/atelier-mobile run dev"
 
 [services.production]
-build = [ "sh", "-c", "pnpm --filter @workspace/atelier-mobile run build && CI=true pnpm prune --prod && rm -rf \"$(pnpm store path)\"" ]
+build = [ "sh", "-c", "pnpm --filter @workspace/atelier-mobile run build && CI=true pnpm prune --prod && rm -rf \"$(pnpm store path)\" .git" ]
 run = [ "pnpm", "--filter", "@workspace/atelier-mobile", "run", "serve" ]
 
 [services.env]
