@@ -203,3 +203,9 @@ id = "tPbce0BR8GhiN-DoxvdRX"
 uri = "file://docs/app-store-submission-answers.md"
 type = "text"
 title = "App Store Submission Answers"
+
+[[outputs]]
+id = "QCruTSO4WzLmub7yj_QYq"
+uri = "file://exports/app-store-submission-answers.pdf"
+type = "pdf"
+title = "App Store Submission Answers (PDF)"

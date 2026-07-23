@@ -41,6 +41,8 @@ import {
   type CliFrame,
 } from "../../lib/atelier-cli/index.js";
 import { stripLocalePreamble } from "../../lib/atelier-cli/locale.js";
+import { runDemoShowcaseTurn } from "../../lib/atelier-cli/demo-showcase.js";
+import { isDemoUser } from "../../lib/auth/demoReadOnly.js";
 import {
   capabilitiesForPersona,
   CATALOG_SCHEMA_VERSION,
@@ -162,6 +164,17 @@ router.post("/cli/turn", async (req, res) => {
   const prompt = isNewCmd ? promptRaw.replace(/^\/new\b\s*/i, "").trim() || "(new session)" : promptRaw;
   const reset = body.reset === true || isNewCmd;
   const sessionId = reset ? null : (body.sessionId ?? null);
+
+  // Per user request (2026-07-23): the read-only App Store demo persona
+  // gets a canned capability showcase instead of a real orchestrator run —
+  // no LLM, no tools, no DB writes. demoReadOnlyGuard allowlists exactly
+  // this POST for the demo user; every other mutating route stays 403.
+  if (isDemoUser({ userId: me.id, email: me.email })) {
+    openSse(res);
+    runDemoShowcaseTurn(prompt, (frame) => writeSseFrame(res, frame));
+    res.end();
+    return;
+  }
 
   openSse(res);
   const stopHeartbeat = startHeartbeat(res);

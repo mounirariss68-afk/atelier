@@ -35,6 +35,15 @@ export function demoReadOnlyGuard(
     next();
     return;
   }
+  // Per user request (2026-07-23): the demo persona may POST a chat turn so
+  // the reviewer can ask "what can I do with the Atelier?". The /cli/turn
+  // route short-circuits demo turns into a canned, read-only capability
+  // showcase (see runDemoShowcaseTurn) — the orchestrator/LLM and every
+  // write tool are never invoked for this user.
+  if (req.method === "POST" && req.path === "/atelier/cli/turn") {
+    next();
+    return;
+  }
   res.status(403).json({
     error: "demo-read-only",
     message:
