@@ -19,6 +19,7 @@
     "test:meeting-chat": "tsx ./tests/meeting-chat/run.ts",
     "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",
     "test:client-meeting": "tsx ./tests/crm/client-meeting-probe.ts",
+    "test:chat-doc-download": "tsx ./tests/crm/chat-doc-download-probe.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
