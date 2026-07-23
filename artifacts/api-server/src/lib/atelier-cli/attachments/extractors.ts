@@ -28,6 +28,8 @@ import mammoth from "mammoth";
 import ExcelJS from "exceljs";
 import { extractText as unpdfExtractText, getDocumentProxy } from "unpdf";
 import { RECEIPT_FIXTURES } from "../../atelier-receipt-fixtures.js";
+import { extractReceiptWithVision } from "../../atelier-receipt-parse.js";
+import { isHeicPayload, convertHeicToJpeg } from "../../atelier-heic.js";
 
 export type DocKind =
   | "pdf"
@@ -313,7 +315,18 @@ export function extractEmlNestedParts(buf: Buffer): NestedEmlPart[] {
 // Images (deterministic OCR fixture map)
 // ---------------------------------------------------------------------------
 
-function extractImage(fileName: string, buf: Buffer): ExtractedDoc {
+/** Real photos are always at least a few KB; anything smaller is a test
+ * fixture or corrupt payload, so we never spend a vision call on it. */
+const MIN_VISION_IMAGE_BYTES = 4096;
+
+const VISION_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]);
+
+async function extractImage(fileName: string, mime: string, buf: Buffer): Promise<ExtractedDoc> {
   const stem = fileName.replace(/\.[^.]+$/, "").toLowerCase();
   const fx = RECEIPT_FIXTURES[stem];
   if (fx) {
@@ -334,6 +347,65 @@ function extractImage(fileName: string, buf: Buffer): ExtractedDoc {
       emailHeaders: null,
       warnings: [],
     };
+  }
+  // Task #598 — no fixture: run the shared vision receipt extractor so a
+  // real photo taken on the phone yields real merchant/amount/date text.
+  // Tiny payloads (test buffers, corrupt files) skip the vision call and
+  // keep the deterministic no-fixture warning.
+  if (buf.byteLength >= MIN_VISION_IMAGE_BYTES) {
+    try {
+      let bytes = buf;
+      let mediaType = mime.toLowerCase().split(";")[0].trim();
+      if (isHeicPayload(bytes, mediaType)) {
+        bytes = await convertHeicToJpeg(bytes);
+        mediaType = "image/jpeg";
+      }
+      if (!VISION_MEDIA_TYPES.has(mediaType)) mediaType = "image/jpeg";
+      const vx = await extractReceiptWithVision(bytes, mediaType);
+      if (vx.unreadable || !vx.merchant || typeof vx.total !== "number") {
+        return {
+          kind: "image",
+          normalizedText:
+            "[image — vision OCR could not read a receipt from this photo]",
+          tableSummary: null,
+          slideTexts: null,
+          emailHeaders: null,
+          warnings: ["receipt-unreadable", `image-bytes:${buf.byteLength}`],
+        };
+      }
+      const lines = [
+        `merchant: ${vx.merchant}`,
+        `category: ${vx.category ?? "other"}`,
+        `currency: ${(vx.currency ?? "USD").toUpperCase()} country: ${vx.country ?? "-"}`,
+        `total: ${vx.total} tax: ${vx.tax ?? 0}`,
+      ];
+      if (vx.date && /^\d{4}-\d{2}-\d{2}$/.test(vx.date)) lines.push(`date: ${vx.date}`);
+      lines.push(`--- raw ---`, vx.rawText ?? "");
+      const warnings: string[] = [];
+      if (vx.confidence && vx.confidence !== "green") {
+        warnings.push(`ocr-confidence:${vx.confidence}`);
+      }
+      return {
+        kind: "image",
+        normalizedText: lines.join("\n"),
+        tableSummary: null,
+        slideTexts: null,
+        emailHeaders: null,
+        warnings,
+      };
+    } catch (err) {
+      return {
+        kind: "image",
+        normalizedText: "[image — vision OCR failed for this photo]",
+        tableSummary: null,
+        slideTexts: null,
+        emailHeaders: null,
+        warnings: [
+          `ocr-failed:${err instanceof Error ? err.message.slice(0, 80) : "error"}`,
+          `image-bytes:${buf.byteLength}`,
+        ],
+      };
+    }
   }
   return {
     kind: "image",
@@ -542,7 +614,7 @@ export async function extractAttachment(args: {
     case "eml":
       return extractEml(args.bytes);
     case "image":
-      return extractImage(args.fileName, args.bytes);
+      return extractImage(args.fileName, args.mime, args.bytes);
     case "pptx":
       return extractPptx(args.bytes);
     case "pdf":

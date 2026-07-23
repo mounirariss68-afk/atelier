@@ -618,20 +618,39 @@ defineCapability({
       category: string;
       vatAmount: number;
       country: string | null;
+      expenseDate: string | null;
+      needsReview: boolean;
+      reviewReason: string | null;
     }> = [];
     for (const aid of attachmentIds) {
       const loaded = await loadAttachment(aid, ctx.persona.orgId);
       if (!loaded?.extracted) continue;
       const text = loaded.extracted.normalizedText ?? "";
-      // Receipt-fixture text always carries `merchant:`/`total:`/`currency:`
-      // headers (see extractors.extractImage). Parse them; non-image
-      // attachments fall back to "scan as text".
+      // Receipt text carries `merchant:`/`total:`/`currency:` headers —
+      // either from a deterministic fixture or from the vision OCR pass
+      // (see extractors.extractImage). Parse them; non-image attachments
+      // fall back to "scan as text".
       const merchantMatch = text.match(/merchant:\s*([^\n]+)/i);
       const totalMatch = text.match(/total:\s*([\d.]+)/i);
       const currencyMatch = text.match(/currency:\s*([A-Z]{3})/i);
       const categoryMatch = text.match(/category:\s*(\w+)/i);
       const taxMatch = text.match(/tax:\s*([\d.]+)/i);
       const countryMatch = text.match(/country:\s*([A-Z]+)/i);
+      const dateMatch = text.match(/date:\s*(\d{4}-\d{2}-\d{2})/i);
+      const warnings = ((loaded.extracted.warnings ?? []) as string[]);
+      // Task #598 — a receipt the extractor could not read stays explicit:
+      // the draft is flagged for manual review instead of silently landing
+      // with the filename as merchant and amount 0.
+      const unreadable =
+        !merchantMatch ||
+        !totalMatch ||
+        warnings.some(
+          (w) =>
+            w === "receipt-unreadable" ||
+            w.startsWith("ocr-failed:") ||
+            w.startsWith("no-ocr-fixture:"),
+        );
+      const lowConfidence = warnings.some((w) => w.startsWith("ocr-confidence:"));
       drafts.push({
         attachmentId: aid,
         merchant: merchantMatch?.[1].trim() ?? loaded.attachment.fileName,
@@ -640,6 +659,13 @@ defineCapability({
         category: categoryMatch?.[1] ?? "other",
         vatAmount: taxMatch ? Number(taxMatch[1]) : 0,
         country: countryMatch?.[1] ?? null,
+        expenseDate: dateMatch?.[1] ?? null,
+        needsReview: unreadable || lowConfidence,
+        reviewReason: unreadable
+          ? "Receipt could not be read — merchant and amount need manual entry."
+          : lowConfidence
+            ? "Receipt was only partly readable — please verify merchant, amount and date."
+            : null,
       });
     }
     if (drafts.length === 0) {
@@ -654,7 +680,11 @@ defineCapability({
         ok: true,
         data: { preview: drafts },
         confirmation: {
-          summary: `Stage ${drafts.length} draft expense(s) from ${attachmentIds.length} attachment(s).`,
+          summary: `Stage ${drafts.length} draft expense(s) from ${attachmentIds.length} attachment(s).${
+            drafts.some((d) => d.needsReview)
+              ? ` ${drafts.filter((d) => d.needsReview).length} could not be fully read and will be flagged for review.`
+              : ""
+          }`,
           diff: { create: { table: "atelier_expenses", count: drafts.length } },
           pending: {
             tool: "ingest_receipts_to_expenses",
@@ -673,7 +703,7 @@ defineCapability({
         personId: ctx.persona.id,
         personType: "employee",
         engagementId,
-        expenseDate: today,
+        expenseDate: d.expenseDate ?? today,
         captureSource: "manual",
         merchant: d.merchant,
         category: d.category,
@@ -681,6 +711,7 @@ defineCapability({
         currency: d.currency,
         vatAmount: d.vatAmount,
         vatCountry: d.country,
+        description: d.needsReview ? d.reviewReason : null,
         receiptFileRef: `enc:cli:${d.attachmentId}`,
         status: "draft",
         createdByUserId: ctx.persona.id,
