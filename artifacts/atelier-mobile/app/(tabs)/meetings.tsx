@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as ExpoLinking from "expo-linking";
 import { useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -52,6 +53,10 @@ import {
 } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
+
+// Device-persisted list/day view choice for the Meetings tab (matches the
+// web calendar's localStorage key so behavior stays consistent).
+const MEETINGS_VIEW_KEY = "atelier-meetings-view";
 
 // Open a meeting join link reliably: web opens a new tab (popup-blocker
 // aware), native tries the deep link (Teams/Meet/Zoom apps) and falls back
@@ -1864,7 +1869,20 @@ export default function MeetingsScreen() {
 
   // Day calendar view — the selected day is fetched as its own window so the
   // navigator can move beyond the list's 7-day range (past or future).
-  const [view, setView] = useState<"list" | "day">("list");
+  // The last-chosen view persists on the device (mirrors the web calendar's
+  // localStorage behavior); missing/invalid stored values fall back to list.
+  const [view, setViewState] = useState<"list" | "day">("list");
+  useEffect(() => {
+    AsyncStorage.getItem(MEETINGS_VIEW_KEY)
+      .then((v) => {
+        if (v === "list" || v === "day") setViewState(v);
+      })
+      .catch(() => {});
+  }, []);
+  const setView = useCallback((v: "list" | "day") => {
+    setViewState(v);
+    AsyncStorage.setItem(MEETINGS_VIEW_KEY, v).catch(() => {});
+  }, []);
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   // Full detail sheet, opened by tapping any meeting card in either view.
   const [detailMeeting, setDetailMeeting] = useState<AtelierCalendarMeeting | null>(
