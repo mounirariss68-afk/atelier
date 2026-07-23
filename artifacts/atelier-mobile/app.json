@@ -19,7 +19,8 @@
       }
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.cognirise.atelier"
     },
     "android": {
       "softwareKeyboardLayoutMode": "pan",

@@ -12,15 +12,15 @@ This document lists every question Apple asks during App Store submission, in th
 
 Before starting, gather these — Apple will ask for them and they cannot be prepared for you:
 
-- [ ] **Apple Developer account** (paid, $99/yr) — enrolled as an **Organization** (recommended for a business app; requires a D-U-N-S number for Cognirise) or Individual.
-- [ ] **Bundle identifier** — e.g. `com.cognirise.atelier` (must be registered in your Apple Developer account; set in `app.json` under `ios.bundleIdentifier` before building).
-- [ ] **Support URL** — a public web page where users can get help (e.g. `https://cognirise.ai/support` or a contact page).
-- [ ] **Marketing URL** (optional) — e.g. `https://cognirise.ai`.
-- [ ] **Privacy Policy URL** (required) — a public page describing data practices. The app has none published yet; one must exist before submission.
+- [x] **Apple Developer account** (paid, $99/yr) — ✅ decision made: launching under Mounir's personal (Individual) Apple Developer account, with a planned **app transfer** to a Cognirise Organization account later. Notes: the app will initially show the individual's name as the seller on the App Store; app transfer between accounts is supported by Apple (App Store Connect → App Information → Transfer App) and keeps ratings/downloads, but both accounts must be in good standing and the Organization enrollment needs a D-U-N-S number for Cognirise — worth starting that enrollment early since D-U-N-S verification can take weeks.
+- [x] **Bundle identifier** — ✅ `com.cognirise.atelier` (set in `app.json` under `ios.bundleIdentifier`; still needs to be registered in your Apple Developer account).
+- [x] **Support URL** — ✅ built into the Atelier app itself: `https://<your published Atelier domain>/support` (public, no login required). Replace `<your published Atelier domain>` with the domain of your published Atelier deployment (e.g. `atelier-xyz.replit.app` or a custom domain).
+- [x] **Marketing URL** — ✅ `https://cognirise.ai`.
+- [x] **Privacy Policy URL** (required) — ✅ built into the Atelier app itself: `https://<your published Atelier domain>/privacypolicy` (public, no login required; source text in `docs/atelier-privacy-policy.md`).
 - [ ] **Company contact info for the DSA trader declaration** — legal business address, phone number, and email (published on your EU App Store page).
-- [ ] **App Review contact** — name, phone, email of a person Apple can reach during review.
-- [ ] **Demo account decision** — see "Sign-In & Demo Account" section; this needs a decision from you.
-- [ ] **Copyright line** — e.g. `© 2026 Cognirise`.
+- [x] **App Review contact** — ✅ Mounir Ariss, `mounir@cognirise.ai`, +971 50 650 4416.
+- [x] **Demo account** — ✅ ready: `demo@cognirise.ai` / `demoact!23` (read-only; see Section 8).
+- [x] **Copyright line** — ✅ `Copyright © Cognirise AI. All Rights Protected and Reserved.`
 - [ ] **Screenshots** — 6.9" iPhone screenshots (out of scope for this document, but required to submit).
 
 ---
@@ -92,7 +92,7 @@ Apple's updated (July 2025) questionnaire uses tiers **4+, 9+, 13+, 16+, 18+**. 
 
 ## 3. App Privacy ("Nutrition Labels")
 
-**Privacy Policy URL:** *(you must supply — see checklist)*
+**Privacy Policy URL:** `https://<your published Atelier domain>/privacypolicy` — served publicly by the Atelier web app itself (no login required). Verify it loads in a logged-out browser after the next Publish.
 
 ### Step 1 — "Do you or your third-party partners collect data from this app?"
 **Answer: Yes** (the app sends login credentials, profile data, expenses, receipts, documents, and chat content to Cognirise's own server).
@@ -184,27 +184,29 @@ This contact info is **published on your EU App Store product page**. Use a busi
 
 **Question:** "Sign-in required?" → **Yes.** Apple requires working credentials so reviewers can see past the login screen.
 
-⚠️ **Decision required from you.** The app currently has only the two real founder logins (Mounir and Gökhan) and, by policy, no seeded demo data. Options, safest first:
+✅ **Ready — a dedicated read-only review account exists.** It is created automatically on every server boot (so it will exist in production after the next Publish) and is production-safe by design:
 
-1. **Recommended: create a dedicated review account** — a real (non-founder) login in production, e.g. `appreview@cognirise.ai`, provisioned through the normal HR/user flow with a **restricted role** (e.g. employee "Me lens": own profile, expenses, calendar, chat limited to self-service tools). It shows every mobile feature without exposing firm CRM/financial data. Populate it with a couple of innocuous expenses/meetings so screens aren't empty. Disable or rotate the password after approval of each release (note: Apple re-reviews every update, so keep it re-enable-able).
-2. Give reviewers a founder login — **not recommended** (exposes all real client and financial data to Apple's reviewers).
-3. Request a review exemption — Apple rarely grants this; expect rejection.
+- **Restricted persona:** an "employee" self-service role — the reviewer sees only the demo account's own Me-lens surfaces (profile, expenses, calendar, documents). No firm CRM, client, or financial data is visible.
+- **Strictly read-only:** every create/change/delete attempt (any POST/PATCH/PUT/DELETE, including chat messages and uploads) is rejected server-side with a clear "demo account is read-only" error. Only logging in and out works.
+- **Cannot be bricked:** the password never rotates (password changes are blocked for this account, and the boot seed repairs the credential on every restart), and no forced password-change screen ever triggers.
 
-**Demo credentials to enter in App Store Connect** (once created):
-- Username: `appreview@cognirise.ai` *(or whatever you provision)*
-- Password: *(set at provisioning; note the app forces a password change on first login for fresh accounts — complete that first login yourselves so the reviewer gets a ready-to-use account)*
+**Demo credentials to enter in App Store Connect:**
+- Username: `demo@cognirise.ai`
+- Password: `demoact!23`
+
+Note: because the account is read-only and there is no seeded demo data, its screens are mostly empty — that is expected and consistent with the review notes below (internal business tool). If you prefer richer screens, you can instead provision a normal employee account through the HR flow, but the read-only demo account is the safe default.
 
 ---
 
 ## 9. App Review Information & Notes
 
-**Contact:** *(your name, phone, email — someone reachable during review)*
+**Contact:** Mounir Ariss · `mounir@cognirise.ai` · +971 50 650 4416
 
 **Notes for App Review (ready to paste):**
 
 > Atelier is an internal business tool: the mobile companion to Cognirise's employee portal. It is intended solely for Cognirise partners, employees, and contractors; accounts are provisioned by the firm and there is no public registration.
 >
-> Please sign in with the demo credentials provided. The demo account is a standard employee account and demonstrates all mobile features: the AI assistant chat (scoped to the employee's own data), expense capture with camera receipt photos (works offline and syncs later), calendar with optional local meeting reminders, profile with a shareable QR business card, and personal documents.
+> Please sign in with the demo credentials provided. The demo account is a restricted, read-only employee account: you can browse every screen an employee sees (profile, expenses, calendar, documents, the AI assistant surface), but for data-safety reasons all write actions (submitting expenses, sending chat messages, editing the profile) return a clear "demo account is read-only" message. Real employee accounts have full write access to their own data.
 >
 > Notes:
 > • The AI assistant answers questions about the signed-in user's own work data only. It calls our own backend; no third-party accounts are needed.
@@ -219,8 +221,8 @@ This contact info is **published on your EU App Store product page**. Use a busi
 | Question | Answer |
 |---|---|
 | **Version number** | `1.0.1` (matches `app.json`). |
-| **Copyright** | `© 2026 Cognirise` *(confirm exact legal entity name)*. |
-| **Release option** | **Manually release this version** — recommended for a first release so you control the go-live moment (e.g. after rotating the review account password back on). |
+| **Copyright** | `Copyright © Cognirise AI. All Rights Protected and Reserved.` |
+| **Release option** | **Manually release this version** — recommended for a first release so you control the go-live moment. |
 | **Phased release** | Not applicable/off for a first release. |
 | **Reset iOS app summary rating** (updates only) | N/A for v1. |
 | **Sign in with Apple requirement** | **Not required.** Apple's rule only forces Sign in with Apple when an app offers *third-party* social logins (Google/Facebook). Atelier uses only its own enterprise email+password login, which is explicitly exempt. |
@@ -232,7 +234,7 @@ This contact info is **published on your EU App Store product page**. Use a busi
 
 When publishing via Replit's mobile flow you'll additionally be asked for (all covered above or in the checklist):
 - Apple Developer account login / App-Specific Password or API key for upload.
-- **Bundle identifier** — must be set in `app.json` (`ios.bundleIdentifier`) and registered to your Apple team before the build. ⚠️ Currently **not set** in `app.json` — add it (e.g. `com.cognirise.atelier`).
+- **Bundle identifier** — ✅ set in `app.json` (`ios.bundleIdentifier: com.cognirise.atelier`); still needs to be registered to your Apple team before the build.
 - **ASC App ID** — created automatically when you make the app record in App Store Connect.
 - App icon: already present and alpha-free (App Store requirement) ✅.
 - Version/build number: `1.0.1`; the flow manages `ios.buildNumber` increments.

@@ -10,6 +10,7 @@ import authRouter from "./auth";
 import esignWebhookRouter from "./esignWebhook";
 import { msMobileOauthRouter } from "./atelier/msAuthRoutes";
 import { requireAuthSession } from "../lib/auth/session";
+import { demoReadOnlyGuard } from "../lib/auth/demoReadOnly";
 
 const router: IRouter = Router();
 
@@ -29,6 +30,12 @@ router.use(msMobileOauthRouter);
 // no default-persona fallback anywhere behind this gate; unauthenticated
 // requests get 401. (NODE_ENV=test bypasses for the in-process CRM harness.)
 router.use(requireAuthSession);
+// Task #621 — App Store review demo account is strictly read-only. Every
+// mutating HTTP method is rejected for the demo user across ALL data routes
+// (REST, chat /cli/*, uploads). The only writes it can ever perform are the
+// pre-gate auth endpoints needed to log in and out (mounted above); even
+// /auth/change-password is blocked for this user inside the auth router.
+router.use(demoReadOnlyGuard);
 router.use("/assessments", assessmentsRouter);
 router.use("/chat", chatRouter);
 router.use("/arcelik", arcelikRouter);

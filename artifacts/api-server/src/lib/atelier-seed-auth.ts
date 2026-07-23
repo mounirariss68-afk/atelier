@@ -100,9 +100,132 @@ async function ensureFounderPersonLinks(): Promise<void> {
   }
 }
 
+// Task #621 — App Store review demo account. A real (data-only) login with
+// the restricted self-only `employee` persona, so the reviewer can browse
+// the Me lens without seeing any client/financial data. Every mutating HTTP
+// method is hard-blocked server-side for this user (see demoReadOnlyGuard in
+// routes/index.ts), and the credential is force-repaired on every boot:
+// the password can never drift (change-password is blocked for this user)
+// and mustChangePassword can never brick it.
+export const DEMO_EMAIL = "demo@cognirise.ai";
+export const DEMO_USER_ID = "p_demo_reviewer";
+const DEMO_PASSWORD = "demoact!23";
+const DEMO_NAME = "Demo Reviewer";
+
+async function ensureDemoAccount(): Promise<void> {
+  // Anchor the demo user to the founders' org.
+  const [founder] = await db
+    .select({ orgId: atelierUsers.orgId })
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, "p_mounir_ariss"));
+  if (!founder) {
+    logger.warn("demo account seed skipped — founder org not found");
+    return;
+  }
+  const orgId = founder.orgId;
+  const [user] = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, DEMO_USER_ID));
+  if (!user) {
+    await db.insert(atelierUsers).values({
+      id: DEMO_USER_ID,
+      orgId,
+      email: DEMO_EMAIL,
+      name: DEMO_NAME,
+      initials: "DR",
+      role: "employee",
+      roleLabel: "Employee",
+      title: "App Review (read-only demo)",
+    });
+    logger.info({ userId: DEMO_USER_ID }, "demo user row created");
+  }
+  // Person link (same pattern as the founder repair — idempotent).
+  const { writePersonFromFullName } = await import("./atelier-person-sync");
+  const [demoUser] = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, DEMO_USER_ID));
+  if (demoUser && !demoUser.personId) {
+    const w = await writePersonFromFullName(db, {
+      orgId,
+      fullName: DEMO_NAME,
+      sourceKind: "user",
+    });
+    await db
+      .update(atelierUsers)
+      .set({ personId: w.personId, updatedAt: new Date() })
+      .where(eq(atelierUsers.id, DEMO_USER_ID));
+  }
+  // Employee roster row so the Me lens resolves a self record.
+  const [emp] = await db
+    .select({ id: atelierEmployees.id, personId: atelierEmployees.personId })
+    .from(atelierEmployees)
+    .where(eq(atelierEmployees.userId, DEMO_USER_ID));
+  if (!emp) {
+    const [linked] = await db
+      .select({ personId: atelierUsers.personId })
+      .from(atelierUsers)
+      .where(eq(atelierUsers.id, DEMO_USER_ID));
+    await db.insert(atelierEmployees).values({
+      id: "emp_demo_reviewer",
+      orgId,
+      userId: DEMO_USER_ID,
+      fullName: DEMO_NAME,
+      email: DEMO_EMAIL,
+      role: "employee",
+      title: "App Review (read-only demo)",
+      personId: linked?.personId ?? null,
+    });
+    logger.info("demo employee roster row created");
+  }
+  // Credential: unlike the founder rows, the demo credential is ALWAYS
+  // repaired to the published review password with no pending forced
+  // change — a partner reset or drift must never brick Apple's review.
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, DEMO_EMAIL));
+  const needsRepair =
+    !cred ||
+    cred.userId !== DEMO_USER_ID ||
+    cred.disabled ||
+    cred.mustChangePassword ||
+    !verifyPassword(DEMO_PASSWORD, cred.passwordHash);
+  if (needsRepair) {
+    const passwordHash = hashPassword(DEMO_PASSWORD);
+    await db
+      .insert(atelierAuthCredentials)
+      .values({
+        email: DEMO_EMAIL,
+        userId: DEMO_USER_ID,
+        passwordHash,
+        userManaged: false,
+        mustChangePassword: false,
+        disabled: false,
+      })
+      .onConflictDoUpdate({
+        target: atelierAuthCredentials.email,
+        set: {
+          userId: DEMO_USER_ID,
+          passwordHash,
+          userManaged: false,
+          mustChangePassword: false,
+          mustChangeReason: null,
+          disabled: false,
+          updatedAt: new Date(),
+        },
+      });
+    logger.info({ email: DEMO_EMAIL }, "demo credential seeded/repaired");
+  }
+}
+
 export async function ensureAtelierAuthSeed(): Promise<void> {
   await ensureFounderTitles();
   await ensureFounderPersonLinks();
+  await ensureDemoAccount().catch((err) => {
+    logger.error({ err }, "demo account seed failed — App Store review login may not work");
+  });
   for (const u of USERS) {
     const [existing] = await db
       .select()

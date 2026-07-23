@@ -128,3 +128,4 @@
 - [Chat receipt image OCR](chat-receipt-vision.md) — fixture-first, vision only ≥4KB images (tests stay offline); ingest parses the header-text contract; unreadable → needsReview draft, never filename+0.
 - [Chat typed-name guard](chat-typed-name-guard.md) — typed-name confirm is risk-based (destructive verbs/irreversible/outbound), not blanket-attachment; web reads top-level typedNameRequired string, mobile the boolean.
 - [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
+- [App Store demo account & public pages](atelier-demo-account.md) — demo@cognirise.ai is force-repaired read-only every boot (guard 403s all writes); /privacypolicy + /support are AuthGate-public static pages.

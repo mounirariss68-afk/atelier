@@ -22,6 +22,7 @@ import {
   clearSessionCookie,
 } from "../../lib/auth/session";
 import { personaToWire } from "../atelier/personaCookie";
+import { isDemoUser } from "../../lib/auth/demoReadOnly";
 import { logger } from "../../lib/logger";
 
 /**
@@ -225,6 +226,16 @@ router.post("/change-password", async (req: Request, res: Response) => {
     res.status(429).json({
       error: "rate-limited",
       message: "Too many attempts. Try again in a few minutes.",
+    });
+    return;
+  }
+  // Task #621 — the App Store review demo account is read-only; its
+  // published password must never be rotated (the boot seed also repairs
+  // it, but reject the attempt outright with the uniform demo error).
+  if (isDemoUser({ userId: session.userId, email: session.email })) {
+    res.status(403).json({
+      error: "demo-read-only",
+      message: "The demo account is read-only and cannot change its password.",
     });
     return;
   }

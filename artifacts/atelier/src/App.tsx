@@ -19,6 +19,8 @@ import NotFound from "@/pages/not-found";
 // Pages
 import SignIn from "@/pages/SignIn";
 import Activate from "@/pages/Activate";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import SupportPage from "@/pages/Support";
 import ForcePasswordChange from "@/pages/ForcePasswordChange";
 import Cli from "@/pages/Cli";
 import Home from "@/pages/Home";
@@ -248,6 +250,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // joiner has no session yet). The page itself validates the token.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/activate")) {
     return <Activate />;
+  }
+  // Task #621 — App Store compliance pages: publicly readable, no session
+  // required. Static informational content only; every data route stays
+  // behind the server's auth gate.
+  if (typeof window !== "undefined" && window.location.pathname === "/privacypolicy") {
+    return <PrivacyPolicy />;
+  }
+  if (typeof window !== "undefined" && window.location.pathname === "/support") {
+    return <SupportPage />;
   }
   if (status === "loading") {
     return (
