@@ -59,6 +59,7 @@ import {
   rescheduleInternalMeeting,
 } from "../../lib/internalMeetingLifecycle.js";
 import { canSeeAccount } from "./accountRoutes.js";
+import { DEMO_USER_ID } from "../../lib/atelier-seed-auth";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
 import { assertAuditAction } from "./auditContract";
 import crypto from "node:crypto";
@@ -588,6 +589,10 @@ async function internalMeetingsForWindow(
     if (m.endAt < start || m.startAt > end) continue;
     if (m.msEventUid) dedupeUids.add(m.msEventUid);
     const attendees = m.internalAttendees ?? [];
+    // Showcase meetings seeded for the read-only App Store demo persona are
+    // visible ONLY to that persona — they must never surface on real
+    // founders' calendars via the founding_partner catch-all.
+    if (m.createdByUserId === DEMO_USER_ID && me.id !== DEMO_USER_ID) continue;
     const visible =
       me.role === "founding_partner" ||
       m.createdByUserId === me.id ||

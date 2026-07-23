@@ -1,5 +1,13 @@
-import { db, atelierAuthCredentials, atelierUsers, atelierEmployees, atelierAuditEvents } from "@workspace/db";
-import { and, eq, ne } from "drizzle-orm";
+import {
+  db,
+  atelierAuthCredentials,
+  atelierUsers,
+  atelierEmployees,
+  atelierAuditEvents,
+  atelierExpenses,
+  atelierMeetings,
+} from "@workspace/db";
+import { and, eq, lt, ne } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "./auth/passwords";
 import { logger } from "./logger";
 
@@ -110,7 +118,11 @@ async function ensureFounderPersonLinks(): Promise<void> {
 export const DEMO_EMAIL = "demo@cognirise.ai";
 export const DEMO_USER_ID = "p_demo_reviewer";
 const DEMO_PASSWORD = "demoact!23";
-const DEMO_NAME = "Demo Reviewer";
+// Per user request (2026-07-23): the demo account presents as a fictional
+// employee "Max Headrom" with a US phone so the Me page + vCard QR look real.
+const DEMO_NAME = "Max Headrom";
+const DEMO_INITIALS = "MH";
+const DEMO_PHONE = "+1 555 555 555 1";
 
 async function ensureDemoAccount(): Promise<void> {
   // Anchor the demo user to the founders' org.
@@ -133,12 +145,31 @@ async function ensureDemoAccount(): Promise<void> {
       orgId,
       email: DEMO_EMAIL,
       name: DEMO_NAME,
-      initials: "DR",
+      initials: DEMO_INITIALS,
       role: "employee",
       roleLabel: "Employee",
       title: "App Review (read-only demo)",
     });
     logger.info({ userId: DEMO_USER_ID }, "demo user row created");
+  } else if (user.name !== DEMO_NAME || user.initials !== DEMO_INITIALS) {
+    // Idempotent identity repair (e.g. rename Demo Reviewer → Max Headrom).
+    await db
+      .update(atelierUsers)
+      .set({ name: DEMO_NAME, initials: DEMO_INITIALS, updatedAt: new Date() })
+      .where(eq(atelierUsers.id, DEMO_USER_ID));
+    if (user.personId) {
+      const { writePersonAndSync } = await import("./atelier-person-sync");
+      const { parsePersonName } = await import("./atelier-person-model");
+      const parsed = parsePersonName(DEMO_NAME);
+      await writePersonAndSync(db, {
+        orgId,
+        personId: user.personId,
+        structured: { ...parsed, preferredName: null },
+        sourceKind: "user",
+        parseReview: parsed.review,
+      });
+    }
+    logger.info({ userId: DEMO_USER_ID, name: DEMO_NAME }, "demo user identity repaired");
   }
   // Person link (same pattern as the founder repair — idempotent).
   const { writePersonFromFullName } = await import("./atelier-person-sync");
@@ -159,7 +190,12 @@ async function ensureDemoAccount(): Promise<void> {
   }
   // Employee roster row so the Me lens resolves a self record.
   const [emp] = await db
-    .select({ id: atelierEmployees.id, personId: atelierEmployees.personId })
+    .select({
+      id: atelierEmployees.id,
+      personId: atelierEmployees.personId,
+      fullName: atelierEmployees.fullName,
+      cellPhones: atelierEmployees.cellPhones,
+    })
     .from(atelierEmployees)
     .where(eq(atelierEmployees.userId, DEMO_USER_ID));
   if (!emp) {
@@ -176,9 +212,27 @@ async function ensureDemoAccount(): Promise<void> {
       role: "employee",
       title: "App Review (read-only demo)",
       personId: linked?.personId ?? null,
+      cellPhones: [{ country: "US", number: DEMO_PHONE }],
     });
     logger.info("demo employee roster row created");
+  } else {
+    // Idempotent repair: keep the demo roster identity + phone in shape so
+    // the Me page (and its vCard QR) always show the review persona.
+    const patch: Partial<typeof atelierEmployees.$inferInsert> = {};
+    if (emp.fullName !== DEMO_NAME) patch.fullName = DEMO_NAME;
+    const phones = emp.cellPhones ?? [];
+    if (!phones.some((p) => p.number === DEMO_PHONE)) {
+      patch.cellPhones = [{ country: "US", number: DEMO_PHONE }];
+    }
+    if (Object.keys(patch).length > 0) {
+      await db
+        .update(atelierEmployees)
+        .set({ ...patch, updatedAt: new Date() })
+        .where(eq(atelierEmployees.id, emp.id));
+      logger.info("demo employee roster row repaired");
+    }
   }
+  await ensureDemoShowcaseData(orgId);
   // Credential: unlike the founder rows, the demo credential is ALWAYS
   // repaired to the published review password with no pending forced
   // change — a partner reset or drift must never brick Apple's review.
@@ -217,6 +271,132 @@ async function ensureDemoAccount(): Promise<void> {
         },
       });
     logger.info({ email: DEMO_EMAIL }, "demo credential seeded/repaired");
+  }
+}
+
+/**
+ * Per user request (2026-07-23): a small set of DEMO-ONLY showcase rows so
+ * the App Store reviewer (and screenshots) never see blank Expenses /
+ * Meetings pages. Strictly scoped to the read-only demo persona — this is
+ * NOT general seeding (that policy stands). Idempotent: expenses insert
+ * once by fixed id; meetings roll forward into the upcoming week whenever
+ * they've drifted into the past so the calendar view is never empty.
+ */
+async function ensureDemoShowcaseData(orgId: string): Promise<void> {
+  const today = new Date();
+  const iso = (d: Date): string => d.toISOString().slice(0, 10);
+  const daysAgo = (n: number): Date =>
+    new Date(today.getTime() - n * 24 * 3600 * 1000);
+
+  const expenses: Array<Partial<typeof atelierExpenses.$inferInsert>> = [
+    {
+      id: "exp_demo_1",
+      merchant: "Uber",
+      description: "Airport transfer — client visit",
+      category: "ground_transport",
+      amount: 42.5,
+      currency: "USD",
+      usdAmount: 42.5,
+      expenseDate: iso(daysAgo(2)),
+      status: "draft",
+    },
+    {
+      id: "exp_demo_2",
+      merchant: "Starbucks",
+      description: "Coffee with prospect",
+      category: "meals",
+      amount: 18.75,
+      currency: "USD",
+      usdAmount: 18.75,
+      expenseDate: iso(daysAgo(5)),
+      status: "submitted",
+      submittedAt: daysAgo(5),
+    },
+    {
+      id: "exp_demo_3",
+      merchant: "Marriott Downtown",
+      description: "Hotel — 1 night, workshop trip",
+      category: "lodging",
+      amount: 289.0,
+      currency: "USD",
+      usdAmount: 289.0,
+      expenseDate: iso(daysAgo(9)),
+      status: "submitted",
+      submittedAt: daysAgo(8),
+    },
+  ];
+  for (const e of expenses) {
+    await db
+      .insert(atelierExpenses)
+      .values({
+        ...e,
+        id: e.id!,
+        orgId,
+        personId: DEMO_USER_ID,
+        personType: "employee",
+        expenseDate: e.expenseDate!,
+        captureSource: "manual",
+        summary: `${e.merchant} — ${e.description}`,
+      } as typeof atelierExpenses.$inferInsert)
+      .onConflictDoNothing({ target: atelierExpenses.id });
+  }
+
+  // "Catch up" meetings with fictional colleagues; visible on /me/calendar
+  // because the demo user is an internal attendee. Times are kept in the
+  // NEXT few days — rolled forward whenever a boot finds them in the past.
+  const attendeeSets = [
+    { id: "mtg_demo_1", withWhom: "Matt Fewer", daysAhead: 1, hourUtc: 7 },
+    { id: "mtg_demo_2", withWhom: "Ricky Norton", daysAhead: 2, hourUtc: 11 },
+    {
+      id: "mtg_demo_3",
+      withWhom: "Matt Fewer, Ricky Norton",
+      daysAhead: 4,
+      hourUtc: 9,
+    },
+  ];
+  const extAttendees = (who: string) =>
+    who.split(", ").map((name) => ({
+      userId: `ext_${name.toLowerCase().replace(/\s+/g, "_")}`,
+      name,
+      email: null,
+    }));
+  for (const m of attendeeSets) {
+    const startAt = new Date(today.getTime() + m.daysAhead * 24 * 3600 * 1000);
+    startAt.setUTCHours(m.hourUtc, 0, 0, 0);
+    const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
+    const internalAttendees = [
+      { userId: DEMO_USER_ID, name: DEMO_NAME, email: DEMO_EMAIL },
+      ...extAttendees(m.withWhom),
+    ];
+    const inserted = await db
+      .insert(atelierMeetings)
+      .values({
+        id: m.id,
+        orgId,
+        parentType: "internal",
+        parentId: "internal",
+        mode: "scheduled",
+        kind: "internal",
+        title: "Catch up",
+        date: iso(startAt),
+        startAt,
+        endAt,
+        locationType: "online",
+        internalAttendees,
+        attendees: internalAttendees.map((a) => a.name),
+        status: "scheduled",
+        createdByUserId: DEMO_USER_ID,
+      })
+      .onConflictDoNothing({ target: atelierMeetings.id })
+      .returning({ id: atelierMeetings.id });
+    if (inserted.length === 0) {
+      // Row exists — roll it forward if it has drifted into the past so the
+      // reviewer's calendar week always shows the demo meetings.
+      await db
+        .update(atelierMeetings)
+        .set({ startAt, endAt, date: iso(startAt), deletedAt: null, updatedAt: new Date() })
+        .where(and(eq(atelierMeetings.id, m.id), lt(atelierMeetings.startAt, today)));
+    }
   }
 }
 
