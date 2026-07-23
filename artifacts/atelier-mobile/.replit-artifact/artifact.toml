@@ -19,7 +19,7 @@ localPort = 20039
 run = "pnpm --filter @workspace/atelier-mobile run dev"
 
 [services.production]
-build = [ "sh", "-c", "pnpm --filter @workspace/atelier-mobile run build && rm -rf node_modules \"$(pnpm store path)\" .git" ]
+build = [ "sh", "-c", "pnpm --filter @workspace/atelier-mobile run build && rm -rf node_modules \"$(pnpm store path)\" .git && mkdir -p /tmp/pkgs && cd /tmp/pkgs && npm init -y > /dev/null 2>&1 && npm install pdfjs-dist@6.1.200 heic-convert@2.1.0 mammoth@1.12.0 exceljs@4.4.0 --no-save --omit=dev --no-package-lock > /dev/null 2>&1 && mv /tmp/pkgs/node_modules /home/runner/workspace/" ]
 run = [ "pnpm", "--filter", "@workspace/atelier-mobile", "run", "serve" ]
 
 [services.env]
