@@ -38,7 +38,13 @@ import {
   msConfigured,
 } from "./msGraph.js";
 import { freshAccessToken, type MsConnectionRow } from "./msScheduling.js";
-import { nextWorkingDayAfter, timezoneFor } from "./atelierHolidays.js";
+import {
+  nextWorkingDayAfter,
+  timezoneFor,
+  applyHolidayOverrides,
+  PUBLIC_HOLIDAYS,
+} from "./atelierHolidays.js";
+import { loadHolidayOverrides } from "./atelierHolidayOverrides.js";
 import { assertAuditAction } from "../routes/atelier/auditContract.js";
 import { logger } from "./logger";
 
@@ -224,7 +230,13 @@ async function reconcileAutoReply(args: {
   }
 
   const country = await personCountry(leave.orgId, leave.personId);
-  const returnDay = nextWorkingDayAfter(win.endDate, country);
+  // Honour HR-confirmed/adjusted holiday dates (Task #606) in the
+  // "back on <date>" maths; falls back to the curated dataset.
+  const effectiveHolidays = applyHolidayOverrides(
+    PUBLIC_HOLIDAYS,
+    await loadHolidayOverrides(leave.orgId).catch(() => null),
+  );
+  const returnDay = nextWorkingDayAfter(win.endDate, country, effectiveHolidays);
   // Schedule in the leave-taker's own timezone (roster country → IANA tz).
   const tz = timezoneFor(country);
   await setAutomaticReplies(accessToken, {

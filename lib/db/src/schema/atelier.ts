@@ -3313,6 +3313,34 @@ export const atelierLeaveEntitlements = pgTable(
   ],
 );
 
+// Task #606 — HR/leadership review decisions over the curated public-holiday
+// dataset (lib atelierHolidays.ts). One row per reviewed dataset entry,
+// keyed by the base entry's stable key (country|date|name). "confirmed"
+// keeps the curated dates; "adjusted" replaces them (Islamic dates are
+// moon-sighting dependent, so official announcements may shift them).
+// Effective date/endDate are ALWAYS stored so readers never need to
+// branch on status. Absence of a row = not yet reviewed.
+export const atelierHolidayOverrides = pgTable(
+  "atelier_holiday_overrides",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    holidayKey: text("holiday_key").notNull(), // country|baseDate|name
+    country: text("country").notNull(),
+    status: text("status").notNull(), // confirmed | adjusted
+    date: text("date").notNull(), // effective start (YYYY-MM-DD)
+    endDate: text("end_date").notNull(), // effective end, inclusive
+    note: text("note"),
+    updatedByUserId: text("updated_by_user_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uniq_atelier_holiday_override").on(t.orgId, t.holidayKey),
+    index("idx_atelier_holiday_override_org").on(t.orgId),
+  ],
+);
+
 // Internal roster reporting lines (org chart for approval routing). A
 // person may hold MULTIPLE live edges (multiple managers) — deliberately
 // no uniqueness on personId alone; approval logic must accept any of them.

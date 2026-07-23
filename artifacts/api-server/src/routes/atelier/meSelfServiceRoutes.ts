@@ -53,6 +53,7 @@ import {
   atelierLeaveEntitlements,
   atelierLeaveTypeEntitlements,
   atelierRosterReportsTo,
+  atelierHolidayOverrides,
 } from "@workspace/db";
 import {
   resolvePersonForCaller,
@@ -109,7 +110,18 @@ import {
   countryToCode,
   nextWorkingDayAfter,
   HOLIDAY_COUNTRIES,
+  PUBLIC_HOLIDAYS,
+  COUNTRY_NAMES,
+  DATASET_YEARS,
+  holidayKeyOf,
+  applyHolidayOverrides,
+  type HolidayCountry,
 } from "../../lib/atelierHolidays.js";
+// Task #606 — HR review decisions over the curated holiday dataset.
+import {
+  loadHolidayOverrideRows,
+  toHolidayOverrides,
+} from "../../lib/atelierHolidayOverrides.js";
 
 const router: IRouter = Router();
 
@@ -1213,6 +1225,12 @@ router.get("/roster/on-leave-today", async (req, res, next) => {
         ),
       )
       .orderBy(atelierLeaveRequests.endDate);
+    // Effective holidays (HR-confirmed/adjusted dates, Task #606) for the
+    // return-date maths below.
+    const effectiveHols = applyHolidayOverrides(
+      PUBLIC_HOLIDAYS,
+      toHolidayOverrides(await loadHolidayOverrideRows(me.orgId)),
+    );
     // The strip shows PARTNERS on leave only (spec: partners/founding
     // partners away that day), so filter by the requester's user role.
     const userIds = Array.from(new Set(rows.map((r) => r.userId)));
@@ -1258,7 +1276,7 @@ router.get("/roster/on-leave-today", async (req, res, next) => {
           leaveType: r.leaveType,
           startDate: r.startDate,
           endDate: r.endDate,
-          returnDate: nextWorkingDayAfter(r.endDate, info?.country ?? null),
+          returnDate: nextWorkingDayAfter(r.endDate, info?.country ?? null, effectiveHols),
         };
       }),
     });
@@ -1301,12 +1319,231 @@ router.get("/me/holidays", async (req, res, next) => {
         .where(and(eq(atelierContractors.orgId, me.orgId), eq(atelierContractors.email, me.email)));
       if (con) viewerCountry = countryToCode(con.country);
     }
+    // Task #606 — merge HR review decisions (confirmed/adjusted dates).
+    const overrides = toHolidayOverrides(await loadHolidayOverrideRows(me.orgId));
+    // Reviewer nudge for HR/leadership only: how many tentative dates in
+    // the upcoming window still need review, and whether the curated
+    // dataset is about to run out of years.
+    let review: { pendingTentative: number; nextYearMissing: number | null } | undefined;
+    if (isHr(me.role) || isLeadership(me.role)) {
+      review = holidayReviewAttention(overrides);
+    }
     res.json({
       window: { start, end },
       countries: Array.from(countries ?? HOLIDAY_COUNTRIES),
       viewerCountry,
-      holidays: holidaysInRange(start, end, countries),
+      holidays: holidaysInRange(start, end, countries, overrides),
+      ...(review ? { review } : {}),
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------
+// Task #606 — yearly holiday-calendar review. The curated dataset carries
+// tentative Islamic dates (moon-sighting dependent); HR/leadership confirm
+// or adjust them here so banners and OOO return dates stay trustworthy.
+// ---------------------------------------------------------------------
+
+const HOLIDAY_REVIEW_HORIZON_DAYS = 120;
+
+function todayYmdDubai(): string {
+  return new Date(Date.now() + 4 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+/** Attention counters shared by /me/holidays (reminder chip) and the
+ *  review surface: tentative entries starting within the horizon that
+ *  have no review decision yet, plus dataset-coverage runway. */
+function holidayReviewAttention(
+  overrides: ReturnType<typeof toHolidayOverrides>,
+): { pendingTentative: number; nextYearMissing: number | null } {
+  const today = todayYmdDubai();
+  const horizon = new Date(`${today}T00:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + HOLIDAY_REVIEW_HORIZON_DAYS);
+  const horizonYmd = horizon.toISOString().slice(0, 10);
+  const reviewed = new Set(overrides.map((o) => o.holidayKey));
+  const pendingTentative = PUBLIC_HOLIDAYS.filter(
+    (h) =>
+      h.tentative &&
+      !reviewed.has(holidayKeyOf(h)) &&
+      h.endDate >= today &&
+      h.date <= horizonYmd,
+  ).length;
+  // Warn when the NEXT calendar year isn't covered by the curated table
+  // yet (it needs a code update — flag it well before Jan 1).
+  const currentYear = Number(today.slice(0, 4));
+  const maxYear = DATASET_YEARS[DATASET_YEARS.length - 1] ?? currentYear;
+  const nextYearMissing = maxYear <= currentYear ? currentYear + 1 : null;
+  return { pendingTentative, nextYearMissing };
+}
+
+function canReviewHolidays(me: typeof atelierUsers.$inferSelect): boolean {
+  return isHr(me.role) || isLeadership(me.role);
+}
+
+const isIsoDateStr = (v: unknown): v is string =>
+  typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
+
+// @cli-skip: HR holiday-calendar review read (Task #606)
+router.get("/roster/holidays/review", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canReviewHolidays(me)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const yearParam = Number(req.query.year);
+    const currentYear = Number(todayYmdDubai().slice(0, 4));
+    const year = DATASET_YEARS.includes(yearParam) ? yearParam : (
+      DATASET_YEARS.includes(currentYear) ? currentYear : DATASET_YEARS[0]
+    );
+    const rows = await loadHolidayOverrideRows(me.orgId);
+    const rowByKey = new Map(rows.map((r) => [r.holidayKey, r]));
+    const holidays = PUBLIC_HOLIDAYS
+      .filter((h) => h.date.startsWith(`${year}-`))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.country.localeCompare(b.country))
+      .map((h) => {
+        const key = holidayKeyOf(h);
+        const o = rowByKey.get(key) ?? null;
+        return {
+          key,
+          country: h.country,
+          countryName: COUNTRY_NAMES[h.country],
+          name: h.name,
+          baseDate: h.date,
+          baseEndDate: h.endDate,
+          tentative: h.tentative,
+          review: o
+            ? {
+                status: o.status,
+                date: o.date,
+                endDate: o.endDate,
+                note: o.note,
+                reviewedAt: o.updatedAt,
+              }
+            : null,
+        };
+      });
+    res.json({
+      year,
+      yearsCovered: DATASET_YEARS,
+      attention: holidayReviewAttention(toHolidayOverrides(rows)),
+      horizonDays: HOLIDAY_REVIEW_HORIZON_DAYS,
+      holidays,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: HR holiday-calendar review write (Task #606)
+router.post("/roster/holidays/review", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canReviewHolidays(me)) {
+      res.status(403).json({ error: "forbidden" });
+      return;
+    }
+    const key = typeof req.body?.key === "string" ? req.body.key : "";
+    const action = req.body?.action;
+    const base = PUBLIC_HOLIDAYS.find((h) => holidayKeyOf(h) === key);
+    if (!base) {
+      res.status(404).json({ error: "unknown-holiday", detail: "key does not match a curated dataset entry" });
+      return;
+    }
+    const note =
+      typeof req.body?.note === "string" && req.body.note.trim()
+        ? req.body.note.trim().slice(0, 500)
+        : null;
+    if (action === "clear") {
+      const [existing] = await db
+        .select()
+        .from(atelierHolidayOverrides)
+        .where(
+          and(
+            eq(atelierHolidayOverrides.orgId, me.orgId),
+            eq(atelierHolidayOverrides.holidayKey, key),
+          ),
+        );
+      if (existing) {
+        await db
+          .delete(atelierHolidayOverrides)
+          .where(eq(atelierHolidayOverrides.id, existing.id));
+        await audit({
+          entityType: "holiday",
+          entityId: key,
+          actor: me,
+          action: "holiday.review.clear",
+          payload: { key, previous: { status: existing.status, date: existing.date, endDate: existing.endDate } },
+          summary: `Cleared review of ${base.country} ${base.name} (${base.date})`,
+        });
+      }
+      res.json({ ok: true, key, review: null });
+      return;
+    }
+    if (action !== "confirm" && action !== "adjust") {
+      res.status(400).json({ error: "invalid-action", detail: "action must be confirm | adjust | clear" });
+      return;
+    }
+    let date = base.date;
+    let endDate = base.endDate;
+    if (action === "adjust") {
+      const d = req.body?.date;
+      const e = req.body?.endDate ?? d;
+      if (!isIsoDateStr(d) || !isIsoDateStr(e) || d > e) {
+        res.status(400).json({ error: "invalid-dates", detail: "adjust needs date (and optional endDate) as YYYY-MM-DD with date <= endDate" });
+        return;
+      }
+      // Keep adjustments plausible: within ±30 days of the curated date
+      // (moon sightings shift Islamic dates by a day or two, not months).
+      const driftMs = Math.abs(Date.parse(d) - Date.parse(base.date));
+      if (driftMs > 30 * 24 * 3600 * 1000) {
+        res.status(400).json({ error: "date-too-far", detail: "adjusted date must be within 30 days of the curated date" });
+        return;
+      }
+      date = d;
+      endDate = e;
+    }
+    const status = action === "confirm" ? "confirmed" : "adjusted";
+    const [existing] = await db
+      .select()
+      .from(atelierHolidayOverrides)
+      .where(
+        and(
+          eq(atelierHolidayOverrides.orgId, me.orgId),
+          eq(atelierHolidayOverrides.holidayKey, key),
+        ),
+      );
+    if (existing) {
+      await db
+        .update(atelierHolidayOverrides)
+        .set({ status, date, endDate, note, updatedByUserId: me.id, updatedAt: new Date() })
+        .where(eq(atelierHolidayOverrides.id, existing.id));
+    } else {
+      await db.insert(atelierHolidayOverrides).values({
+        id: rid("holrev"),
+        orgId: me.orgId,
+        holidayKey: key,
+        country: base.country,
+        status,
+        date,
+        endDate,
+        note,
+        updatedByUserId: me.id,
+      });
+    }
+    await audit({
+      entityType: "holiday",
+      entityId: key,
+      actor: me,
+      action: "holiday.review.set",
+      payload: { key, status, date, endDate, note, baseDate: base.date, baseEndDate: base.endDate },
+      summary: `${status === "confirmed" ? "Confirmed" : "Adjusted"} ${base.country} ${base.name} (${base.date}${status === "adjusted" ? ` → ${date}` : ""})`,
+    });
+    res.json({ ok: true, key, review: { status, date, endDate, note } });
   } catch (err) {
     next(err);
   }

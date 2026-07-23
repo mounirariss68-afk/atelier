@@ -86,6 +86,7 @@ export default function PeopleApprovals() {
       <div className="container-atelier py-6 space-y-6">
         <LeaveApprovalsCard />
         <LeaveEntitlementsCard />
+        <HolidayReviewCard />
         <Card className="p-4">
           <table className="w-full text-sm">
             <thead className="text-xs text-text-mute font-mono uppercase">
@@ -385,6 +386,242 @@ interface ReportsEdge {
   id: string;
   personId: string;
   managerPersonId: string;
+}
+
+// ---------------------------------------------------------------------
+// Task #606 — holiday calendar review. The curated TR/MENA dataset carries
+// tentative Islamic dates (moon-sighting dependent); HR/leadership confirm
+// or adjust them here so calendar banners and OOO return dates stay right.
+// ---------------------------------------------------------------------
+
+interface HolidayReviewItem {
+  key: string;
+  country: string;
+  countryName: string;
+  name: string;
+  baseDate: string;
+  baseEndDate: string;
+  tentative: boolean;
+  review: { status: "confirmed" | "adjusted"; date: string; endDate: string; note: string | null } | null;
+}
+
+interface HolidayReviewData {
+  year: number;
+  yearsCovered: number[];
+  attention: { pendingTentative: number; nextYearMissing: number | null };
+  horizonDays: number;
+  holidays: HolidayReviewItem[];
+}
+
+function HolidayReviewCard() {
+  const [data, setData] = React.useState<HolidayReviewData | null>(null);
+  const [year, setYear] = React.useState<number | null>(null);
+  const [allowed, setAllowed] = React.useState(true);
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [adjusting, setAdjusting] = React.useState<string | null>(null);
+  const [adjDate, setAdjDate] = React.useState("");
+  const [adjEnd, setAdjEnd] = React.useState("");
+  const [adjNote, setAdjNote] = React.useState("");
+
+  const load = React.useCallback(async (y: number | null) => {
+    try {
+      const qs = y ? `?year=${y}` : "";
+      const r = await fetch(`/api/atelier/roster/holidays/review${qs}`, { credentials: "include" });
+      if (r.status === 403) return void setAllowed(false);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j: HolidayReviewData = await r.json();
+      setData(j);
+      setYear(j.year);
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }, []);
+
+  React.useEffect(() => { void load(year); }, [load, year]);
+
+  const post = async (body: Record<string, unknown>, busyKey: string) => {
+    setBusy(busyKey);
+    setErr(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/holidays/review`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || j.error || `HTTP ${r.status}`);
+      setAdjusting(null);
+      await load(year);
+    } catch (ex) {
+      setErr((ex as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!allowed || !data) return null;
+
+  const fmt = (iso: string) =>
+    new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const span = (a: string, b: string) => (a === b ? fmt(a) : `${fmt(a)}–${fmt(b)}`);
+  const needsReview = data.holidays.filter((h) => h.tentative && !h.review).length;
+  const cell = "rounded-md border border-border bg-bg px-2 py-1 text-sm text-text";
+
+  return (
+    <Card className="p-4" data-testid="holiday-review-card">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-text">Holiday calendar · {data.year}</h3>
+          {needsReview > 0 ? (
+            <MonoChip tone="gold" data-testid="holiday-review-pending-chip">{needsReview} to review</MonoChip>
+          ) : (
+            <MonoChip data-testid="holiday-review-clear-chip">all reviewed</MonoChip>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="rounded-md border border-border bg-bg px-2 py-1 text-sm text-text min-h-[44px]"
+            value={data.year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            data-testid="holiday-review-year"
+          >
+            {data.yearsCovered.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+          <PillButton variant="ghost" onClick={() => setOpen((v) => !v)} className="min-h-[44px]" data-testid="holiday-review-toggle">
+            {open ? "Hide" : "Review"}
+          </PillButton>
+        </div>
+      </div>
+      <p className="mt-1 text-xs text-text-mute">
+        Islamic dates marked tentative follow moon sightings — confirm or adjust them once
+        officially announced so banners and out-of-office return dates stay accurate.
+      </p>
+      {data.attention.nextYearMissing && (
+        <p className="mt-1 text-xs text-amber-300" data-testid="holiday-review-coverage-warning">
+          The curated dataset does not cover {data.attention.nextYearMissing} yet — ask for it to be extended before the new year.
+        </p>
+      )}
+      {err && <p className="mt-2 text-sm text-red-300">{err}</p>}
+      {open && (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-text-mute font-mono uppercase">
+              <tr>
+                <th className="text-left py-2">Market</th>
+                <th className="text-left">Holiday</th>
+                <th className="text-left">Dates</th>
+                <th className="text-left">Status</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {data.holidays.map((h) => {
+                const effective = h.review ? span(h.review.date, h.review.endDate) : span(h.baseDate, h.baseEndDate);
+                const adjustingThis = adjusting === h.key;
+                return (
+                  <React.Fragment key={h.key}>
+                    <tr className="border-t border-border-soft" data-testid={`holiday-review-row-${h.country}-${h.baseDate}`}>
+                      <td className="py-2 text-text whitespace-nowrap">{h.country}</td>
+                      <td className="text-text">{h.name}</td>
+                      <td className="text-text-mute whitespace-nowrap">
+                        {effective}
+                        {h.review?.status === "adjusted" && (
+                          <span className="ml-1 text-text-faint line-through">{span(h.baseDate, h.baseEndDate)}</span>
+                        )}
+                      </td>
+                      <td>
+                        {h.review ? (
+                          <MonoChip tone="gold">{h.review.status}</MonoChip>
+                        ) : h.tentative ? (
+                          <MonoChip>tentative</MonoChip>
+                        ) : (
+                          <MonoChip>fixed</MonoChip>
+                        )}
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        {!h.review && (
+                          <PillButton
+                            onClick={() => post({ key: h.key, action: "confirm" }, h.key)}
+                            disabled={busy === h.key}
+                            className="min-h-[36px]"
+                            data-testid={`holiday-confirm-${h.country}-${h.baseDate}`}
+                          >
+                            Confirm
+                          </PillButton>
+                        )}
+                        <PillButton
+                          variant="ghost"
+                          onClick={() => {
+                            if (adjustingThis) return void setAdjusting(null);
+                            setAdjusting(h.key);
+                            setAdjDate(h.review?.date ?? h.baseDate);
+                            setAdjEnd(h.review?.endDate ?? h.baseEndDate);
+                            setAdjNote(h.review?.note ?? "");
+                          }}
+                          disabled={busy === h.key}
+                          className="min-h-[36px] ml-1"
+                          data-testid={`holiday-adjust-${h.country}-${h.baseDate}`}
+                        >
+                          {adjustingThis ? "Cancel" : "Adjust"}
+                        </PillButton>
+                        {h.review && (
+                          <PillButton
+                            variant="ghost"
+                            onClick={() => post({ key: h.key, action: "clear" }, h.key)}
+                            disabled={busy === h.key}
+                            className="min-h-[36px] ml-1"
+                            data-testid={`holiday-clear-${h.country}-${h.baseDate}`}
+                          >
+                            Undo
+                          </PillButton>
+                        )}
+                      </td>
+                    </tr>
+                    {adjustingThis && (
+                      <tr className="border-t border-border-soft/50 bg-bg-soft/50">
+                        <td colSpan={5} className="py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <label className="text-xs text-text-mute">Start</label>
+                            <input type="date" className={cell} value={adjDate} onChange={(e) => setAdjDate(e.target.value)} data-testid="holiday-adjust-date" />
+                            <label className="text-xs text-text-mute">End</label>
+                            <input type="date" className={cell} value={adjEnd} onChange={(e) => setAdjEnd(e.target.value)} data-testid="holiday-adjust-end" />
+                            <input
+                              type="text"
+                              placeholder="Note (e.g. official announcement)"
+                              className={`${cell} flex-1 min-w-[160px]`}
+                              value={adjNote}
+                              onChange={(e) => setAdjNote(e.target.value)}
+                              data-testid="holiday-adjust-note"
+                            />
+                            <PillButton
+                              onClick={() => post({ key: h.key, action: "adjust", date: adjDate, endDate: adjEnd, note: adjNote || undefined }, h.key)}
+                              disabled={busy === h.key || !adjDate || !adjEnd}
+                              className="min-h-[36px]"
+                              data-testid="holiday-adjust-save"
+                            >
+                              Save adjusted dates
+                            </PillButton>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+              {data.holidays.length === 0 && (
+                <tr><td colSpan={5} className="py-4 text-center text-text-faint">No holidays in the dataset for this year.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
 }
 
 function LeaveEntitlementsCard() {

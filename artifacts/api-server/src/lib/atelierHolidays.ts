@@ -240,19 +240,74 @@ export const PUBLIC_HOLIDAYS: PublicHoliday[] = [
   h("JO", "2027-12-25", "Christmas Day"),
 ];
 
+/** Stable identity of a curated dataset entry, used to key HR review
+ *  decisions (atelier_holiday_overrides.holiday_key). Built from the BASE
+ *  (curated) date so adjusting the date never orphans the review row. */
+export function holidayKeyOf(h: Pick<PublicHoliday, "country" | "date" | "name">): string {
+  return `${h.country}|${h.date}|${h.name}`;
+}
+
+/** Calendar years the curated dataset covers (for "extend the table"
+ *  review reminders as new years approach). */
+export const DATASET_YEARS: readonly number[] = Array.from(
+  new Set(PUBLIC_HOLIDAYS.map((p) => Number(p.date.slice(0, 4)))),
+).sort((a, b) => a - b);
+
+/** An HR review decision over one curated entry. Effective dates are
+ *  always present (equal to the curated ones when merely confirmed). */
+export interface HolidayOverride {
+  holidayKey: string;
+  status: "confirmed" | "adjusted";
+  date: string;
+  endDate: string;
+}
+
+/** A dataset entry with any review decision applied: adjusted dates
+ *  replace the curated ones, and a reviewed entry is no longer tentative
+ *  (the whole point of the review is to pin the date). */
+export type EffectiveHoliday = PublicHoliday & {
+  reviewStatus: "confirmed" | "adjusted" | null;
+  /** Curated date before adjustment (differs only when adjusted). */
+  baseDate: string;
+};
+
+export function applyHolidayOverrides(
+  holidays: readonly PublicHoliday[],
+  overrides?: readonly HolidayOverride[] | null,
+): EffectiveHoliday[] {
+  const byKey = new Map((overrides ?? []).map((o) => [o.holidayKey, o]));
+  return holidays.map((h) => {
+    const o = byKey.get(holidayKeyOf(h));
+    if (!o) return { ...h, reviewStatus: null, baseDate: h.date };
+    return {
+      ...h,
+      date: o.date,
+      endDate: o.endDate,
+      tentative: false,
+      reviewStatus: o.status,
+      baseDate: h.date,
+    };
+  });
+}
+
 /** All holidays intersecting [start, end] (both YYYY-MM-DD, inclusive),
- *  optionally restricted to a set of countries. */
+ *  optionally restricted to a set of countries. Pass the org's review
+ *  overrides so confirmed/adjusted dates are reflected; range filtering
+ *  happens AFTER adjustment so a shifted date lands in the right window. */
 export function holidaysInRange(
   start: string,
   end: string,
   countries?: ReadonlySet<string> | null,
-): PublicHoliday[] {
-  return PUBLIC_HOLIDAYS.filter(
-    (p) =>
-      p.date <= end &&
-      p.endDate >= start &&
-      (!countries || countries.size === 0 || countries.has(p.country)),
-  ).sort((a, b) => a.date.localeCompare(b.date) || a.country.localeCompare(b.country));
+  overrides?: readonly HolidayOverride[] | null,
+): EffectiveHoliday[] {
+  return applyHolidayOverrides(PUBLIC_HOLIDAYS, overrides)
+    .filter(
+      (p) =>
+        p.date <= end &&
+        p.endDate >= start &&
+        (!countries || countries.size === 0 || countries.has(p.country)),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.country.localeCompare(b.country));
 }
 
 // ------------------------------------------------------------------
@@ -321,9 +376,13 @@ export function countryToCode(country: string | null | undefined): HolidayCountr
   return byName[c.toLowerCase()] ?? null;
 }
 
-function isHolidayFor(dateYmd: string, country: HolidayCountry | null): boolean {
+function isHolidayFor(
+  dateYmd: string,
+  country: HolidayCountry | null,
+  holidays: readonly PublicHoliday[],
+): boolean {
   if (!country) return false;
-  return PUBLIC_HOLIDAYS.some(
+  return holidays.some(
     (p) => p.country === country && p.date <= dateYmd && p.endDate >= dateYmd,
   );
 }
@@ -342,6 +401,10 @@ function addDaysYmd(dateYmd: string, days: number): string {
 export function nextWorkingDayAfter(
   lastLeaveDay: string,
   country: string | null | undefined,
+  /** Effective holiday list; defaults to the curated base dataset. Pass
+   *  applyHolidayOverrides(PUBLIC_HOLIDAYS, orgOverrides) so HR-adjusted
+   *  Eid dates are honoured in OOO return-date maths. */
+  holidays: readonly PublicHoliday[] = PUBLIC_HOLIDAYS,
 ): string {
   const code = countryToCode(country);
   const weekend = weekendDaysFor(code ?? country);
@@ -350,7 +413,7 @@ export function nextWorkingDayAfter(
   while (guard < 60) {
     guard += 1;
     const dow = new Date(`${d}T00:00:00Z`).getUTCDay();
-    if (!weekend.includes(dow) && !isHolidayFor(d, code)) return d;
+    if (!weekend.includes(dow) && !isHolidayFor(d, code, holidays)) return d;
     d = addDaysYmd(d, 1);
   }
   return d;

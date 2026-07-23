@@ -74,6 +74,9 @@ export const V3_AUDIT_ACTIONS = {
   LEAVE_OOO_SKIPPED: "leave.ooo.skipped",
   LEAVE_OOO_FAILED: "leave.ooo.failed",
   ROSTER_REPORTS_TO_SET: "roster.reports_to.set",
+  // Task #606 — holiday-calendar review (confirm/adjust curated dates) ------
+  HOLIDAY_REVIEW_SET: "holiday.review.set",
+  HOLIDAY_REVIEW_CLEAR: "holiday.review.clear",
   EXPENSE_REIMBURSE: "expense.reimburse",
 
   // Compensation column policy lock --------------------------------------

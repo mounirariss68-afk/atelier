@@ -668,7 +668,11 @@ export function AwayTodayStrip({ date }: { date?: string }) {
 export function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: string }) {
   const { data } = useQuery({
     queryKey: ["me-holidays", startDate, endDate],
-    queryFn: async (): Promise<{ viewerCountry: string | null; holidays: HolidayItem[] } | null> => {
+    queryFn: async (): Promise<{
+      viewerCountry: string | null;
+      holidays: HolidayItem[];
+      review?: { pendingTentative: number; nextYearMissing: number | null };
+    } | null> => {
       const r = await fetch(
         `${API_BASE}/me/holidays?start=${startDate}&end=${endDate}`,
         { credentials: "include" },
@@ -706,8 +710,22 @@ export function HolidayBanner({ startDate, endDate }: { startDate: string; endDa
       className="rounded-lg border border-border-soft bg-bg-soft px-3 py-2"
       data-testid="holiday-banner"
     >
-      <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
-        Public holidays
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint">
+          Public holidays
+        </div>
+        {data?.review && (data.review.pendingTentative > 0 || data.review.nextYearMissing) && (
+          <Link
+            href="/people/approvals"
+            className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/10 px-2 py-0.5 text-[10px] font-mono text-gold hover:bg-gold/20 transition-colors"
+            data-testid="holiday-review-nudge"
+            title="Some holiday dates need a yearly review (tentative Islamic dates or missing next-year data)"
+          >
+            {data.review.pendingTentative > 0
+              ? `${data.review.pendingTentative} tentative date${data.review.pendingTentative === 1 ? "" : "s"} to review`
+              : `Add ${data.review.nextYearMissing} holidays`}
+          </Link>
+        )}
       </div>
       <div className="flex items-center gap-1.5 flex-wrap">
         {mine.map((h) => chip(h, Boolean(viewer)))}
