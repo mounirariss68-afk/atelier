@@ -39,18 +39,44 @@ export function attachmentMentionsDestructive(body: string): boolean {
 }
 
 /**
- * Cheap heuristic for the orchestrator: if any attachment ID looks
- * like it carries a destructive instruction (we only see the ids
- * here, the body lives in attachment storage), we conservatively
- * assume yes when the prompt itself does not name the entity.
+ * Task #603 — risk-based typed-name heuristic for attachment turns.
+ *
+ * The old rule blanket-flagged EVERY write in an attachment turn
+ * whose prompt was benign, forcing users to retype their full name
+ * just to save their own visa scan. The new rule keys off the risk
+ * of the *proposed write* and the *actual attachment bodies*:
+ *
+ * Typed-name re-confirmation is required only when, in a turn with
+ * attachments, at least one of these holds:
+ *  - an attachment body contains a destructive verb (the
+ *    "screenshot says: delete account X" jailbreak),
+ *  - the user's own prompt contains a destructive verb,
+ *  - the proposed write is flagged irreversible in the catalog,
+ *  - the proposed write has an outbound channel (email/send/publish),
+ *  - the proposed tool's name itself is destructive (delete/revoke/…).
+ *
+ * Benign, reversible, self-scoped writes (e.g. save_my_document) in
+ * an attachment turn get the normal Confirm/Cancel card.
  */
 export function shouldRequireTypedNameForAttachmentTurn(opts: {
   hasAttachments: boolean;
   prompt: string;
+  /** True when any attachment body in this turn contains a destructive verb. */
+  attachmentsMentionDestructive?: boolean;
+  /** Risk profile of the proposed write (from the capability catalog). */
+  tool?: {
+    name?: string;
+    irreversible?: boolean;
+    outboundChannel?: string | null;
+  };
 }): boolean {
   if (!opts.hasAttachments) return false;
-  // If the user themselves did NOT name the destructive verb in the
-  // prompt, the attachment is the only possible source — force typed
-  // re-confirm.
-  return !DESTRUCTIVE_RE.test(opts.prompt);
+  if (opts.attachmentsMentionDestructive === true) return true;
+  if (DESTRUCTIVE_RE.test(opts.prompt)) return true;
+  if (opts.tool?.irreversible === true) return true;
+  if (opts.tool?.outboundChannel) return true;
+  if (opts.tool?.name && DESTRUCTIVE_RE.test(opts.tool.name.replace(/[_-]+/g, " "))) {
+    return true;
+  }
+  return false;
 }

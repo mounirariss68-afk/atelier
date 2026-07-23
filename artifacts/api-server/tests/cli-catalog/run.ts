@@ -234,17 +234,76 @@ async function main() {
     assert.ok(attachmentMentionsDestructive("Please DELETE the account"));
     assert.ok(!attachmentMentionsDestructive("Please summarize the meeting notes"));
   });
-  await test("typed-name required when attachments present and prompt is benign", () => {
+  await test("typed-name heuristic is risk-based, not attachment-based (Task #603)", () => {
+    // Benign, reversible, self-scoped save in an attachment turn →
+    // plain Confirm/Cancel, no typed name.
     assert.equal(
-      shouldRequireTypedNameForAttachmentTurn({ hasAttachments: true, prompt: "summarize this" }),
-      true,
-    );
-    assert.equal(
-      shouldRequireTypedNameForAttachmentTurn({ hasAttachments: true, prompt: "delete account ACME" }),
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "Upload the attached photo into my documents as Saudi Visa 2026",
+        attachmentsMentionDestructive: false,
+        tool: { name: "save_my_document", irreversible: false, outboundChannel: null },
+      }),
       false,
     );
+    // Attachment body contains a destructive instruction → typed name
+    // still required even for the write it tries to trigger.
     assert.equal(
-      shouldRequireTypedNameForAttachmentTurn({ hasAttachments: false, prompt: "summarize this" }),
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "summarize this",
+        attachmentsMentionDestructive: true,
+        tool: { name: "save_my_document", irreversible: false, outboundChannel: null },
+      }),
+      true,
+    );
+    // User's own prompt carries a destructive verb → typed name.
+    assert.equal(
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "delete account ACME",
+        attachmentsMentionDestructive: false,
+        tool: { name: "account_archive", irreversible: false, outboundChannel: null },
+      }),
+      true,
+    );
+    // Irreversible tool in an attachment turn → typed name.
+    assert.equal(
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "process the attached file",
+        attachmentsMentionDestructive: false,
+        tool: { name: "account_hard_delete", irreversible: true, outboundChannel: null },
+      }),
+      true,
+    );
+    // Outbound-channel write (email/send/publish) → typed name.
+    assert.equal(
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "share the attached brief",
+        attachmentsMentionDestructive: false,
+        tool: { name: "share_brief", irreversible: false, outboundChannel: "email" },
+      }),
+      true,
+    );
+    // Destructive tool name → typed name even with a benign prompt.
+    assert.equal(
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "handle the attached doc",
+        attachmentsMentionDestructive: false,
+        tool: { name: "revoke_access_grant", irreversible: false, outboundChannel: null },
+      }),
+      true,
+    );
+    // No attachments → this heuristic never fires.
+    assert.equal(
+      shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: false,
+        prompt: "summarize this",
+        attachmentsMentionDestructive: false,
+      }),
       false,
     );
   });

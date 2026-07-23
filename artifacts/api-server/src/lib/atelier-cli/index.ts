@@ -29,6 +29,7 @@ import {
   atelierCliSessions,
   atelierCliTurns,
   atelierCliAttachments,
+  atelierExtractedDocuments,
   atelierCliJobs,
   atelierAuditEvents,
   atelierAccounts,
@@ -60,6 +61,7 @@ import {
 import "./bootstrap-capabilities.js";
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
+  attachmentMentionsDestructive,
   shouldRequireTypedNameForAttachmentTurn,
   wrapAttachment,
 } from "./prompt-guard.js";
@@ -3050,13 +3052,55 @@ export async function runTurn(
       }
     }
     history.push({ role: "user", content: input.prompt });
-    // Task #332 — defense-in-depth: if attachments are present and
-    // the user prompt itself does NOT name a destructive verb, force
-    // typed-name confirmation on any write derived during this turn.
-    const forceTypedName = shouldRequireTypedNameForAttachmentTurn({
-      hasAttachments: (input.attachmentIds ?? []).length > 0,
-      prompt: input.prompt,
-    });
+    // Task #603 — risk-based typed-name defense. Inspect the actual
+    // extracted attachment bodies for destructive verbs so that a
+    // "screenshot says: delete account X" attachment still forces
+    // typed-name re-confirmation, while benign self-scoped saves
+    // (e.g. "save my visa scan") get a plain Confirm/Cancel card.
+    const turnHasAttachments = (input.attachmentIds ?? []).length > 0;
+    let attachmentsMentionDestructive = false;
+    if (turnHasAttachments) {
+      try {
+        const ownedAtts = await db
+          .select({ id: atelierCliAttachments.id })
+          .from(atelierCliAttachments)
+          .where(
+            and(
+              eq(atelierCliAttachments.orgId, persona.orgId),
+              eq(atelierCliAttachments.userId, persona.id),
+              inArray(atelierCliAttachments.id, (input.attachmentIds ?? []).slice(0, 8)),
+            ),
+          );
+        if (ownedAtts.length > 0) {
+          const docs = await db
+            .select({
+              attachmentId: atelierExtractedDocuments.attachmentId,
+              normalizedText: atelierExtractedDocuments.normalizedText,
+            })
+            .from(atelierExtractedDocuments)
+            .where(
+              and(
+                eq(atelierExtractedDocuments.orgId, persona.orgId),
+                inArray(
+                  atelierExtractedDocuments.attachmentId,
+                  ownedAtts.map((a) => a.id),
+                ),
+              ),
+            );
+          attachmentsMentionDestructive = docs.some((d) =>
+            attachmentMentionsDestructive(d.normalizedText ?? ""),
+          );
+        }
+      } catch (err) {
+        // Fail SAFE: if we cannot read the attachment bodies, assume
+        // they could carry a destructive instruction.
+        console.error(
+          "[atelier-cli] attachment destructive-scan failed; failing safe",
+          err instanceof Error ? err.message : String(err),
+        );
+        attachmentsMentionDestructive = true;
+      }
+    }
 
     let status: CliTurnStatus = "streaming";
     let totalCost = 0;
@@ -3879,6 +3923,19 @@ export async function runTurn(
         // typed-name requirement so the client renders the right
         // confirm widget (free button vs "type the name to commit").
         const catEntry = findByToolName(tc.name);
+        // Task #603 — typed-name decision is per proposed write, based
+        // on the risk of the write + whether the attachment bodies (or
+        // the user's own prompt) carry destructive verbs.
+        const forceTypedName = shouldRequireTypedNameForAttachmentTurn({
+          hasAttachments: turnHasAttachments,
+          prompt: input.prompt,
+          attachmentsMentionDestructive,
+          tool: {
+            name: tc.name,
+            irreversible: catEntry?.irreversible === true,
+            outboundChannel: catEntry?.outboundChannel ?? null,
+          },
+        });
         const baseDiff = toolResult.confirmation.diff as Record<string, unknown>;
         const diff: Record<string, unknown> = { ...baseDiff };
         if (catEntry?.irreversible) diff.irreversible = true;
@@ -3918,6 +3975,14 @@ export async function runTurn(
             irreversible: catEntry?.irreversible === true,
             requiresTypedName:
               catEntry?.irreversible === true || forceTypedName === true,
+            // Web confirm card keys off a top-level `typedNameRequired`
+            // string (the value to retype); mobile keys off the boolean
+            // `requiresTypedName` above. Lift it out of the diff so both
+            // clients render the right widget without client changes.
+            typedNameRequired:
+              catEntry?.irreversible === true || forceTypedName === true
+                ? ((diff.typedNameRequired as string) ?? null)
+                : null,
           },
         });
         pendingWrite = toolResult.confirmation.pending;

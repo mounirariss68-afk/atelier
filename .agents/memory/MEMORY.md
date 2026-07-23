@@ -126,4 +126,5 @@
 - [Atelier leave OOO & holidays](atelier-leave-ooo.md) — revoke/shorten share one route (clears Outlook OOF); on-leave-today is leadership-gated; calendar `kind` needs a cast (not in orval type).
 - [Holiday override review layer](atelier-holiday-overrides.md) — tentative holiday dates confirmed/adjusted via org override rows merged at read time; new consumers must pass overrides through, filter ranges AFTER adjustment.
 - [Chat receipt image OCR](chat-receipt-vision.md) — fixture-first, vision only ≥4KB images (tests stay offline); ingest parses the header-text contract; unreadable → needsReview draft, never filename+0.
+- [Chat typed-name guard](chat-typed-name-guard.md) — typed-name confirm is risk-based (destructive verbs/irreversible/outbound), not blanket-attachment; web reads top-level typedNameRequired string, mobile the boolean.
 - [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
