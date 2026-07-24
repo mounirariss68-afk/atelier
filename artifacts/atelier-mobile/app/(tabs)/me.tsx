@@ -43,6 +43,7 @@ import { useFeedback } from "@/components/feedback";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
+import { openDocumentFile } from "@/lib/documentOpen";
 import { TextInput } from "react-native";
 
 // ============================================================
@@ -333,28 +334,27 @@ export default function MeScreen() {
   const openDocument = useCallback(
     async (doc: AtelierSelfDocument, side: "front" | "back" = "front") => {
       if (side === "back" ? !doc.hasBackFile : !doc.hasFile) return;
-      const path = getAtelierDownloadMyDocumentUrl(doc.id);
-      const url = `${API_BASE}${path}${side === "back" ? "?side=back" : ""}`;
-      if (Platform.OS === "web") {
-        Linking.openURL(url);
-        return;
-      }
-      setDownloadingId(`${doc.id}:${side}`);
+      if (Platform.OS !== "web") setDownloadingId(`${doc.id}:${side}`);
       try {
-        const FileSystem = await import("expo-file-system/legacy");
-        const Sharing = await import("expo-sharing");
-        const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
-        const rawName =
-          side === "back" ? (doc.backFileName ?? `${doc.title}-back`) : (doc.fileName ?? `${doc.title}`);
-        const safeName = rawName.replace(/[^\w.\-]+/g, "_");
-        const dest = `${dir}${Date.now()}_${safeName}`;
-        const result = await FileSystem.downloadAsync(url, dest, {
-          headers: authHeader(),
+        const FileSystem = Platform.OS === "web" ? null : await import("expo-file-system/legacy");
+        const Sharing = Platform.OS === "web" ? null : await import("expo-sharing");
+        const result = await openDocumentFile(doc, side, {
+          apiBase: API_BASE,
+          buildDownloadPath: getAtelierDownloadMyDocumentUrl,
+          authHeader,
+          platformOS: Platform.OS,
+          openWebUrl: (url) => Linking.openURL(url),
+          downloadAsync: (url, dest, options) => FileSystem!.downloadAsync(url, dest, options),
+          cacheDirectory: FileSystem ? (FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "") : "",
+          isSharingAvailable: () => Sharing!.isAvailableAsync(),
+          shareAsync: (uri) => Sharing!.shareAsync(uri),
         });
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(result.uri);
+        if (result.status === "error") {
+          hapticError();
+          feedback.toast(t("me.downloadFailed"), "error");
+        } else if (result.status !== "opened_web" && result.status !== "skipped_no_file") {
+          hapticSuccess();
         }
-        hapticSuccess();
       } catch {
         hapticError();
         feedback.toast(t("me.downloadFailed"), "error");
