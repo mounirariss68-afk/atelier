@@ -2621,9 +2621,10 @@ function rowToHistoricalTurn(row: Record<string, unknown>): CliTurn {
     prompt: String(row.prompt ?? ""),
     status: mappedStatus,
     startedAt: row.createdAt ? new Date(String(row.createdAt)).getTime() : Date.now(),
+    text: "",
     trace: [],
     result,
-    toolResults: toolResults.length > 0 ? toolResults : undefined,
+    toolResults,
     partial:
       mappedStatus === "partial"
         ? {

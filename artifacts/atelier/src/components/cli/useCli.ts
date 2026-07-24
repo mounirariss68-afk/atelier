@@ -1,33 +1,35 @@
 /**
  * Task #333 — CLI state machine + SSE consumer.
  *
- * Wraps `fetch` against `/api/atelier/cli/*` and parses the
- * `event:`/`data:` SSE wire format into a typed `CliFrame`. The hook
- * owns one in-flight turn at a time; calling `submit` while another
- * turn is streaming aborts the previous one (consistent with what the
- * server idempotency key allows).
- *
- * The SSE parser deliberately stays tiny — no EventSource, no
- * dependency: EventSource doesn't allow custom POST bodies, and the
- * orchestrator emits one frame per `event:`/`data:` pair separated by
- * a blank line. We keep a buffer across `read()` chunks so multi-byte
- * UTF-8 (Arabic) and multi-chunk frames work.
+ * Task #643 — the platform-independent pieces (SSE frame parser,
+ * frame → turn reducer, confirm/abort/navigation gates, transient-retry
+ * stream runner) now live in `@workspace/chat-core`, shared with the
+ * mobile chat. This hook owns the React state plumbing only: one
+ * in-flight turn at a time; calling `submit` while another turn is
+ * streaming aborts the previous one (consistent with what the server
+ * idempotency key allows).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type {
-  CliFrame,
-  CliFrameType,
-  CliPendingConfirmation,
-  CliPlanStep,
-  CliResultCard,
-  CliTurn,
-  CliTurnStatus,
-  CliLocale,
-  CliCapability,
-} from "./types";
+import {
+  abortOutcome,
+  applyFrame,
+  confirmGate,
+  deviceTimeZone,
+  isSafeHttpUrl,
+  restoreClarificationTurn,
+  streamSse,
+  tryFireNavigation,
+  type PendingClarificationPayload,
+  type SseResponseLike,
+} from "@workspace/chat-core";
+import type { CliTurn, CliTurnStatus, CliLocale, CliCapability } from "./types";
 import { localeInstruction } from "./locale";
 import type { DerivedPageContext } from "./pageContext";
+
+// Re-exported so existing consumers (CommandBar, useCli.test.ts) keep
+// importing from this module; the implementations are shared now.
+export { applyFrame, confirmGate, abortOutcome, tryFireNavigation, isSafeHttpUrl };
 
 function uuid(): string {
   // Crypto-backed when available; falls back for old browsers in tests.
@@ -35,30 +37,6 @@ function uuid(): string {
     return crypto.randomUUID();
   }
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Task #581 — device IANA timezone sent with each turn so the server
- * interprets typed times ("move my 7am") the way the user sees them. */
-function deviceTimeZone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Only http(s) URLs are safe to render as clickable anchors. Source URLs
- * arrive from untrusted web-search results, so any other scheme (notably
- * `javascript:`) must be rejected before it can become an `href`.
- */
-export function isSafeHttpUrl(url: string): boolean {
-  try {
-    const proto = new URL(url).protocol;
-    return proto === "http:" || proto === "https:";
-  } catch {
-    return false;
-  }
 }
 
 interface SubmitArgs {
@@ -91,41 +69,6 @@ interface UseCliOptions {
    * the app to the relevant screen automatically.
    */
   onNavigate?: (path: string, when: "on_propose" | "on_commit") => void;
-}
-
-/**
- * Task #24 — pure confirm-gate decision, exported for unit testing.
- * Decides what `confirm()` should do at click time:
- *   - "noop_in_flight": a confirm is already streaming — the click is a
- *     duplicate and must be ignored (never abort the in-flight confirm).
- *   - "wait_for_turn_id": the server turn id hasn't landed yet — defer
- *     the confirm until it does (with explicit feedback on timeout)
- *     instead of silently returning.
- *   - "start": proceed with the confirm request.
- */
-export function confirmGate(args: {
-  confirming: boolean;
-  serverTurnId: string | null | undefined;
-}): "noop_in_flight" | "wait_for_turn_id" | "start" {
-  if (args.confirming) return "noop_in_flight";
-  if (!args.serverTurnId) return "wait_for_turn_id";
-  return "start";
-}
-
-/**
- * Task #24 — pure abort→status mapping, exported for unit testing.
- * An AbortError on the SSE stream only means "Cancelled" when the user
- * explicitly asked to cancel. Supersede aborts (a newer submit taking
- * the slot) and duplicate-confirm aborts must be dropped silently —
- * publishing "cancelled" for those was a client-side hallucination
- * while the server write might still be committing.
- */
-export function abortOutcome(args: {
-  isActiveTurn: boolean;
-  userCancelRequested: boolean;
-}): "publish_cancelled" | "drop" {
-  if (!args.isActiveTurn) return "drop";
-  return args.userCancelRequested ? "publish_cancelled" : "drop";
 }
 
 export interface UseCliReturn {
@@ -176,373 +119,6 @@ export interface UseCliReturn {
   adoptSession: (sessionId: string) => void;
 }
 
-/** Parse one fully-buffered SSE message block into a `CliFrame`. */
-function parseFrame(block: string): CliFrame | null {
-  let event: CliFrameType | null = null;
-  let dataLines: string[] = [];
-  for (const raw of block.split(/\r?\n/)) {
-    if (raw.startsWith("event:")) event = raw.slice(6).trim() as CliFrameType;
-    else if (raw.startsWith("data:")) dataLines.push(raw.slice(5).trim());
-  }
-  if (!event) return null;
-  let data: Record<string, unknown> = {};
-  if (dataLines.length > 0) {
-    try {
-      data = JSON.parse(dataLines.join("\n"));
-    } catch {
-      data = { _raw: dataLines.join("\n") };
-    }
-  }
-  return { type: event, data, receivedAt: Date.now() };
-}
-
-/**
- * Task #500 — Stream-consumer navigation gate, exported for unit
- * testing. Fires `onNavigate` exactly once per unique destination per
- * turn, and skips entirely when the stream is no longer active so a
- * stale turn cannot yank the user around after a newer submit().
- */
-export function tryFireNavigation(args: {
-  prevNavPath: string | null;
-  navigateTo: { path: string; when: "on_propose" | "on_commit" } | null | undefined;
-  isActive: () => boolean;
-  onNavigate?: (path: string, when: "on_propose" | "on_commit") => void;
-}): { navigatedTo: string | null; fired: boolean } {
-  const { prevNavPath, navigateTo, isActive, onNavigate } = args;
-  if (!isActive() || !navigateTo) {
-    return { navigatedTo: prevNavPath, fired: false };
-  }
-  if (navigateTo.path === prevNavPath) {
-    return { navigatedTo: prevNavPath, fired: false };
-  }
-  try {
-    onNavigate?.(navigateTo.path, navigateTo.when);
-  } catch {
-    /* swallow — navigation must never break the stream */
-  }
-  return { navigatedTo: navigateTo.path, fired: true };
-}
-
-export function applyFrame(turn: CliTurn, frame: CliFrame): CliTurn {
-  switch (frame.type) {
-    case "narration": {
-      const text = String((frame.data as { text?: string }).text ?? "");
-      return {
-        ...turn,
-        status: "streaming",
-        trace: [...turn.trace, { kind: "narration", text, at: frame.receivedAt }],
-      };
-    }
-    case "plan_step": {
-      // The orchestrator currently emits `{step, hasTool}` for every
-      // model step; the bar rendered "?. " for those because the old
-      // shape expected `{index, label}`. Skip frames with no
-      // human-readable label entirely — they're noise.
-      const d = frame.data as { index?: number; label?: string; step?: number };
-      if (!d.label || !String(d.label).trim()) {
-        return { ...turn, status: "streaming" };
-      }
-      const idx = d.index ?? d.step;
-      const prefix = typeof idx === "number" ? `${idx}. ` : "";
-      return {
-        ...turn,
-        status: "streaming",
-        trace: [
-          ...turn.trace,
-          { kind: "step", text: `${prefix}${d.label}`, at: frame.receivedAt },
-        ],
-      };
-    }
-    case "tool_call": {
-      const d = frame.data as { tool?: string };
-      return {
-        ...turn,
-        status: "streaming",
-        trace: [...turn.trace, { kind: "tool", text: `→ ${d.tool ?? "tool"}`, at: frame.receivedAt }],
-      };
-    }
-    case "progress": {
-      // Live sub-step from an agent the orchestrator dispatched (web search,
-      // pricing phases, etc.). Render as a breadcrumb step.
-      const d = frame.data as {
-        pct?: number;
-        message?: string;
-        phase?: string;
-        sources?: Array<{ url?: string; title?: string }>;
-      };
-      const message = String(d.message ?? "").trim();
-      if (!message) return { ...turn, status: "streaming" };
-      const phase = typeof d.phase === "string" ? d.phase : undefined;
-      const sources = Array.isArray(d.sources)
-        ? d.sources
-            .filter((s): s is { url: string; title?: string } => typeof s?.url === "string")
-            .map((s) => ({ url: s.url, title: typeof s.title === "string" ? s.title : undefined }))
-            // Source URLs come from untrusted web-search results — only keep
-            // safe http(s) links so a malicious scheme (e.g. javascript:)
-            // can never become a clickable anchor downstream.
-            .filter((s) => isSafeHttpUrl(s.url))
-        : undefined;
-      const newStep = {
-        kind: "step" as const,
-        text: message,
-        at: frame.receivedAt,
-        ...(phase ? { phase } : {}),
-        ...(sources && sources.length ? { sources } : {}),
-      };
-      // Heartbeat phases (e.g. the long "Synthesising the brief… (Ns)" tail)
-      // emit a fresh line every couple seconds. Collapse consecutive
-      // same-phase heartbeats into one updating row instead of flooding the
-      // breadcrumb trace — the row text + timer still tick live.
-      const last = turn.trace[turn.trace.length - 1];
-      if (phase && last && last.kind === "step" && last.phase === phase) {
-        return {
-          ...turn,
-          status: "streaming",
-          trace: [...turn.trace.slice(0, -1), newStep],
-        };
-      }
-      return {
-        ...turn,
-        status: "streaming",
-        trace: [...turn.trace, newStep],
-      };
-    }
-    case "tool_result": {
-      const d = frame.data as {
-        tool?: string;
-        ok?: boolean;
-        data?: unknown;
-        errorCode?: string;
-        errorMessage?: string;
-      };
-      const tool = d.tool ?? "tool";
-      const ok = d.ok !== false;
-      // Task #499 — generalized from #495: any tool result may carry
-      // a `navigateTo` hint in its data payload (read-side single-
-      // entity resolves, ingest commits, approval commits, etc.).
-      // Lift the first valid hint we see onto the turn so the hook's
-      // stream consumer can fire onNavigate. Hint is optional/null
-      // for capabilities that don't want to navigate.
-      let nextNavigateTo = turn.navigateTo ?? null;
-      if (ok && d.data && typeof d.data === "object") {
-        const dd = d.data as { navigateTo?: { path?: string; when?: string } | null };
-        if (
-          dd.navigateTo &&
-          typeof dd.navigateTo.path === "string" &&
-          (dd.navigateTo.when === "on_propose" || dd.navigateTo.when === "on_commit")
-        ) {
-          nextNavigateTo = {
-            path: dd.navigateTo.path,
-            when: dd.navigateTo.when,
-          };
-        }
-      }
-      return {
-        ...turn,
-        navigateTo: nextNavigateTo,
-        trace: [
-          ...turn.trace,
-          {
-            kind: "tool",
-            text: `${ok ? "✓" : "✗"} ${tool}`,
-            at: frame.receivedAt,
-          },
-        ],
-        // Task #348 — keep the raw payload so the renderer can lay out
-        // a real chart instead of the JSON blob. We append in arrival
-        // order so multi-step plans show their per-tool cards stacked.
-        toolResults: [
-          ...(turn.toolResults ?? []),
-          {
-            tool,
-            ok,
-            data: d.data,
-            errorCode: d.errorCode,
-            errorMessage: d.errorMessage,
-          },
-        ],
-      };
-    }
-    case "proposed_plan": {
-      const steps = ((frame.data as { steps?: CliPlanStep[] }).steps ?? []) as CliPlanStep[];
-      return { ...turn, status: "streaming", proposedPlan: steps };
-    }
-    case "needs_disambiguation": {
-      const d = frame.data as {
-        kind?: string;
-        options?: Array<{ id: string; label: string; hint?: string }>;
-      };
-      return {
-        ...turn,
-        status: "needs_disambiguation",
-        disambig: { kind: d.kind ?? "entity", options: d.options ?? [] },
-      };
-    }
-    case "needs_confirmation": {
-      const d = frame.data as unknown as CliPendingConfirmation & {
-        diff?: { navigateTo?: { path?: string; when?: string } | null } | null;
-      };
-      // Task #495 — propose_write embeds a proposal-time navigateTo
-      // inside `diff.navigateTo`. Lift it onto the turn so the chat
-      // can land on the context page while the user reviews the
-      // confirm card.
-      let nextNavigateTo = turn.navigateTo ?? null;
-      const diffNav = d.diff?.navigateTo;
-      if (
-        diffNav &&
-        typeof diffNav.path === "string" &&
-        (diffNav.when === "on_propose" || diffNav.when === "on_commit")
-      ) {
-        nextNavigateTo = { path: diffNav.path, when: diffNav.when };
-      }
-      return {
-        ...turn,
-        status: "needs_confirmation",
-        pending: d,
-        proposedPlan: d.steps ?? turn.proposedPlan,
-        navigateTo: nextNavigateTo,
-      };
-    }
-    case "needs_clarification": {
-      const d = frame.data as {
-        field?: string;
-        question?: string;
-        tool?: string;
-        partial?: Record<string, unknown>;
-        suggestions?: Array<{ id: string; label: string; hint?: string }>;
-        fields?: Array<{ field: string; label: string; hint?: string; options?: string[]; inputType?: "date"; defaultValue?: string }>;
-      };
-      return {
-        ...turn,
-        status: "needs_clarification",
-        clarification: {
-          field: d.field ?? "value",
-          question: d.question ?? "",
-          tool: d.tool ?? "",
-          partial: d.partial ?? {},
-          suggestions: d.suggestions ?? [],
-          fields: Array.isArray(d.fields) ? d.fields : [],
-        },
-      };
-    }
-    case "refusal": {
-      const d = frame.data as {
-        reason?: string;
-        closestCapabilityId?: string | null;
-        pageHref?: string | null;
-        suggestion?: string | null;
-        requestCapability?: { tool: string; prompt: string };
-      };
-      return {
-        ...turn,
-        refusal: {
-          reason: d.reason ?? "Not available on the CLI surface.",
-          closestCapabilityId: d.closestCapabilityId ?? null,
-          pageHref: d.pageHref ?? null,
-          suggestion: d.suggestion ?? null,
-          requestCapability: d.requestCapability,
-        },
-      };
-    }
-    case "proactive_recap": {
-      const d = frame.data as {
-        summary?: string;
-        turnCount?: number;
-        dormantMs?: number;
-        entities?: Array<{ kind: string; id: string; label: string }>;
-      };
-      return {
-        ...turn,
-        proactiveRecap: {
-          summary: d.summary ?? "",
-          turnCount: d.turnCount ?? 0,
-          dormantMs: d.dormantMs,
-          entities: d.entities ?? [],
-        },
-      };
-    }
-    case "async_dispatched": {
-      const d = frame.data as { jobId?: string; turnId?: string };
-      return {
-        ...turn,
-        status: "async_handoff",
-        asyncJob: { jobId: d.jobId ?? "", turnId: d.turnId ?? "" },
-      };
-    }
-    case "partial_success": {
-      const d = frame.data as {
-        completedSteps?: number;
-        failedStepIndex?: number;
-        error?: string;
-        stepResults?: Array<{
-          index: number;
-          status: "success" | "error" | "skipped" | "pending";
-          error?: string | null;
-        }>;
-      };
-      return {
-        ...turn,
-        status: "partial",
-        partial: {
-          completedSteps: d.completedSteps ?? 0,
-          failedStepIndex: d.failedStepIndex ?? -1,
-          error: d.error ?? "Step failed",
-          stepResults: d.stepResults,
-        },
-      };
-    }
-    case "final": {
-      const d = frame.data as {
-        status?: string;
-        turnId?: string;
-        sessionId?: string;
-        result?: CliResultCard;
-      };
-      // The server emits a `final` frame after every terminal *and*
-      // after every interactive pause (needs_confirmation,
-      // needs_disambiguation, async_dispatched). The orchestrator's
-      // status enum (`success` | `awaiting_confirmation` | `partial` |
-      // `cancelled` | `error` | `async_dispatched` | `read_only_no_op`)
-      // does not 1:1 match the client's status enum, so we map
-      // explicitly. Coercing to "complete" by default — as a previous
-      // revision did — clobbers the interactive states the rest of
-      // the UI keys off of.
-      const ss = d.status;
-      let next: CliTurnStatus;
-      if (ss === "awaiting_confirmation") next = "needs_confirmation";
-      else if (ss === "awaiting_clarification") next = "needs_clarification";
-      else if (ss === "async_dispatched") next = "async_handoff";
-      else if (ss === "partial") next = "partial";
-      else if (ss === "cancelled") next = "cancelled";
-      else if (ss === "error") next = "error";
-      else if (turn.status === "needs_disambiguation") {
-        // Server has no dedicated status string for this; preserve.
-        next = "needs_disambiguation";
-      } else {
-        // success / read_only_no_op / undefined → terminal complete.
-        next = "complete";
-      }
-      return {
-        ...turn,
-        status: next,
-        serverTurnId: d.turnId ?? turn.serverTurnId,
-        result: d.result ?? turn.result,
-      };
-    }
-    case "budget_exceeded":
-    case "error": {
-      const d = frame.data as { code?: string; message?: string };
-      return {
-        ...turn,
-        status: "error",
-        error: { code: d.code ?? frame.type, message: d.message ?? "Unknown error" },
-      };
-    }
-    default:
-      return turn;
-  }
-}
-
 export function useCli(opts: UseCliOptions): UseCliReturn {
   const { locale, onAsync, onNavigate } = opts;
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -557,8 +133,8 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
    * rapid double-click is gated before React re-renders. */
   const confirmingRef = useRef(false);
   /** Task #24 — set only by an explicit user cancel/abort action.
-   * consumeStream maps AbortError → "cancelled" ONLY when this is set;
-   * supersede/duplicate aborts are dropped silently. */
+   * The stream-outcome mapping publishes "cancelled" ONLY when this is
+   * set; supersede/duplicate aborts are dropped silently. */
   const userCancelRef = useRef(false);
   /** Task #24 — live mirror of `current` so confirm() can wait for a
    * late-arriving serverTurnId without stale-closure issues. */
@@ -570,8 +146,8 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
    * Token of the in-flight turn. Stream callbacks read this on every
    * frame; when a new submit() bumps the token, late frames from the
    * aborted previous stream are dropped instead of clobbering state.
-   * Without this, an aborted consumeStream() could briefly overwrite
-   * the freshly-seeded next turn before its first frame arrives.
+   * Without this, an aborted stream could briefly overwrite the
+   * freshly-seeded next turn before its first frame arrives.
    */
   const activeTurnKeyRef = useRef<string | null>(null);
 
@@ -607,53 +183,24 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     let alive = true;
     fetch("/api/atelier/cli/turns/pending-clarification", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
-      .then(
-        (j: {
-          pending?: {
-            turnId: string;
-            sessionId: string;
-            prompt: string;
-            createdAt: string;
-            clarification: {
-              field: string;
-              question: string;
-              tool: string;
-              partial: Record<string, unknown>;
-              suggestions: Array<{ id: string; label: string; hint?: string }>;
-              fields?: Array<{ field: string; label: string; hint?: string; options?: string[]; inputType?: "date"; defaultValue?: string }>;
-            };
-          } | null;
-        } | null) => {
-          if (!alive || !j?.pending) return;
-          // Never clobber live activity started before the fetch landed.
-          // `activeTurnKeyRef` is set synchronously at the top of
-          // submit(), so it also covers the narrow window before the
-          // currentRef sync effect runs.
-          if (currentRef.current || activeTurnKeyRef.current) return;
-          const p = j.pending;
-          setSessionId((s) => s ?? p.sessionId);
-          const restored: CliTurn = {
-            clientTurnKey: uuid(),
-            serverTurnId: p.turnId,
-            prompt: p.prompt,
-            status: "needs_clarification",
-            startedAt: Date.parse(p.createdAt) || Date.now(),
-            trace: [],
-            clarification: {
-              field: p.clarification.field,
-              question: p.clarification.question,
-              tool: p.clarification.tool,
-              partial: p.clarification.partial ?? {},
-              suggestions: p.clarification.suggestions ?? [],
-              fields: Array.isArray(p.clarification.fields)
-                ? p.clarification.fields
-                : [],
-            },
-          };
-          setCurrent(restored);
-          setTurns((t) => [restored, ...t]);
-        },
-      )
+      .then((j: { pending?: PendingClarificationPayload | null } | null) => {
+        if (!alive || !j?.pending) return;
+        // Never clobber live activity started before the fetch landed.
+        // `activeTurnKeyRef` is set synchronously at the top of
+        // submit(), so it also covers the narrow window before the
+        // currentRef sync effect runs.
+        if (currentRef.current || activeTurnKeyRef.current) return;
+        const restoredCore = restoreClarificationTurn(j.pending);
+        setSessionId((s) => s ?? restoredCore.sessionId);
+        const restored: CliTurn = {
+          ...restoredCore.core,
+          clientTurnKey: uuid(),
+          prompt: restoredCore.prompt,
+          startedAt: restoredCore.startedAt,
+        };
+        setCurrent(restored);
+        setTurns((t) => [restored, ...t]);
+      })
       .catch(() => {
         // Best-effort — absence of rehydration must never break the bar.
       });
@@ -662,102 +209,124 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
     };
   }, []);
 
-  const consumeStream = useCallback(
-    async (
-      response: Response,
-      clientTurnKey: string,
-      seedTurn: CliTurn,
-    ): Promise<void> => {
-      if (!response.body) {
-        const err: CliTurn = {
-          ...seedTurn,
-          status: "error",
-          error: { code: "no_body", message: "Server returned no stream body" },
-        };
-        setCurrent(err);
-        setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== clientTurnKey)]);
-        return;
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let buffer = "";
-      let live = seedTurn;
+  /**
+   * Shared stream runner. POSTs `body` to `url` and folds every SSE
+   * frame into the turn keyed by `clientTurnKey`. Transient failures
+   * (proxy 502/503/504 or a network error before the first frame) are
+   * auto-retried by the shared runner — but ONLY when `allowRetry` is
+   * set, i.e. for the dedupe-safe /cli/turn route. Confirm never
+   * retries: the server may already be committing the write.
+   */
+  const runTurnStream = useCallback(
+    async (args: {
+      url: string;
+      body: unknown;
+      clientTurnKey: string;
+      seed: CliTurn;
+      signal: AbortSignal;
+      allowRetry: boolean;
+    }): Promise<void> => {
+      const { url, body, clientTurnKey, seed, signal, allowRetry } = args;
+      let live = seed;
       // Helper: only commit state when this stream is still the active
       // turn. Frames from an aborted prior submit() must not clobber a
       // freshly-seeded next turn.
       const isActive = () => activeTurnKeyRef.current === clientTurnKey;
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          // SSE messages are separated by a blank line.
-          let sep: number;
-          while ((sep = buffer.indexOf("\n\n")) !== -1) {
-            const block = buffer.slice(0, sep);
-            buffer = buffer.slice(sep + 2);
-            const frame = parseFrame(block);
-            if (!frame) continue;
-            // Pull sessionId from any frame that carries it. Task #484:
-            // also track a *changed* id — when the server rolls a stale
-            // adopted session over (30-min inactivity), later turns must
-            // continue the rolled-over session, not re-send the old id.
-            const sid = (frame.data as { sessionId?: string }).sessionId;
-            if (sid && sid !== sessionId) setSessionId(sid);
-            const prevNavPath = live.navigatedTo ?? null;
-            live = applyFrame(live, frame);
-            // Task #495 — fire the consumer's auto-navigation
-            // callback exactly once per unique destination per turn.
-            // Skipped when the stream is no longer active so a stale
-            // turn can't yank the user around after a newer submit.
-            const navResult = tryFireNavigation({
-              prevNavPath,
-              navigateTo: live.navigateTo,
-              isActive,
-              onNavigate,
-            });
-            if (navResult.fired) {
-              live = { ...live, navigatedTo: navResult.navigatedTo };
-            }
-            if (!isActive()) continue;
-            setCurrent(live);
-            setTurns((t) => {
-              const others = t.filter((x) => x.clientTurnKey !== clientTurnKey);
-              return [live, ...others];
-            });
-            if (frame.type === "async_dispatched" && onAsync) {
-              const d = frame.data as { jobId?: string; turnId?: string };
-              onAsync(d.jobId ?? "", d.turnId ?? "");
-            }
+      const commit = (t: CliTurn) => {
+        setCurrent(t);
+        setTurns((list) => [t, ...list.filter((x) => x.clientTurnKey !== clientTurnKey)]);
+      };
+      const outcome = await streamSse({
+        fetchImpl: (u, init) =>
+          fetch(u, { ...init, credentials: "include" }) as Promise<SseResponseLike>,
+        url,
+        body,
+        signal,
+        allowRetry,
+        onRetryWait: () => {
+          if (!isActive()) return;
+          live = { ...live, reconnecting: true };
+          commit(live);
+        },
+        onFrame: (frame) => {
+          // Pull sessionId from any frame that carries it. Task #484:
+          // also track a *changed* id — when the server rolls a stale
+          // adopted session over (30-min inactivity), later turns must
+          // continue the rolled-over session, not re-send the old id.
+          const sid = (frame.data as { sessionId?: string }).sessionId;
+          if (sid) setSessionId((prev) => (sid !== prev ? sid : prev));
+          const prevNavPath = live.navigatedTo ?? null;
+          live = { ...applyFrame(live, frame), reconnecting: false };
+          // Task #495 — fire the consumer's auto-navigation callback
+          // exactly once per unique destination per turn. Skipped when
+          // the stream is no longer active so a stale turn can't yank
+          // the user around after a newer submit.
+          const navResult = tryFireNavigation({
+            prevNavPath,
+            navigateTo: live.navigateTo,
+            isActive,
+            onNavigate,
+          });
+          if (navResult.fired) {
+            live = { ...live, navigatedTo: navResult.navigatedTo };
           }
-        }
-      } catch (e) {
-        if ((e as { name?: string }).name === "AbortError") {
+          if (!isActive()) return;
+          commit(live);
+          if (frame.type === "async_dispatched" && onAsync) {
+            const d = frame.data as { jobId?: string; turnId?: string };
+            onAsync(d.jobId ?? "", d.turnId ?? "");
+          }
+        },
+      });
+      switch (outcome.kind) {
+        case "done":
+          return;
+        case "aborted": {
           // Task #24 — only an explicit user cancel maps to a
           // "cancelled" turn. Supersede aborts (newer submit) and
           // duplicate-confirm aborts are dropped silently; publishing
           // "cancelled" for those was a client-side hallucination while
           // the server write might still be committing.
-          const outcome = abortOutcome({
+          const mapped = abortOutcome({
             isActiveTurn: isActive(),
             userCancelRequested: userCancelRef.current,
           });
           userCancelRef.current = false;
-          if (outcome === "drop") return;
-          live = { ...live, status: "cancelled" };
-        } else {
+          if (mapped === "drop") return;
+          live = { ...live, status: "cancelled", reconnecting: false };
+          commit(live);
+          return;
+        }
+        case "http_error": {
           if (!isActive()) return;
           live = {
             ...live,
             status: "error",
-            error: { code: "stream_failed", message: (e as Error).message },
+            reconnecting: false,
+            error: { code: `http_${outcome.status}`, message: outcome.statusText },
+            ...(outcome.transient ? { errorKind: "network" as const } : {}),
           };
+          commit(live);
+          return;
         }
-        setCurrent(live);
-        setTurns((t) => [live, ...t.filter((x) => x.clientTurnKey !== clientTurnKey)]);
+        case "network_error": {
+          if (!isActive()) return;
+          live = {
+            ...live,
+            status: "error",
+            reconnecting: false,
+            error: {
+              code: outcome.receivedFrame ? "stream_failed" : "network",
+              message: outcome.message,
+            },
+            ...(outcome.receivedFrame ? {} : { errorKind: "network" as const }),
+          };
+          commit(live);
+          return;
+        }
       }
     },
-    [sessionId, onAsync, onNavigate],
+    [onAsync, onNavigate],
   );
 
   const submit = useCallback(
@@ -777,7 +346,9 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         prompt: args.prompt,
         status: "streaming",
         startedAt: Date.now(),
+        text: "",
         trace: [],
+        toolResults: [],
       };
       setCurrent(seed);
       setTurns((t) => [seed, ...t]);
@@ -787,48 +358,30 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
       // locale is the canonical default.
       const wrappedPrompt = `${localeInstruction(locale)}\n\n${args.prompt}`;
 
-      try {
-        const r = await fetch("/api/atelier/cli/turn", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-          body: JSON.stringify({
-            sessionId,
-            prompt: wrappedPrompt,
-            attachmentIds: args.attachmentIds ?? [],
-            pageContext: args.pageContext ?? null,
-            dryRun: args.dryRun ?? false,
-            clientTurnKey,
-            intent: args.intent ?? null,
-            continuesTurnId: args.continuesTurnId ?? null,
-            clarificationValues: args.clarificationValues ?? null,
-            timezone: deviceTimeZone(),
-          }),
-          signal: ctrl.signal,
-        });
-        if (!r.ok) {
-          const err: CliTurn = {
-            ...seed,
-            status: "error",
-            error: { code: `http_${r.status}`, message: r.statusText },
-          };
-          setCurrent(err);
-          setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== clientTurnKey)]);
-          return;
-        }
-        await consumeStream(r, clientTurnKey, seed);
-      } catch (e) {
-        if ((e as { name?: string }).name === "AbortError") return;
-        const err: CliTurn = {
-          ...seed,
-          status: "error",
-          error: { code: "network", message: (e as Error).message },
-        };
-        setCurrent(err);
-        setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== clientTurnKey)]);
-      }
+      await runTurnStream({
+        url: "/api/atelier/cli/turn",
+        body: {
+          sessionId,
+          prompt: wrappedPrompt,
+          attachmentIds: args.attachmentIds ?? [],
+          pageContext: args.pageContext ?? null,
+          dryRun: args.dryRun ?? false,
+          clientTurnKey,
+          intent: args.intent ?? null,
+          continuesTurnId: args.continuesTurnId ?? null,
+          clarificationValues: args.clarificationValues ?? null,
+          timezone: deviceTimeZone(),
+        },
+        clientTurnKey,
+        seed,
+        signal: ctrl.signal,
+        // /cli/turn dedupes on sessionId + clientTurnKey server-side,
+        // so a transient 502 while the API server restarts is safe to
+        // auto-resend (Task #643 — retry policy shared with mobile).
+        allowRetry: true,
+      });
     },
-    [sessionId, locale, consumeStream],
+    [sessionId, locale, runTurnStream],
   );
 
   const confirm = useCallback(
@@ -881,7 +434,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         const turn = currentRef.current!;
         // Supersede any stale prior stream (the propose stream is
         // normally finished by now). Not a user cancel — the abort is
-        // dropped silently by consumeStream's mapping.
+        // dropped silently by the stream-outcome mapping.
         userCancelRef.current = false;
         abortRef.current?.abort();
         const ctrl = new AbortController();
@@ -891,55 +444,34 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
         activeTurnKeyRef.current = turn.clientTurnKey;
         const seed: CliTurn = { ...turn, status: "streaming", trace: [...turn.trace] };
         setCurrent(seed);
-        try {
-          const r = await fetch(
-            `/api/atelier/cli/turn/${encodeURIComponent(turn.serverTurnId!)}/confirm`,
-            {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-              body: JSON.stringify({
-                typedName: typedName ?? null,
-                // Forwarded for #334/#335 enforcement. Current server
-                // confirm route ignores unknown fields (see cliRoutes.ts:
-                // body destructures only `typedName`).
-                excludedStepIndexes: excludedStepIndexes ?? [],
-                planEdits: planEdits ?? {},
-              }),
-              signal: ctrl.signal,
-            },
-          );
-          if (!r.ok) {
-            const err: CliTurn = {
-              ...seed,
-              status: "error",
-              error: { code: `http_${r.status}`, message: r.statusText },
-            };
-            setCurrent(err);
-            setTurns((t) => [err, ...t.filter((x) => x.clientTurnKey !== seed.clientTurnKey)]);
-            return;
-          }
-          await consumeStream(r, seed.clientTurnKey, seed);
-        } catch (e) {
-          if ((e as { name?: string }).name === "AbortError") return;
-          const err: CliTurn = {
-            ...seed,
-            status: "error",
-            error: { code: "network", message: (e as Error).message },
-          };
-          setCurrent(err);
-        }
+        await runTurnStream({
+          url: `/api/atelier/cli/turn/${encodeURIComponent(turn.serverTurnId!)}/confirm`,
+          body: {
+            typedName: typedName ?? null,
+            // Forwarded for #334/#335 enforcement. Current server
+            // confirm route ignores unknown fields (see cliRoutes.ts:
+            // body destructures only `typedName`).
+            excludedStepIndexes: excludedStepIndexes ?? [],
+            planEdits: planEdits ?? {},
+          },
+          clientTurnKey: seed.clientTurnKey,
+          seed,
+          signal: ctrl.signal,
+          // NEVER auto-retry a confirm — it performs the write. A
+          // failed confirm surfaces an error instead of being resent.
+          allowRetry: false,
+        });
       } finally {
         confirmingRef.current = false;
         setConfirming(false);
       }
     },
-    [consumeStream],
+    [runTurnStream],
   );
 
   const cancel = useCallback(async (): Promise<void> => {
     // Task #24 — explicit user cancel: mark the intent BEFORE aborting
-    // so consumeStream's AbortError mapping publishes "cancelled".
+    // so the stream-outcome mapping publishes "cancelled".
     if (!current?.serverTurnId) {
       userCancelRef.current = true;
       abortRef.current?.abort();

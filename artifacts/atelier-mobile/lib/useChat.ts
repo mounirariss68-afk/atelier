@@ -12,12 +12,14 @@ import {
   uploadCliAttachment,
 } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
+import { applyFrame, resetForRestream, type ChatTurn, type ResultCard } from "@/lib/chatFrames";
 import {
-  applyFrame,
-  parseFrame,
-  type ChatTurn,
-  type ResultCard,
-} from "@/lib/chatFrames";
+  deviceTimeZone,
+  restoreClarificationTurn,
+  streamSse,
+  type PendingClarificationPayload,
+  type SseResponseLike,
+} from "@workspace/chat-core";
 
 export type { CliSessionMeta } from "@/lib/api";
 export type {
@@ -31,39 +33,6 @@ export type {
   Trace,
   TurnStatus,
 } from "@/lib/chatFrames";
-
-/** Transient upstream statuses worth auto-retrying (proxy 502 while the API server restarts, etc.). */
-function isTransientStatus(status: number): boolean {
-  return status === 502 || status === 503 || status === 504;
-}
-
-const RETRY_DELAYS_MS = [1_500, 3_000, 5_000];
-
-/** Task #581 — device IANA timezone sent with each turn so the server
- * interprets typed times ("move my 7am") the way the user sees them. */
-function deviceTimeZone(): string | null {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => resolve(), ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        const err = new Error("Aborted");
-        (err as { name: string }).name = "AbortError";
-        reject(err);
-      },
-      { once: true },
-    );
-  });
-}
 
 function uuid() {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -115,6 +84,9 @@ export function useChat() {
   const [sessions, setSessions] = useState<CliSessionMeta[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const sessionRef = useRef<string | null>(null);
+  /** True once any live activity (submit/load) touched the transcript —
+   * the pending-clarification rehydration must never clobber it. */
+  const activityRef = useRef(false);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -168,6 +140,45 @@ export function useChat() {
     setTurns((list) => list.map((t) => (t.key === key ? updater(t) : t)));
   }, []);
 
+  // Task #643 — clarification durability (shared with web): a pending
+  // question used to live only in memory, so an app relaunch made it
+  // vanish while the server kept waiting for an answer. On mount, ask
+  // the server whether the persona's most recent turn is still paused
+  // on a clarification and, if so, restore the turn + its session so
+  // the question card renders again and the answer resumes the
+  // original request (continuesTurnId).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${API_BASE}/api/atelier/cli/turns/pending-clarification`,
+          { headers: authHeader() },
+        );
+        if (!res.ok) return;
+        const j = (await res.json()) as {
+          pending?: PendingClarificationPayload | null;
+        };
+        if (!alive || !j?.pending) return;
+        // Never clobber a transcript the user already started or loaded.
+        if (activityRef.current || sessionRef.current) return;
+        const restored = restoreClarificationTurn(j.pending);
+        sessionRef.current = restored.sessionId;
+        setSessionId(restored.sessionId);
+        setTurns((prev) =>
+          prev.length > 0
+            ? prev
+            : [{ ...restored.core, key: uuid(), prompt: restored.prompt }],
+        );
+      } catch {
+        // Best-effort — absence of rehydration must never break chat.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const runStream = useCallback(
     async (url: string, body: unknown, key: string, opts?: { allowRetry?: boolean }) => {
       // Only retry routes that are dedupe-safe server-side: /cli/turn dedupes
@@ -177,97 +188,67 @@ export function useChat() {
       setBusy(true);
       const ctrl = new AbortController();
       abortRef.current = ctrl;
-      // Auto-retry transient failures (proxy 502/503/504 or a network error
-      // before any SSE frame arrived — e.g. the dev API server mid-restart).
-      // Never retry once frames have been processed: the server may already
-      // be acting on the turn.
-      let attempt = 0;
       try {
-        for (;;) {
-          let receivedFrame = false;
-          try {
-            const res = await expoFetch(`${API_BASE}${url}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "text/event-stream",
-                ...authHeader(),
-              },
-              body: JSON.stringify(body),
-              signal: ctrl.signal,
-            });
-            if (res.status === 401) {
+        const outcome = await streamSse({
+          fetchImpl: (u, init) =>
+            expoFetch(u, {
+              ...init,
+              headers: { ...init.headers, ...authHeader() },
+            }) as unknown as Promise<SseResponseLike>,
+          url: `${API_BASE}${url}`,
+          body,
+          signal: ctrl.signal,
+          allowRetry,
+          onHttpStatus: (status) => {
+            if (status === 401) {
               triggerUnauthorized();
-              return;
+              return "handled";
             }
-            if (!res.ok || !res.body) {
-              if (allowRetry && isTransientStatus(res.status) && attempt < RETRY_DELAYS_MS.length) {
-                upsert(key, (t) => ({ ...t, reconnecting: true }));
-                await sleep(RETRY_DELAYS_MS[attempt], ctrl.signal);
-                attempt += 1;
-                continue;
-              }
-              upsert(key, (t) => ({
-                ...t,
-                status: "error",
-                reconnecting: false,
-                error: `HTTP ${res.status}`,
-                errorKind: isTransientStatus(res.status) ? "network" : undefined,
-              }));
-              return;
+            return undefined;
+          },
+          onRetryWait: () => {
+            upsert(key, (t) => ({ ...t, reconnecting: true }));
+          },
+          onFrame: (frame) => {
+            const sid = (frame.data as { sessionId?: string }).sessionId;
+            if (sid && !sessionRef.current) {
+              sessionRef.current = sid;
+              setSessionId(sid);
             }
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder("utf-8");
-            let buffer = "";
-            while (true) {
-              const { value, done } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              let sep: number;
-              while ((sep = buffer.indexOf("\n\n")) !== -1) {
-                const block = buffer.slice(0, sep);
-                buffer = buffer.slice(sep + 2);
-                const frame = parseFrame(block);
-                if (!frame) continue;
-                receivedFrame = true;
-                const sid = (frame.data as { sessionId?: string }).sessionId;
-                if (sid && !sessionRef.current) {
-                  sessionRef.current = sid;
-                  setSessionId(sid);
-                }
-                upsert(key, (t) => ({ ...applyFrame(t, frame.type, frame.data), reconnecting: false }));
-              }
-            }
+            upsert(key, (t) => ({ ...applyFrame(t, frame), reconnecting: false }));
+          },
+        });
+        switch (outcome.kind) {
+          case "done":
             return;
-          } catch (e) {
-            if ((e as { name?: string }).name === "AbortError") {
-              upsert(key, (t) =>
-                t.status === "streaming" ? { ...t, status: "cancelled", reconnecting: false } : t,
-              );
-              return;
-            }
-            if (allowRetry && !receivedFrame && attempt < RETRY_DELAYS_MS.length) {
-              upsert(key, (t) => ({ ...t, reconnecting: true }));
-              try {
-                await sleep(RETRY_DELAYS_MS[attempt], ctrl.signal);
-              } catch {
-                upsert(key, (t) =>
-                  t.status === "streaming" ? { ...t, status: "cancelled", reconnecting: false } : t,
-                );
-                return;
-              }
-              attempt += 1;
-              continue;
-            }
+          case "aborted":
+            upsert(key, (t) =>
+              t.status === "streaming"
+                ? { ...t, status: "cancelled", reconnecting: false }
+                : t,
+            );
+            return;
+          case "http_error":
             upsert(key, (t) => ({
               ...t,
               status: "error",
               reconnecting: false,
-              error: (e as Error).message,
-              errorKind: receivedFrame ? undefined : "network",
+              error: { code: `http_${outcome.status}`, message: `HTTP ${outcome.status}` },
+              errorKind: outcome.transient ? "network" : undefined,
             }));
             return;
-          }
+          case "network_error":
+            upsert(key, (t) => ({
+              ...t,
+              status: "error",
+              reconnecting: false,
+              error: {
+                code: outcome.receivedFrame ? "stream_failed" : "network",
+                message: outcome.message,
+              },
+              errorKind: outcome.receivedFrame ? undefined : "network",
+            }));
+            return;
         }
       } finally {
         setBusy(false);
@@ -278,6 +259,7 @@ export function useChat() {
 
   const submit = useCallback(
     async (prompt: string, attachments?: { id: string; name: string }[]) => {
+      activityRef.current = true;
       const key = uuid();
       const seed: ChatTurn = {
         key,
@@ -308,6 +290,7 @@ export function useChat() {
 
   const answerClarification = useCallback(
     async (key: string, values: Record<string, string>) => {
+      activityRef.current = true;
       const turn = turns.find((t) => t.key === key);
       const question = turn?.clarification?.question ?? "";
       const prompt = Object.values(values).join(", ") || question;
@@ -315,15 +298,7 @@ export function useChat() {
       // reuses this turn key, so keeping old text/trace/toolResults made
       // every re-asked clarification APPEND duplicate narration and
       // stack duplicate result cards.
-      upsert(key, (t) => ({
-        ...t,
-        status: "streaming",
-        clarification: undefined,
-        text: "",
-        trace: [],
-        toolResults: [],
-        result: undefined,
-      }));
+      upsert(key, (t) => resetForRestream(t));
       await runStream(
         "/api/atelier/cli/turn",
         {
@@ -359,6 +334,7 @@ export function useChat() {
 
   const confirm = useCallback(
     async (key: string, typedName?: string) => {
+      activityRef.current = true;
       const turn = turns.find((t) => t.key === key);
       const turnId = turn?.pending?.turnId ?? turn?.serverTurnId;
       if (!turnId) return;
@@ -367,16 +343,9 @@ export function useChat() {
       // streams into this same turn key; keeping the pre-confirm preview
       // tool_result + narration made every confirmed write render its
       // result card (and narration) twice.
-      upsert(key, (t) => ({
-        ...t,
-        status: "streaming",
-        pending: undefined,
-        text: "",
-        trace: [],
-        toolResults: [],
-        result: undefined,
-      }));
+      upsert(key, (t) => resetForRestream(t));
       await runStream(`/api/atelier/cli/turn/${turnId}/confirm`, { typedName }, key, {
+        // NEVER auto-retry a confirm — it performs the write.
         allowRetry: false,
       });
     },
@@ -407,6 +376,7 @@ export function useChat() {
   }, []);
 
   const newChat = useCallback(() => {
+    activityRef.current = true;
     abortRef.current?.abort();
     sessionRef.current = null;
     setSessionId(null);
@@ -414,6 +384,7 @@ export function useChat() {
   }, []);
 
   const loadSession = useCallback(async (id: string) => {
+    activityRef.current = true;
     abortRef.current?.abort();
     sessionRef.current = id;
     setSessionId(id);

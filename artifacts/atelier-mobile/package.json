@@ -59,6 +59,7 @@
   },
   "dependencies": {
     "@react-native-community/datetimepicker": "8.4.4",
+    "@workspace/chat-core": "workspace:*",
     "buffer": "^6.0.3",
     "expo-camera": "~17.0.10",
     "expo-document-picker": "~14.0.8",

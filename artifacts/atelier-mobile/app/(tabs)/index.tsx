@@ -40,6 +40,7 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
 import { AttachmentRejectedError, MAX_ATTACHMENT_BYTES } from "@/lib/api";
+import { resolveClarificationFields } from "@/lib/chatFrames";
 import { type ChatTurn, useCapabilityShapes, useChat } from "@/lib/useChat";
 
 const KNOWN_ATTACH_REJECTIONS = new Set([
@@ -131,7 +132,11 @@ function ClarificationCard({
   const rtl = useRTL();
   const scheme = useThemeScheme();
   const [values, setValues] = useState<Record<string, string>>({});
-  const fields = turn.clarification?.fields ?? [];
+  // Task #643 — the shared reducer no longer fabricates a single field
+  // for suggestion-only clarifications; resolve at render time.
+  const fields = turn.clarification
+    ? resolveClarificationFields(turn.clarification)
+    : [];
   return (
     <Card style={{ marginTop: 8, gap: 12 }}>
       {turn.clarification?.question ? (
@@ -467,7 +472,10 @@ function TurnBlock({
 
       {turn.trace.length > 0 && turn.status === "streaming" ? (
         <View style={{ gap: 2 }}>
-          {turn.trace.slice(-3).map((tr, i) => (
+          {/* Task #643 — narration now also lands in the trace (shared
+              reducer); it already renders as the reply body, so the
+              activity ticker keeps only step/tool breadcrumbs. */}
+          {turn.trace.filter((tr) => tr.kind !== "narration").slice(-3).map((tr, i) => (
             <Text
               key={i}
               style={{
@@ -547,7 +555,7 @@ function TurnBlock({
           >
             {turn.errorKind === "network"
               ? t("chat.serverUnreachable")
-              : (turn.error ?? t("common.error"))}
+              : (turn.error?.message ?? t("common.error"))}
           </Text>
           <Button
             label={t("chat.retry")}
