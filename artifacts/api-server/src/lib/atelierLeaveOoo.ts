@@ -46,6 +46,7 @@ import {
 } from "./atelierHolidays.js";
 import { loadHolidayOverrides } from "./atelierHolidayOverrides.js";
 import { assertAuditAction } from "../routes/atelier/auditContract.js";
+import { noteLocalCalendarChange } from "./msCalendarSync.js";
 import { logger } from "./logger";
 
 /** Hidden marker embedded in auto-replies we set, so we can tell our own
@@ -311,6 +312,8 @@ export async function applyLeaveOoo(leaveId: string): Promise<void> {
         .update(atelierLeaveRequests)
         .set({ msOofEventId: eventId, updatedAt: new Date() })
         .where(eq(atelierLeaveRequests.id, leave.id));
+      // Task #629 — write-through: OOF block landed on the user's calendar.
+      noteLocalCalendarChange([leave.userId]);
     }
 
     // 2) Automatic replies — needs MailboxSettings scope.
@@ -366,6 +369,8 @@ export async function clearLeaveOoo(
         .update(atelierLeaveRequests)
         .set({ msOofEventId: null, updatedAt: new Date() })
         .where(eq(atelierLeaveRequests.id, leave.id));
+      // Task #629 — write-through: OOF block removed from the calendar.
+      noteLocalCalendarChange([leave.userId]);
     }
     if (mode === "shorten" && leave.status === "approved") {
       const today = todayYmd();
@@ -380,6 +385,8 @@ export async function clearLeaveOoo(
           .update(atelierLeaveRequests)
           .set({ msOofEventId: ev.id, updatedAt: new Date() })
           .where(eq(atelierLeaveRequests.id, leave.id));
+        // Task #629 — write-through: replacement OOF block created.
+        noteLocalCalendarChange([leave.userId]);
       }
     }
 

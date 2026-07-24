@@ -9,6 +9,7 @@ import { runPaymentProposer } from "./atelier-payment-proposer";
 import { runWinLossOverdueScan } from "../routes/atelier/winLossRoutes";
 import { cleanupExpiredSessions } from "./auth/session";
 import { runMsMeetingAutolog } from "./msMeetingAutolog";
+import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -39,6 +40,11 @@ let sessionCleanupTask: ScheduledTask | null = null;
 let msAutologTask: ScheduledTask | null = null;
 let billingOrchestratorTask: ScheduledTask | null = null;
 let cashForecasterTask: ScheduledTask | null = null;
+let msCalSyncTask: ScheduledTask | null = null;
+
+// Task #629 — hourly: renew Graph calendar subscriptions (max ~3-day
+// lifetime), roll cache windows forward, and safety-sync stale caches.
+const MS_CAL_SYNC_CRON = process.env.MS_CAL_SYNC_CRON ?? "15 * * * *";
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -301,6 +307,35 @@ export function startScheduler(): void {
       "Invalid CASH_FORECASTER_CRON expression, Cash Flow Forecaster not scheduled",
     );
   }
+
+  // Task #629 — Graph calendar subscription maintenance + safety sync.
+  if (cron.validate(MS_CAL_SYNC_CRON)) {
+    msCalSyncTask = cron.schedule(
+      MS_CAL_SYNC_CRON,
+      async () => {
+        try {
+          await runCalendarSubscriptionMaintenance();
+        } catch (err) {
+          logger.error({ err }, "MS calendar subscription maintenance encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: MS_CAL_SYNC_CRON }, "MS calendar sync scheduler started");
+  } else {
+    logger.error(
+      { cron: MS_CAL_SYNC_CRON },
+      "Invalid MS_CAL_SYNC_CRON expression, MS calendar sync not scheduled",
+    );
+  }
+
+  // Boot pass: ensure subscriptions exist for already-connected users
+  // shortly after startup (delayed so boot isn't slowed by Graph calls).
+  setTimeout(() => {
+    runCalendarSubscriptionMaintenance().catch((err) => {
+      logger.error({ err }, "MS calendar boot maintenance encountered an error");
+    });
+  }, 10_000).unref?.();
 }
 
 export function stopScheduler(): void {
@@ -348,6 +383,11 @@ export function stopScheduler(): void {
     cashForecasterTask.stop();
     cashForecasterTask = null;
     logger.info("Cash Flow Forecaster scheduler stopped");
+  }
+  if (msCalSyncTask) {
+    msCalSyncTask.stop();
+    msCalSyncTask = null;
+    logger.info("MS calendar sync scheduler stopped");
   }
 }
 

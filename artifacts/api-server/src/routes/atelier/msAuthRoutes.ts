@@ -52,6 +52,13 @@ import {
 } from "../../lib/msGraph.js";
 import { runMsMeetingAutolog } from "../../lib/msMeetingAutolog.js";
 import {
+  ensureCalendarSubscription,
+  enqueueCalendarSync,
+  getCachedCalendar,
+  getCalendarChangedAt,
+  removeCalendarSubscription,
+} from "../../lib/msCalendarSync.js";
+import {
   MeetingLifecycleError,
   SchedulingError,
   canManageInternalMeeting,
@@ -255,6 +262,19 @@ async function completeConnection(args: {
     payload: { msEmail: email },
     summary: `${me.name} connected Microsoft 365 (${email})`,
   });
+  // Task #629 — establish the Graph change-notification subscription and
+  // warm the rolling calendar cache right away (fire-and-forget: connect
+  // must succeed even if Graph webhooks can't be set up, e.g. in dev).
+  void (async () => {
+    try {
+      const conn = await loadConnection(me);
+      if (!conn) return;
+      const sub = await ensureCalendarSubscription(conn);
+      if (sub.ok) enqueueCalendarSync(me.id, "connect");
+    } catch (e) {
+      console.error(`[mscal] post-connect subscription setup failed: ${String(e).slice(0, 300)}`);
+    }
+  })();
   return { ok: true };
 }
 
@@ -512,6 +532,13 @@ router.delete("/me/msconnection", async (req, res, next) => {
       res.json({ ok: true, disconnected: false });
       return;
     }
+    // Task #629 — tear down the Graph subscription + cached calendar BEFORE
+    // the connection row disappears (the Graph-side delete needs the token).
+    try {
+      await removeCalendarSubscription(me.id);
+    } catch (e) {
+      console.warn(`[mscal] disconnect cleanup failed (best-effort): ${String(e).slice(0, 200)}`);
+    }
     // Microsoft v2 has no server-side refresh-token revocation endpoint for
     // confidential clients acting on delegated tokens; deleting the row
     // destroys our only copy, and the token expires on Microsoft's side.
@@ -659,10 +686,19 @@ router.get("/me/calendar", async (req, res, next) => {
       return;
     }
 
-    // Fresh access token from the stored refresh token (persist rotation).
+    // Task #629 — serve from the rolling calendar cache when it can answer
+    // (window covered, recent successful sync, live webhook subscription).
+    // Falls back to the live Graph fetch otherwise (dev, out-of-window).
     let events: MsCalendarEvent[];
     let accessTokenForView = "";
-    try {
+    let cachedHolidays:
+      | Array<{ event: MsCalendarEvent; calendarName: string | null }>
+      | null = null;
+    const cached = await getCachedCalendar(me.id, start, end);
+    if (cached) {
+      events = cached.events;
+      cachedHolidays = cached.holidays;
+    } else try {
       const tokens = await refreshTokens(decryptToken(row.encRefreshToken));
       accessTokenForView = tokens.accessToken;
       if (tokens.refreshToken) {
@@ -832,7 +868,26 @@ router.get("/me/calendar", async (req, res, next) => {
 
     // Task #602 — merge subscribed Outlook holiday calendars (best-effort:
     // a Graph hiccup here must never break the main calendar read).
-    if (!accountIdFilter) {
+    // Task #629 — the cached path already has holiday rows in the store.
+    if (!accountIdFilter && cachedHolidays) {
+      for (const { event: ev, calendarName } of cachedHolidays) {
+        if (ev.isCancelled || !ev.start?.dateTime || !ev.end?.dateTime) continue;
+        meetings.push({
+          id: ev.id,
+          subject: ev.subject ?? "(holiday)",
+          start: `${ev.start.dateTime}${ev.start.dateTime.endsWith("Z") ? "" : "Z"}`,
+          end: `${ev.end.dateTime}${ev.end.dateTime.endsWith("Z") ? "" : "Z"}`,
+          isAllDay: Boolean(ev.isAllDay),
+          location: calendarName,
+          joinUrl: null,
+          webLink: null,
+          organizerEmail: null,
+          attendees: [],
+          matches: [],
+          kind: "holiday",
+        });
+      }
+    } else if (!accountIdFilter) {
       try {
         const cals = await listCalendars(accessTokenForView);
         const holidayCals = cals.filter((c) => /holiday|tatil/i.test(c.name ?? ""));
@@ -876,6 +931,25 @@ router.get("/me/calendar", async (req, res, next) => {
       a.start.localeCompare(b.start),
     );
     res.json({ configured: true, connected: true, meetings: merged });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------
+// Task #629 — GET /me/calendar/changed — lightweight changed-since signal
+// for mobile polling: the app compares changedAt against the value it saw
+// on its last full calendar fetch and re-syncs (reminders included) when
+// it moved. Cheap single-row read; deliberately NOT in the OpenAPI spec
+// (clients use raw fetch, same as the internal-meeting lifecycle routes).
+// ------------------------------------------------------------------
+// @cli-skip: personal Microsoft 365 surface (self-scope, no CLI parity)
+router.get("/me/calendar/changed", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const changedAt = await getCalendarChangedAt(me.id);
+    res.json({ changedAt: changedAt?.toISOString() ?? null });
   } catch (err) {
     next(err);
   }

@@ -129,6 +129,103 @@ export const atelierMsProvisioning = pgTable(
   ],
 );
 
+/**
+ * Task #629 — Microsoft Graph calendar change-notification subscriptions.
+ *
+ * One row per connected user. The clientState is a per-subscription random
+ * secret Graph echoes back in every notification — the webhook endpoint
+ * drops anything that doesn't match. Subscriptions expire after ~3 days
+ * and are renewed by the scheduler job.
+ */
+export const atelierMsCalSubscriptions = pgTable(
+  "atelier_ms_cal_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    /** FK → atelier_users.id (whose calendar the subscription watches). */
+    userId: text("user_id").notNull(),
+    /** Graph subscription id. */
+    subscriptionId: text("subscription_id").notNull(),
+    /** Random secret echoed back by Graph in each notification. */
+    clientState: text("client_state").notNull(),
+    /** Graph resource path (e.g. "/me/events"). */
+    resource: text("resource").notNull().default("/me/events"),
+    expiresAt: timestamp("expires_at").notNull(),
+    lastRenewedAt: timestamp("last_renewed_at"),
+    /** Last create/renew failure (cleared on success). */
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_ms_cal_subscriptions_user").on(t.orgId, t.userId),
+    index("idx_atelier_ms_cal_subscriptions_sub").on(t.subscriptionId),
+  ],
+);
+
+/**
+ * Task #629 — per-user calendar sync state for the rolling cache.
+ * deltaLink is the Graph calendarView delta token for the cached window;
+ * changedAt is bumped on every reconciled change (webhook, write-through)
+ * so clients can cheaply poll "did my calendar change?".
+ */
+export const atelierMsCalSyncState = pgTable(
+  "atelier_ms_cal_sync_state",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(),
+    /** Graph delta link for the next incremental sync (null → full sync). */
+    deltaLink: text("delta_link"),
+    /** The window the cache (and delta token) covers. */
+    windowStart: timestamp("window_start").notNull(),
+    windowEnd: timestamp("window_end").notNull(),
+    /** Bumped whenever cached events change — the mobile changed-since signal. */
+    changedAt: timestamp("changed_at").notNull().defaultNow(),
+    lastSyncedAt: timestamp("last_synced_at"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_ms_cal_sync_state_user").on(t.orgId, t.userId),
+  ],
+);
+
+/**
+ * Task #629 — cached Graph calendar events (rolling window per user).
+ * One row per calendarView occurrence (recurring series arrive expanded,
+ * so a single cancelled/rescheduled occurrence maps to exactly one row).
+ * `payload` is the raw Graph event (same $select as the live fetch) so the
+ * read path can run the identical CRM-matching pipeline. `source` is
+ * "calendar" for delta-synced default-calendar events and "holiday" for
+ * rows copied from subscribed holiday calendars at full-sync time.
+ */
+export const atelierMsCalEvents = pgTable(
+  "atelier_ms_cal_events",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(),
+    /** Graph event id (per-user id space; occurrence ids for recurrences). */
+    msEventId: text("ms_event_id").notNull(),
+    iCalUid: text("ical_uid"),
+    /** "calendar" | "holiday" (holiday-calendar name in holidayCalendarName). */
+    source: text("source").notNull().default("calendar"),
+    holidayCalendarName: text("holiday_calendar_name"),
+    startAt: timestamp("start_at").notNull(),
+    endAt: timestamp("end_at").notNull(),
+    /** Raw Graph event JSON (MsCalendarEvent shape). */
+    payload: jsonb("payload").notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("uq_atelier_ms_cal_events_event").on(t.orgId, t.userId, t.msEventId),
+    index("idx_atelier_ms_cal_events_window").on(t.userId, t.startAt),
+  ],
+);
+
 export const atelierMsConnections = pgTable(
   "atelier_ms_connections",
   {

@@ -689,6 +689,120 @@ export async function listCalendars(accessToken: string): Promise<MsCalendarInfo
   return out;
 }
 
+// ------------------------------------------------------------------
+// Task #629 — Graph change-notification subscriptions + delta queries
+// for the server-side rolling calendar cache.
+// ------------------------------------------------------------------
+
+export interface MsGraphSubscription {
+  id: string;
+  resource?: string;
+  expirationDateTime?: string;
+  clientState?: string;
+}
+
+/** Create a change-notification subscription on the caller's events. */
+export async function createGraphSubscription(
+  accessToken: string,
+  args: {
+    notificationUrl: string;
+    clientState: string;
+    /** ISO expiry — calendar subscriptions max out around 3 days. */
+    expirationDateTime: string;
+    resource?: string;
+  },
+): Promise<MsGraphSubscription> {
+  return graphPost<MsGraphSubscription>(accessToken, "/subscriptions", {
+    changeType: "created,updated,deleted",
+    notificationUrl: args.notificationUrl,
+    resource: args.resource ?? "/me/events",
+    expirationDateTime: args.expirationDateTime,
+    clientState: args.clientState,
+  });
+}
+
+/** Extend an existing subscription's expiry. */
+export async function renewGraphSubscription(
+  accessToken: string,
+  subscriptionId: string,
+  expirationDateTime: string,
+): Promise<MsGraphSubscription> {
+  return graphPatch<MsGraphSubscription>(
+    accessToken,
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { expirationDateTime },
+  );
+}
+
+/** Delete a subscription (404 = already gone, treated as success). */
+export async function deleteGraphSubscription(
+  accessToken: string,
+  subscriptionId: string,
+): Promise<void> {
+  await graphDelete(
+    accessToken,
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  );
+}
+
+/** Delta event: removals arrive as tombstones with an `@removed` marker. */
+export type MsCalendarDeltaEvent = MsCalendarEvent & {
+  "@removed"?: { reason?: string };
+};
+
+export interface MsCalendarDeltaPage {
+  events: MsCalendarDeltaEvent[];
+  deltaLink: string | null;
+}
+
+/**
+ * calendarView delta sync. Pass `startIso`/`endIso` for a full (re)sync of
+ * the window, or `deltaLink` for an incremental round. Recurring series
+ * arrive as expanded occurrences, so exception/cancellation items map to
+ * individual event ids. A 410 (gone/`syncStateNotFound`) propagates as
+ * MsGraphError(status=410) — callers must fall back to a full re-sync.
+ */
+export async function getCalendarViewDelta(
+  accessToken: string,
+  args: { startIso: string; endIso: string } | { deltaLink: string },
+): Promise<MsCalendarDeltaPage> {
+  let path: string | null;
+  if ("deltaLink" in args) {
+    path = args.deltaLink.replace(graphBase(), "");
+    if (!path.startsWith("/")) {
+      // Foreign/absolute delta link (e.g. base URL changed) — force resync.
+      throw new MsGraphError("delta-link-unusable", 410, args.deltaLink.slice(0, 200));
+    }
+  } else {
+    const qs = new URLSearchParams({
+      startDateTime: args.startIso,
+      endDateTime: args.endIso,
+    });
+    path = `/me/calendarView/delta?${qs.toString()}`;
+  }
+  const events: MsCalendarDeltaEvent[] = [];
+  let deltaLink: string | null = null;
+  let guard = 0;
+  while (path && guard < 20) {
+    guard += 1;
+    const page: {
+      value?: MsCalendarDeltaEvent[];
+      "@odata.nextLink"?: string;
+      "@odata.deltaLink"?: string;
+    } = await graphGet(accessToken, path);
+    events.push(...(page.value ?? []));
+    if (page["@odata.deltaLink"]) {
+      deltaLink = page["@odata.deltaLink"];
+      path = null;
+    } else {
+      const next = page["@odata.nextLink"];
+      path = next ? next.replace(graphBase(), "") : null;
+      if (path && !path.startsWith("/")) path = null;
+    }
+  }
+  return { events, deltaLink };
+}
+
 /** Calendar view scoped to one specific (non-default) calendar. */
 export async function getCalendarViewForCalendar(
   accessToken: string,

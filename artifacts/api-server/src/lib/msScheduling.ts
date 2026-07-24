@@ -27,6 +27,9 @@ import {
   type MsCalendarEvent,
 } from "./msGraph.js";
 import { logger } from "./logger";
+// Circular at module level (msCalendarSync imports freshAccessToken from
+// here) but safe: both sides only reference each other inside functions.
+import { noteLocalCalendarChange } from "./msCalendarSync.js";
 
 export const DUBAI_UTC_OFFSET_MS = 4 * 3600 * 1000; // fixed, no DST
 export const WORK_START_HOUR = 8; // 08:00 Dubai
@@ -324,6 +327,8 @@ export async function sendInternalInvite(args: {
       attendees: args.attendees,
       online: args.online,
     });
+    // Task #629 — write-through: the organizer's cached calendar changed.
+    noteLocalCalendarChange([args.requesterUserId]);
     return { event, organizerEmail };
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 403) {
@@ -367,6 +372,8 @@ export async function updateInternalInvite(args: {
       subject: args.subject,
       attendees: args.attendees,
     });
+    // Task #629 — write-through: the organizer's cached calendar changed.
+    noteLocalCalendarChange([args.organizerUserId]);
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 404) {
       // Event vanished from the organizer's mailbox (deleted in Outlook).
@@ -406,6 +413,8 @@ export async function cancelInternalInvite(args: {
   );
   try {
     await deleteCalendarEvent(accessToken, args.msEventId);
+    // Task #629 — write-through: the organizer's cached calendar changed.
+    noteLocalCalendarChange([args.organizerUserId]);
   } catch (err) {
     if (err instanceof MsGraphError && err.status === 403) {
       throw new SchedulingError(

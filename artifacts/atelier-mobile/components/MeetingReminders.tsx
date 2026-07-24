@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "@/contexts/I18nContext";
+import { useCalendarChangedPoll } from "@/lib/calendarChanged";
 import {
   loadRemindersEnabled,
   remindersSupported,
@@ -73,10 +74,21 @@ export function MeetingReminders() {
   const conn = useAtelierGetMyMsConnection({
     query: {
       queryKey: getAtelierGetMyMsConnectionQueryKey(),
-      enabled: remindersSupported() && enabled,
+      // Task #629 — always resolve connection state (not just when
+      // reminders are on): the changed-since poll below keeps the
+      // Meetings tab fresh independently of the reminder toggle.
+      enabled: true,
     },
   });
   const connected = Boolean(conn.data?.configured && conn.data?.connected);
+
+  // Task #629 — near-real-time refresh: poll the cheap changed-since
+  // signal and invalidate every cached calendar query (this component's
+  // reminder window AND the Meetings tab's views) when the server-side
+  // cache changes. Gated on the connection only, so the Meetings tab
+  // stays fresh even when reminders are switched off.
+  useCalendarChangedPoll(connected);
+
   const win = useMemo(() => windowIso(7), []);
   const calendar = useAtelierGetMyCalendar(win, {
     query: {

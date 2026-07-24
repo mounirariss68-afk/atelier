@@ -26,6 +26,13 @@ import {
   fmtDubai,
   updateInternalInvite,
 } from "./msScheduling.js";
+import { noteLocalCalendarChange } from "./msCalendarSync.js";
+
+/** Task #629 — everyone whose mailbox copy of this meeting changes:
+ *  the organizer plus every roster attendee. */
+function affectedUserIds(row: InternalMeetingRow): Array<string | null | undefined> {
+  return [row.createdByUserId, ...(row.internalAttendees ?? []).map((a) => a.userId)];
+}
 
 export type InternalMeetingRow = typeof atelierMeetings.$inferSelect;
 
@@ -186,6 +193,8 @@ export async function rescheduleInternalMeeting(args: {
     },
     summary: `${args.actor.name} rescheduled ${row.parentType === "internal" ? "internal " : ""}meeting "${row.title}" to ${whenLabel}.`,
   });
+  // Task #629 — write-through: attendee mailbox copies moved too.
+  noteLocalCalendarChange(affectedUserIds(row));
   const [fresh] = await db
     .select()
     .from(atelierMeetings)
@@ -328,6 +337,8 @@ export async function cancelInternalMeeting(args: {
     },
     summary: `${args.actor.name} cancelled ${row.parentType === "internal" ? "internal " : ""}meeting "${row.title}".`,
   });
+  // Task #629 — write-through: cancellation clears attendee copies too.
+  noteLocalCalendarChange(affectedUserIds(row));
   return { meeting: row, graphCancelled };
 }
 

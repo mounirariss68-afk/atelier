@@ -9,6 +9,7 @@ import salonRouter from "./salon";
 import authRouter from "./auth";
 import esignWebhookRouter from "./esignWebhook";
 import { msMobileOauthRouter } from "./atelier/msAuthRoutes";
+import msCalendarWebhookRouter from "./msCalendarWebhook";
 import { requireAuthSession } from "../lib/auth/session";
 import { demoReadOnlyGuard } from "../lib/auth/demoReadOnly";
 
@@ -25,6 +26,10 @@ router.use("/esign/webhook", esignWebhookRouter);
 // carries no session cookie; the HMAC-signed, user-bound state is the
 // credential. Web-flow callbacks fall through to the gated atelier router.
 router.use(msMobileOauthRouter);
+// Task #629 — Microsoft Graph calendar webhook: Graph carries no session;
+// each notification is validated against the per-subscription clientState
+// secret and only ever ENQUEUES a re-sync (payload content never trusted).
+router.use("/ms/calendar/webhook", msCalendarWebhookRouter);
 
 // Task #1 — everything else requires a valid server-side session. There is
 // no default-persona fallback anywhere behind this gate; unauthenticated
