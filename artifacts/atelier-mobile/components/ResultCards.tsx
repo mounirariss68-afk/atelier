@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 
 import { Card } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
@@ -68,7 +68,42 @@ const SKIP_KEYS = new Set([
   "entity", "options", "stage", "verb", "payload",
   // Task #469 — internal/meta fields that must never render as card rows.
   "total", "scoped", "scopedNote", "source", "note", "prompt", "empty",
+  // Task #637 — external Outlook draft link renders as a tappable row,
+  // never as a raw-URL grid cell.
+  "outlookDraftLink",
 ]);
+
+/** Task #637 — tappable row for an external https link on a result card
+ * (e.g. the Outlook draft created by email_my_documents). */
+function ExternalLinkRow({ url, label }: { url: string; label: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  if (!/^https?:\/\//i.test(url)) return null;
+  return (
+    <Pressable
+      onPress={() => Linking.openURL(url).catch(() => {})}
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "center",
+        gap: 6,
+        paddingVertical: 6,
+      }}
+      accessibilityRole="link"
+    >
+      <Feather name="external-link" size={13} color={c.primary} />
+      <Text
+        numberOfLines={1}
+        style={{
+          color: c.primary,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 /* ─────────────────────── shared chrome ─────────────────────── */
 
@@ -201,6 +236,14 @@ function WriteSuccess({ data, lang }: { data: Json; lang: string }) {
         </Text>
       </View>
       <FieldGrid entries={entries} currency={currency} lang={lang} />
+      {(() => {
+        // Task #637 — surface the Outlook draft (or any external https
+        // href) as a tappable row.
+        const link = asStr(data.outlookDraftLink) || asStr(data.href);
+        return /^https?:\/\//i.test(link) ? (
+          <ExternalLinkRow url={link} label="Open in Outlook" />
+        ) : null;
+      })()}
     </Card>
   );
 }

@@ -31,6 +31,11 @@ export const MS_SCOPES = [
   // Task #602 — required to set Outlook automatic replies (out-of-office)
   // on the leave-taker's own mailbox when leave is approved. Delegated only.
   "MailboxSettings.ReadWrite",
+  // Task #637 — email personal documents from chat: create Outlook drafts
+  // with attachments (Mail.ReadWrite) or send directly (Mail.Send). Both
+  // delegated — always the caller's own mailbox.
+  "Mail.ReadWrite",
+  "Mail.Send",
 ];
 
 /** Does a stored scope list include calendar write? Microsoft returns
@@ -45,6 +50,18 @@ export function hasCalendarWriteScope(scopes: readonly string[] | null | undefin
  *  scope was added won't have it until the user reconnects. */
 export function hasMailboxSettingsScope(scopes: readonly string[] | null | undefined): boolean {
   return (scopes ?? []).some((s) => /(^|\/)MailboxSettings\.(ReadWrite|Read)$/i.test(s.trim()));
+}
+
+/** Task #637 — can this connection create draft messages in the caller's
+ *  mailbox? Connections made before the Mail scopes were added won't have
+ *  it until the user reconnects (or a silent refresh picks it up). */
+export function hasMailDraftScope(scopes: readonly string[] | null | undefined): boolean {
+  return (scopes ?? []).some((s) => /(^|\/)Mail\.ReadWrite$/i.test(s.trim()));
+}
+
+/** Task #637 — can this connection send mail from the caller's mailbox? */
+export function hasMailSendScope(scopes: readonly string[] | null | undefined): boolean {
+  return (scopes ?? []).some((s) => /(^|\/)Mail\.Send$/i.test(s.trim()));
 }
 
 export function msConfigured(): boolean {
@@ -801,6 +818,96 @@ export async function getCalendarViewDelta(
     }
   }
   return { events, deltaLink };
+}
+
+// ------------------------------------------------------------------
+// Task #637 — email personal documents from chat (Outlook draft or send).
+// ------------------------------------------------------------------
+
+export interface MsMailAttachment {
+  /** File name as it should appear on the message. */
+  name: string;
+  contentType: string;
+  /** Raw bytes — base64-encoded on the wire. */
+  contentBytes: Buffer;
+}
+
+export interface MsMailRecipient {
+  email: string;
+  name?: string | null;
+}
+
+export interface MsDraftMessage {
+  id: string;
+  webLink?: string;
+  subject?: string;
+}
+
+function mailMessageBody(args: {
+  subject: string;
+  bodyText: string;
+  to: MsMailRecipient[];
+  attachments: MsMailAttachment[];
+}): Record<string, unknown> {
+  return {
+    subject: args.subject,
+    body: { contentType: "text", content: args.bodyText },
+    toRecipients: args.to.map((r) => ({
+      emailAddress: { address: r.email, name: r.name ?? undefined },
+    })),
+    attachments: args.attachments.map((a) => ({
+      "@odata.type": "#microsoft.graph.fileAttachment",
+      name: a.name,
+      contentType: a.contentType,
+      contentBytes: a.contentBytes.toString("base64"),
+    })),
+  };
+}
+
+/**
+ * Create a DRAFT message (with inline base64 file attachments) in the
+ * caller's own mailbox and return it — `webLink` opens the draft in
+ * Outlook for review before sending. Requires Mail.ReadWrite.
+ * Attachments must stay under ~3 MB each (no upload sessions here).
+ */
+export async function createDraftMessage(
+  accessToken: string,
+  args: {
+    subject: string;
+    bodyText: string;
+    to: MsMailRecipient[];
+    attachments: MsMailAttachment[];
+  },
+): Promise<MsDraftMessage> {
+  return graphPost<MsDraftMessage>(accessToken, "/me/messages", mailMessageBody(args));
+}
+
+/**
+ * Send a message immediately from the caller's own mailbox (saved to
+ * Sent Items). Requires Mail.Send. Graph returns 202 with an empty body.
+ */
+export async function sendMailMessage(
+  accessToken: string,
+  args: {
+    subject: string;
+    bodyText: string;
+    to: MsMailRecipient[];
+    attachments: MsMailAttachment[];
+  },
+): Promise<void> {
+  const resp = await fetch(`${graphBase()}/me/sendMail`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ message: mailMessageBody(args), saveToSentItems: true }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error(`[msGraph] POST /me/sendMail → ${resp.status} ${text.slice(0, 300)}`);
+    throw new MsGraphError(`graph-request-failed:${resp.status}`, resp.status, text.slice(0, 300));
+  }
 }
 
 /** Calendar view scoped to one specific (non-default) calendar. */

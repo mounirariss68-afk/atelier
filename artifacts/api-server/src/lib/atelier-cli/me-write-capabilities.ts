@@ -38,6 +38,7 @@ import {
   atelierPersonDocuments,
   atelierSelfNotifications,
   atelierAuditEvents,
+  atelierMsConnections,
 } from "@workspace/db";
 import { z } from "zod";
 import {
@@ -50,7 +51,17 @@ import { resolveSelfSubject, type SelfSubject } from "./me-capabilities.js";
 // Me-lens REST submit paths so requests don't sit invisible.
 import { emitSelfNotification } from "../../routes/atelier/meRoutes.js";
 import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
-import { storePersonDocBytes } from "../personDocStorage.js";
+import { storePersonDocBytes, loadPersonDocBytes } from "../personDocStorage.js";
+// Task #637 — email own documents via the caller's Outlook mailbox.
+import {
+  MsAuthError,
+  MsGraphError,
+  createDraftMessage,
+  hasMailDraftScope,
+  hasMailSendScope,
+  sendMailMessage,
+  type MsMailAttachment,
+} from "../msGraph.js";
 import {
   countWorkingDays,
   computeLeaveBalance,
@@ -1678,6 +1689,501 @@ defineSelfWriteCapability({
         id: updated[0].id,
         label: "Notification dismissed",
         href: "/me",
+        navigateTo: null,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.document_email — Task #637: email the caller's OWN personal
+// documents through THEIR Outlook mailbox (Microsoft Graph, delegated).
+// Default mode creates a DRAFT with the files attached and returns the
+// Outlook webLink for review; mode "send" sends directly and is treated
+// as an irreversible outbound action (typed-name confirm).
+// Self-scope only: documents are resolved strictly against the caller's
+// own roster record; attachments over ~3 MB are refused honestly (no
+// upload-session chunking here).
+// ---------------------------------------------------------------------
+const MAIL_ATTACH_MAX_BYTES = 3 * 1024 * 1024;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+type PersonDocRow = typeof atelierPersonDocuments.$inferSelect;
+
+/** Normalize free text for fuzzy doc matching (lowercase, collapse
+ *  separators so "national id" matches kind "national_id"). */
+function docMatchNorm(s: string): string {
+  return s.toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Fuzzy-match one query term against the caller's documents by kind,
+ * title, or file name. Pure so the probe can pin it. Exported for tests.
+ */
+export function matchOwnDocuments(docs: PersonDocRow[], term: string): PersonDocRow[] {
+  const q = docMatchNorm(term);
+  if (!q) return [];
+  const broad = docs.filter((d) => {
+    const kind = docMatchNorm(d.kind);
+    const title = docMatchNorm(d.title ?? "");
+    const fileName = docMatchNorm(d.fileName ?? "");
+    return (
+      kind === q ||
+      q.includes(kind) ||
+      kind.includes(q) ||
+      (title !== "" && (title.includes(q) || q.includes(title))) ||
+      (fileName !== "" && fileName.includes(q))
+    );
+  });
+  if (broad.length <= 1) return broad;
+  // Specificity pass: a query that names a document's exact title (or is
+  // fully contained in it) should not fan out to every same-kind sibling
+  // ("UAE Visa 2025" must not also match "UAE Visa 2026").
+  const exactTitle = broad.filter((d) => docMatchNorm(d.title ?? "") === q);
+  if (exactTitle.length > 0) return exactTitle;
+  const titleHit = broad.filter((d) => {
+    const title = docMatchNorm(d.title ?? "");
+    return title !== "" && (title.includes(q) || q.includes(title));
+  });
+  if (titleHit.length > 0 && titleHit.length < broad.length) return titleHit;
+  return broad;
+}
+
+function docOptionWire(d: PersonDocRow) {
+  return {
+    id: d.id,
+    label: d.title || d.kind,
+    secondary: [d.kind, d.fileName].filter(Boolean).join(" — "),
+  };
+}
+
+defineCapability({
+  id: "me.document_email",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "roster",
+  toolName: "email_my_documents",
+  description:
+    "Email one or more of the signed-in user's OWN personal documents (passport, national ID, residency, visa…) through their connected Outlook mailbox. Default creates an Outlook DRAFT with the files attached for review; mode 'send' sends immediately. Self-scoped — never another person's documents. Pass documentIds from my_documents, or a query like 'passport'.",
+  slashAliases: { en: ["/email-document"], fr: ["/envoyer-document"] },
+  representativePrompts: {
+    en: [
+      "Email my passport to jane@example.com",
+      "Send my national ID and visa to hr@client.com",
+    ],
+    ar: ["أرسل جواز سفري بالبريد الإلكتروني"],
+    fr: ["Envoyer mon passeport par e-mail"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "entity_card",
+  examplePhrases: {
+    en: ["Email my passport to jane@example.com"],
+    ar: ["أرسل جواز سفري بالبريد الإلكتروني"],
+    fr: ["Envoyer mon passeport par e-mail"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      documentIds: {
+        type: "array",
+        items: { type: "string" },
+        description: "Exact document ids from my_documents (preferred)",
+      },
+      query: {
+        type: "string",
+        description:
+          "Free-text document match ('passport', 'national id and visa') when ids are unknown",
+      },
+      to: {
+        type: "array",
+        items: { type: "string" },
+        description: "Recipient email addresses",
+      },
+      mode: {
+        type: "string",
+        enum: ["draft", "send"],
+        description: "draft (default) creates an Outlook draft for review; send emails immediately",
+      },
+      subject: { type: "string" },
+      message: { type: "string", description: "Plain-text email body" },
+      confirm: { type: "boolean" },
+    },
+    required: ["to"],
+    additionalProperties: false,
+  },
+  isWrite: true,
+  twoPhaseConfirm: true,
+  irreversible: false,
+  outboundChannel: "email",
+  async run(input, ctx) {
+    const subject = await resolveSelfSubject(ctx);
+    if (!subject) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: "Your login could not be resolved to a user record.",
+      };
+    }
+    const person = subject.person;
+    if (!person) return NO_ROSTER;
+
+    // ---- recipients --------------------------------------------------
+    const rawTo = Array.isArray(input.to) ? input.to : [];
+    const recipients = [...new Set(rawTo.map((r) => String(r).trim().toLowerCase()).filter(Boolean))];
+    if (recipients.length === 0 || recipients.length > 10) {
+      return {
+        ok: false,
+        errorCode: "invalid_recipients",
+        errorMessage: "Provide between 1 and 10 recipient email addresses.",
+      };
+    }
+    const badEmail = recipients.find((r) => !EMAIL_RE.test(r));
+    if (badEmail) {
+      return {
+        ok: false,
+        errorCode: "invalid_recipients",
+        errorMessage: `"${badEmail}" is not a valid email address.`,
+      };
+    }
+    const mode = input.mode === "send" ? "send" : input.mode === "draft" || input.mode === undefined ? "draft" : null;
+    if (!mode) {
+      return { ok: false, errorCode: "invalid_mode", errorMessage: "mode must be 'draft' or 'send'." };
+    }
+
+    // ---- resolve the caller's OWN documents --------------------------
+    const ownDocs = (
+      await db
+        .select()
+        .from(atelierPersonDocuments)
+        .where(
+          and(
+            eq(atelierPersonDocuments.personType, person.workerType),
+            eq(atelierPersonDocuments.personId, person.id),
+            isNull(atelierPersonDocuments.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierPersonDocuments.uploadedAt))
+    ).filter((d) => d.kind !== "profile_photo" && d.kind !== "biography");
+
+    let selected: PersonDocRow[] = [];
+    const ids = Array.isArray(input.documentIds)
+      ? [...new Set(input.documentIds.map((v) => String(v)).filter(Boolean))]
+      : [];
+    if (ids.length > 0) {
+      const byId = new Map(ownDocs.map((d) => [d.id, d]));
+      const missing = ids.filter((id) => !byId.has(id));
+      if (missing.length > 0) {
+        return {
+          ok: false,
+          errorCode: "doc_not_found",
+          errorMessage: `Document ${missing[0]} was not found on your record. Use my_documents to list yours.`,
+        };
+      }
+      selected = ids.map((id) => byId.get(id)!);
+    } else {
+      const query = String(input.query ?? "").trim();
+      if (!query) {
+        return {
+          ok: false,
+          errorCode: "doc_not_found",
+          errorMessage:
+            ownDocs.length === 0
+              ? "You have no personal documents on file yet — add them under Me → Documents first."
+              : `Which document should I email? You have: ${ownDocs.map((d) => `"${d.title}" (${d.kind})`).join(", ")}.`,
+        };
+      }
+      // Multi-doc queries: split on "and", "+", ",".
+      const terms = query
+        .split(/\s*(?:,|\+|\band\b|\bet\b|\bو\b)\s*/i)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const seen = new Set<string>();
+      for (const term of terms) {
+        const matches = matchOwnDocuments(ownDocs, term);
+        if (matches.length === 0) {
+          return {
+            ok: false,
+            errorCode: "doc_not_found",
+            errorMessage:
+              ownDocs.length === 0
+                ? "You have no personal documents on file yet — add them under Me → Documents first."
+                : `No document of yours matches "${term}". You have: ${ownDocs.map((d) => `"${d.title}" (${d.kind})`).join(", ")}.`,
+          };
+        }
+        if (matches.length > 1) {
+          return {
+            ok: true,
+            data: {
+              prompt: `You have ${matches.length} documents matching "${term}" — which one should I email? Re-run with the exact documentIds.`,
+              options: matches.map(docOptionWire),
+              // Not a commit — nothing was emailed; explicit null keeps the
+              // Task #511 navigateTo contract satisfied.
+              navigateTo: null,
+            },
+          };
+        }
+        if (!seen.has(matches[0].id)) {
+          seen.add(matches[0].id);
+          selected.push(matches[0]);
+        }
+      }
+    }
+    if (selected.length === 0) {
+      return { ok: false, errorCode: "doc_not_found", errorMessage: "No documents selected." };
+    }
+
+    // ---- file availability + size guard (~3 MB per attachment) -------
+    for (const d of selected) {
+      if (!d.fileRef) {
+        return {
+          ok: false,
+          errorCode: "file_missing",
+          errorMessage: `"${d.title}" has no stored file that can be attached.`,
+        };
+      }
+      const tooBig = [
+        { label: d.fileName ?? d.title, size: d.sizeBytes ?? 0 },
+        ...(d.backFileRef ? [{ label: d.backFileName ?? `${d.title} (back)`, size: d.backSizeBytes ?? 0 }] : []),
+      ].find((f) => f.size > MAIL_ATTACH_MAX_BYTES);
+      if (tooBig) {
+        return {
+          ok: false,
+          errorCode: "attachment_too_large",
+          errorMessage: `"${tooBig.label}" is ${(tooBig.size / (1024 * 1024)).toFixed(1)} MB — email attachments from chat are limited to 3 MB per file. Attach it manually from Outlook instead.`,
+        };
+      }
+    }
+
+    // ---- Microsoft connection must exist BEFORE the confirm card -----
+    const [conn] = await db
+      .select()
+      .from(atelierMsConnections)
+      .where(eq(atelierMsConnections.userId, subject.user.id))
+      .limit(1);
+    if (!conn) {
+      return {
+        ok: false,
+        errorCode: "ms_not_connected",
+        errorMessage:
+          "Your Microsoft 365 account isn't connected, so I can't use your Outlook mailbox. Connect it from Me → Settings → Microsoft 365, then try again.",
+      };
+    }
+
+    const docSummary = selected
+      .map((d) => `"${d.title}"${d.kind === "national_id" && d.backFileRef ? " (front + back)" : ""}`)
+      .join(", ");
+    const sideNote = selected.some(
+      (d) => d.kind === "national_id" && !d.backFileRef && d.mime !== "application/pdf",
+    )
+      ? " Note: your national ID has no back-side scan on file — only the front will be attached."
+      : "";
+
+    // ---- two-phase confirm -------------------------------------------
+    if (input.confirm !== true) {
+      const diff: Record<string, unknown> =
+        mode === "send"
+          ? {
+              send: { channel: "email", recipients, documents: selected.map((d) => d.title) },
+              irreversible: true,
+              typedNameRequired: recipients.join(", "),
+              outboundChannel: "email",
+            }
+          : {
+              create: {
+                target: "outlook_draft",
+                recipients,
+                documents: selected.map((d) => d.title),
+              },
+            };
+      return {
+        ok: true,
+        data: {
+          preview: {
+            mode,
+            recipients,
+            documents: selected.map(chatDocWire),
+          },
+        },
+        confirmation: {
+          summary:
+            mode === "send"
+              ? `Send ${docSummary} to ${recipients.join(", ")} from your Outlook mailbox now?${sideNote}`
+              : `Create an Outlook draft to ${recipients.join(", ")} with ${docSummary} attached, for you to review and send?${sideNote}`,
+          diff,
+          pending: {
+            tool: "email_my_documents",
+            input: {
+              documentIds: selected.map((d) => d.id),
+              to: recipients,
+              mode,
+              ...(input.subject !== undefined ? { subject: String(input.subject) } : {}),
+              ...(input.message !== undefined ? { message: String(input.message) } : {}),
+              confirm: true,
+            },
+          },
+        },
+      };
+    }
+
+    // ---- commit: token + scope, load bytes, call Graph ----------------
+    const RECONNECT: ToolResult = {
+      ok: false,
+      errorCode: "ms_reconnect_required",
+      errorMessage:
+        "Your Microsoft 365 connection doesn't have email permission yet (it predates this feature). Disconnect and reconnect Microsoft 365 from Me → Settings, then try again.",
+    };
+    let accessToken: string;
+    let scopes: string[];
+    try {
+      const { freshAccessToken } = await import("../msScheduling.js");
+      const fresh = await freshAccessToken(conn);
+      accessToken = fresh.accessToken;
+      scopes = fresh.scopes;
+    } catch (err) {
+      if (err instanceof MsAuthError || err instanceof MsGraphError) return RECONNECT;
+      throw err;
+    }
+    if (mode === "send" ? !hasMailSendScope(scopes) : !hasMailDraftScope(scopes)) {
+      return RECONNECT;
+    }
+
+    const attachments: MsMailAttachment[] = [];
+    for (const d of selected) {
+      const front = await loadPersonDocBytes(d.fileRef!);
+      if (!front) {
+        return {
+          ok: false,
+          errorCode: "file_missing",
+          errorMessage: `The stored file for "${d.title}" could not be loaded.`,
+        };
+      }
+      if (front.byteLength > MAIL_ATTACH_MAX_BYTES) {
+        return {
+          ok: false,
+          errorCode: "attachment_too_large",
+          errorMessage: `"${d.fileName ?? d.title}" exceeds the 3 MB attachment limit.`,
+        };
+      }
+      attachments.push({
+        name: d.fileName || `${d.title}.pdf`,
+        contentType: d.mime || "application/octet-stream",
+        contentBytes: front,
+      });
+      if (d.backFileRef) {
+        const back = await loadPersonDocBytes(d.backFileRef);
+        if (!back) {
+          return {
+            ok: false,
+            errorCode: "file_missing",
+            errorMessage: `The back-side file for "${d.title}" could not be loaded.`,
+          };
+        }
+        if (back.byteLength > MAIL_ATTACH_MAX_BYTES) {
+          return {
+            ok: false,
+            errorCode: "attachment_too_large",
+            errorMessage: `"${d.backFileName ?? `${d.title} (back)`}" exceeds the 3 MB attachment limit.`,
+          };
+        }
+        attachments.push({
+          name: d.backFileName || `${d.title} (back)`,
+          contentType: d.backMime || "application/octet-stream",
+          contentBytes: back,
+        });
+      }
+    }
+
+    const mailSubject =
+      typeof input.subject === "string" && input.subject.trim()
+        ? input.subject.trim().slice(0, 200)
+        : `Documents from ${subject.user.name}`;
+    const bodyText =
+      typeof input.message === "string" && input.message.trim()
+        ? input.message.trim().slice(0, 5000)
+        : `Please find attached: ${selected.map((d) => d.title).join(", ")}.\n\nSent from The Atelier on behalf of ${subject.user.name}.`;
+    const toWire = recipients.map((email) => ({ email }));
+
+    try {
+      if (mode === "send") {
+        await sendMailMessage(accessToken, {
+          subject: mailSubject,
+          bodyText,
+          to: toWire,
+          attachments,
+        });
+      } else {
+        const draft = await createDraftMessage(accessToken, {
+          subject: mailSubject,
+          bodyText,
+          to: toWire,
+          attachments,
+        });
+        await audit({
+          subject,
+          entityType: "person_document",
+          entityId: selected[0].id,
+          action: "person_document.self_emailed",
+          payload: {
+            mode,
+            documentIds: selected.map((d) => d.id),
+            recipients,
+            draftId: draft.id,
+            via: "chat",
+          },
+          summary: `${subject.user.name} drafted an Outlook email with their ${selected.map((d) => d.kind).join(", ")} document(s) attached`,
+        });
+        return {
+          ok: true,
+          data: {
+            mode: "draft",
+            label: "Outlook draft created — review and send it from Outlook",
+            documents: selected.map((d) => d.title).join(", "),
+            recipients: recipients.join(", "),
+            outlookDraftLink: draft.webLink ?? null,
+            href: draft.webLink ?? "/me/documents",
+            navigateTo: null,
+          },
+        };
+      }
+    } catch (err) {
+      if (err instanceof MsGraphError) {
+        if (err.status === 401 || err.status === 403) return RECONNECT;
+        if (err.status === 413) {
+          return {
+            ok: false,
+            errorCode: "attachment_too_large",
+            errorMessage: "Outlook rejected the message because the attachments are too large.",
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "ms_graph_error",
+          errorMessage: `Outlook returned an error (${err.status}) — the ${mode === "send" ? "email was not sent" : "draft was not created"}. Try again shortly.`,
+        };
+      }
+      if (err instanceof MsAuthError) return RECONNECT;
+      throw err;
+    }
+
+    await audit({
+      subject,
+      entityType: "person_document",
+      entityId: selected[0].id,
+      action: "person_document.self_emailed",
+      payload: {
+        mode,
+        documentIds: selected.map((d) => d.id),
+        recipients,
+        via: "chat",
+      },
+      summary: `${subject.user.name} emailed their ${selected.map((d) => d.kind).join(", ")} document(s) from their Outlook mailbox`,
+    });
+    return {
+      ok: true,
+      data: {
+        mode: "sent",
+        label: `Email sent to ${recipients.join(", ")}`,
+        documents: selected.map((d) => d.title).join(", "),
+        recipients: recipients.join(", "),
         navigateTo: null,
       },
     };
