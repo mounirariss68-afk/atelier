@@ -67,6 +67,8 @@ function JoinersView() {
   const [confirmingUserId, setConfirmingUserId] = React.useState<string | null>(null);
   const [markLeaver, setMarkLeaver] = React.useState(true);
   const [leaverEndDate, setLeaverEndDate] = React.useState("");
+  // Task #628 — Microsoft 365 mailbox choice at offboarding.
+  const [msMailboxAction, setMsMailboxAction] = React.useState<"retain" | "remove">("retain");
   const [handoverUserId, setHandoverUserId] = React.useState<string | null>(null);
 
   const deactivate = useAtelierDeactivateJoiner({
@@ -178,13 +180,39 @@ function JoinersView() {
                         />
                       </label>
                     ) : null}
+                    <div className="space-y-1" data-testid={`ms-mailbox-choice-${j.userId}`}>
+                      <span className="block font-mono text-[10px] uppercase tracking-wider text-text-faint">Microsoft 365 mailbox (if provisioned)</span>
+                      <label className="flex items-center gap-2 text-xs text-text">
+                        <input
+                          type="radio"
+                          name={`ms-mailbox-${j.userId}`}
+                          checked={msMailboxAction === "retain"}
+                          onChange={() => setMsMailboxAction("retain")}
+                          data-testid={`ms-mailbox-retain-${j.userId}`}
+                        />
+                        Keep the mailbox for handover (sign-in still blocked; license stays assigned)
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-text">
+                        <input
+                          type="radio"
+                          name={`ms-mailbox-${j.userId}`}
+                          checked={msMailboxAction === "remove"}
+                          onChange={() => setMsMailboxAction("remove")}
+                          data-testid={`ms-mailbox-remove-${j.userId}`}
+                        />
+                        Remove the mailbox and free the license
+                      </label>
+                    </div>
                     <div className="flex items-center gap-3">
                       <button
                         className="font-mono text-[10px] uppercase tracking-wider text-red-400/80 hover:text-red-400"
                         onClick={() =>
                           deactivate.mutate({
                             userId: j.userId,
-                            data: markLeaver ? { markLeaver: true, endDate: leaverEndDate || undefined } : {},
+                            data: {
+                              ...(markLeaver ? { markLeaver: true, endDate: leaverEndDate || undefined } : {}),
+                              msMailboxAction,
+                            },
                           })
                         }
                         disabled={deactivate.isPending}

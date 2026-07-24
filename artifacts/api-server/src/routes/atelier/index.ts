@@ -75,6 +75,7 @@ import performanceRoutes from "./performanceRoutes";
 import meProfileRoutes from "./meProfileRoutes";
 import msAuthRoutes from "./msAuthRoutes";
 import joinerRoutes from "./joinerRoutes";
+import msProvisioningRoutes from "./msProvisioningRoutes";
 import hireRoutes from "./hireRoutes";
 import rosterLifecycleRoutes from "./rosterLifecycleRoutes";
 import skillGraphRoutes from "./skillGraphRoutes";
@@ -318,6 +319,8 @@ router.use(meProfileRoutes);
 // /me/msauth/*, /me/msconnection, /me/calendar — safe for every persona).
 router.use(msAuthRoutes);
 router.use(joinerRoutes);
+// Task #628 — Microsoft 365 provisioning admin surface (HR / founders).
+router.use(msProvisioningRoutes);
 router.use(hireRoutes);
 // Mount agent / opportunity write routes (Task #221).
 router.use(agentRoutes);

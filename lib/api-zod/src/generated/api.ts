@@ -5842,6 +5842,7 @@ export const AtelierDeactivateJoinerBody = zod.object({
     .max(atelierDeactivateJoinerBodyEndDateMax)
     .regex(atelierDeactivateJoinerBodyEndDateRegExp)
     .optional(),
+  msMailboxAction: zod.enum(["retain", "remove"]).optional(),
 });
 
 export const AtelierDeactivateJoinerResponse = zod.object({

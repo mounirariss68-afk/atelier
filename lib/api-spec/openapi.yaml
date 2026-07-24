@@ -9067,6 +9067,10 @@ components:
       properties:
         markLeaver: { type: boolean }
         endDate: { type: string, maxLength: 10, pattern: '^\d{4}-\d{2}-\d{2}$' }
+        # Task #628 — Microsoft 365 mailbox choice at offboarding:
+        # retain = keep the mailbox/license for handover (default);
+        # remove = free the license (mailbox is removed by Microsoft).
+        msMailboxAction: { type: string, enum: [retain, remove] }
 
     AtelierLeaverHandoverAccount:
       type: object

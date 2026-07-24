@@ -51,6 +51,7 @@ import {
   type StructuredName,
 } from "../../lib/atelier-person-model.js";
 import { writePersonAndSync } from "../../lib/atelier-person-sync.js";
+import { syncMsDisplayName } from "../../lib/atelier-ms-provisioning.js";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
   loadPersonDocBytes,
@@ -1760,6 +1761,17 @@ router.patch("/roster/people/:id", async (req, res, next) => {
             eq(atelierPartnerFirmResources.orgId, me.orgId),
           ),
         );
+    }
+
+    // Task #628 — best-effort M365 display-name sync when the person's
+    // name changed and a Microsoft account is linked (fire-and-forget).
+    if (
+      (person.workerType === "employee" || person.workerType === "contractor") &&
+      changes.some((c) =>
+        ["fullName", "firstName", "lastName", "middleName", "preferredName", "honorific"].includes(c.field),
+      )
+    ) {
+      syncMsDisplayName({ orgId: me.orgId, personIds: [person.id] });
     }
 
     assertAuditAction("roster.person.updated");

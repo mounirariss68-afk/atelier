@@ -17,6 +17,15 @@ export const V3_AUDIT_ACTIONS = {
   // Microsoft 365 meeting auto-log (Task #336) ----------------------------
   MS_MEETING_AUTOLOGGED: "ms.meeting.autologged",
   MS_MEETING_AUTOLOG_REMOVED: "ms.meeting.autolog_removed",
+  // Microsoft 365 provisioning (Task #628) --------------------------------
+  MS_ACCOUNT_CREATED: "ms.account.created",
+  MS_ACCOUNT_LINKED: "ms.account.linked",
+  MS_ACCOUNT_RECHECKED: "ms.account.rechecked",
+  MS_ACCOUNT_NAME_SYNCED: "ms.account.name_synced",
+  MS_SERVICES_UPDATED: "ms.services.updated",
+  MS_ACCOUNT_DEPROVISIONED: "ms.account.deprovisioned",
+  MS_PROVISIONING_FAILED: "ms.provisioning.failed",
+  MS_DEPROVISIONING_FAILED: "ms.deprovisioning.failed",
   // Roster ----------------------------------------------------------------
   ROSTER_PERSON_CREATED: "roster.person.created",
   ROSTER_PERSON_UPDATED: "roster.person.updated",

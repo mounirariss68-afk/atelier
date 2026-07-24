@@ -58,6 +58,13 @@ import { personaToWire } from "./personaCookie";
 import { isFoundingPartner, isHr } from "./personaRoles";
 import { emitSelfNotification } from "./meRoutes";
 import { autoRevokeDelegationsForUser } from "./delegationRoutes";
+import {
+  deprovisionMs,
+  reactivateMs,
+  ensureProvisioningRow,
+  launchProvisioning,
+  defaultProfileForWorkerType,
+} from "../../lib/atelier-ms-provisioning";
 
 const router: IRouter = Router();
 
@@ -361,6 +368,43 @@ router.post("/roster/joiners", async (req, res, next) => {
         tx,
       );
     });
+
+    // Task #628 — Microsoft 365 provisioning rides on onboarding but never
+    // blocks it: the run fires in the background after commit, and any
+    // tenant refusal lands on the ledger row + notifies founders/HR.
+    // `skipMsProvisioning` is the "don't create an email address" tickbox;
+    // it still records an explicit not_provisioned row for the profile UI.
+    // Both fields ride outside the zod schema (unknown keys are stripped,
+    // not rejected) so non-UI API callers stay compatible.
+    const rawBody = req.body as {
+      skipMsProvisioning?: unknown;
+      msServiceProfile?: unknown;
+    };
+    const skipMsProvisioning = rawBody?.skipMsProvisioning === true;
+    const msServiceProfile =
+      rawBody?.msServiceProfile === "employee" || rawBody?.msServiceProfile === "contractor"
+        ? rawBody.msServiceProfile
+        : defaultProfileForWorkerType(workerType);
+    try {
+      await ensureProvisioningRow({
+        orgId: me.orgId,
+        personId,
+        personType: workerType === "employee" ? "employee" : "contractor",
+        userId,
+        email,
+        serviceProfile: msServiceProfile,
+      });
+      if (!skipMsProvisioning) {
+        launchProvisioning({
+          orgId: me.orgId,
+          personId,
+          actor: { id: me.id, name: me.name },
+          serviceProfile: msServiceProfile,
+        });
+      }
+    } catch (err) {
+      console.error("[joiners] M365 provisioning launch failed (non-fatal):", err);
+    }
 
     // Welcome email with login details — only after the transaction has
     // committed, and strictly best-effort: a delivery failure must never
@@ -710,8 +754,42 @@ async function setDisabled(
     }
   }
 
+  // Task #628 — Microsoft 365 offboarding rides on deactivation: block
+  // tenant sign-in + revoke Microsoft sessions, and free the license when
+  // HR chose "remove mailbox" (retain keeps the seat for handover). Always
+  // best-effort: a Graph refusal never blocks the Atelier-side deactivation
+  // (the ledger row is flagged and founders/HR get a card instead).
+  const msMailboxAction: "retain" | "remove" =
+    (req.body as { msMailboxAction?: string } | undefined)?.msMailboxAction === "remove"
+      ? "remove"
+      : "retain";
+  let ms365: Record<string, unknown> | null = null;
+  if (disabled) {
+    const out = await deprovisionMs({
+      orgId: me.orgId,
+      userId,
+      actor: { id: me.id, name: me.name },
+      mailboxAction: msMailboxAction,
+    });
+    if (!("skipped" in out)) {
+      ms365 = out.ok
+        ? { blockedSignIn: out.blockedSignIn, licenseFreed: out.licenseFreed, mailboxRetained: out.mailboxRetained }
+        : { error: out.error };
+    }
+  }
+
   let rosterRestored: Record<string, unknown> | null = null;
   if (!disabled) {
+    // Task #628 — restore Microsoft sign-in (license re-assignment is
+    // prompted separately when the seat was freed at offboarding).
+    const out = await reactivateMs({
+      orgId: me.orgId,
+      userId,
+      actor: { id: me.id, name: me.name },
+    });
+    if (!("skipped" in out)) {
+      ms365 = out.ok ? { signInRestored: true, needsLicense: out.needsLicense } : { error: out.error };
+    }
     // Reactivation reverses a prior leaver marking: find the most recent
     // deactivation audit that captured roster state and restore it.
     const events = await db
@@ -766,6 +844,7 @@ async function setDisabled(
       ...(delegationsRevoked > 0 ? { eaDelegationsRevoked: delegationsRevoked } : {}),
       ...(rosterPrior ? { rosterPrior, rosterMarked } : {}),
       ...(rosterRestored ? { rosterRestored } : {}),
+      ...(ms365 ? { ms365, msMailboxAction: disabled ? msMailboxAction : undefined } : {}),
     },
     summary: disabled
       ? `${me.name} deactivated the login for ${user.name} (${cred.email}) and revoked all sessions${rosterMarked ? `; roster marked leaver (end date ${endDate})` : ""}`

@@ -3595,6 +3595,14 @@ export interface AtelierJoiner {
   mustChangePassword?: boolean;
 }
 
+export type AtelierDeactivateJoinerInputMsMailboxAction =
+  (typeof AtelierDeactivateJoinerInputMsMailboxAction)[keyof typeof AtelierDeactivateJoinerInputMsMailboxAction];
+
+export const AtelierDeactivateJoinerInputMsMailboxAction = {
+  retain: "retain",
+  remove: "remove",
+} as const;
+
 export interface AtelierDeactivateJoinerInput {
   markLeaver?: boolean;
   /**
@@ -3602,6 +3610,7 @@ export interface AtelierDeactivateJoinerInput {
    * @pattern ^\d{4}-\d{2}-\d{2}$
    */
   endDate?: string;
+  msMailboxAction?: AtelierDeactivateJoinerInputMsMailboxAction;
 }
 
 export interface AtelierLeaverHandoverAccount {

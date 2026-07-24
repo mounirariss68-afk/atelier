@@ -274,6 +274,7 @@ export * from "./atelierCritiqueResult";
 export * from "./atelierCritiqueResultIssuesItem";
 export * from "./atelierCritiqueResultReadiness";
 export * from "./atelierDeactivateJoinerInput";
+export * from "./atelierDeactivateJoinerInputMsMailboxAction";
 export * from "./atelierDealPricing";
 export * from "./atelierDealPricingAlternativeStructuresItem";
 export * from "./atelierDealPricingComputed";

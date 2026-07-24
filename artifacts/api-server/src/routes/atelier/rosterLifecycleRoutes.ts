@@ -65,6 +65,11 @@ import {
 } from "../../lib/atelier-person-model.js";
 import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email.js";
 import { emitSelfNotification } from "./meRoutes.js";
+import {
+  ensureProvisioningRow,
+  launchProvisioning,
+  defaultProfileForWorkerType,
+} from "../../lib/atelier-ms-provisioning.js";
 
 const router: IRouter = Router();
 
@@ -1353,6 +1358,43 @@ router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
         tx,
       );
     });
+
+    // Task #628 — Microsoft 365 provisioning rides on login creation but
+    // never blocks it: the run fires in the background after commit, and
+    // any tenant refusal lands on the ledger row + notifies founders/HR.
+    // `skipMsProvisioning` is the "don't create an email address" tickbox.
+    // Partner-firm resources use their own firm's tooling — no M365 account.
+    if (person.workerType === "employee" || person.workerType === "contractor") {
+      const rawBody = (req.body ?? {}) as {
+        skipMsProvisioning?: unknown;
+        msServiceProfile?: unknown;
+      };
+      const skipMs = rawBody.skipMsProvisioning === true;
+      const msProfile =
+        rawBody.msServiceProfile === "employee" || rawBody.msServiceProfile === "contractor"
+          ? rawBody.msServiceProfile
+          : defaultProfileForWorkerType(person.workerType);
+      try {
+        await ensureProvisioningRow({
+          orgId: me.orgId,
+          personId: person.id,
+          personType: person.workerType,
+          userId,
+          email,
+          serviceProfile: msProfile,
+        });
+        if (!skipMs) {
+          launchProvisioning({
+            orgId: me.orgId,
+            personId: person.id,
+            actor: { id: me.id, name: me.name },
+            serviceProfile: msProfile,
+          });
+        }
+      } catch (err) {
+        console.error("[create-login] M365 provisioning launch failed (non-fatal):", err);
+      }
+    }
 
     // If login was the last outstanding step, complete the sequence and
     // activate the person (same rule as the advance route).

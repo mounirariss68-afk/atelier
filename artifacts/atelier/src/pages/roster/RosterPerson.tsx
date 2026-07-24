@@ -950,6 +950,218 @@ interface EngagementGrant {
   endDate: string | null;
 }
 
+// Task #628 — Microsoft 365 account card: status, create / re-check actions
+// and per-service toggles. Bespoke /m365 routes are not in the openapi spec,
+// so everything here is raw fetch (matches the account-agent UI pattern).
+interface M365Wire {
+  status: string;
+  email: string | null;
+  msUserId: string | null;
+  serviceProfile: string | null;
+  skuId: string | null;
+  disabledPlans: string[];
+  signInBlocked: boolean;
+  mailboxRetained: boolean;
+  licenseFreed: boolean;
+  lastError: string | null;
+  provisionedAt: string | null;
+  personEmail: string | null;
+  defaultProfile: string;
+}
+
+interface M365Plan {
+  servicePlanId: string;
+  servicePlanName: string;
+  enabled: boolean;
+}
+
+const M365_STATUS_LABEL: Record<string, string> = {
+  not_provisioned: "Not provisioned",
+  provisioning: "Provisioning…",
+  provisioned: "Active",
+  linked_existing: "Linked (existing account)",
+  pending_license: "Created — no license seat free",
+  blocked: "Blocked — needs manual action",
+  deprovisioned: "Deprovisioned",
+};
+
+function M365Card({ personId }: { personId: string }) {
+  const [wire, setWire] = React.useState<M365Wire | null>(null);
+  const [plans, setPlans] = React.useState<M365Plan[] | null>(null);
+  const [plansError, setPlansError] = React.useState<string | null>(null);
+  const [showPlans, setShowPlans] = React.useState(false);
+  const [busy, setBusy] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  // Service-profile override for the create action ("" = worker-type default).
+  const [profileChoice, setProfileChoice] = React.useState<"" | "employee" | "contractor">("");
+
+  const load = React.useCallback(async () => {
+    const r = await fetch(`/api/atelier/roster/people/${personId}/m365`, { credentials: "include" });
+    if (!r.ok) return null;
+    const d = (await r.json()) as M365Wire;
+    setWire(d);
+    return d;
+  }, [personId]);
+
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Poll while an async provision run is in flight.
+  React.useEffect(() => {
+    if (wire?.status !== "provisioning") return;
+    const t = setInterval(() => void load(), 3000);
+    return () => clearInterval(t);
+  }, [wire?.status, load]);
+
+  const act = async (path: string, body?: unknown) => {
+    setBusy(path);
+    setActionError(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/people/${personId}/m365/${path}`, {
+        method: path === "services" ? "PATCH" : "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setActionError((d as { message?: string }).message ?? "Request failed.");
+        return false;
+      }
+      await load();
+      return true;
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const loadPlans = async () => {
+    setPlansError(null);
+    const r = await fetch(`/api/atelier/roster/people/${personId}/m365/plans`, { credentials: "include" });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      setPlansError((d as { message?: string }).message ?? "Could not load service plans.");
+      setPlans(null);
+      return;
+    }
+    setPlans((d as { plans: M365Plan[] }).plans);
+  };
+
+  const togglePlan = async (planId: string, enabled: boolean) => {
+    if (!plans) return;
+    const nextDisabled = plans.filter((p) => (p.servicePlanId === planId ? enabled : !p.enabled)).map((p) => p.servicePlanId);
+    const ok = await act("services", { disabledPlans: nextDisabled });
+    if (ok) await loadPlans();
+  };
+
+  if (!wire) return null;
+  const statusTone =
+    wire.status === "provisioned" || wire.status === "linked_existing"
+      ? ""
+      : wire.status === "blocked"
+        ? "text-danger border-danger/40"
+        : "text-warning border-warning/40";
+
+  return (
+    <Card className="p-4 space-y-3" data-testid="m365-card">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-xs font-mono uppercase text-text-mute">Microsoft 365</div>
+        <MonoChip className={statusTone}>{M365_STATUS_LABEL[wire.status] ?? wire.status}</MonoChip>
+      </div>
+      <div className="text-sm text-text space-y-1">
+        <div>
+          <span className="text-text-mute">Account email: </span>
+          {wire.email ?? wire.personEmail ?? "—"}
+        </div>
+        {wire.serviceProfile ? (
+          <div className="text-xs text-text-mute">Service profile: {wire.serviceProfile}</div>
+        ) : null}
+        {wire.signInBlocked ? <div className="text-xs text-warning">Sign-in is blocked.</div> : null}
+        {wire.status === "deprovisioned" ? (
+          <div className="text-xs text-text-mute">
+            Mailbox {wire.mailboxRetained ? "retained for handover" : "removed"} · license{" "}
+            {wire.licenseFreed ? "freed" : "still assigned"}
+          </div>
+        ) : null}
+        {wire.lastError ? (
+          <div className="text-xs text-danger" data-testid="m365-last-error">
+            {wire.lastError}
+          </div>
+        ) : null}
+      </div>
+      {actionError ? <div className="text-xs text-danger">{actionError}</div> : null}
+      <div className="flex gap-3 flex-wrap items-center">
+        {wire.status === "not_provisioned" || wire.status === "deprovisioned" ? (
+          <>
+            <label className="flex items-center gap-1 text-[10px] text-text-mute">
+              Services:
+              <select
+                className="rounded border border-border bg-bg-elevate px-1 py-0.5 text-[10px] text-text"
+                value={profileChoice}
+                onChange={(e) => setProfileChoice(e.target.value as "" | "employee" | "contractor")}
+                data-testid="m365-profile-select"
+              >
+                <option value="">Default ({wire.defaultProfile})</option>
+                <option value="employee">Employee — full bundle</option>
+                <option value="contractor">Contractor — email only</option>
+              </select>
+            </label>
+            <button
+              className="font-mono text-[10px] uppercase tracking-wider text-gold hover:underline disabled:opacity-50"
+              disabled={busy !== null}
+              onClick={() => void act("provision", { serviceProfile: profileChoice || wire.defaultProfile })}
+              data-testid="m365-provision"
+            >
+              {busy === "provision" ? "Starting…" : "Create Microsoft account"}
+            </button>
+          </>
+        ) : null}
+        {wire.status !== "not_provisioned" && wire.status !== "provisioning" ? (
+          <button
+            className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text disabled:opacity-50"
+            disabled={busy !== null}
+            onClick={() => void act("recheck")}
+            data-testid="m365-recheck"
+          >
+            {busy === "recheck" ? "Re-checking…" : "Re-check"}
+          </button>
+        ) : null}
+        {wire.skuId ? (
+          <button
+            className="font-mono text-[10px] uppercase tracking-wider text-text-faint hover:text-text"
+            onClick={() => {
+              setShowPlans((v) => !v);
+              if (!showPlans) void loadPlans();
+            }}
+            data-testid="m365-toggle-plans"
+          >
+            {showPlans ? "Hide services" : "Services"}
+          </button>
+        ) : null}
+      </div>
+      {showPlans ? (
+        <div className="space-y-1 border-t border-border-soft pt-2" data-testid="m365-plans">
+          {plansError ? <div className="text-xs text-danger">{plansError}</div> : null}
+          {!plans && !plansError ? <div className="text-xs text-text-mute">Loading services…</div> : null}
+          {plans?.map((p) => (
+            <label key={p.servicePlanId} className="flex items-center gap-2 text-xs text-text">
+              <input
+                type="checkbox"
+                checked={p.enabled}
+                disabled={busy !== null}
+                onChange={() => void togglePlan(p.servicePlanId, p.enabled)}
+                data-testid={`m365-plan-${p.servicePlanName}`}
+              />
+              {p.servicePlanName}
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
 function AccessTab({ personId }: { personId: string }) {
   // PRD §1 IA — Access tab shows engagements the person is on with role + scope chips.
   // Same data shape as /engagements endpoint, but rendered as a flatter access ledger.
@@ -970,26 +1182,33 @@ function AccessTab({ personId }: { personId: string }) {
   if (!rows) return <div className="text-text-mute">Loading…</div>;
   if (firmWide)
     return (
-      <Card className="p-6" data-testid="access-firm-wide">
-        <div className="text-gold font-mono text-sm">Full firm-wide access</div>
-        <div className="text-text-mute text-xs mt-1">
-          Founding Partners and Partners have access to all accounts,
-          opportunities and engagements by role — no per-engagement grants
-          apply.
-        </div>
-      </Card>
+      <div className="space-y-4">
+        <M365Card personId={personId} />
+        <Card className="p-6" data-testid="access-firm-wide">
+          <div className="text-gold font-mono text-sm">Full firm-wide access</div>
+          <div className="text-text-mute text-xs mt-1">
+            Founding Partners and Partners have access to all accounts,
+            opportunities and engagements by role — no per-engagement grants
+            apply.
+          </div>
+        </Card>
+      </div>
     );
   if (rows.length === 0)
     return (
-      <Card className="p-6 text-text-mute">
-        {scopeNote ? (
-          <div className="text-gold text-xs font-mono mb-2" data-testid="access-scope-note">{scopeNote}</div>
-        ) : null}
-        No engagement-access grants. Use the Roster admin (Partner-only) to grant access.
-      </Card>
+      <div className="space-y-4">
+        <M365Card personId={personId} />
+        <Card className="p-6 text-text-mute">
+          {scopeNote ? (
+            <div className="text-gold text-xs font-mono mb-2" data-testid="access-scope-note">{scopeNote}</div>
+          ) : null}
+          No engagement-access grants. Use the Roster admin (Partner-only) to grant access.
+        </Card>
+      </div>
     );
   return (
     <div className="space-y-2" data-testid="access-tab-rows">
+      <M365Card personId={personId} />
       {scopeNote ? (
         <div className="text-gold text-xs font-mono" data-testid="access-scope-note">{scopeNote}</div>
       ) : null}

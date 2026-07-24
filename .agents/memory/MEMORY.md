@@ -131,3 +131,4 @@
 - [Demo-account showcase data](atelier-demo-showcase.md) — demo persona's fake profile/expenses/meetings live only in the boot seed; broad internal-meeting lists must hide demo-created rows from non-demo viewers.
 - [Chat attachment continuity](chat-attachment-continuity.md) — turns without attachmentIds get an "[earlier attachments]" primer (same session, 30-min, own uploads); uploads digest-dedupe per org (same bytes = same id).
 - [App Store demo account & public pages](atelier-demo-account.md) — demo@cognirise.ai is force-repaired read-only every boot (guard 403s all writes); /privacypolicy + /support are AuthGate-public static pages.
+- [Atelier M365 provisioning](atelier-m365-provisioning.md) — live tenant lacks admin consent (no roles claim): provisioning parks as blocked, never blocks onboarding; stub via MS_*_BASE_URL; scratch DB reuse needs per-run unique emails.

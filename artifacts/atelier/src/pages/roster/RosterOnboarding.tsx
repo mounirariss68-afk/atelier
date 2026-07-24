@@ -53,6 +53,11 @@ export default function RosterOnboarding(): React.ReactElement {
   const [loginResult, setLoginResult] = React.useState<LoginResult | null>(null);
   const [loginError, setLoginError] = React.useState<string | null>(null);
   const [loginBusy, setLoginBusy] = React.useState<string | null>(null);
+  // Task #628 — "don't create an email address" tickbox per onboarding card,
+  // plus the service-profile override (employee = full bundle, contractor =
+  // email-only). Empty = server default for the worker type.
+  const [skipMs, setSkipMs] = React.useState<Record<string, boolean>>({});
+  const [msProfile, setMsProfile] = React.useState<Record<string, "" | "employee" | "contractor">>({});
   const reload = React.useCallback(() => {
     fetch("/api/atelier/roster/onboarding", { credentials: "include" })
       .then((r) => r.json())
@@ -80,6 +85,13 @@ export default function RosterOnboarding(): React.ReactElement {
       const r = await fetch(`/api/atelier/roster/onboarding/${onbId}/create-login`, {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        // Task #628 — the tickbox skips Microsoft 365 provisioning; the
+        // account can still be created later from the person's profile.
+        body: JSON.stringify({
+          skipMsProvisioning: skipMs[onbId] === true,
+          ...(msProfile[onbId] ? { msServiceProfile: msProfile[onbId] } : {}),
+        }),
       });
       const d = await r.json();
       if (!r.ok) {
@@ -157,15 +169,41 @@ export default function RosterOnboarding(): React.ReactElement {
                   {s.status !== "done" && s.status !== "skipped" && (
                     <div className="flex gap-1">
                       {s.code === LOGIN_STEP_CODE ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={loginBusy === o.id || o.personId.startsWith("draft:")}
-                          onClick={() => createLogin(o.id, o.personName)}
-                          data-testid={`create-login-${o.id}`}
-                        >
-                          {loginBusy === o.id ? "Creating…" : "Create login"}
-                        </Button>
+                        <div className="flex flex-col items-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={loginBusy === o.id || o.personId.startsWith("draft:")}
+                            onClick={() => createLogin(o.id, o.personName)}
+                            data-testid={`create-login-${o.id}`}
+                          >
+                            {loginBusy === o.id ? "Creating…" : "Create login"}
+                          </Button>
+                          <label className="flex items-center gap-1 text-[10px] text-text-mute whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={skipMs[o.id] === true}
+                              onChange={(e) => setSkipMs((m) => ({ ...m, [o.id]: e.target.checked }))}
+                              data-testid={`skip-ms-${o.id}`}
+                            />
+                            Don't create a Microsoft email address
+                          </label>
+                          {skipMs[o.id] !== true ? (
+                            <label className="flex items-center gap-1 text-[10px] text-text-mute whitespace-nowrap">
+                              Microsoft services:
+                              <select
+                                className="rounded border border-border bg-bg-elevate px-1 py-0.5 text-[10px] text-text"
+                                value={msProfile[o.id] ?? ""}
+                                onChange={(e) => setMsProfile((m) => ({ ...m, [o.id]: e.target.value as "" | "employee" | "contractor" }))}
+                                data-testid={`ms-profile-${o.id}`}
+                              >
+                                <option value="">Default for worker type</option>
+                                <option value="employee">Employee — full bundle</option>
+                                <option value="contractor">Contractor — email only</option>
+                              </select>
+                            </label>
+                          ) : null}
+                        </div>
                       ) : (
                         <Button size="sm" variant="outline" onClick={() => advance(o.id, s.id, "done")}>
                           Mark done
