@@ -1499,7 +1499,11 @@ function TurnBody({
       {!isActionTurn && turn.trace.length > 0 && (() => {
         const recent = turn.trace.slice(-12);
         const breadcrumbs = recent.filter((l) => l.kind !== "narration");
-        const narrations = recent.filter((l) => l.kind === "narration");
+        // Task #645 — narration is optional under the card-aware output
+        // contract; only render prose rows that actually carry text.
+        const narrations = recent.filter(
+          (l) => l.kind === "narration" && l.text.trim().length > 0,
+        );
         return (
           <div
             className="bg-bg-elevate border border-border rounded-md px-3 py-2 space-y-2"

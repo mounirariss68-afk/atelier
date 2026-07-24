@@ -1184,6 +1184,20 @@ export async function getOrCreateSession(
 // 6. Loop
 // =====================================================================
 
+// Task #645 — deterministic backstops against narration that duplicates
+// or contradicts result cards live in ./narration-contract.ts (pure,
+// unit-testable). Re-exported here for existing import sites.
+import {
+  trimNarrationForCard,
+  toolResultFrameKey,
+} from "./narration-contract.js";
+export {
+  cardPayloadTokens,
+  narrationRestatesCard,
+  firstSentence,
+  trimNarrationForCard,
+} from "./narration-contract.js";
+
 const SYSTEM_PROMPT = [
   "You are the Atelier CLI orchestrator. Help the user accomplish a task using the tools you are given.",
   "Be concise. Prefer one tool call per step.",
@@ -1202,7 +1216,11 @@ const SYSTEM_PROMPT = [
   "   confirm — do not retry, do not re-call the tool.",
   "6. DISAMBIGUATION: when a tool returns disambiguation options, STOP and let the user",
   "   pick — do not guess.",
-  "Finish with one short closing sentence that summarises what happened. Write plain prose only —",
+  "CLOSING PROSE: if the last tool result renders as a structured result card (a render note",
+  "after the tool result will tell you), add AT MOST one short framing sentence and NEVER",
+  "restate the card's fields, numbers, names, or lists — the card already shows them.",
+  "After a committed write's success card, add NO closing recap at all. Only when no result",
+  "card is shown should you answer in full prose. Write plain prose only —",
   "NEVER prefix your reply with labels or markers like `final:`, `answer:`, or `narration:`.",
   "7. ATTACHMENT INTENT: when an attached image or document could plausibly be EITHER a",
   "   receipt OR an identity document (passport / national ID / residency / visa) and the",
@@ -2722,7 +2740,16 @@ export async function runTurn(
     const t0 = Date.now();
     let finalEmitted = false;
 
+    // Task #645 — deterministic dedupe: never stream/persist two identical
+    // tool_result frames for the same step+tool in one turn.
+    const emittedToolResultKeys = new Set<string>();
+
     function record(frame: CliFrame): void {
+      if (frame.type === "tool_result") {
+        const key = toolResultFrameKey(frame.data as Record<string, unknown>);
+        if (emittedToolResultKeys.has(key)) return;
+        emittedToolResultKeys.add(key);
+      }
       // Tag every frame with the real Anthropic model id observed for
       // this turn so SSE consumers see the actual Sonnet/Haiku name on
       // every step (per acceptance criterion: no implicit "claude" /
@@ -3546,6 +3573,11 @@ export async function runTurn(
         }
       }
     }
+    // Task #645 — narration/card output-contract state for this turn.
+    let pendingNarration: { text: string; step: number } | null = null;
+    let committedWriteOk = false;
+    let lastCardShape: string | null = null;
+    let lastCardData: unknown = null;
     for (let step = 0; step < MAX_TOOL_STEPS && !clarificationHandled; step++) {
       const elapsed = Date.now() - t0;
       if (aborted) {
@@ -3653,7 +3685,7 @@ export async function runTurn(
               /^\s*(?:final|answer|narration)\s*[:\-–—]\s*/i,
               "",
             ),
-          ) ?? "";
+          )?.trim() ?? "";
         // Task #644 — widen-on-miss retry: the model claims it has no
         // suitable tool while it made no tool call this turn. Rebuild
         // the menu ONCE from the full eligible pool (same persona
@@ -3702,7 +3734,25 @@ export async function runTurn(
           }
         }
         if (cleanText) {
-          record({ type: "narration", data: { text: cleanText, step } });
+          if (claudeStep.toolCall) {
+            // Task #645 — hold pre-tool narration ("I'll do X…") until the
+            // tool result is known; if the tool fails, the optimistic prose
+            // would contradict the error card, so it is dropped below.
+            pendingNarration = { text: cleanText, step };
+          } else if (committedWriteOk) {
+            // Task #645 — a committed write's success card is the answer;
+            // suppress the closing prose recap entirely.
+          } else {
+            // Task #645 — final prose after a card-rendering tool result:
+            // clamp anything that restates the card payload to one sentence.
+            const trimmed =
+              lastCardShape != null
+                ? trimNarrationForCard(cleanText, lastCardData)
+                : cleanText;
+            if (trimmed) {
+              record({ type: "narration", data: { text: trimmed, step } });
+            }
+          }
         }
       }
       record({ type: "plan_step", data: { step, hasTool: !!claudeStep.toolCall } });
@@ -3893,6 +3943,34 @@ export async function runTurn(
         });
       } else {
         toolResult = await runWithProgressSink(progressSink, () => tool.run(tc.input, ctx));
+      }
+
+      // Task #645 — flush the held pre-tool narration now that the outcome
+      // is known: suppress it when the tool failed (the optimistic "I'll do
+      // X…" prose would contradict the error card the user is about to see).
+      if (pendingNarration) {
+        if (toolResult.ok !== false) {
+          record({
+            type: "narration",
+            data: { text: pendingNarration.text, step: pendingNarration.step },
+          });
+        }
+        pendingNarration = null;
+      }
+      // Task #645 — remember the card shape/payload the client will render
+      // for this result so the closing prose can be trimmed against it.
+      if (toolResult.ok) {
+        const shapeHint =
+          ((toolResult.data as { shape?: unknown } | null)?.shape as
+            | string
+            | undefined) ??
+          findByToolName(tc.name)?.resultCard ??
+          null;
+        if (shapeHint) {
+          lastCardShape = String(shapeHint);
+          lastCardData = toolResult.data;
+        }
+        if (isCommit) committedWriteOk = true;
       }
 
       toolCalls.push({
@@ -4131,6 +4209,15 @@ export async function runTurn(
       }
 
       // Feed the tool result back to the model.
+      // Task #645 — card-aware render note: when this result renders as a
+      // structured card, tell the model so its closing prose stays to one
+      // framing sentence instead of restating the card's data.
+      const renderNote =
+        toolResult.ok && lastCardShape && lastCardData === toolResult.data
+          ? committedWriteOk
+            ? "[render note] The success card for this committed write is already displayed to the user. Do NOT add a closing recap or restate what was changed — end your reply now, with no further prose."
+            : `[render note] A "${lastCardShape}" result card showing this exact data is already displayed to the user. Reply with at most ONE short framing sentence and do NOT restate the card's fields, numbers, names, or lists.`
+          : null;
       history.push({
         role: "user",
         content: [
@@ -4146,6 +4233,7 @@ export async function runTurn(
             }),
             is_error: !toolResult.ok,
           },
+          ...(renderNote ? [{ type: "text", text: renderNote }] : []),
         ],
       });
 

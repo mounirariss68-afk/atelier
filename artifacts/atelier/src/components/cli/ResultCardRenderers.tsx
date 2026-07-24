@@ -556,9 +556,24 @@ export function ToolResultCardList({
   /** Task #411 round-6 — gate_report partner-override slash dispatcher. */
   onRunSlash?: (cmd: string) => void;
 }) {
+  // Task #645 — one action must never render two identical cards: drop
+  // exact-duplicate tool results (same tool, outcome and payload) before
+  // mapping to cards.
+  const seenCardKeys = new Set<string>();
+  const dedupedResults = toolResults.filter((tr) => {
+    let key: string;
+    try {
+      key = `${tr.tool}|${tr.ok}|${tr.errorCode ?? ""}|${JSON.stringify(tr.data ?? null)}`;
+    } catch {
+      key = `${tr.tool}|${tr.ok}|${tr.errorCode ?? ""}`;
+    }
+    if (seenCardKeys.has(key)) return false;
+    seenCardKeys.add(key);
+    return true;
+  });
   return (
     <div className="space-y-2.5" data-testid="cli-tool-results">
-      {toolResults.map((tr, i) => {
+      {dedupedResults.map((tr, i) => {
         const cap = capabilities.find((c) => c.toolName === tr.tool) ?? null;
         // Task #411 — orchestrator coordinator tools (resolve_entity,
         // evaluate_gate) emit shape-tagged payloads via the data

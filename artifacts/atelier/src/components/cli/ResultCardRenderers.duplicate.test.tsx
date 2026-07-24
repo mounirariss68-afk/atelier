@@ -131,6 +131,30 @@ test("ToolResultCardList routes errorCode duplicate_opportunity to the friendly 
   assert(!html.includes('data-testid="cli-tool-error"'), "raw error dump should not render");
 });
 
+console.log("ToolResultCardList \u2014 Task #645 identical-card dedupe");
+
+test("two identical tool results render exactly one card", () => {
+  const tr = {
+    tool: "meeting_reschedule",
+    ok: true,
+    data: { shape: "meeting_card", id: "mtg_1", title: "Weekly sync", startsAt: "2026-07-25T07:00:00Z" },
+  };
+  const html = renderToStaticMarkup(
+    <ToolResultCardList toolResults={[tr, { ...tr }]} capabilities={[]} locale="en" />,
+  );
+  const cards = html.split('data-testid="cli-tool-result-card"').length - 1;
+  assert(cards === 1, `expected exactly one card render, got ${cards}`);
+});
+
+test("distinct tool results still render separate cards", () => {
+  const a = { tool: "meeting_reschedule", ok: true, data: { shape: "meeting_card", id: "mtg_1", title: "Weekly sync A" } };
+  const b = { tool: "meeting_reschedule", ok: true, data: { shape: "meeting_card", id: "mtg_2", title: "Weekly sync B" } };
+  const html = renderToStaticMarkup(
+    <ToolResultCardList toolResults={[a, b]} capabilities={[]} locale="en" />,
+  );
+  assert(html.includes("Weekly sync A") && html.includes("Weekly sync B"), "both distinct cards must render");
+});
+
 test("other errors still render the generic error card", () => {
   const html = renderToStaticMarkup(
     <ToolResultCardList

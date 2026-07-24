@@ -141,6 +141,29 @@ export function applyFrame<T extends ChatTurnCore>(turn: T, frame: ChatFrame): T
         const lifted = liftNavigateTo((d.data as { navigateTo?: unknown }).navigateTo);
         if (lifted) nextNavigateTo = lifted;
       }
+      // Task #645 — never stack two identical cards for one action: drop
+      // a tool_result whose tool + outcome + payload already exist on this
+      // turn (confirm replays / server re-emits). The trace tick is still
+      // appended so the activity breadcrumb stays honest.
+      const isDuplicate = (turn.toolResults ?? []).some((prev) => {
+        if (prev.tool !== tool || prev.ok !== ok) return false;
+        if ((prev.errorCode ?? null) !== (d.errorCode ?? null)) return false;
+        try {
+          return JSON.stringify(prev.data ?? null) === JSON.stringify(d.data ?? null);
+        } catch {
+          return false;
+        }
+      });
+      if (isDuplicate) {
+        return {
+          ...turn,
+          navigateTo: nextNavigateTo,
+          trace: [
+            ...turn.trace,
+            { kind: "tool", text: `${ok ? "✓" : "✗"} ${tool}`, at: frame.receivedAt },
+          ],
+        };
+      }
       return {
         ...turn,
         navigateTo: nextNavigateTo,

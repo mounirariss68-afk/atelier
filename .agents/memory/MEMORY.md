@@ -135,3 +135,4 @@
 - [Shared chat-core package](chat-core-shared.md) — web+mobile chat are shims over @workspace/chat-core (2-arg applyFrame, {code,message} error, render-time clarification fields); edit protocol there, never fork a client reducer.
 - [Outlook calendar webhook cache](atelier-calendar-cache.md) — cache read path degrades to live pull unless sub+deltaLink fresh; new Outlook-write surfaces must call noteLocalCalendarChange; dev = live-pull only.
 - [Chat document-email via Outlook](atelier-doc-email.md) — disambiguation payloads from isWrite tools need navigateTo:null; Mail scopes are newer than calendar scopes (stale connections → reconnect); 3MB inline attachment cap.
+- [Chat narration/card contract](atelier-narration-contract.md) — pre-tool prose buffered, flushed only on tool success; card-restating final prose trimmed via pure narration-contract helpers; clients dedupe identical tool_result frames.

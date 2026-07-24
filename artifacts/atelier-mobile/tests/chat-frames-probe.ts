@@ -223,5 +223,39 @@ check(
   );
 }
 
+// 6. Task #645 — identical tool_result frames dedupe. A server re-emit
+// (same tool + outcome + payload) must NOT stack a second card, but the
+// trace still records the tool tick. Distinct payloads still append.
+{
+  let t = freshTurn();
+  const payload = {
+    tool: "meeting_reschedule",
+    ok: true,
+    data: { shape: "write_success", id: "mtg_1", title: "Weekly sync" },
+  };
+  t = applyFrame(t, frame("tool_result", payload));
+  t = applyFrame(t, frame("tool_result", JSON.parse(JSON.stringify(payload))));
+  check("identical tool_result re-emit keeps one card", t.toolResults.length === 1, t.toolResults);
+  check(
+    "duplicate still appends a trace row",
+    t.trace.filter((tr) => tr.kind === "tool").length === 2,
+    t.trace,
+  );
+  t = applyFrame(
+    t,
+    frame("tool_result", {
+      tool: "meeting_reschedule",
+      ok: true,
+      data: { shape: "write_success", id: "mtg_2", title: "Other" },
+    }),
+  );
+  check("distinct payload still appends a second card", t.toolResults.length === 2);
+  t = applyFrame(
+    t,
+    frame("tool_result", { tool: "meeting_reschedule", ok: false, errorCode: "not_found" }),
+  );
+  check("same tool with different outcome appends", t.toolResults.length === 3);
+}
+
 console.log(failures === 0 ? "ALL PASS" : `${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
