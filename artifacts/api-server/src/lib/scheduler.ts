@@ -10,6 +10,7 @@ import { runWinLossOverdueScan } from "../routes/atelier/winLossRoutes";
 import { cleanupExpiredSessions } from "./auth/session";
 import { runMsMeetingAutolog } from "./msMeetingAutolog";
 import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
+import { runMsLicenseSeatForecast } from "./msLicenseForecast";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -30,6 +31,11 @@ const BILLING_ORCHESTRATOR_CRON = process.env.BILLING_ORCHESTRATOR_CRON ?? "30 4
 // Task #431 — Cash Flow Forecaster writes a fresh 13-week snapshot +
 // raises cash-gap Pane A alerts every Monday 05:00 UTC by default.
 const CASH_FORECASTER_CRON = process.env.CASH_FORECASTER_CRON ?? "0 5 * * 1";
+// Task #632 — daily 05:15 UTC: compare upcoming joiner start dates against
+// spare Microsoft 365 seats and warn founders/HR ONCE per shortfall so
+// seats get bought in the GoDaddy portal before day one. Cheap no-op when
+// MS admin creds/consent are missing.
+const MS_LICENSE_FORECAST_CRON = process.env.MS_LICENSE_FORECAST_CRON ?? "15 5 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
@@ -41,6 +47,7 @@ let msAutologTask: ScheduledTask | null = null;
 let billingOrchestratorTask: ScheduledTask | null = null;
 let cashForecasterTask: ScheduledTask | null = null;
 let msCalSyncTask: ScheduledTask | null = null;
+let msLicenseForecastTask: ScheduledTask | null = null;
 
 // Task #629 — hourly: renew Graph calendar subscriptions (max ~3-day
 // lifetime), roll cache windows forward, and safety-sync stale caches.
@@ -329,6 +336,32 @@ export function startScheduler(): void {
     );
   }
 
+  // Microsoft 365 seat forecast (Task #632) — daily look-ahead of joiner
+  // start dates vs spare license seats; alerts founders/HR once per
+  // distinct shortfall, skips cleanly without creds/consent.
+  if (cron.validate(MS_LICENSE_FORECAST_CRON)) {
+    msLicenseForecastTask = cron.schedule(
+      MS_LICENSE_FORECAST_CRON,
+      async () => {
+        try {
+          const out = await runMsLicenseSeatForecast();
+          if (out.checked || out.skippedReason !== "not-configured") {
+            logger.info(out, "MS license seat forecast finished");
+          }
+        } catch (err) {
+          logger.error({ err }, "MS license seat forecast encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: MS_LICENSE_FORECAST_CRON }, "MS license seat forecast scheduler started");
+  } else {
+    logger.error(
+      { cron: MS_LICENSE_FORECAST_CRON },
+      "Invalid MS_LICENSE_FORECAST_CRON expression, MS license seat forecast not scheduled",
+    );
+  }
+
   // Boot pass: ensure subscriptions exist for already-connected users
   // shortly after startup (delayed so boot isn't slowed by Graph calls).
   setTimeout(() => {
@@ -388,6 +421,11 @@ export function stopScheduler(): void {
     msCalSyncTask.stop();
     msCalSyncTask = null;
     logger.info("MS calendar sync scheduler stopped");
+  }
+  if (msLicenseForecastTask) {
+    msLicenseForecastTask.stop();
+    msLicenseForecastTask = null;
+    logger.info("MS license seat forecast scheduler stopped");
   }
 }
 
