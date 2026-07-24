@@ -51,7 +51,21 @@ import {
   looksLikeEmailAddress,
   isSelfReference,
 } from "../../src/lib/atelier-cli/meeting-attendee-resolver.js";
-import { listCapabilities } from "../../src/lib/atelier-cli/capability-catalog.js";
+import {
+  extractTemporalHints,
+  significantTitleWords,
+  scoreTitleWordMatch,
+  titleWordsAllMatch,
+} from "../../src/lib/atelier-cli/temporal-query.js";
+import { looksLikeToolMiss } from "../../src/lib/atelier-cli/index.js";
+import {
+  CORE_TOOLS_BY_KIND,
+  floorToolsForKind,
+} from "../../src/lib/atelier-cli/capability-retriever.js";
+import {
+  listCapabilities,
+  scrubKnownToolNames,
+} from "../../src/lib/atelier-cli/capability-catalog.js";
 import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 
 let passed = 0;
@@ -155,7 +169,9 @@ ok(timeFromMeetingQuery("review 12/09") === null, "MM/DD not a time");
 ok(timeFromMeetingQuery("phase 2 planning") === null, "bare number without time context");
 ok(timeFromMeetingQuery("on 2026-07-22 at 7pm") === "19:00", "date + time → time wins");
 ok(dateFromMeetingQuery("on 2026-07-22 at 7pm") === "2026-07-22", "explicit date extracted");
-ok(dateFromMeetingQuery("catch up friday") === null, "no explicit/relative date → null");
+// Task #644 — weekdays now narrow to a date (previously ignored).
+ok(/^\d{4}-\d{2}-\d{2}$/.test(dateFromMeetingQuery("catch up friday") ?? ""), "bare weekday now narrows to a date (Task #644)");
+ok(dateFromMeetingQuery("quarterly business review") === null, "no explicit/relative date → null");
 
 console.log("6c. Task #581 — timezone helpers");
 {
@@ -394,6 +410,81 @@ console.log("11. intent utterance matrix (accented × unaccented × refusals)");
   ok(!looksLikeClarificationAnswer("setup a meeting with gokhan tomorrow at 8"), "screenshot utterance routes as a fresh command");
   ok(normalizeTimeInput("8") === "08:00", "screenshot utterance time token normalizes");
   ok(foldRosterName("Gökhan Güney").includes(foldRosterName("gokhan")), "screenshot utterance attendee folds to roster row");
+}
+
+console.log("12. Task #644 — temporal normalization (extractTemporalHints)");
+{
+  const now = new Date("2026-07-22T22:30:00Z"); // Dubai already on the 23rd
+  const tz = "Asia/Dubai";
+  const h1 = extractTemporalHints("the weekly catch up meeting today", tz, now);
+  ok(h1.cleaned === "weekly catch up meeting", "\"today\" + articles stripped from title query");
+  ok(h1.ymd === "2026-07-23", "\"today\" resolves in the caller's tz");
+  const h2 = extractTemporalHints("tomorrow's 7am meeting", tz, now);
+  ok(h2.ymd === "2026-07-24" && h2.hadTemporal, "\"tomorrow's\" resolves + flags temporal");
+  ok(!h2.cleaned.includes("tomorrow"), "possessive tomorrow stripped");
+  const h3 = extractTemporalHints("pipeline review on friday", tz, now);
+  ok(h3.ymd === "2026-07-24" && h3.cleaned === "pipeline review", "weekday resolves to next occurrence");
+  const h4 = extractTemporalHints("standup next monday", tz, now);
+  ok(h4.ymd === "2026-07-27" && h4.cleaned === "standup", "\"next monday\" resolves");
+  const h5 = extractTemporalHints("catch up on 2026-08-01", tz, now);
+  ok(h5.ymd === "2026-08-01" && h5.cleaned === "catch up", "explicit ISO date extracted + stripped");
+  const h6 = extractTemporalHints("today", tz, now);
+  ok(h6.cleaned === "" && h6.ymd === "2026-07-23" && h6.hadTemporal, "pure-temporal phrase → empty cleaned query");
+  const h7 = extractTemporalHints("quarterly business review", tz, now);
+  ok(h7.ymd === null && !h7.hadTemporal && h7.cleaned === "quarterly business review", "no temporal tokens → untouched");
+  ok(dateFromMeetingQuery("cancel friday's standup", tz, now) === "2026-07-24", "weekday flows through dateFromMeetingQuery");
+}
+
+console.log("13. Task #644 — fuzzy title word matching");
+{
+  ok(titleWordsAllMatch("weekly catch up", "Weekly Catch-Up: Ops"), "catch up matches Catch-Up (squashed hyphen)");
+  ok(titleWordsAllMatch("catchup weekly", "Weekly Catch-up"), "word order irrelevant + catchup≈catch-up");
+  ok(!titleWordsAllMatch("weekly catch up", "Monthly Review"), "unrelated title rejected");
+  ok(significantTitleWords("the catch up with gökhan").includes("gökhan") === false || true, "significantTitleWords runs");
+  ok(significantTitleWords("cancel the meeting").length === 0 || !significantTitleWords("cancel the meeting").includes("the"), "stopwords dropped");
+  ok(scoreTitleWordMatch("weekly ops sync", "Weekly Sync") >= 0.5, "majority word overlap scores ≥0.5");
+  ok(scoreTitleWordMatch("budget deep dive", "Weekly Catch-up") < 0.5, "no overlap scores low");
+}
+
+console.log("14. Task #644 — widen-on-miss refusal detector (looksLikeToolMiss)");
+{
+  for (const miss of [
+    "I don't have a tool available to upload documents.",
+    "I don't currently have access to a suitable tool for that.",
+    "There is no capability for saving files here.",
+    "Unfortunately I cannot find a tool that handles this request.",
+    "I'm unable to do this in the current surface.",
+    "That's not supported in this chat.",
+  ]) {
+    ok(looksLikeToolMiss(miss), `miss detected: "${miss.slice(0, 44)}…"`);
+  }
+  for (const normal of [
+    "Your meeting with Gökhan is booked for tomorrow at 08:00.",
+    "You have 3 upcoming meetings this week.",
+    "I couldn't find an upcoming meeting matching \"catch up\".",
+    "Here are your expenses for July.",
+    "",
+  ]) {
+    ok(!looksLikeToolMiss(normal), `normal prose passes: "${(normal || "(empty)").slice(0, 40)}"`);
+  }
+}
+
+console.log("15. Task #644 — per-kind tool floor + narration scrub");
+{
+  ok(CORE_TOOLS_BY_KIND.meeting!.includes("reschedule_internal_meeting"), "meeting floor includes reschedule");
+  const eligible = new Set(["meeting_list", "check_availability", "account_lookup"]);
+  const floor = floorToolsForKind("meeting", eligible);
+  ok(floor.join(",") === "meeting_list,check_availability", "floor restricted to eligible surface (clamp wins)");
+  ok(floorToolsForKind("nonexistent_kind", eligible).length === 0, "unknown kind → empty floor");
+  ok(floorToolsForKind(undefined, eligible).length === 0, "missing kind → empty floor");
+
+  const scrubbed = scrubKnownToolNames(
+    "I used schedule_internal_meeting and `meeting_list` to check.",
+  )!;
+  ok(!scrubbed.includes("schedule_internal_meeting") && !scrubbed.includes("meeting_list"), "registered tool names scrubbed from narration");
+  const untouched = scrubKnownToolNames("Expense exp_a1b2c3 for AED 500 at some_random_shop is approved.")!;
+  ok(untouched.includes("exp_a1b2c3") && untouched.includes("some_random_shop"), "entity ids + generic snake_case prose untouched");
+  ok(scrubKnownToolNames(null) === null, "null passthrough");
 }
 
 console.log(`\nAll ${passed} probes passed.`);

@@ -44,6 +44,50 @@ const ALWAYS_INCLUDE = new Set([
 /** Hard maximum tools surfaced to the model per step (always-on + ranked). */
 const HARD_CAP = 12;
 
+/** Cap for the widened retry pool (see `widen` below). */
+const WIDE_CAP = 40;
+
+/**
+ * Task #644 — deterministic per-intent-kind tool floor. When the typed
+ * intent names one of these kinds, the listed core tools are ALWAYS
+ * surfaced (persona/eligibility permitting) regardless of cosine
+ * scores, so common actions never vanish behind an embedding miss.
+ * Names not on the persona's eligible surface are silently skipped —
+ * the floor can never widen a persona's clamp.
+ */
+export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
+  meeting: [
+    "schedule_internal_meeting",
+    "reschedule_internal_meeting",
+    "cancel_internal_meeting",
+    "update_internal_meeting",
+    "schedule_client_meeting",
+    "meeting_list",
+    "check_availability",
+  ],
+  expense: ["create_my_expense", "my_expenses", "submit_my_expense", "expense_list"],
+  timesheet: ["log_my_time", "my_timesheets", "submit_my_timesheet", "timesheet_current"],
+  leave: ["request_leave", "my_leave"],
+  document: ["save_my_document", "my_documents", "search_documents", "document_list"],
+  account: ["account_lookup", "account_list", "account_dossier"],
+  opportunity: ["opportunity_detail", "opportunity_list_by_stage", "pipeline_by_stage"],
+  contact: ["contact_detail", "contact_list"],
+  engagement: ["engagement_detail", "engagement_list_active"],
+};
+
+/**
+ * Pure floor helper (probed offline): core tool names for `kind`
+ * restricted to the eligible surface.
+ */
+export function floorToolsForKind(
+  kind: string | undefined,
+  eligibleNames: ReadonlySet<string>,
+): string[] {
+  const core = kind ? CORE_TOOLS_BY_KIND[kind] : undefined;
+  if (!core) return [];
+  return core.filter((n) => eligibleNames.has(n));
+}
+
 /**
  * Modules whose write tools are covered by the orchestrator's
  * `propose_write` dispatcher. Any tool whose `module` is in this set
@@ -183,10 +227,21 @@ export async function retrieveCapabilities(args: {
    * stay reachable via slash commands and direct typed routes.
    */
   decommissionLegacy?: boolean;
+  /**
+   * Task #644 — widen-on-miss retry. When true the ENTIRE eligible
+   * pool (same persona clamp, read-intent write hiding and legacy
+   * decommission as always) is surfaced up to WIDE_CAP, bypassing
+   * cosine ranking. Used exactly once per turn when the model claims
+   * no suitable tool exists.
+   */
+  widen?: boolean;
 }): Promise<RetrievedTools> {
   const persona = args.persona;
+  const cap = args.widen ? WIDE_CAP : HARD_CAP;
   // Reserve always-on slots; ranked slots fill the rest of HARD_CAP.
-  const rankedBudget = Math.max(1, (args.topK ?? HARD_CAP - ALWAYS_INCLUDE.size));
+  const rankedBudget = args.widen
+    ? cap
+    : Math.max(1, (args.topK ?? HARD_CAP - ALWAYS_INCLUDE.size));
   const decommissionLegacy = args.decommissionLegacy ?? true;
   const intentVerb = args.intentVerb ?? "";
   const isReadIntent = intentVerb === "read" || intentVerb === "trivial";
@@ -224,18 +279,35 @@ export async function retrieveCapabilities(args: {
 
   // 1. Always-include the four orchestrator verbs (within budget).
   for (const t of allTools) {
-    if (selected.size >= HARD_CAP) break;
+    if (selected.size >= cap) break;
     if (ALWAYS_INCLUDE.has(t.name)) selected.add(t.name);
   }
 
-  // 2. Top-K by cosine over the eligible pool, capped at HARD_CAP.
+  // 1b. Task #644 — deterministic per-kind floor: the core tools for
+  // the typed intent kind are surfaced regardless of cosine rank
+  // (still restricted to the eligible pool, so persona clamps and the
+  // read-intent write hiding always win).
+  for (const n of floorToolsForKind(args.intentKind, eligibleNames)) {
+    if (selected.size >= cap) break;
+    selected.add(n);
+  }
+
+  // 1c. Widened retry — surface the whole eligible pool up to WIDE_CAP.
+  if (args.widen) {
+    for (const t of eligible) {
+      if (selected.size >= cap) break;
+      selected.add(t.name);
+    }
+  }
+
+  // 2. Top-K by cosine over the eligible pool, capped.
   const scored = rows
     .filter((r) => eligibleNames.has(r.toolName) && !selected.has(r.toolName))
     .map((r) => ({ tool: r.toolName, score: cosine(queryEmb.vec, r.vec) }))
     .sort((a, b) => b.score - a.score);
   let added = 0;
   for (const s of scored) {
-    if (selected.size >= HARD_CAP || added >= rankedBudget) break;
+    if (selected.size >= cap || added >= rankedBudget) break;
     selected.add(s.tool);
     added++;
   }
@@ -243,13 +315,13 @@ export async function retrieveCapabilities(args: {
   // 3. Cold-start fallback — when we have no embeddings for the
   // eligible pool, fill the remaining budget alphabetically by tool
   // name so the model has *something* to work with. Still capped.
-  if (selected.size < HARD_CAP && scored.length === 0) {
+  if (selected.size < cap && scored.length === 0) {
     const fillers = eligible
       .filter((t) => !selected.has(t.name))
       .map((t) => t.name)
       .sort();
     for (const n of fillers) {
-      if (selected.size >= HARD_CAP) break;
+      if (selected.size >= cap) break;
       selected.add(n);
     }
   }

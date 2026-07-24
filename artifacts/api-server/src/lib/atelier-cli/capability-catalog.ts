@@ -534,6 +534,26 @@ export function scrubToolIdentifiers(text: string | null | undefined): string | 
   return out;
 }
 
+/**
+ * Task #644 — conservative narration scrub. Unlike scrubToolIdentifiers
+ * (used for refusal frames), this replaces ONLY registered tool names /
+ * capability ids — never the generic snake_case fallback — so entity
+ * ids, references and file names in normal prose are left untouched.
+ */
+export function scrubKnownToolNames(text: string | null | undefined): string | null {
+  if (!text) return text ?? null;
+  let out = text;
+  for (const e of REGISTRY) {
+    for (const n of [e.toolName, e.id]) {
+      if (!n) continue;
+      const esc = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      out = out.replace(new RegExp("`?\\b" + esc + "\\b`?", "g"), "that action");
+    }
+  }
+  out = out.replace(/(that action)( \1)+/g, "$1").replace(/[ \t]{2,}/g, " ");
+  return out;
+}
+
 export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
   const role = persona.role as AtelierRole;
   if (SELF_ONLY_CHAT_ROLES.has(role)) {

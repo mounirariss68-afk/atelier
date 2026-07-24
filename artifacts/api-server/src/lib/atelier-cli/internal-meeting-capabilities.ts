@@ -33,6 +33,11 @@ import {
 } from "./chat-tz.js";
 import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
 import {
+  extractTemporalHints,
+  scoreTitleWordMatch,
+  titleWordsAllMatch,
+} from "./temporal-query.js";
+import {
   buildDuplicateWarning,
   findSameSlotMeetings,
   isPastSlot,
@@ -603,12 +608,9 @@ export function dateFromMeetingQuery(
   tz: string = DEFAULT_CHAT_TZ,
   now: Date = new Date(),
 ): string | null {
-  const m = query.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-  if (m) return m[1]!;
-  const s = query.toLowerCase();
-  if (/\btomorrow\b/.test(s)) return tomorrowInTz(tz, now);
-  if (/\btoday\b|\btonight\b/.test(s)) return todayInTz(tz, now);
-  return null;
+  // Task #644 — delegate to the shared temporal extractor so weekday
+  // names ("the sync on Friday") resolve too, not just today/tomorrow.
+  return extractTemporalHints(query, tz, now).ymd;
 }
 
 /** Minutes since midnight for an "HH:MM" string. */
@@ -694,7 +696,54 @@ async function resolveTargetMeeting(
 > {
   const meetingId = typeof input.meetingId === "string" ? input.meetingId.trim() : "";
   const query = typeof input.meeting === "string" ? input.meeting.trim() : "";
-  let candidates = await findManagedMeetings(persona, meetingId ? "" : query);
+  // Task #644 — strip temporal tokens ("today", "tomorrow's", weekday
+  // names) from the lookup phrase BEFORE any title matching: they are
+  // never part of the stored title and used to poison the ILIKE match.
+  // The resolved wall date narrows candidates instead.
+  const hints = extractTemporalHints(query, tz);
+  const cleaned = hints.cleaned;
+  const qYmd = hints.ymd;
+  const onDay = (rows: ManagedMeetingRow[]): ManagedMeetingRow[] =>
+    qYmd
+      ? rows.filter((m) => m.startAt && wallParts(m.startAt, tz).ymd === qYmd)
+      : rows;
+  let candidates: ManagedMeetingRow[];
+  let allRows: ManagedMeetingRow[] | null = null;
+  if (meetingId || !query) {
+    candidates = await findManagedMeetings(persona, "");
+    // Date-only phrasings ("cancel tomorrow's meeting", or a bare date
+    // with no topic words at all) narrow to that day.
+    if (!meetingId && qYmd) candidates = onDay(candidates);
+  } else {
+    // Fetch once, match in JS: exact substring first (old behavior on
+    // the CLEANED phrase), then word-level fuzzy fallback tolerating
+    // word order, punctuation and hyphen/space variants
+    // ("catch up" / "catch-up" / "Catchup").
+    allRows = await findUpcomingMeetingRows(persona.orgId, "");
+    const pool = onDay(allRows);
+    let matched: ManagedMeetingRow[] =
+      cleaned.length > 0
+        ? pool.filter((m) => (m.title ?? "").toLowerCase().includes(cleaned.toLowerCase()))
+        : [];
+    if (matched.length === 0 && cleaned.length > 0) {
+      matched = pool.filter((m) => titleWordsAllMatch(cleaned, m.title ?? ""));
+    }
+    if (matched.length === 0 && cleaned.length > 0) {
+      // Partial-coverage fallback: majority of the words match
+      // ("weekly team catch up" vs title "Weekly Catch-up").
+      matched = pool
+        .map((m) => ({ m, s: scoreTitleWordMatch(cleaned, m.title ?? "") }))
+        .filter((x) => x.s >= 0.5)
+        .sort((a, b) => b.s - a.s)
+        .map((x) => x.m);
+    }
+    if (matched.length === 0 && cleaned.length === 0 && qYmd) {
+      // Purely temporal phrase ("tomorrow's meeting") — every meeting
+      // on that day is a candidate; disambiguation handles >1.
+      matched = pool;
+    }
+    candidates = matched.filter((m) => canManageInternalMeeting(persona, m)).slice(0, 10);
+  }
   // Task #581 — title match came up empty but the query contains a time
   // ("tomorrow's 7am", "the 8:30"): match candidates on their start time
   // as the USER sees it (device timezone; Dubai fallback). Fetched
@@ -704,8 +753,8 @@ async function resolveTargetMeeting(
   if (!meetingId && query && candidates.length === 0) {
     const hm = timeFromMeetingQuery(query);
     if (hm) {
-      const ymd = dateFromMeetingQuery(query, tz);
-      const all = await findUpcomingMeetingRows(persona.orgId, "");
+      const ymd = qYmd;
+      const all = allRows ?? (await findUpcomingMeetingRows(persona.orgId, ""));
       const { exact, near } = matchMeetingsByTime(all, hm, ymd, tz);
       const exactManageable = exact.filter((m) => canManageInternalMeeting(persona, m));
       if (exactManageable.length > 0) {
@@ -785,10 +834,15 @@ async function resolveTargetMeeting(
   if (candidates.length === 0) {
     // Task #581 — only mention organizer permissions when an
     // unmanageable meeting actually matches the words; otherwise the
-    // honest answer is simply "no match".
-    if (query) {
-      const anyMatch = (await findUpcomingMeetingRows(persona.orgId, query)).filter(
-        (m) => !canManageInternalMeeting(persona, m),
+    // honest answer is simply "no match". Task #644 — matching uses the
+    // cleaned phrase + fuzzy word matching (same rules as above).
+    if (query && cleaned.length > 0) {
+      const rows = onDay(allRows ?? (await findUpcomingMeetingRows(persona.orgId, "")));
+      const anyMatch = rows.filter(
+        (m) =>
+          !canManageInternalMeeting(persona, m) &&
+          ((m.title ?? "").toLowerCase().includes(cleaned.toLowerCase()) ||
+            titleWordsAllMatch(cleaned, m.title ?? "")),
       );
       if (anyMatch.length > 0) {
         return {
@@ -800,12 +854,37 @@ async function resolveTargetMeeting(
         };
       }
     }
+    // Task #644 — resolution telemetry: log the miss so real-world
+    // phrasing gaps show up in the server logs, never to the user.
+    console.log(
+      `[cli-telemetry] ${JSON.stringify({
+        evt: "meeting_resolve_miss",
+        query,
+        cleaned,
+        ymd: qYmd,
+        tz,
+      })}`,
+    );
+    // Honest distinction when the user gave no topic words: "nothing
+    // that day / at all" vs "meetings exist but you can't manage them".
+    if (!query || cleaned.length === 0) {
+      const rows = onDay(allRows ?? (await findUpcomingMeetingRows(persona.orgId, "")));
+      if (rows.length > 0) {
+        return {
+          result: {
+            ok: false,
+            errorCode: "forbidden",
+            errorMessage: `I found ${rows.length === 1 ? `${meetingLabel(rows[0]!, tz)}` : `${rows.length} upcoming meetings${qYmd ? ` on ${qYmd}` : ""}`}, but only the organizer (or a founding partner) can change ${rows.length === 1 ? "it" : "them"}.`,
+          },
+        };
+      }
+    }
     return {
       result: {
         ok: false,
         errorCode: "not_found",
         errorMessage: query
-          ? `I couldn't find an upcoming meeting matching "${query}".`
+          ? `I couldn't find an upcoming meeting matching "${cleaned || query}"${qYmd ? ` on ${qYmd}` : ""}.`
           : "You have no upcoming meetings that you can manage.",
       },
     };

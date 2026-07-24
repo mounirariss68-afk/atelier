@@ -50,6 +50,7 @@ import {
   findByToolName,
   CATALOG_SCHEMA_VERSION,
   scrubToolIdentifiers,
+  scrubKnownToolNames,
   getSessionDraft,
   recordSessionResult,
   ingestEntitiesFromToolResult,
@@ -2300,6 +2301,24 @@ const COMMAND_OPENERS = new Set([
   // pending is a NEW request, not an answer to the paused question.
   "setup", "book", "reschedule", "cancel", "invite", "plan", "check",
 ]);
+/**
+ * Task #644 — refusal-ish text detector for the widen-on-miss retry.
+ * Fires only when the model's prose claims it lacks a tool/capability
+ * for the request, never on normal answers. Pure + exported so the
+ * offline probe suite can pin the phrasing coverage.
+ */
+export function looksLikeToolMiss(raw: string | null | undefined): boolean {
+  const t = (raw ?? "").toLowerCase();
+  if (!t) return false;
+  return (
+    /(don'?t|do not|doesn'?t|does not|no longer)\s+(currently\s+)?(have|see|find)\s+(access to\s+)?(a|any|the)?\s*(suitable\s+|available\s+|specific\s+)?(tool|capabilit(?:y|ies)|function|way to)/.test(t) ||
+    /\bno\s+(suitable\s+|available\s+|matching\s+)?(tools?|capabilit(?:y|ies)|functions?)\b/.test(t) ||
+    /\b(i'?m|i am)\s+(unable|not able)\s+to\s+(do|perform|handle|complete)\s+(this|that)\b/.test(t) ||
+    /\bnot\s+(currently\s+)?(supported|available)\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface)\b/.test(t) ||
+    /\bcannot\s+(find|locate)\s+(a|any)\s+(tool|capabilit(?:y|ies)|function)/.test(t)
+  );
+}
+
 export function looksLikeClarificationAnswer(raw: string): boolean {
   const p = (raw ?? "").trim();
   if (!p) return false;
@@ -3135,7 +3154,22 @@ export async function runTurn(
       intentKind: typedIntent.kind,
       intentVerb: typedIntent.verb,
     });
-    const tools = retrieved.tools;
+    // Task #644 — `let`: the tool menu may be rebuilt ONCE mid-turn by
+    // the widen-on-miss retry below when the model claims no suitable
+    // tool exists.
+    let tools = retrieved.tools;
+    let widenRetryUsed = false;
+    // Task #644 — resolution telemetry: intent + surfaced tools, so
+    // real-world "couldn't understand" cases are diagnosable from logs.
+    console.log(
+      `[cli-telemetry] ${JSON.stringify({
+        evt: "tool_menu",
+        turnId,
+        kind: typedIntent.kind,
+        verb: typedIntent.verb,
+        tools: retrieved.selected,
+      })}`,
+    );
     // Tier routing — reads land on Haiku, writes / transitions on Sonnet.
     const turnTier: "haiku" | "sonnet" = typedIntent.tier;
 
@@ -3609,11 +3643,64 @@ export async function runTurn(
 
       if (claudeStep.text) {
         // Task #469 — strip leaked internal markers ("final: …") from
-        // the prose before it streams to any client.
-        const cleanText = claudeStep.text.replace(
-          /^\s*(?:final|answer|narration)\s*[:\-–—]\s*/i,
-          "",
-        );
+        // the prose before it streams to any client. Task #644 — also
+        // deterministically scrub registered tool names / capability
+        // ids from user-facing narration (conservative scrub only:
+        // entity ids and normal snake_case prose are untouched).
+        const cleanText =
+          scrubKnownToolNames(
+            claudeStep.text.replace(
+              /^\s*(?:final|answer|narration)\s*[:\-–—]\s*/i,
+              "",
+            ),
+          ) ?? "";
+        // Task #644 — widen-on-miss retry: the model claims it has no
+        // suitable tool while it made no tool call this turn. Rebuild
+        // the menu ONCE from the full eligible pool (same persona
+        // clamp + read-intent write hiding) and let it retry, instead
+        // of surfacing a refusal for a capability that exists.
+        if (
+          !widenRetryUsed &&
+          !claudeStep.toolCall &&
+          toolCalls.length === 0 &&
+          looksLikeToolMiss(claudeStep.text)
+        ) {
+          widenRetryUsed = true;
+          try {
+            const widened = await retrieveCapabilities({
+              persona,
+              query: retrievalQuery,
+              intentKind: typedIntent.kind,
+              intentVerb: typedIntent.verb,
+              widen: true,
+            });
+            tools = widened.tools;
+            console.log(
+              `[cli-telemetry] ${JSON.stringify({
+                evt: "tool_miss_widen",
+                turnId,
+                kind: typedIntent.kind,
+                verb: typedIntent.verb,
+                tools: widened.selected,
+              })}`,
+            );
+            history.push({
+              role: "assistant",
+              content: [{ type: "text", text: claudeStep.text }],
+            });
+            history.push({
+              role: "user",
+              content:
+                "(system: the available tool list has been refreshed and now includes additional capabilities — re-check it and complete the original request if a suitable tool now exists. If it truly cannot be done, say so plainly without mentioning any internal tool names.)",
+            });
+            continue;
+          } catch (err) {
+            console.error(
+              "[atelier-cli] widen-on-miss retry failed",
+              err instanceof Error ? err.message : String(err),
+            );
+          }
+        }
         if (cleanText) {
           record({ type: "narration", data: { text: cleanText, step } });
         }
@@ -3650,6 +3737,52 @@ export async function runTurn(
           classification.label === "other" &&
           (claudeStep.text ?? "").trim().length === 0
         ) {
+          // Task #644 — the "silent miss" variant of widen-on-miss:
+          // the model produced neither a tool call nor text. Rebuild
+          // the menu once from the full eligible pool before refusing.
+          if (!widenRetryUsed) {
+            widenRetryUsed = true;
+            try {
+              const widened = await retrieveCapabilities({
+                persona,
+                query: retrievalQuery,
+                intentKind: typedIntent.kind,
+                intentVerb: typedIntent.verb,
+                widen: true,
+              });
+              tools = widened.tools;
+              console.log(
+                `[cli-telemetry] ${JSON.stringify({
+                  evt: "tool_miss_widen",
+                  turnId,
+                  kind: typedIntent.kind,
+                  verb: typedIntent.verb,
+                  silent: true,
+                  tools: widened.selected,
+                })}`,
+              );
+              history.push({
+                role: "user",
+                content:
+                  "(system: the available tool list has been refreshed and now includes additional capabilities — re-check it and complete the original request if a suitable tool now exists. If it truly cannot be done, say so plainly without mentioning any internal tool names.)",
+              });
+              continue;
+            } catch (err) {
+              console.error(
+                "[atelier-cli] widen-on-miss retry failed",
+                err instanceof Error ? err.message : String(err),
+              );
+            }
+          }
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "capability_refusal",
+              turnId,
+              kind: typedIntent.kind,
+              verb: typedIntent.verb,
+              widened: widenRetryUsed,
+            })}`,
+          );
           // Task #340 — refusal pageHref fallback: prefer the page the
           // user is currently on (so "open the right page" returns them
           // to the most relevant surface), else null.
