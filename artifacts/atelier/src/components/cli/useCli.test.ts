@@ -87,7 +87,9 @@ test("tool_result(propose_write) lifts data.navigateTo (on_commit)", () => {
   assert.deepEqual(next.navigateTo, { path: "/opportunities/opp_1", when: "on_commit" });
 });
 
-test("tool_result for a different tool does not lift navigateTo", () => {
+test("tool_result from any successful tool lifts a valid navigateTo hint", () => {
+  // Shared chat-core reducer semantics: ANY ok tool result may carry a
+  // navigateTo hint in its data payload, not just propose_write.
   const next = applyFrame(seedTurn(), {
     type: "tool_result",
     receivedAt: 2,
@@ -97,7 +99,7 @@ test("tool_result for a different tool does not lift navigateTo", () => {
       data: { navigateTo: { path: "/x", when: "on_commit" } },
     },
   });
-  assert.equal(next.navigateTo ?? null, null);
+  assert.deepEqual(next.navigateTo, { path: "/x", when: "on_commit" });
 });
 
 test("tool_result(propose_write) with ok=false does not lift", () => {
