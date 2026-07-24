@@ -490,6 +490,137 @@ async function main() {
         composeEnrichedSummary("Unreadable receipt photo.", sanitizeReceiptDetails(visScrap.details)) ===
           "Unreadable receipt photo.",
     );
+    // 12. Task #652 — currency-glyph amount misreads. A real Airbnb receipt
+    // (total د.إ657.72, tax د.إ85.79) was extracted as 4657.72/485.79 with
+    // green confidence — the dirham glyph read as a leading "4". The shared
+    // pipeline must arithmetically cross-check and self-correct (or downgrade)
+    // before any consumer trusts the numbers.
+    const { validateReceiptAmounts, amountInText } = await import(
+      "../../src/lib/atelier-receipt-parse.js"
+    );
+
+    // (a) End-to-end through the stubbed extractor: misread total+tax, but
+    // subtotal read correctly → unambiguous stray-leading-digit fix.
+    cannedQueue.push({
+      merchant: "Airbnb",
+      total: 4657.72,
+      tax: 485.79,
+      subtotal: 571.93,
+      currency: "AED",
+      country: "UAE",
+      category: "hotel",
+      rawText:
+        "Airbnb receipt\n2 nights\nSubtotal د.إ571.93\nVAT د.إ85.79\nTotal (AED) د.إ657.72\nVISA ···· 4722 د.إ657.72",
+      confidence: "green",
+    });
+    const airbnb = await extractReceiptFromText("Airbnb Total د.إ657.72 ...");
+    check("airbnb: total corrected", airbnb.total === 657.72, String(airbnb.total));
+    check("airbnb: tax corrected", airbnb.tax === 85.79, String(airbnb.tax));
+    check(
+      "airbnb: validation stamped corrected",
+      airbnb.amountValidation?.status === "corrected",
+      JSON.stringify(airbnb.amountValidation),
+    );
+
+    // (b) Correct values pass through untouched (green stays green).
+    const good = validateReceiptAmounts({
+      total: 657.72,
+      tax: 85.79,
+      subtotal: 571.93,
+      confidence: "green",
+      rawText: "Subtotal 571.93 VAT 85.79 Total 657.72",
+    });
+    check("good: total unchanged", good.total === 657.72);
+    check("good: confidence stays green", good.confidence === "green");
+    check("good: status ok", good.amountValidation?.status === "ok");
+
+    // (c) Inconsistent but ambiguous → downgrade, never invent a number.
+    const ambiguous = validateReceiptAmounts({
+      total: 900,
+      tax: 50,
+      subtotal: 700,
+      confidence: "green",
+      rawText: "irrelevant",
+    });
+    check("ambiguous: total NOT rewritten", ambiguous.total === 900, String(ambiguous.total));
+    check(
+      "ambiguous: downgraded to amber",
+      ambiguous.confidence === "amber" && ambiguous.amountValidation?.status === "downgraded",
+      JSON.stringify(ambiguous.amountValidation),
+    );
+
+    // (d) rawText contradicting a would-be fix blocks the correction.
+    const contradicted = validateReceiptAmounts({
+      total: 4657.72,
+      tax: 85.79,
+      subtotal: 571.93,
+      confidence: "green",
+      rawText: "Grand total 4,657.72", // original verifiably printed, fix absent
+    });
+    check(
+      "contradicted: downgrade instead of correct",
+      contradicted.total === 4657.72 && contradicted.amountValidation?.status === "downgraded",
+      JSON.stringify(contradicted.amountValidation),
+    );
+
+    // (e) Repeated printed totals that all agree force the fix even without
+    // a subtotal.
+    const mentionsFix = validateReceiptAmounts({
+      total: 4657.72,
+      tax: 0,
+      totalMentions: [657.72, 657.72],
+      confidence: "green",
+      rawText: "Total 657.72 ... Charged 657.72",
+    });
+    check(
+      "mentions: total corrected",
+      mentionsFix.total === 657.72 && mentionsFix.amountValidation?.status === "corrected",
+      JSON.stringify(mentionsFix.amountValidation),
+    );
+
+    // (f) No subtotal, no repeated total, no tax — must NOT false-positive.
+    const noSignals = validateReceiptAmounts({
+      total: 48.5,
+      tax: 0,
+      confidence: "green",
+      rawText: "Careem trip 48.50 AED",
+    });
+    check("no-signals: untouched", noSignals.total === 48.5 && noSignals.confidence === "green");
+    const noTax = validateReceiptAmounts({
+      total: 30,
+      tax: 0,
+      subtotal: 30,
+      confidence: "green",
+      rawText: "OpenAI $30.00",
+    });
+    check("no-tax subtotal==total: ok", noTax.amountValidation?.status === "ok" && noTax.confidence === "green");
+
+    // (g) rawText-only weak signal: total absent but stripped variant printed
+    // → downgrade (never rewrite on this evidence alone).
+    const weak = validateReceiptAmounts({
+      total: 4657.72,
+      tax: 0,
+      confidence: "green",
+      rawText: "Total (AED) 657.72",
+    });
+    check(
+      "weak rawText signal: downgraded, not rewritten",
+      weak.total === 4657.72 && weak.confidence === "amber" && weak.amountValidation?.status === "downgraded",
+      JSON.stringify(weak.amountValidation),
+    );
+
+    // (h) amountInText boundary awareness: 657.72 inside 4,657.72 must not match.
+    check("amountInText: substring guarded", amountInText("Total 4,657.72", 657.72) === false);
+    check("amountInText: comma form found", amountInText("Total 4,657.72", 4657.72) === true);
+    check("amountInText: plain found", amountInText("Total 657.72", 657.72) === true);
+
+    // (i) Prompt guardrails present in the shared guidance.
+    check(
+      "prompt keeps currency-glyph rules",
+      src.includes("Currency symbols and marks are NEVER digits") &&
+        src.includes("د.إ657.72") &&
+        src.includes("card-number fragments"),
+    );
   } finally {
     stub.close();
   }
