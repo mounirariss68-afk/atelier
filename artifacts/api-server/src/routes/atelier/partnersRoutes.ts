@@ -35,7 +35,9 @@ import {
   atelierContract,
   atelierSelfBilledInvoices,
   atelierAuditEvents,
+  atelierDealPricings,
 } from "@workspace/db";
+import { normalizeCostLines } from "../../lib/atelier-pricing-structures.js";
 import { atelierAgentRuns } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { audit } from "./engagementRoutes";
@@ -267,6 +269,71 @@ router.get("/partners/firms/:id", async (req, res, next) => {
       return;
     }
     res.json(firm);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Deals whose pricing carries an alliance-partner-quote cost line linked to
+// this firm (Task #665). Read-only projection over atelier_deal_pricings
+// cost lines — surfaces quoted-vs-costed spend per deal on the partner page.
+// @cli-skip: Task #665 REST surface; chat parity tracked in docs/PARTNERS_BACKLOG.md
+router.get("/partners/firms/:id/quoted-deals", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const firm = await getFirm(me, req.params.id);
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const rows = await db
+      .select({
+        opportunityId: atelierDealPricings.opportunityId,
+        costLines: atelierDealPricings.costLines,
+        opportunityName: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        accountId: atelierOpportunities.accountId,
+        accountName: atelierAccounts.name,
+      })
+      .from(atelierDealPricings)
+      .innerJoin(
+        atelierOpportunities,
+        and(
+          eq(atelierOpportunities.id, atelierDealPricings.opportunityId),
+          eq(atelierOpportunities.orgId, me.orgId),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      )
+      .leftJoin(atelierAccounts, eq(atelierAccounts.id, atelierOpportunities.accountId))
+      .where(eq(atelierDealPricings.orgId, me.orgId));
+    const items: Array<Record<string, unknown>> = [];
+    for (const r of rows) {
+      const lines = normalizeCostLines(r.costLines ?? []);
+      for (const line of lines) {
+        if (line.type !== "alliance_partner_quote") continue;
+        if (line.partnerFirmId !== firm.id) continue;
+        const quoted = line.quotedAmountUsd ?? null;
+        items.push({
+          opportunityId: r.opportunityId,
+          opportunityName: r.opportunityName ?? null,
+          accountId: r.accountId ?? null,
+          accountName: r.accountName ?? null,
+          salesStage: r.salesStage ?? null,
+          lineLabel: line.label ?? null,
+          quotedAmountUsd: quoted,
+          costedAmountUsd: line.amountUsd,
+          deltaUsd:
+            quoted == null ? null : Math.round((line.amountUsd - quoted) * 100) / 100,
+          passThrough: line.passThrough === true,
+          recurrence: line.recurrence ?? "one_time",
+        });
+      }
+    }
+    items.sort((a, b) =>
+      String(a.opportunityName ?? "").localeCompare(String(b.opportunityName ?? "")),
+    );
+    res.json({ items });
   } catch (err) {
     next(err);
   }

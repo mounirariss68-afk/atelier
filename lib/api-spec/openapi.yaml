@@ -5914,6 +5914,30 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/partners/firms/{id}/quoted-deals:
+    get:
+      operationId: atelierListPartnerFirmQuotedDeals
+      tags: [atelier]
+      summary: Deals whose pricing carries an alliance-partner-quote cost line linked to this firm
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Quoted deals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AtelierPartnerFirmQuotedDeal" }
+                required: [items]
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/partners/targets:
     get:
       operationId: atelierListPartnerTargets
@@ -12090,6 +12114,21 @@ components:
         byUserId: { type: string, nullable: true }
         reason: { type: string, nullable: true }
       required: [toTier, at]
+    AtelierPartnerFirmQuotedDeal:
+      type: object
+      properties:
+        opportunityId: { type: string }
+        opportunityName: { type: string, nullable: true }
+        accountId: { type: string, nullable: true }
+        accountName: { type: string, nullable: true }
+        salesStage: { type: string, nullable: true }
+        lineLabel: { type: string, nullable: true }
+        quotedAmountUsd: { type: number, nullable: true }
+        costedAmountUsd: { type: number }
+        deltaUsd: { type: number, nullable: true }
+        passThrough: { type: boolean }
+        recurrence: { type: string }
+      required: [opportunityId, costedAmountUsd, passThrough, recurrence]
     AtelierPartnerFirm:
       type: object
       additionalProperties: true

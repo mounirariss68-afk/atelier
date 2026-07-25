@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { AtelierPricingCostLine } from "@workspace/api-client-react";
+import { useAtelierListPartnerFirms } from "@workspace/api-client-react";
 import { Card } from "@/components/ui/primitives";
 import { fieldControlCls } from "@/components/ui/fieldControls";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,8 @@ export function PricingCostLinesEditor({
   lines: CostLineDraft[];
   onChange: (next: CostLineDraft[]) => void;
 }) {
+  const { data: firmsData } = useAtelierListPartnerFirms();
+  const partnerFirms = firmsData?.items ?? [];
   const edit = (i: number, patch: Partial<CostLineDraft>) =>
     onChange(lines.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
   const remove = (i: number) => onChange(lines.filter((_, idx) => idx !== i));
@@ -109,8 +112,49 @@ export function PricingCostLinesEditor({
                 </button>
               </div>
               {line.type === "alliance_partner_quote" && (
-                <div className="text-[10px] text-text-faint font-mono pl-1">
-                  Partner quote — verify the quoted amount before billing handoff.
+                <div className="space-y-1 pl-1">
+                  <div className="grid grid-cols-12 gap-2 items-center">
+                    <select
+                      value={line.partnerFirmId ?? ""}
+                      onChange={(e) => edit(i, { partnerFirmId: e.target.value || null })}
+                      className={`${fieldControlCls} col-span-5 bg-bg-elevate border border-border rounded-md text-text text-sm`}
+                      data-testid={`select-cost-partner-firm-${i}`}
+                    >
+                      <option value="">Link partner firm…</option>
+                      {partnerFirms.map((f) => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                      {line.partnerFirmId &&
+                        !partnerFirms.some((f) => f.id === line.partnerFirmId) && (
+                          <option value={line.partnerFirmId}>
+                            {line.partnerFirmId} (not in registry)
+                          </option>
+                        )}
+                    </select>
+                    <Input
+                      type="number"
+                      min={0}
+                      placeholder="Quoted $"
+                      value={line.quotedAmountUsd ?? ""}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        edit(i, { quotedAmountUsd: Number.isFinite(v) && v >= 0 ? v : null });
+                      }}
+                      className="col-span-3 bg-bg-elevate border-border text-text"
+                      data-testid={`input-cost-quoted-${i}`}
+                    />
+                    <div className="col-span-4 text-[10px] text-text-faint font-mono">
+                      {line.quotedAmountUsd != null && line.quotedAmountUsd > 0 ? (
+                        <QuoteDelta quoted={line.quotedAmountUsd} costed={line.amountUsd} />
+                      ) : (
+                        "Partner's quoted amount (informational)"
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-text-faint font-mono">
+                    Partner quote — link the alliance firm and verify the quoted amount before
+                    billing handoff.
+                  </div>
                 </div>
               )}
             </div>
@@ -124,6 +168,17 @@ export function PricingCostLinesEditor({
         </div>
       )}
     </Card>
+  );
+}
+
+function QuoteDelta({ quoted, costed }: { quoted: number; costed: number }) {
+  const delta = Math.round((costed - quoted) * 100) / 100;
+  if (delta === 0) return <span data-testid="text-quote-delta">Costed at quote</span>;
+  const over = delta > 0;
+  return (
+    <span className={over ? "text-warn" : "text-success"} data-testid="text-quote-delta">
+      {over ? "+" : "−"}{fmtUsd(Math.abs(delta))} vs quote
+    </span>
   );
 }
 

@@ -7555,6 +7555,20 @@ export interface AtelierPartnerTierChange {
   reason?: string | null;
 }
 
+export interface AtelierPartnerFirmQuotedDeal {
+  opportunityId: string;
+  opportunityName?: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  salesStage?: string | null;
+  lineLabel?: string | null;
+  quotedAmountUsd?: number | null;
+  costedAmountUsd: number;
+  deltaUsd?: number | null;
+  passThrough: boolean;
+  recurrence: string;
+}
+
 export type AtelierPartnerFirmTier =
   | (typeof AtelierPartnerFirmTier)[keyof typeof AtelierPartnerFirmTier]
   | null;
@@ -8924,6 +8938,10 @@ export type AtelierCreateRateCardVersion201 = {
 export type AtelierOverridePricing200 = { [key: string]: unknown };
 
 export type AtelierCountersignPricing200 = { [key: string]: unknown };
+
+export type AtelierListPartnerFirmQuotedDeals200 = {
+  items: AtelierPartnerFirmQuotedDeal[];
+};
 
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;

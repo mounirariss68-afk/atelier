@@ -67,6 +67,7 @@ import {
   useAtelierListPartnerAgreements,
   useAtelierGetPartnerCoDeliver,
   useAtelierListOpportunities,
+  useAtelierListPartnerFirmQuotedDeals,
   getAtelierListPartnerFirmsQueryKey,
   getAtelierListPartnerTargetsQueryKey,
   getAtelierListJointPipelineQueryKey,
@@ -400,6 +401,7 @@ function IdentifyView() {
   const update = useAtelierUpdatePartnerFirm();
   const archive = useAtelierArchivePartnerFirm();
   const [evalOpenId, setEvalOpenId] = React.useState<string | null>(null);
+  const [quotesOpenId, setQuotesOpenId] = React.useState<string | null>(null);
 
   return (
     <div className="space-y-8">
@@ -485,6 +487,13 @@ function IdentifyView() {
                       <ChevronRight className={`w-3 h-3 transition-transform ${evalOpenId === f.id ? "rotate-90" : ""}`} />
                       eval
                     </RecordCardAction>
+                    <RecordCardAction
+                      onClick={() => setQuotesOpenId(quotesOpenId === f.id ? null : f.id)}
+                      data-testid={`button-quoted-deals-${f.id}`}
+                    >
+                      <ChevronRight className={`w-3 h-3 transition-transform ${quotesOpenId === f.id ? "rotate-90" : ""}`} />
+                      quotes
+                    </RecordCardAction>
                     {canEdit && (
                       <RecordCardAction
                         danger
@@ -534,6 +543,11 @@ function IdentifyView() {
                     <AllianceEvaluationPanel firm={f} canEdit={canEdit} />
                   </div>
                 )}
+                {quotesOpenId === f.id && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <QuotedDealsPanel firmId={f.id} />
+                  </div>
+                )}
               </RecordCard>
             ),
           )}
@@ -544,6 +558,64 @@ function IdentifyView() {
       <TargetsSection firms={firms} />
     </div>
   );
+}
+
+// ---- Quoted deals (Task #665) ----------------------------------------------
+// Deals whose pricing carries an alliance-partner-quote cost line linked to
+// this firm — shows quoted vs costed spend and links into the CRM deal.
+function QuotedDealsPanel({ firmId }: { firmId: string }) {
+  const { data, isLoading } = useAtelierListPartnerFirmQuotedDeals(firmId);
+  const items = data?.items ?? [];
+  return (
+    <div className="mt-3 border-t border-border-soft pt-3 space-y-2" data-testid={`panel-quoted-deals-${firmId}`}>
+      <div className="text-[10px] font-mono uppercase tracking-widest text-text-faint">
+        Deals carrying this partner's quotes
+      </div>
+      {isLoading ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="text-xs text-text-mute">
+          No deal pricing references this firm yet. Link the firm on an
+          alliance-partner-quote cost line in a deal's Commercials tab.
+        </p>
+      ) : (
+        <div className="space-y-1">
+          {items.map((d, i) => (
+            <div
+              key={`${d.opportunityId}-${i}`}
+              className="flex flex-wrap items-center gap-2 text-xs"
+              data-testid={`row-quoted-deal-${d.opportunityId}-${i}`}
+            >
+              <Link
+                href={`/opportunities/${d.opportunityId}`}
+                className="text-gold hover:text-gold/80 font-medium"
+              >
+                {d.opportunityName ?? d.opportunityId}
+              </Link>
+              {d.accountName && <span className="text-text-faint">· {d.accountName}</span>}
+              {d.salesStage && <MonoChip>{d.salesStage}</MonoChip>}
+              {d.lineLabel && <span className="text-text-faint">{d.lineLabel}</span>}
+              <span className="text-text-mute font-mono ml-auto">
+                cost ${fmtNum(d.costedAmountUsd)}
+                {d.quotedAmountUsd != null && <> · quoted ${fmtNum(d.quotedAmountUsd)}</>}
+                {d.deltaUsd != null && d.deltaUsd !== 0 && (
+                  <span className={d.deltaUsd > 0 ? "text-warn" : "text-success"}>
+                    {" "}({d.deltaUsd > 0 ? "+" : "−"}${fmtNum(Math.abs(d.deltaUsd))} vs quote)
+                  </span>
+                )}
+              </span>
+              {d.passThrough && <MonoChip tone="amber">pass-through</MonoChip>}
+              {d.recurrence !== "one_time" && <MonoChip>{d.recurrence.replace("_", "-")}</MonoChip>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmtNum(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 // ---- Target partners --------------------------------------------------------

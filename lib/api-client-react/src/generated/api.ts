@@ -180,6 +180,7 @@ import type {
   AtelierListMyExpenseContexts200,
   AtelierListMyExpenseContextsParams,
   AtelierListMyExpenses200,
+  AtelierListPartnerFirmQuotedDeals200,
   AtelierListPerformanceGoalsParams,
   AtelierListPerformanceReviewsParams,
   AtelierListSignatureRequestsParams,
@@ -24911,6 +24912,102 @@ export const useAtelierArchivePartnerFirm = <
 > => {
   return useMutation(getAtelierArchivePartnerFirmMutationOptions(options));
 };
+
+/**
+ * @summary Deals whose pricing carries an alliance-partner-quote cost line linked to this firm
+ */
+export const getAtelierListPartnerFirmQuotedDealsUrl = (id: string) => {
+  return `/api/atelier/partners/firms/${id}/quoted-deals`;
+};
+
+export const atelierListPartnerFirmQuotedDeals = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AtelierListPartnerFirmQuotedDeals200> => {
+  return customFetch<AtelierListPartnerFirmQuotedDeals200>(
+    getAtelierListPartnerFirmQuotedDealsUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierListPartnerFirmQuotedDealsQueryKey = (id: string) => {
+  return [`/api/atelier/partners/firms/${id}/quoted-deals`] as const;
+};
+
+export const getAtelierListPartnerFirmQuotedDealsQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierListPartnerFirmQuotedDealsQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>
+  > = ({ signal }) =>
+    atelierListPartnerFirmQuotedDeals(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierListPartnerFirmQuotedDealsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>
+>;
+export type AtelierListPartnerFirmQuotedDealsQueryError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Deals whose pricing carries an alliance-partner-quote cost line linked to this firm
+ */
+
+export function useAtelierListPartnerFirmQuotedDeals<
+  TData = Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>,
+  TError = ErrorType<AtelierError>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof atelierListPartnerFirmQuotedDeals>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierListPartnerFirmQuotedDealsQueryOptions(
+    id,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Target partners (Identify pipeline)

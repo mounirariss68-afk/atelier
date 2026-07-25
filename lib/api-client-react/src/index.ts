@@ -846,6 +846,8 @@ export {
   useAtelierListPartnerFirms,
   getAtelierListPartnerFirmsQueryOptions,
   getAtelierListPartnerFirmsQueryKey,
+  useAtelierListPartnerFirmQuotedDeals,
+  getAtelierListPartnerFirmQuotedDealsQueryKey,
   getAtelierGetPartnerFirmQueryKey,
   getAtelierListPartnerTargetsQueryKey,
   getAtelierListJointPipelineQueryKey,

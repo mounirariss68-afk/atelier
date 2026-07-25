@@ -34491,6 +34491,31 @@ export const AtelierArchivePartnerFirmResponse = zod.object({
 });
 
 /**
+ * @summary Deals whose pricing carries an alliance-partner-quote cost line linked to this firm
+ */
+export const AtelierListPartnerFirmQuotedDealsParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AtelierListPartnerFirmQuotedDealsResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      opportunityId: zod.string(),
+      opportunityName: zod.string().nullish(),
+      accountId: zod.string().nullish(),
+      accountName: zod.string().nullish(),
+      salesStage: zod.string().nullish(),
+      lineLabel: zod.string().nullish(),
+      quotedAmountUsd: zod.number().nullish(),
+      costedAmountUsd: zod.number(),
+      deltaUsd: zod.number().nullish(),
+      passThrough: zod.boolean(),
+      recurrence: zod.string(),
+    }),
+  ),
+});
+
+/**
  * @summary Target partners (Identify pipeline)
  */
 export const AtelierListPartnerTargetsResponse = zod.object({
