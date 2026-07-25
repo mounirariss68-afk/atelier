@@ -3,8 +3,11 @@
  */
 import * as React from "react";
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, Eyebrow, MonoChip, BackLink } from "@/components/ui/primitives";
-import { useStatutoryFilings, useFinanceEntities, useEntityExpiries, type StatutoryFilingRow } from "@/lib/v5-hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { CheckCircle2, Undo2 } from "lucide-react";
+import { PageHero, SectionHead, Card, Eyebrow, MonoChip, BackLink, PillButton } from "@/components/ui/primitives";
+import { useToast } from "@/hooks/use-toast";
+import { useStatutoryFilings, useFinanceEntities, useEntityExpiries, API_BASE, type StatutoryFilingRow } from "@/lib/v5-hooks";
 
 function daysUntil(iso: string): number {
   return Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -31,7 +34,31 @@ export default function FinanceComplyStatutory() {
   const filings = useStatutoryFilings();
   const entities = useFinanceEntities();
   const { expiries } = useEntityExpiries(90);
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<"all" | string>("all");
+
+  async function setFiled(f: StatutoryFilingRow, reopen: boolean) {
+    setBusy(f.id);
+    try {
+      const res = await fetch(`${API_BASE}/finance/comply/statutory/${f.id}/mark-filed`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(reopen ? { reopen: true } : {}),
+      });
+      const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+      if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`);
+      toast({ title: reopen ? "Filing reopened" : "Filing marked as filed" });
+      await qc.invalidateQueries({ queryKey: ["atelier-v5", "finance-statutory"] });
+      await qc.invalidateQueries({ queryKey: ["statutory-filings"] });
+    } catch (e) {
+      toast({ title: "Statutory filings", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
   const visibleExpiries = filter === "all" ? expiries : expiries.filter((x) => x.entityId === filter);
 
   const visible = filter === "all" ? filings : filings.filter((f) => f.entityId === filter);
@@ -132,10 +159,29 @@ export default function FinanceComplyStatutory() {
                   <div className="font-mono text-[10px] text-text-faint">{f.status === "filed" ? "filed" : fmtRel(d)}</div>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3 text-xs pt-2 border-t border-border-soft">
-                <div><span className="text-text-faint">Owner:</span> <span className="text-text">{f.owner}</span></div>
-                {f.evidenceUrl && (
-                  <div><span className="text-text-faint">Evidence:</span> <a href={f.evidenceUrl} className="font-mono text-gold hover:underline">{f.evidenceUrl}</a></div>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs pt-2 border-t border-border-soft">
+                <div className="flex flex-wrap gap-3">
+                  <div><span className="text-text-faint">Owner:</span> <span className="text-text">{f.owner}</span></div>
+                  {f.evidenceUrl && (
+                    <div><span className="text-text-faint">Evidence:</span> <a href={f.evidenceUrl} className="font-mono text-gold hover:underline">{f.evidenceUrl}</a></div>
+                  )}
+                  {f.status === "filed" && (f.filedOn || f.filedByName) && (
+                    <div><span className="text-text-faint">Filed:</span> <span className="text-text">{f.filedOn ?? ""}{f.filedByName ? ` by ${f.filedByName}` : ""}</span></div>
+                  )}
+                </div>
+                {f.status === "filed" ? (
+                  <button
+                    className="font-mono uppercase tracking-widest text-text-faint hover:text-text inline-flex items-center gap-1"
+                    disabled={busy !== null}
+                    onClick={() => setFiled(f, true)}
+                    data-testid={`statutory-reopen-${f.id}`}
+                  ><Undo2 className="w-3 h-3" /> Reopen</button>
+                ) : (
+                  <PillButton
+                    disabled={busy !== null}
+                    onClick={() => setFiled(f, false)}
+                    data-testid={`statutory-mark-filed-${f.id}`}
+                  ><CheckCircle2 className="w-4 h-4" /> Mark filed</PillButton>
                 )}
               </div>
               {f.notes && <div className="text-xs text-text-mute italic">{f.notes}</div>}

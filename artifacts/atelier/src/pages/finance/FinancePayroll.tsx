@@ -12,7 +12,7 @@ import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHero, SectionHead, Card, MonoChip, PillButton, Eyebrow, BackLink } from "@/components/ui/primitives";
 import { useToast } from "@/hooks/use-toast";
-import { PlayCircle, BookOpenCheck, RefreshCw, AlertTriangle } from "lucide-react";
+import { PlayCircle, BookOpenCheck, RefreshCw, AlertTriangle, CheckCircle2, Undo2 } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -103,11 +103,33 @@ interface SettlementRow {
   finalAmount: number;
 }
 
+interface FilingItem {
+  id: string;
+  entityId: string;
+  kind: string;
+  authority: string;
+  description: string;
+  dueOn: string;
+  status: "not_started" | "in_progress" | "filed" | "overdue";
+  owner: string;
+  filedOn?: string | null;
+  filedByName?: string | null;
+  sourceKey?: string | null;
+}
+
 function fmt(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 function currentPeriod(): string {
   return new Date().toISOString().slice(0, 7);
+}
+function daysUntil(iso: string): number {
+  return Math.round((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+}
+function fmtRel(d: number): string {
+  if (d < 0) return `${Math.abs(d)}d overdue`;
+  if (d === 0) return "due today";
+  return `due in ${d}d`;
 }
 
 export default function FinancePayroll() {
@@ -154,6 +176,20 @@ export default function FinancePayroll() {
     queryKey: ["eosb-settlements"],
     queryFn: async () => (await jfetch("/finance/payroll/eosb/settlements")) as { items: SettlementRow[] },
   });
+  // The overview call is what materializes the filing calendar rows, so
+  // fetch the register only after it has settled or we'd race the backfill.
+  const filingsQ = useQuery({
+    queryKey: ["statutory-filings"],
+    enabled: !!overviewQ.data,
+    queryFn: async () => (await jfetch("/finance/comply/statutory")) as { items: FilingItem[] },
+  });
+  const allFilings = filingsQ.data?.items ?? [];
+  const overdueFilings = allFilings.filter((f) => f.status === "overdue");
+  const entityFilings = allFilings
+    .filter((f) => f.entityId === entityId)
+    .sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+  const openEntityFilings = entityFilings.filter((f) => f.status !== "filed");
+  const filedEntityFilings = entityFilings.filter((f) => f.status === "filed").slice(-6);
 
   async function act(key: string, fn: () => Promise<unknown>, ok: string) {
     setBusy(key);
@@ -164,6 +200,8 @@ export default function FinancePayroll() {
       await qc.invalidateQueries({ queryKey: ["payroll-run"] });
       await qc.invalidateQueries({ queryKey: ["eosb-report"] });
       await qc.invalidateQueries({ queryKey: ["eosb-settlements"] });
+      await qc.invalidateQueries({ queryKey: ["statutory-filings"] });
+      await qc.invalidateQueries({ queryKey: ["atelier-v5", "finance-statutory"] });
     } catch (e) {
       toast({ title: "Payroll", description: e instanceof Error ? e.message : String(e), variant: "destructive" });
     } finally {
@@ -203,6 +241,27 @@ export default function FinancePayroll() {
         {overviewQ.isLoading && <p className="text-text-mute text-sm">Loading…</p>}
         {overviewQ.isError && (
           <Card className="p-6"><p className="text-sm text-red-400">{(overviewQ.error as Error).message}</p></Card>
+        )}
+
+        {overdueFilings.length > 0 && (
+          <Card className="p-4 border border-red-500/40 bg-red-500/5" data-testid="filings-overdue-banner">
+            <p className="text-sm text-red-400 flex items-center gap-2 font-medium">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              {overdueFilings.length} statutory filing{overdueFilings.length === 1 ? " is" : "s are"} overdue
+              {" — "}missed WPS / social-security filings carry penalties.
+            </p>
+            <ul className="mt-2 space-y-1 text-xs text-text-mute">
+              {overdueFilings.slice(0, 5).map((f) => {
+                const ent = entities.find((e) => e.id === f.entityId);
+                return (
+                  <li key={f.id} className="font-mono">
+                    {ent?.shortName ?? f.entityId} · {f.kind} · due {f.dueOn} ({fmtRel(daysUntil(f.dueOn))})
+                  </li>
+                );
+              })}
+              {overdueFilings.length > 5 && <li>…and {overdueFilings.length - 5} more</li>}
+            </ul>
+          </Card>
         )}
 
         {entity && (
@@ -245,6 +304,95 @@ export default function FinancePayroll() {
                 </Card>
               </div>
             )}
+          </section>
+        )}
+
+        {entity && (
+          <section data-testid="filing-deadlines-section">
+            <SectionHead headline={`Filing deadlines — ${entity.shortName}`} />
+            <Card className="p-6 mt-4">
+              {filingsQ.isLoading && <p className="text-sm text-text-mute">Loading…</p>}
+              {filingsQ.isError && <p className="text-sm text-red-400">{(filingsQ.error as Error).message}</p>}
+              {!filingsQ.isLoading && !filingsQ.isError && entityFilings.length === 0 && (
+                <p className="text-sm text-text-mute">
+                  No statutory filings attached to this entity yet. Deadlines are auto-attached
+                  for covered countries when payroll data loads.
+                </p>
+              )}
+              {openEntityFilings.length > 0 && (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-mono uppercase tracking-widest text-text-mute border-b border-border">
+                      <th className="py-2 pr-4">Filing</th>
+                      <th className="py-2 pr-4">Authority</th>
+                      <th className="py-2 pr-4">Due</th>
+                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openEntityFilings.map((f) => {
+                      const d = daysUntil(f.dueOn);
+                      const tone = f.status === "overdue" ? "red" : d <= 7 ? "amber" : "default";
+                      return (
+                        <tr key={f.id} className="border-b border-border/50" data-testid={`filing-row-${f.id}`}>
+                          <td className="py-2 pr-4">
+                            <div className="font-medium">{f.kind}</div>
+                            <div className="text-xs text-text-mute">{f.description}</div>
+                          </td>
+                          <td className="py-2 pr-4"><MonoChip>{f.authority}</MonoChip></td>
+                          <td className="py-2 pr-4">
+                            <div className="font-mono">{f.dueOn}</div>
+                            <div className={`font-mono text-[10px] ${f.status === "overdue" ? "text-red-400" : "text-text-faint"}`}>{fmtRel(d)}</div>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <MonoChip tone={tone}>{f.status.replace("_", " ")}</MonoChip>
+                          </td>
+                          <td className="py-2 text-right">
+                            <PillButton
+                              disabled={busy !== null}
+                              onClick={() => act(`file-${f.id}`, () => jfetch(`/finance/comply/statutory/${f.id}/mark-filed`, {
+                                method: "POST",
+                                body: JSON.stringify({}),
+                              }), "Filing marked as filed")}
+                              data-testid={`filing-mark-filed-${f.id}`}
+                            ><CheckCircle2 className="w-4 h-4" /> Mark filed</PillButton>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+              {filedEntityFilings.length > 0 && (
+                <div className={openEntityFilings.length > 0 ? "mt-6 border-t border-border pt-4" : ""}>
+                  <p className="text-xs font-mono uppercase tracking-widest text-text-mute mb-2">Recently filed</p>
+                  <ul className="space-y-1.5">
+                    {filedEntityFilings.map((f) => (
+                      <li key={f.id} className="text-sm flex flex-wrap items-center justify-between gap-2" data-testid={`filing-filed-${f.id}`}>
+                        <span className="text-text-mute">
+                          {f.kind} · due {f.dueOn}
+                          {f.filedOn ? ` · filed ${f.filedOn}` : ""}
+                          {f.filedByName ? ` by ${f.filedByName}` : ""}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <MonoChip tone="green">filed</MonoChip>
+                          <button
+                            className="text-xs font-mono uppercase tracking-widest text-text-faint hover:text-text inline-flex items-center gap-1"
+                            disabled={busy !== null}
+                            onClick={() => act(`reopen-${f.id}`, () => jfetch(`/finance/comply/statutory/${f.id}/mark-filed`, {
+                              method: "POST",
+                              body: JSON.stringify({ reopen: true }),
+                            }), "Filing reopened")}
+                            data-testid={`filing-reopen-${f.id}`}
+                          ><Undo2 className="w-3 h-3" /> Reopen</button>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Card>
           </section>
         )}
 

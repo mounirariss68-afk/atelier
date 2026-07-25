@@ -417,6 +417,8 @@ export interface StatutoryFilingRow {
   owner: string;
   evidenceUrl: string | null;
   notes: string;
+  filedOn?: string | null;
+  filedByName?: string | null;
 }
 export const useStatutoryFilings = listHook<StatutoryFilingRow>(
   "finance-statutory",

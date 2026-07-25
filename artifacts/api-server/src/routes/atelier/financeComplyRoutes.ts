@@ -28,7 +28,7 @@
  */
 import { Router, type IRouter, type Request, type Response } from "express";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { db, atelierUsers, atelierFinanceComplianceEntries } from "@workspace/db";
+import { db, atelierUsers, atelierFinanceComplianceEntries, atelierAuditEvents } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -224,6 +224,24 @@ function isFinanceLeadership(me: Me): boolean {
   return ["founding_partner", "partner", "finance", "senior_manager"].includes(me.role);
 }
 
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Statutory rows derive "overdue" at read time: an unfiled filing whose
+ * dueOn is in the past reads as overdue regardless of the stored status,
+ * so nobody has to run a batch job to flip statuses.
+ */
+function deriveStatutory(row: Record<string, unknown>): Record<string, unknown> {
+  const status = row.status;
+  const dueOn = typeof row.dueOn === "string" ? row.dueOn : null;
+  if (status !== "filed" && dueOn && dueOn < todayIso()) {
+    return { ...row, status: "overdue" };
+  }
+  return row;
+}
+
 async function listRegister(orgId: string, register: RegisterKey): Promise<Record<string, unknown>[]> {
   const rows = await db
     .select()
@@ -234,7 +252,8 @@ async function listRegister(orgId: string, register: RegisterKey): Promise<Recor
       isNull(atelierFinanceComplianceEntries.deletedAt),
     ))
     .orderBy(asc(atelierFinanceComplianceEntries.createdAt));
-  return rows.map((r) => ({ id: r.id, ...r.data }));
+  const items = rows.map((r) => ({ id: r.id, ...r.data }));
+  return register === "statutory" ? items.map(deriveStatutory) : items;
 }
 
 function gatedList(register: RegisterKey) {
@@ -302,6 +321,69 @@ router.post("/finance/comply/:register", async (req, res) => {
     id, orgId: me.orgId, register, data, createdByUserId: me.id, updatedByUserId: me.id,
   });
   res.status(201).json({ item: { id, ...data } });
+});
+
+/**
+ * Mark a statutory filing as filed (or reopen it). Dedicated, audited
+ * write path so the compliance trail shows who confirmed each statutory
+ * deadline and when — Task #662.
+ */
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/finance/comply/statutory/:id/mark-filed", async (req, res) => {
+  const me = ensurePersona(req, res); if (!me) return;
+  if (denyRecruiter(me, res)) return;
+  if (!isFinanceLeadership(me)) {
+    res.status(403).json({ error: "forbidden", message: "Finance leadership only." });
+    return;
+  }
+  const reopen = req.body?.reopen === true;
+  const rows = await db.select().from(atelierFinanceComplianceEntries)
+    .where(and(
+      eq(atelierFinanceComplianceEntries.orgId, me.orgId),
+      eq(atelierFinanceComplianceEntries.id, String(req.params.id)),
+      eq(atelierFinanceComplianceEntries.register, "statutory"),
+      isNull(atelierFinanceComplianceEntries.deletedAt),
+    )).limit(1);
+  const existing = rows[0];
+  if (!existing) { res.status(404).json({ error: "not-found" }); return; }
+  const prior = existing.data as Record<string, unknown>;
+  const wasFiled = prior.status === "filed";
+  if (!reopen && wasFiled) {
+    res.json({ item: deriveStatutory({ id: existing.id, ...prior }), alreadyFiled: true });
+    return;
+  }
+  if (reopen && !wasFiled) {
+    res.json({ item: deriveStatutory({ id: existing.id, ...prior }), notFiled: true });
+    return;
+  }
+  const data: Record<string, unknown> = reopen
+    ? { ...prior, status: "not_started", filedOn: null, filedByUserId: null, filedByName: null }
+    : { ...prior, status: "filed", filedOn: todayIso(), filedByUserId: me.id, filedByName: me.name };
+  await db.update(atelierFinanceComplianceEntries)
+    .set({ data, updatedAt: new Date(), updatedByUserId: me.id })
+    .where(eq(atelierFinanceComplianceEntries.id, existing.id));
+  await db.insert(atelierAuditEvents).values({
+    id: `aud_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    entityType: "atelier_statutory_filing",
+    entityId: existing.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: reopen ? "statutory_filing.reopen" : "statutory_filing.mark_filed",
+    payload: {
+      sourceKey: prior.sourceKey ?? null,
+      entityId: prior.entityId ?? null,
+      kind: prior.kind ?? null,
+      authority: prior.authority ?? null,
+      dueOn: prior.dueOn ?? null,
+      priorStatus: prior.status ?? null,
+      newStatus: data.status,
+    },
+    payloadSummary: reopen
+      ? `Reopened statutory filing ${String(prior.kind ?? existing.id)} (due ${String(prior.dueOn ?? "?")})`
+      : `Marked statutory filing ${String(prior.kind ?? existing.id)} (due ${String(prior.dueOn ?? "?")}) as filed`,
+  });
+  res.json({ item: deriveStatutory({ id: existing.id, ...data }) });
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
