@@ -188,6 +188,15 @@ const ROUTER_SYSTEM = [
 export async function classifyIntentTyped(
   prompt: string,
   surface: string = "global",
+  opts?: {
+    /**
+     * Task #681 — explicit clarification-answer turns don't need the
+     * live model (the turn resumes a paused tool; the classification is
+     * pure bookkeeping). Skip the network call entirely and use the
+     * deterministic keyword classifier.
+     */
+    deterministicOnly?: boolean;
+  },
 ): Promise<Intent> {
   const det = deterministicClassify(prompt);
   const fallback = (model: string, costUsd = 0, tokensIn = 0, tokensOut = 0): Intent => ({
@@ -203,10 +212,25 @@ export async function classifyIntentTyped(
     tokensOut,
     costUsd,
   });
+  if (opts?.deterministicOnly) {
+    return fallback(`${HAIKU_MODEL} (deterministic-only)`);
+  }
+  // Task #681 — the classifier is advisory bookkeeping; it must never
+  // kill a turn. Two attempts (15s cutoff each) against the live model,
+  // then degrade to the deterministic keyword classifier with lowered
+  // confidence. The previous 5s single-shot hard-fail aborted turns
+  // constantly under normal proxy latency.
+  const rawTimeout = Number(process.env.ATELIER_CLI_CLASSIFIER_TIMEOUT_MS ?? 15_000);
+  // Clamp: NaN/0/negative env values must not produce an instant abort.
+  const CLASSIFIER_TIMEOUT_MS =
+    Number.isFinite(rawTimeout) && rawTimeout >= 100 ? rawTimeout : 15_000;
+  const ATTEMPTS = 2;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
   try {
     const { anthropic } = await import("@workspace/integrations-anthropic-ai");
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), 5_000);
+    const timer = setTimeout(() => ac.abort(), CLASSIFIER_TIMEOUT_MS);
     try {
       const resp = await anthropic.messages.create(
         {
@@ -224,7 +248,7 @@ export async function classifyIntentTyped(
       const m = raw.match(/\{[\s\S]*\}/);
       if (!m) {
         throw new Error(
-          `intent-router: classifier model ${resp.model ?? HAIKU_MODEL} returned no parseable JSON object — refusing to silently fall back.`,
+          `intent-router: classifier model ${resp.model ?? HAIKU_MODEL} returned no parseable JSON object.`,
         );
       }
       const parsed = JSON.parse(m[0]) as Partial<{
@@ -258,13 +282,21 @@ export async function classifyIntentTyped(
       clearTimeout(timer);
     }
   } catch (err) {
-    // Live classifier is required — surface the failure so the caller
-    // can show an explicit error instead of silently routing on the
-    // deterministic heuristic. The mock-mode fallback was deleted.
-    throw new Error(
-      `intent-router: live classifier (${HAIKU_MODEL}) call failed — ${(err as { message?: string })?.message ?? String(err)}`,
+    lastErr = err;
+    // Transient failure (timeout/abort/network/5xx) — retry once, then
+    // degrade. Log loudly on every failed attempt so ops can see the
+    // classifier flaking even though turns keep working.
+    console.error(
+      `[intent-router] live classifier (${HAIKU_MODEL}) attempt ${attempt}/${ATTEMPTS} failed — ${(err as { message?: string })?.message ?? String(err)}`,
     );
   }
+  }
+  // Both attempts failed — degrade to the deterministic keyword
+  // classifier (confidence 0.4) instead of erroring the whole turn.
+  console.error(
+    `[intent-router] live classifier unavailable after ${ATTEMPTS} attempts; using deterministic fallback — ${(lastErr as { message?: string })?.message ?? String(lastErr)}`,
+  );
+  return fallback(`${HAIKU_MODEL} (deterministic-fallback)`);
 }
 
 /** Compact textual representation of an Intent for embedding queries. */

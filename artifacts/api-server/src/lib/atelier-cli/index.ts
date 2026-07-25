@@ -2627,9 +2627,14 @@ export async function runTurn(
       }
     }
 
+    // Task #681 — an explicit clarification answer (continuesTurnId set)
+    // resumes a paused tool; the typed intent is pure bookkeeping there.
+    // Skip the live classifier call so a slow model can never abort the
+    // turn that carries the user's answer to an expensive research run.
     const earlyTypedIntent = await (await import("./intent-router.js")).classifyIntentTyped(
       input.prompt,
       earlySurface,
+      { deterministicOnly: Boolean(input.continuesTurnId) },
     );
     const earlyLabel: IntentLabel = (() => {
       const v = earlyTypedIntent.verb;
