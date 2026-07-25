@@ -94,6 +94,7 @@ export const FINANCE_SECTIONS: Record<string, SectionDef> = {
     subPages: [
       { label: "Bank reconciliation", href: "/wallet/cash/recon", blurb: "Match bank statements to ledger cash.", status: "live" },
       { label: "Close checklist", href: "/finance/close", blurb: "Owner-by-owner close tasks per entity.", status: "live" },
+      { label: "Statutory payroll", href: "/finance/payroll", blurb: "Monthly payroll runs with EOSB accrual, GPSSA / GOSI / GRSIA / SGK contributions and WPS filing calendar, posted to the GL.", status: "live" },
       { label: "Adjusting entries", href: "/finance/close", blurb: "Period-end accruals, deferrals, FX reval.", status: "live" },
       { label: "Sign-offs & audit trail", href: "/finance/close", blurb: "Two-partner sign-off and immutable trail.", status: "live" },
     ],

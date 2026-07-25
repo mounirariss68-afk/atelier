@@ -137,3 +137,4 @@
 - [Receipt amount validation](receipt-amount-validation.md) — all receipt extraction paths cross-check total/tax arithmetically in the shared extractors; unambiguous stray-digit fix or downgrade to amber, never silent green.
 - [Chat document-email via Outlook](atelier-doc-email.md) — disambiguation payloads from isWrite tools need navigateTo:null; Mail scopes are newer than calendar scopes (stale connections → reconnect); 3MB inline attachment cap.
 - [Chat narration/card contract](atelier-narration-contract.md) — pre-tool prose buffered, flushed only on tool success; card-restating final prose trimmed via pure narration-contract helpers; clients dedupe identical tool_result frames.
+- [Atelier statutory payroll](atelier-statutory-payroll.md) — forecast lines are employer-contributions-only (salary rides roster line); run post 409s on unlinked employees; payroll routes are raw-fetch.

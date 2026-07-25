@@ -2259,6 +2259,19 @@ export const atelierEmployees = pgTable(
     startDate: text("start_date"), // ISO date
     endDate: text("end_date"),
     status: text("status").notNull().default("active"), // active | on_leave | offboarded
+    // Task #655 — statutory payroll linkage. `legalEntityId` FKs the employing
+    // atelier_legal_entities row (payroll runs group by it; falls back to the
+    // org's single active entity when null). Wage split: `basicWageMonthly`
+    // (contractual basic, excl. allowances — EOSB basis in AE/QA) and
+    // `housingAllowanceMonthly` (GOSI/GRSIA base add-on). When basic is null
+    // the whole monthly wage (baseCompensation/12) is treated as basic.
+    // `schemeRegisteredOn` = first social-security registration date driving
+    // old-vs-new scheme selection (GPSSA Oct-2023, GOSI Jul-2024); falls back
+    // to startDate when null.
+    legalEntityId: text("legal_entity_id"),
+    basicWageMonthly: doublePrecision("basic_wage_monthly"),
+    housingAllowanceMonthly: doublePrecision("housing_allowance_monthly"),
+    schemeRegisteredOn: text("scheme_registered_on"), // ISO date
     iban: text("iban"),
     swift: text("swift"),
     noticePeriodDays: integer("notice_period_days").notNull().default(30),

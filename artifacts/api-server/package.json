@@ -15,6 +15,7 @@
     "atelier:spine-backfill": "tsx ./src/scripts/atelier-spine-backfill.ts",
     "test:funnel": "tsx ./tests/funnel/funnel.test.ts",
     "test:merchant-parse": "tsx ./tests/merchant-parse/run.ts",
+    "test:payroll-statutory": "tsx ./tests/payroll-statutory/run.ts",
     "test:meeting-link": "tsx ./tests/meeting-link/run.ts",
     "test:meeting-chat": "tsx ./tests/meeting-chat/run.ts",
     "test:meeting-edit": "tsx ./tests/crm/internal-meeting-edit-probe.ts",

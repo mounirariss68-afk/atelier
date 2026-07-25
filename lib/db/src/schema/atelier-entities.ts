@@ -112,6 +112,28 @@ export interface EntityCashPolicy {
   notes: string | null;
 }
 
+/**
+ * Task #655 — per-entity statutory-payroll overrides. The canonical country
+ * rules (EOSB bands, contribution schemes, filing calendar) are seeded in
+ * code (api-server statutoryRules.ts) and resolved from `country`; this
+ * jsonb holds only the genuinely entity-specific knobs. All keys optional.
+ */
+export interface EntityStatutory {
+  /** Free-zone regime label (e.g. "DIFC" — DEWS replaces gratuity). Informational + used for warnings. */
+  freeZoneRegime?: string | null;
+  /** Scheme keys switched off for this entity (e.g. opt-outs). */
+  optOut?: string[] | null;
+  /** schemeKey → employer % override (e.g. TR hazard-class short-term branch). */
+  employerPctOverride?: Record<string, number> | null;
+  /** schemeKey → employee % override. */
+  employeePctOverride?: Record<string, number> | null;
+  /** schemeKey → monthly contribution-base ceiling override (entity currency). */
+  ceilingOverride?: Record<string, number> | null;
+  /** TR kıdem tazminatı ceiling per year of service (updated semi-annually). */
+  eosbCapPerYearOverride?: number | null;
+  notes?: string | null;
+}
+
 export const atelierLegalEntities = pgTable(
   "atelier_legal_entities",
   {
@@ -142,6 +164,8 @@ export const atelierLegalEntities = pgTable(
     lease: jsonb("lease").$type<EntityLease | null>(),
     fiscal: jsonb("fiscal").$type<EntityFiscal | null>(),
     cashPolicy: jsonb("cash_policy").$type<EntityCashPolicy | null>(),
+    /** Task #655 — statutory-payroll overrides (country rules live in code). */
+    statutory: jsonb("statutory").$type<EntityStatutory | null>(),
     notes: text("notes"),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

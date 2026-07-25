@@ -99,6 +99,7 @@ import financeEntitiesRoutes from "./financeEntitiesRoutes";
 import expenseTaxonomyRoutes from "./expenseTaxonomyRoutes";
 import financePayablesRoutes from "./financePayablesRoutes";
 import financeComplyRoutes from "./financeComplyRoutes";
+import payrollRoutes from "./payrollRoutes";
 import financePlanRoutes from "./financePlanRoutes";
 import financeReportsRoutes from "./financeReportsRoutes";
 import agentsLensRoutes from "./agentsLensRoutes";
@@ -389,6 +390,10 @@ router.use(financePayablesRoutes);
 // insurance register. All read-only seed; mounts under /api/atelier
 // with persona gating mirroring financeEntitiesRoutes.
 router.use(financeComplyRoutes);
+// Task #655 — country statutory payroll layer: payroll runs (GL-posted),
+// EOSB accruals/settlements, filing-calendar backfill. Finance-leadership
+// gated inside the router.
+router.use(payrollRoutes);
 // Task #415 — Finance Plan: 13-week direct-method cash forecast and
 // backlog/pipeline coverage. Seed-only data.
 router.use(financePlanRoutes);

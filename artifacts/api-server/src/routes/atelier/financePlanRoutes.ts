@@ -22,8 +22,8 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
-import { desc, eq } from "drizzle-orm";
-import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits } from "@workspace/db";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { db, atelierUsers, atelierCashLineOverrides, atelierCashAudit, atelierFinancePlanCommits, atelierPayrollRuns } from "@workspace/db";
 import { listFinanceEntities } from "./financeEntitiesRoutes";
 import { loadFinanceFacts, FIRM_ENTITY_ID } from "./financeRealFacts";
 import { hydrateFpaFromFacts, setFpaEntities } from "./financePlanFpaEngine";
@@ -159,15 +159,17 @@ const RECEIPTS: ReceiptLine[] = [];
 const DISBURSEMENTS: DisbursementLine[] = [];
 
 async function hydratePlanFacts(orgId: string): Promise<void> {
-  const [facts, registry] = await Promise.all([
+  const [facts, registry, statutoryLines] = await Promise.all([
     loadFinanceFacts(orgId),
     listFinanceEntities(orgId),
+    buildStatutoryLines(orgId),
   ]);
   RECEIPTS.length = 0;
   RECEIPTS.push(...facts.receipts);
   DISBURSEMENTS.length = 0;
   DISBURSEMENTS.push(...facts.disbursements);
   DISBURSEMENTS.push(...buildTaxLines(registry));
+  DISBURSEMENTS.push(...statutoryLines);
   BACKLOG.length = 0;
   BACKLOG.push(...facts.backlog);
   PIPELINE.length = 0;
@@ -267,6 +269,60 @@ function buildTaxLines(registry: Awaited<ReturnType<typeof listFinanceEntities>>
         label: `Corporate tax — ${e.shortName}`,
         detail: `Corporate-tax payment (${currency})`,
       });
+    }
+  }
+  return lines;
+}
+
+// Task #655 — incremental statutory payroll cash outflows from the latest
+// POSTED payroll run per legal entity. The roster-based `dis_payroll_*`
+// lines from loadFinanceFacts already carry GROSS salary (= net pay +
+// employee withholdings), so adding those here would double-count salary
+// cash. Only EMPLOYER contributions are incremental (EOSB accrual is
+// non-cash and excluded). Recurs monthly on the 15th inside the window.
+async function buildStatutoryLines(orgId: string): Promise<DisbursementLine[]> {
+  const runs = await db
+    .select()
+    .from(atelierPayrollRuns)
+    .where(and(
+      eq(atelierPayrollRuns.orgId, orgId),
+      eq(atelierPayrollRuns.status, "posted"),
+      isNull(atelierPayrollRuns.deletedAt),
+    ));
+  const latestByEntity = new Map<string, typeof runs[number]>();
+  for (const r of runs) {
+    const prev = latestByEntity.get(r.legalEntityId);
+    if (!prev || r.periodLabel > prev.periodLabel) latestByEntity.set(r.legalEntityId, r);
+  }
+  const lines: DisbursementLine[] = [];
+  const windowEnd = dateAdd(AS_OF_MONDAY, 13 * 7);
+  for (const run of latestByEntity.values()) {
+    const t = run.totals;
+    const cash = Math.round(t.employerContributions * 100) / 100;
+    if (cash <= 0) continue;
+    // Monthly on the 15th, from the first 15th on/after the window start.
+    let d = new Date(`${AS_OF_MONDAY}T00:00:00Z`);
+    if (d.getUTCDate() > 15) d.setUTCMonth(d.getUTCMonth() + 1);
+    d.setUTCDate(15);
+    let date = d.toISOString().slice(0, 10);
+    let n = 0;
+    while (date <= windowEnd && n < 4) {
+      if (date >= AS_OF_MONDAY) {
+        lines.push({
+          id: `statpay-${run.legalEntityId}-${date}`,
+          entityId: run.legalEntityId,
+          currency: run.currency,
+          amount: cash,
+          expectedDate: date,
+          confidence: "high",
+          category: "payroll",
+          vendor: "Statutory authorities",
+          label: `Employer statutory contributions — ${run.periodLabel} basis`,
+          detail: `Employer social-security contributions from the last posted payroll run (${run.totals.headcount} people, ${run.currency}); salary itself rides on the roster payroll line`,
+        });
+      }
+      date = addMonths(date, 1);
+      n += 1;
     }
   }
   return lines;

@@ -26,6 +26,8 @@ import { isFoundingPartner, isPartner } from "./personaRoles";
 import { loadDocBytes, DOC_KINDS } from "../../lib/atelier-documents.js";
 import { extractAttachment } from "../../lib/atelier-cli/attachments/extractors.js";
 import { extractFirstJsonObject } from "../../lib/atelier-agents/runner.js";
+// Task #655 — auto-attach statutory payroll filings on entity create.
+import { ensureStatutoryFilings } from "../../lib/atelier-payroll/payrollRun.js";
 
 const router: IRouter = Router();
 
@@ -185,6 +187,18 @@ const cashPolicySchema = z.object({
   notes: optStr(600),
 });
 
+// Task #655 — per-entity statutory-payroll overrides (country rules live
+// in code; this jsonb only carries the genuinely entity-specific knobs).
+const statutorySchema = z.object({
+  freeZoneRegime: optStr(120),
+  optOut: z.array(z.string().trim().min(1).max(80)).max(20).nullish(),
+  employerPctOverride: z.record(z.string(), z.number().finite().min(0).max(100)).nullish(),
+  employeePctOverride: z.record(z.string(), z.number().finite().min(0).max(100)).nullish(),
+  ceilingOverride: z.record(z.string(), z.number().finite().min(0)).nullish(),
+  eosbCapPerYearOverride: z.number().finite().min(0).nullish(),
+  notes: optStr(2000),
+});
+
 const entityBody = z.object({
   legalNameEn: str(400).min(1),
   legalNameAr: optStr(400),
@@ -211,6 +225,7 @@ const entityBody = z.object({
   lease: leaseSchema.nullish(),
   fiscal: fiscalSchema.nullish(),
   cashPolicy: cashPolicySchema.nullish(),
+  statutory: statutorySchema.nullish(),
   notes: optStr(4000),
 });
 
@@ -280,6 +295,21 @@ function normalizeCashPolicy(p: z.infer<typeof cashPolicySchema> | null | undefi
   return hasValue ? shaped : null;
 }
 
+function normalizeStatutory(s: z.infer<typeof statutorySchema> | null | undefined) {
+  if (!s) return null;
+  const shaped = {
+    freeZoneRegime: s.freeZoneRegime ?? null,
+    optOut: s.optOut && s.optOut.length > 0 ? s.optOut : null,
+    employerPctOverride: s.employerPctOverride && Object.keys(s.employerPctOverride).length > 0 ? s.employerPctOverride : null,
+    employeePctOverride: s.employeePctOverride && Object.keys(s.employeePctOverride).length > 0 ? s.employeePctOverride : null,
+    ceilingOverride: s.ceilingOverride && Object.keys(s.ceilingOverride).length > 0 ? s.ceilingOverride : null,
+    eosbCapPerYearOverride: s.eosbCapPerYearOverride ?? null,
+    notes: s.notes ?? null,
+  };
+  const hasValue = Object.values(shaped).some((v) => v !== null);
+  return hasValue ? shaped : null;
+}
+
 function nullishObj<T extends Record<string, unknown>>(o: T | null | undefined): T | null {
   if (!o) return null;
   const hasValue = Object.values(o).some((v) => v !== null && v !== undefined && v !== "");
@@ -310,6 +340,7 @@ function entityShape(e: EntityRow) {
     lease: e.lease ?? null,
     fiscal: e.fiscal ?? null,
     cashPolicy: e.cashPolicy ?? null,
+    statutory: e.statutory ?? null,
     notes: e.notes,
     archivedAt: e.archivedAt,
     createdAt: e.createdAt,
@@ -639,6 +670,7 @@ router.post("/finance/entities", async (req, res) => {
       lease: nullishObj(b.lease ?? null) as EntityRow["lease"],
       fiscal: normalizeFiscal(b.fiscal),
       cashPolicy: normalizeCashPolicy(b.cashPolicy),
+      statutory: normalizeStatutory(b.statutory),
       notes: b.notes ?? null,
     })
     .returning();
@@ -649,6 +681,9 @@ router.post("/finance/entities", async (req, res) => {
     payload: { legalNameEn: b.legalNameEn, country: b.country },
     summary: `Created legal entity "${b.legalNameEn}" (${b.country})`,
   });
+  // Task #655 — auto-attach the country's statutory payroll filing
+  // calendar (WPS / GOSI / GPSSA / GRSIA / MUHSGK) for covered countries.
+  await ensureStatutoryFilings(me.orgId, row);
   res.status(201).json({ entity: entityShape(row) });
 });
 
@@ -698,6 +733,7 @@ router.patch("/finance/entities/:id", async (req, res) => {
   if (b.lease !== undefined) assign("lease", nullishObj(b.lease ?? null));
   if (b.fiscal !== undefined) assign("fiscal", normalizeFiscal(b.fiscal));
   if (b.cashPolicy !== undefined) assign("cashPolicy", normalizeCashPolicy(b.cashPolicy));
+  if (b.statutory !== undefined) assign("statutory", normalizeStatutory(b.statutory));
   if (b.notes !== undefined) assign("notes", b.notes ?? null);
   if (Object.keys(changes).length === 0) {
     res.json({ entity: entityShape(existing) });

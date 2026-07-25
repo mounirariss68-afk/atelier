@@ -62,6 +62,10 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   { code: "2200", name: "Deferred revenue", type: "liability", normalSide: "credit", isSystem: true },
   { code: "2300", name: "VAT payable", type: "liability", normalSide: "credit", isSystem: true },
   { code: "2400", name: "Corporate tax payable", type: "liability", normalSide: "credit", isSystem: false },
+  // Task #655 — statutory payroll accounts (payroll run + EOSB postings).
+  { code: "2150", name: "Employee withholdings payable", type: "liability", normalSide: "credit", isSystem: true },
+  { code: "2160", name: "Social security contributions payable", type: "liability", normalSide: "credit", isSystem: true },
+  { code: "2500", name: "End-of-service benefits provision", type: "liability", normalSide: "credit", isSystem: true },
   { code: "3000", name: "Owners' equity", type: "equity", normalSide: "credit", isSystem: false },
   { code: "3100", name: "Retained earnings", type: "equity", normalSide: "credit", isSystem: false },
   { code: "4000", name: "Consulting fees revenue", type: "revenue", normalSide: "credit", isSystem: true },
@@ -70,6 +74,10 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   { code: "5000", name: "Subcontractor & partner-firm costs", type: "expense", normalSide: "debit", isSystem: true },
   { code: "5100", name: "Direct engagement expenses", type: "expense", normalSide: "debit", isSystem: true },
   { code: "6000", name: "Salaries & benefits", type: "expense", normalSide: "debit", isSystem: false },
+  // Task #655 — names keep "Payroll"/"benefits" so GL statements classify
+  // them into the payroll P&L bucket (financeGlStatements.classifyFlow).
+  { code: "6010", name: "Payroll — employer social contributions", type: "expense", normalSide: "debit", isSystem: true },
+  { code: "6020", name: "Payroll — end-of-service benefits expense", type: "expense", normalSide: "debit", isSystem: true },
   { code: "6100", name: "Travel & entertainment", type: "expense", normalSide: "debit", isSystem: true },
   { code: "6200", name: "Software & subscriptions", type: "expense", normalSide: "debit", isSystem: false },
   { code: "6300", name: "Office & facilities", type: "expense", normalSide: "debit", isSystem: false },

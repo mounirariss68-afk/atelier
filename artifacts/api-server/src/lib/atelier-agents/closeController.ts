@@ -29,8 +29,11 @@ import {
   atelierCloseCycle,
   atelierCloseItem,
   atelierCloseAccrual,
+  atelierPayrollRuns,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
+// Task #655 — statutory payroll close check (rules-as-code registry).
+import { resolveRules } from "../atelier-payroll/statutoryRules.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -97,6 +100,7 @@ export function checklistTemplate(
       { itemKey: "timesheet_review", phase: "pre_close", title: "Timesheets reviewed for the period", ownerRole: "finance", autoCheck: false, sortOrder: 30 },
       { itemKey: "revrec_posted", phase: "execution", title: "Revenue recognition posted", ownerRole: "finance", autoCheck: true, sortOrder: 40 },
       { itemKey: "gl_posted", phase: "execution", title: "Bookkeeper posted — no open GL exceptions", ownerRole: "finance", autoCheck: true, sortOrder: 50 },
+      { itemKey: "payroll_statutory", phase: "execution", title: "Payroll posted — salaries, statutory contributions & EOSB accrual", ownerRole: "finance", autoCheck: true, sortOrder: 55 },
       { itemKey: "ar_tie", phase: "execution", title: "AR subledger ties to GL (1100)", ownerRole: "finance", autoCheck: true, sortOrder: 60 },
       { itemKey: "accruals_decided", phase: "execution", title: "Accrual proposals decided (approved or rejected)", ownerRole: "partner", autoCheck: true, sortOrder: 70 },
       { itemKey: "management_review", phase: "post_close", title: "Management review of results", ownerRole: "partner", autoCheck: false, sortOrder: 80 },
@@ -374,6 +378,41 @@ async function executeCloseController(
       : Math.abs(delta) <= 0.011
         ? { status: "done", message: `AR ties: GL 1100 $${glAr} = subledger outstanding $${subAr}.`, detail: { glAr, subAr } }
         : { status: "blocked", message: `AR does not tie: GL 1100 $${glAr} vs subledger outstanding $${subAr} (Δ $${delta}). Re-run the Bookkeeper or investigate unposted receipts.`, detail: { glAr, subAr, delta } });
+
+    // ── payroll_statutory (Task #655) ──
+    // For countries with statutory rules, the month's payroll run must be
+    // posted (salaries + contributions + EOSB accrual in the GL). Countries
+    // without seeded rules pass as not-applicable.
+    const [closeEntity] = await db
+      .select()
+      .from(atelierLegalEntities)
+      .where(and(eq(atelierLegalEntities.orgId, orgId), eq(atelierLegalEntities.id, entityId)))
+      .limit(1);
+    const statRules = closeEntity ? resolveRules(closeEntity.country, `${periodLabel}-28`) : null;
+    if (!statRules) {
+      results.set("payroll_statutory", {
+        status: "done",
+        message: closeEntity
+          ? `No statutory payroll rules seeded for ${closeEntity.country} — not applicable.`
+          : "Entity not found in the registry — not applicable.",
+      });
+    } else {
+      const [payRun] = await db
+        .select()
+        .from(atelierPayrollRuns)
+        .where(and(
+          eq(atelierPayrollRuns.orgId, orgId),
+          eq(atelierPayrollRuns.legalEntityId, entityId),
+          eq(atelierPayrollRuns.periodLabel, periodLabel),
+          isNull(atelierPayrollRuns.deletedAt),
+        ))
+        .limit(1);
+      results.set("payroll_statutory", payRun?.status === "posted"
+        ? { status: "done", message: `Payroll ${periodLabel} posted (${payRun.totals.headcount} people; EOSB accrual ${payRun.totals.eosbAccrual} ${payRun.currency}).`, detail: { runId: payRun.id } }
+        : payRun
+          ? { status: "blocked", message: `Payroll run for ${periodLabel} is still draft — post it (or resolve its validation errors) before close.`, detail: { runId: payRun.id } }
+          : { status: "blocked", message: `No payroll run exists for ${periodLabel} — compute and post it from Finance → Payroll.` });
+    }
 
     // ── accruals_decided ──
     const undecided = await db

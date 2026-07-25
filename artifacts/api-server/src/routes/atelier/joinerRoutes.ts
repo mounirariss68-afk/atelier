@@ -58,6 +58,7 @@ import { personaToWire } from "./personaCookie";
 import { isFoundingPartner, isHr } from "./personaRoles";
 import { emitSelfNotification } from "./meRoutes";
 import { autoRevokeDelegationsForUser } from "./delegationRoutes";
+import { createEosbSettlement } from "../../lib/atelier-payroll/payrollRun.js";
 import {
   deprovisionMs,
   reactivateMs,
@@ -751,6 +752,33 @@ async function setDisabled(
           .where(eq(atelierContractors.id, roster.personId));
       }
       rosterMarked = { ...rosterPrior, newStatus: "offboarded", newEndDate: endDate };
+      // Task #655 — leaver EOSB settlement rides on offboarding. For
+      // employees in a statutory-covered country, draft the end-of-service
+      // settlement so Finance reviews and settles it from Finance → Payroll.
+      // Best-effort: incomplete roster data or an uncovered country never
+      // blocks the deactivation — the outcome lands in the audit payload.
+      if (roster.personType === "employee") {
+        const eosbReason =
+          typeof (req.body as { eosbReason?: string } | undefined)?.eosbReason === "string" &&
+          ["resignation", "termination", "end_of_contract", "retirement", "death", "mutual"].includes(
+            (req.body as { eosbReason: string }).eosbReason,
+          )
+            ? ((req.body as { eosbReason: string }).eosbReason as
+                | "resignation" | "termination" | "end_of_contract" | "retirement" | "death" | "mutual")
+            : "termination";
+        try {
+          const settlement = await createEosbSettlement({
+            orgId: me.orgId,
+            employeeId: roster.personId,
+            leaveDate: endDate,
+            reason: eosbReason,
+            createdByUserId: me.id,
+          });
+          rosterMarked.eosbSettlement = { id: settlement.id, finalAmount: settlement.finalAmount, currency: settlement.currency, reason: eosbReason };
+        } catch (err) {
+          rosterMarked.eosbSettlement = { skipped: true, message: err instanceof Error ? err.message : String(err) };
+        }
+      }
     }
   }
 
