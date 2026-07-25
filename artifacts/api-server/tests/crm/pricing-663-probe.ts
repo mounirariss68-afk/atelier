@@ -133,6 +133,7 @@ async function main() {
     atelierAgentRuns,
   } = D;
   const { eq, inArray } = await import("drizzle-orm");
+  const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
   const S = await import("../../src/lib/atelier-pricing-structures.js");
 
   const appMod = await import("../../src/app.js");
@@ -447,7 +448,6 @@ async function main() {
       await db.delete(atelierBillingRule).where(eq(atelierBillingRule.engagementId, engId));
       await db.delete(atelierDealPricings).where(eq(atelierDealPricings.opportunityId, oppId));
       await db.delete(atelierEngagements).where(eq(atelierEngagements.id, engId));
-      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
       await hardDeleteOpportunities([oppId]);
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierRateCardRows).where(inArray(atelierRateCardRows.id, [`rcr_${T}_p`, `rcr_${T}_a`]));

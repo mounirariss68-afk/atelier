@@ -138,23 +138,31 @@ async function main() {
     const tools = getToolsForPersona(persona);
     assert.ok(!tools.some((t) => t.name === "account_delete"), "contractor saw account_delete");
   });
-  await test("employee/contractor chat surface is exactly the non-write me.* catalog (Task #445)", () => {
-    // Task #422 clamp: self-only personas get ONLY identity-locked me.*
-    // reads. This pins the perimeter so a future tool registration
-    // (catalog OR legacy TOOL_REGISTRY) cannot silently widen it.
-    const meReadToolNames = new Set(
+  await test("employee/contractor chat surface is exactly the me.* catalog (Task #445, updated by #583)", () => {
+    // Task #422 clamped self-only personas to identity-locked me.* reads;
+    // Task #583 deliberately widened that to include the identity-locked
+    // me.* WRITE capabilities (leave request, expense create, timesheet
+    // log/submit, profile edit, personal documents, notification
+    // dismiss). Every me.* write resolves its subject from the session
+    // persona and is confirm-gated. This pins the perimeter so a future
+    // tool registration (catalog OR legacy TOOL_REGISTRY) cannot
+    // silently widen it beyond the me.* lens.
+    const meToolNames = new Set(
       listCapabilities()
-        .filter((c) => c.id.startsWith("me.") && !c.isWrite)
+        .filter((c) => c.id.startsWith("me."))
         .map((c) => c.toolName),
     );
-    assert.ok(meReadToolNames.size > 0, "expected at least one me.* read capability");
+    assert.ok(meToolNames.size > 0, "expected at least one me.* capability");
+    assert.ok(
+      listCapabilities().some((c) => c.id.startsWith("me.") && c.isWrite),
+      "expected at least one me.* write capability (Task #583)",
+    );
     const byToolName = new Map(listCapabilities().map((c) => [c.toolName, c] as const));
     for (const role of ["employee", "contractor"] as const) {
       const persona = { id: `p_${role}`, name: role, role, orgId: "aico" };
       const tools = getToolsForPersona(persona);
       assert.ok(tools.length > 0, `${role} chat surface is empty`);
       for (const t of tools) {
-        assert.equal(t.isWrite, false, `${role} leaked write tool ${t.name}`);
         const entry = byToolName.get(t.name);
         assert.ok(entry, `${role} got tool ${t.name} not in the capability catalog (legacy leak)`);
         assert.ok(
@@ -164,13 +172,13 @@ async function main() {
       }
       // Exact-set equality: nothing missing, nothing extra.
       const got = new Set(tools.map((t) => t.name));
-      for (const name of meReadToolNames) {
+      for (const name of meToolNames) {
         assert.ok(got.has(name), `${role} missing self-scoped tool ${name}`);
       }
       assert.equal(
         got.size,
-        meReadToolNames.size,
-        `${role} chat surface (${got.size}) differs from me.* read set (${meReadToolNames.size})`,
+        meToolNames.size,
+        `${role} chat surface (${got.size}) differs from me.* set (${meToolNames.size})`,
       );
     }
   });

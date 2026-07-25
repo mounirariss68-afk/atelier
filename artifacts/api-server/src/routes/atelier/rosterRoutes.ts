@@ -1116,10 +1116,10 @@ router.patch("/roster/people/:id/demographics", async (req, res, next) => {
       entityId: person.id,
       actorType: "user",
       actorId: me.id,
-      actorLabel: me.fullName ?? me.id,
+      actorLabel: me.name ?? me.id,
       action: "roster.person.updated",
       payload: { workerType: person.workerType, change: "demographics", ...update },
-      payloadSummary: `${me.fullName ?? me.id} updated demographics for ${person.fullName}`,
+      payloadSummary: `${me.name ?? me.id} updated demographics for ${person.fullName}`,
     });
     const updated = await getPerson(person.id, canSeeComp(me.role));
     res.json({ person: updated });
@@ -1214,7 +1214,7 @@ router.patch("/roster/people/:id/title", async (req, res, next) => {
       entityId: emp.id,
       actorType: "user",
       actorId: me.id,
-      actorLabel: me.fullName ?? me.id,
+      actorLabel: me.name ?? me.id,
       action: "roster.person.updated",
       payload: {
         workerType: "employee",
@@ -1223,7 +1223,7 @@ router.patch("/roster/people/:id/title", async (req, res, next) => {
         to: title,
         syncedUserId,
       },
-      payloadSummary: `${me.fullName ?? me.id} changed ${emp.fullName}'s title from "${fromTitle ?? "—"}" to "${title}"`,
+      payloadSummary: `${me.name ?? me.id} changed ${emp.fullName}'s title from "${fromTitle ?? "—"}" to "${title}"`,
     });
     const updated = await getPerson(emp.id, canSeeComp(me.role));
     res.json({ person: updated });

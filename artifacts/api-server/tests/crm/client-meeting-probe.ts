@@ -110,6 +110,7 @@ async function main() {
     atelierMsConnections,
   } = D as any;
   const { eq, inArray, like } = await import("drizzle-orm");
+  const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
   const gm = await import("../../src/lib/msGraph.js");
   await import("../../src/lib/atelier-cli/client-meeting-capabilities.js");
   const { findByToolName } = await import("../../src/lib/atelier-cli/capability-catalog.js");
@@ -264,7 +265,6 @@ async function main() {
       }
       await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, userId));
       await db.delete(atelierContacts).where(inArray(atelierContacts.id, [contactId, noMailContactId]));
-      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
       await hardDeleteOpportunities([oppId, opp2Id]);
       await db.delete(atelierEngagements).where(eq(atelierEngagements.id, engId));
       await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, [accId, acc2Id]));
