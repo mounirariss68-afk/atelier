@@ -291,9 +291,11 @@ async function main() {
       scopes: tokenScope.split(" "),
     });
 
-    // ---- 11. invalid recipient -----------------------------------------
+    // ---- 11. unresolvable recipient --------------------------------------
+    // Non-email entries are now treated as people names and looked up in
+    // the roster + CRM contacts; a miss is an honest recipient_not_found.
     const badTo = await runTool({ query: "passport", to: ["not-an-email"] });
-    check("invalid recipient", badTo.ok === false && badTo.errorCode === "invalid_recipients");
+    check("unknown name → recipient_not_found", badTo.ok === false && badTo.errorCode === "recipient_not_found");
 
     // ---- 10. oversize refused before confirm ---------------------------
     const big = await runTool({ documentIds: [bigId], to: ["jane@x.com"] });
@@ -410,14 +412,222 @@ async function main() {
       staleCommit.ok === false && staleCommit.errorCode === "ms_reconnect_required",
       JSON.stringify(staleCommit).slice(0, 300),
     );
-    check("stale: no message calls", !graphCalls.some((c) => c.url.startsWith("/me/"))); 
+    check("stale: no message calls", !graphCalls.some((c) => c.url.startsWith("/me/")));
+    tokenScope =
+      "openid profile offline_access User.Read Calendars.ReadWrite Mail.ReadWrite Mail.Send";
+
+    // ====================================================================
+    // 12. Recipient NAME resolution (roster + CRM contacts)
+    // ====================================================================
+    await db.insert(atelierUsers).values([
+      {
+        id: `p_test_g1_${STAMP}`,
+        orgId: ORG,
+        name: `Gokhanx One ${TAG}`,
+        initials: "G1",
+        email: `gokhanx1.${STAMP}@test.local`,
+        role: "consultant",
+        roleLabel: "Consultant",
+        title: "Consultant",
+      },
+      {
+        id: `p_test_g2_${STAMP}`,
+        orgId: ORG,
+        name: `Gokhanx Two ${TAG}`,
+        initials: "G2",
+        email: `gokhanx2.${STAMP}@test.local`,
+        role: "consultant",
+        roleLabel: "Consultant",
+        title: "Consultant",
+      },
+      {
+        id: `p_test_z_${STAMP}`,
+        orgId: ORG,
+        name: `Zeynepx Unique ${TAG}`,
+        initials: "ZU",
+        email: `zeynepx.${STAMP}@test.local`,
+        role: "consultant",
+        roleLabel: "Consultant",
+        title: "Consultant",
+      },
+    ]);
+
+    graphCalls.length = 0;
+    // single roster match → straight to the confirm card with the email
+    const byName = await runTool({ documentIds: [passportId], to: ["Zeynepx"] });
+    check(
+      "name: single match → confirm frame",
+      byName.ok === true && Boolean(byName.confirmation),
+      JSON.stringify(byName).slice(0, 300),
+    );
+    check(
+      "name: summary shows Name <email>",
+      String(byName.confirmation?.summary ?? "").includes(
+        `Zeynepx Unique ${TAG} <zeynepx.${STAMP}@test.local>`,
+      ),
+      byName.confirmation?.summary,
+    );
+    check(
+      "name: pending input carries resolved email",
+      byName.confirmation?.pending?.input?.to?.[0] === `zeynepx.${STAMP}@test.local`,
+    );
+
+    // multiple roster matches → disambiguation options, no confirm card
+    const multiName = await runTool({ documentIds: [passportId], to: ["Gokhanx"] });
+    check(
+      "name: multi-match → options",
+      multiName.ok === true &&
+        !multiName.confirmation &&
+        Array.isArray(multiName.data?.options) &&
+        multiName.data.options.length === 2 &&
+        multiName.disambiguation?.kind === "email_recipient",
+      JSON.stringify(multiName).slice(0, 400),
+    );
+    check(
+      "name: option ids are emails",
+      multiName.data?.options?.every((o: any) => String(o.id).includes("@")),
+    );
+    check("name: no Graph traffic on lookup", graphCalls.length === 0);
+
+    // ====================================================================
+    // 13. email_company_documents (Document Library)
+    // ====================================================================
+    const dc = await import("../../src/lib/atelier-cli/document-email-capabilities.js");
+    void dc;
+    const compEntry = findByToolName("email_company_documents");
+    check("company: registered", Boolean(compEntry));
+    check(
+      "company: isWrite + twoPhase + email channel",
+      compEntry?.isWrite === true &&
+        compEntry?.twoPhaseConfirm === true &&
+        compEntry?.outboundChannel === "email",
+    );
+
+    const FP_UID = `p_test_fp_${STAMP}`;
+    await db.insert(atelierUsers).values({
+      id: FP_UID,
+      orgId: ORG,
+      name: `Founder Probe ${TAG}`,
+      initials: "FP",
+      email: `fp.${STAMP}@test.local`,
+      role: "founding_partner",
+      roleLabel: "Founding Partner",
+      title: "Founding Partner",
+    });
+    const fpPersona = { id: FP_UID, name: `Founder Probe ${TAG}`, role: "founding_partner", orgId: ORG };
+    const runCompany = async (input: Record<string, unknown>, p = fpPersona) =>
+      compEntry.run(input, { persona: p } as any);
+
+    const { createDocument } = await import("../../src/lib/atelier-documents.js");
+    const created = await createDocument({
+      orgId: ORG,
+      uploader: { id: FP_UID, name: `Founder Probe ${TAG}` },
+      title: `Commercial Registration Certificate Dubai ${TAG}`,
+      category: "other",
+      docKind: "commercial_register",
+      fileName: "registration-cert.pdf",
+      mime: "application/pdf",
+      bytes: Buffer.from(`%PDF-regcert-${TAG}`),
+    });
+    check("company: library doc created", created.ok === true, JSON.stringify(created).slice(0, 200));
+    const libDocId = created.ok ? created.document.id : "";
+
+    // CRM contact for recipient resolution via contacts
+    const ACC_ID = `acc_${TAG}`;
+    await db.insert(D.atelierAccounts).values({
+      id: ACC_ID,
+      orgId: ORG,
+      name: `Probe Account ${TAG}`,
+      country: "AE",
+      sector: "technology",
+    });
+    await db.insert(D.atelierContacts).values({
+      id: `ct_${TAG}`,
+      orgId: ORG,
+      accountId: ACC_ID,
+      fullName: `Contactx Person ${TAG}`,
+      email: `contactx.${STAMP}@client.test`,
+    });
+
+    // FP needs an MS connection before the confirm card
+    await db.insert(atelierMsConnections).values({
+      id: `msc_fp_${TAG}`,
+      orgId: ORG,
+      userId: FP_UID,
+      msOid: "ms-oid-fp",
+      msEmail: `fp.${STAMP}@test.local`,
+      msDisplayName: "Founder Probe",
+      encRefreshToken: gm.encryptToken("stub-refresh-1"),
+      scopes: tokenScope.split(" "),
+    });
+
+    graphCalls.length = 0;
+    // fuzzy library match + roster-name recipient → confirm card
+    const compFirst = await runCompany({
+      query: "company registration certificate in Dubai",
+      to: ["Zeynepx"],
+    });
+    check(
+      "company: confirm frame with resolved recipient",
+      compFirst.ok === true &&
+        Boolean(compFirst.confirmation) &&
+        String(compFirst.confirmation?.summary ?? "").includes(`zeynepx.${STAMP}@test.local`),
+      JSON.stringify(compFirst).slice(0, 400),
+    );
+    check(
+      "company: pending tool is email_company_documents",
+      compFirst.confirmation?.pending?.tool === "email_company_documents",
+    );
+    const compCommit = await runCompany(compFirst.confirmation.pending.input);
+    check("company: commit ok", compCommit.ok === true, JSON.stringify(compCommit).slice(0, 300));
+    const compCall = graphCalls.find((c) => c.url.startsWith("/me/messages"));
+    check(
+      "company: attachment bytes match",
+      compCall?.body?.attachments?.length === 1 &&
+        Buffer.from(compCall.body.attachments[0].contentBytes, "base64").toString() ===
+          `%PDF-regcert-${TAG}`,
+      JSON.stringify(compCall?.body?.attachments?.map((a: any) => a.name)),
+    );
+    const [compAudit] = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(
+        and(eq(atelierAuditEvents.action, "document.emailed"), eq(atelierAuditEvents.entityId, libDocId)),
+      );
+    check("company: audit row", Boolean(compAudit) && compAudit.payload?.mode === "draft");
+
+    // CRM-contact recipient resolves too
+    const compContact = await runCompany({ documentIds: [libDocId], to: ["Contactx"] });
+    check(
+      "company: CRM contact resolves",
+      compContact.ok === true &&
+        String(compContact.confirmation?.summary ?? "").includes(`contactx.${STAMP}@client.test`),
+      JSON.stringify(compContact).slice(0, 300),
+    );
+
+    // visibility: the employee persona cannot see the FP's org-level doc
+    const compHidden = await runCompany(
+      { query: "registration certificate", to: [`zeynepx.${STAMP}@test.local`] },
+      persona,
+    );
+    check(
+      "company: hidden from non-privileged persona",
+      compHidden.ok === false && compHidden.errorCode === "doc_not_found",
+      JSON.stringify(compHidden).slice(0, 200),
+    );
   } finally {
     // ---- cleanup + tag sweep ------------------------------------------
     try {
       await db.delete(atelierAuditEvents).where(like(atelierAuditEvents.actorLabel, `%${TAG}%`));
       await db.delete(atelierPersonDocuments).where(like(atelierPersonDocuments.id, `%${TAG}%`));
+      await db.delete(atelierMsConnections).where(like(atelierMsConnections.id, `%${TAG}%`));
       await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, UID));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, PERSON));
+      await db.delete(D.atelierDocumentVersions).where(like(D.atelierDocumentVersions.fileName, `registration-cert.pdf`));
+      await db.delete(D.atelierDocuments).where(like(D.atelierDocuments.title, `%${TAG}%`));
+      await db.delete(D.atelierContacts).where(like(D.atelierContacts.id, `%${TAG}%`));
+      await db.delete(D.atelierAccounts).where(like(D.atelierAccounts.id, `%${TAG}%`));
+      await db.delete(atelierUsers).where(like(atelierUsers.name, `%${TAG}%`));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, UID));
     } catch (e) {
       console.error("cleanup failed", e);

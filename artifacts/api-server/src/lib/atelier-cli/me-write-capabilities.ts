@@ -89,6 +89,7 @@ import { evaluateExpense } from "../atelier-expense-policy.js";
 import { notifyFoundersOfSubmittedExpense } from "../../routes/atelier/walletRoutes.js";
 import { writePersonAndSync } from "../atelier-person-sync";
 import type { ToolContext, ToolResult } from "./index.js";
+import { resolveEmailRecipients, recipientLabel } from "./email-recipient-resolver.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -1796,7 +1797,8 @@ defineCapability({
       to: {
         type: "array",
         items: { type: "string" },
-        description: "Recipient email addresses",
+        description:
+          "Recipients — email addresses OR people names ('Gokhan', 'Jane Smith'). Names are looked up in the org roster and CRM contacts automatically; never ask the user for an email address when they gave a name.",
       },
       mode: {
         type: "string",
@@ -1827,21 +1829,29 @@ defineCapability({
     if (!person) return NO_ROSTER;
 
     // ---- recipients --------------------------------------------------
+    // Accepts raw emails AND people names ("Gokhan"): names are resolved
+    // against the org roster + CRM contacts; one match proceeds to the
+    // confirm card (showing "Name <email>"), multiple matches return a
+    // pick-one disambiguation card. Never asks free-text for an email.
     const rawTo = Array.isArray(input.to) ? input.to : [];
-    const recipients = [...new Set(rawTo.map((r) => String(r).trim().toLowerCase()).filter(Boolean))];
-    if (recipients.length === 0 || recipients.length > 10) {
+    const toEntries = [...new Set(rawTo.map((r) => String(r).trim()).filter(Boolean))];
+    if (toEntries.length === 0 || toEntries.length > 10) {
       return {
         ok: false,
         errorCode: "invalid_recipients",
-        errorMessage: "Provide between 1 and 10 recipient email addresses.",
+        errorMessage: "Provide between 1 and 10 recipients (email addresses or people names).",
       };
     }
-    const badEmail = recipients.find((r) => !EMAIL_RE.test(r));
-    if (badEmail) {
+    const resolution = await resolveEmailRecipients(toEntries, ctx.persona);
+    if (resolution.kind === "result") return resolution.result as ToolResult;
+    const resolved = resolution.recipients;
+    const recipients = resolved.map((r) => r.email);
+    const recipientLabels = resolved.map(recipientLabel);
+    if (recipients.length === 0) {
       return {
         ok: false,
         errorCode: "invalid_recipients",
-        errorMessage: `"${badEmail}" is not a valid email address.`,
+        errorMessage: "No valid recipients could be resolved.",
       };
     }
     const mode = input.mode === "send" ? "send" : input.mode === "draft" || input.mode === undefined ? "draft" : null;
@@ -2000,14 +2010,15 @@ defineCapability({
           preview: {
             mode,
             recipients,
+            recipientLabels,
             documents: selected.map(chatDocWire),
           },
         },
         confirmation: {
           summary:
             mode === "send"
-              ? `Send ${docSummary} to ${recipients.join(", ")} from your Outlook mailbox now?${sideNote}`
-              : `Create an Outlook draft to ${recipients.join(", ")} with ${docSummary} attached, for you to review and send?${sideNote}`,
+              ? `Send ${docSummary} to ${recipientLabels.join(", ")} from your Outlook mailbox now?${sideNote}`
+              : `Create an Outlook draft to ${recipientLabels.join(", ")} with ${docSummary} attached, for you to review and send?${sideNote}`,
           diff,
           pending: {
             tool: "email_my_documents",

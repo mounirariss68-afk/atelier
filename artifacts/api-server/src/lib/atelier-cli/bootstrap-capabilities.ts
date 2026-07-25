@@ -81,6 +81,10 @@ import "./client-meeting-capabilities.js";
 // (dedupe → candidate/agreed clarification → confirm → create + launch
 // Alliance Cartographer, mapper auto-chains) + evaluation read.
 import "./alliance-partner-capabilities.js";
+// Email COMPANY documents from the Document Library to named recipients
+// ("email our registration certificate to Gokhan") — visibility-scoped
+// via canSeeDocument, recipients resolved against roster + CRM contacts.
+import "./document-email-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;
