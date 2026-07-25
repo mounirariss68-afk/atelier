@@ -51,6 +51,20 @@ export interface BillingInstallment {
   dueDate: string; // YYYY-MM-DD
   amount: number;
   label: string;
+  /** Re-invoiced to the client at cost (no margin) — surfaced on billing UIs. */
+  passThrough?: boolean;
+}
+
+/**
+ * Contingent (outcome/SLA/volume) pricing component — NEVER auto-invoiced.
+ * Held on the rule config for manual verification by finance before any
+ * invoice is raised.
+ */
+export interface BillingContingentComponent {
+  key: string;
+  dueDate: string; // YYYY-MM-DD (expected)
+  expectedAmount: number;
+  label: string;
 }
 
 export interface BillingRuleConfig {
@@ -60,6 +74,8 @@ export interface BillingRuleConfig {
   anchorDate?: string;
   endDate?: string;
   installments?: BillingInstallment[];
+  /** Contingent tranches — manual verification required, never auto-invoiced. */
+  contingentComponents?: BillingContingentComponent[];
 }
 
 export const atelierBillingRule = pgTable(

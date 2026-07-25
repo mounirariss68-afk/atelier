@@ -236,6 +236,9 @@ export async function candidatesForRule(
       });
     }
   } else if (rule.ruleType === "fixed_fee") {
+    // NOTE: only cfg.installments become triggers. cfg.contingentComponents
+    // (outcome/SLA/volume tranches) are deliberately NEVER scanned here —
+    // they require manual verification by finance before any invoicing.
     for (const inst of cfg.installments ?? []) {
       if (inst.dueDate > isoDate(asOf)) continue;
       out.push({
@@ -246,7 +249,11 @@ export async function candidatesForRule(
         dueDate: inst.dueDate,
         amount: inst.amount,
         currency: rule.currency,
-        details: { installmentKey: inst.key, label: inst.label },
+        details: {
+          installmentKey: inst.key,
+          label: inst.label,
+          ...(inst.passThrough ? { passThrough: true } : {}),
+        },
       });
     }
   } else if (rule.ruleType === "retainer") {
@@ -357,7 +364,7 @@ export async function computeUpcomingTriggers(args: {
             ruleId: rule.id, engagementId: rule.engagementId,
             triggerType: "installment", dueDate: inst.dueDate,
             amount: inst.amount, currency: rule.currency,
-            label: inst.label || `Installment ${inst.key}`,
+            label: `${inst.label || `Installment ${inst.key}`}${inst.passThrough ? " (pass-through, at cost)" : ""}`,
           });
         }
       }
@@ -561,7 +568,7 @@ export async function draftInvoiceForTrigger(args: {
   } else if (trigger.triggerType === "installment") {
     lines.push({
       ord: 0,
-      description: String(details.label ?? "Fixed-fee installment"),
+      description: `${String(details.label ?? "Fixed-fee installment")}${details.passThrough === true ? " (pass-through cost, re-invoiced at cost)" : ""}`,
       qty: 1,
       unitPrice: trigger.amount,
       amount: trigger.amount,

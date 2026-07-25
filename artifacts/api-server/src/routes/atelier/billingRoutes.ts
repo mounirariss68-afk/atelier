@@ -96,6 +96,18 @@ const InstallmentSchema = z.object({
   dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   amount: z.number().nonnegative(),
   label: z.string().max(200),
+  // Pass-through cost installments are re-invoiced at cost — the flag must
+  // survive rule edits or the at-cost marker silently disappears.
+  passThrough: z.boolean().optional(),
+});
+
+// Contingent (outcome/SLA/volume) components — carried on the rule config
+// purely for manual verification; NEVER turned into billing triggers.
+const ContingentComponentSchema = z.object({
+  key: z.string().min(1).max(80),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  expectedAmount: z.number().nonnegative(),
+  label: z.string().max(200),
 });
 
 const RuleConfigSchema = z.object({
@@ -105,6 +117,7 @@ const RuleConfigSchema = z.object({
   anchorDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   installments: z.array(InstallmentSchema).max(60).optional(),
+  contingentComponents: z.array(ContingentComponentSchema).max(60).optional(),
 });
 
 const CreateRuleSchema = z.object({

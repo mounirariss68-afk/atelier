@@ -14,7 +14,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { fieldControlCls } from "@/components/ui/fieldControls";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Plus, Trash2 } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -22,6 +22,14 @@ interface Installment {
   key: string;
   dueDate: string;
   amount: number;
+  label: string;
+  /** Re-invoiced to the client at cost (no margin). */
+  passThrough?: boolean;
+}
+interface ContingentComponent {
+  key: string;
+  dueDate: string;
+  expectedAmount: number;
   label: string;
 }
 interface BillingRule {
@@ -39,6 +47,7 @@ interface BillingRule {
     anchorDate?: string;
     endDate?: string;
     installments?: Installment[];
+    contingentComponents?: ContingentComponent[];
   };
   notes: string;
   createdAt: string;
@@ -198,27 +207,73 @@ export function BillingRulesCard({ engId }: { engId: string }) {
       )}
 
       <div className="space-y-2">
-        {rules.map((r) => (
-          <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/5 p-3">
-            <div>
-              <div className="flex items-center gap-2">
-                <MonoChip tone={r.status === "active" ? "green" : "amber"}>{r.status}</MonoChip>
-                <span className="text-sm font-medium">{RULE_LABEL[r.ruleType]}</span>
-                <span className="text-xs text-text-mute font-mono">{r.currency} · net {r.paymentTermsDays}d · {r.jurisdiction}</span>
+        {rules.map((r) => {
+          const passThroughInsts = (r.config.installments ?? []).filter((i) => i.passThrough);
+          const contingent = r.config.contingentComponents ?? [];
+          return (
+          <div key={r.id} className="rounded border border-white/5 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <MonoChip tone={r.status === "active" ? "green" : "amber"}>{r.status}</MonoChip>
+                  <span className="text-sm font-medium">{RULE_LABEL[r.ruleType]}</span>
+                  <span className="text-xs text-text-mute font-mono">{r.currency} · net {r.paymentTermsDays}d · {r.jurisdiction}</span>
+                </div>
+                <p className="mt-1 text-xs text-text-mute">
+                  {RULE_BLURB[r.ruleType]}
+                  {r.ruleType === "retainer" && r.config.amount ? ` ${r.currency} ${r.config.amount.toLocaleString()}/month.` : ""}
+                  {r.ruleType === "fixed_fee" && r.config.installments ? ` ${r.config.installments.length} installments.` : ""}
+                  {r.ruleType === "periodic_tnm" && r.config.defaultRateUsd ? ` Fallback rate $${r.config.defaultRateUsd}/day.` : ""}
+                  {r.billTo?.name ? ` Bill to ${r.billTo.name}.` : ""}
+                </p>
               </div>
-              <p className="mt-1 text-xs text-text-mute">
-                {RULE_BLURB[r.ruleType]}
-                {r.ruleType === "retainer" && r.config.amount ? ` ${r.currency} ${r.config.amount.toLocaleString()}/month.` : ""}
-                {r.ruleType === "fixed_fee" && r.config.installments ? ` ${r.config.installments.length} installments.` : ""}
-                {r.ruleType === "periodic_tnm" && r.config.defaultRateUsd ? ` Fallback rate $${r.config.defaultRateUsd}/day.` : ""}
-                {r.billTo?.name ? ` Bill to ${r.billTo.name}.` : ""}
-              </p>
+              <PillButton variant="ghost" disabled={busy} onClick={() => void toggleRule(r)}>
+                {r.status === "active" ? "Pause" : "Resume"}
+              </PillButton>
             </div>
-            <PillButton variant="ghost" disabled={busy} onClick={() => void toggleRule(r)}>
-              {r.status === "active" ? "Pause" : "Resume"}
-            </PillButton>
+
+            {passThroughInsts.length > 0 && (
+              <div className="mt-2 rounded border border-sky-400/20 bg-sky-400/5 p-2" data-testid={`passthrough-${r.id}`}>
+                <p className="text-xs font-medium text-sky-300">
+                  Pass-through costs — re-invoiced at cost (no margin)
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {passThroughInsts.map((i) => (
+                    <li key={i.key} className="flex flex-wrap items-baseline gap-2 text-xs text-text-mute">
+                      <span>{i.label || i.key}</span>
+                      <span className="font-mono">{i.dueDate}</span>
+                      <span className="font-mono">{r.currency} {i.amount.toLocaleString()}</span>
+                      <MonoChip>at cost</MonoChip>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {contingent.length > 0 && (
+              <div className="mt-2 rounded border border-amber-400/30 bg-amber-400/5 p-2" data-testid={`contingent-${r.id}`}>
+                <p className="flex items-center gap-1.5 text-xs font-medium text-amber-300">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Contingent components — verify before invoicing
+                </p>
+                <p className="mt-0.5 text-[11px] text-text-mute">
+                  These outcome/SLA/volume tranches are never invoiced automatically. Finance must verify the
+                  outcome and raise the invoice manually on verified actuals, not expected value.
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {contingent.map((c) => (
+                    <li key={c.key} className="flex flex-wrap items-baseline gap-2 text-xs text-text-mute">
+                      <span>{c.label || c.key}</span>
+                      <span className="font-mono">due {c.dueDate}</span>
+                      <span className="font-mono">expected {r.currency} {c.expectedAmount.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {showForm && (

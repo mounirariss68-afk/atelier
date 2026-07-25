@@ -35,6 +35,7 @@ interface TriggerRow {
   skippedReason: string | null;
   invoiceId: string | null;
   invoice: { id: string; status: string; total: number; currency: string; invoiceNumber: string | null } | null;
+  details?: { label?: string; passThrough?: boolean } | null;
 }
 interface UpcomingRow {
   ruleId: string;
@@ -177,6 +178,7 @@ export default function BillingWorklist() {
                 <div className="flex items-center gap-2">
                   <MonoChip>{TYPE_LABEL[x.triggerType] ?? x.triggerType}</MonoChip>
                   <span className="font-medium">{x.engagementName}</span>
+                  {x.details?.passThrough === true && <MonoChip tone="gold">pass-through · at cost</MonoChip>}
                 </div>
                 <p className="mt-1 text-sm opacity-70">
                   Due {x.dueDate} · {x.invoice ? money(x.invoice.total, x.invoice.currency) : money(x.amount, x.currency)}
@@ -228,6 +230,7 @@ export default function BillingWorklist() {
                 <div className="flex items-center gap-2">
                   <MonoChip>{TYPE_LABEL[x.triggerType] ?? x.triggerType}</MonoChip>
                   <span className="font-medium">{x.engagementName}</span>
+                  {x.details?.passThrough === true && <MonoChip tone="gold">pass-through · at cost</MonoChip>}
                   {x.status === "held" && <MonoChip tone="amber">held</MonoChip>}
                 </div>
                 <p className="mt-1 text-sm opacity-70">
