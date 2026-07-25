@@ -46,7 +46,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-bg">
       <div className="mx-auto max-w-2xl px-6 py-12">
         <div className="mb-8 flex items-center gap-3">
-          <Logo />
+          <Logo variant="themed" />
         </div>
         <h1 className="text-2xl font-semibold text-text">Privacy Policy</h1>
         <p className="mt-1 font-mono text-xs uppercase tracking-widest text-text-faint">

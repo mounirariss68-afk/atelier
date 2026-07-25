@@ -1,13 +1,16 @@
 import lockupSrc from "@/assets/cognirise-logo.png";
 import lockupLightSrc from "@/assets/cognirise-logo-light.png";
 import markSrc from "@/assets/cognirise-mark.png";
+import { useTheme } from "@/lib/theme";
 
 interface LogoProps {
   /** "lockup" = full wordmark with a light tint (use on navy surfaces);
    *  "lockup-light" = full wordmark in navy ink (use on light/white surfaces
    *  such as reports, exported documents and print);
-   *  "mark" = gradient CR glyph only (reads on any background). */
-  variant?: "lockup" | "lockup-light" | "mark";
+   *  "mark" = gradient CR glyph only (reads on any background);
+   *  "themed" = follows the active theme: light wordmark ("lockup") in dark
+   *  mode, navy-ink wordmark ("lockup-light") in light mode. */
+  variant?: "lockup" | "lockup-light" | "mark" | "themed";
   size?: "sm" | "md" | "lg";
   className?: string;
 }
@@ -27,11 +30,18 @@ export default function Logo({
   size = "md",
   className = "",
 }: LogoProps) {
+  const { theme } = useTheme();
   const h = heights[size];
+  const resolved =
+    variant === "themed"
+      ? theme === "light"
+        ? "lockup-light"
+        : "lockup"
+      : variant;
   const src =
-    variant === "mark"
+    resolved === "mark"
       ? markSrc
-      : variant === "lockup-light"
+      : resolved === "lockup-light"
         ? lockupLightSrc
         : lockupSrc;
   return (
