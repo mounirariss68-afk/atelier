@@ -221,3 +221,9 @@ id = "M5-DmIic37oi8gXRs79ZW"
 uri = "file://exports/appstore-screenshots-6.5.zip"
 type = "unspecified"
 title = "App Store screenshots (6.5-inch, 1284×2778)"
+
+[[outputs]]
+id = "Yl0aci6L0CYyG8hEAqNv5"
+uri = "file://exports/DUNS_Questionnaire_Cognirise_UAE.docx"
+type = "word_document"
+title = "DUNS Questionnaire — Cognirise UAE (filled)"
