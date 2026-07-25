@@ -30,10 +30,12 @@ import {
   atelierCloseItem,
   atelierCloseAccrual,
   atelierPayrollRuns,
+  atelierPayrollRun,
 } from "@workspace/db";
 import { runAgent } from "./runAgent.js";
 // Task #655 — statutory payroll close check (rules-as-code registry).
 import { resolveRules } from "../atelier-payroll/statutoryRules.js";
+import { buildPayrollLines } from "../atelier-payroll.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -102,7 +104,9 @@ export function checklistTemplate(
       { itemKey: "gl_posted", phase: "execution", title: "Bookkeeper posted — no open GL exceptions", ownerRole: "finance", autoCheck: true, sortOrder: 50 },
       { itemKey: "payroll_statutory", phase: "execution", title: "Payroll posted — salaries, statutory contributions & EOSB accrual", ownerRole: "finance", autoCheck: true, sortOrder: 55 },
       { itemKey: "ar_tie", phase: "execution", title: "AR subledger ties to GL (1100)", ownerRole: "finance", autoCheck: true, sortOrder: 60 },
+      { itemKey: "payroll_posted", phase: "execution", title: "Monthly payroll run approved & posted", ownerRole: "finance", autoCheck: true, sortOrder: 65 },
       { itemKey: "accruals_decided", phase: "execution", title: "Accrual proposals decided (approved or rejected)", ownerRole: "partner", autoCheck: true, sortOrder: 70 },
+      { itemKey: "ct_provision", phase: "execution", title: "Corporate tax provision considered (record or mark N/A)", ownerRole: "finance", autoCheck: false, sortOrder: 75 },
       { itemKey: "management_review", phase: "post_close", title: "Management review of results", ownerRole: "partner", autoCheck: false, sortOrder: 80 },
     ];
   }
@@ -412,6 +416,53 @@ async function executeCloseController(
         : payRun
           ? { status: "blocked", message: `Payroll run for ${periodLabel} is still draft — post it (or resolve its validation errors) before close.`, detail: { runId: payRun.id } }
           : { status: "blocked", message: `No payroll run exists for ${periodLabel} — compute and post it from Finance → Payroll.` });
+    }
+
+    // ── payroll_posted (Task #654) ──
+    // Simple monthly payroll run. A posted STATUTORY run (Task #655) also
+    // satisfies this check — the two systems must never both post salary
+    // expense for the same entity/month.
+    const [statutoryPosted] = await db
+      .select({ id: atelierPayrollRuns.id })
+      .from(atelierPayrollRuns)
+      .where(and(
+        eq(atelierPayrollRuns.orgId, orgId),
+        eq(atelierPayrollRuns.legalEntityId, entityId),
+        eq(atelierPayrollRuns.periodLabel, periodLabel),
+        eq(atelierPayrollRuns.status, "posted"),
+        isNull(atelierPayrollRuns.deletedAt),
+      ))
+      .limit(1);
+    const [payrollRun] = await db
+      .select()
+      .from(atelierPayrollRun)
+      .where(and(
+        eq(atelierPayrollRun.orgId, orgId),
+        eq(atelierPayrollRun.entityId, entityId),
+        eq(atelierPayrollRun.periodLabel, periodLabel),
+        isNull(atelierPayrollRun.deletedAt),
+      ))
+      .limit(1);
+    if (statutoryPosted) {
+      results.set("payroll_posted", {
+        status: "done",
+        message: `Statutory payroll ${periodLabel} posted — covered by the statutory payroll run.`,
+        detail: { statutoryRunId: statutoryPosted.id },
+      });
+    } else if (payrollRun && (payrollRun.status === "approved" || payrollRun.status === "paid")) {
+      results.set("payroll_posted", {
+        status: "done",
+        message: `Payroll ${periodLabel} ${payrollRun.status} — USD ${payrollRun.totalAmount} across ${payrollRun.lines.length} employee(s).`,
+        detail: { runId: payrollRun.id, totalAmount: payrollRun.totalAmount, employees: payrollRun.lines.length },
+      });
+    } else {
+      const expected = closeEntity ? await buildPayrollLines(orgId, closeEntity) : { lines: [], excluded: [], totalAmount: 0 };
+      results.set("payroll_posted", expected.lines.length === 0
+        ? { status: "done", message: "No active employees with base compensation attributed to this entity — no payroll expected." }
+        : { status: "blocked", message: payrollRun
+            ? `Payroll run for ${periodLabel} is still a draft (USD ${payrollRun.totalAmount}). A partner must approve it.`
+            : `${expected.lines.length} active employee(s) expect payroll (~USD ${expected.totalAmount}) but no run exists for ${periodLabel}. Build and approve the payroll run.`,
+          detail: { expectedEmployees: expected.lines.length, expectedTotal: expected.totalAmount } });
     }
 
     // ── accruals_decided ──

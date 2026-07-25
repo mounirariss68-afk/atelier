@@ -113,6 +113,7 @@ export default function FinanceClose() {
   const meQ = useAtelierGetMe();
   const me = (meQ.data as { data?: { role?: string } } | undefined)?.data;
   const isPartner = me?.role === "founding_partner" || me?.role === "partner";
+  const isFoundingPartner = me?.role === "founding_partner";
   const entities = useFinanceEntities();
   const [entityId, setEntityId] = React.useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -144,6 +145,8 @@ export default function FinanceClose() {
     void qc.invalidateQueries({ queryKey: ["close-cycles"] });
     void qc.invalidateQueries({ queryKey: ["close-cycle"] });
     void qc.invalidateQueries({ queryKey: ["collections-drafts"] });
+    void qc.invalidateQueries({ queryKey: ["payroll-runs"] });
+    void qc.invalidateQueries({ queryKey: ["vat-return"] });
   };
   const act = async (key: string, fn: () => Promise<unknown>, okMsg: string) => {
     setBusy(key);
@@ -321,6 +324,30 @@ export default function FinanceClose() {
                               </PillButton>
                             </>
                           )}
+                          {detail.cycle.status !== "signed_off" && (
+                            <PillButton
+                              onClick={() => act("ctprov", () => jfetch(`/close/cycles/${detail.cycle.id}/ct-provision`, { method: "POST", body: JSON.stringify({}) }), "CT provision proposed — approve it under accruals")}
+                              disabled={busy !== null || !isPartner}
+                              title={!isPartner ? "Partner tier required" : "Propose a corporate-tax provision accrual (configurable rate on pre-tax profit)"}
+                              data-testid="button-ct-provision"
+                            >
+                              CT provision
+                            </PillButton>
+                          )}
+                          {detail.cycle.status === "signed_off" && (
+                            <PillButton
+                              onClick={() => {
+                                const reason = window.prompt("Reopen this signed-off period — a reason is required (min 10 characters):");
+                                if (!reason) return;
+                                void act("reopen", () => jfetch(`/close/cycles/${detail.cycle.id}/reopen`, { method: "POST", body: JSON.stringify({ reason }) }), "Period reopened — sign-offs reset");
+                              }}
+                              disabled={busy !== null || !isFoundingPartner}
+                              title={!isFoundingPartner ? "Founding partner only" : undefined}
+                              data-testid="button-reopen-cycle"
+                            >
+                              <Unlock className="w-3.5 h-3.5 mr-1" /> Reopen period
+                            </PillButton>
+                          )}
                           {detail.cycle.periodType === "year" && detail.cycle.status !== "signed_off" && (
                             <PillButton
                               onClick={() => act("rollover", () => jfetch("/close/rollover", { method: "POST", body: JSON.stringify({ entityId: detail.cycle.entityId, year: detail.cycle.periodLabel }) }), "Retained-earnings rollover posted")}
@@ -457,6 +484,13 @@ export default function FinanceClose() {
               </div>
             </div>
 
+            {entity && (
+              <div className="grid lg:grid-cols-2 gap-4">
+                <PayrollPanel entityId={entity.id} entityName={entity.shortName} isPartner={isPartner} busy={busy} act={act} />
+                <VatPanel entityId={entity.id} entityName={entity.shortName} isPartner={isPartner} busy={busy} act={act} />
+              </div>
+            )}
+
             <CollectionsPanel isPartner={isPartner} busy={busy} act={act} />
           </>
         )}
@@ -570,6 +604,259 @@ function CollectionsPanel(props: {
             </li>
           ))}
         </ul>
+      )}
+    </Card>
+  );
+}
+
+// ─────────────────────── Payroll (Task #654) ───────────────────────
+
+interface PayrollRunRow {
+  id: string;
+  entityId: string;
+  periodLabel: string;
+  status: string;
+  totalAmount: number;
+  lines: Array<{ employeeId: string; name: string; title: string | null; monthlyAmountUsd: number }>;
+  excluded: Array<{ employeeId: string; name: string; reason: string }>;
+  journalEntryId?: string | null;
+  paymentJournalEntryId?: string | null;
+}
+
+function PayrollPanel(props: {
+  entityId: string;
+  entityName: string;
+  isPartner: boolean;
+  busy: string | null;
+  act: (key: string, fn: () => Promise<unknown>, okMsg: string) => Promise<void>;
+}) {
+  const { entityId, entityName, isPartner, busy, act } = props;
+  const [period, setPeriod] = React.useState<string>(currentMonth());
+  const [expanded, setExpanded] = React.useState<string | null>(null);
+  const runsQ = useQuery({
+    queryKey: ["payroll-runs", entityId],
+    queryFn: async () => (await jfetch(`/payroll/runs?entityId=${entityId}`)) as { data: { rows: PayrollRunRow[] } },
+  });
+  const runs = runsQ.data?.data.rows ?? [];
+
+  return (
+    <Card className="p-4" data-testid="payroll-panel">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-widest text-text-faint">Payroll · {entityName}</div>
+          <div className="text-[11px] text-text-mute mt-0.5">
+            Monthly salary run from the roster — approve posts Dr 6000 / Cr 2100; mark paid posts Dr 2100 / Cr 1000.
+          </div>
+        </div>
+        <div className="flex items-end gap-2 shrink-0">
+          <input
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="bg-bg-elevate border border-border-soft rounded px-2 py-1 text-xs font-mono text-text w-24"
+            placeholder="YYYY-MM"
+            data-testid="input-payroll-period"
+          />
+          <PillButton
+            onClick={() => act("pay-build", () => jfetch("/payroll/runs", { method: "POST", body: JSON.stringify({ entityId, periodLabel: period.trim() }) }), `Payroll draft built for ${period}`)}
+            disabled={busy !== null}
+            data-testid="button-payroll-build"
+          >
+            Build run
+          </PillButton>
+        </div>
+      </div>
+      {runs.length === 0 ? (
+        <div className="text-xs text-text-mute italic" data-testid="payroll-empty">
+          No payroll runs yet for this entity — pick a month and build a draft.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {runs.map((r) => (
+            <li key={r.id} className="border border-border-soft rounded p-3 text-xs" data-testid={`payroll-run-${r.periodLabel}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-text font-mono">{r.periodLabel} · USD {r.totalAmount.toLocaleString()}</div>
+                  <div className="text-[10px] text-text-mute mt-0.5">
+                    {r.lines.length} employee(s){r.excluded.length > 0 ? ` · ${r.excluded.length} excluded (no base compensation)` : ""}
+                  </div>
+                  <button
+                    onClick={() => setExpanded(expanded === r.id ? null : r.id)}
+                    className="text-[10px] font-mono uppercase text-gold hover:underline mt-1"
+                    data-testid={`button-payroll-lines-${r.id}`}
+                  >
+                    {expanded === r.id ? "hide lines" : "show lines"}
+                  </button>
+                  {expanded === r.id && (
+                    <div className="mt-2 bg-bg-elevate rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5">
+                      {r.lines.map((l) => (
+                        <div key={l.employeeId} className="flex justify-between gap-3">
+                          <span className="truncate">{l.name}{l.title ? ` · ${l.title}` : ""}</span>
+                          <span className="shrink-0">USD {l.monthlyAmountUsd.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      {r.excluded.map((x) => (
+                        <div key={x.employeeId} className="text-red-400/80">excluded: {x.name} — {x.reason}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <MonoChip tone={r.status === "paid" ? "default" : r.status === "approved" ? "gold" : "amber"}>{r.status}</MonoChip>
+                  <div className="flex gap-1">
+                    {r.status === "draft" && (
+                      <>
+                        <PillButton
+                          onClick={() => act(`pay-appr-${r.id}`, () => jfetch(`/payroll/runs/${r.id}/approve`, { method: "POST", body: JSON.stringify({}) }), "Payroll approved — expense journal posted")}
+                          disabled={busy !== null || !isPartner}
+                          title={!isPartner ? "Partner tier required" : undefined}
+                          data-testid={`button-payroll-approve-${r.id}`}
+                        >
+                          Approve · post
+                        </PillButton>
+                        <PillButton
+                          onClick={() => act(`pay-del-${r.id}`, () => jfetch(`/payroll/runs/${r.id}`, { method: "DELETE" }), "Draft payroll run deleted")}
+                          disabled={busy !== null}
+                          data-testid={`button-payroll-delete-${r.id}`}
+                        >
+                          Delete
+                        </PillButton>
+                      </>
+                    )}
+                    {r.status === "approved" && (
+                      <PillButton
+                        onClick={() => act(`pay-paid-${r.id}`, () => jfetch(`/payroll/runs/${r.id}/mark-paid`, { method: "POST", body: JSON.stringify({}) }), "Payroll marked paid — payment journal posted")}
+                        disabled={busy !== null || !isPartner}
+                        title={!isPartner ? "Partner tier required" : undefined}
+                        data-testid={`button-payroll-paid-${r.id}`}
+                      >
+                        Mark paid
+                      </PillButton>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// ─────────────────────── VAT return (Task #654) ───────────────────────
+
+interface VatReturnData {
+  entityId: string;
+  period: string;
+  outputVat: number;
+  inputVat: number;
+  netVat: number;
+  lines: Array<{ journalEntryId: string; entryDate: string; periodLabel: string; sourceKind: string; memo: string | null; accountCode: string; debit: number; credit: number }>;
+  filed: boolean;
+  settlementJournalEntryId: string | null;
+  vatPeriodSetting: string | null;
+  nextVatFilingDate: string | null;
+}
+
+function defaultVatPeriod(): string {
+  return currentMonth();
+}
+
+function VatPanel(props: {
+  entityId: string;
+  entityName: string;
+  isPartner: boolean;
+  busy: string | null;
+  act: (key: string, fn: () => Promise<unknown>, okMsg: string) => Promise<void>;
+}) {
+  const { entityId, entityName, isPartner, busy, act } = props;
+  const [period, setPeriod] = React.useState<string>(defaultVatPeriod());
+  const [showLines, setShowLines] = React.useState(false);
+  const retQ = useQuery({
+    queryKey: ["vat-return", entityId, period],
+    enabled: /^\d{4}-(0[1-9]|1[0-2]|Q[1-4])$/.test(period.trim()),
+    queryFn: async () => (await jfetch(`/vat/return?entityId=${entityId}&period=${encodeURIComponent(period.trim())}`)) as { data: VatReturnData },
+  });
+  const ret = retQ.data?.data;
+
+  return (
+    <Card className="p-4" data-testid="vat-panel">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-widest text-text-faint">VAT return · {entityName}</div>
+          <div className="text-[11px] text-text-mute mt-0.5">
+            Output VAT (2300) vs input VAT (1400) from the GL — mark filed to post the netting journal and roll the next filing date.
+          </div>
+        </div>
+        <input
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          className="bg-bg-elevate border border-border-soft rounded px-2 py-1 text-xs font-mono text-text w-24 shrink-0"
+          placeholder="YYYY-MM / YYYY-Qn"
+          data-testid="input-vat-period"
+        />
+      </div>
+      {!ret ? (
+        <div className="text-xs text-text-mute italic" data-testid="vat-empty">
+          {retQ.isLoading ? "Computing…" : "Enter a period (YYYY-MM or YYYY-Qn) to compute the return."}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-bg-elevate rounded p-2">
+              <div className="text-[10px] font-mono uppercase text-text-faint">Output (2300)</div>
+              <div className="text-sm font-mono text-text" data-testid="vat-output">USD {ret.outputVat.toLocaleString()}</div>
+            </div>
+            <div className="bg-bg-elevate rounded p-2">
+              <div className="text-[10px] font-mono uppercase text-text-faint">Input (1400)</div>
+              <div className="text-sm font-mono text-text" data-testid="vat-input">USD {ret.inputVat.toLocaleString()}</div>
+            </div>
+            <div className="bg-bg-elevate rounded p-2">
+              <div className="text-[10px] font-mono uppercase text-text-faint">{ret.netVat >= 0 ? "Net payable" : "Net receivable"}</div>
+              <div className="text-sm font-mono text-gold" data-testid="vat-net">USD {Math.abs(ret.netVat).toLocaleString()}</div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setShowLines(!showLines)}
+              className="text-[10px] font-mono uppercase text-gold hover:underline"
+              data-testid="button-vat-lines"
+            >
+              {showLines ? "hide drill-down" : `drill down (${ret.lines.length} lines)`}
+            </button>
+            <div className="flex items-center gap-2">
+              {ret.nextVatFilingDate && (
+                <span className="text-[10px] font-mono text-text-faint">next filing {ret.nextVatFilingDate}</span>
+              )}
+              {ret.filed ? (
+                <MonoChip tone="default">filed</MonoChip>
+              ) : (
+                <PillButton
+                  onClick={() => act("vat-file", () => jfetch("/vat/return/file", { method: "POST", body: JSON.stringify({ entityId, period: period.trim() }) }), `VAT return ${period} marked filed`)}
+                  disabled={busy !== null || !isPartner}
+                  title={!isPartner ? "Partner tier required" : undefined}
+                  data-testid="button-vat-file"
+                >
+                  Mark filed
+                </PillButton>
+              )}
+            </div>
+          </div>
+          {showLines && (
+            <div className="bg-bg-elevate rounded p-2 font-mono text-[10px] text-text-mute space-y-0.5 max-h-48 overflow-auto" data-testid="vat-drilldown">
+              {ret.lines.length === 0 ? (
+                <div className="italic">No VAT-account journal lines in this period.</div>
+              ) : (
+                ret.lines.map((l, i) => (
+                  <div key={i} className="flex justify-between gap-3">
+                    <span className="truncate">{l.entryDate?.slice(0, 10)} · {l.accountCode === "2300" ? "output" : "input"} · {l.memo ?? l.journalEntryId}</span>
+                    <span className="shrink-0">{l.debit > 0 ? `Dr USD ${l.debit.toLocaleString()}` : `Cr USD ${l.credit.toLocaleString()}`}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       )}
     </Card>
   );

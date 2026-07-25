@@ -125,7 +125,15 @@ export const atelierCloseAccrual = pgTable(
     /** Idempotency key so controller re-runs refresh, not duplicate. */
     sourceKey: text("source_key").notNull(),
     status: text("status").notNull().default("proposed"),
+    /**
+     * Task #654 — approved accruals auto-post a reversing journal dated the
+     * first day of the next period. Provisions (e.g. CT) set this false so
+     * they stay on the books.
+     */
+    autoReverse: boolean("auto_reverse").notNull().default(true),
     journalEntryId: text("journal_entry_id"),
+    /** Journal entry id of the auto-posted reversal (Task #654). */
+    reversalEntryId: text("reversal_entry_id"),
     proposedByRunId: text("proposed_by_run_id"),
     decidedByUserId: text("decided_by_user_id"),
     decidedAt: timestamp("decided_at"),
@@ -135,6 +143,55 @@ export const atelierCloseAccrual = pgTable(
   (t) => [
     index("idx_atelier_close_accrual_cycle").on(t.cycleId),
     uniqueIndex("uq_atelier_close_accrual_source").on(t.cycleId, t.sourceKey),
+  ],
+);
+
+// ============================================================
+// PAYROLL RUN — Task #654. One run per (entity, month). Built from the
+// active roster (annual baseCompensation / 12), partner-approved (posts
+// salary expense Dr 6000 / Cr 2100), then marked paid (Dr 2100 / Cr 1000).
+// status: draft | approved | paid
+// ============================================================
+export const atelierPayrollRun = pgTable(
+  "atelier_payroll_run",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    entityId: text("entity_id").notNull(),
+    periodLabel: text("period_label").notNull(), // YYYY-MM
+    status: text("status").notNull().default("draft"),
+    currency: text("currency").notNull().default("USD"),
+    /** Per-person salary lines snapshotted at build time (USD amounts). */
+    lines: jsonb("lines")
+      .$type<Array<{
+        employeeId: string;
+        name: string;
+        title: string | null;
+        baseCurrency: string | null;
+        baseCompensationAnnual: number;
+        monthlyAmountUsd: number;
+      }>>()
+      .notNull()
+      .default([]),
+    totalAmount: doublePrecision("total_amount").notNull().default(0),
+    /** Employees on the entity with no baseCompensation (visibility only). */
+    excluded: jsonb("excluded")
+      .$type<Array<{ employeeId: string; name: string; reason: string }>>()
+      .notNull()
+      .default([]),
+    approvedByUserId: text("approved_by_user_id"),
+    approvedAt: timestamp("approved_at"),
+    journalEntryId: text("journal_entry_id"),
+    paidByUserId: text("paid_by_user_id"),
+    paidAt: timestamp("paid_at"),
+    paidDate: text("paid_date"), // ISO date of the cash outflow
+    paymentJournalEntryId: text("payment_journal_entry_id"),
+    ...COMMON,
+  },
+  (t) => [
+    index("idx_atelier_payroll_run_org").on(t.orgId),
+    index("idx_atelier_payroll_run_entity").on(t.entityId),
+    uniqueIndex("uq_atelier_payroll_run").on(t.orgId, t.entityId, t.periodLabel),
   ],
 );
 

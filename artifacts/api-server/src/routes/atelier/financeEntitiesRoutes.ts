@@ -174,6 +174,8 @@ const fiscalSchema = z.object({
   ctTaxYearBasis: optStr(60),
   ctFirstPeriodStart: isoDate.nullish(),
   ctFirstPeriodEnd: isoDate.nullish(),
+  // Task #654 — CT rate (%) used by the close CT-provision computation.
+  ctRatePct: z.number().min(0).max(100).nullish(),
 });
 
 // Task #272 — per-entity cash policy (opening balance, min-cash floor,
@@ -277,6 +279,7 @@ function normalizeFiscal(f: z.infer<typeof fiscalSchema> | null | undefined) {
     ctTaxYearBasis: f.ctTaxYearBasis ?? null,
     ctFirstPeriodStart: f.ctFirstPeriodStart ?? null,
     ctFirstPeriodEnd: f.ctFirstPeriodEnd ?? null,
+    ctRatePct: f.ctRatePct ?? null,
   };
   const hasValue = Object.values(out).some((v) => v !== null && v !== "");
   return hasValue ? out : null;

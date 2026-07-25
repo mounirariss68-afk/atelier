@@ -109,6 +109,7 @@ import deliverableAcceptanceRoutes from "./deliverableAcceptanceRoutes";
 import revrecRoutes from "./revrecRoutes";
 import glRoutes from "./glRoutes";
 import closeRoutes from "./closeRoutes";
+import vatRoutes from "./vatRoutes";
 import marginReportsRoutes from "./marginReportsRoutes";
 import bankRoutes from "./bankRoutes";
 import cashRoutes from "./cashRoutes";
@@ -430,6 +431,7 @@ router.use(revrecRoutes);
 // journal, entity tagging, Bookkeeper posting agent, trial balance.
 router.use(glRoutes);
 router.use(closeRoutes);
+router.use(vatRoutes);
 
 // Task #434 — Margin / realization reporting suite: sold-position
 // snapshots, client margin rollups, overhead allocation, realization
@@ -901,6 +903,7 @@ async function buildEngagementWire(
     plannedEndDate: e.plannedEndDate,
     raidStatus: e.raidStatus as "green" | "amber" | "red",
     deliverablesDueThisWeek: e.deliverablesDueThisWeek,
+    legalEntityId: e.legalEntityId ?? null,
   };
 }
 

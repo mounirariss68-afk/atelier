@@ -20,6 +20,9 @@ import { DeliverablesTab } from "@/components/tabs/DeliverablesTab";
 import { ArtifactsTab } from "@/components/tabs/ArtifactsTab";
 import { DocumentLibraryPanel } from "@/pages/Documents";
 import { AgentsTab } from "@/components/tabs/AgentsTab";
+import { useQueryClient } from "@tanstack/react-query";
+import { useFinanceEntities } from "@/lib/v5-hooks";
+import { useToast } from "@/hooks/use-toast";
 import { ProcessesTab } from "@/components/tabs/ProcessesTab";
 import { FinancialsTab } from "@/components/tabs/FinancialsTab";
 
@@ -102,14 +105,16 @@ export default function Engagement() {
               </span>
             }
           />
-          <OwnershipPanel
-            className="shrink-0"
-            rows={[
-              { label: "Partner", name: eng.partnerOwnerName },
-              { label: "Engagement Lead", name: eng.engagementLeadName },
-              { label: "Started", name: new Date(eng.startDate).toLocaleDateString(), meta: true },
-            ]}
-          />
+          <div className="shrink-0 flex flex-col items-end gap-3">
+            <OwnershipPanel
+              rows={[
+                { label: "Partner", name: eng.partnerOwnerName },
+                { label: "Engagement Lead", name: eng.engagementLeadName },
+                { label: "Started", name: new Date(eng.startDate).toLocaleDateString(), meta: true },
+              ]}
+            />
+            <LegalEntitySelector engId={eng.id} legalEntityId={eng.legalEntityId ?? null} />
+          </div>
         </div>
       </PageHero>
 
@@ -153,5 +158,55 @@ export default function Engagement() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Task #654 — explicit legal entity on the engagement (invoicing/delivery
+// entity for margin reporting). Raw fetch: PATCH /engagements/:id is a
+// bespoke route not in the OpenAPI spec for writes.
+function LegalEntitySelector({ engId, legalEntityId }: { engId: string; legalEntityId: string | null }) {
+  const entities = useFinanceEntities();
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = React.useState(false);
+  if (entities.length === 0) return null;
+
+  const onChange = async (value: string) => {
+    setBusy(true);
+    try {
+      const base = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
+      const res = await fetch(`${base}/engagements/${engId}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ legalEntityId: value || null }),
+      });
+      const body = (await res.json().catch(() => null)) as { message?: string; error?: string } | null;
+      if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`);
+      toast({ title: value ? "Legal entity updated" : "Legal entity cleared" });
+      void qc.invalidateQueries({ queryKey: getAtelierGetEngagementQueryKey(engId) });
+    } catch (err) {
+      toast({ title: "Update failed", description: err instanceof Error ? err.message : String(err), variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <label className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-text-faint" data-testid="engagement-entity-selector">
+      Legal entity
+      <select
+        value={legalEntityId ?? ""}
+        onChange={(e) => void onChange(e.target.value)}
+        disabled={busy}
+        className="bg-bg-elevate border border-border-soft rounded px-2 py-1 text-[11px] font-mono text-text normal-case tracking-normal"
+        data-testid="select-engagement-entity"
+      >
+        <option value="">— inferred from invoices —</option>
+        {entities.map((e) => (
+          <option key={e.id} value={e.id}>{e.shortName}</option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -18,6 +18,7 @@ import { eq, and, desc, isNull, inArray } from "drizzle-orm";
 import {
   db,
   atelierEngagements,
+  atelierLegalEntities,
   atelierEngagementAccess,
   atelierUsers,
   atelierAuditEvents,
@@ -1285,10 +1286,54 @@ router.patch("/engagements/:engId", async (req, res) => {
     res.status(404).json({ error: "engagement-not-found" });
     return;
   }
-  const body = (req.body ?? {}) as { plmStage?: string };
+  const body = (req.body ?? {}) as { plmStage?: string; legalEntityId?: string | null };
   const nextStage = body.plmStage;
-  if (!nextStage) {
+  const hasEntityUpdate = Object.prototype.hasOwnProperty.call(body, "legalEntityId");
+  if (!nextStage && !hasEntityUpdate) {
     res.status(400).json({ error: "no-fields-to-update" });
+    return;
+  }
+
+  // Task #654 — explicit invoicing/delivery legal entity on the engagement.
+  // Null clears it (reverts margin reporting to invoice inference).
+  if (hasEntityUpdate) {
+    const nextEntityId = body.legalEntityId ?? null;
+    if (nextEntityId !== null) {
+      if (typeof nextEntityId !== "string" || !nextEntityId.trim()) {
+        res.status(400).json({ error: "invalid-legal-entity-id" });
+        return;
+      }
+      const [ent] = await db
+        .select({ id: atelierLegalEntities.id })
+        .from(atelierLegalEntities)
+        .where(and(eq(atelierLegalEntities.id, nextEntityId), eq(atelierLegalEntities.orgId, me.orgId)))
+        .limit(1);
+      if (!ent) {
+        res.status(404).json({ error: "legal-entity-not-found" });
+        return;
+      }
+    }
+    if (nextEntityId !== (eng.legalEntityId ?? null)) {
+      await db
+        .update(atelierEngagements)
+        .set({ legalEntityId: nextEntityId, updatedAt: new Date() })
+        .where(eq(atelierEngagements.id, eng.id));
+      await db.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "engagement",
+        entityId: eng.id,
+        actorType: "user",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "engagement.legal_entity.update",
+        payload: { from: eng.legalEntityId ?? null, to: nextEntityId },
+        payloadSummary: `Engagement legal entity ${eng.legalEntityId ?? "—"} → ${nextEntityId ?? "—"}`,
+      });
+    }
+  }
+
+  if (!nextStage) {
+    res.json({ ok: true });
     return;
   }
   const wasClosed = eng.plmStage === "closed";

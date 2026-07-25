@@ -93,6 +93,8 @@ export interface EntityFiscal {
   ctTaxYearBasis?: string | null;
   ctFirstPeriodStart?: string | null;
   ctFirstPeriodEnd?: string | null;
+  /** Task #654 — corporate-tax rate (%) applied when recording a CT provision at close. */
+  ctRatePct?: number | null;
 }
 
 /**

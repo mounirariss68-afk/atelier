@@ -85,6 +85,10 @@ export const DEFAULT_CHART: ChartAccountDef[] = [
   { code: "6500", name: "Marketing & business development", type: "expense", normalSide: "debit", isSystem: false },
   { code: "6600", name: "Bank charges & FX", type: "expense", normalSide: "debit", isSystem: true },
   { code: "6900", name: "Other operating expenses", type: "expense", normalSide: "debit", isSystem: true },
+  // Task #654 — corporate-tax provision (Dr 6950 / Cr 2400). Kept outside
+  // the 6xxx operating range semantics: pre-tax profit computations must
+  // exclude this code.
+  { code: "6950", name: "Corporate tax expense", type: "expense", normalSide: "debit", isSystem: false },
 ];
 
 /** Legacy flat expense-category → fallback account code. */

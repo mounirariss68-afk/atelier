@@ -5050,6 +5050,7 @@ export interface Engagement {
   plannedEndDate: string;
   raidStatus: EngagementRaidStatus;
   deliverablesDueThisWeek: number;
+  legalEntityId?: string | null;
 }
 
 export type AgentCatalogEntryStatus =

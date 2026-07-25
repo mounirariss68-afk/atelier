@@ -97,6 +97,14 @@ app.listen(port, (err) => {
         "./lib/atelier-expense-taxonomy"
       );
       await ensureExpenseTaxonomy();
+      // Task #654 — idempotent backfill of engagement legal_entity_id from
+      // unambiguous invoice history (only touches rows with NULL entity).
+      const { backfillEngagementLegalEntities } = await import(
+        "./lib/atelier-engagement-entity"
+      );
+      const res = await backfillEngagementLegalEntities();
+      if (res.filled > 0)
+        logger.info({ ...res }, "Engagement legal-entity backfill complete");
       const migrated = await migrateLegacyExpenseRows();
       if (migrated > 0) logger.info({ migrated }, "Expense rows migrated to taxonomy");
     })().catch((err) => {

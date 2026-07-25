@@ -292,6 +292,177 @@ router.post("/close/cycles/:id/signoff", async (req, res) => {
   return res.json({ ok: true, data: { signoff: "final", locked: true, lockedModules: LOCK_MODULES } });
 });
 
+// ─────────────────────── founding-partner reopen (Task #654) ───────────────────────
+
+const ReopenSchema = z.object({
+  reason: z.string().trim().min(10, "A substantive reason (min 10 chars) is required").max(1000),
+});
+
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/close/cycles/:id/reopen", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  if (me.role !== "founding_partner")
+    return res.status(403).json({ error: "forbidden", message: "Reopening a signed-off period requires a founding partner." });
+  const cycle = await loadCycle(req.params.id, me.orgId);
+  if (!cycle) return res.status(404).json({ error: "not_found" });
+  if (cycle.status !== "signed_off")
+    return res.status(409).json({ error: "not_signed_off", status: cycle.status, message: "Only a signed-off cycle can be reopened." });
+  const parsed = ReopenSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+  const reason = parsed.data.reason;
+
+  const now = new Date();
+  const prior = {
+    firstSignoffUserId: cycle.firstSignoffUserId,
+    secondSignoffUserId: cycle.secondSignoffUserId,
+    signedOffAt: cycle.signedOffAt,
+  };
+  await db.update(atelierCloseCycle).set({
+    status: "open",
+    firstSignoffUserId: null, firstSignoffAt: null,
+    secondSignoffUserId: null, secondSignoffAt: null,
+    signedOffAt: null, updatedAt: now,
+  }).where(eq(atelierCloseCycle.id, cycle.id));
+
+  // The period lock is org-wide per periodLabel, shared across entities:
+  // only release it when no OTHER entity's cycle for the same period is
+  // still signed off.
+  const others = await db.select({ id: atelierCloseCycle.id }).from(atelierCloseCycle).where(and(
+    eq(atelierCloseCycle.orgId, me.orgId),
+    eq(atelierCloseCycle.periodLabel, cycle.periodLabel),
+    eq(atelierCloseCycle.status, "signed_off"),
+    isNull(atelierCloseCycle.deletedAt),
+  ));
+  let lockReleased = false;
+  if (others.length === 0) {
+    const [lock] = await db.select().from(atelierPeriodCloseLock)
+      .where(and(eq(atelierPeriodCloseLock.orgId, me.orgId), eq(atelierPeriodCloseLock.periodLabel, cycle.periodLabel), isNull(atelierPeriodCloseLock.deletedAt)))
+      .limit(1);
+    if (lock) {
+      await db.update(atelierPeriodCloseLock)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(eq(atelierPeriodCloseLock.id, lock.id));
+      lockReleased = true;
+    }
+  }
+  await audit({ entityType: "close_cycle", entityId: cycle.id, actor: me,
+    action: "close.reopen",
+    payload: { periodLabel: cycle.periodLabel, entityId: cycle.entityId, reason, priorSignoffs: prior, lockReleased, otherSignedOffCycles: others.length },
+    summary: `Reopened ${cycle.periodType} close ${cycle.periodLabel} (${lockReleased ? "period lock released" : "lock kept — other signed-off cycles share the period"}): ${reason}` });
+  return res.json({ ok: true, data: { reopened: true, lockReleased, otherSignedOffCycles: others.length } });
+});
+
+// ─────────────────────── CT provision (Task #654) ───────────────────────
+
+function monthsOfPeriod(periodType: string, periodLabel: string): string[] {
+  if (periodType === "month") return [periodLabel];
+  if (periodType === "quarter") {
+    const y = periodLabel.slice(0, 4);
+    const q = Number(periodLabel.slice(6));
+    return [1, 2, 3].map((i) => `${y}-${String((q - 1) * 3 + i).padStart(2, "0")}`);
+  }
+  return Array.from({ length: 12 }, (_, i) => `${periodLabel}-${String(i + 1).padStart(2, "0")}`);
+}
+
+/** Pre-tax profit for an entity over a set of months, from posted GL journals (excludes 6950 CT expense). */
+async function computePreTaxProfit(orgId: string, entityId: string, months: string[]) {
+  const entries = await db.select({ id: atelierGlJournalEntry.id, periodLabel: atelierGlJournalEntry.periodLabel })
+    .from(atelierGlJournalEntry)
+    .where(and(
+      eq(atelierGlJournalEntry.orgId, orgId),
+      eq(atelierGlJournalEntry.legalEntityId, entityId),
+      isNull(atelierGlJournalEntry.deletedAt),
+    ));
+  const monthSet = new Set(months);
+  const entryIds = new Set(entries.filter((e) => monthSet.has(e.periodLabel)).map((e) => e.id));
+  if (entryIds.size === 0) return { revenue: 0, expenses: 0, preTaxProfit: 0 };
+  const accounts = await db.select().from(atelierGlAccount).where(and(
+    eq(atelierGlAccount.orgId, orgId), eq(atelierGlAccount.legalEntityId, entityId), isNull(atelierGlAccount.deletedAt),
+  ));
+  const typeByAcct = new Map(accounts.map((a) => [a.id, { type: a.type, code: a.code }]));
+  const lines = await db.select().from(atelierGlJournalLine)
+    .where(and(eq(atelierGlJournalLine.orgId, orgId), isNull(atelierGlJournalLine.deletedAt)));
+  let revenue = 0, expenses = 0;
+  for (const l of lines) {
+    if (!entryIds.has(l.journalEntryId)) continue;
+    const meta = typeByAcct.get(l.accountId);
+    if (!meta) continue;
+    if (meta.type === "revenue") revenue += (l.credit || 0) - (l.debit || 0);
+    else if (meta.type === "expense" && meta.code !== "6950") expenses += (l.debit || 0) - (l.credit || 0);
+  }
+  revenue = round2(revenue); expenses = round2(expenses);
+  return { revenue, expenses, preTaxProfit: round2(revenue - expenses) };
+}
+
+const CtProvisionSchema = z.object({
+  ratePct: z.number().min(0).max(100).optional(),
+  preview: z.boolean().optional(),
+});
+
+// Compute + record the corporate-tax provision for a close cycle as a
+// non-reversing accrual proposal (Dr 6950 / Cr 2400) that then flows
+// through the normal partner approve path.
+// @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
+router.post("/close/cycles/:id/ct-provision", async (req, res) => {
+  const me = denyRead(req, res); if (!me) return;
+  const cycle = await loadCycle(req.params.id, me.orgId);
+  if (!cycle) return res.status(404).json({ error: "not_found" });
+  if (cycle.status === "signed_off")
+    return res.status(409).json({ error: "signed_off", message: "This period is already signed off and locked." });
+  const parsed = CtProvisionSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "invalid_input", details: parsed.error.flatten() });
+
+  const [ent] = await db.select().from(atelierLegalEntities)
+    .where(and(eq(atelierLegalEntities.id, cycle.entityId), eq(atelierLegalEntities.orgId, me.orgId)));
+  if (!ent) return res.status(404).json({ error: "not_found", message: "Legal entity not found." });
+  const ratePct = parsed.data.ratePct ?? ent.fiscal?.ctRatePct ?? 9;
+
+  const months = monthsOfPeriod(cycle.periodType, cycle.periodLabel);
+  const profit = await computePreTaxProfit(me.orgId, cycle.entityId, months);
+  const provision = round2(Math.max(0, profit.preTaxProfit) * (ratePct / 100));
+
+  if (parsed.data.preview)
+    return res.json({ ok: true, data: { ...profit, ratePct, provision, preview: true } });
+  if (provision <= 0)
+    return res.status(400).json({ error: "no_taxable_profit", ...profit, ratePct,
+      message: `Pre-tax profit for ${cycle.periodLabel} is USD ${profit.preTaxProfit} — no CT provision to record. Mark the checklist item N/A instead.` });
+
+  const lastMonth = months[months.length - 1];
+  const sourceKey = "ct_provision";
+  const memo = `Corporate tax provision ${cycle.periodLabel} (${ratePct}% of pre-tax profit USD ${profit.preTaxProfit})`;
+  const lines = [
+    { accountCode: "6950", debit: provision, credit: 0, memo: "Corporate tax expense" },
+    { accountCode: "2400", debit: 0, credit: provision, memo: "Corporate tax payable" },
+  ];
+  const [existing] = await db.select().from(atelierCloseAccrual).where(and(
+    eq(atelierCloseAccrual.cycleId, cycle.id), eq(atelierCloseAccrual.sourceKey, sourceKey), isNull(atelierCloseAccrual.deletedAt),
+  )).limit(1);
+  let accrualId: string;
+  if (existing) {
+    if (existing.status !== "proposed")
+      return res.status(409).json({ error: "already_decided", status: existing.status, id: existing.id, message: "The CT provision was already decided for this cycle." });
+    accrualId = existing.id;
+    await db.update(atelierCloseAccrual).set({
+      memo, rationaleText: `Rate ${ratePct}% applied to pre-tax profit USD ${profit.preTaxProfit} (revenue ${profit.revenue} − expenses ${profit.expenses}).`,
+      amount: provision, lines, autoReverse: false, updatedAt: new Date(),
+    }).where(eq(atelierCloseAccrual.id, existing.id));
+  } else {
+    accrualId = rid("clacc");
+    await db.insert(atelierCloseAccrual).values({
+      id: accrualId, orgId: me.orgId, cycleId: cycle.id, entityId: cycle.entityId,
+      periodLabel: lastMonth, memo,
+      rationaleText: `Rate ${ratePct}% applied to pre-tax profit USD ${profit.preTaxProfit} (revenue ${profit.revenue} − expenses ${profit.expenses}).`,
+      currency: "USD", amount: provision, lines, sourceKey, autoReverse: false,
+      createdByUserId: me.id,
+    });
+  }
+  await audit({ entityType: "close_accrual", entityId: accrualId, actor: me,
+    action: "close.ct_provision_propose",
+    payload: { cycleId: cycle.id, periodLabel: cycle.periodLabel, ratePct, ...profit, provision },
+    summary: `CT provision proposed for ${cycle.periodLabel}: USD ${provision} (${ratePct}% of pre-tax profit USD ${profit.preTaxProfit}) — awaiting partner approval` });
+  return res.status(existing ? 200 : 201).json({ ok: true, data: { accrualId, ...profit, ratePct, provision, refreshed: !!existing } });
+});
+
 // ─────────────────────── accrual decisions ───────────────────────
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure
@@ -327,7 +498,19 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
   const y = Number(acc.periodLabel.slice(0, 4));
   const m = Number(acc.periodLabel.slice(5, 7));
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+
+  // Task #654 — approved accruals auto-post a reversing journal dated the
+  // 1st of the next period. Fail loudly (409) if the next period is already
+  // GL-locked rather than silently skipping the reversal.
+  const nextPeriod = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
+  if (acc.autoReverse && (await isGlPeriodLocked(me.orgId, nextPeriod)))
+    return res.status(409).json({
+      error: "next_period_locked",
+      message: `Cannot approve: the reversing journal would post into ${nextPeriod}, which is locked for the GL module. Reopen ${nextPeriod} first or disable auto-reverse for this accrual.`,
+    });
+
   const entryId = rid("gljrn");
+  const reversalId = acc.autoReverse ? rid("gljrn") : null;
   await db.transaction(async (tx) => {
     await tx.insert(atelierGlJournalEntry).values({
       id: entryId, orgId: me.orgId, legalEntityId: acc.entityId,
@@ -343,8 +526,29 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
         debit: round2(l.debit || 0), credit: round2(l.credit || 0), memo: l.memo ?? null,
       });
     }
+    if (reversalId) {
+      // Reversal: same lines with debit/credit swapped, dated the 1st of
+      // the next period, pointing back at the accrual entry.
+      await tx.insert(atelierGlJournalEntry).values({
+        id: reversalId, orgId: me.orgId, legalEntityId: acc.entityId,
+        periodLabel: nextPeriod, entryDate: `${nextPeriod}-01`,
+        kind: "reversal", sourceKind: "close_accrual_reversal", sourceRef: acc.id,
+        memo: `Reversal of accrual: ${acc.memo}`, currency: acc.currency,
+        totalDebit: totalCredit, totalCredit: totalDebit,
+        reversesEntryId: entryId, createdByUserId: me.id,
+      });
+      for (const l of lines) {
+        const acct = byCode.get(l.accountCode)!;
+        await tx.insert(atelierGlJournalLine).values({
+          id: rid("gljl"), orgId: me.orgId, journalEntryId: reversalId,
+          accountId: acct.id, accountCode: acct.code, accountName: acct.name,
+          debit: round2(l.credit || 0), credit: round2(l.debit || 0),
+          memo: l.memo ? `Reversal: ${l.memo}` : null,
+        });
+      }
+    }
     await tx.update(atelierCloseAccrual).set({
-      status: "approved", journalEntryId: entryId,
+      status: "approved", journalEntryId: entryId, reversalEntryId: reversalId,
       decidedByUserId: me.id, decidedAt: new Date(),
       decisionNote: (req.body as { note?: string })?.note ?? null,
       updatedAt: new Date(),
@@ -352,9 +556,9 @@ router.post("/close/accruals/:id/approve", async (req, res) => {
   });
   await audit({ entityType: "close_accrual", entityId: acc.id, actor: me,
     action: "close.accrual_approve",
-    payload: { cycleId: acc.cycleId, periodLabel: acc.periodLabel, amount: acc.amount, journalEntryId: entryId },
-    summary: `Approved accrual "${acc.memo}" (${acc.currency} ${acc.amount}) — journal posted` });
-  return res.json({ ok: true, data: { journalEntryId: entryId } });
+    payload: { cycleId: acc.cycleId, periodLabel: acc.periodLabel, amount: acc.amount, journalEntryId: entryId, reversalEntryId: reversalId, reversalPeriod: reversalId ? nextPeriod : null },
+    summary: `Approved accrual "${acc.memo}" (${acc.currency} ${acc.amount}) — journal posted${reversalId ? ` with auto-reversal on ${nextPeriod}-01` : ""}` });
+  return res.json({ ok: true, data: { journalEntryId: entryId, reversalEntryId: reversalId } });
 });
 
 // @cli-skip: UI-workflow write; CLI write parity needs confirm-flow capability design before exposure

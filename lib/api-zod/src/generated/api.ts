@@ -8329,6 +8329,7 @@ export const AtelierListEngagementsResponseItem = zod.object({
   plannedEndDate: zod.string(),
   raidStatus: zod.enum(["green", "amber", "red"]),
   deliverablesDueThisWeek: zod.number(),
+  legalEntityId: zod.string().nullish(),
 });
 export const AtelierListEngagementsResponse = zod.array(
   AtelierListEngagementsResponseItem,
@@ -8362,6 +8363,7 @@ export const AtelierGetEngagementResponse = zod.object({
   plannedEndDate: zod.string(),
   raidStatus: zod.enum(["green", "amber", "red"]),
   deliverablesDueThisWeek: zod.number(),
+  legalEntityId: zod.string().nullish(),
 });
 
 export const AtelierListCharterVersionsParams = zod.object({

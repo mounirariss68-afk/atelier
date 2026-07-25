@@ -378,6 +378,9 @@ export async function ensureEngagementForContract(
       const start = new Date();
       const plannedEnd = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
       const engId = rid("eng");
+      // Task #654 — legalEntityId intentionally starts null here: an
+      // auto-created engagement has no invoice history yet. It is set
+      // explicitly via PATCH or by the boot backfill once invoices exist.
       const slug = `${opp.slug}-delivery`.slice(0, 60);
       const [created] = await db
         .insert(atelierEngagements)

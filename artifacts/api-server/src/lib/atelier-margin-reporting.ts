@@ -190,10 +190,19 @@ async function latestMarginSnapshots(
   return Array.from(best.values());
 }
 
-/** Engagement → invoicing legal-entity id (latest non-void invoice wins). */
+/**
+ * Engagement → legal-entity id. Task #654: the explicit
+ * `atelier_engagements.legal_entity_id` wins when set; legacy rows
+ * without it fall back to invoice inference (latest non-void invoice).
+ */
 async function engagementEntityMap(orgId: string, engagementIds: string[]): Promise<Map<string, string | null>> {
   const map = new Map<string, string | null>();
   if (!engagementIds.length) return map;
+  const explicitRows = await db
+    .select({ id: atelierEngagements.id, legalEntityId: atelierEngagements.legalEntityId })
+    .from(atelierEngagements)
+    .where(and(eq(atelierEngagements.orgId, orgId), inArray(atelierEngagements.id, engagementIds)));
+  const explicit = new Map(explicitRows.map((r) => [r.id, r.legalEntityId]));
   const invoices = await db
     .select({
       engagementId: atelierInvoice.engagementId,
@@ -208,7 +217,7 @@ async function engagementEntityMap(orgId: string, engagementIds: string[]): Prom
     const prev = latest.get(inv.engagementId);
     if (!prev || inv.createdAt > prev.at) latest.set(inv.engagementId, { at: inv.createdAt, entity: inv.legalEntityId ?? null });
   }
-  for (const id of engagementIds) map.set(id, latest.get(id)?.entity ?? null);
+  for (const id of engagementIds) map.set(id, explicit.get(id) ?? latest.get(id)?.entity ?? null);
   return map;
 }
 

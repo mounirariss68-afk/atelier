@@ -917,6 +917,10 @@ export const atelierEngagements = pgTable(
       onDelete: "set null",
     }),
     accountId: text("account_id").notNull(),
+    // Task #654 — explicit invoicing/delivery legal entity. Backfilled from
+    // invoice history where unambiguous; margin + entity reports read this
+    // first and only fall back to invoice inference for legacy null rows.
+    legalEntityId: text("legal_entity_id"),
     plmStage: text("plm_stage").notNull(), // mobilize | deliver | compound | closed
     partnerOwnerId: text("partner_owner_id").notNull(),
     engagementLeadId: text("engagement_lead_id").notNull(),

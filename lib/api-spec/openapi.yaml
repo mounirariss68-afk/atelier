@@ -9978,6 +9978,7 @@ components:
         plannedEndDate: { type: string }
         raidStatus: { type: string, enum: [green, amber, red] }
         deliverablesDueThisWeek: { type: integer }
+        legalEntityId: { type: string, nullable: true }
 
     AgentCatalogEntry:
       type: object
