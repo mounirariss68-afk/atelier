@@ -187,6 +187,45 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
   const editRow = (i: number, patch: Partial<TeamMixEntry>) =>
     setDraftMix((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
 
+  // Task #664 — one-click apply of Pricing Researcher suggestions. These
+  // write via the same PUT pricing mutation as manual Save, so the Partner
+  // gate, audit trail, and override invalidation all behave normally.
+  const applyResearcherStructure = async (kind: string, outcomeVariant?: string) => {
+    const nextParams: StructureParamsDraft =
+      outcomeVariant && outcomeVariant !== "generic"
+        ? { ...draftParams, outcomeVariant }
+        : draftParams;
+    setDraftModel(kind);
+    setDraftParams(nextParams);
+    await update.mutateAsync({
+      oppId,
+      data: {
+        teamMix: draftMix,
+        durationWeeks: draftWeeks,
+        pricingModel: kind,
+        rateCardId: pricing.rateCardId,
+        structureParams: nextParams,
+        costLines: draftCostLines,
+      },
+    });
+  };
+
+  const applyResearcherCostLine = async (line: CostLineDraft) => {
+    const next = [...draftCostLines, line];
+    setDraftCostLines(next);
+    await update.mutateAsync({
+      oppId,
+      data: {
+        teamMix: draftMix,
+        durationWeeks: draftWeeks,
+        pricingModel: draftModel,
+        rateCardId: pricing.rateCardId,
+        structureParams: draftParams,
+        costLines: next,
+      },
+    });
+  };
+
   const onStrategist = async () => {
     const result = await strategist.mutateAsync({ oppId, data: {} });
     setStrategistResult(result);
@@ -363,6 +402,8 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
         canSeeCost={pricing.computedCostUsd != null}
         selectedModel={draftModel}
         costLines={draftCostLines}
+        onApplyStructure={applyResearcherStructure}
+        onApplyCostLine={applyResearcherCostLine}
       />
 
       <Card className="p-6 space-y-4">

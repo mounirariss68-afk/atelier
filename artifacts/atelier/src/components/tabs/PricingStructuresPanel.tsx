@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, TrendingUp, Send, Globe } from "lucide-react";
+import { Sparkles, TrendingUp, Send, Globe, Check } from "lucide-react";
 
 const fmtUsd = (n: number) =>
   n >= 1000 ? `$${(n / 1000).toFixed(0)}k` : `$${n.toFixed(0)}`;
@@ -53,12 +53,16 @@ export function PricingStructuresPanel({
   canSeeCost,
   selectedModel,
   costLines,
+  onApplyStructure,
+  onApplyCostLine,
 }: {
   oppId: string;
   isPartner: boolean;
   canSeeCost: boolean;
   selectedModel: string;
   costLines?: AtelierPricingCostLine[];
+  onApplyStructure?: (kind: string, outcomeVariant?: string) => Promise<unknown>;
+  onApplyCostLine?: (line: AtelierPricingCostLine) => Promise<unknown>;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -252,7 +256,13 @@ export function PricingStructuresPanel({
         </Card>
       )}
 
-      {isPartner && <PricingResearcherCard oppId={oppId} />}
+      {isPartner && (
+        <PricingResearcherCard
+          oppId={oppId}
+          onApplyStructure={onApplyStructure}
+          onApplyCostLine={onApplyCostLine}
+        />
+      )}
 
       {isPartner && (
         <Card className="p-6 space-y-3">
@@ -312,7 +322,18 @@ interface ResearcherStatus {
   output: ResearcherOutput | null;
 }
 
-function PricingResearcherCard({ oppId }: { oppId: string }) {
+const COST_LINE_TYPES = new Set(["llm_ai", "hardware_infra", "alliance_partner_quote", "travel", "other"]);
+const COST_LINE_RECURRENCES = new Set(["one_time", "weekly", "monthly"]);
+
+function PricingResearcherCard({
+  oppId,
+  onApplyStructure,
+  onApplyCostLine,
+}: {
+  oppId: string;
+  onApplyStructure?: (kind: string, outcomeVariant?: string) => Promise<unknown>;
+  onApplyCostLine?: (line: AtelierPricingCostLine) => Promise<unknown>;
+}) {
   const { toast } = useToast();
   const base = `${import.meta.env.BASE_URL}api/atelier/opportunities/${oppId}/pricing/researcher`;
   const [focus, setFocus] = React.useState("");
@@ -324,6 +345,55 @@ function PricingResearcherCard({ oppId }: { oppId: string }) {
   });
   const [launching, setLaunching] = React.useState(false);
   const polling = React.useRef<number | null>(null);
+  // Task #664 — per-suggestion apply tracking. Applies go through the
+  // normal PUT pricing path (via the parent), never a direct agent write.
+  const [appliedStructures, setAppliedStructures] = React.useState<Set<number>>(new Set());
+  const [appliedCostLines, setAppliedCostLines] = React.useState<Set<number>>(new Set());
+  const [applying, setApplying] = React.useState<string | null>(null);
+
+  const applyStructure = async (i: number, s: NonNullable<ResearcherOutput["suggestedStructures"]>[number]) => {
+    if (!onApplyStructure || !s.kind) return;
+    setApplying(`structure-${i}`);
+    try {
+      await onApplyStructure(s.kind, s.outcomeVariant);
+      setAppliedStructures((prev) => new Set(prev).add(i));
+      toast({ title: "Structure applied", description: "Deal pricing saved with the suggested structure." });
+    } catch (e) {
+      toast({
+        title: "Apply failed",
+        description: e instanceof Error ? e.message : "Could not apply the suggestion",
+        variant: "destructive",
+      });
+    } finally {
+      setApplying(null);
+    }
+  };
+
+  const applyCostLine = async (i: number, c: NonNullable<ResearcherOutput["suggestedCostLines"]>[number]) => {
+    if (!onApplyCostLine) return;
+    setApplying(`costline-${i}`);
+    try {
+      await onApplyCostLine({
+        type: (c.type && COST_LINE_TYPES.has(c.type) ? c.type : "other") as AtelierPricingCostLine["type"],
+        label: c.label ?? c.type ?? "Suggested cost line",
+        amountUsd: typeof c.amountUsd === "number" && Number.isFinite(c.amountUsd) ? c.amountUsd : 0,
+        recurrence: (c.recurrence && COST_LINE_RECURRENCES.has(c.recurrence)
+          ? c.recurrence
+          : "one_time") as AtelierPricingCostLine["recurrence"],
+        passThrough: !!c.passThrough,
+      });
+      setAppliedCostLines((prev) => new Set(prev).add(i));
+      toast({ title: "Cost line applied", description: "Deal pricing saved with the suggested cost line." });
+    } catch (e) {
+      toast({
+        title: "Apply failed",
+        description: e instanceof Error ? e.message : "Could not apply the suggestion",
+        variant: "destructive",
+      });
+    } finally {
+      setApplying(null);
+    }
+  };
 
   const poll = React.useCallback(async () => {
     const r = await fetch(base, { credentials: "include" });
@@ -370,6 +440,8 @@ function PricingResearcherCard({ oppId }: { oppId: string }) {
         throw new Error(j.error ?? `researcher_${r.status}`);
       }
       setState((s) => ({ ...s, status: "running", phase: "Starting research…", progressPct: 0 }));
+      setAppliedStructures(new Set());
+      setAppliedCostLines(new Set());
       startPolling();
     } catch (e) {
       toast({
@@ -446,32 +518,78 @@ function PricingResearcherCard({ oppId }: { oppId: string }) {
           {(out.suggestedStructures?.length ?? 0) > 0 && (
             <div className="space-y-1">
               <div className="text-xs font-mono uppercase tracking-widest text-text-mute">Suggested structures</div>
-              <ul className="text-sm text-text-mute space-y-1 list-disc list-inside">
-                {out.suggestedStructures!.map((s, i) => (
-                  <li key={i}>
-                    <span className="text-text capitalize">{(s.kind ?? "").replace(/_/g, " ")}</span>
-                    {s.outcomeVariant && s.outcomeVariant !== "generic" ? (
-                      <span className="text-text-faint"> · {s.outcomeVariant.replace(/_/g, " ")}</span>
-                    ) : null}
-                    {s.rationale ? ` — ${s.rationale}` : ""}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-1.5">
+                {out.suggestedStructures!.map((s, i) => {
+                  const isApplied = appliedStructures.has(i);
+                  return (
+                    <div key={i} className="flex items-start justify-between gap-3" data-testid={`suggested-structure-${i}`}>
+                      <div className="text-sm text-text-mute">
+                        <span className="text-text capitalize">{(s.kind ?? "").replace(/_/g, " ")}</span>
+                        {s.outcomeVariant && s.outcomeVariant !== "generic" ? (
+                          <span className="text-text-faint"> · {s.outcomeVariant.replace(/_/g, " ")}</span>
+                        ) : null}
+                        {s.rationale ? ` — ${s.rationale}` : ""}
+                      </div>
+                      {onApplyStructure && s.kind ? (
+                        isApplied ? (
+                          <MonoChip tone="green" data-testid={`chip-applied-structure-${i}`}>
+                            <Check className="w-3 h-3 mr-1 inline" /> Applied
+                          </MonoChip>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => void applyStructure(i, s)}
+                            disabled={applying != null}
+                            data-testid={`button-apply-structure-${i}`}
+                          >
+                            {applying === `structure-${i}` ? "Applying…" : "Apply"}
+                          </Button>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
           {(out.suggestedCostLines?.length ?? 0) > 0 && (
             <div className="space-y-1">
               <div className="text-xs font-mono uppercase tracking-widest text-text-mute">Suggested cost lines</div>
-              <ul className="text-sm text-text-mute space-y-1 list-disc list-inside">
-                {out.suggestedCostLines!.map((c, i) => (
-                  <li key={i}>
-                    {c.label ?? c.type} — ${Math.round(c.amountUsd ?? 0).toLocaleString()}
-                    {c.recurrence && c.recurrence !== "one_time" ? ` ${c.recurrence.replace("_", "-")}` : ""}
-                    {c.passThrough ? " (pass-through)" : ""}
-                    {c.rationale ? ` · ${c.rationale}` : ""}
-                  </li>
-                ))}
-              </ul>
+              <div className="space-y-1.5">
+                {out.suggestedCostLines!.map((c, i) => {
+                  const isApplied = appliedCostLines.has(i);
+                  return (
+                    <div key={i} className="flex items-start justify-between gap-3" data-testid={`suggested-cost-line-${i}`}>
+                      <div className="text-sm text-text-mute">
+                        {c.label ?? c.type} — ${Math.round(c.amountUsd ?? 0).toLocaleString()}
+                        {c.recurrence && c.recurrence !== "one_time" ? ` ${c.recurrence.replace("_", "-")}` : ""}
+                        {c.passThrough ? " (pass-through)" : ""}
+                        {c.rationale ? ` · ${c.rationale}` : ""}
+                      </div>
+                      {onApplyCostLine ? (
+                        isApplied ? (
+                          <MonoChip tone="green" data-testid={`chip-applied-cost-line-${i}`}>
+                            <Check className="w-3 h-3 mr-1 inline" /> Applied
+                          </MonoChip>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => void applyCostLine(i, c)}
+                            disabled={applying != null}
+                            data-testid={`button-apply-cost-line-${i}`}
+                          >
+                            {applying === `costline-${i}` ? "Applying…" : "Apply"}
+                          </Button>
+                        )
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
           {(out.risks?.length ?? 0) > 0 && (
@@ -498,7 +616,7 @@ function PricingResearcherCard({ oppId }: { oppId: string }) {
             </div>
           )}
           <p className="text-[11px] text-text-faint">
-            Review-only market research — nothing is applied to the deal pricing automatically.
+            Review-only market research — nothing changes automatically. Apply writes through the normal pricing save, so margin gates, audit, and override invalidation all fire.
           </p>
         </div>
       ) : !running && state.status !== "failed" ? (
