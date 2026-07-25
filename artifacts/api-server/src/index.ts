@@ -150,6 +150,24 @@ app.listen(port, (err) => {
     } catch (err) {
       logger.warn({ err }, "Data tripwire check failed");
     }
+    // Task #679 — sync capability embeddings at BOOT instead of lazily on
+    // the first chat turn. New capabilities added in a deploy previously
+    // stayed invisible to ranked retrieval until someone chatted after the
+    // restart AND the lazy bootstrap ran; users saw "that feature doesn't
+    // exist". Loud on failure; the per-turn bootstrap remains as a
+    // fail-loud backstop.
+    await (async () => {
+      const { ensureCapabilityEmbeddings } = await import(
+        "./lib/atelier-cli/capability-retriever"
+      );
+      await ensureCapabilityEmbeddings();
+      logger.info("Capability embeddings synced at boot");
+    })().catch((err) => {
+      logger.error(
+        { err },
+        "CAPABILITY EMBEDDING SYNC FAILED — new chat tools may be invisible to ranked retrieval until the next successful sync",
+      );
+    });
     // Task #411 — install pg_trgm + pgvector (when available) and the
     // GIN trgm indexes the hybrid resolver hits. Idempotent. Runs last in
     // the serialized boot chain (Task #185) so it never competes with the

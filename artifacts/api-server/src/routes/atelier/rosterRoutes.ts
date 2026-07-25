@@ -21,6 +21,7 @@ import { and, desc, eq, isNull, or, ilike, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { ensureEngAccess } from "./engagementRoutes.js";
+import { foldRosterName } from "../../lib/atelier-cli/chat-normalizers.js";
 import { assertAuditAction } from "./auditContract.js";
 import {
   db,
@@ -379,9 +380,12 @@ export interface ListOpts {
 
 export async function listPersons(opts: ListOpts): Promise<PersonWire[]> {
   const wt = opts.workerType ?? "all";
-  const q = opts.q?.trim().toLowerCase() ?? "";
+  // Accent/diacritic-insensitive matching so "gokhan" finds "Gökhan
+  // Güney" (Turkish dotless-ı handled too). Shared folding helper —
+  // the same one the chat email-recipient resolver uses.
+  const q = foldRosterName(opts.q?.trim() ?? "");
   const matches = (s: string | null | undefined) =>
-    !q || (s ?? "").toLowerCase().includes(q);
+    !q || foldRosterName(s ?? "").includes(q);
   const nationality = opts.nationality?.trim().toUpperCase();
   const gender = opts.gender?.trim().toLowerCase();
   const country = opts.country?.trim().toUpperCase();

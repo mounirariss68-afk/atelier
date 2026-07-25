@@ -64,10 +64,60 @@ import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 // helpers
 // ---------------------------------------------------------------------
 
-/** Task #538 — contact name search also matches the linked structured
- *  person record's preferred/display name. */
-function contactPersonNameMatch(pat: string) {
-  return sql`EXISTS (SELECT 1 FROM atelier_persons p WHERE p.id = ${atelierContacts.personId} AND (p.preferred_name ILIKE ${pat} OR p.display_name ILIKE ${pat}))`;
+/**
+ * Task #679 — accent/diacritic-insensitive contact name search.
+ * Postgres ILIKE is accent-SENSITIVE, so "Gokhan" never matched
+ * "Gökhan". Candidates are fetched org-scoped and fold-filtered in JS
+ * with the same foldRosterName helper the roster + email-recipient
+ * resolver use (Turkish dotless-ı handled). Matches contact full name,
+ * linked structured-person preferred/display names, and email.
+ * Callers still apply their own ACL filtering AFTER this search.
+ */
+async function foldedContactSearch(
+  orgId: string,
+  q: string,
+  opts?: { accountId?: string; cap?: number },
+): Promise<
+  Array<{
+    id: string;
+    fullName: string;
+    title: string | null;
+    email: string | null;
+    phone: string | null;
+    accountId: string;
+  }>
+> {
+  const needle = foldRosterName(q.trim());
+  if (needle.length < 2) return [];
+  const emailNeedle = q.trim().toLowerCase();
+  const rows = await db
+    .select({
+      id: atelierContacts.id,
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      email: atelierContacts.email,
+      phone: atelierContacts.phone,
+      accountId: atelierContacts.accountId,
+      personNames: sql<string>`COALESCE((SELECT COALESCE(p.preferred_name,'') || ' ' || COALESCE(p.display_name,'') FROM atelier_persons p WHERE p.id = ${atelierContacts.personId}), '')`,
+    })
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.orgId, orgId),
+        isNull(atelierContacts.deletedAt),
+        opts?.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
+      ),
+    )
+    .limit(600);
+  return rows
+    .filter(
+      (r) =>
+        foldRosterName(r.fullName ?? "").includes(needle) ||
+        foldRosterName(r.personNames ?? "").includes(needle) ||
+        (r.email ?? "").toLowerCase().includes(emailNeedle),
+    )
+    .map(({ personNames: _pn, ...rest }) => rest)
+    .slice(0, opts?.cap ?? 25);
 }
 
 function denyForbidden(reason: string): ToolResult {
@@ -289,30 +339,10 @@ async function crmContactFallback(
   ctx: ToolContext,
   q: string,
 ): Promise<ToolResult | null> {
-  const rows = await db
-    .select({
-      id: atelierContacts.id,
-      fullName: atelierContacts.fullName,
-      title: atelierContacts.title,
-      email: atelierContacts.email,
-      phone: atelierContacts.phone,
-      accountId: atelierContacts.accountId,
-    })
-    .from(atelierContacts)
-    .where(
-      and(
-        or(
-          ilike(atelierContacts.fullName, `%${q}%`),
-          ilike(atelierContacts.email, `%${q}%`),
-          contactPersonNameMatch(`%${q}%`),
-        ),
-        eq(atelierContacts.orgId, ctx.persona.orgId),
-        isNull(atelierContacts.deletedAt),
-      ),
-    )
-    // Fetch a wider candidate set BEFORE the ACL filter so a restricted
-    // caller whose visible match sorts late isn't false-negatived.
-    .limit(25);
+  // Fold-based search (accent-insensitive); fetches a wider candidate
+  // set BEFORE the ACL filter so a restricted caller whose visible
+  // match sorts late isn't false-negatived.
+  const rows = await foldedContactSearch(ctx.persona.orgId, q, { cap: 25 });
   if (rows.length === 0) return null;
   const me = { id: ctx.persona.id, role: ctx.persona.role };
   const access = await engAclFor(ctx.persona);
@@ -765,21 +795,8 @@ defineCapability({
         if (isToolResult(acc)) return acc;
         accountId = acc.id;
       }
-      const where = and(
-        or(
-          ilike(atelierContacts.fullName, `%${q}%`),
-          ilike(atelierContacts.email, `%${q}%`),
-          contactPersonNameMatch(`%${q}%`),
-        ),
-        eq(atelierContacts.orgId, ctx.persona.orgId),
-        isNull(atelierContacts.deletedAt),
-        accountId ? eq(atelierContacts.accountId, accountId) : undefined,
-      );
-      const rows = await db
-        .select({ id: atelierContacts.id, fullName: atelierContacts.fullName, title: atelierContacts.title })
-        .from(atelierContacts)
-        .where(where)
-        .limit(6);
+      // Fold-based search (accent-insensitive) — "Gokhan" matches "Gökhan".
+      const rows = await foldedContactSearch(ctx.persona.orgId, q, { accountId, cap: 6 });
       if (rows.length === 0) {
         // Task #469 — the person may be internal, not a client contact.
         const fb = await internalPersonFallback(ctx, q);
@@ -1253,7 +1270,7 @@ defineCapability({
   module: "knowledge",
   toolName: "document_list",
   description:
-    "List or search documents in the library by title, category (proposal|deliverable|contract|template|other), account or engagement. Returns metadata only (title, category, version, file name) — never document content.",
+    "List or search documents in the library by title, category (proposal|deliverable|contract|template|other), account, engagement or legal entity (e.g. trade licenses of a specific company entity). Returns metadata only (title, category, version, file name) — never document content.",
   slashAliases: { en: ["/documents", "/docs"], fr: ["/documents"] },
   inputSchema: {
     type: "object",
@@ -1262,6 +1279,11 @@ defineCapability({
       category: { type: "string" },
       accountName: { type: "string" },
       engagementName: { type: "string" },
+      entityName: {
+        type: "string",
+        description:
+          "Filter to documents linked to one legal entity from the firm's entity registry (short or legal name).",
+      },
       limit: { type: "integer", minimum: 1, maximum: 50 },
     },
     additionalProperties: false,
@@ -1299,6 +1321,60 @@ defineCapability({
       if (isToolResult(acc)) return acc;
       accountFilter = acc.id;
     }
+    // Task #679 — entity filter: "list trade licenses for the FZ-LLC".
+    // Queries the legal-entity registry directly so BOTH short names
+    // and legal names (en/ar) match, fold-compared for diacritics.
+    let entityFilter: string | null = null;
+    if (typeof input.entityName === "string" && input.entityName.trim()) {
+      const { atelierLegalEntities } = await import("@workspace/db");
+      const rows = await db
+        .select({
+          id: atelierLegalEntities.id,
+          shortName: atelierLegalEntities.shortName,
+          legalNameEn: atelierLegalEntities.legalNameEn,
+          legalNameAr: atelierLegalEntities.legalNameAr,
+          status: atelierLegalEntities.status,
+        })
+        .from(atelierLegalEntities)
+        .where(eq(atelierLegalEntities.orgId, ctx.persona.orgId));
+      const entities = rows
+        .filter((r) => r.status !== "archived")
+        .map((r) => ({
+          id: r.id,
+          shortName: r.shortName || r.legalNameEn,
+          names: [r.shortName, r.legalNameEn, r.legalNameAr].filter(
+            (n): n is string => Boolean(n && n.trim()),
+          ),
+        }));
+      const needle = foldRosterName(input.entityName.trim());
+      const hits = entities.filter((e) =>
+        e.names.some((n) => {
+          const hay = foldRosterName(n);
+          return hay.includes(needle) || needle.includes(hay);
+        }),
+      );
+      if (hits.length === 0) {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `No legal entity matching "${input.entityName}" in the entity registry.`,
+        };
+      }
+      if (hits.length > 1) {
+        return {
+          ok: true,
+          data: {
+            prompt: "Which legal entity did you mean?",
+            options: hits.slice(0, 6).map((e) => ({ id: e.id, label: e.shortName })),
+          },
+          disambiguation: {
+            kind: "entity",
+            options: hits.slice(0, 6).map((e) => ({ id: e.id, label: e.shortName })),
+          },
+        };
+      }
+      entityFilter = hits[0]!.id;
+    }
     const conds = [
       eq(atelierDocuments.orgId, ctx.persona.orgId),
       eq(atelierDocuments.status, "active"),
@@ -1306,6 +1382,7 @@ defineCapability({
     ];
     if (accountFilter) conds.push(eq(atelierDocuments.accountId, accountFilter));
     if (engagementFilter) conds.push(eq(atelierDocuments.engagementId, engagementFilter));
+    if (entityFilter) conds.push(eq(atelierDocuments.entityId, entityFilter));
     if (typeof input.category === "string" && input.category.trim()) {
       conds.push(eq(atelierDocuments.category, input.category.trim().toLowerCase()));
     }

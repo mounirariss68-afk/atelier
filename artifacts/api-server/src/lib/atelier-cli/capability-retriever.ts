@@ -68,7 +68,17 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   expense: ["create_my_expense", "my_expenses", "submit_my_expense", "expense_list"],
   timesheet: ["log_my_time", "my_timesheets", "submit_my_timesheet", "timesheet_current"],
   leave: ["request_leave", "my_leave"],
-  document: ["save_my_document", "my_documents", "search_documents", "document_list"],
+  document: [
+    "save_my_document",
+    "my_documents",
+    "search_documents",
+    "document_list",
+    // Task #679 — emailing documents is a document-kind intent; without
+    // these in the floor, a missing/stale embedding row made the email
+    // tools invisible and the model claimed the capability didn't exist.
+    "email_company_documents",
+    "email_my_documents",
+  ],
   account: ["account_lookup", "account_list", "account_dossier"],
   opportunity: ["opportunity_detail", "opportunity_list_by_stage", "pipeline_by_stage"],
   contact: ["contact_detail", "contact_list"],
@@ -182,6 +192,20 @@ export async function ensureCapabilityEmbeddings(): Promise<void> {
         schemaHash: entry.schemaHash,
       });
     }
+  }
+  // Task #679 — loud invariant: every registered capability must have an
+  // embedding row after the sync. A silent gap makes tools invisible to
+  // ranked retrieval (only widen/floor can surface them), which the user
+  // experiences as "the assistant says the feature doesn't exist".
+  const after = await db
+    .select({ capabilityId: atelierCapabilityEmbeddings.capabilityId })
+    .from(atelierCapabilityEmbeddings);
+  const have = new Set(after.map((r) => r.capabilityId));
+  const missing = all.filter((e) => !have.has(e.id)).map((e) => e.id);
+  if (missing.length > 0) {
+    throw new Error(
+      `[capability-retriever] embedding sync incomplete — missing rows for: ${missing.join(", ")}`,
+    );
   }
 }
 

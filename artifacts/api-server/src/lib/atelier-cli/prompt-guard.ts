@@ -68,15 +68,74 @@ export function shouldRequireTypedNameForAttachmentTurn(opts: {
     name?: string;
     irreversible?: boolean;
     outboundChannel?: string | null;
+    /** True for self-scoped me.* writes that only touch the caller's own data. */
+    selfScoped?: boolean;
   };
 }): boolean {
   if (!opts.hasAttachments) return false;
-  if (opts.attachmentsMentionDestructive === true) return true;
+  const toolNameDestructive = Boolean(
+    opts.tool?.name && DESTRUCTIVE_RE.test(opts.tool.name.replace(/[_-]+/g, " ")),
+  );
+  const toolRisky =
+    opts.tool?.irreversible === true ||
+    Boolean(opts.tool?.outboundChannel) ||
+    toolNameDestructive;
   if (DESTRUCTIVE_RE.test(opts.prompt)) return true;
-  if (opts.tool?.irreversible === true) return true;
-  if (opts.tool?.outboundChannel) return true;
-  if (opts.tool?.name && DESTRUCTIVE_RE.test(opts.tool.name.replace(/[_-]+/g, " "))) {
+  if (opts.attachmentsMentionDestructive === true) {
+    // Task #679 — a destructive verb INSIDE the attachment body must
+    // not dead-end a benign self-scoped save: a visa/permit scan
+    // legitimately contains words like "cancel". The injection defense
+    // matters when the proposed write can actually do damage beyond
+    // the caller's own records (irreversible, outbound, destructive
+    // tool, or non-self-scoped). Reversible me.* saves get the normal
+    // Confirm/Cancel card.
+    if (opts.tool?.selfScoped === true && !toolRisky) return false;
     return true;
   }
-  return false;
+  return toolRisky;
+}
+
+/**
+ * Task #679 — the value the user must retype for a typed-name confirm
+ * MUST be something they can actually type. The old placeholder
+ * "(re-type to confirm; attachment-derived)" was stamped as the
+ * EXPECTED value, making the confirm impossible to pass. Derive a
+ * human-typeable name from the confirmation diff / pending input
+ * (entity title, name, file name…), falling back to "CONFIRM".
+ */
+export const TYPED_NAME_FALLBACK = "CONFIRM";
+
+/** Legacy un-typeable placeholder — treated as "no expected value". */
+export const LEGACY_TYPED_NAME_PLACEHOLDER =
+  "(re-type to confirm; attachment-derived)";
+
+const TYPED_NAME_KEYS = ["title", "name", "fullName", "label", "fileName"];
+
+function scanForTypedName(obj: unknown, depth: number): string | null {
+  if (!obj || typeof obj !== "object" || depth > 3) return null;
+  const rec = obj as Record<string, unknown>;
+  for (const k of TYPED_NAME_KEYS) {
+    const v = rec[k];
+    if (typeof v === "string" && v.trim().length >= 2 && v.trim().length <= 120) {
+      return v.trim();
+    }
+  }
+  for (const v of Object.values(rec)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      const hit = scanForTypedName(v, depth + 1);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+export function deriveTypedNameExpected(
+  diff: Record<string, unknown> | null | undefined,
+  pendingInput?: Record<string, unknown> | null,
+): string {
+  return (
+    scanForTypedName(diff ?? null, 0) ??
+    scanForTypedName(pendingInput ?? null, 0) ??
+    TYPED_NAME_FALLBACK
+  );
 }

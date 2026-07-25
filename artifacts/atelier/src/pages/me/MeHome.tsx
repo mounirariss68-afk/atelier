@@ -61,7 +61,11 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 
 export default function MeHome() {
   const [, params] = useRoute("/me/:section");
-  const section = (params?.section ?? "overview") as SectionId;
+  // Task #679 — chat cards historically linked to /me/documents, which is
+  // not a tab; personal documents live inside Profile. Alias it so old
+  // links (and any cached chat sessions) land on the right section.
+  const rawSection = params?.section ?? "overview";
+  const section = (rawSection === "documents" ? "profile" : rawSection) as SectionId;
   const { data: profile, isLoading } = useAtelierGetMyProfile();
 
   const firstName = profile?.user?.name?.split(/\s+/)[0] ?? "";

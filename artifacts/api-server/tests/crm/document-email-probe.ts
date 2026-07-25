@@ -615,6 +615,146 @@ async function main() {
       compHidden.ok === false && compHidden.errorCode === "doc_not_found",
       JSON.stringify(compHidden).slice(0, 200),
     );
+
+    // ====================================================================
+    // 14. Task #679 — fold search, embedding floor, typed-name, card shapes
+    // ====================================================================
+    // 14a. accent-folded contact name search: "Gokhan" must find "Gökhan"
+    await db.insert(D.atelierContacts).values({
+      id: `ct_fold_${TAG}`,
+      orgId: ORG,
+      accountId: ACC_ID,
+      fullName: `Gökhan Foldprobe ${TAG}`,
+      email: `gokhanfold.${STAMP}@client.test`,
+    });
+    const contactDetail = findByToolName("contact_detail");
+    check("fold: contact_detail registered", Boolean(contactDetail));
+    const foldRes = await contactDetail.run(
+      { name: "Gokhan Foldprobe" },
+      { persona: fpPersona } as any,
+    );
+    const foldStr = JSON.stringify(foldRes);
+    check(
+      "fold: ASCII query matches diacritic contact",
+      foldRes.ok === true && foldStr.includes(`Gökhan Foldprobe ${TAG}`),
+      foldStr.slice(0, 300),
+    );
+
+    // 14b. document floor includes the email tools
+    const retriever = await import("../../src/lib/atelier-cli/capability-retriever.js");
+    const docFloor = (retriever as any).CORE_TOOLS_BY_KIND?.document ?? [];
+    check(
+      "floor: email tools in document floor",
+      docFloor.includes("email_company_documents") && docFloor.includes("email_my_documents"),
+      JSON.stringify(docFloor),
+    );
+
+    // 14c. typed-name guard: self-scoped downgrade + derived expected value
+    const pg = await import("../../src/lib/atelier-cli/prompt-guard.js");
+    check(
+      "guard: benign self-scoped save NOT typed-name gated by attachment verbs",
+      pg.shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "save my visa scan",
+        attachmentsMentionDestructive: true,
+        tool: { name: "save_my_document", selfScoped: true },
+      }) === false,
+    );
+    check(
+      "guard: destructive PROMPT still forces typed-name",
+      pg.shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "delete my old visa",
+        attachmentsMentionDestructive: false,
+        tool: { name: "save_my_document", selfScoped: true },
+      }) === true,
+    );
+    check(
+      "guard: non-self-scoped write still gated on attachment verbs",
+      pg.shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "file this",
+        attachmentsMentionDestructive: true,
+        tool: { name: "update_account", selfScoped: false },
+      }) === true,
+    );
+    check(
+      "guard: outbound self-scoped write still gated",
+      pg.shouldRequireTypedNameForAttachmentTurn({
+        hasAttachments: true,
+        prompt: "file this",
+        attachmentsMentionDestructive: true,
+        tool: { name: "email_my_documents", selfScoped: true, outboundChannel: "email" },
+      }) === true,
+    );
+    check(
+      "guard: derived typed-name is typeable (title)",
+      pg.deriveTypedNameExpected({ create: { title: "UAE Visa 2026" } }) === "UAE Visa 2026",
+    );
+    check(
+      "guard: derived typed-name falls back to CONFIRM",
+      pg.deriveTypedNameExpected({}) === pg.TYPED_NAME_FALLBACK &&
+        pg.TYPED_NAME_FALLBACK === "CONFIRM",
+    );
+    check(
+      "guard: legacy placeholder constant unchanged",
+      pg.LEGACY_TYPED_NAME_PLACEHOLDER === "(re-type to confirm; attachment-derived)",
+    );
+
+    // 14d. my_documents card shape: ranked_list with labels + /me/profile hrefs
+    const myDocsEntry = findByToolName("my_documents");
+    check("card: my_documents resultCard ranked_list", myDocsEntry?.resultCard === "ranked_list");
+    const myDocs = await myDocsEntry.run({}, { persona } as any);
+    check(
+      "card: my_documents items carry label + /me/profile href",
+      myDocs.ok === true &&
+        Array.isArray(myDocs.data?.items) &&
+        myDocs.data.items.length > 0 &&
+        myDocs.data.items.every((i: any) => typeof i.label === "string" && i.label.length > 0) &&
+        myDocs.data.items.every((i: any) => i.href === "/me/profile") &&
+        myDocs.data.href === "/me/profile",
+      JSON.stringify(myDocs.data?.items?.[0] ?? myDocs).slice(0, 300),
+    );
+
+    // 14e. document_list entityName filter
+    const docList = findByToolName("document_list");
+    const badEntity = await docList.run(
+      { entityName: `NoSuchEntity ${TAG}` },
+      { persona: fpPersona } as any,
+    );
+    check(
+      "entity: unknown entity → not_found",
+      badEntity.ok === false && badEntity.errorCode === "not_found",
+      JSON.stringify(badEntity).slice(0, 200),
+    );
+    // positive match by LEGAL name where shortName differs
+    await db.insert(D.atelierLegalEntities).values({
+      id: `le_${TAG}`,
+      orgId: ORG,
+      legalNameEn: `Cognirise Probe Entity ${TAG} L.L.C.`,
+      shortName: `FZ Probe ${TAG}`,
+      country: "AE",
+      baseCurrency: "AED",
+      status: "active",
+    });
+    const byLegal = await docList.run(
+      { entityName: `Cognirise Probe Entity ${TAG}` },
+      { persona: fpPersona } as any,
+    );
+    check(
+      "entity: legal-name query resolves (shortName differs)",
+      byLegal.ok === true && Array.isArray(byLegal.data?.items),
+      JSON.stringify(byLegal).slice(0, 200),
+    );
+    const byShort = await docList.run(
+      { entityName: `FZ Probe ${TAG}` },
+      { persona: fpPersona } as any,
+    );
+    check(
+      "entity: short-name query resolves",
+      byShort.ok === true && Array.isArray(byShort.data?.items),
+      JSON.stringify(byShort).slice(0, 200),
+    );
   } finally {
     // ---- cleanup + tag sweep ------------------------------------------
     try {
@@ -626,6 +766,7 @@ async function main() {
       await db.delete(D.atelierDocumentVersions).where(like(D.atelierDocumentVersions.fileName, `registration-cert.pdf`));
       await db.delete(D.atelierDocuments).where(like(D.atelierDocuments.title, `%${TAG}%`));
       await db.delete(D.atelierContacts).where(like(D.atelierContacts.id, `%${TAG}%`));
+      await db.delete(D.atelierLegalEntities).where(like(D.atelierLegalEntities.id, `%${TAG}%`));
       await db.delete(D.atelierAccounts).where(like(D.atelierAccounts.id, `%${TAG}%`));
       await db.delete(atelierUsers).where(like(atelierUsers.name, `%${TAG}%`));
       await db.delete(atelierUsers).where(eq(atelierUsers.id, UID));

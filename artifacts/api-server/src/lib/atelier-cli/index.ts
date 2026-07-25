@@ -63,6 +63,8 @@ import "./bootstrap-capabilities.js";
 import { redactJson, redactText, statsTouched } from "./pii-redaction.js";
 import {
   attachmentMentionsDestructive,
+  deriveTypedNameExpected,
+  LEGACY_TYPED_NAME_PLACEHOLDER,
   shouldRequireTypedNameForAttachmentTurn,
   wrapAttachment,
 } from "./prompt-guard.js";
@@ -3058,14 +3060,27 @@ export async function runTurn(
         .limit(5);
       const cutoffMs = Date.now() - 30 * 60 * 1000;
       const priorIds: string[] = [];
-      for (const tr of recentTurns) {
-        if (!tr.createdAt || new Date(tr.createdAt).getTime() < cutoffMs) continue;
-        for (const ref of (tr.attachmentRefs as string[] | null) ?? []) {
-          if (typeof ref === "string" && ref.length > 0 && !priorIds.includes(ref)) {
-            priorIds.push(ref);
+      const collect = (respectCutoff: boolean) => {
+        for (const tr of recentTurns) {
+          if (
+            respectCutoff &&
+            (!tr.createdAt || new Date(tr.createdAt).getTime() < cutoffMs)
+          )
+            continue;
+          for (const ref of (tr.attachmentRefs as string[] | null) ?? []) {
+            if (typeof ref === "string" && ref.length > 0 && !priorIds.includes(ref)) {
+              priorIds.push(ref);
+            }
           }
         }
-      }
+      };
+      collect(true);
+      // Task #679 — a user returning to a session after >30 min and saying
+      // "save that passport scan" got a dead-end ("no attachment found").
+      // If the fresh window is empty, fall back to the most recent
+      // attachments from this same session regardless of age (still own
+      // uploads only — the org/user filter below enforces that).
+      if (priorIds.length === 0) collect(false);
       if (priorIds.length > 0) {
         const rows = await db
           .select({
@@ -4145,13 +4160,24 @@ export async function runTurn(
             name: tc.name,
             irreversible: catEntry?.irreversible === true,
             outboundChannel: catEntry?.outboundChannel ?? null,
+            // Self-scoped me.* writes only touch the caller's own data,
+            // so attachment-body verbs alone don't force typed-name.
+            selfScoped: catEntry?.id?.startsWith("me.") === true,
           },
         });
         const baseDiff = toolResult.confirmation.diff as Record<string, unknown>;
         const diff: Record<string, unknown> = { ...baseDiff };
         if (catEntry?.irreversible) diff.irreversible = true;
         if (forceTypedName && diff.typedNameRequired === undefined) {
-          diff.typedNameRequired = "(re-type to confirm; attachment-derived)";
+          // Task #679 — the expected value MUST be typeable. The old
+          // "(re-type to confirm; attachment-derived)" placeholder was
+          // compared verbatim on /confirm, an impossible dead-end.
+          diff.typedNameRequired = deriveTypedNameExpected(
+            diff,
+            toolResult.confirmation.pending?.input as
+              | Record<string, unknown>
+              | undefined,
+          );
           diff.requiresTypedName = true;
         }
         if (catEntry?.outboundChannel) diff.outboundChannel = catEntry.outboundChannel;
@@ -4612,7 +4638,10 @@ export async function confirmPendingWrite(
   const needsTypedName =
     pending.requiresTypedName === true || isIrreversibleTool(pending.tool);
   if (needsTypedName) {
-    const expected = (pending.typedNameExpected ?? "").trim();
+    let expected = (pending.typedNameExpected ?? "").trim();
+    // Task #679 — turns stamped with the legacy un-typeable placeholder
+    // must not dead-end: accept any non-empty typed confirmation.
+    if (expected === LEGACY_TYPED_NAME_PLACEHOLDER) expected = "";
     const got = (opts.typedName ?? "").trim();
     if (!got || (expected && got.toLowerCase() !== expected.toLowerCase())) {
       emit({

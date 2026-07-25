@@ -1266,7 +1266,9 @@ defineCapability({
     fr: ["Affiche mes documents"],
   },
   surfaceOn: ["home", "global"],
-  resultCard: "entity_card",
+  // Task #679 — this is a LIST; entity_card rendered a broken single-item
+  // card on both clients. ranked_list expects items[] with a label each.
+  resultCard: "ranked_list",
   examplePhrases: {
     en: ["Show my documents"],
     ar: ["اعرض مستنداتي"],
@@ -1305,8 +1307,15 @@ defineCapability({
       data: {
         items: docs
           .filter((d) => d.kind !== "profile_photo" && d.kind !== "biography")
-          .map(chatDocWire),
-        href: "/me/documents",
+          .map((d) => ({
+            ...chatDocWire(d),
+            // ranked_list items render their `label`; personal documents
+            // live under the Me → Profile tab (there is no /me/documents
+            // page — the old href 404-bounced to the overview).
+            label: d.title,
+            href: "/me/profile",
+          })),
+        href: "/me/profile",
       },
     };
   },
