@@ -447,7 +447,8 @@ async function main() {
       await db.delete(atelierBillingRule).where(eq(atelierBillingRule.engagementId, engId));
       await db.delete(atelierDealPricings).where(eq(atelierDealPricings.opportunityId, oppId));
       await db.delete(atelierEngagements).where(eq(atelierEngagements.id, engId));
-      await db.delete(atelierOpportunities).where(eq(atelierOpportunities.id, oppId));
+      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+      await hardDeleteOpportunities([oppId]);
       await db.delete(atelierAccounts).where(eq(atelierAccounts.id, acctId));
       await db.delete(atelierRateCardRows).where(inArray(atelierRateCardRows.id, [`rcr_${T}_p`, `rcr_${T}_a`]));
       await db.delete(atelierRateCards).where(eq(atelierRateCards.id, rcId));

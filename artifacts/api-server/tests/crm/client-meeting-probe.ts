@@ -264,7 +264,8 @@ async function main() {
       }
       await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, userId));
       await db.delete(atelierContacts).where(inArray(atelierContacts.id, [contactId, noMailContactId]));
-      await db.delete(atelierOpportunities).where(inArray(atelierOpportunities.id, [oppId, opp2Id]));
+      const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.js");
+      await hardDeleteOpportunities([oppId, opp2Id]);
       await db.delete(atelierEngagements).where(eq(atelierEngagements.id, engId));
       await db.delete(atelierAccounts).where(inArray(atelierAccounts.id, [accId, acc2Id]));
       await db.delete(atelierUsers).where(inArray(atelierUsers.id, [userId, colleagueId]));
