@@ -54,6 +54,43 @@ export interface EditablePerson {
   swift?: string | null;
   dayRateAmount?: number | null;
   dayRateCurrency?: string | null;
+  // Task #660 — statutory payroll fields (employees, comp-gated wire).
+  baseCompensation?: number | null;
+  baseCurrency?: string | null;
+  legalEntityId?: string | null;
+  basicWageMonthly?: number | null;
+  housingAllowanceMonthly?: number | null;
+  schemeRegisteredOn?: string | null;
+}
+
+// Task #660 — payroll draft, saved via the dedicated payroll PATCH (raw
+// fetch — payroll routes stay off the codegen'd OpenAPI surface).
+type PayrollDraft = {
+  legalEntityId: string;
+  baseCompensation: string;
+  baseCurrency: string;
+  basicWageMonthly: string;
+  housingAllowanceMonthly: string;
+  schemeRegisteredOn: string;
+};
+
+function payrollDraftFrom(p: EditablePerson): PayrollDraft {
+  return {
+    legalEntityId: p.legalEntityId ?? "",
+    baseCompensation: p.baseCompensation != null ? String(p.baseCompensation) : "",
+    baseCurrency: p.baseCurrency ?? "",
+    basicWageMonthly: p.basicWageMonthly != null ? String(p.basicWageMonthly) : "",
+    housingAllowanceMonthly:
+      p.housingAllowanceMonthly != null ? String(p.housingAllowanceMonthly) : "",
+    schemeRegisteredOn: p.schemeRegisteredOn ?? "",
+  };
+}
+
+interface PayrollEntityOption {
+  id: string;
+  name: string;
+  country: string;
+  baseCurrency: string | null;
 }
 
 type Draft = {
@@ -156,6 +193,11 @@ export function EditPersonForm({
   const [legalEntities, setLegalEntities] = React.useState<LegalEntityRow[]>([]);
   const [draft, setDraft] = React.useState<Draft>(() => draftFrom(person, null));
   const [error, setError] = React.useState<string | null>(null);
+  // Task #660 — payroll fields (comp-gated, employees only).
+  const showPayroll = person.workerType === "employee" && viewerCanSeeComp;
+  const [payrollEntities, setPayrollEntities] = React.useState<PayrollEntityOption[]>([]);
+  const [payroll, setPayroll] = React.useState<PayrollDraft>(() => payrollDraftFrom(person));
+  const [payrollSaving, setPayrollSaving] = React.useState(false);
   const mutation = useAtelierUpdateRosterPerson();
   // Task #509 (T4) — seniority options from the titles registry; when the
   // registry is empty we fall back to the legacy hardcoded ladder.
@@ -203,6 +245,13 @@ export function EditPersonForm({
           const entities = (payload.legalEntities ?? []) as LegalEntityRow[];
           setLegalEntities(entities);
         })
+        .catch(() => undefined);
+    }
+    if (showPayroll) {
+      // Task #660 — active legal-entity register for the payroll link picker.
+      fetch(`/api/atelier/roster/legal-entities`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : { entities: [] }))
+        .then((d) => alive && setPayrollEntities(d.entities ?? []))
         .catch(() => undefined);
     }
     return () => {
@@ -302,6 +351,43 @@ export function EditPersonForm({
     return patch as AtelierRosterPersonEdit;
   };
 
+  // Task #660 — dirty payroll fields → body for the dedicated payroll PATCH.
+  const buildPayrollPatch = (): Record<string, unknown> | { error: string } | null => {
+    if (!showPayroll) return null;
+    const base = payrollDraftFrom(person);
+    const patch: Record<string, unknown> = {};
+    if (payroll.legalEntityId !== base.legalEntityId) {
+      patch.legalEntityId = payroll.legalEntityId || null;
+    }
+    const num = (key: "baseCompensation" | "basicWageMonthly" | "housingAllowanceMonthly", label: string, allowZero: boolean) => {
+      if (payroll[key] === base[key]) return null;
+      const s = payroll[key].trim();
+      if (!s) {
+        patch[key] = null;
+        return null;
+      }
+      const n = Number(s.replace(/,/g, ""));
+      if (!Number.isFinite(n) || n < 0 || (!allowZero && n <= 0)) return `${label} must be a positive number.`;
+      patch[key] = n;
+      return null;
+    };
+    const errs = [
+      num("baseCompensation", "Annual base compensation", false),
+      num("basicWageMonthly", "Basic wage (monthly)", false),
+      num("housingAllowanceMonthly", "Housing allowance (monthly)", true),
+    ].filter(Boolean);
+    if (errs.length > 0) return { error: String(errs[0]) };
+    if (payroll.baseCurrency !== base.baseCurrency) {
+      const c = payroll.baseCurrency.trim().toUpperCase();
+      if (c && !/^[A-Z]{3}$/.test(c)) return { error: "Base currency must be a 3-letter code (e.g. AED)." };
+      patch.baseCurrency = c || null;
+    }
+    if (payroll.schemeRegisteredOn !== base.schemeRegisteredOn) {
+      patch.schemeRegisteredOn = payroll.schemeRegisteredOn || null;
+    }
+    return Object.keys(patch).length > 0 ? patch : null;
+  };
+
   const save = async () => {
     setError(null);
     const patch = buildPatch();
@@ -309,16 +395,47 @@ export function EditPersonForm({
       setError(patch.error);
       return;
     }
+    const payrollPatch = buildPayrollPatch();
+    if (payrollPatch && "error" in payrollPatch && typeof payrollPatch.error === "string") {
+      setError(payrollPatch.error);
+      return;
+    }
     const body = patch as AtelierRosterPersonEdit;
-    if (Object.keys(body).length === 0) {
+    if (Object.keys(body).length === 0 && !payrollPatch) {
       onClose();
       return;
     }
     try {
-      const resp = await mutation.mutateAsync({ id: person.id, data: body });
-      onSaved(resp.person as Record<string, unknown>);
+      let saved: Record<string, unknown> | null = null;
+      if (Object.keys(body).length > 0) {
+        const resp = await mutation.mutateAsync({ id: person.id, data: body });
+        saved = resp.person as Record<string, unknown>;
+      }
+      if (payrollPatch) {
+        setPayrollSaving(true);
+        const r = await fetch(`/api/atelier/roster/people/${person.id}/payroll`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payrollPatch),
+        });
+        setPayrollSaving(false);
+        if (!r.ok) {
+          const d = (await r.json().catch(() => null)) as { error?: string } | null;
+          if (r.status === 403) setError("You are not authorized to edit payroll fields.");
+          else if (d?.error === "legal-entity-not-found")
+            setError("That legal entity is no longer active — refresh and pick again.");
+          else setError("Payroll fields failed to save — please check the values.");
+          if (saved) onSaved(saved);
+          return;
+        }
+        const d = (await r.json()) as { person?: Record<string, unknown> };
+        if (d.person) saved = d.person;
+      }
+      if (saved) onSaved(saved);
       onClose();
     } catch (e: unknown) {
+      setPayrollSaving(false);
       const status = (e as { status?: number })?.status;
       if (status === 403) setError("You are not authorized to edit this person.");
       else if (status === 409) setError("That work email is already in use by someone else.");
@@ -553,6 +670,75 @@ export function EditPersonForm({
         </section>
       )}
 
+      {/* Task #660 — payroll fields (employees, comp-cleared editors only).
+          Saved via the dedicated payroll PATCH so pay data keeps a single
+          audited write path, separate from the general profile edit. */}
+      {showPayroll && (
+        <section className="space-y-2" data-testid="edit-payroll-section">
+          <div className={label}>Payroll (statutory)</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <FieldWrap label="Employing legal entity *">
+              <select className={input} value={payroll.legalEntityId} data-testid="edit-payroll-entity"
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const ent = payrollEntities.find((x) => x.id === id);
+                  setPayroll((p) => ({
+                    ...p,
+                    legalEntityId: id,
+                    // Autofill the entity's base currency when none set yet —
+                    // payroll runs are single-currency per entity.
+                    baseCurrency:
+                      id && ent?.baseCurrency && !p.baseCurrency.trim()
+                        ? ent.baseCurrency
+                        : p.baseCurrency,
+                  }));
+                }}>
+                <option value="">— not linked —</option>
+                {payroll.legalEntityId && !payrollEntities.some((x) => x.id === payroll.legalEntityId) && (
+                  <option value={payroll.legalEntityId}>{payroll.legalEntityId}</option>
+                )}
+                {payrollEntities.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.name} ({x.country}{x.baseCurrency ? ` · ${x.baseCurrency}` : ""})
+                  </option>
+                ))}
+              </select>
+            </FieldWrap>
+            <FieldWrap label="Base currency *">
+              <input className={input} value={payroll.baseCurrency} maxLength={3} placeholder="AED"
+                onChange={(e) => setPayroll((p) => ({ ...p, baseCurrency: e.target.value.toUpperCase() }))}
+                data-testid="edit-payroll-currency" />
+            </FieldWrap>
+            <FieldWrap label="Annual base compensation *">
+              <input className={input} value={payroll.baseCompensation} inputMode="decimal"
+                onChange={(e) => setPayroll((p) => ({ ...p, baseCompensation: e.target.value }))}
+                data-testid="edit-payroll-basecomp" />
+            </FieldWrap>
+            <FieldWrap label="Basic wage (monthly, optional)">
+              <input className={input} value={payroll.basicWageMonthly} inputMode="decimal"
+                placeholder="blank = full monthly salary"
+                onChange={(e) => setPayroll((p) => ({ ...p, basicWageMonthly: e.target.value }))}
+                data-testid="edit-payroll-basicwage" />
+            </FieldWrap>
+            <FieldWrap label="Housing allowance (monthly, optional)">
+              <input className={input} value={payroll.housingAllowanceMonthly} inputMode="decimal"
+                onChange={(e) => setPayroll((p) => ({ ...p, housingAllowanceMonthly: e.target.value }))}
+                data-testid="edit-payroll-housing" />
+            </FieldWrap>
+            <FieldWrap label="Scheme registered on (optional)">
+              <input className={input} type="date" value={payroll.schemeRegisteredOn}
+                onChange={(e) => setPayroll((p) => ({ ...p, schemeRegisteredOn: e.target.value }))}
+                data-testid="edit-payroll-schemedate" />
+            </FieldWrap>
+          </div>
+          <p className="text-[11px] text-text-faint">
+            Payroll runs need the entity link, annual base compensation, base
+            currency, start date and nationality before they can post. Scheme
+            registration date defaults to the start date when blank.
+          </p>
+        </section>
+      )}
+
       {/* Compensation & banking — mirrors the profile card for comp-cleared
           viewers. These fields are deliberately read-only here: bank details
           change only via the HR-approved bank-change flow, and pay data via
@@ -619,16 +805,16 @@ export function EditPersonForm({
         )}
         <button
           onClick={onClose}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || payrollSaving}
           className="text-[10px] font-mono uppercase tracking-widest text-text-faint hover:text-text px-3 py-1">
           Cancel
         </button>
         <button
           onClick={save}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || payrollSaving}
           className="text-[10px] font-mono uppercase tracking-widest bg-gold text-bg px-3 py-1 rounded disabled:opacity-50"
           data-testid="edit-save">
-          {mutation.isPending ? "Saving…" : "Save changes"}
+          {mutation.isPending || payrollSaving ? "Saving…" : "Save changes"}
         </button>
       </div>
     </Card>

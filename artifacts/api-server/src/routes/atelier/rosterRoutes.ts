@@ -41,6 +41,7 @@ import {
   atelierRosterReportsTo,
   atelierTitles,
   atelierPersons,
+  atelierLegalEntities,
 } from "@workspace/db";
 // Task #538 — unified person model: structured names resolve through the
 // shared parser/sanitizer and persist via the person-sync helper.
@@ -127,6 +128,13 @@ export interface PersonWire {
   baseCompensation?: number | null;
   dayRateInternalCost?: number | null;
   costToCognirisePerDay?: number | null;
+  // Task #660 — statutory payroll fields (employees, comp-gated). Edited
+  // ONLY via PATCH /roster/people/:id/payroll, never the general edit.
+  baseCurrency?: string | null;
+  legalEntityId?: string | null;
+  basicWageMonthly?: number | null;
+  housingAllowanceMonthly?: number | null;
+  schemeRegisteredOn?: string | null;
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
@@ -568,6 +576,13 @@ function employeeToWire(
     base.partnerEconomicsId = r.partnerEconomicsId;
     // PRD §2.1 policy-locked field — Partner / Operations only.
     base.baseCompensation = r.baseCompensation ?? null;
+    // Task #660 — statutory payroll fields (comp-gated prefill for the
+    // payroll edit surface).
+    base.baseCurrency = r.baseCurrency ?? null;
+    base.legalEntityId = r.legalEntityId ?? null;
+    base.basicWageMonthly = r.basicWageMonthly ?? null;
+    base.housingAllowanceMonthly = r.housingAllowanceMonthly ?? null;
+    base.schemeRegisteredOn = r.schemeRegisteredOn ?? null;
   }
   return base;
 }
@@ -1439,6 +1454,11 @@ const SENSITIVE_EDIT_FIELDS = new Set([
   "dayRateInternalCost",
   "baseCompensation",
   "baseCurrency",
+  // Task #660 — payroll linkage fields live on the dedicated payroll PATCH.
+  "legalEntityId",
+  "basicWageMonthly",
+  "housingAllowanceMonthly",
+  "schemeRegisteredOn",
   "payrollCountry",
   "payrollCountryCode",
   "costToCognirisePerDay",
@@ -1793,6 +1813,191 @@ router.patch("/roster/people/:id", async (req, res, next) => {
         changes,
       },
       payloadSummary: `${me.name ?? me.id} edited ${person.fullName}'s profile (${changes
+        .map((c) => c.field)
+        .join(", ")})`,
+    });
+    const updated = await getPerson(person.id, canSeeComp(me.role));
+    res.json({ person: updated, changes });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------
+// Task #660 — payroll linkage edit surface. Statutory payroll runs
+// (Task #655) refuse to post while an active employee is missing a legal
+// entity link, annual base comp, base currency, start date or nationality.
+// These pay fields are deliberately locked out of the general Edit Person
+// PATCH; this dedicated route is their "finance flow", gated to the people
+// editors (founding_partner | hr) plus finance (who run payroll).
+// -----------------------------------------------------------------
+
+function canEditPayrollFields(role: string | undefined | null): boolean {
+  return canEditPeople(role) || isFinance(role);
+}
+
+// Task #660 — active legal entities for the payroll-entity picker.
+// @cli-skip: UI support read for the payroll fields form
+router.get("/roster/legal-entities", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canEditPayrollFields(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const rows = await db
+      .select({
+        id: atelierLegalEntities.id,
+        legalNameEn: atelierLegalEntities.legalNameEn,
+        shortName: atelierLegalEntities.shortName,
+        country: atelierLegalEntities.country,
+        baseCurrency: atelierLegalEntities.baseCurrency,
+      })
+      .from(atelierLegalEntities)
+      .where(and(eq(atelierLegalEntities.orgId, me.orgId), eq(atelierLegalEntities.status, "active")));
+    const entities = rows
+      .map((e) => ({
+        id: e.id,
+        name: e.shortName || e.legalNameEn,
+        legalNameEn: e.legalNameEn,
+        country: e.country,
+        baseCurrency: e.baseCurrency || null,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json({ entities });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const payrollEditSchema = z
+  .object({
+    legalEntityId: z.string().trim().min(1).max(80).nullable(),
+    baseCompensation: z.number().positive().finite().nullable(),
+    baseCurrency: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z]{3}$/, "ISO 4217 code")
+      .transform((s) => s.toUpperCase())
+      .nullable(),
+    basicWageMonthly: z.number().positive().finite().nullable(),
+    housingAllowanceMonthly: z.number().min(0).finite().nullable(),
+    schemeRegisteredOn: zIsoDate,
+  })
+  .partial()
+  .strict();
+
+// @cli-skip: UI-workflow write; comp data — CLI exposure needs confirm-flow capability design
+router.patch("/roster/people/:id/payroll", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    if (!canEditPayrollFields(me.role)) {
+      res.status(403).json({ error: "person-edit-restricted" });
+      return;
+    }
+    const person = await getPerson(req.params.id, true);
+    if (!person) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    if (person.workerType !== "employee") {
+      res.status(422).json({
+        error: "employee-only",
+        hint: "Payroll fields apply to employees; contractors are paid via day rates.",
+      });
+      return;
+    }
+    const parsed = payrollEditSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(422).json({
+        error: "invalid-body",
+        issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      });
+      return;
+    }
+    const patch = parsed.data as Record<string, unknown>;
+    if (Object.keys(patch).length === 0) {
+      res.status(400).json({ error: "no-updatable-fields" });
+      return;
+    }
+
+    const [row] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)))
+      .limit(1);
+    if (!row) {
+      res.status(404).json({ error: "person-not-found" });
+      return;
+    }
+    const raw = row as unknown as Record<string, unknown>;
+
+    // Entity link must point at a live (active) legal entity in this org.
+    // The employingEntity display mirror follows the link so list views and
+    // the general edit form stay truthful.
+    let entityRow: typeof atelierLegalEntities.$inferSelect | null = null;
+    if ("legalEntityId" in patch && patch.legalEntityId != null) {
+      const [ent] = await db
+        .select()
+        .from(atelierLegalEntities)
+        .where(
+          and(
+            eq(atelierLegalEntities.id, String(patch.legalEntityId)),
+            eq(atelierLegalEntities.orgId, me.orgId),
+            eq(atelierLegalEntities.status, "active"),
+          ),
+        )
+        .limit(1);
+      if (!ent) {
+        res.status(422).json({ error: "legal-entity-not-found" });
+        return;
+      }
+      entityRow = ent;
+    }
+
+    const changes: Array<{ field: string; from: unknown; to: unknown }> = [];
+    const update: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(patch)) {
+      const before = raw[k] ?? null;
+      const after = v ?? null;
+      if (JSON.stringify(before) === JSON.stringify(after)) continue;
+      update[k] = v;
+      changes.push({ field: k, from: before, to: after });
+    }
+    if (entityRow && "legalEntityId" in update) {
+      const mirror = entityRow.shortName || entityRow.legalNameEn;
+      if ((raw.employingEntity ?? null) !== mirror) {
+        update.employingEntity = mirror;
+        changes.push({ field: "employingEntity", from: raw.employingEntity ?? null, to: mirror });
+      }
+    }
+    if (changes.length === 0) {
+      res.json({ person: await getPerson(person.id, canSeeComp(me.role)), changes: [] });
+      return;
+    }
+    update.updatedAt = new Date();
+    await db
+      .update(atelierEmployees)
+      .set(update)
+      .where(and(eq(atelierEmployees.id, person.id), eq(atelierEmployees.orgId, me.orgId)));
+
+    assertAuditAction("roster.person.updated");
+    await db.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      entityType: "person",
+      entityId: person.id,
+      actorType: "user",
+      actorId: me.id,
+      actorLabel: me.name ?? me.id,
+      action: "roster.person.updated",
+      payload: {
+        workerType: person.workerType,
+        change: "payroll",
+        changes,
+      },
+      payloadSummary: `${me.name ?? me.id} updated payroll fields for ${person.fullName} (${changes
         .map((c) => c.field)
         .join(", ")})`,
     });
