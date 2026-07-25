@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierPricingCostLine } from "./atelierPricingCostLine";
 import type { AtelierPricingSimulateInputStructuresItem } from "./atelierPricingSimulateInputStructuresItem";
 import type { AtelierTeamMixEntry } from "./atelierTeamMixEntry";
 
@@ -13,4 +14,5 @@ export interface AtelierPricingSimulateInput {
   durationWeeks?: number;
   rateCardId?: string;
   structures?: AtelierPricingSimulateInputStructuresItem[];
+  costLines?: AtelierPricingCostLine[];
 }

@@ -6670,6 +6670,49 @@ export type AtelierDealPricingPricingAnalystOutput = {
   [key: string]: unknown;
 } | null;
 
+/**
+ * @nullable
+ */
+export type AtelierDealPricingPricingResearcherOutput = {
+  [key: string]: unknown;
+} | null;
+
+export type AtelierPricingCostLineType =
+  (typeof AtelierPricingCostLineType)[keyof typeof AtelierPricingCostLineType];
+
+export const AtelierPricingCostLineType = {
+  llm_ai: "llm_ai",
+  hardware_infra: "hardware_infra",
+  alliance_partner_quote: "alliance_partner_quote",
+  travel: "travel",
+  other: "other",
+} as const;
+
+export type AtelierPricingCostLineRecurrence =
+  (typeof AtelierPricingCostLineRecurrence)[keyof typeof AtelierPricingCostLineRecurrence];
+
+export const AtelierPricingCostLineRecurrence = {
+  one_time: "one_time",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
+export interface AtelierPricingCostLine {
+  id?: string;
+  type: AtelierPricingCostLineType;
+  /** @nullable */
+  label?: string | null;
+  amountUsd: number;
+  recurrence?: AtelierPricingCostLineRecurrence;
+  passThrough?: boolean;
+  /** @nullable */
+  partnerFirmId?: string | null;
+  /** @nullable */
+  quotedAmountUsd?: number | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
 export interface AtelierDealPricing {
   id: string;
   opportunityId: string;
@@ -6709,6 +6752,11 @@ export interface AtelierDealPricing {
   pricingAnalystRunId?: string | null;
   /** @nullable */
   pricingAnalystOutput?: AtelierDealPricingPricingAnalystOutput;
+  costLines?: AtelierPricingCostLine[];
+  /** @nullable */
+  pricingResearcherRunId?: string | null;
+  /** @nullable */
+  pricingResearcherOutput?: AtelierDealPricingPricingResearcherOutput;
 }
 
 export type AtelierDealPricingEnvelopeRateCardRowsItem = {
@@ -6746,6 +6794,7 @@ export interface AtelierDealPricingInput {
   pricingModel?: string;
   rateCardId?: string;
   structureParams?: AtelierDealPricingInputStructureParams;
+  costLines?: AtelierPricingCostLine[];
 }
 
 export interface AtelierPricingScenarioBand {
@@ -6766,6 +6815,8 @@ export type AtelierPricingStructureSimCashProfileItem = {
   label: string;
 };
 
+export type AtelierPricingStructureSimCostStack = { [key: string]: unknown };
+
 export type AtelierPricingStructureSimParams = { [key: string]: unknown };
 
 export type AtelierPricingStructureSimAssumptions = { [key: string]: unknown };
@@ -6780,6 +6831,7 @@ export interface AtelierPricingStructureSim {
   twoPartnerRequired?: boolean;
   cashProfile: AtelierPricingStructureSimCashProfileItem[];
   weeksToCash80: number;
+  costStack?: AtelierPricingStructureSimCostStack;
   params?: AtelierPricingStructureSimParams;
   assumptions?: AtelierPricingStructureSimAssumptions;
   notes?: string[];
@@ -6799,6 +6851,7 @@ export interface AtelierPricingSimulateInput {
   durationWeeks?: number;
   rateCardId?: string;
   structures?: AtelierPricingSimulateInputStructuresItem[];
+  costLines?: AtelierPricingCostLine[];
 }
 
 export interface AtelierPricingSimulateResult {

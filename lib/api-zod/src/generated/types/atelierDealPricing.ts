@@ -7,9 +7,11 @@
  */
 import type { AtelierDealPricingAlternativeStructuresItem } from "./atelierDealPricingAlternativeStructuresItem";
 import type { AtelierDealPricingPricingAnalystOutput } from "./atelierDealPricingPricingAnalystOutput";
+import type { AtelierDealPricingPricingResearcherOutput } from "./atelierDealPricingPricingResearcherOutput";
 import type { AtelierDealPricingStructureParams } from "./atelierDealPricingStructureParams";
 import type { AtelierDealPricingStructureSim } from "./atelierDealPricingStructureSim";
 import type { AtelierMarginLockStatus } from "./atelierMarginLockStatus";
+import type { AtelierPricingCostLine } from "./atelierPricingCostLine";
 import type { AtelierTeamMixEntry } from "./atelierTeamMixEntry";
 
 export interface AtelierDealPricing {
@@ -51,4 +53,9 @@ export interface AtelierDealPricing {
   pricingAnalystRunId?: string | null;
   /** @nullable */
   pricingAnalystOutput?: AtelierDealPricingPricingAnalystOutput;
+  costLines?: AtelierPricingCostLine[];
+  /** @nullable */
+  pricingResearcherRunId?: string | null;
+  /** @nullable */
+  pricingResearcherOutput?: AtelierDealPricingPricingResearcherOutput;
 }

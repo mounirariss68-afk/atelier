@@ -36,6 +36,8 @@ export type AtelierAgentId =
   | "proposal_composer"
   | "pricing_analyst"
   | "pricing_strategist"
+  // Task #663 — Pricing Researcher (web-search market benchmarks, review-only)
+  | "pricing_researcher"
   | "case_study_picker"
   | "compliance_reviewer"
   | "win_loss_interviewer"

@@ -8,6 +8,7 @@
 import type { AtelierMarginLockStatus } from "./atelierMarginLockStatus";
 import type { AtelierPricingStructureSimAssumptions } from "./atelierPricingStructureSimAssumptions";
 import type { AtelierPricingStructureSimCashProfileItem } from "./atelierPricingStructureSimCashProfileItem";
+import type { AtelierPricingStructureSimCostStack } from "./atelierPricingStructureSimCostStack";
 import type { AtelierPricingStructureSimParams } from "./atelierPricingStructureSimParams";
 import type { AtelierPricingStructureSimScenarios } from "./atelierPricingStructureSimScenarios";
 
@@ -21,6 +22,7 @@ export interface AtelierPricingStructureSim {
   twoPartnerRequired?: boolean;
   cashProfile: AtelierPricingStructureSimCashProfileItem[];
   weeksToCash80: number;
+  costStack?: AtelierPricingStructureSimCostStack;
   params?: AtelierPricingStructureSimParams;
   assumptions?: AtelierPricingStructureSimAssumptions;
   notes?: string[];

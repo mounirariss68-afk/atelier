@@ -40,14 +40,17 @@ import {
   simulateStructure,
   simulateAllStructures,
   normalizeStructureKind,
+  normalizeCostLines,
   buildBillingHandoff,
   PRICING_STRUCTURE_KINDS,
+  type CostLine,
   type PricingStructureKind,
   type StructureParams,
   type StructureSimulation,
 } from "../../lib/atelier-pricing-structures.js";
 import { PRICING_TREND_GUIDANCE } from "../../lib/atelier-pricing-trends.js";
-import { runPricingStrategist, runPricingAnalyst } from "../../lib/atelier-agents/runner.js";
+import { runPricingStrategist, runPricingAnalyst, runPricingResearcher } from "../../lib/atelier-agents/runner.js";
+import { atelierAgentRuns } from "@workspace/db";
 import { canViewEngagementCosting } from "./personaRoles.js";
 import { withRls } from "./rls.js";
 import { sql as dsql } from "drizzle-orm";
@@ -444,6 +447,11 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     req.body?.structureParams && typeof req.body.structureParams === "object"
       ? (req.body.structureParams as StructureParams)
       : ((existing.structureParams as StructureParams | null) ?? null);
+  // Task #663 — typed non-labor cost lines. Normalized defensively; absorbed
+  // lines fold into cost/margin, pass-through lines ride cash/invoice only.
+  const costLines: CostLine[] = normalizeCostLines(
+    Array.isArray(req.body?.costLines) ? req.body.costLines : (existing.costLines ?? []),
+  );
   const rateCardRows = await loadRateCardRows(rateCardId);
   const compute = computePricing({ teamMix, durationWeeks, rateCardRows, policy });
 
@@ -459,7 +467,17 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     durationWeeks,
     rateCardRows,
     policy,
+    costLines,
   });
+  // Headline computed figures include absorbed non-labor cost (Task #663);
+  // pass-through stays out of margin. With no cost lines this is identical
+  // to the legacy labor-only compute.
+  const absorbedNonLabor = sim.costStack.absorbedNonLaborUsd;
+  const computedCostUsd = Math.round((compute.computedCostUsd + absorbedNonLabor) * 100) / 100;
+  const computedMarginPct =
+    compute.computedPriceUsd > 0
+      ? Math.round(((compute.computedPriceUsd - computedCostUsd) / compute.computedPriceUsd) * 10000) / 10000
+      : 0;
 
   // Governance: if any economic input changed, invalidate prior
   // single-Partner override + two-Partner countersign so a stale approval
@@ -469,7 +487,8 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     existing.durationWeeks !== durationWeeks ||
     existing.pricingModel !== pricingModel ||
     existing.rateCardId !== rateCardId ||
-    JSON.stringify(existing.structureParams ?? null) !== JSON.stringify(structureParams ?? null);
+    JSON.stringify(existing.structureParams ?? null) !== JSON.stringify(structureParams ?? null) ||
+    JSON.stringify(normalizeCostLines(existing.costLines ?? [])) !== JSON.stringify(costLines);
   const hadPriorApproval = !!existing.partnerOverrideId || !!existing.countersignPartnerId;
 
   const updateSet: Record<string, unknown> = {
@@ -477,9 +496,10 @@ router.put("/opportunities/:oppId/pricing", async (req, res) => {
     durationWeeks,
     pricingModel,
     rateCardId,
-    computedCostUsd: compute.computedCostUsd,
+    computedCostUsd,
     computedPriceUsd: compute.computedPriceUsd,
-    computedMarginPct: compute.computedMarginPct,
+    computedMarginPct,
+    costLines: costLines as unknown as Array<Record<string, unknown>>,
     // Margin lock gates on the risk-adjusted margin from the structure
     // simulation — not the raw expected-case margin — so fee-at-risk
     // structures cannot pass on optimistic assumptions.
@@ -579,6 +599,9 @@ router.post("/opportunities/:oppId/pricing/simulate", async (req, res) => {
   const teamMix: TeamMixEntry[] = Array.isArray(req.body?.teamMix) ? req.body.teamMix : (existing.teamMix as TeamMixEntry[]);
   const durationWeeks: number = typeof req.body?.durationWeeks === "number" ? req.body.durationWeeks : existing.durationWeeks;
   const rateCardId: string = typeof req.body?.rateCardId === "string" ? req.body.rateCardId : existing.rateCardId;
+  const costLines: CostLine[] = normalizeCostLines(
+    Array.isArray(req.body?.costLines) ? req.body.costLines : (existing.costLines ?? []),
+  );
   const rateCardRows = await loadRateCardRows(rateCardId);
 
   let simulations: StructureSimulation[];
@@ -599,10 +622,11 @@ router.post("/opportunities/:oppId/pricing/simulate", async (req, res) => {
         durationWeeks,
         rateCardRows,
         policy,
+        costLines,
       }),
     );
   } else {
-    simulations = simulateAllStructures({ teamMix, durationWeeks, rateCardRows, policy });
+    simulations = simulateAllStructures({ teamMix, durationWeeks, rateCardRows, policy, costLines });
   }
   // Cost/margin figures are partner/finance-facing; mask for non-costing
   // viewers (same rule as the deal-pricing view masking).
@@ -615,6 +639,14 @@ router.post("/opportunities/:oppId/pricing/simulate", async (req, res) => {
         worst: { ...s.scenarios.worst, costUsd: 0, marginPct: 0 },
       },
       riskAdjustedMarginPct: 0,
+      // Task #663 — the cost stack is cost data; zero it out too.
+      costStack: {
+        laborCostUsd: 0,
+        absorbedNonLaborUsd: 0,
+        passThroughUsd: 0,
+        totalAbsorbedCostUsd: 0,
+        lines: [],
+      },
     }));
   }
   res.json({ simulations, policy, structureKinds: PRICING_STRUCTURE_KINDS });
@@ -812,6 +844,7 @@ router.post("/opportunities/:oppId/pricing/handoff-billing", async (req, res) =>
     durationWeeks: pricing.durationWeeks,
     rateCardRows,
     policy,
+    costLines: normalizeCostLines(pricing.costLines ?? []),
   });
   const startDate = typeof req.body?.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.body.startDate)
     ? req.body.startDate
@@ -848,6 +881,119 @@ router.post("/opportunities/:oppId/pricing/handoff-billing", async (req, res) =>
     payloadSummary: `${me.name} handed off ${sim.label} pricing to billing rule ${ruleId} on ${eng.name}`,
   });
   res.status(201).json({ rule, plan, sim });
+});
+
+// =============================================================
+// Pricing Researcher (Task #663) — async web-search market research.
+// Review-only: output lands as a suggestion snapshot on the pricing row
+// (pricingResearcherOutput) and is NEVER auto-applied to economic terms.
+// Launch returns 202 immediately (proxy times out held requests); the
+// client polls the status route. In-memory launch map bridges the gap
+// before the durable agent_run row exists.
+// =============================================================
+type ResearcherLaunchState = {
+  status: "running" | "succeeded" | "failed";
+  error: string | null;
+  runId: string | null;
+  startedAt: number;
+};
+const researcherLaunches = new Map<string, ResearcherLaunchState>();
+
+// @cli-skip: pending Task #340 read-parity migration
+router.post("/opportunities/:oppId/pricing/researcher", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!requirePartner(me, res)) return;
+  const oppId = req.params.oppId;
+  const inFlight = researcherLaunches.get(oppId);
+  if (inFlight?.status === "running") {
+    res.status(202).json({ status: "running", runId: inFlight.runId });
+    return;
+  }
+  const [opp] = await db
+    .select()
+    .from(atelierOpportunities)
+    .where(and(eq(atelierOpportunities.id, oppId), isNull(atelierOpportunities.deletedAt)));
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const policy = await loadDefaultPolicy();
+  const existing = await loadOrInitDealPricing(opp.id, policy);
+  if (!existing) {
+    res.status(409).json({ error: "no-active-rate-card" });
+    return;
+  }
+  const focus = typeof req.body?.focus === "string" && req.body.focus.trim() ? req.body.focus.trim().slice(0, 500) : undefined;
+  const launch: ResearcherLaunchState = { status: "running", error: null, runId: null, startedAt: Date.now() };
+  researcherLaunches.set(oppId, launch);
+  void (async () => {
+    try {
+      const result = await runPricingResearcher({
+        opportunity: opp,
+        pricing: existing,
+        policy,
+        actorId: me.id,
+        actorLabel: me.name,
+        focus,
+      });
+      launch.status = "succeeded";
+      launch.runId = result.runId;
+    } catch (err) {
+      launch.status = "failed";
+      launch.error = err instanceof Error ? err.message : "researcher-failed";
+    }
+  })();
+  res.status(202).json({ status: "running" });
+});
+
+// @cli-skip: pending Task #340 read-parity migration
+router.get("/opportunities/:oppId/pricing/researcher", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const oppId = req.params.oppId;
+  const [pricing] = await db
+    .select()
+    .from(atelierDealPricings)
+    .where(and(eq(atelierDealPricings.opportunityId, oppId), isNull(atelierDealPricings.deletedAt)));
+  const launch = researcherLaunches.get(oppId);
+  if (launch?.status === "running") {
+    // Surface the live phase from the run row when it exists already.
+    const [row] = await db
+      .select({ statusMessage: atelierAgentRuns.statusMessage, progressPct: atelierAgentRuns.progressPct })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.agentId, "ag_pricing_researcher"),
+          eq(atelierAgentRuns.targetType, "opportunity"),
+          eq(atelierAgentRuns.targetId, oppId),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(1);
+    res.json({
+      status: "running",
+      phase: row?.statusMessage ?? "Starting research…",
+      progressPct: row?.progressPct ?? 0,
+      output: null,
+    });
+    return;
+  }
+  if (launch?.status === "failed") {
+    res.json({ status: "failed", phase: launch.error, progressPct: null, output: null });
+    return;
+  }
+  if (pricing?.pricingResearcherOutput) {
+    res.json({
+      status: "succeeded",
+      phase: null,
+      progressPct: 100,
+      runId: pricing.pricingResearcherRunId,
+      output: pricing.pricingResearcherOutput,
+    });
+    return;
+  }
+  res.json({ status: null, phase: null, progressPct: null, output: null });
 });
 
 // Strategist — accepts the canonical agent input contract:

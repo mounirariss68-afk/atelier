@@ -11379,6 +11379,31 @@ components:
         pricingAnalystOutput:
           type: ["object", "null"]
           additionalProperties: true
+        costLines:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPricingCostLine" }
+        pricingResearcherRunId: { type: ["string", "null"] }
+        pricingResearcherOutput:
+          type: ["object", "null"]
+          additionalProperties: true
+
+    AtelierPricingCostLine:
+      type: object
+      required: [type, amountUsd]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [llm_ai, hardware_infra, alliance_partner_quote, travel, other]
+        label: { type: ["string", "null"] }
+        amountUsd: { type: number }
+        recurrence:
+          type: string
+          enum: [one_time, weekly, monthly]
+        passThrough: { type: boolean }
+        partnerFirmId: { type: ["string", "null"] }
+        quotedAmountUsd: { type: ["number", "null"] }
+        notes: { type: ["string", "null"] }
 
     AtelierDealPricingEnvelope:
       type: object
@@ -11417,6 +11442,9 @@ components:
         structureParams:
           type: object
           additionalProperties: true
+        costLines:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPricingCostLine" }
 
     AtelierPricingScenarioBand:
       type: object
@@ -11453,6 +11481,9 @@ components:
               amountUsd: { type: number }
               label: { type: string }
         weeksToCash80: { type: number }
+        costStack:
+          type: object
+          additionalProperties: true
         params:
           type: object
           additionalProperties: true
@@ -11481,6 +11512,9 @@ components:
               params:
                 type: object
                 additionalProperties: true
+        costLines:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPricingCostLine" }
 
     AtelierPricingSimulateResult:
       type: object

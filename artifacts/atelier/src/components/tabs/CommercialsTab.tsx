@@ -18,6 +18,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, Lock, ShieldAlert, Plus, Trash2 } from "lucide-react";
 import { PricingStructuresPanel } from "./PricingStructuresPanel";
+import {
+  PricingCostLinesEditor,
+  PricingStructureSettings,
+  type CostLineDraft,
+  type StructureParamsDraft,
+} from "./PricingCostLinesEditor";
 
 const SENIORITY_BANDS = [
   "Partner",
@@ -91,6 +97,8 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
   const [draftMix, setDraftMix] = React.useState<TeamMixEntry[]>([]);
   const [draftWeeks, setDraftWeeks] = React.useState<number>(8);
   const [draftModel, setDraftModel] = React.useState<string>("time_and_materials");
+  const [draftCostLines, setDraftCostLines] = React.useState<CostLineDraft[]>([]);
+  const [draftParams, setDraftParams] = React.useState<StructureParamsDraft>({});
   const [overrideRationale, setOverrideRationale] = React.useState("");
   const [countersignRationale, setCountersignRationale] = React.useState("");
   const [strategistResult, setStrategistResult] = React.useState<unknown | null>(null);
@@ -100,6 +108,8 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
     setDraftMix((data.pricing.teamMix as TeamMixEntry[]) ?? []);
     setDraftWeeks(data.pricing.durationWeeks);
     setDraftModel(data.pricing.pricingModel);
+    setDraftCostLines((data.pricing.costLines as CostLineDraft[] | undefined) ?? []);
+    setDraftParams((data.pricing.structureParams as StructureParamsDraft | null) ?? {});
   }, [data?.pricing?.id]);
 
   // Reactive what-if: recompute on draft changes (debounced 350 ms).
@@ -151,6 +161,8 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
         durationWeeks: draftWeeks,
         pricingModel: draftModel,
         rateCardId: pricing.rateCardId,
+        structureParams: draftParams,
+        costLines: draftCostLines,
       },
     });
   };
@@ -337,11 +349,20 @@ export function CommercialsTab({ oppId }: { oppId: string }) {
         </div>
       </Card>
 
+      <PricingCostLinesEditor lines={draftCostLines} onChange={setDraftCostLines} />
+
+      <PricingStructureSettings
+        params={draftParams}
+        onChange={setDraftParams}
+        pricingModel={draftModel}
+      />
+
       <PricingStructuresPanel
         oppId={oppId}
         isPartner={isPartner}
         canSeeCost={pricing.computedCostUsd != null}
         selectedModel={draftModel}
+        costLines={draftCostLines}
       />
 
       <Card className="p-6 space-y-4">

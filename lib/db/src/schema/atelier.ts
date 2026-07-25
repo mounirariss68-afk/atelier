@@ -1788,6 +1788,13 @@ export const atelierDealPricings = pgTable(
     pricingStrategistBriefId: text("pricing_strategist_brief_id"),
     pricingStrategistRunId: text("pricing_strategist_run_id"),
     pricingStrategistOutput: jsonb("pricing_strategist_output"),
+    // Task #663 — typed non-labor cost lines (CostLine[] in
+    // api-server lib/atelier-pricing-structures.ts). Absorbed lines fold into
+    // delivery cost; pass-through lines ride the cash/invoice schedule only.
+    costLines: jsonb("cost_lines").notNull().default([]).$type<Array<Record<string, unknown>>>(),
+    // Task #663 — Pricing Researcher agent (async web-search run; review-only).
+    pricingResearcherRunId: text("pricing_researcher_run_id"),
+    pricingResearcherOutput: jsonb("pricing_researcher_output"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),

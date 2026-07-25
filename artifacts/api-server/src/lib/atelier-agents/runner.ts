@@ -4231,6 +4231,157 @@ export async function runPricingAnalyst(args: {
 }
 
 // =============================================================
+// PRICING RESEARCHER (Task #663) — web-search market research for
+// pricing structures. REVIEW-ONLY: the output is persisted as a
+// suggestion snapshot on the pricing row and is never auto-applied
+// to economic terms. Launched async (202 + poll) — web search runs
+// for minutes.
+// =============================================================
+
+export interface PricingResearcherOutput {
+  runId: string;
+  summary: string;
+  marketBenchmarks: Array<{
+    metric: string;
+    value: string;
+    context?: string;
+  }>;
+  suggestedStructures: Array<{
+    kind: string;
+    outcomeVariant?: string;
+    rationale: string;
+    suggestedParams?: Record<string, unknown>;
+  }>;
+  suggestedCostLines: Array<{
+    type: string;
+    label: string;
+    amountUsd: number;
+    recurrence?: string;
+    passThrough?: boolean;
+    rationale?: string;
+  }>;
+  risks: string[];
+  citations: Array<{ url: string; title?: string }>;
+  confidence: "green" | "amber" | "red";
+}
+
+export async function runPricingResearcher(args: {
+  opportunity: typeof atelierOpportunities.$inferSelect;
+  pricing: {
+    id: string;
+    teamMix: unknown;
+    durationWeeks: number;
+    pricingModel: string;
+    computedPriceUsd: number;
+    structureParams?: unknown;
+    costLines?: unknown;
+  };
+  policy: PricingMarginPolicy;
+  actorId: string;
+  actorLabel: string;
+  focus?: string;
+}): Promise<PricingResearcherOutput> {
+  const t0 = Date.now();
+  const runId = await startRun({
+    agentId: "ag_pricing_researcher",
+    triggeredByUserId: args.actorId,
+    targetType: "opportunity",
+    targetId: args.opportunity.id,
+    targetLabel: args.opportunity.name,
+    actorLabel: args.actorLabel,
+    inputs: {
+      pricingModel: args.pricing.pricingModel,
+      durationWeeks: args.pricing.durationWeeks,
+      focus: args.focus ?? null,
+    },
+  });
+
+  try {
+    await progressRun(runId, 10, "Preparing pricing research brief");
+    let systemPrompt: string;
+    try {
+      systemPrompt = loadPrompt("pricing_researcher", 1);
+    } catch {
+      systemPrompt =
+        "You are Cognirise's Pricing Researcher, an AI-consultancy pricing specialist. " +
+        "Use web search to find CURRENT market benchmarks for consulting/AI-advisory pricing relevant to the deal below: " +
+        "typical fee levels, gain-share / success-fee / volume-based / SLA-credit structures in this sector, and typical non-labor cost lines (LLM/API costs, hardware, partner quotes, travel). " +
+        "You NEVER set final numbers — you suggest, a Partner decides. All suggestions are review-only. " +
+        "Respond ONLY with a JSON object: { summary: string, marketBenchmarks: [{metric, value, context?}], " +
+        "suggestedStructures: [{kind: tnm|capped_tnm|fixed_fee|milestone|retainer|outcome_based|hybrid, outcomeVariant?: generic|gain_share|volume_unit|sla_based|success_fee, rationale, suggestedParams?}], " +
+        "suggestedCostLines: [{type: llm_ai|hardware_infra|alliance_partner_quote|travel|other, label, amountUsd, recurrence?: one_time|weekly|monthly, passThrough?: boolean, rationale?}], " +
+        "risks: string[], confidence: green|amber|red }";
+    }
+    const userPrompt = JSON.stringify({
+      opportunity: {
+        name: args.opportunity.name,
+        hypothesis: (args.opportunity as { hypothesis?: string | null }).hypothesis ?? null,
+      },
+      pricing: {
+        pricingModel: args.pricing.pricingModel,
+        durationWeeks: args.pricing.durationWeeks,
+        indicativePriceUsd: args.pricing.computedPriceUsd,
+        structureParams: args.pricing.structureParams ?? null,
+        costLines: args.pricing.costLines ?? [],
+      },
+      targetMarginPct: args.policy.targetMarginPct,
+      focus: args.focus ?? "general market benchmarks for this structure",
+    });
+
+    await progressRun(runId, 25, "Researching market pricing benchmarks (web search)");
+    const llm = await callClaudeJsonWithWebSearch<Omit<PricingResearcherOutput, "runId" | "citations">>(
+      "claude-sonnet-4-5",
+      systemPrompt,
+      userPrompt,
+      { progressRunId: runId },
+    );
+
+    const v = llm.value ?? ({} as Omit<PricingResearcherOutput, "runId" | "citations">);
+    const result: PricingResearcherOutput = {
+      runId,
+      summary: typeof v.summary === "string" ? v.summary : "",
+      marketBenchmarks: Array.isArray(v.marketBenchmarks) ? v.marketBenchmarks : [],
+      suggestedStructures: Array.isArray(v.suggestedStructures) ? v.suggestedStructures : [],
+      suggestedCostLines: Array.isArray(v.suggestedCostLines) ? v.suggestedCostLines : [],
+      risks: Array.isArray(v.risks) ? v.risks : [],
+      citations: llm.citationUrls ?? [],
+      confidence: v.confidence === "green" || v.confidence === "amber" || v.confidence === "red" ? v.confidence : "amber",
+    };
+
+    // Review-only snapshot on the pricing row — never touches economic terms.
+    await db
+      .update(atelierDealPricings)
+      .set({
+        pricingResearcherRunId: runId,
+        pricingResearcherOutput: result as unknown as Record<string, unknown>,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierDealPricings.id, args.pricing.id));
+
+    await completeRun({
+      runId,
+      output: result as unknown,
+      confidence: result.confidence,
+      costUsd: llm.costUsd,
+      durationMs: Date.now() - t0,
+      sourcesCount: result.citations.length,
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+      targetLabel: args.opportunity.name,
+    });
+    return result;
+  } catch (err) {
+    await failRun(runId, err, {
+      actorLabel: args.actorLabel,
+      targetType: "opportunity",
+      targetId: args.opportunity.id,
+    });
+    throw err;
+  }
+}
+
+// =============================================================
 // WIN/LOSS INTERVIEWER (Sonnet 4.6) — Task #241
 // =============================================================
 //

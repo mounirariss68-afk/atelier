@@ -33187,6 +33187,29 @@ export const AtelierGetDealPricingResponse = zod.object({
     billingHandoffAt: zod.coerce.date().nullish(),
     pricingAnalystRunId: zod.string().nullish(),
     pricingAnalystOutput: zod.record(zod.string(), zod.unknown()).nullish(),
+    costLines: zod
+      .array(
+        zod.object({
+          id: zod.string().optional(),
+          type: zod.enum([
+            "llm_ai",
+            "hardware_infra",
+            "alliance_partner_quote",
+            "travel",
+            "other",
+          ]),
+          label: zod.string().nullish(),
+          amountUsd: zod.number(),
+          recurrence: zod.enum(["one_time", "weekly", "monthly"]).optional(),
+          passThrough: zod.boolean().optional(),
+          partnerFirmId: zod.string().nullish(),
+          quotedAmountUsd: zod.number().nullish(),
+          notes: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+    pricingResearcherRunId: zod.string().nullish(),
+    pricingResearcherOutput: zod.record(zod.string(), zod.unknown()).nullish(),
   }),
   policy: zod.object({
     id: zod.string(),
@@ -33225,6 +33248,27 @@ export const AtelierUpdateDealPricingBody = zod.object({
   pricingModel: zod.string().optional(),
   rateCardId: zod.string().optional(),
   structureParams: zod.record(zod.string(), zod.unknown()).optional(),
+  costLines: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        type: zod.enum([
+          "llm_ai",
+          "hardware_infra",
+          "alliance_partner_quote",
+          "travel",
+          "other",
+        ]),
+        label: zod.string().nullish(),
+        amountUsd: zod.number(),
+        recurrence: zod.enum(["one_time", "weekly", "monthly"]).optional(),
+        passThrough: zod.boolean().optional(),
+        partnerFirmId: zod.string().nullish(),
+        quotedAmountUsd: zod.number().nullish(),
+        notes: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const AtelierUpdateDealPricingResponse = zod.object({
@@ -33262,6 +33306,29 @@ export const AtelierUpdateDealPricingResponse = zod.object({
     billingHandoffAt: zod.coerce.date().nullish(),
     pricingAnalystRunId: zod.string().nullish(),
     pricingAnalystOutput: zod.record(zod.string(), zod.unknown()).nullish(),
+    costLines: zod
+      .array(
+        zod.object({
+          id: zod.string().optional(),
+          type: zod.enum([
+            "llm_ai",
+            "hardware_infra",
+            "alliance_partner_quote",
+            "travel",
+            "other",
+          ]),
+          label: zod.string().nullish(),
+          amountUsd: zod.number(),
+          recurrence: zod.enum(["one_time", "weekly", "monthly"]).optional(),
+          passThrough: zod.boolean().optional(),
+          partnerFirmId: zod.string().nullish(),
+          quotedAmountUsd: zod.number().nullish(),
+          notes: zod.string().nullish(),
+        }),
+      )
+      .optional(),
+    pricingResearcherRunId: zod.string().nullish(),
+    pricingResearcherOutput: zod.record(zod.string(), zod.unknown()).nullish(),
   }),
   policy: zod.object({
     id: zod.string(),
@@ -33300,6 +33367,27 @@ export const AtelierWhatifDealPricingBody = zod.object({
   pricingModel: zod.string().optional(),
   rateCardId: zod.string().optional(),
   structureParams: zod.record(zod.string(), zod.unknown()).optional(),
+  costLines: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        type: zod.enum([
+          "llm_ai",
+          "hardware_infra",
+          "alliance_partner_quote",
+          "travel",
+          "other",
+        ]),
+        label: zod.string().nullish(),
+        amountUsd: zod.number(),
+        recurrence: zod.enum(["one_time", "weekly", "monthly"]).optional(),
+        passThrough: zod.boolean().optional(),
+        partnerFirmId: zod.string().nullish(),
+        quotedAmountUsd: zod.number().nullish(),
+        notes: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const AtelierWhatifDealPricingResponse = zod.object({
@@ -33346,6 +33434,27 @@ export const AtelierSimulatePricingStructuresBody = zod.object({
       }),
     )
     .optional(),
+  costLines: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        type: zod.enum([
+          "llm_ai",
+          "hardware_infra",
+          "alliance_partner_quote",
+          "travel",
+          "other",
+        ]),
+        label: zod.string().nullish(),
+        amountUsd: zod.number(),
+        recurrence: zod.enum(["one_time", "weekly", "monthly"]).optional(),
+        passThrough: zod.boolean().optional(),
+        partnerFirmId: zod.string().nullish(),
+        quotedAmountUsd: zod.number().nullish(),
+        notes: zod.string().nullish(),
+      }),
+    )
+    .optional(),
 });
 
 export const AtelierSimulatePricingStructuresResponse = zod.object({
@@ -33382,6 +33491,7 @@ export const AtelierSimulatePricingStructuresResponse = zod.object({
         }),
       ),
       weeksToCash80: zod.number(),
+      costStack: zod.record(zod.string(), zod.unknown()).optional(),
       params: zod.record(zod.string(), zod.unknown()).optional(),
       assumptions: zod.record(zod.string(), zod.unknown()).optional(),
       notes: zod.array(zod.string()).optional(),
