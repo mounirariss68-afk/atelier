@@ -87,10 +87,10 @@ const today = "2026-07-24";
 
 // ── TR kıdem: forfeiture + per-year ceiling ─────────────────
 {
-  const tr = resolveRules("TR", today)!;
-  // 3y at TRY 60k gross: 30d/yr = 60,000/yr > ceiling 46,655.43 → 3 × 46,655.43
-  const e = computeEosbEntitlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 50_000, monthlyGross: 60_000 });
-  check("TR per-year ceiling applied (139,966.29)", near(e.cappedEntitlement, 3 * 46_655.43) && e.capApplied != null, e);
+  const tr = resolveRules("TR", today)!; // 2026 rules: kıdem ceiling 64,948.77
+  // 3y at TRY 80k gross: 30d/yr = 80,000/yr > ceiling 64,948.77 → 3 × 64,948.77
+  const e = computeEosbEntitlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 70_000, monthlyGross: 80_000 });
+  check("TR per-year ceiling applied (194,846.31)", near(e.cappedEntitlement, 3 * 64_948.77) && e.capApplied != null, e);
   // Below ceiling: 3y at 30k gross → 90,000, no cap
   const low = computeEosbEntitlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 25_000, monthlyGross: 30_000 });
   check("TR below ceiling uncapped (90,000)", near(low.cappedEntitlement, 90_000) && low.capApplied == null, low);
@@ -98,12 +98,19 @@ const today = "2026-07-24";
   const ov = computeEosbEntitlement({ rules: tr.eosb!, serviceYears: 2, monthlyBasic: 50_000, monthlyGross: 60_000, capPerYearOverride: 50_000 });
   check("TR ceiling override honoured (100,000)", near(ov.cappedEntitlement, 100_000), ov);
   // Resignation forfeits kıdem entirely
-  const res = computeEosbSettlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 50_000, monthlyGross: 60_000, reason: "resignation" });
+  const res = computeEosbSettlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 70_000, monthlyGross: 80_000, reason: "resignation" });
   check("TR resignation forfeits (0)", res.finalAmount === 0 && res.adjustmentFactor === 0, res);
-  const term = computeEosbSettlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 50_000, monthlyGross: 60_000, reason: "termination" });
-  check("TR termination pays capped amount", near(term.finalAmount, 3 * 46_655.43), term);
+  const term = computeEosbSettlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 70_000, monthlyGross: 80_000, reason: "termination" });
+  check("TR termination pays capped amount", near(term.finalAmount, 3 * 64_948.77), term);
   const retire = computeEosbSettlement({ rules: tr.eosb!, serviceYears: 3, monthlyBasic: 25_000, monthlyGross: 30_000, reason: "retirement" });
   check("TR retirement pays (90,000)", near(retire.finalAmount, 90_000), retire);
+  // Kıdem ceiling version history: H1-2025 → H2-2025 → H1-2026
+  const tr25a = resolveRules("TR", "2025-06-30")!;
+  const e25a = computeEosbEntitlement({ rules: tr25a.eosb!, serviceYears: 3, monthlyBasic: 70_000, monthlyGross: 80_000 });
+  check("TR H1-2025 kıdem ceiling 46,655.43", near(e25a.cappedEntitlement, 3 * 46_655.43), e25a);
+  const tr25b = resolveRules("TR", "2025-12-31")!;
+  const e25b = computeEosbEntitlement({ rules: tr25b.eosb!, serviceYears: 3, monthlyBasic: 70_000, monthlyGross: 80_000 });
+  check("TR H2-2025 kıdem ceiling 53,919.68", near(e25b.cappedEntitlement, 3 * 53_919.68), e25b);
 }
 
 // ── Contributions: AE GPSSA old/new law + ILOE ──────────────
@@ -165,15 +172,15 @@ const today = "2026-07-24";
 
 // ── Contributions: TR SGK ceiling version step-up ───────────
 {
-  const args = { nationality: "TR", schemeRegisteredOn: "2024-01-01", monthlyBasic: 200_000, monthlyGross: 250_000, housingAllowanceMonthly: 0 };
+  const args = { nationality: "TR", schemeRegisteredOn: "2024-01-01", monthlyBasic: 300_000, monthlyGross: 350_000, housingAllowanceMonthly: 0 };
   const sgk25 = computeContributions({ rules: resolveRules("TR", "2025-06-30")!, ...args }).find((c) => c.schemeKey === "sgk")!;
   const sgk26 = computeContributions({ rules: resolveRules("TR", "2026-06-30")!, ...args }).find((c) => c.schemeKey === "sgk")!;
   check("TR SGK 2025 ceiling 195,041.25", near(sgk25.base, 195_041.25) && near(sgk25.employerAmount, 195_041.25 * 0.2275), sgk25);
-  check("TR SGK 2026 ceiling 234,049.50", near(sgk26.base, 234_049.5), sgk26);
-  check("TR SGK employee 15% under ceiling", near(sgk26.employeeAmount, 234_049.5 * 0.15), sgk26);
+  check("TR SGK 2026 ceiling 297,270 (9 × 33,030)", near(sgk26.base, 297_270), sgk26);
+  check("TR SGK employee 15% under ceiling", near(sgk26.employeeAmount, 297_270 * 0.15), sgk26);
   // Hazard-class employer override knob
   const oz = computeContributions({ rules: resolveRules("TR", "2026-06-30")!, ...args, overrides: { employerPctOverride: { sgk: 24.25 } } }).find((c) => c.schemeKey === "sgk")!;
-  check("TR employer % override (hazard class)", oz.employerPct === 24.25 && near(oz.employerAmount, 234_049.5 * 0.2425), oz);
+  check("TR employer % override (hazard class)", oz.employerPct === 24.25 && near(oz.employerAmount, 297_270 * 0.2425), oz);
 }
 
 // ── Filing materialization: determinism + due dates ─────────

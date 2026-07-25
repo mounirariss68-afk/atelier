@@ -368,11 +368,39 @@ const TR: CountryStatutoryRules = {
       ],
     },
     {
-      // 2026: SGK ceiling multiplier rises to 9× gross minimum wage.
-      // Seeded against the 2025 minimum wage pending the 2026 asgari ücret
-      // announcement — override ceilingMonthly per entity once official.
+      // H2-2025 kıdem ceiling (Treasury circular of 07.07.2025).
+      effectiveFrom: "2025-07-01",
+      eosb: {
+        wageBasis: "gross",
+        bands: [{ fromYears: 0, toYears: null, daysPerYear: 30 }],
+        minServiceYears: 1,
+        capMonthsWage: null,
+        capPerYearAmount: 53_919.68,
+        resignationScaling: null,
+        resignationForfeits: true,
+        appliesTo: "all",
+        daysBase: 30,
+      },
+      contributions: [],
+      filings: [],
+    },
+    {
+      // Official 2026 figures (verified Jan 2026):
+      //  - kıdem ceiling H1-2026: TRY 64,948.77 (Treasury circular 06.01.2026)
+      //  - SGK ceiling: 9 × 2026 gross minimum wage 33,030.00 = 297,270.00
+      //    (multiplier raised from 7.5× to 9× by Law 7566, effective 2026-01-01)
       effectiveFrom: "2026-01-01",
-      eosb: null,
+      eosb: {
+        wageBasis: "gross",
+        bands: [{ fromYears: 0, toYears: null, daysPerYear: 30 }],
+        minServiceYears: 1,
+        capMonthsWage: null,
+        capPerYearAmount: 64_948.77, // H1-2026; H2 update appended when announced
+        resignationScaling: null,
+        resignationForfeits: true,
+        appliesTo: "all",
+        daysBase: 30,
+      },
       contributions: [
         {
           key: "sgk",
@@ -382,8 +410,8 @@ const TR: CountryStatutoryRules = {
           base: "gross",
           employerPct: 22.75,
           employeePct: 15,
-          ceilingMonthly: 234_049.5, // 9 × 26,005.50 (update via override)
-          notes: "9× minimum-wage ceiling from 2026; update when the 2026 minimum wage is set.",
+          ceilingMonthly: 297_270, // 9 × 33,030.00 (2026 minimum wage)
+          notes: "9× minimum-wage ceiling from 2026 (Law 7566).",
         },
       ],
       filings: [],
