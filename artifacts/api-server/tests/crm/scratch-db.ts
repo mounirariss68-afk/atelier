@@ -26,6 +26,12 @@ import { fileURLToPath } from "node:url";
 
 const SCRATCH_DB_NAME = process.env.CRM_TEST_DB_NAME || "crm_test";
 
+// Task #687 — the CRM probes stub Anthropic only; pin the research layer to
+// the legacy Anthropic web_search path so no probe reaches out to the live
+// Perplexity connector. The Perplexity mode has its own dedicated offline
+// probe (perplexity-research-probe.ts) with a local Perplexity stub.
+process.env.ATELIER_RESEARCH_PROVIDER ??= "anthropic";
+
 function fatal(msg: string): never {
   console.error(`FATAL (CRM harness isolation): ${msg}`);
   console.error(

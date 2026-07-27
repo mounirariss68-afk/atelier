@@ -208,6 +208,9 @@ async function main(): Promise<void> {
   const stubPort = (stub.address() as AddressInfo).port;
   process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL = `http://127.0.0.1:${stubPort}`;
   process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY = "alliance-stub-key";
+  // Task #687 — pin the research layer to the stubbed Anthropic web_search
+  // path (the Perplexity mode is covered by perplexity-research-probe.ts).
+  process.env.ATELIER_RESEARCH_PROVIDER ??= "anthropic";
   // Keep PDL out — the Mapper path must be fully deterministic.
   delete process.env.PDL_API_KEY;
 

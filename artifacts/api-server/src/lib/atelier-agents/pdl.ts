@@ -141,7 +141,10 @@ export async function resolvePdlCompanyId(args: {
  * Senior people currently at the given PDL company. Sorted so the most
  * senior levels come first; capped at MAX_PEOPLE to bound credit spend.
  */
-export async function searchPdlExecutives(companyId: string): Promise<PdlExecutive[]> {
+export async function searchPdlExecutives(
+  companyId: string,
+  opts?: { government?: boolean },
+): Promise<PdlExecutive[]> {
   // job_title_levels is unreliable — real C-suite records sometimes carry an
   // empty array (e.g. "chief of corporate affairs", "chief of staff"), so
   // match on title keywords as well, never on levels alone.
@@ -191,6 +194,21 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
     ` OR job_title LIKE 'vp%' OR job_title LIKE 'evp%' OR job_title LIKE 'svp%'` +
     ` OR job_title LIKE 'vice president%' OR job_title LIKE 'executive vice president%'` +
     ` OR job_title LIKE 'senior vice president%')))`;
+  // Government-body pass — ministries and public authorities in the GCC and
+  // Türkiye follow government rank hierarchies (Minister → Deputy/Vice/
+  // Assistant Minister → Undersecretary → Director General; Governor for
+  // authorities/central banks; Türkiye: Bakan Yardımcısı / Genel Müdür /
+  // Daire Başkanı), which the corporate passes above never match.
+  const govSql =
+    `SELECT * FROM person WHERE job_company_id = '${cid}'` +
+    ` AND (job_title LIKE '%minister%'` +
+    ` OR job_title LIKE '%undersecretary%' OR job_title LIKE '%under secretary%'` +
+    ` OR job_title LIKE '%director general%' OR job_title LIKE '%general director%'` +
+    ` OR job_title LIKE '%secretary general%'` +
+    ` OR job_title LIKE '%governor%'` +
+    ` OR job_title LIKE '%bakan%' OR job_title LIKE '%genel müdür%'` +
+    ` OR job_title LIKE '%genel mudur%' OR job_title LIKE '%daire başkanı%'` +
+    ` OR job_title LIKE '%müsteşar%')`;
   const boardRaw = (await pdlFetch("/person/search", {
     sql: boardSql,
     size: String(MAX_BOARD_PEOPLE),
@@ -201,7 +219,18 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
     size: String(MAX_PEOPLE),
   })) as { data?: PdlPersonRecord[] } | null;
   const csuite = csuiteRaw?.data ?? [];
-  const remaining = Math.max(0, MAX_PEOPLE - csuite.length);
+  // Government pass runs alongside the C-suite pass (never instead of it —
+  // some authorities mix "Governor" with corporate CxO titles), capped at
+  // MAX_PEOPLE and deduped by name below.
+  let gov: PdlPersonRecord[] = [];
+  if (opts?.government) {
+    const govRaw = (await pdlFetch("/person/search", {
+      sql: govSql,
+      size: String(MAX_PEOPLE),
+    })) as { data?: PdlPersonRecord[] } | null;
+    gov = govRaw?.data ?? [];
+  }
+  const remaining = Math.max(0, MAX_PEOPLE - csuite.length - gov.length);
   let broad: PdlPersonRecord[] = [];
   if (remaining > 0) {
     const broadRaw = (await pdlFetch("/person/search", {
@@ -218,11 +247,24 @@ export async function searchPdlExecutives(companyId: string): Promise<PdlExecuti
       ...board,
       // A chairman can also appear in the exec passes (e.g. "chairman & CEO");
       // drop the exec duplicate so the board flag wins.
-      ...[...csuite, ...broad].filter(
-        (p) => !boardKeys.has((p.full_name ?? "").trim().toLowerCase()),
+      ...dedupeByName(
+        [...gov, ...csuite, ...broad].filter(
+          (p) => !boardKeys.has((p.full_name ?? "").trim().toLowerCase()),
+        ),
       ),
     ],
   };
+  function dedupeByName(records: PdlPersonRecord[]): PdlPersonRecord[] {
+    const seen = new Set<string>();
+    const out: PdlPersonRecord[] = [];
+    for (const p of records) {
+      const key = (p.full_name ?? "").trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(p);
+    }
+    return out;
+  }
   const rank = (levels: string[], title: string | null | undefined): number => {
     const t = (title ?? "").toLowerCase();
     if (levels.includes("cxo") || levels.includes("owner") || t.startsWith("chief")) return 0;
@@ -258,10 +300,12 @@ export async function fetchPdlExecutivesForCompany(args: {
   name: string;
   brandName?: string | null;
   country?: string | null;
+  /** Government body: adds the ministry-rank title pass to the sweep. */
+  government?: boolean;
 }): Promise<{ company: { id: string; displayName: string }; people: PdlExecutive[] } | null> {
   const company = await resolvePdlCompanyId(args);
   if (!company) return null;
-  const people = await searchPdlExecutives(company.id);
+  const people = await searchPdlExecutives(company.id, { government: args.government });
   return { company, people };
 }
 

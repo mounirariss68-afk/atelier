@@ -121,6 +121,7 @@ export function buildVCard(p: CardPerson): string {
   lines.push(`N:${structuredName(p.fullName)}`);
   lines.push(`FN:${esc(p.fullName)}`);
   lines.push(`ORG:${esc(FIRM)}`);
+  lines.push(`URL;TYPE=WORK:https://${WEBSITE}`);
   if (p.title) lines.push(`TITLE:${esc(p.title)}`);
   if (p.email) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(p.email)}`);
   const cells = (p.cellPhones ?? []).filter((c) => c.number.trim());
@@ -235,7 +236,8 @@ const PAGE_H = EMU(1800225); // ≈ 141.8 pt (1.969 in / 50 mm)
 
 /** Front-page geometry (slide1.xml). */
 const FRONT = {
-  bg: "#010538",
+  // Template navy was #010538; lightened slightly on request (2026-07-27).
+  bg: "#0A1050",
   logo: { x: EMU(13252), y: EMU(228570), w: EMU(1676698), h: EMU(1117797) },
   divider: { x: EMU(1726096), y0: EMU(440635), y1: EMU(440635 + 1017104) },
   // TextBox offsets + PowerPoint default insets (l 91440, t 45720 EMU).
@@ -262,13 +264,17 @@ const BACK = {
   gradFrom: "#020711",
   gradTo: "#080A1A",
   art: { x: EMU(0), y: EMU(351999), w: EMU(2187078), h: EMU(1229577) },
-  qr: { x: EMU(2328639), y: EMU(642714), size: EMU(521147) },
+  // QR + frame enlarged ~20% vs the template (user request 2026-07-27),
+  // scaled about the original frame center (EMU 2589212, 903288) so the
+  // composition is unchanged. Template values: qr 521147 @ (2328639,642714);
+  // frame 593725 @ (2292350,606425).
+  qr: { x: EMU(2276524), y: EMU(590599), size: EMU(625376) },
   // Rounded-rect QR frame with the brand gradient stroke (roundRect,
   // adj 8111 → corner radius = 8.111% of the side; ln w 6350 EMU = 0.5 pt).
   qrFrame: {
-    x: EMU(2292350),
-    y: EMU(606425),
-    size: EMU(593725),
+    x: EMU(2232977),
+    y: EMU(547053),
+    size: EMU(712470),
     radiusFrac: 0.08111,
     lineWidth: EMU(6350),
   },

@@ -30,10 +30,12 @@ import { loadPrompt, type AtelierAgentId } from "./loader.js";
 import { runAgent } from "./runAgent.js";
 import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
+import { perplexityResearch } from "./perplexity.js";
 import { findPersonMatch, richerPersonName } from "./person-name.js";
 import {
   classifyCriticalRole,
   guardExecutiveMapperCriticalRoles,
+  isGovernmentAccount,
   type CriticalRoleId,
   type CriticalRoleCoverageEntry,
   type SeniorityGuardDrop,
@@ -953,7 +955,9 @@ export async function runPursuitScout(args: {
     async (ctx) => {
       const system = loadPrompt("pursuit_scout");
       await ctx.progress(25, "Planning research lines");
-      const { value, costUsd } = await callClaudeJson<PursuitScoutOutput>(
+      // Task #687 — Scout briefs are now web-grounded (Perplexity retrieval →
+      // Claude synthesis) instead of model-memory-only.
+      const { value, costUsd } = await callResearchJson<PursuitScoutOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -963,6 +967,12 @@ export async function runPursuitScout(args: {
           opportunityName: args.opportunityName,
           contextBlurb: args.contextBlurb,
         }),
+        {
+          researchQueries: [
+            `${args.accountName} (${args.accountCountry}, ${args.accountSector}) company overview: scale, recent strategic moves, announcements and press`,
+            `${args.accountName} buying context for "${args.opportunityName}": relevant initiatives, technology investments, likely budget holders and competing suppliers${args.contextBlurb ? ` — context: ${args.contextBlurb.slice(0, 200)}` : ""}`,
+          ],
+        },
       );
       await ctx.progress(70, "Synthesising 5C draft");
       const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
@@ -2587,6 +2597,265 @@ export async function callClaudeJsonWithWebSearch<T>(
   return { value, costUsd, tokensIn, tokensOut, citationUrls };
 }
 
+// =============================================================
+// Task #687 — Perplexity-retrieval + Claude-synthesis research layer
+// =============================================================
+
+/** Options shared by both research providers. */
+export interface ResearchJsonOpts {
+  progressRunId?: string | null;
+  /**
+   * Targeted retrieval queries (Perplexity mode). Each becomes one
+   * web-grounded Perplexity call; the answers + citations form the dossier
+   * Claude synthesises from. Ignored in Anthropic web_search mode.
+   */
+  researchQueries: string[];
+  /** Restrict Perplexity retrieval to recent sources (press monitoring). */
+  searchRecencyFilter?: "day" | "week" | "month" | "year";
+}
+
+/**
+ * Which research provider is active. Perplexity is the default; setting
+ * ATELIER_RESEARCH_PROVIDER=anthropic keeps the legacy Anthropic
+ * web_search_20250305 path for comparison. Any other value throws loudly.
+ */
+export function researchProvider(): "perplexity" | "anthropic" {
+  const raw = (process.env.ATELIER_RESEARCH_PROVIDER ?? "perplexity")
+    .trim()
+    .toLowerCase();
+  if (raw === "perplexity" || raw === "anthropic") return raw;
+  throw new Error(
+    `Unknown ATELIER_RESEARCH_PROVIDER "${raw}" — expected "perplexity" or "anthropic".`,
+  );
+}
+
+/**
+ * Two-stage research call: Perplexity performs retrieval (one call per
+ * query, citations harvested), then Claude synthesises the dossier into the
+ * agent's existing JSON contract. Progress phases mirror the web_search
+ * path ("Searching the web…" → "Read N sources" → synthesis heartbeat with
+ * per-section captions) so the account page / chat captions are unchanged.
+ *
+ * A missing/broken Perplexity connection throws PerplexityConnectionError —
+ * the caller's failRun persists it on the run row. No silent fallback.
+ */
+async function callClaudeJsonWithPerplexityResearch<T>(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  opts: ResearchJsonOpts,
+): Promise<{
+  value: T;
+  costUsd: number;
+  tokensIn: number;
+  tokensOut: number;
+  citationUrls: Array<{ url: string; title?: string }>;
+}> {
+  const progressRunId = opts.progressRunId ?? null;
+  let maxPersistedPct = 0;
+  const emitPhase = (
+    pct: number,
+    message: string,
+    data?: Record<string, unknown>,
+  ) => {
+    reportProgress(pct, message, data);
+    if (progressRunId) {
+      maxPersistedPct = Math.max(maxPersistedPct, Math.round(pct));
+      void db
+        .update(atelierAgentRuns)
+        .set({
+          progressPct: maxPersistedPct,
+          statusMessage: message.slice(0, 240),
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierAgentRuns.id, progressRunId))
+        .then(undefined, () => {});
+    }
+  };
+
+  // ---- Stage 1: Perplexity retrieval (fails loudly, no fallback) ----
+  const research = await perplexityResearch({
+    queries: opts.researchQueries,
+    searchRecencyFilter: opts.searchRecencyFilter,
+    onPhase: emitPhase,
+  });
+
+  // ---- Stage 2: Claude synthesis into the existing JSON contract ----
+  const dossierPrompt =
+    `${userPrompt}\n\n## Web research dossier (retrieved ${new Date().toISOString().slice(0, 10)})\n` +
+    `The following web research was retrieved for you. Base every web-sourced claim on it, ` +
+    `and use ONLY the source URLs listed below when filling sourceUrl / sourceUrls / evidence ` +
+    `fields — never invent URLs. If the dossier does not support a claim, omit the claim or ` +
+    `record it as an open question.\n\n${research.dossier}`;
+
+  const { anthropic } = await import("@workspace/integrations-anthropic-ai");
+  const ac = new AbortController();
+  const idleMs = Number(
+    process.env.ATELIER_WEBSEARCH_TIMEOUT_MS ??
+      process.env.ATELIER_AGENT_TIMEOUT_MS ??
+      180_000,
+  );
+  const hardCapMs = Number(process.env.ATELIER_WEBSEARCH_HARD_CAP_MS ?? 900_000);
+  const startedAt = Date.now();
+  let abortReason: "idle" | "cap" | null = null;
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  const armIdle = () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      abortReason = "idle";
+      ac.abort();
+    }, idleMs);
+  };
+  const capTimer = setTimeout(() => {
+    abortReason = "cap";
+    ac.abort();
+  }, hardCapMs);
+  armIdle();
+
+  // Live synthesis heartbeat + per-section captions (same UX as the
+  // web_search path: the JSON streams for 60–90s and must never look frozen).
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  let heartbeatBase = "Synthesising the brief…";
+  let heartbeatStartedAt = Date.now();
+  let heartbeatFloorPct = 60;
+  const emitHeartbeat = () => {
+    const secs = Math.round((Date.now() - heartbeatStartedAt) / 1000);
+    emitPhase(
+      Math.min(Math.max(heartbeatFloorPct, 60 + Math.floor(secs / 5)), 96),
+      secs > 0 ? `${heartbeatBase} (${secs}s)` : heartbeatBase,
+      { phase: "synthesis" },
+    );
+  };
+  const startHeartbeat = (base: string, floorPct = 60) => {
+    if (heartbeat && base === heartbeatBase) return;
+    heartbeatBase = base;
+    heartbeatFloorPct = Math.max(heartbeatFloorPct, floorPct);
+    heartbeatStartedAt = Date.now();
+    emitHeartbeat();
+    if (!heartbeat) heartbeat = setInterval(emitHeartbeat, 2500);
+  };
+
+  let answerText = "";
+  let synthSectionIdx = -1;
+  const resp = await (async () => {
+    const stream = anthropic.messages.stream(
+      {
+        model,
+        max_tokens: 32000,
+        system: `${systemPrompt}\n\nIMPORTANT: Your FINAL message MUST contain ONLY one JSON object that matches the schema. No prose, no code fences.`,
+        messages: [{ role: "user", content: dossierPrompt }],
+      },
+      { signal: ac.signal },
+    );
+    try {
+      startHeartbeat("Synthesising the brief…");
+      for await (const event of stream) {
+        if (
+          event.type === "content_block_delta" &&
+          event.delta.type === "text_delta"
+        ) {
+          armIdle();
+          answerText += event.delta.text;
+          let detected = synthSectionIdx;
+          for (let i = CARTOGRAPHER_SYNTH_SECTIONS.length - 1; i > synthSectionIdx; i--) {
+            if (answerText.includes(CARTOGRAPHER_SYNTH_SECTIONS[i].key)) {
+              detected = i;
+              break;
+            }
+          }
+          if (detected > synthSectionIdx) {
+            synthSectionIdx = detected;
+            const section = CARTOGRAPHER_SYNTH_SECTIONS[synthSectionIdx];
+            startHeartbeat(section.label, section.pct);
+          }
+        }
+      }
+      return await stream.finalMessage();
+    } catch (err) {
+      if (ac.signal.aborted) {
+        const secs = Math.round((Date.now() - startedAt) / 1000);
+        const msg =
+          abortReason === "cap"
+            ? `Synthesis hit the ${Math.round(hardCapMs / 1000)}s ceiling`
+            : `Synthesis stalled — no progress for ${Math.round(idleMs / 1000)}s (stopped after ${secs}s)`;
+        emitPhase(97, msg, { phase: "synthesis" });
+      }
+      throw err;
+    } finally {
+      if (idleTimer) clearTimeout(idleTimer);
+      clearTimeout(capTimer);
+      if (heartbeat) clearInterval(heartbeat);
+    }
+  })();
+
+  const textBlocks = resp.content.filter(
+    (b): b is { type: "text"; text: string } & typeof b =>
+      b.type === "text" && typeof (b as { text?: unknown }).text === "string",
+  );
+  const lastText = textBlocks.length > 0 ? textBlocks[textBlocks.length - 1].text : "";
+  const stripped = lastText
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+  const json = extractFirstJsonObject(stripped);
+  let value: T;
+  if (json === null) {
+    if (resp.stop_reason === "max_tokens") {
+      throw new Error(
+        "Research synthesis exceeded the token budget and was truncated before the JSON completed. Increase max_tokens or reduce the requested detail.",
+      );
+    }
+    throw new AgentNonJsonResponseError(stripped.slice(0, 120));
+  }
+  try {
+    value = JSON.parse(json) as T;
+  } catch (parseErr) {
+    if (resp.stop_reason === "max_tokens") {
+      throw new Error(
+        "Research synthesis exceeded the token budget and was truncated before the JSON completed. Increase max_tokens or reduce the requested detail.",
+      );
+    }
+    throw parseErr;
+  }
+  const tokensIn = resp.usage.input_tokens;
+  const tokensOut = resp.usage.output_tokens;
+  const inRate = model.includes("haiku") ? 1 : 3;
+  const outRate = model.includes("haiku") ? 5 : 15;
+  // Perplexity retrieval cost is a rough per-request estimate (sonar-pro
+  // request pricing); the Claude token cost dominates.
+  const perplexityCostUsd = research.queryCount * 0.006;
+  const costUsd =
+    (tokensIn * inRate + tokensOut * outRate) / 1_000_000 + perplexityCostUsd;
+  return { value, costUsd, tokensIn, tokensOut, citationUrls: research.citations };
+}
+
+/**
+ * Task #687 — env-selectable research entry point used by all six
+ * web-research agents. Default: Perplexity retrieval → Claude synthesis.
+ * ATELIER_RESEARCH_PROVIDER=anthropic keeps the legacy single-call
+ * Anthropic web_search path. Same return contract either way.
+ */
+export async function callResearchJson<T>(
+  model: string,
+  systemPrompt: string,
+  userPrompt: string,
+  opts: ResearchJsonOpts,
+): Promise<{
+  value: T;
+  costUsd: number;
+  tokensIn: number;
+  tokensOut: number;
+  citationUrls: Array<{ url: string; title?: string }>;
+}> {
+  if (researchProvider() === "anthropic") {
+    return callClaudeJsonWithWebSearch<T>(model, systemPrompt, userPrompt, {
+      progressRunId: opts.progressRunId,
+    });
+  }
+  return callClaudeJsonWithPerplexityResearch<T>(model, systemPrompt, userPrompt, opts);
+}
+
 /**
  * Task #32 — accept only a plausible public LinkedIn PROFILE url
  * (linkedin.com/in/…). Company pages, search pages, non-LinkedIn urls and
@@ -2722,7 +2991,7 @@ export async function runAccountCartographer(args: {
     if (runId) await progressRun(runId, 25, "Searching the public web");
     else reportProgress(25, "Searching the public web");
     const { value, costUsd, citationUrls } =
-      await callClaudeJsonWithWebSearch<CartographerOutput>(
+      await callResearchJson<CartographerOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -2734,7 +3003,15 @@ export async function runAccountCartographer(args: {
         // Live runs persist phase to the run row so the account page shows a
         // current phase, not a bare spinner. research_only (runId null) relies
         // solely on the ambient sink streaming to the chat transcript.
-        { progressRunId: runId });
+        {
+          progressRunId: runId,
+          // Task #687 — targeted Perplexity retrieval for the account brief.
+          researchQueries: [
+            `${args.accountName} (${args.accountCountry}, ${args.accountSector}) company profile: ownership/holding structure, headquarters, size (employees, revenue), business units and main brands`,
+            `${args.accountName} ${args.accountCountry} executive leadership: group CEO, CFO, board chairman, key C-suite names and exact titles (distinguish group-level from subsidiary roles)`,
+            `${args.accountName} recent strategy, announcements, digital/AI initiatives, expansions and press coverage`,
+          ],
+        });
     if (runId) {
       // Runs AFTER the synthesis heartbeat (which ramps to ~96%) — keep the
       // pct monotonic so the phase never visibly backsteps. This is the true
@@ -2988,11 +3265,19 @@ export async function runExecutiveMapper(args: {
     inputs: { knownContactCount: args.knownContacts.length },
     actorLabel: args.actorLabel,
   });
+  // Ministries / public authorities follow government title hierarchies
+  // (Minister → Deputy/Vice Minister → Undersecretary → Director General;
+  // Governor for authorities and central banks), not CxO conventions — the
+  // sweep, the seniority guard and PDL all switch to that taxonomy.
+  const government = isGovernmentAccount({
+    sector: args.accountSector,
+    name: args.accountName,
+  });
   try {
     const system = loadPrompt("executive_mapper", 2);
     await progressRun(runId, 20, "Sweeping the leadership roster");
     const { value, costUsd, citationUrls } =
-      await callClaudeJsonWithWebSearch<ExecutiveMapperOutput>(
+      await callResearchJson<ExecutiveMapperOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -3000,9 +3285,27 @@ export async function runExecutiveMapper(args: {
           accountCountry: args.accountCountry,
           accountSector: args.accountSector,
           accountHqCity: args.accountHqCity ?? null,
+          // Flips the prompt's government-body mode: sweep ministry ranks
+          // (Minister, Deputy/Vice/Assistant Minister, Undersecretary,
+          // Director General, Governor) instead of CxO titles.
+          governmentBody: government,
           knownContacts: args.knownContacts,
         }),
-        { progressRunId: runId },
+        {
+          progressRunId: runId,
+          // Task #687 — search stage only; PDL enrichment below is untouched.
+          researchQueries: government
+            ? [
+                `${args.accountName} ${args.accountCountry} minister, deputy ministers, vice ministers and assistant ministers: current names and exact titles`,
+                `${args.accountName} undersecretary, assistant undersecretaries, directors general and heads of department: current names and titles (organizational structure)`,
+                `${args.accountName} leadership appointments, new minister or director general (recent news)`,
+              ]
+            : [
+                `${args.accountName} ${args.accountCountry} full executive leadership team: names, exact titles, and which legal entity each leads (group vs subsidiary)`,
+                `${args.accountName} board of directors: chairman and board member names and titles`,
+                `${args.accountName} C-suite appointments and leadership changes (recent news)`,
+              ],
+        },
       );
     await progressRun(runId, 98, "Finalising the roster", {
       name: "execmap.synth",
@@ -3099,6 +3402,7 @@ export async function runExecutiveMapper(args: {
           name: args.accountName,
           brandName: args.accountBrandName ?? null,
           country: args.accountCountry || null,
+          government,
         });
         if (!pdl) {
           normalised.openQuestions.push(
@@ -3192,7 +3496,7 @@ export async function runExecutiveMapper(args: {
     // unsupported criticalRole claim, drop people below the seniority floor
     // (logged in droppedBySeniorityGuard) and recompute the 15-role coverage
     // summary in code so it can't be hallucinated.
-    guardExecutiveMapperCriticalRoles(normalised);
+    guardExecutiveMapperCriticalRoles(normalised, { government });
 
     // Backfill uncorroborated citations so the review queue still shows where
     // the sweep looked even when the model under-reported its sources.
@@ -4329,11 +4633,20 @@ export async function runPricingResearcher(args: {
     });
 
     await progressRun(runId, 25, "Researching market pricing benchmarks (web search)");
-    const llm = await callClaudeJsonWithWebSearch<Omit<PricingResearcherOutput, "runId" | "citations">>(
+    const llm = await callResearchJson<Omit<PricingResearcherOutput, "runId" | "citations">>(
       "claude-sonnet-4-5",
       systemPrompt,
       userPrompt,
-      { progressRunId: runId },
+      {
+        progressRunId: runId,
+        // Task #687 — recency-sensitive market benchmarks via Perplexity.
+        searchRecencyFilter: "year",
+        researchQueries: [
+          `current AI/technology consulting fee benchmarks and day rates for a ${args.pricing.pricingModel} engagement of ~${args.pricing.durationWeeks} weeks (typical fee levels, ranges)`,
+          `gain-share, success-fee, volume-based and SLA-credit pricing structures used in AI advisory / consulting engagements: recent examples and typical parameters`,
+          `typical non-labor cost lines in AI consulting projects (LLM/API costs, hardware, partner fees, travel) — current price points${args.focus ? `; focus: ${args.focus}` : ""}`,
+        ],
+      },
     );
 
     const v = llm.value ?? ({} as Omit<PricingResearcherOutput, "runId" | "citations">);
@@ -5693,6 +6006,14 @@ async function runV5GenericAgent(args: {
   targetId: string;
   targetLabel: string;
   actorLabel?: string;
+  /**
+   * Task #687 — when set, the agent runs on the web-research layer
+   * (Perplexity retrieval → Claude synthesis) instead of a plain LLM call.
+   */
+  research?: {
+    queries: string[];
+    searchRecencyFilter?: "day" | "week" | "month" | "year";
+  };
 }): Promise<V5GenericResult> {
   const result = await runAgent(
     {
@@ -5715,11 +6036,12 @@ async function runV5GenericAgent(args: {
         args.promptMode,
       );
       const userPrompt = JSON.stringify(args.input);
-      const { value, costUsd } = await callClaudeJson<unknown>(
-        args.model,
-        promptBody,
-        userPrompt,
-      );
+      const { value, costUsd } = args.research
+        ? await callResearchJson<unknown>(args.model, promptBody, userPrompt, {
+            researchQueries: args.research.queries,
+            searchRecencyFilter: args.research.searchRecencyFilter,
+          })
+        : await callClaudeJson<unknown>(args.model, promptBody, userPrompt);
       return { output: value, costUsd, confidence: "amber" as const };
     },
   );
@@ -5764,6 +6086,20 @@ export async function runPressMonitor(
     targetId: "press_watch",
     targetLabel: "Press watch",
     actorLabel: input.actorLabel ?? "Press Monitor",
+    // Task #687 — daily press scanning is web-grounded via Perplexity with a
+    // recency filter matched to the lookback window.
+    research: {
+      searchRecencyFilter: (input.lookbackDays ?? 7) <= 2 ? "day" : (input.lookbackDays ?? 7) <= 8 ? "week" : "month",
+      queries: [
+        `Cognirise AI consulting firm: recent press coverage, announcements or mentions (last ${input.lookbackDays ?? 7} days)`,
+        ...(input.watchlistPartners ?? []).slice(0, 3).map(
+          (p) => `${p}: recent news, partnerships, announcements (last ${input.lookbackDays ?? 7} days)`,
+        ),
+        ...(input.watchlistCompetitors ?? []).slice(0, 3).map(
+          (c) => `${c}: recent news, deals, announcements (last ${input.lookbackDays ?? 7} days)`,
+        ),
+      ],
+    },
   });
 }
 

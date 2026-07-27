@@ -54,6 +54,86 @@ function norm(raw: string | null | undefined): string {
 const CONTEXT_VETO =
   /\b(assistant|deputy|advisor|adviser|secretary|intern|apprentice|aide)\b|office of the|\b[ep]a to\b/;
 
+// Government-mode veto: in ministries "Deputy Minister" / "Undersecretary" /
+// "Assistant Undersecretary" are STRUCTURAL senior ranks, not aides — so the
+// blanket assistant/deputy/secretary veto above would wrongly drop them. This
+// narrower veto keeps only the genuinely-adjacent patterns (advisors, aides,
+// "assistant TO", the minister's private office, spokespeople).
+const GOV_CONTEXT_VETO =
+  /\b(advisor|adviser|aide|intern|apprentice|spokesperson|spokesman|spokeswoman)\b|office of the|\b[ep]a to\b|\b(assistant|deputy|secretary) to\b|private secretary/;
+
+/**
+ * Government title hierarchy — GCC (KSA, UAE, Qatar, Kuwait, Bahrain, Oman)
+ * and Türkiye. Researched against published ministry org charts (e.g. Saudi
+ * MOFA hierarchy, Qatar MOFA Amiri Decision 33/2022 structure, UAE Cabinet)
+ * and Türkiye's post-2018 presidential-system decrees (Müsteşar abolished,
+ * replaced by Bakan Yardımcısı; Genel Müdür below that; Daire Başkanı below).
+ *
+ * Rank mapping onto titleSeniorityRank's scale:
+ *   5 Minister / Minister of State / Prime Minister (Bakan) · Governor of an
+ *     authority, central bank or province (Vali) · Secretary General of a
+ *     council/authority (Genel Sekreter)
+ *   4 Vice/Deputy/Assistant Minister (Bakan Yardımcısı) · Undersecretary
+ *     (Wakil / Müsteşar) · Deputy/Vice Governor · Director General /
+ *     General Director (Genel Müdür) · Chairman/President of a public
+ *     authority, commission or agency · Deputy Secretary General
+ *   3 Assistant Undersecretary (Wakil Musaid) · Deputy/Assistant Director
+ *     General (Genel Müdür Yardımcısı) · Executive Director of a sector ·
+ *     Head of Department (Daire Başkanı) · Advisor ranks excluded via veto
+ *
+ * Matching order: most-junior patterns first, because senior keywords are
+ * substrings of junior titles ("Deputy Minister" contains "minister").
+ */
+const GOV_RANK_3 =
+  /assistant undersecretary|deputy undersecretary|assistant under secretary|(deputy|assistant|vice) director general|genel m[uü]d[uü]r yard[iı]mc[iı]s[iı]|daire ba[sş]kan[iı]|acting director general|assistant secretary general|executive director/;
+const GOV_RANK_4 =
+  /(deputy|vice|assistant) (prime )?minister|bakan yard[iı]mc[iı]s[iı]|(deputy|vice) governor|deputy secretary general|undersecretary|under secretary|m[uü]ste[sş]ar|director general|general director|genel m[uü]d[uü]r|(chairman|chairwoman|chairperson|president) of (the )?(authority|commission|agency|board of)|kurum ba[sş]kan[iı]/;
+const GOV_RANK_5 =
+  /\bminister\b|\bbakan\b|\bgovernor\b|\bvali\b|secretary general|genel sekreter/;
+
+/**
+ * Seniority rank for a government-body title, or -1 when the title carries no
+ * recognised government rank. Deterministic complement to titleSeniorityRank
+ * for ministry / authority / municipality accounts, where CxO conventions
+ * don't apply.
+ */
+export function governmentTitleSeniorityRank(rawTitle: string | null | undefined): number {
+  const t = norm(rawTitle);
+  if (!t) return -1;
+  if (GOV_CONTEXT_VETO.test(t)) return -1;
+  if (GOV_RANK_3.test(t)) return 3;
+  if (GOV_RANK_4.test(t)) return 4;
+  if (GOV_RANK_5.test(t)) return 5;
+  return -1;
+}
+
+/**
+ * Deterministic government-body detection from account sector + name.
+ * Ministries, public authorities, municipalities, general directorates and
+ * central banks across the GCC and Türkiye follow government title
+ * hierarchies, not CxO conventions.
+ */
+export function isGovernmentAccount(args: {
+  sector?: string | null;
+  name?: string | null;
+}): boolean {
+  const sector = norm(args.sector);
+  const name = norm(args.name);
+  if (
+    /\bgovernment\b|public sector|public administration|\bministry\b|\bmunicipal/.test(sector)
+  ) {
+    return true;
+  }
+  return /\bministry\b|bakanl[iı][gğ]|\bmunicipality\b|belediye|general directorate|genel m[uü]d[uü]rl[uü][gğ][uü]|general secretariat|presidency of|supreme council|public authority|government of|valili[gğ]i|governorate|central bank|\bauthority\b|\bcommission\b/.test(
+    name,
+  );
+}
+
+export interface RoleClassifyOpts {
+  /** Government-body mode: ministry rank hierarchy + narrower context veto. */
+  government?: boolean;
+}
+
 // Explicit C-level acronym list — a generic /c[a-z]{1,3}o/ would false-match
 // words like "cairo", so we enumerate.
 const C_LEVEL_ACRONYMS =
@@ -69,9 +149,22 @@ const C_LEVEL_ACRONYMS =
  *   0 clearly individual-contributor (engineer, analyst, …)
  *  -1 unrecognisable — treated as unknown (never counts as senior)
  */
-export function titleSeniorityRank(rawTitle: string | null | undefined): number {
+export function titleSeniorityRank(
+  rawTitle: string | null | undefined,
+  opts?: RoleClassifyOpts,
+): number {
   const t = norm(rawTitle);
   if (!t) return -1;
+  if (opts?.government) {
+    // Government titles rank on the ministry hierarchy; a title recognised
+    // there wins over the corporate reading (a "Director General" is rank 4
+    // in a ministry, not a rank-2 corporate director).
+    const gov = governmentTitleSeniorityRank(rawTitle);
+    if (gov >= 0) {
+      const corporate = titleSeniorityRank(rawTitle);
+      return Math.max(gov, corporate);
+    }
+  }
   if (/\bchief\b/.test(t) || C_LEVEL_ACRONYMS.test(t)) return 5;
   if (
     /\b(evp|svp|executive vice president|senior vice president|managing director|managing partner|president)\b/.test(
@@ -164,11 +257,16 @@ export function criticalRoleLabel(id: CriticalRoleId): string {
 }
 
 /** All critical roles a verbatim title supports (priority order). */
-export function classifyCriticalRoles(rawTitle: string | null | undefined): CriticalRoleId[] {
+export function classifyCriticalRoles(
+  rawTitle: string | null | undefined,
+  opts?: RoleClassifyOpts,
+): CriticalRoleId[] {
   const t = norm(rawTitle);
   if (!t) return [];
-  if (CONTEXT_VETO.test(t)) return [];
-  const rank = titleSeniorityRank(rawTitle);
+  // Government mode: "Deputy Minister for Digital Transformation" is a
+  // legitimate function holder, so only the narrower gov veto applies.
+  if (opts?.government ? GOV_CONTEXT_VETO.test(t) : CONTEXT_VETO.test(t)) return [];
+  const rank = titleSeniorityRank(rawTitle, opts);
   const out: CriticalRoleId[] = [];
   for (const r of CRITICAL_ROLES) {
     if (r.veto && r.veto.test(t)) continue;
@@ -182,8 +280,9 @@ export function classifyCriticalRoles(rawTitle: string | null | undefined): Crit
 /** The primary (highest-priority) critical role a verbatim title supports, or null. */
 export function classifyCriticalRole(
   rawTitle: string | null | undefined,
+  opts?: RoleClassifyOpts,
 ): CriticalRoleId | null {
-  return classifyCriticalRoles(rawTitle)[0] ?? null;
+  return classifyCriticalRoles(rawTitle, opts)[0] ?? null;
 }
 
 export interface CriticalRoleCoverageEntry {
@@ -214,12 +313,21 @@ interface GuardableDm {
  * Board members always pass. Managers/ICs (declared OR title-derived) never
  * pass. Directors pass only when their title carries a critical-role function.
  */
-export function seniorityGuardDropReason(dm: GuardableDm): string | null {
+export function seniorityGuardDropReason(
+  dm: GuardableDm,
+  opts?: RoleClassifyOpts,
+): string | null {
   if (dm.seniority === "board_chair" || dm.seniority === "board_member") return null;
   if (dm.seniority === "manager" || dm.seniority === "ic") {
     return `declared seniority "${dm.seniority}" is below the proposal floor`;
   }
-  const rank = titleSeniorityRank(dm.title);
+  // Government mode: advisors, aides and the minister's private office sit
+  // NEXT TO the hierarchy, not in it — drop them explicitly (their titles
+  // otherwise read as unranked and would slip through).
+  if (opts?.government && GOV_CONTEXT_VETO.test(norm(dm.title))) {
+    return "adjacent-to-role government title (advisor / aide / private office)";
+  }
+  const rank = titleSeniorityRank(dm.title, opts);
   if (rank === 0 || rank === 1) {
     return `title reads as ${rank === 1 ? "manager" : "individual-contributor"} level`;
   }
@@ -265,14 +373,14 @@ export function guardExecutiveMapperCriticalRoles<
     criticalRoleCoverage?: CriticalRoleCoverageEntry[];
     droppedBySeniorityGuard?: SeniorityGuardDrop[];
   },
->(output: T): T {
+>(output: T, opts?: RoleClassifyOpts): T {
   const kept: T["decisionMakers"] = [];
   const dropped: SeniorityGuardDrop[] = [];
   for (const dm of output.decisionMakers ?? []) {
     // The classifier is the sole authority on the tag — a model claim the
     // verbatim title does not support is silently corrected.
-    dm.criticalRole = classifyCriticalRole(dm.title);
-    const reason = seniorityGuardDropReason(dm);
+    dm.criticalRole = classifyCriticalRole(dm.title, opts);
+    const reason = seniorityGuardDropReason(dm, opts);
     if (reason) {
       dropped.push({ fullName: dm.fullName, title: dm.title ?? null, reason });
     } else {

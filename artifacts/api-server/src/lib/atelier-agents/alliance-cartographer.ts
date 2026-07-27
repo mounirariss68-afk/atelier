@@ -25,7 +25,7 @@ import {
   progressRun,
   completeRun,
   failRun,
-  callClaudeJsonWithWebSearch,
+  callResearchJson,
   materiallyEqual,
   stableStringify,
   normaliseLinkedinProfileUrl,
@@ -194,7 +194,7 @@ export async function runAllianceCartographer(args: {
     const system = loadPrompt("alliance_cartographer", 1);
     await progressRun(runId, 15, "Researching the partner firm");
     const { value, costUsd, citationUrls } =
-      await callClaudeJsonWithWebSearch<Record<string, unknown>>(
+      await callResearchJson<Record<string, unknown>>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -204,7 +204,15 @@ export async function runAllianceCartographer(args: {
           firm_kind: args.firmKind ?? null,
           context_notes: args.contextNotes ?? null,
         }),
-        { progressRunId: runId },
+        {
+          progressRunId: runId,
+          // Task #687 — partner-firm profiling via Perplexity retrieval.
+          researchQueries: [
+            `${args.firmName}${args.firmCountry ? ` (${args.firmCountry})` : ""} company profile: what they do${args.firmSpeciality ? ` (${args.firmSpeciality})` : ""}, size, ownership, headquarters, website`,
+            `${args.firmName} partnerships, alliances, technology vendor certifications and notable clients`,
+            `${args.firmName} recent news, funding, expansion or leadership announcements`,
+          ],
+        },
       );
     await progressRun(runId, 92, "Scoring the fit framework", {
       name: "alliance_cart.synth",
@@ -607,7 +615,7 @@ export async function runAllianceExecutiveMapper(args: {
     const system = loadPrompt("alliance_executive_mapper", 1);
     await progressRun(runId, 20, "Sweeping the partner-firm leadership");
     const { value, costUsd, citationUrls } =
-      await callClaudeJsonWithWebSearch<AllianceExecutiveMapperOutput>(
+      await callResearchJson<AllianceExecutiveMapperOutput>(
         "claude-sonnet-4-5",
         system,
         JSON.stringify({
@@ -616,7 +624,14 @@ export async function runAllianceExecutiveMapper(args: {
           firm_speciality: args.firmSpeciality ?? null,
           known_contacts: args.knownContacts,
         }),
-        { progressRunId: runId },
+        {
+          progressRunId: runId,
+          // Task #687 — partner-firm leadership sweep via Perplexity.
+          researchQueries: [
+            `${args.firmName}${args.firmCountry ? ` (${args.firmCountry})` : ""} leadership team: founder/CEO and executives — names, exact titles`,
+            `${args.firmName} partnership / alliances leads and key commercial contacts (names, titles, LinkedIn)`,
+          ],
+        },
       );
     await progressRun(runId, 96, "Finalising the alliance roster", {
       name: "alliance_map.synth",

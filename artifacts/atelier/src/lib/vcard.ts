@@ -83,6 +83,7 @@ export function buildVCard(input: VCardInput): string {
   lines.push(`N:${n}`);
   lines.push(`FN:${esc(input.fullName)}`);
   if (input.org) lines.push(`ORG:${esc(input.org)}`);
+  lines.push("URL;TYPE=WORK:https://www.cognirise.ai");
   if (input.title) lines.push(`TITLE:${esc(input.title)}`);
   if (input.email) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(input.email)}`);
 
