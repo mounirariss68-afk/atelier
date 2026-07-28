@@ -283,7 +283,9 @@ const FRONT = {
   divider: { x: EMU(1726096), y0: EMU(440635), y1: EMU(440635 + 1017104) },
   // TextBox offsets + PowerPoint default insets (l 91440, t 45720 EMU).
   textX: EMU(1822174 + 91440),
-  name: { y: EMU(467139 + 45720), size: 11 },
+  // Template size was 11 with Helvetica; Plus Jakarta Sans runs wider, so
+  // 10 restores the original visual weight (user request 2026-07-28).
+  name: { y: EMU(467139 + 45720), size: 10 },
   title: { y: EMU(675257 + 45720), size: 6 },
   phone: { y: EMU(962887 + 45720), size: 6 },
   email: { y: EMU(1111070 + 45720), size: 6 },
@@ -472,10 +474,22 @@ export async function generateBusinessCardPdf(
     .lineWidth(0.5)
     .stroke(grad);
 
-  const textW = PAGE_W - FRONT.textX - 4;
+  // Right padding mirrors the left inset between divider and text (~8.5 pt)
+  // so the name never crowds the trim edge.
+  const RIGHT_PAD = 9;
+  const textW = PAGE_W - FRONT.textX - RIGHT_PAD;
   doc.fillColor("#ffffff");
   doc.registerFont("CardText", loadCardFont());
-  doc.font("CardText").fontSize(FRONT.name.size);
+  // Auto-fit the name: start at the template size and shrink until the full
+  // name fits the text column (lineBreak is off, so overflow would otherwise
+  // clip at the card edge). Floor keeps degenerate inputs legible.
+  let nameSize = FRONT.name.size;
+  doc.font("CardText").fontSize(nameSize);
+  const NAME_MIN_SIZE = 7;
+  while (nameSize > NAME_MIN_SIZE && doc.widthOfString(person.fullName) > textW) {
+    nameSize -= 0.25;
+    doc.fontSize(nameSize);
+  }
   doc.text(person.fullName, FRONT.textX, FRONT.name.y, { width: textW, lineBreak: false });
   doc.fontSize(FRONT.title.size);
   if (person.title) {
