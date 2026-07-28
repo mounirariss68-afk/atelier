@@ -20,6 +20,7 @@ import { useRoute, Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { RecordCard, RecordCardAction } from "@/components/ui/record-card";
+import { ViewToggle, useViewMode, RecordRow } from "@/components/ui/view-toggle";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { AllianceEvaluationPanel, AllianceVerdictChip } from "./AllianceEvaluation";
 import {
@@ -402,6 +403,8 @@ function IdentifyView() {
   const archive = useAtelierArchivePartnerFirm();
   const [evalOpenId, setEvalOpenId] = React.useState<string | null>(null);
   const [quotesOpenId, setQuotesOpenId] = React.useState<string | null>(null);
+  // Task #723 — list/card toggle, persisted per page.
+  const [viewMode, setViewMode] = useViewMode("partners-directory");
 
   return (
     <div className="space-y-8">
@@ -413,6 +416,7 @@ function IdentifyView() {
               <Handshake className="w-3.5 h-3.5" />
               {firms.length} firm{firms.length === 1 ? "" : "s"}
             </span>
+            <ViewToggle mode={viewMode} onChange={setViewMode} data-testid="view-toggle-partners" />
             {canEdit && !adding && (
               <PillButton variant="ghost" onClick={() => { setAdding(true); setErr(null); }} data-testid="button-add-firm">
                 <Plus className="w-3.5 h-3.5 mr-1 inline" /> Add firm
@@ -443,7 +447,7 @@ function IdentifyView() {
           </p>
         )}
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className={viewMode === "list" ? "space-y-2" : "grid gap-3 md:grid-cols-2"}>
           {firms.map((f) =>
             editingId === f.id ? (
               <div key={f.id} className="md:col-span-2">
@@ -461,6 +465,34 @@ function IdentifyView() {
                   }
                 />
               </div>
+            ) : viewMode === "list" ? (
+              <RecordRow
+                key={f.id}
+                data-testid={`row-firm-${f.id}`}
+                onClick={canEdit ? () => { setEditingId(f.id); setErr(null); } : undefined}
+                title={f.name}
+                subtitle={[f.kind, f.country, f.speciality].filter(Boolean).join(" · ") || "—"}
+                chips={
+                  <>
+                    {f.relationshipStrength != null && (
+                      <MonoChip tone={f.relationshipStrength >= 4 ? "gold" : f.relationshipStrength >= 3 ? "green" : "amber"}>
+                        strength {f.relationshipStrength}/5
+                      </MonoChip>
+                    )}
+                    <MonoChip>{f.activeResourceCount} active resource{f.activeResourceCount === 1 ? "" : "s"}</MonoChip>
+                  </>
+                }
+                trailing={
+                  <>
+                    {f.partnershipStage === "candidate" && <MonoChip tone="amber">candidate</MonoChip>}
+                    <AllianceVerdictChip firm={f} />
+                    {f.tier && <MonoChip tone={f.tier === "strategic" ? "gold" : "default"}>{f.tier}</MonoChip>}
+                    <MonoChip tone={f.status === "active" ? "green" : f.status === "renewal_due" ? "amber" : "default"}>
+                      {f.status.replace("_", " ")}
+                    </MonoChip>
+                  </>
+                }
+              />
             ) : (
               <RecordCard
                 key={f.id}

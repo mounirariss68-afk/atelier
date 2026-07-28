@@ -12,12 +12,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { RecordCard } from "@/components/ui/record-card";
+import { ViewToggle, useViewMode } from "@/components/ui/view-toggle";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  LayoutGrid,
-  List as ListIcon,
   AlertTriangle,
   Plus,
   ArrowUp,
@@ -348,7 +347,10 @@ export default function Pipeline() {
   const initialMode: "pipeline" | "forecast" = initialQuery.get("view") === "forecast" ? "forecast" : "pipeline";
   const initialBy = initialQuery.get("by") || "partner";
   const [mode, setMode] = useState<"pipeline" | "forecast">(initialMode);
-  const [view, setView] = useState<"kanban" | "table">("kanban");
+  // Task #723 — kanban/table switch presented via the shared ViewToggle
+  // pattern (kanban is the "cards" side) and persisted per page.
+  const [viewMode, setViewMode] = useViewMode("pipeline-opportunities");
+  const view: "kanban" | "table" = viewMode === "list" ? "table" : "kanban";
 
   // Keep the ?view= param in sync so back/forward and bookmarks work.
   useEffect(() => {
@@ -497,20 +499,13 @@ export default function Pipeline() {
               </button>
             </div>
             {mode === "pipeline" && (
-              <div className="flex items-center gap-2 bg-bg-elevate p-1 rounded-full border border-border">
-                <button
-                  onClick={() => setView("kanban")}
-                  className={`p-2 rounded-full transition-colors ${view === "kanban" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                >
-                  <LayoutGrid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setView("table")}
-                  className={`p-2 rounded-full transition-colors ${view === "table" ? "bg-bg-deep text-gold" : "text-text-mute hover:text-text"}`}
-                >
-                  <ListIcon className="w-4 h-4" />
-                </button>
-              </div>
+              <ViewToggle
+                mode={viewMode}
+                onChange={setViewMode}
+                cardsLabel="Kanban"
+                listLabel="Table"
+                data-testid="view-toggle-pipeline"
+              />
             )}
           </div>
         }

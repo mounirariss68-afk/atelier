@@ -9,6 +9,9 @@ import {
   PillButton,
 } from "@/components/ui/primitives";
 import { RecordCard } from "@/components/ui/record-card";
+import { ViewToggle, useViewMode, RecordRow } from "@/components/ui/view-toggle";
+import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
+import { localizedIndustryName } from "@/lib/reference-data";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Globe, Plus, Users, Building2, MapPin, ChevronDown, ChevronUp, UserX } from "lucide-react";
@@ -81,7 +84,11 @@ export default function Crm() {
   const [view, setView] = useState<"accounts" | "renewals">("accounts");
   const [tier, setTier] = useState<string>("");
   const [sector, setSector] = useState<string>("");
+  const [industry, setIndustry] = useState<string>("");
+  const [owner, setOwner] = useState<string>("");
   const [q, setQ] = useState("");
+  // Task #723 — list/card toggle, persisted per page.
+  const [viewMode, setViewMode] = useViewMode("crm-accounts");
 
   const sectors = useMemo(() => {
     const s = new Set<string>();
@@ -89,17 +96,64 @@ export default function Crm() {
     return Array.from(s).sort();
   }, [accounts]);
 
+  // Task #723 — industry filter options resolved through the same taxonomy
+  // the account detail page uses (reference-data bootstrap). Options are
+  // derived from the codes actually present on the loaded accounts, so the
+  // dropdown only ever offers slices that exist.
+  const hasIndustryCodes = (accounts ?? []).some((a) => !!a.industryCode);
+  const { data: refData } = useReferenceBootstrap(hasIndustryCodes);
+  const industryOptions = useMemo(() => {
+    const codes = new Set<string>();
+    (accounts ?? []).forEach((a) => {
+      if (a.industryCode) codes.add(a.industryCode);
+    });
+    return Array.from(codes)
+      .map((code) => {
+        const row = refData?.industries.find((i) => i.code === code) ?? null;
+        return { code, label: row ? localizedIndustryName(row, "en") : code };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [accounts, refData]);
+
+  const owners = useMemo(() => {
+    const s = new Set<string>();
+    (accounts ?? []).forEach((a) => {
+      if (a.partnerOwnerName) s.add(a.partnerOwnerName);
+    });
+    return Array.from(s).sort();
+  }, [accounts]);
+
   const filtered = useMemo(() => {
     return (accounts ?? []).filter((a) => {
       if (tier && a.tier !== tier) return false;
       if (sector && a.sector !== sector) return false;
+      if (industry && a.industryCode !== industry) return false;
+      if (owner && a.partnerOwnerName !== owner) return false;
       if (q) {
         const hay = `${a.brandName ?? ""} ${a.name}`.toLowerCase();
         if (!hay.includes(q.toLowerCase())) return false;
       }
       return true;
     });
-  }, [accounts, tier, sector, q]);
+  }, [accounts, tier, sector, industry, owner, q]);
+
+  // Task #723 — group the filtered set under country headings (with counts);
+  // accounts without a country fall into a trailing "No country" group.
+  const NO_COUNTRY = "No country";
+  const grouped = useMemo(() => {
+    const m = new Map<string, typeof filtered>();
+    for (const a of filtered) {
+      const key = a.country?.trim() || NO_COUNTRY;
+      const arr = m.get(key) ?? [];
+      arr.push(a);
+      m.set(key, arr);
+    }
+    return Array.from(m.entries()).sort(([a], [b]) => {
+      if (a === NO_COUNTRY) return 1;
+      if (b === NO_COUNTRY) return -1;
+      return a.localeCompare(b);
+    });
+  }, [filtered]);
 
   const totalOpps = (accounts ?? []).reduce(
     (s, a) => s + (a.openOpportunityCount ?? 0),
@@ -214,6 +268,36 @@ export default function Crm() {
               </option>
             ))}
           </select>
+          {industryOptions.length > 0 && (
+            <select
+              value={industry}
+              onChange={(e) => setIndustry(e.target.value)}
+              className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+              data-testid="select-industry"
+            >
+              <option value="">All industries</option>
+              {industryOptions.map((i) => (
+                <option key={i.code} value={i.code}>
+                  {i.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {owners.length > 0 && (
+            <select
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+              className="bg-bg-elevate border border-border rounded px-2 py-1 text-text"
+              data-testid="select-owner"
+            >
+              <option value="">All partners</option>
+              {owners.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -221,24 +305,73 @@ export default function Crm() {
             className="bg-bg-elevate border border-border rounded px-2 py-1 text-text placeholder:text-text-faint normal-case tracking-normal"
             data-testid="input-crm-search"
           />
-          {(tier !== "" || sector !== "" || q !== "") && (
+          {(tier !== "" || sector !== "" || industry !== "" || owner !== "" || q !== "") && (
             <button
               type="button"
-              onClick={() => { setTier(""); setSector(""); setQ(""); }}
+              onClick={() => { setTier(""); setSector(""); setIndustry(""); setOwner(""); setQ(""); }}
               className="text-text-mute hover:text-gold underline"
             >
               Clear
             </button>
           )}
           <span className="ml-auto text-text-mute">{filtered.length} of {accounts?.length ?? 0}</span>
+          <ViewToggle mode={viewMode} onChange={setViewMode} data-testid="view-toggle-accounts" />
         </div>
 
         {lifecycle === "active" && <CoverageRollupCard />}
 
         {isLoading && <Skeleton className="h-64 bg-bg-elevate" />}
 
+        {grouped.map(([country, group]) => (
+          <div key={country} className="space-y-3" data-testid={`country-group-${country}`}>
+            <div className="flex items-baseline gap-2 border-b border-border-soft pb-1.5">
+              <span className="text-[11px] font-mono uppercase tracking-widest text-text-mute">
+                {country}
+              </span>
+              <span className="text-[11px] font-mono text-text-faint" data-testid={`country-count-${country}`}>
+                {group.length}
+              </span>
+            </div>
+            {viewMode === "list" ? (
+              <div className="space-y-2">
+                {group.map((a) => (
+                  <RecordRow
+                    key={a.id}
+                    href={`/accounts/${a.id}`}
+                    data-testid={`row-account-${a.id}`}
+                    title={a.brandName ?? a.name}
+                    subtitle={
+                      <span className="font-mono">
+                        {a.country} · {a.sector}
+                      </span>
+                    }
+                    chips={
+                      <>
+                        {a.partnerOwnerName && <MonoChip>Partner: {a.partnerOwnerName}</MonoChip>}
+                        <MonoChip>{a.openOpportunityCount} opp{a.openOpportunityCount === 1 ? "" : "s"}</MonoChip>
+                        <MonoChip>{a.activeEngagementCount} eng{a.activeEngagementCount === 1 ? "" : "s"}</MonoChip>
+                        {(a.pendingUpdateCount ?? 0) > 0 && (
+                          <MonoChip tone="amber">{a.pendingUpdateCount} pending</MonoChip>
+                        )}
+                        {staleMapAges.has(a.id) && (
+                          <MonoChip tone="amber">map stale · {staleMapAges.get(a.id)}d</MonoChip>
+                        )}
+                      </>
+                    }
+                    trailing={
+                      <>
+                        <span className="text-[11px] font-mono text-text-faint hidden sm:inline">
+                          Strength {Math.round(a.relationshipStrength)}/100
+                        </span>
+                        <MonoChip tone={TIER_TONE[a.tier] ?? "default"}>{a.tier}</MonoChip>
+                      </>
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((a) => (
+          {group.map((a) => (
             <div key={a.id} data-testid={`card-account-${a.id}`} className="h-full">
               <RecordCard
                 href={`/accounts/${a.id}`}
@@ -324,12 +457,15 @@ export default function Crm() {
               </RecordCard>
             </div>
           ))}
-          {!isLoading && filtered.length === 0 && (
-            <Card className="p-8 text-center text-text-mute font-mono text-sm">
-              No accounts match these filters.
-            </Card>
-          )}
         </div>
+            )}
+          </div>
+        ))}
+        {!isLoading && filtered.length === 0 && (
+          <Card className="p-8 text-center text-text-mute font-mono text-sm">
+            No accounts match these filters.
+          </Card>
+        )}
       </div>
     </div>
   );

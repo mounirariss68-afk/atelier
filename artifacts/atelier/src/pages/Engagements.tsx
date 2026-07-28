@@ -3,6 +3,7 @@ import { useAtelierListEngagements, getAtelierListEngagementsQueryKey } from "@w
 import { useQueryClient } from "@tanstack/react-query";
 import { PlmPill, MonoChip, PillButton } from "@/components/ui/primitives";
 import { RecordCard } from "@/components/ui/record-card";
+import { ViewToggle, useViewMode, RecordRow } from "@/components/ui/view-toggle";
 import { LensPageHeader } from "@/components/layout/LensPageHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Clock, CheckCircle, Search } from "lucide-react";
@@ -19,6 +20,8 @@ export default function Engagements() {
   const [query, setQuery] = React.useState("");
   const [raidFilter, setRaidFilter] = React.useState<RaidFilter>("all");
   const [page, setPage] = React.useState(1);
+  // Task #723 — list/card toggle, persisted per page.
+  const [viewMode, setViewMode] = useViewMode("engagements");
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -93,11 +96,48 @@ export default function Engagements() {
               {f}
             </button>
           ))}
+          <ViewToggle mode={viewMode} onChange={setViewMode} data-testid="view-toggle-engagements" />
         </div>
       </div>
 
-      <div className="container-atelier py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        {paged.map((eng) => (
+      <div
+        className={
+          viewMode === "list"
+            ? "container-atelier py-10 space-y-2"
+            : "container-atelier py-10 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
+        }
+      >
+        {viewMode === "list" && paged.map((eng) => (
+          <RecordRow
+            key={eng.id}
+            href={`/clients/deliver/engagements/${eng.id}`}
+            data-testid={`row-engagement-${eng.id}`}
+            title={eng.name}
+            subtitle={<span className="font-mono">{eng.accountName}</span>}
+            chips={
+              <>
+                <PlmPill stage={eng.plmStage} />
+                <MonoChip tone={eng.raidStatus === 'red' ? 'red' : eng.raidStatus === 'amber' ? 'amber' : 'green'}>
+                  RAID: {eng.raidStatus}
+                </MonoChip>
+              </>
+            }
+            trailing={
+              <div className="flex items-center gap-3 text-xs font-mono text-text-mute">
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  Due: <span className="text-text">{eng.deliverablesDueThisWeek}</span>
+                </span>
+                <span className="hidden sm:inline-flex items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  Ends {new Date(eng.plannedEndDate).toLocaleDateString(undefined, { month: 'short', year: 'numeric'})}
+                </span>
+                <span className="text-text-faint hidden md:inline">{eng.partnerOwnerName}</span>
+              </div>
+            }
+          />
+        ))}
+        {viewMode === "cards" && paged.map((eng) => (
           <RecordCard
             key={eng.id}
             href={`/clients/deliver/engagements/${eng.id}`}

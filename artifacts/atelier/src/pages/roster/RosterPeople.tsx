@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useLocation } from "wouter";
 import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { RecordCard } from "@/components/ui/record-card";
+import { ViewToggle, useViewMode, RecordRow } from "@/components/ui/view-toggle";
 import { Input } from "@/components/ui/input";
 import { Users, Filter, X } from "lucide-react";
 import { countryName } from "@/lib/countries";
@@ -77,6 +78,8 @@ export default function RosterPeople() {
   });
   const [q, setQ] = React.useState("");
   const [cohort, setCohort] = React.useState<Record<CohortKey, string>>(readCohortFromUrl);
+  // Task #723 — list/card toggle, persisted per page.
+  const [viewMode, setViewMode] = useViewMode("roster-people");
 
   /** Reflect filter state back into the URL so the slice is shareable
    *  and survives reloads. The directory + Composition dashboard share
@@ -183,6 +186,7 @@ export default function RosterPeople() {
               data-testid="roster-search"
             />
           </div>
+          <ViewToggle mode={viewMode} onChange={setViewMode} data-testid="view-toggle-roster" />
         </div>
       </div>
 
@@ -235,6 +239,37 @@ export default function RosterPeople() {
         </p>
       )}
 
+      {viewMode === "list" && (
+        <div className="space-y-2 mt-6">
+          {(people ?? []).map((p) => (
+            <RecordRow
+              key={p.id}
+              href={`/roster/people/${p.id}`}
+              accentClass={WORKER_COLOR[p.workerType]}
+              title={p.fullName}
+              subtitle={p.title}
+              data-testid={`person-row-${p.id}`}
+              chips={
+                <>
+                  {p.seniority && <MonoChip>{p.seniority}</MonoChip>}
+                  {p.country && <MonoChip>{countryName(p.country)}</MonoChip>}
+                  {p.partnerFirmName && <MonoChip>{p.partnerFirmName}</MonoChip>}
+                  <MonoChip>{p.status}</MonoChip>
+                </>
+              }
+              trailing={
+                <>
+                  {p.email && (
+                    <span className="text-xs text-text-faint truncate max-w-56 hidden md:inline">{p.email}</span>
+                  )}
+                  <MonoChip>{WORKER_LABEL[p.workerType]}</MonoChip>
+                </>
+              }
+            />
+          ))}
+        </div>
+      )}
+      {viewMode === "cards" && (
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 mt-6">
         {(people ?? []).map((p) => (
           <RecordCard
@@ -262,6 +297,7 @@ export default function RosterPeople() {
           </RecordCard>
         ))}
       </div>
+      )}
       </div>
     </div>
   );
