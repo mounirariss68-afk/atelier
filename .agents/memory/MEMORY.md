@@ -147,4 +147,5 @@
 - [Account industry taxonomy resolver](atelier-industry-taxonomy.md) — ALL industry writes (auto-run, reviewed research, proposal apply) go through resolveIndustryTaxonomy; unmappable → skip, never store raw NAICS; ownership fields PATCH-editable but audit-only (not in firmo history labels).
 - [Statutory filing register actions](atelier-statutory-filings.md) — overdue derived at read time; mark-filed/reopen via audited dedicated route; payroll-page register fetch must wait for overview backfill.
 - [Atelier chat travel tools](atelier-travel-tools.md) — Duffel search tools are DB-free by design (offline tsx probe); booking = deep-link handoff only; DUFFEL_API_KEY fail-loud; clarification fields carry inputType first-class.
+- [Industry backfill rerun](atelier-industry-backfill.md) — governed industry backfill script targets null OR invalid (raw-NAICS) codes; DB data doesn't merge — re-run on main + prod.
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.
