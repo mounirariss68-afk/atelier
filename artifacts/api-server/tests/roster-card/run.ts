@@ -208,6 +208,27 @@ async function main(): Promise<void> {
         /^[\x20-\x7e]+$/.test(tr.disp),
       `disp=${tr.disp}`,
     );
+    // Task #696 — the rendered card text must carry correct Turkish glyphs
+    // (Helvetica/WinAnsi substituted "ş" with "ð"). Extract text via pdftotext.
+    {
+      const { execFile } = await import("node:child_process");
+      const { writeFile, unlink } = await import("node:fs/promises");
+      const tmpPdf = `/tmp/roster-card-tr-${STAMP}.pdf`;
+      await writeFile(tmpPdf, tr.buf);
+      const text = await new Promise<string>((resolve, reject) => {
+        execFile("pdftotext", [tmpPdf, "-"], (err, stdout) =>
+          err ? reject(err) : resolve(stdout),
+        );
+      }).catch((e) => `pdftotext-failed: ${e}`);
+      await unlink(tmpPdf).catch(() => {});
+      check(
+        "card text renders Turkish glyphs (Yiş / Türkiye, no ð substitution)",
+        text.includes("Ömer Barbaros Yiş") &&
+          text.includes("CEO Türkiye") &&
+          !text.includes("\u00f0"),
+        `extracted=${JSON.stringify(text.slice(0, 200))}`,
+      );
+    }
 
     // =====================================================================
     group("request validation parity");

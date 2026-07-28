@@ -20,7 +20,7 @@
  * atelier-board-pack-logo.ts. Loaders fail loud: a missing asset is a
  * packaging bug, not something to paper over with a blank card.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parsePhoneNumberFromString, type CountryCode } from "libphonenumber-js";
 import PDFDocument from "pdfkit";
@@ -48,6 +48,47 @@ export function loadTemplateAsset(name: string): Buffer {
   }
   throw new Error(
     `atelier template asset "${name}" not found (tried: ${tried.join(", ")})`,
+  );
+}
+
+/**
+ * Task #696 — Unicode text font for the card.
+ *
+ * pdfkit's built-in Helvetica is WinAnsi-only: Turkish letters outside
+ * Latin-1 (ş, ğ, İ, ı…) get substituted with wrong glyphs ("Yiş" printed
+ * as "Yi ð"). Embed the bundled Plus Jakarta Sans TTFs (same fonts the
+ * contract PDFs ship, full Latin-Extended coverage) instead. Fail loud if
+ * the fonts directory is missing — silently falling back to Helvetica
+ * would reintroduce the corruption.
+ */
+const FONT_CANDIDATE_DIRS = [
+  // Bundled output: artifacts/api-server/dist/index.mjs → ../fonts
+  "../fonts/",
+  // Source (tsx): artifacts/api-server/src/lib/ → ../../fonts
+  "../../fonts/",
+] as const;
+
+let cardFontCache: Buffer | null = null;
+
+export function loadCardFont(): Buffer {
+  if (cardFontCache) return cardFontCache;
+  const tried: string[] = [];
+  for (const dir of FONT_CANDIDATE_DIRS) {
+    try {
+      const dirPath = fileURLToPath(new URL(dir, import.meta.url));
+      // Sanity-guard: only accept a dir that actually holds the TTF.
+      if (!readdirSync(dirPath).includes("PlusJakartaSans-Regular.ttf")) {
+        tried.push(dir);
+        continue;
+      }
+      cardFontCache = readFileSync(`${dirPath}/PlusJakartaSans-Regular.ttf`);
+      return cardFontCache;
+    } catch {
+      tried.push(dir);
+    }
+  }
+  throw new Error(
+    `business-card font PlusJakartaSans-Regular.ttf not found (tried: ${tried.join(", ")}) — refusing to fall back to WinAnsi Helvetica (would corrupt non-Latin-1 glyphs)`,
   );
 }
 
@@ -433,7 +474,8 @@ export async function generateBusinessCardPdf(
 
   const textW = PAGE_W - FRONT.textX - 4;
   doc.fillColor("#ffffff");
-  doc.font("Helvetica").fontSize(FRONT.name.size);
+  doc.registerFont("CardText", loadCardFont());
+  doc.font("CardText").fontSize(FRONT.name.size);
   doc.text(person.fullName, FRONT.textX, FRONT.name.y, { width: textW, lineBreak: false });
   doc.fontSize(FRONT.title.size);
   if (person.title) {
