@@ -43,6 +43,7 @@ export function EditAccountStrategyDialog({ account, accountId, open, onOpenChan
   const { toast } = useToast();
   const update = useAtelierUpdateAccount();
 
+  const [guidance, setGuidance] = React.useState("");
   const [objectives, setObjectives] = React.useState<ObjectiveDraft[]>([]);
   const [serviceLines, setServiceLines] = React.useState("");
   const [winHypothesis, setWinHypothesis] = React.useState("");
@@ -51,6 +52,7 @@ export function EditAccountStrategyDialog({ account, accountId, open, onOpenChan
 
   React.useEffect(() => {
     if (!open) return;
+    setGuidance(account.strategyGuidance ?? "");
     const s = account.accountStrategy;
     setObjectives(
       (s?.objectives ?? []).map((o) => ({
@@ -119,6 +121,7 @@ export function EditAccountStrategyDialog({ account, accountId, open, onOpenChan
                 keyPlays: keyPlaysArr,
               }
             : null,
+          strategyGuidance: guidance.trim() || null,
           competitors: cleanCompetitors,
         },
       });
@@ -149,6 +152,22 @@ export function EditAccountStrategyDialog({ account, accountId, open, onOpenChan
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={save} className="grid gap-6 py-3">
+          {/* Partner guidance (Task #699) */}
+          <div className="grid gap-2">
+            <Label htmlFor="es-guidance" className={labelCls}>
+              Partner guidance (steers the Strategy Developer agent)
+            </Label>
+            <Textarea
+              id="es-guidance"
+              value={guidance}
+              onChange={(e) => setGuidance(e.target.value)}
+              className={`${fieldCls} min-h-[88px]`}
+              maxLength={4000}
+              placeholder="Your thoughts and direction on the strategy — e.g. lead with the CFO agenda, avoid competing on price, prioritise the supply-chain agentic build…"
+              data-testid="input-strategy-guidance"
+            />
+          </div>
+
           {/* Objectives */}
           <div className="grid gap-2">
             <div className="flex items-center justify-between">

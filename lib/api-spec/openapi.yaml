@@ -6790,6 +6790,9 @@ components:
           oneOf:
             - $ref: "#/components/schemas/AtelierAccountStrategy"
             - type: "null"
+        # Task #699 — free-text partner guidance steering the account
+        # strategy (and the Strategy Developer agent's drafts).
+        strategyGuidance: { type: ["string", "null"], maxLength: 4000 }
         competitors:
           type: array
           maxItems: 25
@@ -7338,6 +7341,8 @@ components:
                   oneOf:
                     - $ref: "#/components/schemas/AtelierAccountStrategy"
                     - type: "null"
+                # Task #699 — free-text partner guidance on the strategy.
+                strategyGuidance: { type: ["string", "null"] }
                 # Task #566 — competitive landscape / incumbents.
                 competitors:
                   type: array

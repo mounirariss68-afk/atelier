@@ -857,6 +857,18 @@ function ProfileTab({
                 <Pencil className="w-3 h-3" /> Edit
               </PillButton>
             </div>
+            {/* Task #699 — free-text partner guidance, shown even without a strategy */}
+            {(a.strategyGuidance ?? "").trim() && (
+              <div
+                className="border border-gold/30 bg-gold/5 rounded p-3"
+                data-testid="text-strategy-guidance"
+              >
+                <Eyebrow>Partner guidance</Eyebrow>
+                <p className="text-text text-sm mt-1 leading-relaxed whitespace-pre-wrap">
+                  {a.strategyGuidance}
+                </p>
+              </div>
+            )}
             {!hasStrategy ? (
               <p className="text-text-mute italic text-sm">
                 No strategy recorded yet — click Edit to define objectives, target service lines,
@@ -3221,6 +3233,290 @@ function AgentPanel({
   );
 }
 
+// ---------- Strategy Developer (Task #699) ----------
+
+interface StrategyShape {
+  objectives: Array<{ id: string; text: string; targetValue?: string | null; targetDate?: string | null }>;
+  targetServiceLines: string[];
+  winHypothesis: string;
+  keyPlays: string[];
+}
+interface StrategyDraftOutput {
+  draftStrategy: StrategyShape;
+  rationale: string;
+  guidanceUsed: string | null;
+  sourcesUsed: string[];
+  confidence: Conf;
+}
+interface StrategyDevStatus {
+  status: "idle" | "running" | "drafted" | "failed";
+  phase: string | null;
+  progressPct: number | null;
+  runId: string | null;
+  draft: StrategyDraftOutput | null;
+  currentStrategy: StrategyShape | null;
+  strategyGuidance: string | null;
+}
+
+function StrategyColumn({ label, strategy }: { label: string; strategy: StrategyShape | null }) {
+  const empty =
+    !strategy ||
+    ((strategy.objectives ?? []).length === 0 &&
+      (strategy.targetServiceLines ?? []).length === 0 &&
+      !strategy.winHypothesis &&
+      (strategy.keyPlays ?? []).length === 0);
+  return (
+    <div className="rounded-lg border border-border-soft bg-bg-soft p-4 space-y-3 min-w-0">
+      <Eyebrow>{label}</Eyebrow>
+      {empty ? (
+        <p className="text-text-mute italic text-sm">No strategy recorded.</p>
+      ) : (
+        <>
+          {(strategy!.objectives ?? []).length > 0 && (
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Objectives</p>
+              <ul className="mt-1 space-y-1">
+                {strategy!.objectives.map((o) => (
+                  <li key={o.id} className="text-sm text-text flex items-start gap-1.5">
+                    <span className="text-gold">·</span>
+                    <span>
+                      {o.text}
+                      {(o.targetValue || o.targetDate) && (
+                        <span className="text-xs font-mono text-text-faint">
+                          {" "}
+                          [{[o.targetValue, o.targetDate].filter(Boolean).join(" · ")}]
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(strategy!.targetServiceLines ?? []).length > 0 && (
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Target service lines</p>
+              <p className="text-sm text-text mt-1">{strategy!.targetServiceLines.join(" · ")}</p>
+            </div>
+          )}
+          {strategy!.winHypothesis && (
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Win hypothesis</p>
+              <p className="text-sm text-text mt-1 leading-relaxed">{strategy!.winHypothesis}</p>
+            </div>
+          )}
+          {(strategy!.keyPlays ?? []).length > 0 && (
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Key plays</p>
+              <ul className="mt-1 space-y-1">
+                {strategy!.keyPlays.map((p, i) => (
+                  <li key={i} className="text-sm text-text flex items-start gap-1.5">
+                    <span className="text-gold">·</span>
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [status, setStatus] = useState<StrategyDevStatus | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState(false);
+  const [decided, setDecided] = useState<"approved" | "dismissed" | null>(null);
+
+  const base = `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/agents/strategy-developer`;
+
+  const fetchStatus = async (): Promise<StrategyDevStatus | null> => {
+    const res = await fetch(`${base}/status`, { credentials: "include" });
+    if (!res.ok) return null;
+    return (await res.json()) as StrategyDevStatus;
+  };
+
+  // Load any pending draft on mount (survives reloads).
+  useEffect(() => {
+    let cancelled = false;
+    void fetchStatus().then((s) => {
+      if (!cancelled && s) {
+        setStatus(s);
+        if (s.status === "running") {
+          setRunning(true);
+          void poll();
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
+  const poll = async () => {
+    for (let i = 0; i < 240; i++) {
+      await new Promise((r) => setTimeout(r, 2500));
+      const s = await fetchStatus();
+      if (!s) continue;
+      setStatus(s);
+      if (s.status !== "running") {
+        setRunning(false);
+        if (s.status === "failed") setError(s.phase ?? "Draft failed");
+        return;
+      }
+    }
+    setRunning(false);
+    setError("Timed out waiting for the draft.");
+  };
+
+  const run = async () => {
+    setError(null);
+    setDecided(null);
+    setRunning(true);
+    try {
+      const res = await fetch(`${base}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
+        throw new Error(detail.reason ?? detail.error ?? `Run failed (${res.status})`);
+      }
+      setStatus((p) => (p ? { ...p, status: "running", draft: null, runId: null } : p));
+      void poll();
+    } catch (e) {
+      setRunning(false);
+      setError(e instanceof Error ? e.message : "Run failed");
+    }
+  };
+
+  const decide = async (action: "approve" | "dismiss") => {
+    if (!status?.runId) return;
+    setDeciding(true);
+    setError(null);
+    try {
+      const res = await fetch(`${base}/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ runId: status.runId }),
+      });
+      if (!res.ok) {
+        const detail = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
+        throw new Error(detail.reason ?? detail.error ?? `${action} failed (${res.status})`);
+      }
+      setDecided(action === "approve" ? "approved" : "dismissed");
+      if (action === "approve") {
+        qc.invalidateQueries({ queryKey: getAtelierGetAccountWorkspaceQueryKey(accountId) });
+        toast({ title: "Strategy applied", description: "The drafted strategy is now the plan of record." });
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : `${action} failed`);
+    } finally {
+      setDeciding(false);
+    }
+  };
+
+  const draft = decided ? null : status?.draft ?? null;
+
+  return (
+    <AgentPanel
+      icon={<Target className="w-5 h-5" />}
+      title="Strategy Developer"
+      blurb="Drafts the full account strategy from your guidance, the research brief, and how partners wrote strategy on other accounts. You approve before anything is applied."
+      checkpoint="You review the draft side-by-side and approve or dismiss it — never auto-applied."
+      running={running}
+      error={error}
+      onRun={run}
+      runLabel="Draft strategy"
+      hasResult={!!draft}
+    >
+      {running && status?.phase && (
+        <p className="text-xs font-mono text-text-faint">{status.phase}</p>
+      )}
+      {decided && (
+        <p
+          className={`text-sm font-mono ${decided === "approved" ? "text-success" : "text-text-mute"}`}
+          data-testid="text-strategy-decision"
+        >
+          {decided === "approved"
+            ? "Draft approved — the account strategy has been updated."
+            : "Draft dismissed — the current strategy is unchanged."}
+        </p>
+      )}
+      {draft && (
+        <div className="space-y-4" data-testid="strategy-draft-review">
+          <div className="flex items-center gap-2">
+            <ConfChip conf={draft.confidence} />
+            <span className="text-xs text-text-mute">{draft.rationale}</span>
+          </div>
+          {(status?.strategyGuidance || draft.guidanceUsed) && (
+            <div className="rounded border border-gold/30 bg-gold/5 p-3 space-y-1">
+              {status?.strategyGuidance && (
+                <p className="text-xs text-text">
+                  <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+                    Partner guidance:{" "}
+                  </span>
+                  {status.strategyGuidance}
+                </p>
+              )}
+              {draft.guidanceUsed && (
+                <p className="text-xs text-text-mute">
+                  <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+                    How it shaped the draft:{" "}
+                  </span>
+                  {draft.guidanceUsed}
+                </p>
+              )}
+            </div>
+          )}
+          {draft.sourcesUsed.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {draft.sourcesUsed.map((s, i) => (
+                <span
+                  key={i}
+                  className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-border-soft text-text-faint"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StrategyColumn label="Current strategy" strategy={status?.currentStrategy ?? null} />
+            <StrategyColumn label="Proposed draft" strategy={draft.draftStrategy} />
+          </div>
+          <div className="flex justify-end gap-2">
+            <PillButton
+              variant="ghost"
+              onClick={() => decide("dismiss")}
+              disabled={deciding}
+              data-testid="button-strategy-dismiss"
+            >
+              Dismiss
+            </PillButton>
+            <PillButton
+              onClick={() => decide("approve")}
+              disabled={deciding}
+              data-testid="button-strategy-approve"
+            >
+              {deciding ? "Working…" : "Approve → apply strategy"}
+            </PillButton>
+          </div>
+        </div>
+      )}
+    </AgentPanel>
+  );
+}
+
 function AccountAgentsTab({
   accountId,
   contacts,
@@ -3228,6 +3524,9 @@ function AccountAgentsTab({
   accountId: string;
   contacts: AtelierContact[];
 }) {
+  const { data: me } = useAtelierGetMe();
+  const canEditStrategy =
+    !!me && ["founding_partner", "partner", "senior_manager"].includes(me.role);
   // Next-Best-Action
   const [nba, setNba] = useState<NbaOutput | null>(null);
   const [nbaRunning, setNbaRunning] = useState(false);
@@ -3353,6 +3652,9 @@ function AccountAgentsTab({
   return (
     <div className="space-y-6">
       <Eyebrow>Account AI · propose-then-approve</Eyebrow>
+
+      {/* Strategy Developer (Task #699) — strategy-edit rights only */}
+      {canEditStrategy && <StrategyDeveloperPanel accountId={accountId} />}
 
       {/* Next-Best-Action */}
       <AgentPanel

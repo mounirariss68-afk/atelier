@@ -6686,8 +6686,202 @@ export async function runPreMeetingBriefing(
   return { runId: result.runId, output: result.output, costUsd: result.costUsd };
 }
 
+// ------- Strategy Developer (Task #699) -------
+
+/** Server-side clamp caps mirroring openapi AtelierAccountStrategy. */
+const STRAT_CAPS = {
+  objectives: 12,
+  objectiveText: 400,
+  targetValue: 200,
+  targetDate: 120,
+  serviceLines: 12,
+  serviceLine: 160,
+  winHypothesis: 1200,
+  keyPlays: 12,
+  keyPlay: 400,
+};
+
+export interface StrategyDraft {
+  objectives: Array<{
+    id: string;
+    text: string;
+    targetValue: string | null;
+    targetDate: string | null;
+  }>;
+  targetServiceLines: string[];
+  winHypothesis: string;
+  keyPlays: string[];
+}
+
+export interface StrategyDeveloperOutput {
+  draftStrategy: StrategyDraft;
+  rationale: string;
+  guidanceUsed: string | null;
+  sourcesUsed: string[];
+  confidence: "green" | "amber" | "red";
+}
+
+/**
+ * Clamp/normalize a model-emitted strategy draft into the exact
+ * accountStrategy shape (openapi caps enforced, ids stamped). Shared by the
+ * runner (so the persisted output is already valid) and the approve route
+ * (defence in depth before writing the account).
+ */
+export function clampStrategyDraft(raw: unknown): StrategyDraft {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number): string =>
+    typeof v === "string" ? v.trim().slice(0, max) : "";
+  const strOrNull = (v: unknown, max: number): string | null => {
+    const s = str(v, max);
+    return s.length > 0 ? s : null;
+  };
+  const objectives = (Array.isArray(r.objectives) ? r.objectives : [])
+    .map((o) => {
+      const obj = (o ?? {}) as Record<string, unknown>;
+      return {
+        id: typeof obj.id === "string" && obj.id ? obj.id : rid("obj"),
+        text: str(obj.text, STRAT_CAPS.objectiveText),
+        targetValue: strOrNull(obj.targetValue, STRAT_CAPS.targetValue),
+        targetDate: strOrNull(obj.targetDate, STRAT_CAPS.targetDate),
+      };
+    })
+    .filter((o) => o.text.length > 0)
+    .slice(0, STRAT_CAPS.objectives);
+  const strArr = (v: unknown, maxItems: number, maxLen: number): string[] =>
+    (Array.isArray(v) ? v : [])
+      .map((x) => str(x, maxLen))
+      .filter((x) => x.length > 0)
+      .slice(0, maxItems);
+  return {
+    objectives,
+    targetServiceLines: strArr(r.targetServiceLines, STRAT_CAPS.serviceLines, STRAT_CAPS.serviceLine),
+    winHypothesis: str(r.winHypothesis, STRAT_CAPS.winHypothesis),
+    keyPlays: strArr(r.keyPlays, STRAT_CAPS.keyPlays, STRAT_CAPS.keyPlay),
+  };
+}
+
+export interface StrategyDeveloperInput extends V5RunCommonArgs {
+  accountId: string;
+}
+
+/**
+ * Draft the full account strategy from partner guidance, account research,
+ * the current strategy, and org-scoped exemplar strategies partners wrote on
+ * other accounts (RAG). Propose-then-approve: output is NEVER auto-applied.
+ */
+export async function runStrategyDeveloper(
+  input: StrategyDeveloperInput,
+): Promise<V5GenericResult> {
+  const ctx = await loadAccountAgentContext(input.accountId);
+  const [accountRow] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(eq(atelierAccounts.id, input.accountId));
+  const { retrieveStrategyExemplars, serializeStrategy, isStrategyEmpty } =
+    await import("./strategy-exemplars.js");
+
+  const currentStrategy = (accountRow?.accountStrategy ?? null) as
+    | (StrategyDraft & { objectives: StrategyDraft["objectives"] })
+    | null;
+  const guidance = (accountRow?.strategyGuidance ?? "").trim() || null;
+
+  const result = await runAgent(
+    {
+      agentId: "ag_strategy_developer",
+      input: { accountId: input.accountId, accountName: ctx.account.name },
+      triggeredByUserId: input.triggeredByUserId,
+      targetType: "account",
+      targetId: input.accountId,
+      targetLabel: ctx.account.name,
+      actorLabel: input.actorLabel ?? "Strategy Developer",
+    },
+    async (c) => {
+      await c.progress(25, "Gathering guidance, research and current strategy");
+      // Org-scoped exemplar retrieval — how the firm's partners write strategy.
+      const queryText = [
+        `Account: ${ctx.account.name} (${ctx.account.sector ?? ""})`,
+        guidance ? `Partner guidance: ${guidance}` : "",
+        (ctx.account.strategicPriorities ?? []).length
+          ? `Priorities: ${(ctx.account.strategicPriorities as string[]).join("; ")}`
+          : "",
+        currentStrategy && !isStrategyEmpty(currentStrategy)
+          ? serializeStrategy({
+              accountName: ctx.account.name,
+              sector: ctx.account.sector,
+              strategy: currentStrategy,
+            })
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+      let exemplars: Awaited<ReturnType<typeof retrieveStrategyExemplars>> = [];
+      try {
+        exemplars = await retrieveStrategyExemplars({
+          orgId: accountRow?.orgId ?? "aico",
+          excludeAccountId: input.accountId,
+          queryText,
+          limit: 3,
+        });
+      } catch (err) {
+        // Retrieval degrades soft — the draft still runs on guidance+research.
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[strategy-developer] exemplar retrieval failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+      await c.progress(45, "Retrieving exemplar strategies from other accounts");
+      const promptBody = loadPrompt("strategy_developer", 1);
+      const userPrompt = JSON.stringify({
+        partnerGuidance: guidance,
+        currentStrategy,
+        researchBrief: accountRow?.researchBrief ?? null,
+        strategicPriorities: accountRow?.strategicPriorities ?? [],
+        exemplarStrategies: exemplars.map((e) => ({
+          accountName: e.accountName,
+          sector: e.sector,
+          strategy: e.text,
+        })),
+        ...ctx,
+      });
+      await c.progress(70, "Drafting the account strategy");
+      const { value, costUsd } = await callClaudeJson<{
+        draftStrategy?: unknown;
+        rationale?: string;
+        guidanceUsed?: string | null;
+        sourcesUsed?: string[];
+        confidence?: "green" | "amber" | "red";
+      }>("claude-sonnet-4-5", promptBody, userPrompt);
+      const output: StrategyDeveloperOutput = {
+        draftStrategy: clampStrategyDraft(value.draftStrategy),
+        rationale: typeof value.rationale === "string" ? value.rationale.slice(0, 2000) : "",
+        guidanceUsed:
+          typeof value.guidanceUsed === "string" && value.guidanceUsed.trim()
+            ? value.guidanceUsed.slice(0, 600)
+            : null,
+        sourcesUsed: (Array.isArray(value.sourcesUsed) ? value.sourcesUsed : [])
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.slice(0, 200))
+          .slice(0, 12),
+        confidence: value.confidence ?? "amber",
+      };
+      if (
+        output.draftStrategy.objectives.length === 0 &&
+        !output.draftStrategy.winHypothesis &&
+        output.draftStrategy.keyPlays.length === 0
+      ) {
+        throw new Error("Strategy Developer returned an empty draft.");
+      }
+      return { output, costUsd, confidence: output.confidence };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
 export const ATELIER_V5_DISPATCH: Record<string, V5DispatcherFn> = {
   ag_next_best_action: (i) => runNextBestAction(i as never),
+  ag_strategy_developer: (i) => runStrategyDeveloper(i as never),
   ag_relationship_health: (i) => runRelationshipHealth(i as never),
   ag_pre_meeting_briefing: (i) => runPreMeetingBriefing(i as never),
   ag_linkedin_composer: (i) => runLinkedInComposer(i as never),

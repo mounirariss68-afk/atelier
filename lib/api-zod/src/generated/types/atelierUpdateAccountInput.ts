@@ -26,6 +26,11 @@ export interface AtelierUpdateAccountInput {
   /** @nullable */
   parentAccountId?: string | null;
   accountStrategy?: AtelierAccountStrategy | null;
+  /**
+   * @maxLength 4000
+   * @nullable
+   */
+  strategyGuidance?: string | null;
   /** @maxItems 25 */
   competitors?: AtelierAccountCompetitor[];
   /**

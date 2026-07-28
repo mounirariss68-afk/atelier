@@ -280,6 +280,11 @@ export const atelierAccounts = pgTable(
       // Concrete plays/moves the account team will run.
       keyPlays: string[];
     }>(),
+    // Task #699 — free-text partner guidance on the account strategy. The
+    // account partner's thoughts / direction that steer the Strategy
+    // Developer agent's drafts. Lives OUTSIDE the accountStrategy jsonb so
+    // guidance survives when the strategy itself is cleared/null.
+    strategyGuidance: text("strategy_guidance"),
     // Task #566 — competitive landscape / incumbents. Who else holds work
     // at the account and Cognirise's displacement angle for each.
     competitors: jsonb("competitors")

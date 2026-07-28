@@ -10044,6 +10044,7 @@ export const AtelierMergeAccountsResponse = zod.object({
               zod.null(),
             ])
             .optional(),
+          strategyGuidance: zod.string().nullish(),
           competitors: zod
             .array(
               zod.object({
@@ -11136,6 +11137,7 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -11880,6 +11882,8 @@ export const atelierUpdateAccountBodyAccountStrategyOneKeyPlaysItemMax = 400;
 
 export const atelierUpdateAccountBodyAccountStrategyOneKeyPlaysMax = 12;
 
+export const atelierUpdateAccountBodyStrategyGuidanceMax = 4000;
+
 export const atelierUpdateAccountBodyCompetitorsItemNameMax = 200;
 
 export const atelierUpdateAccountBodyCompetitorsItemHoldsMax = 600;
@@ -11975,6 +11979,10 @@ export const AtelierUpdateAccountBody = zod
         zod.null(),
       ])
       .optional(),
+    strategyGuidance: zod
+      .string()
+      .max(atelierUpdateAccountBodyStrategyGuidanceMax)
+      .nullish(),
     competitors: zod
       .array(
         zod.object({
@@ -12448,6 +12456,7 @@ export const AtelierUpdateAccountResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -13531,6 +13540,7 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -15323,6 +15333,7 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -16411,6 +16422,7 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -17512,6 +17524,7 @@ export const AtelierCreateAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -18612,6 +18625,7 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -19696,6 +19710,7 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -20789,6 +20804,7 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -21882,6 +21898,7 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -22968,6 +22985,7 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -24066,6 +24084,7 @@ export const AtelierCreateAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -25161,6 +25180,7 @@ export const AtelierUpdateAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -26245,6 +26265,7 @@ export const AtelierDeleteAccountActionResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -27338,6 +27359,7 @@ export const AtelierCreateAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -28432,6 +28454,7 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -29516,6 +29539,7 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({
@@ -30606,6 +30630,7 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
             zod.null(),
           ])
           .optional(),
+        strategyGuidance: zod.string().nullish(),
         competitors: zod
           .array(
             zod.object({

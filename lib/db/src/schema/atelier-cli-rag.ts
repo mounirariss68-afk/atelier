@@ -151,3 +151,34 @@ export const atelierEntityEmbeddings = pgTable(
     index("idx_atelier_ent_emb_org_kind").on(t.orgId, t.kind),
   ],
 );
+
+/**
+ * Task #699 — Account-strategy exemplars (Strategy Developer RAG).
+ *
+ * One row per account that has a partner-defined/approved account strategy.
+ * The strategy is serialized to text and embedded so future Strategy
+ * Developer drafts on OTHER accounts can retrieve org-scoped exemplars of
+ * how partners actually write strategy. Refreshed whenever a strategy is
+ * edited or an agent draft is approved; row deleted when the strategy is
+ * cleared. Retrieval is brute-force cosine over the org's rows (the account
+ * roster is small), so `vec` (jsonb) is the only vector store needed.
+ */
+export const atelierStrategyExemplars = pgTable(
+  "atelier_strategy_exemplars",
+  {
+    /** The account whose strategy this exemplar snapshots. */
+    accountId: text("account_id").primaryKey(),
+    orgId: text("org_id").notNull().default("aico"),
+    accountName: text("account_name").notNull(),
+    /** Sector at index time — used to prefer same-sector exemplars. */
+    sector: text("sector"),
+    /** Serialized strategy text that was embedded. */
+    text: text("text").notNull(),
+    provider: text("provider").notNull(),
+    dim: integer("dim").notNull(),
+    vec: jsonb("vec").$type<number[]>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("idx_atelier_strategy_exemplar_org").on(t.orgId)],
+);

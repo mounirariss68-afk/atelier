@@ -79,7 +79,9 @@ export type AtelierAgentId =
   // Account-management agents (Next-Best-Action, Relationship-Health, Pre-Meeting Briefing)
   | "next_best_action"
   | "relationship_health"
-  | "pre_meeting_briefing";
+  | "pre_meeting_briefing"
+  // Task #699 — Account Strategy Developer
+  | "strategy_developer";
 
 /**
  * Load an agent prompt from `prompts/<agentId>/v<version>.md`.

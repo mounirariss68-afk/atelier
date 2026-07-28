@@ -2001,6 +2001,59 @@ export const CollectionsAgent = defineAgent({
   evals: [],
 });
 
+// Task #699 — Account Strategy Developer (propose-then-approve Drafter).
+export const StrategyDeveloper = defineAgent({
+  id: "ag_strategy_developer",
+  name: "Strategy Developer",
+  group: "Account Management",
+  stage: "Cross-cutting",
+  purpose:
+    "Drafts the full account strategy (objectives, win hypothesis, key plays, target service lines) from partner guidance, account research, and exemplar strategies partners wrote on other accounts.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "mvp",
+  systemPromptRef: "prompts/strategy_developer/v1.md",
+  inputSchema: z.object({
+    accountId: z.string().min(1),
+    accountName: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    draftStrategy: z.object({
+      objectives: z.array(
+        z.object({
+          id: z.string().optional(),
+          text: z.string(),
+          targetValue: z.string().nullable().optional(),
+          targetDate: z.string().nullable().optional(),
+        }),
+      ),
+      targetServiceLines: z.array(z.string()),
+      winHypothesis: z.string(),
+      keyPlays: z.array(z.string()),
+    }),
+    rationale: z.string(),
+    guidanceUsed: z.string().nullable().optional(),
+    sourcesUsed: z.array(z.string()),
+    confidence: Confidence,
+  }),
+  tools: ["knowledge.search"],
+  guardrails: [
+    "The draft is a proposal — it is NEVER applied without explicit partner approval",
+    "Ground every element in supplied guidance, research, or account data — never invent figures or named people",
+    "Exemplars inform style and rigour, not content: never copy another account's specifics",
+  ],
+  humanCheckpoints: [
+    leadCheck("Account partner reviews the drafted strategy (approve / dismiss)"),
+  ],
+  evals: [
+    {
+      id: "ev_complete_shape",
+      description: "Draft carries objectives, service lines, win hypothesis and key plays",
+      threshold: 1,
+    },
+  ],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -2070,6 +2123,8 @@ export const ATELIER_AGENTS: Agent[] = [
   NextBestAction,
   RelationshipHealth,
   PreMeetingBriefing,
+  // Task #699 — Account Strategy Developer
+  StrategyDeveloper,
 ];
 
 export const AGENT_BY_ID: Record<string, Agent> = Object.fromEntries(

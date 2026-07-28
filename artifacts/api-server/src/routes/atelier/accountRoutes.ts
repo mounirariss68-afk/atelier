@@ -161,10 +161,14 @@ import {
   runNextBestAction,
   runRelationshipHealth,
   runPreMeetingBriefing,
+  runStrategyDeveloper,
+  clampStrategyDraft,
+  type StrategyDeveloperOutput,
   type PendingProfileUpdate,
   type WhitespaceOutput,
   type QbrOutput,
 } from "../../lib/atelier-agents/runner.js";
+import { indexAccountStrategyExemplar } from "../../lib/atelier-agents/strategy-exemplars.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -1345,6 +1349,8 @@ async function buildWorkspace(
       }>,
       cogniriseHypothesis: a.cogniriseHypothesis ?? null,
       accountStrategy: a.accountStrategy ?? null,
+      // Task #699 — free-text partner guidance on the strategy.
+      strategyGuidance: a.strategyGuidance ?? null,
       competitors: a.competitors ?? [],
       researchBrief: a.researchBrief ?? null,
       // Task #9 — deterministic research-quality signals over the persisted
@@ -1784,6 +1790,249 @@ router.post("/accounts/:accountId/agents/pre-meeting-briefing/run", async (req, 
   } catch (err) {
     res.status(502).json({ error: "agent-failed", detail: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// ---------- Strategy Developer: draft the account strategy (Task #699) ----------
+// Propose-then-approve. Long LLM run → async launch + poll (instant return,
+// never holds the request open). Run/approve/dismiss all require account-
+// strategy edit rights (mirrors PATCH /accounts/:id CREATE_ROLES gate) on
+// top of canSeeAccount.
+async function guardStrategyDeveloper(req: Request, res: Response) {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return null;
+  if (!CREATE_ROLES.has(guard.me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason: "Only Partner or Senior Manager personas can run or approve strategy drafts.",
+    });
+    return null;
+  }
+  return guard;
+}
+
+const STRATEGY_DEV_AGENT = "ag_strategy_developer";
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/strategy-developer/run", async (req, res) => {
+  const guard = await guardStrategyDeveloper(req, res);
+  if (!guard) return;
+  const key = launchKey(STRATEGY_DEV_AGENT, guard.account.id);
+  const existing = agentLaunches.get(key);
+  if (existing?.status === "running") {
+    res.status(409).json({ error: "already-running" });
+    return;
+  }
+  agentLaunches.set(key, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
+  void (async () => {
+    try {
+      const result = await runStrategyDeveloper({
+        accountId: guard.account.id,
+        triggeredByUserId: guard.me.id,
+      });
+      agentLaunches.set(key, {
+        status: "succeeded",
+        error: null,
+        runId: result.runId,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    } catch (err) {
+      agentLaunches.set(key, {
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    }
+  })();
+  res.status(202).json({ launched: true });
+});
+
+/**
+ * Latest reviewable Strategy Developer draft for an account: the newest
+ * `complete` run that has not already been approved or dismissed (both
+ * decisions are recorded as audit events referencing the runId).
+ */
+async function loadLatestStrategyDraft(accountId: string) {
+  const [run] = await db
+    .select()
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, STRATEGY_DEV_AGENT),
+        eq(atelierAgentRuns.targetType, "account"),
+        eq(atelierAgentRuns.targetId, accountId),
+        eq(atelierAgentRuns.status, "complete"),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const decisions = await db
+    .select({ id: atelierAuditEvents.id, action: atelierAuditEvents.action, payload: atelierAuditEvents.payload })
+    .from(atelierAuditEvents)
+    .where(
+      and(
+        eq(atelierAuditEvents.entityType, "account"),
+        eq(atelierAuditEvents.entityId, accountId),
+        inArray(atelierAuditEvents.action, ["agent.approved", "agent.dismissed"]),
+      ),
+    );
+  const decided = decisions.some(
+    (d) => (d.payload as { runId?: string } | null)?.runId === run.id,
+  );
+  if (decided) return null;
+  return run;
+}
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.get("/accounts/:accountId/agents/strategy-developer/status", async (req, res) => {
+  const guard = await guardStrategyDeveloper(req, res);
+  if (!guard) return;
+  const key = launchKey(STRATEGY_DEV_AGENT, guard.account.id);
+  const launch = agentLaunches.get(key);
+  if (launch?.status === "running") {
+    const [row] = await db
+      .select({ statusMessage: atelierAgentRuns.statusMessage, progressPct: atelierAgentRuns.progressPct })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.agentId, STRATEGY_DEV_AGENT),
+          eq(atelierAgentRuns.targetType, "account"),
+          eq(atelierAgentRuns.targetId, guard.account.id),
+          eq(atelierAgentRuns.status, "running"),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(1);
+    res.json({
+      status: "running",
+      phase: row?.statusMessage ?? "Starting draft…",
+      progressPct: row?.progressPct ?? 5,
+      draft: null,
+      runId: null,
+      currentStrategy: guard.account.accountStrategy ?? null,
+      strategyGuidance: guard.account.strategyGuidance ?? null,
+    });
+    return;
+  }
+  const run = await loadLatestStrategyDraft(guard.account.id);
+  res.json({
+    status: launch?.status === "failed" ? "failed" : run ? "drafted" : "idle",
+    phase: launch?.status === "failed" ? launch.error : null,
+    progressPct: null,
+    runId: run?.id ?? null,
+    draft: (run?.output as StrategyDeveloperOutput | null) ?? null,
+    currentStrategy: guard.account.accountStrategy ?? null,
+    strategyGuidance: guard.account.strategyGuidance ?? null,
+  });
+});
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/strategy-developer/approve", async (req, res) => {
+  const guard = await guardStrategyDeveloper(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { runId?: string };
+  if (typeof body.runId !== "string" || !body.runId) {
+    res.status(400).json({ error: "invalid-body", reason: "runId is required." });
+    return;
+  }
+  const [run] = await db
+    .select()
+    .from(atelierAgentRuns)
+    .where(eq(atelierAgentRuns.id, body.runId));
+  if (
+    !run ||
+    run.agentId !== STRATEGY_DEV_AGENT ||
+    run.targetType !== "account" ||
+    run.targetId !== guard.account.id ||
+    run.status !== "complete"
+  ) {
+    res.status(404).json({ error: "run-not-found" });
+    return;
+  }
+  // A run that was already approved or dismissed cannot be decided again —
+  // otherwise a direct API call could apply a draft the partner dismissed.
+  const priorDecisions = await db
+    .select({ payload: atelierAuditEvents.payload })
+    .from(atelierAuditEvents)
+    .where(
+      and(
+        eq(atelierAuditEvents.entityType, "account"),
+        eq(atelierAuditEvents.entityId, guard.account.id),
+        inArray(atelierAuditEvents.action, ["agent.approved", "agent.dismissed"]),
+      ),
+    );
+  if (priorDecisions.some((d) => (d.payload as { runId?: string } | null)?.runId === run.id)) {
+    res.status(409).json({ error: "already-decided", reason: "This draft was already approved or dismissed." });
+    return;
+  }
+  const output = run.output as StrategyDeveloperOutput | null;
+  // Defence in depth: re-clamp before writing, even though the runner
+  // already clamps — the account write must never exceed the openapi caps.
+  const strategy = clampStrategyDraft(output?.draftStrategy);
+  if (
+    strategy.objectives.length === 0 &&
+    !strategy.winHypothesis &&
+    strategy.keyPlays.length === 0
+  ) {
+    res.status(409).json({ error: "empty-draft", reason: "The draft carries no strategy content." });
+    return;
+  }
+  await db
+    .update(atelierAccounts)
+    .set({ accountStrategy: strategy, updatedAt: new Date() })
+    .where(eq(atelierAccounts.id, guard.account.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    orgId: guard.account.orgId,
+    entityType: "account",
+    entityId: guard.account.id,
+    actorType: "human",
+    actorId: guard.me.id,
+    actorLabel: guard.me.name,
+    action: "agent.approved",
+    payload: { agentId: STRATEGY_DEV_AGENT, runId: run.id, fields: ["accountStrategy"] },
+    payloadSummary: `${guard.me.name} approved the Strategy Developer draft on ${guard.account.brandName ?? guard.account.name}.`,
+  });
+  // Re-index so future drafts on other accounts learn from this approved
+  // strategy (fire-and-forget; failure never breaks the approve).
+  void indexAccountStrategyExemplar(guard.account.id);
+  res.json({ ok: true, accountStrategy: strategy });
+});
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/strategy-developer/dismiss", async (req, res) => {
+  const guard = await guardStrategyDeveloper(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { runId?: string; reason?: string };
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    orgId: guard.account.orgId,
+    entityType: "account",
+    entityId: guard.account.id,
+    actorType: "human",
+    actorId: guard.me.id,
+    actorLabel: guard.me.name,
+    action: "agent.dismissed",
+    payload: {
+      agentId: STRATEGY_DEV_AGENT,
+      runId: typeof body.runId === "string" ? body.runId : null,
+      reason: typeof body.reason === "string" ? body.reason.slice(0, 240) : null,
+    },
+    payloadSummary: `${guard.me.name} dismissed the Strategy Developer draft for ${guard.account.brandName ?? guard.account.name}.`,
+  });
+  res.json({ ok: true });
 });
 
 // ---------- edit insight (author only) ----------
@@ -3318,6 +3567,11 @@ router.patch("/accounts/:accountId", async (req, res) => {
     update.parentAccountId = nextParent;
     changed.push("parentAccountId");
   }
+  // Task #699 — free-text partner guidance steering the account strategy.
+  if ("strategyGuidance" in input) {
+    update.strategyGuidance = input.strategyGuidance?.trim() || null;
+    changed.push("strategyGuidance");
+  }
   if ("accountStrategy" in input) {
     // Stamp ids on any objective that arrived without one so the UI can key
     // rows deterministically.
@@ -3422,6 +3676,13 @@ router.patch("/accounts/:accountId", async (req, res) => {
     payload: { fields: changed, changes: firmoChanges },
     payloadSummary: `${me.name} updated ${changed.join(", ")} on ${a.name}.`,
   });
+
+  // Task #699 — keep the strategy-exemplar index in sync so future Strategy
+  // Developer drafts on other accounts learn from this edit. Fire-and-forget:
+  // indexing failure never breaks the write.
+  if (changed.includes("accountStrategy")) {
+    void indexAccountStrategyExemplar(a.id);
+  }
 
   const ws = await buildWorkspace(a.id, access, me);
   res.json(ws);

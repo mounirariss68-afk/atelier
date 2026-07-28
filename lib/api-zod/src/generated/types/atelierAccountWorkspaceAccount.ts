@@ -30,6 +30,8 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   /** @nullable */
   cogniriseHypothesis?: string | null;
   accountStrategy?: AtelierAccountStrategy | null;
+  /** @nullable */
+  strategyGuidance?: string | null;
   competitors?: AtelierAccountCompetitor[];
   researchBrief?: AtelierResearchBrief | null;
   researchQuality?: AtelierAccountResearchQuality;
