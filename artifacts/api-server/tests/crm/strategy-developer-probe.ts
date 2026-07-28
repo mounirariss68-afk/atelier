@@ -294,6 +294,51 @@ async function main() {
     const reApprove = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/approve`, { runId: settled2.runId });
     check("re-approving an approved run -> 409", reApprove.status === 409, reApprove.status);
 
+    // ---- 4b. Task #703 — approve with a partner-edited draft ----
+    const run3 = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/run`, {});
+    check("third run -> 202", run3.status === 202, run3.status);
+    const settled3 = await pollStatus(
+      (s) => s?.status === "drafted" && s.runId && s.runId !== settled2.runId,
+    );
+    check("third draft ready", settled3?.status === "drafted", settled3?.status);
+    const ds3 = settled3?.draft?.draftStrategy ?? {};
+    const editedDraft = {
+      ...ds3,
+      objectives: [
+        { ...(ds3.objectives?.[0] ?? {}), text: `Partner-edited objective ${LONG}` },
+      ],
+      winHypothesis: "Partner-edited hypothesis: lead with delivery velocity.",
+      keyPlays: [...(ds3.keyPlays ?? []).slice(0, 2), "Partner-added play"],
+    };
+    const badApprove = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/approve`, { runId: settled3.runId, editedDraft: "nope" });
+    check("non-object editedDraft -> 400", badApprove.status === 400, badApprove.status);
+    const emptyApprove = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/approve`, { runId: settled3.runId, editedDraft: { objectives: [], winHypothesis: "", keyPlays: [] } });
+    check("emptied editedDraft -> 409 empty-draft", emptyApprove.status === 409 && emptyApprove.body?.error === "empty-draft", emptyApprove);
+    const approveEdited = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/approve`, { runId: settled3.runId, editedDraft });
+    check("approve with edits -> ok", approveEdited.status === 200 && approveEdited.body?.ok === true, approveEdited);
+    check(
+      "edited fields re-clamped (objective text <= 400)",
+      (approveEdited.body?.accountStrategy?.objectives?.[0]?.text ?? "").length <= 400 &&
+        approveEdited.body?.accountStrategy?.objectives?.[0]?.text?.startsWith("Partner-edited objective"),
+      approveEdited.body?.accountStrategy?.objectives?.[0]?.text?.length,
+    );
+    const [afterEdited] = await db
+      .select({ s: atelierAccounts.accountStrategy })
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, acctMain));
+    const editedApplied = afterEdited?.s as any;
+    check("edited hypothesis applied", editedApplied?.winHypothesis === "Partner-edited hypothesis: lead with delivery velocity.", editedApplied?.winHypothesis);
+    check("edited key plays applied", (editedApplied?.keyPlays ?? []).includes("Partner-added play") && editedApplied.keyPlays.length === 3, editedApplied?.keyPlays);
+    const audits3 = await db
+      .select()
+      .from(atelierAuditEvents)
+      .where(and(eq(atelierAuditEvents.entityId, acctMain), eq(atelierAuditEvents.action, "agent.approved")));
+    const editedAudit = audits3.find((a: any) => a.payload?.runId === settled3.runId);
+    check("edited approve audited partnerEdited=true", editedAudit?.payload?.partnerEdited === true, editedAudit?.payload);
+    check("edited approve summary notes edits", (editedAudit?.payloadSummary ?? "").includes("with partner edits"), editedAudit?.payloadSummary);
+    const plainAudit = audits3.find((a: any) => a.payload?.runId === settled2.runId);
+    check("plain approve audited partnerEdited=false", plainAudit?.payload?.partnerEdited === false, plainAudit?.payload);
+
     // ---- 5. Restricted persona 403s ----
     const empRun = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/run`, {}, employeeId);
     const empStatus = await api("GET", `/accounts/${acctMain}/agents/strategy-developer/status`, undefined, employeeId);

@@ -3354,6 +3354,150 @@ function StrategyColumn({ label, strategy }: { label: string; strategy: Strategy
   );
 }
 
+// Task #703 — inline editor for the proposed draft so partners can tweak
+// objectives, plays and the hypothesis before approving. Mirrors StrategyShape.
+function StrategyDraftEditor({
+  value,
+  onChange,
+}: {
+  value: StrategyShape;
+  onChange: (next: StrategyShape) => void;
+}) {
+  const inputCls =
+    "w-full bg-bg-elevate border border-border-soft rounded px-2 py-1.5 text-sm text-text focus:outline-none focus:border-gold/50";
+  const setObjective = (
+    idx: number,
+    patch: Partial<StrategyShape["objectives"][number]>,
+  ) =>
+    onChange({
+      ...value,
+      objectives: value.objectives.map((o, i) => (i === idx ? { ...o, ...patch } : o)),
+    });
+  const setList = (key: "keyPlays" | "targetServiceLines", idx: number, text: string) =>
+    onChange({ ...value, [key]: value[key].map((p, i) => (i === idx ? text : p)) });
+  const removeAt = (key: "keyPlays" | "targetServiceLines", idx: number) =>
+    onChange({ ...value, [key]: value[key].filter((_, i) => i !== idx) });
+  return (
+    <div
+      className="rounded-lg border border-gold/30 bg-bg-soft p-4 space-y-3 min-w-0"
+      data-testid="strategy-draft-editor"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <Eyebrow>Proposed draft — editable</Eyebrow>
+        <span className="text-[10px] font-mono text-text-faint inline-flex items-center gap-1">
+          <Pencil className="w-3 h-3" /> tweak before approving
+        </span>
+      </div>
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Objectives</p>
+        <div className="mt-1 space-y-2">
+          {value.objectives.map((o, i) => (
+            <div key={o.id} className="rounded border border-border-soft p-2 space-y-1.5">
+              <div className="flex items-start gap-1.5">
+                <textarea
+                  value={o.text}
+                  onChange={(e) => setObjective(i, { text: e.target.value })}
+                  rows={2}
+                  className={`${inputCls} resize-y`}
+                  data-testid={`input-draft-objective-text-${i}`}
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      ...value,
+                      objectives: value.objectives.filter((_, j) => j !== i),
+                    })
+                  }
+                  className="text-text-faint hover:text-danger mt-1"
+                  title="Remove objective"
+                  data-testid={`button-draft-objective-remove-${i}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                <input
+                  value={o.targetValue ?? ""}
+                  onChange={(e) => setObjective(i, { targetValue: e.target.value || null })}
+                  placeholder="Target value"
+                  className={inputCls}
+                  data-testid={`input-draft-objective-target-${i}`}
+                />
+                <input
+                  value={o.targetDate ?? ""}
+                  onChange={(e) => setObjective(i, { targetDate: e.target.value || null })}
+                  placeholder="Target date"
+                  className={inputCls}
+                  data-testid={`input-draft-objective-date-${i}`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Target service lines</p>
+        <div className="mt-1 space-y-1.5">
+          {value.targetServiceLines.map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <input
+                value={s}
+                onChange={(e) => setList("targetServiceLines", i, e.target.value)}
+                className={inputCls}
+                data-testid={`input-draft-serviceline-${i}`}
+              />
+              <button
+                type="button"
+                onClick={() => removeAt("targetServiceLines", i)}
+                className="text-text-faint hover:text-danger"
+                title="Remove service line"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Win hypothesis</p>
+        <textarea
+          value={value.winHypothesis}
+          onChange={(e) => onChange({ ...value, winHypothesis: e.target.value })}
+          rows={3}
+          className={`${inputCls} mt-1 resize-y`}
+          data-testid="input-draft-win-hypothesis"
+        />
+      </div>
+      <div>
+        <p className="text-[10px] font-mono uppercase tracking-wider text-text-faint">Key plays</p>
+        <div className="mt-1 space-y-1.5">
+          {value.keyPlays.map((p, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <textarea
+                value={p}
+                onChange={(e) => setList("keyPlays", i, e.target.value)}
+                rows={2}
+                className={`${inputCls} resize-y`}
+                data-testid={`input-draft-keyplay-${i}`}
+              />
+              <button
+                type="button"
+                onClick={() => removeAt("keyPlays", i)}
+                className="text-text-faint hover:text-danger"
+                title="Remove play"
+                data-testid={`button-draft-keyplay-remove-${i}`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -3362,6 +3506,21 @@ function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [deciding, setDeciding] = useState(false);
   const [decided, setDecided] = useState<"approved" | "dismissed" | null>(null);
+  // Task #703 — partner-editable copy of the draft. `pristine` holds the
+  // agent's original (stringified) so we only send editedDraft when changed.
+  const [edited, setEdited] = useState<StrategyShape | null>(null);
+  const [pristine, setPristine] = useState<string | null>(null);
+  const syncEditable = (s: StrategyDevStatus | null) => {
+    const d = s?.status === "drafted" ? s.draft?.draftStrategy ?? null : null;
+    if (d) {
+      const clone = JSON.parse(JSON.stringify(d)) as StrategyShape;
+      setEdited(clone);
+      setPristine(JSON.stringify(d));
+    } else {
+      setEdited(null);
+      setPristine(null);
+    }
+  };
 
   const base = `${import.meta.env.BASE_URL}api/atelier/accounts/${accountId}/agents/strategy-developer`;
 
@@ -3377,6 +3536,7 @@ function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
     void fetchStatus().then((s) => {
       if (!cancelled && s) {
         setStatus(s);
+        syncEditable(s);
         if (s.status === "running") {
           setRunning(true);
           void poll();
@@ -3396,6 +3556,7 @@ function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
       if (!s) continue;
       setStatus(s);
       if (s.status !== "running") {
+        syncEditable(s);
         setRunning(false);
         if (s.status === "failed") setError(s.phase ?? "Draft failed");
         return;
@@ -3433,11 +3594,20 @@ function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
     setDeciding(true);
     setError(null);
     try {
+      // Task #703 — approve sends the partner-edited draft when it differs
+      // from the agent's original; the server re-clamps and audits the edit.
+      const hasEdits =
+        action === "approve" &&
+        !!edited &&
+        !!pristine &&
+        JSON.stringify(edited) !== pristine;
       const res = await fetch(`${base}/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ runId: status.runId }),
+        body: JSON.stringify(
+          hasEdits ? { runId: status.runId, editedDraft: edited } : { runId: status.runId },
+        ),
       });
       if (!res.ok) {
         const detail = (await res.json().catch(() => ({}))) as { reason?: string; error?: string };
@@ -3522,9 +3692,29 @@ function StrategyDeveloperPanel({ accountId }: { accountId: string }) {
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <StrategyColumn label="Current strategy" strategy={status?.currentStrategy ?? null} />
-            <StrategyColumn label="Proposed draft" strategy={draft.draftStrategy} />
+            {edited ? (
+              <StrategyDraftEditor value={edited} onChange={setEdited} />
+            ) : (
+              <StrategyColumn label="Proposed draft" strategy={draft.draftStrategy} />
+            )}
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 items-center">
+            {edited && pristine && JSON.stringify(edited) !== pristine && (
+              <>
+                <span className="text-[11px] font-mono text-gold mr-auto" data-testid="text-strategy-edited">
+                  Draft edited — your version will be applied.
+                </span>
+                <PillButton
+                  variant="ghost"
+                  onClick={() => syncEditable(status)}
+                  disabled={deciding}
+                  data-testid="button-strategy-reset-edits"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset edits
+                </PillButton>
+              </>
+            )}
             <PillButton
               variant="ghost"
               onClick={() => decide("dismiss")}

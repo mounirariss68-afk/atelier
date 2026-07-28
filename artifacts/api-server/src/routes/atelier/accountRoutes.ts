@@ -1964,9 +1964,22 @@ router.get("/accounts/:accountId/agents/strategy-developer/status", async (req, 
 router.post("/accounts/:accountId/agents/strategy-developer/approve", async (req, res) => {
   const guard = await guardStrategyDeveloper(req, res);
   if (!guard) return;
-  const body = (req.body ?? {}) as { runId?: string };
+  // Task #703 — the partner may tweak the drafted fields inline before
+  // approving. `editedDraft` (optional) carries the partner-edited strategy;
+  // the server re-clamps it against the same caps as the agent draft and
+  // audits that the applied strategy was partner-edited.
+  const body = (req.body ?? {}) as { runId?: string; editedDraft?: unknown };
   if (typeof body.runId !== "string" || !body.runId) {
     res.status(400).json({ error: "invalid-body", reason: "runId is required." });
+    return;
+  }
+  if (
+    body.editedDraft !== undefined &&
+    (typeof body.editedDraft !== "object" ||
+      body.editedDraft === null ||
+      Array.isArray(body.editedDraft))
+  ) {
+    res.status(400).json({ error: "invalid-body", reason: "editedDraft must be an object." });
     return;
   }
   const [run] = await db
@@ -2002,7 +2015,17 @@ router.post("/accounts/:accountId/agents/strategy-developer/approve", async (req
   const output = run.output as StrategyDeveloperOutput | null;
   // Defence in depth: re-clamp before writing, even though the runner
   // already clamps — the account write must never exceed the openapi caps.
-  const strategy = clampStrategyDraft(output?.draftStrategy);
+  // Task #703 — when the partner edited the draft inline, the edited copy is
+  // what gets clamped and applied; the pristine agent draft stays on the run
+  // row so the audit trail can show what the agent originally proposed.
+  const agentDraft = clampStrategyDraft(output?.draftStrategy);
+  const strategy =
+    body.editedDraft !== undefined ? clampStrategyDraft(body.editedDraft) : agentDraft;
+  // Only stamp "edited" when the applied strategy actually differs from the
+  // agent's draft (a no-op editedDraft is treated as a plain approve).
+  const partnerEdited =
+    body.editedDraft !== undefined &&
+    JSON.stringify(strategy) !== JSON.stringify(agentDraft);
   if (
     strategy.objectives.length === 0 &&
     !strategy.winHypothesis &&
@@ -2024,8 +2047,17 @@ router.post("/accounts/:accountId/agents/strategy-developer/approve", async (req
     actorId: guard.me.id,
     actorLabel: guard.me.name,
     action: "agent.approved",
-    payload: { agentId: STRATEGY_DEV_AGENT, runId: run.id, fields: ["accountStrategy"] },
-    payloadSummary: `${guard.me.name} approved the Strategy Developer draft on ${guard.account.brandName ?? guard.account.name}.`,
+    payload: {
+      agentId: STRATEGY_DEV_AGENT,
+      runId: run.id,
+      fields: ["accountStrategy"],
+      // Task #703 — record that the applied strategy was tweaked by the
+      // partner before approval (the pristine agent draft stays on the run row).
+      partnerEdited,
+    },
+    payloadSummary: partnerEdited
+      ? `${guard.me.name} approved the Strategy Developer draft on ${guard.account.brandName ?? guard.account.name} with partner edits.`
+      : `${guard.me.name} approved the Strategy Developer draft on ${guard.account.brandName ?? guard.account.name}.`,
   });
   // Re-index so future drafts on other accounts learn from this approved
   // strategy (fire-and-forget; failure never breaks the approve).
