@@ -91,32 +91,82 @@ export async function perplexitySearch(
       : {}),
   };
 
+  const payload = JSON.stringify(body);
+  const stubBase = process.env.ATELIER_PERPLEXITY_BASE_URL;
   let res: Response;
-  try {
-    const stubBase = process.env.ATELIER_PERPLEXITY_BASE_URL;
-    if (stubBase) {
-      // Test stub path — offline probes point this at a local stub server.
+  if (stubBase) {
+    // Test stub path — offline probes point this at a local stub server.
+    try {
       res = await fetch(`${stubBase.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: payload,
       });
-    } else {
-      // Replit Perplexity connector — the SDK proxies to the Perplexity API
-      // and injects the API key. Never cache the client (tokens rotate).
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new PerplexityConnectionError(`connection failed (${msg}).`);
+    }
+  } else {
+    // Preferred: Replit Perplexity connector — the SDK proxies to the
+    // Perplexity API and injects the API key. Never cache the client
+    // (tokens rotate). Fallback: the connector binding has been broken
+    // platform-side ("No perplexity connection found") since ~2026-07,
+    // so when the connector transport fails OR the proxy 404s with a
+    // no-connection error, retry directly against api.perplexity.ai with
+    // the PERPLEXITY_API_KEY secret. Still fail-loud when neither works.
+    let connectorFailure: string | null = null;
+    let proxied: Response | null = null;
+    try {
       const { ReplitConnectors } = await import("@replit/connectors-sdk");
       const connectors = new ReplitConnectors();
-      res = (await connectors.proxy("perplexity", "/chat/completions", {
+      proxied = (await connectors.proxy("perplexity", "/chat/completions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: payload,
       })) as Response;
+    } catch (err) {
+      connectorFailure = err instanceof Error ? err.message : String(err);
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new PerplexityConnectionError(
-      `connection failed (${msg}). Check the Replit Perplexity connector is set up and authorized.`,
-    );
+    if (proxied && proxied.status === 404) {
+      // Distinguish "connector not bound" (proxy-level 404) from a real
+      // Perplexity API 404 by sniffing the error body.
+      let text = "";
+      try {
+        text = await proxied.clone().text();
+      } catch {
+        /* ignore */
+      }
+      if (/no perplexity connection/i.test(text)) {
+        connectorFailure = `connector proxy 404 — ${text.slice(0, 120)}`;
+        proxied = null;
+      }
+    }
+    if (proxied) {
+      res = proxied;
+    } else {
+      const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+      if (!apiKey) {
+        throw new PerplexityConnectionError(
+          `connection failed (${connectorFailure ?? "connector unavailable"}). ` +
+            "Check the Replit Perplexity connector is authorized, or set the PERPLEXITY_API_KEY secret.",
+        );
+      }
+      try {
+        res = await fetch("https://api.perplexity.ai/chat/completions", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${apiKey}`,
+          },
+          body: payload,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new PerplexityConnectionError(
+          `connector failed (${connectorFailure ?? "unavailable"}) and direct API fallback failed (${msg}).`,
+        );
+      }
+    }
   }
   if (!res.ok) {
     let snippet = "";
