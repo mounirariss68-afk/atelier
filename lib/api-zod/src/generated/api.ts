@@ -9004,6 +9004,10 @@ export const atelierListAccountsResponseCountryPresenceItemCountryMax = 120;
 
 export const atelierListAccountsResponseCountryPresenceItemNoteMax = 200;
 
+export const atelierListAccountsResponseIndustryCodeMax = 64;
+
+export const atelierListAccountsResponseSubIndustryCodeMax = 64;
+
 export const AtelierListAccountsResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
@@ -9102,6 +9106,14 @@ export const AtelierListAccountsResponseItem = zod.object({
       zod.literal("office"),
       zod.literal(null),
     ])
+    .nullish(),
+  industryCode: zod
+    .string()
+    .max(atelierListAccountsResponseIndustryCodeMax)
+    .nullish(),
+  subIndustryCode: zod
+    .string()
+    .max(atelierListAccountsResponseSubIndustryCodeMax)
     .nullish(),
   relationshipStrength: zod.number(),
   openOpportunityCount: zod.number().optional(),
@@ -9699,6 +9711,10 @@ export const atelierMergeAccountsResponseWorkspaceAccountOneCountryPresenceItemC
 
 export const atelierMergeAccountsResponseWorkspaceAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierMergeAccountsResponseWorkspaceAccountOneIndustryCodeMax = 64;
+
+export const atelierMergeAccountsResponseWorkspaceAccountOneSubIndustryCodeMax = 64;
+
 export const atelierMergeAccountsResponseWorkspaceAccountTwoHealthOneScoreMin = 0;
 export const atelierMergeAccountsResponseWorkspaceAccountTwoHealthOneScoreMax = 100;
 
@@ -9900,6 +9916,16 @@ export const AtelierMergeAccountsResponse = zod.object({
             zod.literal("office"),
             zod.literal(null),
           ])
+          .nullish(),
+        industryCode: zod
+          .string()
+          .max(atelierMergeAccountsResponseWorkspaceAccountOneIndustryCodeMax)
+          .nullish(),
+        subIndustryCode: zod
+          .string()
+          .max(
+            atelierMergeAccountsResponseWorkspaceAccountOneSubIndustryCodeMax,
+          )
           .nullish(),
         relationshipStrength: zod.number(),
         openOpportunityCount: zod.number().optional(),
@@ -10796,6 +10822,10 @@ export const atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemCoun
 
 export const atelierGetAccountWorkspaceResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierGetAccountWorkspaceResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierGetAccountWorkspaceResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierGetAccountWorkspaceResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -10993,6 +11023,14 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierGetAccountWorkspaceResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierGetAccountWorkspaceResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -12139,6 +12177,10 @@ export const atelierUpdateAccountResponseAccountOneCountryPresenceItemCountryMax
 
 export const atelierUpdateAccountResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpdateAccountResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpdateAccountResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -12336,6 +12378,14 @@ export const AtelierUpdateAccountResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpdateAccountResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierUpdateAccountResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -13219,6 +13269,10 @@ export const atelierRefreshAccountCartographerResponseAccountOneCountryPresenceI
 
 export const atelierRefreshAccountCartographerResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierRefreshAccountCartographerResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierRefreshAccountCartographerResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierRefreshAccountCartographerResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -13416,6 +13470,16 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierRefreshAccountCartographerResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(
+          atelierRefreshAccountCartographerResponseAccountOneSubIndustryCodeMax,
+        )
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -15012,6 +15076,10 @@ export const atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemCoun
 
 export const atelierDecideProfileUpdateResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierDecideProfileUpdateResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierDecideProfileUpdateResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDecideProfileUpdateResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -15209,6 +15277,14 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierDecideProfileUpdateResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierDecideProfileUpdateResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -16101,6 +16177,10 @@ export const atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceIte
 
 export const atelierBulkDecideProfileUpdatesResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierBulkDecideProfileUpdatesResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierBulkDecideProfileUpdatesResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierBulkDecideProfileUpdatesResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -16298,6 +16378,16 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierBulkDecideProfileUpdatesResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(
+          atelierBulkDecideProfileUpdatesResponseAccountOneSubIndustryCodeMax,
+        )
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -17203,6 +17293,10 @@ export const atelierCreateAccountInsightResponseAccountOneCountryPresenceItemCou
 
 export const atelierCreateAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierCreateAccountInsightResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierCreateAccountInsightResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -17400,6 +17494,14 @@ export const AtelierCreateAccountInsightResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierCreateAccountInsightResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierCreateAccountInsightResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -18304,6 +18406,10 @@ export const atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemCou
 
 export const atelierUpdateAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpdateAccountInsightResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpdateAccountInsightResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -18501,6 +18607,14 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpdateAccountInsightResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierUpdateAccountInsightResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -19389,6 +19503,10 @@ export const atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemCou
 
 export const atelierDeleteAccountInsightResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierDeleteAccountInsightResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierDeleteAccountInsightResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountInsightResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -19586,6 +19704,14 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierDeleteAccountInsightResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierDeleteAccountInsightResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -20483,6 +20609,10 @@ export const atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemCou
 
 export const atelierAddAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierAddAccountTeamMemberResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierAddAccountTeamMemberResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierAddAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -20680,6 +20810,14 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierAddAccountTeamMemberResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierAddAccountTeamMemberResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -21577,6 +21715,10 @@ export const atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItem
 
 export const atelierUpdateAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpdateAccountTeamMemberResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpdateAccountTeamMemberResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -21774,6 +21916,14 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpdateAccountTeamMemberResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierUpdateAccountTeamMemberResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -22664,6 +22814,10 @@ export const atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItem
 
 export const atelierRemoveAccountTeamMemberResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierRemoveAccountTeamMemberResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierRemoveAccountTeamMemberResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierRemoveAccountTeamMemberResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -22861,6 +23015,14 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierRemoveAccountTeamMemberResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierRemoveAccountTeamMemberResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -23763,6 +23925,10 @@ export const atelierCreateAccountActionResponseAccountOneCountryPresenceItemCoun
 
 export const atelierCreateAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierCreateAccountActionResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierCreateAccountActionResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -23960,6 +24126,14 @@ export const AtelierCreateAccountActionResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierCreateAccountActionResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierCreateAccountActionResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -24859,6 +25033,10 @@ export const atelierUpdateAccountActionResponseAccountOneCountryPresenceItemCoun
 
 export const atelierUpdateAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpdateAccountActionResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpdateAccountActionResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -25056,6 +25234,14 @@ export const AtelierUpdateAccountActionResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpdateAccountActionResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierUpdateAccountActionResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -25944,6 +26130,10 @@ export const atelierDeleteAccountActionResponseAccountOneCountryPresenceItemCoun
 
 export const atelierDeleteAccountActionResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierDeleteAccountActionResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierDeleteAccountActionResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountActionResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -26141,6 +26331,14 @@ export const AtelierDeleteAccountActionResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierDeleteAccountActionResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierDeleteAccountActionResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -27038,6 +27236,10 @@ export const atelierCreateAccountRiskResponseAccountOneCountryPresenceItemCountr
 
 export const atelierCreateAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierCreateAccountRiskResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierCreateAccountRiskResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierCreateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -27235,6 +27437,14 @@ export const AtelierCreateAccountRiskResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierCreateAccountRiskResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierCreateAccountRiskResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -28133,6 +28343,10 @@ export const atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemCountr
 
 export const atelierUpdateAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpdateAccountRiskResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpdateAccountRiskResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpdateAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -28330,6 +28544,14 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpdateAccountRiskResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierUpdateAccountRiskResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -29218,6 +29440,10 @@ export const atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemCountr
 
 export const atelierDeleteAccountRiskResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierDeleteAccountRiskResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierDeleteAccountRiskResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierDeleteAccountRiskResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -29415,6 +29641,14 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierDeleteAccountRiskResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(atelierDeleteAccountRiskResponseAccountOneSubIndustryCodeMax)
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),
@@ -30309,6 +30543,10 @@ export const atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceIt
 
 export const atelierUpsertAccountGoalProgressResponseAccountOneCountryPresenceItemNoteMax = 200;
 
+export const atelierUpsertAccountGoalProgressResponseAccountOneIndustryCodeMax = 64;
+
+export const atelierUpsertAccountGoalProgressResponseAccountOneSubIndustryCodeMax = 64;
+
 export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMin = 0;
 export const atelierUpsertAccountGoalProgressResponseAccountTwoHealthOneScoreMax = 100;
 
@@ -30506,6 +30744,16 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
           zod.literal("office"),
           zod.literal(null),
         ])
+        .nullish(),
+      industryCode: zod
+        .string()
+        .max(atelierUpsertAccountGoalProgressResponseAccountOneIndustryCodeMax)
+        .nullish(),
+      subIndustryCode: zod
+        .string()
+        .max(
+          atelierUpsertAccountGoalProgressResponseAccountOneSubIndustryCodeMax,
+        )
         .nullish(),
       relationshipStrength: zod.number(),
       openOpportunityCount: zod.number().optional(),

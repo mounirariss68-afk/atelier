@@ -102,6 +102,8 @@ import {
   AlertTriangle,
   PenLine,
 } from "lucide-react";
+import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
+import { localizedIndustryName } from "@/lib/reference-data";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
 import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPanel";
 // Task #159 — contract records linked to this account.
@@ -1881,6 +1883,30 @@ function CompanyDetailsCard({
   canEdit: boolean;
 }) {
   const a = account;
+  // Task #700 — resolve the classified industry codes to taxonomy display
+  // names via the shared reference-data bootstrap. Fetch only when a code is
+  // present so unclassified accounts don't fire an unnecessary request.
+  const hasIndustry = !!a.industryCode;
+  const { data: refData } = useReferenceBootstrap(hasIndustry);
+  const industryRow = hasIndustry
+    ? refData?.industries.find((i) => i.code === a.industryCode) ?? null
+    : null;
+  const subIndustryRow =
+    hasIndustry && a.subIndustryCode
+      ? refData?.subIndustries.find((s) => s.code === a.subIndustryCode) ?? null
+      : null;
+  const industryLabel = hasIndustry
+    ? [
+        industryRow ? localizedIndustryName(industryRow, "en") : a.industryCode,
+        a.subIndustryCode
+          ? subIndustryRow
+            ? localizedIndustryName(subIndustryRow, "en")
+            : a.subIndustryCode
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const rev = a.annualRevenue ?? null;
   const revRedacted = a.annualRevenueRedacted === true;
   const holding = a.holdingStructure ?? null;
@@ -1927,6 +1953,7 @@ function CompanyDetailsCard({
   }
 
   const hasAnything =
+    hasIndustry ||
     employeeCount != null ||
     rev != null ||
     revRedacted ||
@@ -2026,6 +2053,21 @@ function CompanyDetailsCard({
       {header}
 
       <dl className="space-y-2 text-sm">
+        <Row
+          label="Industry"
+          value={
+            industryLabel ? (
+              <span data-testid="text-account-industry">{industryLabel}</span>
+            ) : (
+              <span
+                className="text-text-mute italic"
+                data-testid="text-account-industry"
+              >
+                Not classified yet
+              </span>
+            )
+          }
+        />
         <Row
           label="Employees"
           value={

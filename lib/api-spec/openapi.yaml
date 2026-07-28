@@ -7018,6 +7018,10 @@ components:
         entityRole:
           type: ["string", "null"]
           enum: [hq, subsidiary, branch, office, null]
+        # Task #700 — classified industry taxonomy codes (Cartographer or
+        # manual). Display names come from the reference-data bootstrap.
+        industryCode: { type: ["string", "null"], maxLength: 64 }
+        subIndustryCode: { type: ["string", "null"], maxLength: 64 }
         relationshipStrength: { type: number }
         openOpportunityCount: { type: integer }
         activeEngagementCount: { type: integer }

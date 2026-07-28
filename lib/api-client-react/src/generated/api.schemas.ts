@@ -969,6 +969,16 @@ export interface AtelierAccountSummary {
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
   entityRole?: AtelierAccountSummaryEntityRole;
+  /**
+   * @maxLength 64
+   * @nullable
+   */
+  industryCode?: string | null;
+  /**
+   * @maxLength 64
+   * @nullable
+   */
+  subIndustryCode?: string | null;
   relationshipStrength: number;
   openOpportunityCount?: number;
   activeEngagementCount?: number;

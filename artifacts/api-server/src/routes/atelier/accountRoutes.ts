@@ -361,6 +361,10 @@ async function summariseAccount(
       | "branch"
       | "office"
       | null,
+    // Task #700 — classified industry taxonomy codes surfaced on the
+    // account profile (display names resolved client-side via reference data).
+    industryCode: a.industryCode ?? null,
+    subIndustryCode: a.subIndustryCode ?? null,
     relationshipStrength: Number(a.relationshipStrength ?? 0),
     openOpportunityCount: openOpps.length,
     activeEngagementCount: activeEngs.length,
