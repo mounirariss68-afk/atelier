@@ -46,6 +46,13 @@ import {
 
 interface Props {
   trigger: React.ReactNode;
+  // Task #726 — when opened from an account detail page, the target account
+  // is preselected and locked (the picker + "new account" mode are hidden).
+  presetAccount?: { id: string; name: string };
+  // Optional post-create hook. When provided, it replaces the default
+  // navigate-to-the-new-opportunity behavior (used by the account page to
+  // stay put and refresh its own opportunity list).
+  onCreated?: (opportunityId: string) => void;
 }
 
 type FormState = {
@@ -130,7 +137,7 @@ function FieldError({ msg }: { msg?: string | null }) {
   return <p className="text-[11px] text-danger mt-1">{msg}</p>;
 }
 
-export function CreateOpportunityDialog({ trigger }: Props) {
+export function CreateOpportunityDialog({ trigger, presetAccount, onCreated }: Props) {
   const [open, setOpen] = React.useState(false);
   const [, setLocation] = useLocation();
   const qc = useQueryClient();
@@ -155,7 +162,7 @@ export function CreateOpportunityDialog({ trigger }: Props) {
       name: "",
       description: "",
       accountMode: "existing",
-      accountId: "",
+      accountId: presetAccount?.id ?? "",
       newAccountName: "",
       newAccountCountry: "Türkiye",
       newAccountSector: "",
@@ -172,7 +179,7 @@ export function CreateOpportunityDialog({ trigger }: Props) {
       runScout: true,
       scoutFocus: "",
     }),
-    [me?.id],
+    [me?.id, presetAccount?.id],
   );
 
   const [form, setForm] = React.useState<FormState>(initial);
@@ -341,7 +348,11 @@ export function CreateOpportunityDialog({ trigger }: Props) {
           : "Pipeline updated. Run Pursuit Scout from the Brief tab when ready.",
       });
       setOpen(false);
-      setLocation(`/pipeline/${res.opportunity.id}`);
+      if (onCreated) {
+        onCreated(res.opportunity.id);
+      } else {
+        setLocation(`/pipeline/${res.opportunity.id}`);
+      }
     } catch (err) {
       // Task #30 — a 409 duplicate-opportunity conflict is not a failure
       // toast; it renders an inline warning panel with an explicit
@@ -454,6 +465,20 @@ export function CreateOpportunityDialog({ trigger }: Props) {
           </Section>
 
           {/* ───────────── Account ───────────── */}
+          {presetAccount ? (
+            <Section
+              title="Account"
+              hint="Created from this account's page — the account is fixed."
+            >
+              <div
+                className={`${selectCls} flex items-center justify-between opacity-80 cursor-default`}
+                data-testid="preset-account-locked"
+              >
+                <span className="text-text">{presetAccount.name}</span>
+                <Check className="w-4 h-4 text-gold shrink-0 ml-2" />
+              </div>
+            </Section>
+          ) : (
           <Section
             title="Account"
             hint="Pick the client this opportunity belongs to, or create one if it's net-new."
@@ -660,6 +685,7 @@ export function CreateOpportunityDialog({ trigger }: Props) {
               </div>
             )}
           </Section>
+          )}
 
           {/* ───────────── Owners ───────────── */}
           <Section

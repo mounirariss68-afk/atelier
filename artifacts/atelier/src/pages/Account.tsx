@@ -101,7 +101,9 @@ import {
   Zap,
   AlertTriangle,
   PenLine,
+  Plus,
 } from "lucide-react";
+import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
 import { localizedIndustryName } from "@/lib/reference-data";
 import { SendForSignatureDialog } from "@/components/esign/SendForSignatureDialog";
@@ -463,7 +465,14 @@ export default function Account() {
             canMerge={canMerge}
           />
         )}
-        {tab === "opportunities" && <OpportunitiesTab opps={ws.opportunities} />}
+        {tab === "opportunities" && (
+          <OpportunitiesTab
+            opps={ws.opportunities}
+            accountId={accountId}
+            accountName={a.name}
+            onCreated={invalidate}
+          />
+        )}
         {tab === "engagements" && <EngagementsTab engs={ws.engagements} />}
         {tab === "relationships" && (
           <RelationshipsTab
@@ -2956,18 +2965,44 @@ function DecisionMakersGraph({
 
 function OpportunitiesTab({
   opps,
+  accountId,
+  accountName,
+  onCreated,
 }: {
   opps: AtelierAccountWorkspace["opportunities"];
+  accountId: string;
+  accountName: string;
+  onCreated: () => void;
 }) {
+  // Task #726 — create an opportunity without detouring to Pipeline. Same
+  // dialog as Pipeline (which shows the trigger to every CRM persona), with
+  // this account preselected and locked; on success we refresh the account
+  // workspace so the new deal appears in the list immediately.
+  const newOppButton = (
+    <CreateOpportunityDialog
+      presetAccount={{ id: accountId, name: accountName }}
+      onCreated={onCreated}
+      trigger={
+        <PillButton variant="primary" data-testid="btn-account-new-opportunity">
+          <span className="inline-flex items-center gap-1">
+            <Plus className="w-3 h-3" /> New opportunity
+          </span>
+        </PillButton>
+      }
+    />
+  );
   if (opps.length === 0) {
     return (
-      <Card className="p-8 text-center text-text-mute font-mono text-sm">
-        No opportunities for this account.
+      <Card className="p-8 text-center text-text-mute font-mono text-sm space-y-4">
+        <p>No opportunities for this account.</p>
+        <div className="flex justify-center">{newOppButton}</div>
       </Card>
     );
   }
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-4">
+      <div className="flex justify-end">{newOppButton}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {opps.map((o) => (
         <Card key={o.id} className="p-5 hover:border-gold/50 transition-colors">
           <Link
@@ -2991,6 +3026,7 @@ function OpportunitiesTab({
           )}
         </Card>
       ))}
+      </div>
     </div>
   );
 }
