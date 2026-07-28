@@ -38,6 +38,7 @@ import {
   atelierDealPricings,
   atelierOpportunityStageTransitions,
 } from "@workspace/db";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -681,7 +682,7 @@ router.get("/reports/:id/export.csv", async (req, res) => {
   const lines = [cols.join(",")];
   for (const r of result.rows) lines.push(cols.map((c) => escape(r[c])).join(","));
   res.setHeader("Content-Type", "text/csv");
-  res.setHeader("Content-Disposition", `attachment; filename="${row.id}.csv"`);
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${row.id}.csv`));
   res.send(lines.join("\n"));
 });
 
@@ -698,7 +699,7 @@ router.get("/reports/:id/export.pdf", async (req, res) => {
   }
   const result = (row.lastRunSnapshot as { rows: Array<Record<string, unknown>>; summary?: string } | null) ?? { rows: [], summary: "" };
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${row.id}.pdf"`);
+  res.setHeader("Content-Disposition", contentDispositionFilename("inline", `${row.id}.pdf`));
   const doc = new PDFDocument({ size: "A4", margin: 48 });
   doc.pipe(res);
   doc.rect(0, 0, doc.page.width, 64).fill("#0E1F3D");

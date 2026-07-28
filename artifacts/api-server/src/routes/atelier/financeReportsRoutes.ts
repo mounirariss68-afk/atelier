@@ -49,6 +49,7 @@ import {
   type GlPnlFlows,
 } from "./financeGlStatements";
 import { loadBoardPackLogo } from "../../lib/atelier-board-pack-logo.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 const router: IRouter = Router();
 
@@ -1173,7 +1174,7 @@ router.get("/finance/reports/board-pack.pdf", async (req, res) => {
   const elimsBsOut = convertElims(elimsBs, currency, period);
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="board-pack-${period.id}.pdf"`);
+  res.setHeader("Content-Disposition", contentDispositionFilename("inline", `board-pack-${period.id}.pdf`));
   const doc = new PDFDocument({ size: "A4", margin: 56 });
   doc.pipe(res);
 

@@ -33,6 +33,7 @@ import { buildAccountPlan } from "../../lib/atelier-account-plan.js";
 import { isRestrictedPersona, isBoardObserver } from "./personaRoles.js";
 import { canSeeAccount } from "./accountRoutes.js";
 import { accessibleEngagementIds } from "./engagementRoutes.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 type Persona = { id: string; role: string; name: string; orgId?: string };
 
@@ -210,7 +211,7 @@ export async function accountPlanPdfHandler(
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+    contentDispositionFilename("attachment", filename),
   );
 
   const doc = new PDFDocument({ size: "A4", margin: 48 });

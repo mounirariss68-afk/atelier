@@ -90,6 +90,7 @@ import {
   formatReferenceValue,
   type Counterparty,
 } from "../../lib/atelier-contract-service.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 type TemplateRow = typeof atelierContractTemplates.$inferSelect;
@@ -698,7 +699,7 @@ router.get("/contract-templates/:id/download", async (req, res) => {
   res.setHeader("Content-Type", DOCX_MIME);
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${version.fileName.replace(/[^\w.\- ]+/g, "_")}"`,
+    contentDispositionFilename("attachment", version.fileName),
   );
   res.send(bytes);
 });
@@ -892,7 +893,7 @@ router.get("/me/contracts/:id/documents/:docId/download", async (req, res) => {
   res.setHeader("Content-Type", doc.mime);
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${doc.fileName.replace(/[^\w.\- ]+/g, "_")}"`,
+    contentDispositionFilename("attachment", doc.fileName),
   );
   res.send(bytes);
 });
@@ -1645,7 +1646,7 @@ router.get("/contracts/:id/documents/:docId/download", async (req, res) => {
   res.setHeader("Content-Type", doc.mime);
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${doc.fileName.replace(/[^\w.\- ]+/g, "_")}"`,
+    contentDispositionFilename("attachment", doc.fileName),
   );
   res.send(bytes);
 });

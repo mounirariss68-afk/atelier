@@ -49,6 +49,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { ensureEngAccess, audit } from "./engagementRoutes.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1271,7 +1272,7 @@ router.get("/artifacts/:filename", async (req, res) => {
     : safe.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     : "application/octet-stream";
   res.setHeader("content-type", ct);
-  res.setHeader("content-disposition", `inline; filename="${safe}"`);
+  res.setHeader("content-disposition", contentDispositionFilename("inline", safe));
   createReadStream(full).pipe(res);
 });
 

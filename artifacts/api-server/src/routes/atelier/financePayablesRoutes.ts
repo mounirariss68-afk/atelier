@@ -30,6 +30,7 @@ import {
 import { runSelfBillingClerk } from "../../lib/atelier-agents/selfBillingClerk.js";
 import { nextRunNumber } from "../../lib/atelier-agents/selfBillingClerk.js";
 import { notifySupplierOfInvoice } from "../../lib/selfBilledInvoiceEmail.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -670,7 +671,7 @@ router.post("/finance/payables/payment-runs/:id/export", async (req, res, next) 
       });
     }
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${run.runNumber}.csv"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${run.runNumber}.csv`));
     res.send(lines.join("\n"));
   } catch (err) { next(err); }
 });

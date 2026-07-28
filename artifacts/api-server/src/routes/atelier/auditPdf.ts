@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { withRls } from "./rls";
 import { resolveUserIdForPerson } from "./meRoutes";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 const ENTITY_TYPES = new Set([
   "account",
@@ -67,7 +68,7 @@ export async function auditPdfHandler(req: Request, res: Response): Promise<void
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+    contentDispositionFilename("attachment", filename),
   );
 
   const doc = new PDFDocument({ size: "A4", margin: 56 });
@@ -244,7 +245,7 @@ export async function personAuditPdfHandler(req: Request, res: Response): Promis
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+    contentDispositionFilename("attachment", filename),
   );
 
   const doc = new PDFDocument({ size: "A4", margin: 56 });

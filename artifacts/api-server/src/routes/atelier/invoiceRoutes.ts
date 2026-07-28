@@ -56,6 +56,7 @@ import {
 } from "../../lib/clientInvoicePdf.js";
 import { sendEmail } from "../../lib/email.js";
 import { buildCogniriseEmail } from "../../lib/cognirise-email-templates.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 const router: IRouter = Router();
 
@@ -668,10 +669,10 @@ router.get("/wallet/invoices/:id/pdf", async (req, res) => {
     return;
   }
   const inv = loaded.args.invoice;
-  const filename = `${(inv.invoiceNumber ?? inv.id).replace(/[^a-zA-Z0-9._-]/g, "_")}.pdf`;
+  const filename = `${inv.invoiceNumber ?? inv.id}.pdf`;
   res.setHeader("Content-Type", "application/pdf");
   const disposition = req.query.download === "1" ? "attachment" : "inline";
-  res.setHeader("Content-Disposition", `${disposition}; filename="${filename}"`);
+  res.setHeader("Content-Disposition", contentDispositionFilename(disposition, filename));
   const doc = new PDFDocument({ size: "A4", margin: 56 });
   doc.pipe(res);
   writeClientInvoicePdf(doc, loaded.args);

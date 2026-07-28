@@ -24,6 +24,7 @@ import {
 } from "@workspace/db";
 import PDFDocument from "pdfkit";
 import { writeSelfBilledInvoicePdf } from "../../lib/selfBilledInvoicePdf.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 const router: IRouter = Router();
@@ -159,7 +160,7 @@ router.get("/me/self-billing/:id/pdf", async (req, res, next) => {
     if (!inv || inv.status === "rejected") { res.status(404).json({ error: "not-found" }); return; }
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${inv.invoiceNumber}.pdf"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `${inv.invoiceNumber}.pdf`));
     const doc = new PDFDocument({ size: "A4", margin: 48 });
     doc.pipe(res);
     writeSelfBilledInvoicePdf(doc, inv);

@@ -17,6 +17,7 @@ import {
   tasamaAgentPerformanceTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { contentDispositionFilename } from "../lib/httpFilename.js";
 
 const router: IRouter = Router();
 
@@ -227,7 +228,7 @@ router.get("/documents/:id/file", async (req, res) => {
     try {
       const buffer = await fs.readFile(filePath);
       res.setHeader("Content-Type", doc.mimeType);
-      res.setHeader("Content-Disposition", `inline; filename="${doc.filename}"`);
+      res.setHeader("Content-Disposition", contentDispositionFilename("inline", doc.filename));
       res.send(buffer);
     } catch (err) {
       res.status(404).json({

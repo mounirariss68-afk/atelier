@@ -846,7 +846,7 @@ router.get("/me/bio/template", async (req, res, next) => {
     res.setHeader("Content-Type", PPTX_MIME);
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${BIO_TEMPLATE_FILENAME}"`,
+      contentDispositionFilename("attachment", BIO_TEMPLATE_FILENAME),
     );
     res.setHeader("Cache-Control", "private, no-store");
     res.send(bytes);

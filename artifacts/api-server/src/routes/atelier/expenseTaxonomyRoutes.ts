@@ -36,6 +36,7 @@ import {
 import { suggestCategory } from "../../lib/atelier-expense-categorizer.js";
 import { ObjectStorageService, ObjectNotFoundError } from "../../lib/objectStorage.js";
 import { isHeicPayload, convertHeicToJpeg } from "../../lib/atelier-heic.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 const router: IRouter = Router();
 type Me = typeof atelierUsers.$inferSelect;
@@ -655,13 +656,13 @@ router.get("/wallet/expenses/export", async (req, res) => {
     );
     const csv = [header, ...lines, `,,,,,,,,TOTAL,,${total.toFixed(2)},`].join("\n");
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="expenses-${req.query.engagementId}.csv"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `expenses-${req.query.engagementId}.csv`));
     res.send(csv);
     return;
   }
   // PDF
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="expenses-${req.query.engagementId}.pdf"`);
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", `expenses-${req.query.engagementId}.pdf`));
   const doc = new PDFDocument({ size: "A4", margin: 48 });
   doc.pipe(res);
   doc.fontSize(16).text("Reimbursable Expenses", { continued: false });

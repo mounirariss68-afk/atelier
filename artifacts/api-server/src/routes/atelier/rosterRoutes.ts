@@ -2606,7 +2606,7 @@ router.get("/roster/business-cards.zip", async (req, res, next) => {
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="Cognirise_business_cards_${stamp}.zip"`,
+      contentDispositionFilename("attachment", `Cognirise_business_cards_${stamp}.zip`),
     );
     res.setHeader("Cache-Control", "private, no-store");
     res.send(zipBuf);

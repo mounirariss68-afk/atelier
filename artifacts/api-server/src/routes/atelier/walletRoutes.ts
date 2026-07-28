@@ -188,6 +188,7 @@ function buildOcrFromExpense(
 }
 
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 
 // Inline definition retained as a typed wrapper that delegates to the
 // shared module so existing call sites keep their import.
@@ -1815,7 +1816,7 @@ router.get("/wallet/vat", async (req, res) => {
       ].join(","),
     );
     res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename="vat-register.csv"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", "vat-register.csv"));
     res.send([header, ...lines].join("\n"));
     return;
   }
@@ -2454,7 +2455,7 @@ router.get("/wallet/invoice-drafts/:engagementId", async (req, res) => {
     ].join("\n");
     res
       .type("text/csv")
-      .header("content-disposition", `attachment; filename="invoice-draft-${eid}.csv"`)
+      .header("content-disposition", contentDispositionFilename("attachment", `invoice-draft-${eid}.csv`))
       .send(csv);
     return;
   }
