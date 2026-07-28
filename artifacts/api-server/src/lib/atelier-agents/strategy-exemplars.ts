@@ -89,6 +89,14 @@ export async function indexAccountStrategyExemplar(accountId: string): Promise<v
       .from(atelierAccounts)
       .where(and(eq(atelierAccounts.id, accountId), isNull(atelierAccounts.deletedAt)));
     if (!a) return;
+    // Archived accounts are excluded from the example library: their
+    // exemplar row is removed on archive and re-created on restore. If an
+    // index is requested while archived (e.g. a stale fire-and-forget),
+    // treat it as a removal, never a (re)insert.
+    if ((a.status ?? "active") === "archived") {
+      await removeAccountStrategyExemplar(accountId);
+      return;
+    }
     const strategy = (a.accountStrategy ?? null) as AccountStrategyShape | null;
     if (isStrategyEmpty(strategy)) {
       await db
@@ -133,6 +141,25 @@ export async function indexAccountStrategyExemplar(accountId: string): Promise<v
     // eslint-disable-next-line no-console
     console.warn(
       `[strategy-exemplars] failed to index account ${accountId}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+/**
+ * Remove an account's exemplar row (account archived or permanently
+ * deleted). Fail-soft like indexing: never throws into the lifecycle path.
+ */
+export async function removeAccountStrategyExemplar(accountId: string): Promise<void> {
+  try {
+    await db
+      .delete(atelierStrategyExemplars)
+      .where(eq(atelierStrategyExemplars.accountId, accountId));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[strategy-exemplars] failed to remove exemplar for account ${accountId}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );

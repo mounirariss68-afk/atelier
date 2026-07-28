@@ -42,6 +42,10 @@ import {
   atelierPaneAItems,
 } from "@workspace/db";
 import { purgeAttachmentsByScope } from "./atelier-cli/attachments/index.js";
+import {
+  indexAccountStrategyExemplar,
+  removeAccountStrategyExemplar,
+} from "./atelier-agents/strategy-exemplars.js";
 import { purgeDocumentsByScope } from "./atelier-documents.js";
 
 export interface LifecycleActor {
@@ -265,6 +269,11 @@ export async function archiveAccount(
     .set({ status: "archived", updatedAt: now })
     .where(and(eq(atelierAccounts.id, acc.id), eq(atelierAccounts.orgId, actor.orgId)));
 
+  // Task #702 — an archived account must stop teaching the Strategy
+  // Developer: drop its exemplar row so other accounts' drafts never
+  // retrieve it. Restore re-indexes. Fail-soft inside the helper.
+  await removeAccountStrategyExemplar(acc.id);
+
   const cascade: ArchiveCascade = {
     engagements: engRows.map((e) => ({ id: e.id, priorStage: e.stage as string })),
     opportunities: cascadedOppIds,
@@ -363,6 +372,11 @@ export async function restoreAccount(
     .update(atelierAccounts)
     .set({ status: "active", updatedAt: now })
     .where(and(eq(atelierAccounts.id, acc.id), eq(atelierAccounts.orgId, actor.orgId)));
+
+  // Task #702 — restore re-admits the account's strategy to the example
+  // library (no-op when the strategy is empty). Await so the row is back
+  // before the route returns; the helper is fail-soft.
+  await indexAccountStrategyExemplar(acc.id);
 
   await writeAudit(
     actor,
@@ -469,6 +483,11 @@ export async function permanentlyDeleteAccount(
       actorLabel: actor.name,
     });
   }
+
+  // Task #702 — permanent deletion removes the account's strategy exemplar
+  // alongside the other purged children so retrieval can never surface a
+  // strategy whose account no longer exists.
+  await removeAccountStrategyExemplar(acc.id);
 
   return { status: "deleted", accountName: acc.name };
 }

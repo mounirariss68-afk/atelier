@@ -301,6 +301,51 @@ async function main() {
     check("employee run -> 403", empRun.status === 403, empRun.status);
     check("employee status -> 403", empStatus.status === 403, empStatus.status);
     check("employee approve -> 403", empApprove.status === 403, empApprove.status);
+
+    // ---- 6. Task #702 — archive/restore/delete keep the library fresh ----
+    const exRow = async () => {
+      const [r] = await db
+        .select()
+        .from(atelierStrategyExemplars)
+        .where(eq(atelierStrategyExemplars.accountId, acctExemplar));
+      return r ?? null;
+    };
+    check("exemplar row present pre-archive", !!(await exRow()), null);
+    const arch = await api("POST", `/accounts/${acctExemplar}/archive`, {});
+    check("archive exemplar account -> ok", arch.status === 200 && arch.body?.ok === true, arch.status);
+    check("archive removes exemplar row", (await exRow()) === null, await exRow());
+    // A draft on another account must no longer see the archived strategy.
+    const runArch = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/run`, {});
+    check("run after archive -> 202", runArch.status === 202, runArch.status);
+    const settledArch = await pollStatus((s) => s?.status === "drafted" && s.runId && s.runId !== settled2.runId);
+    check("draft after archive ready", settledArch?.status === "drafted", settledArch?.status);
+    check(
+      "prompt excludes archived account's exemplar",
+      !lastPromptBody.includes("Exemplar SameOrg Co"),
+      null,
+    );
+    await api("POST", `/accounts/${acctMain}/agents/strategy-developer/dismiss`, { runId: settledArch.runId, reason: "probe" });
+
+    // Restore re-indexes the exemplar.
+    const rest = await api("POST", `/accounts/${acctExemplar}/restore`, {});
+    check("restore exemplar account -> ok", rest.status === 200 && rest.body?.ok === true, rest.status);
+    const restoredRow = await exRow();
+    check("restore re-indexes exemplar row", !!restoredRow && restoredRow.text.includes("Expand data platform footprint"), restoredRow?.text?.slice(0, 50));
+
+    // Permanent delete removes the row alongside other children, and the
+    // deleted account's strategy never appears in another account's prompt.
+    const del = await api("DELETE", `/accounts/${acctExemplar}?override=true`);
+    check("permanent delete -> ok", del.status === 200 && del.body?.ok === true, del);
+    check("permanent delete removes exemplar row", (await exRow()) === null, await exRow());
+    const runDel = await api("POST", `/accounts/${acctMain}/agents/strategy-developer/run`, {});
+    check("run after delete -> 202", runDel.status === 202, runDel.status);
+    const settledDel = await pollStatus((s) => s?.status === "drafted" && s.runId && s.runId !== settledArch.runId);
+    check("draft after delete ready", settledDel?.status === "drafted", settledDel?.status);
+    check(
+      "prompt NEVER carries deleted account's strategy",
+      !lastPromptBody.includes("Exemplar SameOrg Co") && !lastPromptBody.includes("Win on delivery credibility"),
+      null,
+    );
   } finally {
     try {
       await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, [acctMain, acctExemplar, acctOtherOrg]));
