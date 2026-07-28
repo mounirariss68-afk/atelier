@@ -753,6 +753,8 @@ export * from "./atelierTrainingMaterialPatchAudience";
 export * from "./atelierUpdateAccountActionInput";
 export * from "./atelierUpdateAccountInput";
 export * from "./atelierUpdateAccountInputEntityRole";
+export * from "./atelierUpdateAccountInputPrimaryLanguage";
+export * from "./atelierUpdateAccountInputStatus";
 export * from "./atelierUpdateAccountInsightInput";
 export * from "./atelierUpdateAccountRiskInput";
 export * from "./atelierUpdateAccountTeamMemberInput";

@@ -730,10 +730,8 @@ export const AtelierUpdateAccountInputEntityRole = {
   office: "office",
 } as const;
 
-/**
- * Partner-editable account fields. Only the keys present are written
-(PATCH semantics). `parentAccountId: null` unlinks the parent.
-
+export type AtelierUpdateAccountInputStatus =
+  (typeof AtelierUpdateAccountInputStatus)[keyof typeof AtelierUpdateAccountInputStatus];
  */
 export interface AtelierUpdateAccountInput {
   /**
@@ -763,6 +761,22 @@ export interface AtelierUpdateAccountInput {
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
   entityRole?: AtelierUpdateAccountInputEntityRole;
+  /** @nullable */
+  partnerOwnerId?: string | null;
+  tier?: AtelierAccountTier;
+  status?: AtelierUpdateAccountInputStatus;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  hqCity?: string | null;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   * @pattern ^[A-Z]{3}$
+   */
+  primaryCurrency?: string;
+  primaryLanguage?: AtelierUpdateAccountInputPrimaryLanguage;
 }
 
 export type AtelierAccountDuplicateErrorError =
@@ -8953,3 +8967,16 @@ export type AtelierListPartnerFirmQuotedDeals200 = {
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;
 };
+
+export const AtelierUpdateAccountInputStatus = {
+  active: "active",
+  dormant: "dormant",
+} as const;
+
+export type AtelierUpdateAccountInputPrimaryLanguage =
+  (typeof AtelierUpdateAccountInputPrimaryLanguage)[keyof typeof AtelierUpdateAccountInputPrimaryLanguage];
+
+export const AtelierUpdateAccountInputPrimaryLanguage = {
+  en: "en",
+  ar: "ar",
+} as const;

@@ -10,7 +10,10 @@ import type { AtelierAccountCompetitor } from "./atelierAccountCompetitor";
 import type { AtelierAccountCountryPresence } from "./atelierAccountCountryPresence";
 import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
+import type { AtelierAccountTier } from "./atelierAccountTier";
 import type { AtelierUpdateAccountInputEntityRole } from "./atelierUpdateAccountInputEntityRole";
+import type { AtelierUpdateAccountInputPrimaryLanguage } from "./atelierUpdateAccountInputPrimaryLanguage";
+import type { AtelierUpdateAccountInputStatus } from "./atelierUpdateAccountInputStatus";
 
 /**
  * Partner-editable account fields. Only the keys present are written
@@ -45,4 +48,20 @@ export interface AtelierUpdateAccountInput {
   countryPresence?: AtelierAccountCountryPresence[];
   /** @nullable */
   entityRole?: AtelierUpdateAccountInputEntityRole;
+  /** @nullable */
+  partnerOwnerId?: string | null;
+  tier?: AtelierAccountTier;
+  status?: AtelierUpdateAccountInputStatus;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  hqCity?: string | null;
+  /**
+   * @minLength 3
+   * @maxLength 3
+   * @pattern ^[A-Z]{3}$
+   */
+  primaryCurrency?: string;
+  primaryLanguage?: AtelierUpdateAccountInputPrimaryLanguage;
 }

@@ -58,6 +58,7 @@ import { MergeContactDialog } from "@/components/MergeContactDialog";
 import { ContactInsightsDialog } from "@/components/ContactInsightsDialog";
 import { EditAccountStrategyDialog } from "@/components/EditAccountStrategyDialog";
 import { EditAccountProfileDialog } from "@/components/EditAccountProfileDialog";
+import { EditOwnershipDialog } from "@/components/EditOwnershipDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -777,6 +778,7 @@ function ProfileTab({
   const canEditProfile = !!me && ["founding_partner", "partner", "senior_manager"].includes(me.role);
   const [editStrategy, setEditStrategy] = useState(false);
   const [editProfile, setEditProfile] = useState(false);
+  const [editOwnership, setEditOwnership] = useState(false);
   const brief = a.researchBrief ?? null;
   // Task #9 — server-computed research-quality signals (completeness,
   // narrative→evidence links, staleness) over the persisted brief.
@@ -804,6 +806,13 @@ function ProfileTab({
         accountId={a.id}
         open={editProfile}
         onOpenChange={setEditProfile}
+      />
+
+      <EditOwnershipDialog
+        account={a}
+        accountId={a.id}
+        open={editOwnership}
+        onOpenChange={setEditOwnership}
       />
 
       {/* At-a-glance callout */}
@@ -1344,9 +1353,21 @@ function ProfileTab({
             onEdit={() => setEditProfile(true)}
           />
 
-          {/* Ownership */}
+          {/* Ownership (Task #698 — partner-editable) */}
           <Card className="p-6 space-y-4">
-            <SectionLabel>Ownership</SectionLabel>
+            <div className="flex items-center justify-between">
+              <SectionLabel>Ownership</SectionLabel>
+              {canEditProfile && (
+                <PillButton
+                  variant="ghost"
+                  onClick={() => setEditOwnership(true)}
+                  className="text-xs"
+                  data-testid="button-edit-ownership"
+                >
+                  <Pencil className="w-3 h-3" /> Edit
+                </PillButton>
+              )}
+            </div>
             <dl className="space-y-2 text-sm">
               <Row label="Partner" value={a.partnerOwnerName ?? "—"} />
               <Row label="Tier" value={`Tier ${a.tier}`} />
@@ -1565,6 +1586,7 @@ const PROPOSAL_FIELD_LABELS: Record<string, string> = {
   sector: "Sector",
   hqCity: "HQ city",
   size: "Company size",
+  industry: "Industry",
 };
 
 function PendingProposalCard({
@@ -1664,6 +1686,14 @@ function PendingProposalCard({
             </div>
           ) : isScalar ? (
             <p className="leading-relaxed">{String(p.toValue ?? "")}</p>
+          ) : p.field === "industry" && p.toValue && typeof p.toValue === "object" ? (
+            // Task #698 — industry classification proposal (taxonomy codes).
+            <p className="font-mono" data-testid={`text-industry-proposal-${p.id}`}>
+              {String((p.toValue as { industryCode?: string }).industryCode ?? "")}
+              {(p.toValue as { subIndustryCode?: string | null }).subIndustryCode
+                ? ` / ${(p.toValue as { subIndustryCode?: string }).subIndustryCode}`
+                : ""}
+            </p>
           ) : (
             <p className="text-text-mute text-xs italic">
               {p.field === "sourceSignals" && Array.isArray(p.toValue)

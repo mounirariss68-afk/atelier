@@ -55,6 +55,7 @@ import {
 } from "../../lib/atelier-account-lifecycle.js";
 import { mergeAccounts, mergeContacts } from "../../lib/atelier-merge.js";
 import { findPersonMatch, richerPersonName } from "../../lib/atelier-agents/person-name.js";
+import { resolveIndustryTaxonomy } from "../../lib/atelier-agents/industry-taxonomy.js";
 import {
   classifyCriticalRole,
   computeCriticalRoleCoverage,
@@ -454,13 +455,20 @@ async function persistReviewedResearch(args: {
     (d) => d.fullName && d.fullName.trim().length > 0,
   );
 
+  // Task #698 — resolve the reviewed research's industry onto the app
+  // taxonomy so a raw NAICS code / free-text label never lands in the column.
+  const reviewedIndustry = resolveIndustryTaxonomy(
+    research.industryCode ?? null,
+    research.subIndustryCode ?? null,
+  );
+
   await db.transaction(async (tx) => {
     await tx
       .update(atelierAccounts)
       .set({
-        industryCode: research.industryCode ?? account.industryCode ?? null,
+        industryCode: reviewedIndustry?.industryCode ?? account.industryCode ?? null,
         subIndustryCode:
-          research.subIndustryCode ?? account.subIndustryCode ?? null,
+          reviewedIndustry?.subIndustryCode ?? account.subIndustryCode ?? null,
         notes,
         sourceSignals: signals as typeof account.sourceSignals,
         strategicPriorities: mergedPriorities,
@@ -815,10 +823,24 @@ router.post("/accounts", async (req, res) => {
               .filter((d) => d.fullName.trim().length > 0)
               .slice(0, 7)
           : [];
+      // Task #698 — the auto-run previously dropped the agent's identified
+      // industry. Resolve it onto the app taxonomy; only fill when the account
+      // has none yet (a reviewed/manual classification is never clobbered).
+      const autoIndustry = resolveIndustryTaxonomy(
+        out.account.industryCode ?? null,
+        out.account.subIndustryCode ?? null,
+      );
       await db.transaction(async (tx) => {
         await tx
           .update(atelierAccounts)
           .set({
+            ...(autoIndustry && !fresh.industryCode
+              ? {
+                  industryCode: autoIndustry.industryCode,
+                  subIndustryCode:
+                    fresh.subIndustryCode ?? autoIndustry.subIndustryCode,
+                }
+              : {}),
             sourceSignals: mergedSignals,
             strategicPriorities: mergedPriorities,
             strategicPriorityRefs: priorityRefs,
@@ -3659,6 +3681,75 @@ router.patch("/accounts/:accountId", async (req, res) => {
     recordFirmoChange("entityRole", a.entityRole ?? null, update.entityRole);
   }
 
+  // Task #698 — ownership fields, editable post-create by the same partner-tier
+  // personas that can create accounts. partnerOwnerId is validated against a
+  // real partner-tier user in the caller's org (never a free-form id); each
+  // change is captured with before/after in the audit payload.
+  // Archived accounts are frozen: the archive/restore lifecycle routes are the
+  // only way in or out of that state, so ownership edits (including status,
+  // which would otherwise silently "restore" the account) are rejected.
+  const ownershipKeys = [
+    "partnerOwnerId",
+    "tier",
+    "status",
+    "hqCity",
+    "primaryCurrency",
+    "primaryLanguage",
+  ] as const;
+  if (a.status === "archived" && ownershipKeys.some((k) => k in input)) {
+    res.status(409).json({
+      error: "account-archived",
+      reason: "This account is archived. Restore it before editing ownership fields.",
+    });
+    return;
+  }
+  if ("partnerOwnerId" in input) {
+    const nextOwner = input.partnerOwnerId ?? null;
+    if (nextOwner) {
+      const [owner] = await db
+        .select({ id: atelierUsers.id, role: atelierUsers.role })
+        .from(atelierUsers)
+        .where(and(eq(atelierUsers.id, nextOwner), eq(atelierUsers.orgId, a.orgId)));
+      if (!owner || (owner.role !== "partner" && owner.role !== "founding_partner")) {
+        res.status(400).json({
+          error: "invalid-partner-owner",
+          reason: "Partner owner must be a partner-tier user in your organisation.",
+        });
+        return;
+      }
+    }
+    update.partnerOwnerId = nextOwner;
+    changed.push("partnerOwnerId");
+    recordFirmoChange("partnerOwnerId", a.partnerOwnerId ?? null, nextOwner);
+  }
+  if ("tier" in input && input.tier) {
+    update.tier = input.tier;
+    changed.push("tier");
+    recordFirmoChange("tier", a.tier ?? null, input.tier);
+  }
+  if ("status" in input && input.status) {
+    // "archived" is deliberately NOT accepted here — archiving is a lifecycle
+    // action with its own cascade + audit semantics (POST /archive).
+    update.status = input.status;
+    changed.push("status");
+    recordFirmoChange("status", a.status ?? null, input.status);
+  }
+  if ("hqCity" in input) {
+    update.hqCity = input.hqCity?.trim() || null;
+    changed.push("hqCity");
+    recordFirmoChange("hqCity", a.hqCity ?? null, update.hqCity);
+  }
+  if ("primaryCurrency" in input && input.primaryCurrency) {
+    update.primaryCurrency = input.primaryCurrency.toUpperCase();
+    changed.push("primaryCurrency");
+    recordFirmoChange("primaryCurrency", a.primaryCurrency ?? null, update.primaryCurrency);
+  }
+  if ("primaryLanguage" in input && input.primaryLanguage) {
+    update.primaryLanguage = input.primaryLanguage;
+    changed.push("primaryLanguage");
+    recordFirmoChange("primaryLanguage", a.primaryLanguage ?? null, input.primaryLanguage);
+  }
+
   if (changed.length === 0) {
     res.status(400).json({ error: "empty-update", reason: "No editable fields supplied." });
     return;
@@ -4576,6 +4667,21 @@ async function applyProfileUpdateDecisions(args: {
           accountUpdate.hqCity = effectiveValue;
         } else if (f === "size" && typeof effectiveValue === "string") {
           accountUpdate.size = effectiveValue;
+        } else if (f === "industry" && effectiveValue && typeof effectiveValue === "object") {
+          // Task #698 — re-validate through the taxonomy resolver on apply so
+          // an edited/stale proposal can never write an off-taxonomy code.
+          const iv = effectiveValue as {
+            industryCode?: string | null;
+            subIndustryCode?: string | null;
+          };
+          const resolved = resolveIndustryTaxonomy(
+            iv.industryCode ?? null,
+            iv.subIndustryCode ?? null,
+          );
+          if (resolved) {
+            accountUpdate.industryCode = resolved.industryCode;
+            accountUpdate.subIndustryCode = resolved.subIndustryCode;
+          }
         } else if (f === "researchBrief" && effectiveValue && typeof effectiveValue === "object") {
           accountUpdate.researchBrief =
             effectiveValue as typeof atelierAccounts.$inferInsert.researchBrief;

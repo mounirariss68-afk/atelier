@@ -11920,6 +11920,15 @@ export const atelierUpdateAccountBodyCountryPresenceItemNoteMax = 200;
 
 export const atelierUpdateAccountBodyCountryPresenceMax = 40;
 
+export const atelierUpdateAccountBodyHqCityMax = 120;
+
+export const atelierUpdateAccountBodyPrimaryCurrencyMin = 3;
+export const atelierUpdateAccountBodyPrimaryCurrencyMax = 3;
+
+export const atelierUpdateAccountBodyPrimaryCurrencyRegExp = new RegExp(
+  "^[A-Z]{3}$",
+);
+
 export const AtelierUpdateAccountBody = zod
   .object({
     notes: zod.string().max(atelierUpdateAccountBodyNotesMax).nullish(),
@@ -12091,6 +12100,17 @@ export const AtelierUpdateAccountBody = zod
         zod.literal(null),
       ])
       .nullish(),
+    partnerOwnerId: zod.string().nullish(),
+    tier: zod.enum(["A", "B", "C", "D"]).optional(),
+    status: zod.enum(["active", "dormant"]).optional(),
+    hqCity: zod.string().max(atelierUpdateAccountBodyHqCityMax).nullish(),
+    primaryCurrency: zod
+      .string()
+      .min(atelierUpdateAccountBodyPrimaryCurrencyMin)
+      .max(atelierUpdateAccountBodyPrimaryCurrencyMax)
+      .regex(atelierUpdateAccountBodyPrimaryCurrencyRegExp)
+      .optional(),
+    primaryLanguage: zod.enum(["en", "ar"]).optional(),
   })
   .describe(
     "Partner-editable account fields. Only the keys present are written\n(PATCH semantics). `parentAccountId: null` unlinks the parent.\n",

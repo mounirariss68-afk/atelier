@@ -32,6 +32,7 @@ import { reportProgress } from "./progress-sink.js";
 import { isPdlConfigured, fetchPdlExecutivesForCompany } from "./pdl.js";
 import { perplexityResearch } from "./perplexity.js";
 import { findPersonMatch, richerPersonName } from "./person-name.js";
+import { resolveIndustryTaxonomy } from "./industry-taxonomy.js";
 import {
   classifyCriticalRole,
   guardExecutiveMapperCriticalRoles,
@@ -893,7 +894,26 @@ export function buildCartographerProposals(args: {
     );
   }
 
-  // 5) contacts (decision-makers) — one proposal per discovered person. The
+  // 5) industry (Task #698) — the agent's identified industry, resolved onto
+  //    the app taxonomy. Unmappable output (e.g. an unknown NAICS code) fails
+  //    gracefully to "no proposal" — never leak a raw code into the queue.
+  const resolvedIndustry = resolveIndustryTaxonomy(
+    output.account.industryCode ?? null,
+    output.account.subIndustryCode ?? null,
+  );
+  if (resolvedIndustry) {
+    push(
+      "industry",
+      {
+        industryCode: account.industryCode ?? null,
+        subIndustryCode: account.subIndustryCode ?? null,
+      },
+      resolvedIndustry,
+      "Account Cartographer classified the account's industry from public sources.",
+    );
+  }
+
+  // 6) contacts (decision-makers) — one proposal per discovered person. The
   //    applier upserts the contact and (on approval) the reports_to edge.
   const knownNames = new Set(args.existingContacts.map((c) => c.fullName.toLowerCase()));
   for (const dm of output.decisionMakers ?? []) {
@@ -999,7 +1019,6 @@ export async function runPursuitScout(args: {
 }
 
 // ------- POV Author (3-step chain) -------
-
 
 
 export async function runPovOutline(args: {
@@ -5956,21 +5975,6 @@ export async function runExpenseAuditor(input: ExpenseAuditorInput): Promise<{
   );
   return { runId: result.runId, proposal: result.output as ExpenseAuditorProposal };
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // ---------- run<X> entrypoints ----------

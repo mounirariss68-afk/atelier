@@ -6819,6 +6819,24 @@ components:
         entityRole:
           type: ["string", "null"]
           enum: [hq, subsidiary, branch, office, null]
+        # Task #698 — ownership fields, editable from the account Ownership
+        # card by partner-tier personas. partnerOwnerId is server-validated
+        # against a real partner-tier user in the caller's org; null unassigns.
+        # "archived" status is excluded — archiving has its own lifecycle route.
+        partnerOwnerId: { type: ["string", "null"] }
+        tier: { $ref: "#/components/schemas/AtelierAccountTier" }
+        status:
+          type: string
+          enum: [active, dormant]
+        hqCity: { type: ["string", "null"], maxLength: 120 }
+        primaryCurrency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          pattern: "^[A-Z]{3}$"
+        primaryLanguage:
+          type: string
+          enum: [en, ar]
 
     AtelierAccountDuplicateError:
       type: object
