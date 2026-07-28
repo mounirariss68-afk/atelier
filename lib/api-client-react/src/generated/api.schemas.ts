@@ -732,6 +732,24 @@ export const AtelierUpdateAccountInputEntityRole = {
 
 export type AtelierUpdateAccountInputStatus =
   (typeof AtelierUpdateAccountInputStatus)[keyof typeof AtelierUpdateAccountInputStatus];
+
+export const AtelierUpdateAccountInputStatus = {
+  active: "active",
+  dormant: "dormant",
+} as const;
+
+export type AtelierUpdateAccountInputPrimaryLanguage =
+  (typeof AtelierUpdateAccountInputPrimaryLanguage)[keyof typeof AtelierUpdateAccountInputPrimaryLanguage];
+
+export const AtelierUpdateAccountInputPrimaryLanguage = {
+  en: "en",
+  ar: "ar",
+} as const;
+
+/**
+ * Partner-editable account fields. Only the keys present are written
+(PATCH semantics). `parentAccountId: null` unlinks the parent.
+
  */
 export interface AtelierUpdateAccountInput {
   /**
@@ -8967,16 +8985,3 @@ export type AtelierListPartnerFirmQuotedDeals200 = {
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;
 };
-
-export const AtelierUpdateAccountInputStatus = {
-  active: "active",
-  dormant: "dormant",
-} as const;
-
-export type AtelierUpdateAccountInputPrimaryLanguage =
-  (typeof AtelierUpdateAccountInputPrimaryLanguage)[keyof typeof AtelierUpdateAccountInputPrimaryLanguage];
-
-export const AtelierUpdateAccountInputPrimaryLanguage = {
-  en: "en",
-  ar: "ar",
-} as const;
