@@ -656,11 +656,231 @@ const ok = (name: string) => {
       (e) => e.toolName,
     );
   assert.ok(toolNames("partner").includes("travel_search_flights"));
+  assert.ok(toolNames("partner").includes("travel_select_flight"));
+  assert.ok(toolNames("partner").includes("travel_itinerary_summary"));
   assert.ok(!toolNames("board_observer").includes("travel_search_flights"));
+  assert.ok(!toolNames("board_observer").includes("travel_select_flight"));
   assert.ok(!toolNames("employee").includes("travel_search_flights"));
   ok("persona gating: partner yes, board_observer/employee no");
 }
 
+// ────────────────────── Task #721 — guided booking flow ──────────────────────
+
+const selectFlight = findByToolName("travel_select_flight");
+const itinerarySummary = findByToolName("travel_itinerary_summary");
+assert.ok(selectFlight && itinerarySummary, "guided-booking capabilities registered");
+
+// 13. Server-side airline filter: name substring and IATA code both
+// narrow the offers; the card can no longer disagree with the prose.
+{
+  const base = {
+    segments: [
+      { origin: "DXB", destination: "IST", date: "2027-03-02" },
+      { origin: "IST", destination: "DXB", date: "2027-03-06" },
+    ],
+  };
+  const byName = await flights.run({ ...base, airline: "turkish" }, ctx);
+  assert.equal(byName.ok, true, JSON.stringify(byName));
+  const nameItems = (byName.data as { items: Array<Record<string, unknown>> }).items;
+  assert.equal(nameItems.length, 1);
+  assert.ok(String(nameItems[0].label).includes("Turkish Airlines"));
+  assert.equal((byName.data as { airlineFilter: string }).airlineFilter, "turkish");
+  const byIata = await flights.run({ ...base, airline: "PC" }, ctx);
+  assert.equal(byIata.ok, true);
+  const iataItems = (byIata.data as { items: Array<Record<string, unknown>> }).items;
+  assert.equal(iataItems.length, 1);
+  assert.ok(String(iataItems[0].label).includes("Pegasus"));
+  ok("airline filter: name substring + IATA code narrow offers server-side");
+}
+
+// 14. Airline filter with no matches → honest empty result listing the
+// airlines that DO have offers (never silently unfiltered).
+{
+  const r = await flights.run(
+    {
+      segments: [{ origin: "DXB", destination: "IST", date: "2027-03-02" }],
+      airline: "Qantas",
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const data = r.data as Record<string, unknown>;
+  assert.equal((data.items as unknown[]).length, 0);
+  assert.equal(data.total, 0);
+  const avail = data.availableAirlines as string[];
+  assert.deepEqual(avail, ["Emirates", "Pegasus", "Turkish Airlines"]);
+  assert.ok(String(data.note).includes("Qantas"));
+  assert.ok(String(data.note).includes("Emirates"));
+  ok("airline filter miss → honest empty result + available airlines");
+}
+
+// 15. Flight numbers + airline logo ride the card payload; pageSize
+// present for client-side paging (default fetch is now 20).
+{
+  requests.length = 0;
+  const r = await flights.run(
+    { segments: [{ origin: "DXB", destination: "IST", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(r.ok, true);
+  const data = r.data as Record<string, unknown>;
+  assert.equal(data.pageSize, 10);
+  const ow = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+  assert.ok(ow, "one-way endpoint hit");
+  const item = (data.items as Array<Record<string, unknown>>)[0];
+  const flight = item.flight as Record<string, unknown>;
+  // Stub segments carry marketing code + bare flight_number "123" →
+  // "PC 123" style label.
+  const legs = flight.legs as Array<Record<string, unknown>>;
+  assert.deepEqual(legs[0].flightNumbers, ["PC 123"]);
+  assert.equal(legs[0].flightNumbersLabel, "PC 123");
+  assert.equal(legs[0].logoUrl, "https://images.kiwi.com/airlines/64/PC.png");
+  assert.equal(flight.logoUrl, "https://images.kiwi.com/airlines/64/PC.png");
+  ok("cards carry flight numbers + airline logo URL; pageSize for paging");
+}
+
+// 16. Select a one-way flight → tool pauses to ask about a return
+// flight (yes/no + date picker), preserving the picked offer in partial.
+{
+  const picked = {
+    airline: "Pegasus",
+    airlineIata: "PC",
+    origin: "DXB",
+    destination: "IST",
+    date: "2027-03-02",
+    departTime: "08:10",
+    arriveTime: "12:20",
+    flightNumbers: ["PC 123"],
+    cabin: "economy",
+    priceAmount: 410.5,
+    currency: "USD",
+    tripType: "one way",
+  };
+  const r1 = await selectFlight.run({ ...picked }, ctx);
+  assert.equal(r1.ok, false);
+  assert.equal(r1.errorCode, "return_choice_needed");
+  const fields = r1.clarification!.fields!;
+  assert.equal(fields[0].field, "addReturn");
+  assert.deepEqual(fields[0].options, ["yes", "no"]);
+  assert.equal(fields[1].field, "returnDate");
+  assert.equal(fields[1].inputType, "date");
+  const partial = r1.clarification!.partial as Record<string, unknown>;
+  assert.equal(partial.airline, "Pegasus", "picked offer preserved in partial");
+
+  // yes + date → confirmation card telling the model to search the return leg.
+  const r2 = await selectFlight.run(
+    { ...picked, addReturn: "yes", returnDate: "2027-03-06" },
+    ctx,
+  );
+  assert.equal(r2.ok, true, JSON.stringify(r2));
+  const d2 = r2.data as Record<string, unknown>;
+  assert.ok(String(d2.nextStep).includes("travel_search_flights"));
+  assert.ok(String(d2.nextStep).includes("IST → DXB"));
+  assert.ok(String(d2.nextStep).includes("2027-03-06"));
+  const sel = d2.selection as Record<string, unknown>;
+  assert.equal(sel.returnDate, "2027-03-06");
+  assert.equal(sel.logoUrl, "https://images.kiwi.com/airlines/64/PC.png");
+  // yes but no date → date clarification.
+  const r3 = await selectFlight.run({ ...picked, addReturn: "yes" }, ctx);
+  assert.equal(r3.ok, false);
+  assert.equal(r3.errorCode, "return_date_needed");
+  assert.equal(r3.clarification!.fields![0].inputType, "date");
+  // no → wrap-up instruction.
+  const r4 = await selectFlight.run({ ...picked, addReturn: "no" }, ctx);
+  assert.equal(r4.ok, true);
+  assert.ok(String((r4.data as { nextStep: string }).nextStep).includes("travel_itinerary_summary"));
+  ok("select one-way flight → return-flight question, date flows, next steps");
+}
+
+// 17. Fare options are honest: no fare families, cabin alternatives only.
+{
+  const r = await selectFlight.run(
+    {
+      airline: "Emirates",
+      origin: "DXB",
+      destination: "IST",
+      date: "2027-03-02",
+      cabin: "economy",
+      tripType: "round trip",
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true);
+  const fo = (r.data as { fareOptions: Record<string, unknown> }).fareOptions;
+  assert.equal(fo.fareFamiliesAvailable, false);
+  assert.deepEqual(fo.cabinAlternatives, ["business", "first"]);
+  assert.ok(String(fo.note).includes("no branded-fare"));
+  // Missing required fields fail loudly.
+  const bad = await selectFlight.run({ airline: "Emirates" }, ctx);
+  assert.equal(bad.ok, false);
+  assert.equal(bad.errorCode, "missing_selection_fields");
+  ok("fare options honest (cabin alternatives only); missing fields loud");
+}
+
+// 18. Itinerary summary: per-leg flight cards + AED grand total across
+// currencies, handoff links, invalid-leg validation.
+{
+  const r = await itinerarySummary.run(
+    {
+      legs: [
+        {
+          airline: "Pegasus",
+          airlineIata: "PC",
+          flightNumbers: ["PC 123"],
+          origin: "DXB",
+          destination: "IST",
+          date: "2027-03-02",
+          departTime: "08:10",
+          arriveTime: "12:20",
+          cabin: "economy",
+          stops: 0,
+          durationLabel: "4 hr 15 min",
+          priceAmount: 410.5,
+          currency: "USD",
+          href: "https://www.google.com/travel/flights?q=x",
+        },
+        {
+          airline: "Turkish Airlines",
+          airlineIata: "TK",
+          origin: "IST",
+          destination: "DXB",
+          date: "2027-03-06",
+          priceAmount: 500,
+          currency: "EUR",
+        },
+      ],
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const data = r.data as Record<string, unknown>;
+  const itin2 = data.itinerary as Record<string, unknown>;
+  assert.equal(itin2.legCount, 2);
+  // 410.50 USD × 3.6725 + 500 EUR × 3.98 = 1507.56 + 1990 ≈ 3498.
+  assert.equal(itin2.totalAedAmount, 3498);
+  assert.ok(String(itin2.totalDisplay).startsWith("AED 3,498"));
+  assert.ok(String(itin2.totalDisplay).includes("USD 410.50"));
+  assert.ok(String(itin2.totalDisplay).includes("EUR 500.00"));
+  const items = data.items as Array<Record<string, unknown>>;
+  assert.equal(items.length, 2);
+  const f0 = items[0].flight as Record<string, unknown>;
+  const leg0 = (f0.legs as Array<Record<string, unknown>>)[0];
+  assert.equal(leg0.flightNumbersLabel, "PC 123");
+  assert.equal(leg0.logoUrl, "https://images.kiwi.com/airlines/64/PC.png");
+  assert.equal(items[0].href, "https://www.google.com/travel/flights?q=x");
+  // Second leg had no href → prefilled handoff link built.
+  assert.ok(String(items[1].href).startsWith("https://www.google.com/travel/flights?q="));
+  assert.ok(String(data.note).includes("total AED 3,498"));
+  // Invalid leg → loud error.
+  const bad = await itinerarySummary.run(
+    { legs: [{ airline: "X", origin: "DXB", destination: "", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(bad.ok, false);
+  assert.equal(bad.errorCode, "invalid_leg");
+  ok("itinerary summary: legs, logos, flight numbers, AED total, links, validation");
+}
+
 ignavStub.close();
 stayingStub.close();
-console.log(`\ntravel-probe: ${passed}/13 groups passed`);
+console.log(`\ntravel-probe: ${passed}/19 groups passed`);

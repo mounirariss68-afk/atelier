@@ -148,5 +148,6 @@
 - [Statutory filing register actions](atelier-statutory-filings.md) — overdue derived at read time; mark-filed/reopen via audited dedicated route; payroll-page register fetch must wait for overview backfill.
 - [Atelier chat travel tools](atelier-travel-tools.md) — Duffel search tools are DB-free by design (offline tsx probe); booking = deep-link handoff only; DUFFEL_API_KEY fail-loud; clarification fields carry inputType first-class.
 - [Travel flight cards & AED](atelier-travel-flight-cards.md) — rich flight cards ride ranked_list via item.flight; AED display via static approx table (DB-free); duffel_test prefix → testMode banner.
+- [Atelier guided flight booking](atelier-travel-guided-booking.md) — select/itinerary tools are stateless + DB-free; airline filter is server-side; clarification sanitizer must keep inputType/options.
 - [Industry backfill rerun](atelier-industry-backfill.md) — governed industry backfill script targets null OR invalid (raw-NAICS) codes; DB data doesn't merge — re-run on main + prod.
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.

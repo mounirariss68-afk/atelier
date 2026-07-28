@@ -2110,6 +2110,14 @@ function KpiStrip({ data, locale }: { data: Json; locale: CliLocale }) {
 function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
   const items = asArr(data.items) as Json[];
   const total = asNum(data.total);
+  // Task #721 — client-side Prev/Next paging over the fetched results.
+  const pageSize = Math.max(1, asNum(data.pageSize) ?? 10);
+  const [page, setPage] = React.useState(0);
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const paged = items.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const itinerary = asObj(data.itinerary);
+  const isItinerary = data.itinerary != null && typeof data.itinerary === "object";
   if (items.length === 0) {
     return (
       <div className="text-xs text-text-mute italic" data-testid="ranked-empty">
@@ -2155,6 +2163,29 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
           </span>
         </div>
       )}
+      {isItinerary && (
+        <div
+          className="flex items-baseline justify-between gap-2 mb-1.5"
+          data-testid="itinerary-summary-header"
+        >
+          <div className="text-xs font-semibold text-text">
+            {locale === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
+            <span className="text-text-faint font-normal ms-1.5">
+              {locale === "ar"
+                ? `${asNum(itinerary.legCount) ?? items.length} رحلة`
+                : `${asNum(itinerary.legCount) ?? items.length} leg${(asNum(itinerary.legCount) ?? items.length) > 1 ? "s" : ""}`}
+            </span>
+          </div>
+          {asStr(itinerary.totalDisplay) && (
+            <div
+              className="text-sm font-semibold text-gold tabular-nums"
+              data-testid="itinerary-total"
+            >
+              {asStr(itinerary.totalDisplay)}
+            </div>
+          )}
+        </div>
+      )}
       {total != null && total > items.length && (
         <div className="text-[11px] text-text-faint mb-1.5">
           {locale === "ar"
@@ -2164,13 +2195,14 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
       )}
       {isFlightList ? (
         <ul className="space-y-1.5">
-          {items.slice(0, 20).map((it, idx) => (
+          {paged.map((it, idx) => (
             <FlightOfferRow key={asStr(it.id) || idx} item={it} />
           ))}
         </ul>
       ) : (
       <ul className="space-y-1">
-        {items.slice(0, 20).map((it, idx) => {
+        {paged.map((it, pageIdx) => {
+          const idx = safePage * pageSize + pageIdx;
           const id = asStr(it.id);
           const label = asStr(it.label) || id || `#${idx + 1}`;
           const href = asStr(it.href);
@@ -2242,6 +2274,36 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
         })}
       </ul>
       )}
+      {pageCount > 1 && (
+        <div
+          className="flex items-center justify-between mt-1.5"
+          data-testid="ranked-pager"
+        >
+          <button
+            type="button"
+            disabled={safePage === 0}
+            onClick={() => setPage(Math.max(0, safePage - 1))}
+            className="text-[11px] px-2 py-1 rounded border border-border-soft text-text-mute hover:border-gold/50 disabled:opacity-40 disabled:hover:border-border-soft transition-colors"
+            data-testid="ranked-prev"
+          >
+            {locale === "ar" ? "السابق" : "← Prev"}
+          </button>
+          <span className="text-[11px] text-text-faint tabular-nums">
+            {locale === "ar"
+              ? `${safePage + 1} / ${pageCount}`
+              : `Page ${safePage + 1} of ${pageCount}`}
+          </span>
+          <button
+            type="button"
+            disabled={safePage >= pageCount - 1}
+            onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))}
+            className="text-[11px] px-2 py-1 rounded border border-border-soft text-text-mute hover:border-gold/50 disabled:opacity-40 disabled:hover:border-border-soft transition-colors"
+            data-testid="ranked-next"
+          >
+            {locale === "ar" ? "التالي" : "Next →"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2271,6 +2333,10 @@ function FlightOfferRow({ item }: { item: Json }) {
   const stopsDur = [asStr(outbound.stopsLabel), asStr(outbound.durationLabel)]
     .filter(Boolean)
     .join(" · ");
+  // Task #721 — airline logo (CDN, hidden on load error) + flight numbers.
+  const logoUrl = asStr(outbound.logoUrl) || asStr(f.logoUrl);
+  const [logoFailed, setLogoFailed] = React.useState(false);
+  const flightNumbers = asStr(outbound.flightNumbersLabel);
   const returnLegs = legs.slice(1);
   const Container: React.ElementType = href ? "a" : "div";
   const containerProps = href
@@ -2288,6 +2354,16 @@ function FlightOfferRow({ item }: { item: Json }) {
         className="block bg-bg-deep border border-border-soft hover:border-gold/50 rounded-lg px-3 py-2.5 transition-colors"
       >
         <div className="flex items-start gap-3">
+          {logoUrl && !logoFailed && (
+            <img
+              src={logoUrl}
+              alt=""
+              className="w-6 h-6 rounded shrink-0 mt-0.5 bg-white/90 object-contain"
+              loading="lazy"
+              onError={() => setLogoFailed(true)}
+              data-testid="flight-airline-logo"
+            />
+          )}
           <div className="flex-1 min-w-0">
             {/* Times row: 20:40 ⟶ 00:50⁺¹ */}
             <div className="flex items-center gap-2">
@@ -2325,7 +2401,25 @@ function FlightOfferRow({ item }: { item: Json }) {
               <div className="text-[11px] text-text-mute mt-1">{stopsDur}</div>
             )}
             {carriers && (
-              <div className="text-[11px] text-text-faint">{carriers}</div>
+              <div className="text-[11px] text-text-faint">
+                {carriers}
+                {flightNumbers && (
+                  <span
+                    className="font-mono ms-1.5"
+                    data-testid="flight-numbers"
+                  >
+                    {flightNumbers}
+                  </span>
+                )}
+              </div>
+            )}
+            {!carriers && flightNumbers && (
+              <div
+                className="text-[11px] font-mono text-text-faint"
+                data-testid="flight-numbers"
+              >
+                {flightNumbers}
+              </div>
             )}
             {returnLegs.length > 0 && (
               <div className="text-[10px] font-mono text-text-faint mt-1">

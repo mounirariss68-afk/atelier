@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import React from "react";
-import { Linking, Pressable, Text, View } from "react-native";
+import { Image, Linking, Pressable, Text, View } from "react-native";
 
 import { Card } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
@@ -324,6 +324,9 @@ function KpiStrip({ data, lang }: { data: Json; lang: string }) {
 function RankedList({ data, lang }: { data: Json; lang: string }) {
   const c = useColors();
   const rtl = useRTL();
+  // Task #721 — paging state must sit above the empty-list early return
+  // (hooks may not be conditional).
+  const [page, setPage] = React.useState(0);
   const rows = (
     asArr(data.items).length > 0
       ? asArr(data.items)
@@ -356,6 +359,104 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
   // Task #715 — rich flight cards: travel.search_flights items carry a
   // structured `flight` object; render those Google-Flights style.
   const isFlightList = rows.some((r) => r.flight && typeof r.flight === "object");
+  // Task #721 — client-side Prev/Next paging over the fetched results.
+  const pageSize = Math.max(1, asNum(data.pageSize) ?? (isFlightList ? 10 : 8));
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, pageCount - 1);
+  const paged = rows.slice(safePage * pageSize, (safePage + 1) * pageSize);
+  const itinerary = asObj(data.itinerary);
+  const isItinerary = data.itinerary != null && typeof data.itinerary === "object";
+  const pagerLabel = (dir: "prev" | "next") =>
+    lang === "ar" ? (dir === "prev" ? "السابق" : "التالي") : dir === "prev" ? "← Prev" : "Next →";
+  const pager =
+    pageCount > 1 ? (
+      <View
+        style={{
+          flexDirection: rtl.row,
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginTop: 6,
+        }}
+      >
+        {(["prev", "next"] as const).map((dir, i) => {
+          const disabled = dir === "prev" ? safePage === 0 : safePage >= pageCount - 1;
+          const mid = i === 0 && (
+            <Text
+              key="mid"
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 11,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {`${safePage + 1} / ${pageCount}`}
+            </Text>
+          );
+          return (
+            <React.Fragment key={dir}>
+              <Pressable
+                disabled={disabled}
+                onPress={() =>
+                  setPage(dir === "prev" ? Math.max(0, safePage - 1) : Math.min(pageCount - 1, safePage + 1))
+                }
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.borderSoft,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  opacity: disabled ? 0.4 : 1,
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 11,
+                  }}
+                >
+                  {pagerLabel(dir)}
+                </Text>
+              </Pressable>
+              {mid}
+            </React.Fragment>
+          );
+        })}
+      </View>
+    ) : null;
+  const itineraryHeader = isItinerary ? (
+    <View
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        marginBottom: 4,
+      }}
+    >
+      <Text
+        style={{
+          color: c.foreground,
+          fontFamily: "PlusJakartaSans_700Bold",
+          fontSize: 13,
+        }}
+      >
+        {lang === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
+      </Text>
+      {asStr(itinerary.totalDisplay) ? (
+        <Text
+          style={{
+            color: c.primary,
+            fontFamily: "PlusJakartaSans_700Bold",
+            fontSize: 13,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {asStr(itinerary.totalDisplay)}
+        </Text>
+      ) : null}
+    </View>
+  ) : null;
   const testBanner =
     data.testMode === true ? (
       <View
@@ -389,17 +490,20 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
   if (isFlightList) {
     return (
       <View style={{ gap: 8 }}>
+        {itineraryHeader}
         {testBanner}
-        {rows.slice(0, 8).map((r, i) => (
-          <FlightOfferRow key={i} item={r} />
+        {paged.map((r, i) => (
+          <FlightOfferRow key={safePage * pageSize + i} item={r} />
         ))}
+        {pager}
       </View>
     );
   }
   return (
     <View style={{ gap: 2 }}>
       {testBanner}
-      {rows.slice(0, 8).map((r, i) => {
+      {paged.map((r, pageIdx) => {
+        const i = safePage * pageSize + pageIdx;
         const label =
           asStr(r.name) || asStr(r.title) || asStr(r.label) || asStr(r.account) || `#${i + 1}`;
         // Task #469 — split monetary fields from plain counts/scores so
@@ -426,7 +530,7 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
               alignItems: "center",
               gap: 10,
               paddingVertical: 8,
-              borderBottomWidth: i < Math.min(rows.length, 8) - 1 ? 1 : 0,
+              borderBottomWidth: pageIdx < paged.length - 1 ? 1 : 0,
               borderBottomColor: c.borderSoft,
             }}
           >
@@ -513,6 +617,10 @@ function FlightOfferRow({ item }: { item: Json }) {
   const stopsDur = [asStr(outbound.stopsLabel), asStr(outbound.durationLabel)]
     .filter(Boolean)
     .join(" · ");
+  // Task #721 — airline logo (CDN, hidden on error) + flight numbers.
+  const logoUrl = asStr(outbound.logoUrl) || asStr(f.logoUrl);
+  const [logoFailed, setLogoFailed] = React.useState(false);
+  const flightNumbers = asStr(outbound.flightNumbersLabel);
   const returnLegs = legs.slice(1);
   const Row = externalUrl ? Pressable : View;
   const rowPressProps = externalUrl
@@ -542,6 +650,20 @@ function FlightOfferRow({ item }: { item: Json }) {
       }}
     >
       <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 10 }}>
+        {logoUrl && !logoFailed ? (
+          <Image
+            source={{ uri: logoUrl }}
+            onError={() => setLogoFailed(true)}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 5,
+              marginTop: 2,
+              backgroundColor: "#FFFFFFE6",
+            }}
+            resizeMode="contain"
+          />
+        ) : null}
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
             <View>
@@ -599,6 +721,30 @@ function FlightOfferRow({ item }: { item: Json }) {
               }}
             >
               {carriers}
+              {flightNumbers ? (
+                <Text
+                  style={{
+                    color: c.faint,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 11,
+                  }}
+                >
+                  {`  ${flightNumbers}`}
+                </Text>
+              ) : null}
+            </Text>
+          ) : null}
+          {!carriers && flightNumbers ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 11,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {flightNumbers}
             </Text>
           ) : null}
           {returnLegs.length > 0 ? (

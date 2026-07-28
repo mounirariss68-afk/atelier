@@ -160,6 +160,32 @@ function fmtDuration(mins: number | null): string | null {
   return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
 }
 
+/**
+ * Airline logo URL (public CDN keyed by IATA code). Clients render the
+ * logo with a text fallback when the image 404s — no server fetch.
+ */
+function airlineLogoUrl(iata: string | null | undefined): string | null {
+  const code = (iata ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9]{2}$/.test(code)) return null;
+  return `https://images.kiwi.com/airlines/64/${code}.png`;
+}
+
+/** "EK 123" style flight-number labels for a slice's segments. */
+function legFlightNumbers(slice: FlightSlice): string[] {
+  const out: string[] = [];
+  for (const seg of slice.segments) {
+    const n = (seg.flightNumber ?? "").trim();
+    if (!n) continue;
+    // Provider numbers may already carry the carrier prefix ("EK123");
+    // otherwise prepend the marketing carrier code.
+    const label = /[A-Za-z]/.test(n)
+      ? n.toUpperCase()
+      : `${(seg.carrierIata ?? "").toUpperCase()}${seg.carrierIata ? " " : ""}${n}`;
+    if (!out.includes(label)) out.push(label);
+  }
+  return out;
+}
+
 /** Summarize one slice (leg) for the rich flight card. */
 function summarizeLeg(slice: FlightSlice) {
   const first = slice.segments[0];
@@ -195,6 +221,10 @@ function summarizeLeg(slice: FlightSlice) {
     durationLabel: fmtDuration(slice.durationMinutes),
     carriers,
     carriersLabel: carriers.join(" · ") || null,
+    // Task #721 — keep flight numbers + logo through to the cards.
+    flightNumbers: legFlightNumbers(slice),
+    flightNumbersLabel: legFlightNumbers(slice).join(" · ") || null,
+    logoUrl: airlineLogoUrl(slice.segments[0]?.carrierIata),
   };
 }
 
@@ -219,7 +249,7 @@ defineCapability({
   module: "knowledge",
   toolName: "travel_search_flights",
   description:
-    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, total price (displayed in AED), and a booking handoff link. Call IMMEDIATELY when origin, destination, and date are known — cabin class defaults to economy and passengers to 1 adult, so NEVER ask the user about cabin class or passenger count unless they raise it themselves. The only thing worth clarifying is a missing/vague exact date (YYYY-MM-DD per segment): relative dates like 'tomorrow' or 'next Tuesday' should be resolved to a concrete date yourself from today's date, not asked about. If the tool itself asks a clarifying question, answer it via the clarification flow — the original route and dates are preserved automatically.",
+    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, total price (displayed in AED), and a booking handoff link. Call IMMEDIATELY when origin, destination, and date are known — cabin class defaults to economy and passengers to 1 adult, so NEVER ask the user about cabin class or passenger count unless they raise it themselves. The only thing worth clarifying is a missing/vague exact date (YYYY-MM-DD per segment): relative dates like 'tomorrow' or 'next Tuesday' should be resolved to a concrete date yourself from today's date, not asked about. If the tool itself asks a clarifying question, answer it via the clarification flow — the original route and dates are preserved automatically. When the user asks for a specific airline, pass the `airline` param — NEVER filter airlines only in prose (the card shows what the tool returns). When the user then picks an offer, call travel_select_flight with that offer's fields to continue the guided booking flow.",
   slashAliases: { en: ["/flights", "/flight-search"], fr: ["/vols"] },
   inputSchema: {
     type: "object",
@@ -249,6 +279,11 @@ defineCapability({
       cabinClass: {
         type: "string",
         enum: ["economy", "premium_economy", "business", "first"],
+      },
+      airline: {
+        type: "string",
+        description:
+          "Optional airline filter — airline name (e.g. 'Emirates') or 2-letter IATA code (e.g. EK). Only offers on that airline are returned; ALWAYS pass this when the user asks for a specific airline instead of filtering in prose.",
       },
       maxResults: { type: "integer", minimum: 1, maximum: 20 },
     },
@@ -370,10 +405,50 @@ defineCapability({
       const cabinClass = input.cabinClass
         ? (String(input.cabinClass) as CabinClass)
         : undefined;
-      const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 10) || 10));
+      // Task #721 — fetch up to 20 so clients can page (10 per page).
+      const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 20) || 20));
 
       const offers = await ignavSearchFlights({ slices, adults, cabinClass });
-      const sorted = [...offers].sort((a, b) => a.totalAmount - b.totalAmount);
+
+      // Task #721 — server-side airline filter: match name (substring,
+      // case-insensitive) or exact 2-letter IATA code. Filtering here
+      // keeps card and prose consistent (the old model-side prose
+      // filter left mismatched cards).
+      const airlineFilterRaw = String(input.airline ?? "").trim();
+      let filtered = offers;
+      let airlineFilterApplied: string | null = null;
+      if (airlineFilterRaw) {
+        const lower = airlineFilterRaw.toLowerCase();
+        const isIata = /^[A-Za-z0-9]{2}$/.test(airlineFilterRaw);
+        filtered = offers.filter((o) => {
+          if (isIata && (o.airlineIata ?? "").toLowerCase() === lower) return true;
+          if (o.airlineName.toLowerCase().includes(lower)) return true;
+          // Multi-carrier combos: match any segment carrier too.
+          return o.segments.some(
+            (s) =>
+              (isIata && (s.carrierIata ?? "").toLowerCase() === lower) ||
+              (s.carrierName ?? "").toLowerCase().includes(lower) ||
+              (s.operatingCarrierName ?? "").toLowerCase().includes(lower),
+          );
+        });
+        airlineFilterApplied = airlineFilterRaw;
+      }
+      const sorted = [...filtered].sort((a, b) => a.totalAmount - b.totalAmount);
+
+      if (airlineFilterApplied && sorted.length === 0) {
+        const available = [...new Set(offers.map((o) => o.airlineName))].sort();
+        return {
+          ok: true,
+          data: {
+            items: [],
+            total: 0,
+            slices,
+            airlineFilter: airlineFilterApplied,
+            availableAirlines: available,
+            note: `No offers matched airline "${airlineFilterApplied}" on this route/date. Airlines with offers: ${available.join(", ") || "none"}. Tell the user honestly and offer the alternatives.`,
+          },
+        };
+      }
 
       // Multi-airline price comparison: cheapest total per airline.
       const byAirline = new Map<string, { airline: string; cheapest: FlightOffer }>();
@@ -432,6 +507,7 @@ defineCapability({
             selfTransfer: o.selfTransfer,
             airline: o.airlineName,
             airlineIata: o.airlineIata,
+            logoUrl: airlineLogoUrl(o.airlineIata),
             legs,
             outbound: legs[0] ?? null,
             price: {
@@ -463,8 +539,10 @@ defineCapability({
         data: {
           items,
           total: sorted.length,
+          pageSize: 10,
           slices,
           tripType,
+          ...(airlineFilterApplied ? { airlineFilter: airlineFilterApplied } : {}),
           airlineComparison,
           testMode,
           displayCurrency: "AED",
@@ -474,6 +552,435 @@ defineCapability({
     } catch (err) {
       return travelError(err);
     }
+  },
+});
+
+// ---------------------------------------------------------------------
+// Task #721 — travel.select_flight: guided-booking step after the user
+// picks an offer from the results. Stateless: the model passes the
+// picked offer's fields back. Handles the "want a return flight?"
+// question for one-way picks (via the clarification flow) and offers
+// honest fare alternatives (Ignav has NO fare-family data, so the only
+// real upsell is re-searching a higher cabin).
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "travel.select_flight",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "knowledge",
+  toolName: "travel_select_flight",
+  description:
+    "Record the flight offer the user picked from travel_search_flights results and drive the next guided-booking step. Pass the picked offer's fields verbatim from the search results (airline, route, date, times, price, cabin, flight numbers, href). For a ONE-WAY pick the tool asks whether the user wants a return flight (and its date) — answer via the clarification flow; if they do, run travel_search_flights for the return leg next. Also surfaces honest fare options: the flight provider has no branded-fare data, so the only real alternatives are other cabin classes — offer to re-run travel_search_flights with cabinClass business/first (or economy) if the user wants different fares. Once every leg of the trip has been selected, call travel_itinerary_summary.",
+  slashAliases: {},
+  inputSchema: {
+    type: "object",
+    properties: {
+      airline: { type: "string", description: "Airline name from the picked offer." },
+      airlineIata: { type: "string", description: "2-letter airline IATA code, when known." },
+      origin: { type: "string", description: "Leg origin IATA code." },
+      destination: { type: "string", description: "Leg destination IATA code." },
+      date: { type: "string", description: "Departure date YYYY-MM-DD." },
+      departTime: { type: "string", description: "Departure time HH:MM (local)." },
+      arriveTime: { type: "string", description: "Arrival time HH:MM (local)." },
+      flightNumbers: {
+        type: "array",
+        items: { type: "string" },
+        description: "Flight numbers for the leg (e.g. ['EK 121']).",
+      },
+      cabin: { type: "string", description: "Cabin class of the picked offer." },
+      priceAmount: { type: "number", description: "Offer total price amount." },
+      currency: { type: "string", description: "Offer price currency (e.g. USD)." },
+      href: { type: "string", description: "Booking handoff link from the offer." },
+      tripType: {
+        type: "string",
+        enum: ["one way", "round trip", "multi-city"],
+        description: "Trip type of the search the offer came from.",
+      },
+      stops: { type: "integer", description: "Number of stops on the leg." },
+      durationLabel: { type: "string", description: "e.g. '5 hr 10 min'." },
+      addReturn: {
+        type: "string",
+        enum: ["yes", "no"],
+        description:
+          "One-way picks only: whether the user wants a return flight too. Leave unset to have the tool ask.",
+      },
+      returnDate: {
+        type: "string",
+        description: "Return departure date YYYY-MM-DD (when addReturn is yes).",
+      },
+    },
+    required: ["airline", "origin", "destination", "date"],
+  },
+  isWrite: false,
+  irreversible: false,
+  requiredRoles: TRAVEL_ROLES,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  promoteAsSuggestion: false,
+  examplePhrases: {
+    en: ["Take the 2pm Emirates one", "Book the second option"],
+    fr: ["Prends le vol Emirates de 14 h"],
+  },
+  async run(input) {
+    const airline = String(input.airline ?? "").trim();
+    const origin = String(input.origin ?? "").trim().toUpperCase();
+    const destination = String(input.destination ?? "").trim().toUpperCase();
+    const date = String(input.date ?? "").trim();
+    const missing: string[] = [];
+    if (!airline) missing.push("airline");
+    if (!origin) missing.push("origin");
+    if (!destination) missing.push("destination");
+    if (!DATE_RE.test(date)) missing.push("date");
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        errorCode: "missing_selection_fields",
+        errorMessage: `Pass the picked offer's fields from the search results — missing: ${missing.join(", ")}.`,
+      };
+    }
+    const tripType = String(input.tripType ?? "").trim() || "one way";
+    const cabin = String(input.cabin ?? "economy").trim() || "economy";
+    const addReturn = String(input.addReturn ?? "").trim().toLowerCase();
+    const returnDate = String(input.returnDate ?? "").trim();
+
+    // One-way guided step: ask about a return flight before summarizing.
+    if (tripType === "one way" && addReturn !== "yes" && addReturn !== "no") {
+      return {
+        ok: false,
+        errorCode: "return_choice_needed",
+        errorMessage: "Ask the user whether they also want a return flight.",
+        clarification: {
+          field: "addReturn",
+          question: `Noted — ${airline} ${origin} → ${destination} on ${date}. Do you also want a return flight ${destination} → ${origin}? If yes, pick the return date.`,
+          fields: [
+            {
+              field: "addReturn",
+              label: "Add a return flight?",
+              options: ["yes", "no"],
+            },
+            {
+              field: "returnDate",
+              label: `Return date (${destination} → ${origin})`,
+              inputType: "date",
+              hint: "Leave blank if no return flight is needed.",
+            },
+          ],
+          tool: "travel_select_flight",
+          partial: { ...input },
+        },
+      };
+    }
+    if (tripType === "one way" && addReturn === "yes" && !isValidFutureDate(returnDate)) {
+      return {
+        ok: false,
+        errorCode: "return_date_needed",
+        errorMessage: "A valid future return date (YYYY-MM-DD) is required.",
+        clarification: {
+          field: "returnDate",
+          question: `What date should the return flight ${destination} → ${origin} leave?`,
+          fields: [
+            {
+              field: "returnDate",
+              label: `Return date (${destination} → ${origin})`,
+              inputType: "date",
+            },
+          ],
+          tool: "travel_select_flight",
+          partial: { ...input },
+        },
+      };
+    }
+
+    const priceAmount = Number(input.priceAmount);
+    const currency = String(input.currency ?? "").trim().toUpperCase();
+    const hasPrice = Number.isFinite(priceAmount) && priceAmount > 0 && !!currency;
+    const flightNumbers = Array.isArray(input.flightNumbers)
+      ? (input.flightNumbers as unknown[]).map((n) => String(n)).filter(Boolean)
+      : [];
+    const airlineIata = String(input.airlineIata ?? "").trim().toUpperCase() || null;
+    const cabinAlternatives = (
+      ["economy", "business", "first"] as const
+    ).filter((c) => c !== cabin);
+    const wantsReturn = tripType === "one way" && addReturn === "yes";
+
+    const fareOptionsNote =
+      "The flight provider exposes no branded-fare (fare family) data, so fare options beyond the quoted fare cannot be shown honestly. The only real alternatives are other cabin classes — offer to re-run the search with cabinClass " +
+      cabinAlternatives.join("/") +
+      " if the user wants different fares.";
+    const nextStep = wantsReturn
+      ? `Now run travel_search_flights for the return leg ${destination} → ${origin} on ${returnDate}${airline ? ` (offer to filter by ${airline} via the airline param, but show all airlines unless asked)` : ""}.`
+      : tripType === "one way"
+        ? "No return wanted — call travel_itinerary_summary with this leg to wrap up."
+        : "If every leg of the trip is now selected, call travel_itinerary_summary with all selected legs; otherwise continue selecting the remaining legs.";
+
+    return {
+      ok: true,
+      data: {
+        title: `Selected: ${airline} ${origin} → ${destination}`,
+        entityType: "flight_selection",
+        fields: [
+          { label: "Flight", value: `${airline}${flightNumbers.length ? ` ${flightNumbers.join(" · ")}` : ""}` },
+          { label: "Route", value: `${origin} → ${destination}` },
+          { label: "Date", value: date },
+          ...(input.departTime || input.arriveTime
+            ? [{ label: "Times", value: `${String(input.departTime ?? "?")} → ${String(input.arriveTime ?? "?")}` }]
+            : []),
+          { label: "Cabin", value: cabin },
+          ...(hasPrice
+            ? [{ label: "Price", value: fmtDisplayPrice(priceAmount, currency) }]
+            : []),
+        ],
+        selection: {
+          airline,
+          airlineIata,
+          logoUrl: airlineLogoUrl(airlineIata),
+          flightNumbers,
+          origin,
+          destination,
+          date,
+          departTime: String(input.departTime ?? "") || null,
+          arriveTime: String(input.arriveTime ?? "") || null,
+          cabin,
+          priceAmount: hasPrice ? priceAmount : null,
+          currency: hasPrice ? currency : null,
+          href: String(input.href ?? "") || null,
+          tripType,
+          addReturn: tripType === "one way" ? addReturn : null,
+          returnDate: wantsReturn ? returnDate : null,
+        },
+        fareOptions: {
+          fareFamiliesAvailable: false,
+          cabinAlternatives,
+          note: fareOptionsNote,
+        },
+        nextStep,
+        note: `${fareOptionsNote} ${nextStep}`,
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// Task #721 — travel.itinerary_summary: final recap card once every
+// leg of the trip has been selected. Stateless — legs are passed in.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "travel.itinerary_summary",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "knowledge",
+  toolName: "travel_itinerary_summary",
+  description:
+    "Show the final itinerary summary card once the user has selected a flight for EVERY leg of their trip (after travel_select_flight). Pass one entry per selected leg in travel order with the exact fields from the selected offers. Renders each leg with airline logo, flight numbers, times, and a combined total in AED (and original currency), plus the booking handoff links.",
+  slashAliases: { en: ["/itinerary"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      legs: {
+        type: "array",
+        minItems: 1,
+        description: "One entry per selected leg, in travel order.",
+        items: {
+          type: "object",
+          properties: {
+            airline: { type: "string" },
+            airlineIata: { type: "string" },
+            flightNumbers: { type: "array", items: { type: "string" } },
+            origin: { type: "string", description: "Origin IATA code." },
+            destination: { type: "string", description: "Destination IATA code." },
+            date: { type: "string", description: "YYYY-MM-DD." },
+            departTime: { type: "string" },
+            arriveTime: { type: "string" },
+            cabin: { type: "string" },
+            stops: { type: "integer" },
+            durationLabel: { type: "string" },
+            priceAmount: { type: "number", description: "Leg price (omit on legs covered by a combined round-trip fare — put the full fare on one leg only)." },
+            currency: { type: "string" },
+            href: { type: "string", description: "Booking handoff link." },
+          },
+          required: ["airline", "origin", "destination", "date"],
+        },
+      },
+      adults: { type: "integer", minimum: 1, maximum: 9 },
+    },
+    required: ["legs"],
+  },
+  isWrite: false,
+  irreversible: false,
+  requiredRoles: TRAVEL_ROLES,
+  surfaceOn: ["global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "ranked_list",
+  promoteAsSuggestion: false,
+  examplePhrases: {
+    en: ["Show me the full itinerary", "Summarize my trip"],
+    fr: ["Résume mon itinéraire"],
+  },
+  async run(input) {
+    const rawLegs = Array.isArray(input.legs)
+      ? (input.legs as Array<Record<string, unknown>>)
+      : [];
+    if (rawLegs.length === 0) {
+      return {
+        ok: false,
+        errorCode: "missing_legs",
+        errorMessage: "Pass one entry per selected leg (airline, origin, destination, date).",
+      };
+    }
+    type LegIn = {
+      airline: string;
+      airlineIata: string | null;
+      flightNumbers: string[];
+      origin: string;
+      destination: string;
+      date: string;
+      departTime: string | null;
+      arriveTime: string | null;
+      cabin: string;
+      stops: number | null;
+      durationLabel: string | null;
+      priceAmount: number | null;
+      currency: string | null;
+      href: string | null;
+    };
+    const legs: LegIn[] = [];
+    for (let i = 0; i < rawLegs.length; i++) {
+      const l = rawLegs[i];
+      const airline = String(l.airline ?? "").trim();
+      const origin = String(l.origin ?? "").trim().toUpperCase();
+      const destination = String(l.destination ?? "").trim().toUpperCase();
+      const date = String(l.date ?? "").trim();
+      if (!airline || !origin || !destination || !DATE_RE.test(date)) {
+        return {
+          ok: false,
+          errorCode: "invalid_leg",
+          errorMessage: `Leg ${i + 1} is missing airline/origin/destination or a valid YYYY-MM-DD date.`,
+        };
+      }
+      const amount = Number(l.priceAmount);
+      const currency = String(l.currency ?? "").trim().toUpperCase();
+      legs.push({
+        airline,
+        airlineIata: String(l.airlineIata ?? "").trim().toUpperCase() || null,
+        flightNumbers: Array.isArray(l.flightNumbers)
+          ? (l.flightNumbers as unknown[]).map((n) => String(n)).filter(Boolean)
+          : [],
+        origin,
+        destination,
+        date,
+        departTime: String(l.departTime ?? "").trim() || null,
+        arriveTime: String(l.arriveTime ?? "").trim() || null,
+        cabin: String(l.cabin ?? "economy").trim() || "economy",
+        stops: Number.isFinite(Number(l.stops)) ? Number(l.stops) : null,
+        durationLabel: String(l.durationLabel ?? "").trim() || null,
+        priceAmount: Number.isFinite(amount) && amount > 0 && currency ? amount : null,
+        currency: Number.isFinite(amount) && amount > 0 && currency ? currency : null,
+      href:
+          String(l.href ?? "").trim() ||
+          `https://www.google.com/travel/flights?q=${encodeURIComponent(
+            `Flights ${origin} to ${destination} on ${date} with ${airline}`,
+          )}`,
+      });
+    }
+
+    // Totals: AED (approx) always when convertible; original-currency
+    // totals per currency (never sum across currencies).
+    let aedTotal = 0;
+    let aedConvertible = true;
+    const byCurrency = new Map<string, number>();
+    let pricedLegs = 0;
+    for (const leg of legs) {
+      if (leg.priceAmount === null || !leg.currency) continue;
+      pricedLegs++;
+      byCurrency.set(leg.currency, (byCurrency.get(leg.currency) ?? 0) + leg.priceAmount);
+      const aed = toAed(leg.priceAmount, leg.currency);
+      if (aed) aedTotal += aed.amount;
+      else aedConvertible = false;
+    }
+    const originalTotals = [...byCurrency.entries()].map(([cur, amt]) => fmtMoney(amt, cur));
+    const totalDisplay =
+      pricedLegs === 0
+        ? null
+        : aedConvertible
+          ? `AED ${Math.round(aedTotal).toLocaleString("en-US")}${
+              originalTotals.length ? ` (≈, from ${originalTotals.join(" + ")})` : ""
+            }`
+          : originalTotals.join(" + ");
+
+    const adults = Math.max(1, Math.min(9, Number(input.adults ?? 1) || 1));
+    const items = legs.map((leg, i) => {
+      const aed = leg.priceAmount !== null && leg.currency ? toAed(leg.priceAmount, leg.currency) : null;
+      return {
+        id: `leg-${i + 1}`,
+        label: `${leg.airline} — ${leg.origin} → ${leg.destination} ${leg.date}`,
+        href: leg.href,
+        flight: {
+          tripType: null,
+          cabin: leg.cabin,
+          checkedBags: null,
+          selfTransfer: null,
+          airline: leg.airline,
+          airlineIata: leg.airlineIata,
+          logoUrl: airlineLogoUrl(leg.airlineIata),
+          legs: [
+            {
+              departTime: leg.departTime ?? "?",
+              arriveTime: leg.arriveTime ?? "?",
+              departDate: leg.date,
+              originIata: leg.origin,
+              destinationIata: leg.destination,
+              arrivesNextDay: false,
+              stops: leg.stops ?? 0,
+              stopsLabel:
+                leg.stops === null
+                  ? null
+                  : leg.stops === 0
+                    ? "Non-stop"
+                    : leg.stops === 1
+                      ? "1 stop"
+                      : `${leg.stops} stops`,
+              durationMinutes: null,
+              durationLabel: leg.durationLabel,
+              carriers: [leg.airline],
+              carriersLabel: leg.airline,
+              flightNumbers: leg.flightNumbers,
+              flightNumbersLabel: leg.flightNumbers.join(" · ") || null,
+              logoUrl: airlineLogoUrl(leg.airlineIata),
+            },
+          ],
+          outbound: null, // filled by clients from legs[0]
+          price:
+            leg.priceAmount !== null && leg.currency
+              ? {
+                  amount: leg.priceAmount,
+                  currency: leg.currency,
+                  aedAmount: aed?.amount ?? null,
+                  aedApprox: aed?.approx ?? null,
+                }
+              : { amount: null, currency: null, aedAmount: null, aedApprox: null },
+          testMode: false,
+        },
+      };
+    });
+
+    return {
+      ok: true,
+      data: {
+        items,
+        total: items.length,
+        itinerary: {
+          legCount: legs.length,
+          adults,
+          totalDisplay,
+          totalAedAmount: pricedLegs > 0 && aedConvertible ? Math.round(aedTotal) : null,
+          originalTotals,
+        },
+        note:
+          `Itinerary summary — ${legs.length} leg${legs.length > 1 ? "s" : ""}${totalDisplay ? `, total ${totalDisplay}` : ""}. ` +
+          "Prices are the selected live fares (AED totals are approximate conversions). Each leg's link opens a prefilled flight search to complete booking with the airline — in-chat ticketing is not enabled.",
+      },
+    };
   },
 });
 

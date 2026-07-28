@@ -2436,17 +2436,51 @@ export function reRouteClarificationAnswer(
 /** Validate an untrusted `fields` array from a persisted frame/body. */
 export function sanitizeClarificationFields(
   raw: unknown,
-): Array<{ field: string; label: string; hint?: string }> | null {
+): Array<{
+  field: string;
+  label: string;
+  hint?: string;
+  inputType?: string;
+  options?: string[];
+  defaultValue?: string;
+}> | null {
   if (!Array.isArray(raw)) return null;
-  const out: Array<{ field: string; label: string; hint?: string }> = [];
+  const out: Array<{
+    field: string;
+    label: string;
+    hint?: string;
+    inputType?: string;
+    options?: string[];
+    defaultValue?: string;
+  }> = [];
   for (const f of raw.slice(0, 40)) {
     if (!f || typeof f !== "object") continue;
-    const o = f as { field?: unknown; label?: unknown; hint?: unknown };
+    const o = f as {
+      field?: unknown;
+      label?: unknown;
+      hint?: unknown;
+      inputType?: unknown;
+      options?: unknown;
+      defaultValue?: unknown;
+    };
     if (typeof o.field !== "string" || o.field.length === 0) continue;
+    // Task #721 — preserve rich-input props (date pickers, dropdowns,
+    // prefills) through clarification rehydration; stripping them broke
+    // restored travel date-picker cards.
+    const options = Array.isArray(o.options)
+      ? o.options.filter((x): x is string => typeof x === "string" && x.length > 0).slice(0, 40)
+      : null;
     out.push({
       field: o.field,
       label: typeof o.label === "string" && o.label.length > 0 ? o.label : o.field,
       ...(typeof o.hint === "string" && o.hint.length > 0 ? { hint: o.hint } : {}),
+      ...(typeof o.inputType === "string" && o.inputType.length > 0
+        ? { inputType: o.inputType }
+        : {}),
+      ...(options && options.length > 0 ? { options } : {}),
+      ...(typeof o.defaultValue === "string" && o.defaultValue.length > 0
+        ? { defaultValue: o.defaultValue }
+        : {}),
     });
   }
   return out.length > 0 ? out : null;
