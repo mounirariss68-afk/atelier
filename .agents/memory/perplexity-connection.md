@@ -1,9 +1,12 @@
 ---
-name: Perplexity connection runtime binding
-description: Perplexity connector proxy 404s platform-side; research client now falls back to direct API with PERPLEXITY_API_KEY secret.
+name: Perplexity direct API only
+description: Connector proxy removed; research client is direct api.perplexity.ai via PERPLEXITY_API_KEY, with per-query timeout and one 429/5xx retry.
 ---
-The Replit Perplexity connection reports status "added" via integration search, but at runtime `listConnections("perplexity")` returns null/[] and the `@replit/connectors-sdk` proxy 404s with "No perplexity connection found for this customer". Two re-authorization attempts (UI re-add + ProposeIntegration re-attach, 2026-07-27) did not fix it — persistent platform-side binding issue, not code.
 
-**Resolution (2026-07-28):** the research client (`perplexity.ts`) now falls back automatically: stub base URL (tests) → connector proxy → direct `api.perplexity.ai` with the `PERPLEXITY_API_KEY` secret. A proxy 404 is treated as connector-not-bound only when its body matches "no perplexity connection" (real API 404s stay errors). Still fail-loud (`PerplexityConnectionError`) when neither the connector nor the secret works. Verified live: fallback returns answers + citations.
+The Replit Perplexity connector proxy 404'd platform-side ("No perplexity connection found") since ~2026-07, so the connector path was deleted entirely (2026-07-28). The research client now has exactly two transports:
+- `ATELIER_PERPLEXITY_BASE_URL` → offline stub (tests).
+- Direct `https://api.perplexity.ai` with the `PERPLEXITY_API_KEY` secret; missing/blank key fails loudly with an actionable typed error.
 
-**How to apply:** live Perplexity research works as long as the `PERPLEXITY_API_KEY` secret is set — no need to escalate the connector binding. If the connector binding is ever fixed platform-side, the proxy path takes precedence automatically. `ATELIER_RESEARCH_PROVIDER=anthropic` remains the env-selectable alternate mode; test suites pin it (scratch-db.ts, alliance run.ts) so they stay offline.
+**Why:** connector was broken platform-side for weeks; direct API verified working and key is present in prod secrets.
+
+**How to apply:** never reintroduce `@replit/connectors-sdk` (dropped from api-server deps/lockfile). Resilience lives in the client: per-query timeout (`ATELIER_PERPLEXITY_TIMEOUT_MS`, default 60s, surfaces as PerplexityConnectionError) and exactly one short-backoff retry on 429/5xx (`ATELIER_PERPLEXITY_RETRY_BACKOFF_MS`). Probe: perplexity-research-probe.ts covers stub, error-body, missing-key, timeout, 429-retry.

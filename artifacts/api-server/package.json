@@ -70,7 +70,6 @@
     "@anthropic-ai/sdk": "^0.92.0",
     "@google-cloud/storage": "^7.21.0",
     "@huggingface/transformers": "^3.8.1",
-    "@replit/connectors-sdk": "^0.4.1",
     "@types/heic-convert": "^2.1.1",
     "@types/multer": "^2.1.0",
     "@types/qrcode": "1.5.5",

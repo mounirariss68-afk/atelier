@@ -13,6 +13,11 @@
  *      PerplexityConnectionError — no silent fallback to the LLM-only path
  *      (the Anthropic stub must NOT be hit).
  *   4. Unknown provider value throws loudly.
+ *   5. API error status (e.g. 400) surfaces as PerplexityConnectionError
+ *      with a body snippet.
+ *   6. Missing PERPLEXITY_API_KEY (no stub base URL) → actionable error.
+ *   7. Slow endpoint → per-query timeout error (ATELIER_PERPLEXITY_TIMEOUT_MS).
+ *   8. 429-then-200 → one retry, query succeeds.
  *
  * Run: pnpm exec tsx tests/crm/perplexity-research-probe.ts
  */
@@ -230,6 +235,118 @@ async function main() {
     }
     check("unknown provider value throws", badProvider instanceof Error);
     delete process.env.ATELIER_RESEARCH_PROVIDER;
+
+    const { perplexitySearch } = await import(
+      "../../src/lib/atelier-agents/perplexity.js"
+    );
+
+    // ---- 5. API error status surfaces with body snippet ----
+    const errorStub = createServer((req, res) => {
+      res.writeHead(400, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "bad model name" }));
+    });
+    errorStub.listen(0);
+    await new Promise<void>((r) => errorStub.once("listening", () => r()));
+    process.env.ATELIER_PERPLEXITY_BASE_URL = `http://127.0.0.1:${(errorStub.address() as AddressInfo).port}`;
+    let apiErr: unknown = null;
+    try {
+      await perplexitySearch("anything");
+    } catch (err) {
+      apiErr = err;
+    }
+    errorStub.close();
+    check(
+      "API error status surfaces with body snippet",
+      apiErr instanceof PerplexityConnectionError &&
+        apiErr.message.includes("HTTP 400") &&
+        apiErr.message.includes("bad model name"),
+      apiErr,
+    );
+
+    // ---- 6. Missing PERPLEXITY_API_KEY → actionable error ----
+    const savedBase = process.env.ATELIER_PERPLEXITY_BASE_URL;
+    const savedKey = process.env.PERPLEXITY_API_KEY;
+    delete process.env.ATELIER_PERPLEXITY_BASE_URL;
+    delete process.env.PERPLEXITY_API_KEY;
+    let keyErr: unknown = null;
+    try {
+      await perplexitySearch("anything");
+    } catch (err) {
+      keyErr = err;
+    }
+    check(
+      "missing PERPLEXITY_API_KEY fails loudly with actionable message",
+      keyErr instanceof PerplexityConnectionError &&
+        keyErr.message.includes("PERPLEXITY_API_KEY"),
+      keyErr,
+    );
+    process.env.ATELIER_PERPLEXITY_BASE_URL = savedBase;
+    if (savedKey !== undefined) process.env.PERPLEXITY_API_KEY = savedKey;
+
+    // ---- 7. Slow endpoint → per-query timeout error ----
+    const slowStub = createServer((_req, _res) => {
+      /* never responds */
+    });
+    slowStub.listen(0);
+    await new Promise<void>((r) => slowStub.once("listening", () => r()));
+    process.env.ATELIER_PERPLEXITY_BASE_URL = `http://127.0.0.1:${(slowStub.address() as AddressInfo).port}`;
+    process.env.ATELIER_PERPLEXITY_TIMEOUT_MS = "1000";
+    let slowErr: unknown = null;
+    const slowStart = Date.now();
+    try {
+      await perplexitySearch("anything");
+    } catch (err) {
+      slowErr = err;
+    }
+    slowStub.close();
+    delete process.env.ATELIER_PERPLEXITY_TIMEOUT_MS;
+    check(
+      "slow endpoint surfaces the per-query timeout as connection error",
+      slowErr instanceof PerplexityConnectionError &&
+        slowErr.message.includes("timed out") &&
+        Date.now() - slowStart < 10_000,
+      slowErr,
+    );
+
+    // ---- 8. 429-then-200 → one retry, success ----
+    let flakyHits = 0;
+    const flakyStub = createServer((req, res) => {
+      req.resume();
+      req.on("end", () => {
+        flakyHits++;
+        if (flakyHits === 1) {
+          res.writeHead(429, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "rate limited" }));
+          return;
+        }
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(
+          JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "Retry answer." } }],
+            search_results: [{ title: "Src", url: "https://example.test/retry" }],
+          }),
+        );
+      });
+    });
+    flakyStub.listen(0);
+    await new Promise<void>((r) => flakyStub.once("listening", () => r()));
+    process.env.ATELIER_PERPLEXITY_BASE_URL = `http://127.0.0.1:${(flakyStub.address() as AddressInfo).port}`;
+    process.env.ATELIER_PERPLEXITY_RETRY_BACKOFF_MS = "10";
+    let retryResult: Awaited<ReturnType<typeof perplexitySearch>> | null = null;
+    let retryErr: unknown = null;
+    try {
+      retryResult = await perplexitySearch("anything");
+    } catch (err) {
+      retryErr = err;
+    }
+    flakyStub.close();
+    delete process.env.ATELIER_PERPLEXITY_RETRY_BACKOFF_MS;
+    check(
+      "429-then-200 retries once and succeeds",
+      flakyHits === 2 && retryResult?.answer === "Retry answer.",
+      retryErr ?? { flakyHits, retryResult },
+    );
+    process.env.ATELIER_PERPLEXITY_BASE_URL = `http://127.0.0.1:${perplexityPort}`;
   } finally {
     anthropicStub.close();
     perplexityStub.close();

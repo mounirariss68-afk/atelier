@@ -1,18 +1,25 @@
 /**
- * Task #687 — Perplexity web-research client (Replit Perplexity connector).
+ * Perplexity web-research client (direct API only).
  *
  * Retrieval layer for the web-research agents: each call performs one
  * web-grounded Perplexity query and returns the answer text plus citation
  * URLs. Claude then synthesises the retrieved dossier into each agent's
  * existing JSON contract (see callResearchJson in runner.ts).
  *
- * Failure policy: a missing/broken connection FAILS LOUDLY with a typed
- * PerplexityConnectionError — never a silent fallback. The runner's failRun
- * persists the message onto the agent-run row so the UI shows why.
+ * Transport has exactly two branches:
+ *   1. ATELIER_PERPLEXITY_BASE_URL set → offline test stub (probe pattern).
+ *   2. Otherwise → direct https://api.perplexity.ai with the
+ *      PERPLEXITY_API_KEY secret as bearer auth. (The former Replit
+ *      Perplexity connector proxy was removed — it 404'd platform-side.)
  *
- * Testing: when ATELIER_PERPLEXITY_BASE_URL is set (stub server, mirroring
- * the stub-Anthropic probe pattern), requests go straight to that base URL
- * with plain fetch — no connector involved, fully offline.
+ * Failure policy: a missing key or broken endpoint FAILS LOUDLY with a
+ * typed PerplexityConnectionError — never a silent fallback. The runner's
+ * failRun persists the message onto the agent-run row so the UI shows why.
+ *
+ * Resilience: every query is bounded by an env-tunable per-query timeout
+ * (ATELIER_PERPLEXITY_TIMEOUT_MS, default 60s) so a hung call can never
+ * orphan an agent run, and a 429/5xx response gets exactly one short-backoff
+ * retry before failing loud.
  */
 
 export class PerplexityConnectionError extends Error {
@@ -93,80 +100,61 @@ export async function perplexitySearch(
 
   const payload = JSON.stringify(body);
   const stubBase = process.env.ATELIER_PERPLEXITY_BASE_URL;
-  let res: Response;
+  let url: string;
+  const headers: Record<string, string> = { "content-type": "application/json" };
   if (stubBase) {
     // Test stub path — offline probes point this at a local stub server.
+    url = `${stubBase.replace(/\/$/, "")}/chat/completions`;
+  } else {
+    const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+    if (!apiKey) {
+      throw new PerplexityConnectionError(
+        "the PERPLEXITY_API_KEY secret is missing or blank. " +
+          "Set the PERPLEXITY_API_KEY secret (a Perplexity API key) in this environment to enable web research.",
+      );
+    }
+    url = "https://api.perplexity.ai/chat/completions";
+    headers.authorization = `Bearer ${apiKey}`;
+  }
+
+  const timeoutMs = Math.max(
+    1_000,
+    Number(process.env.ATELIER_PERPLEXITY_TIMEOUT_MS ?? 60_000) || 60_000,
+  );
+  const retryBackoffMs = Math.max(
+    0,
+    Number(process.env.ATELIER_PERPLEXITY_RETRY_BACKOFF_MS ?? 2_000) || 0,
+  );
+
+  const attempt = async (): Promise<Response> => {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
     try {
-      res = await fetch(`${stubBase.replace(/\/$/, "")}/chat/completions`, {
+      return await fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: payload,
+        signal: ac.signal,
       });
     } catch (err) {
+      if (ac.signal.aborted) {
+        throw new PerplexityConnectionError(
+          `query timed out after ${timeoutMs}ms (tune via ATELIER_PERPLEXITY_TIMEOUT_MS).`,
+        );
+      }
       const msg = err instanceof Error ? err.message : String(err);
       throw new PerplexityConnectionError(`connection failed (${msg}).`);
+    } finally {
+      clearTimeout(timer);
     }
-  } else {
-    // Preferred: Replit Perplexity connector — the SDK proxies to the
-    // Perplexity API and injects the API key. Never cache the client
-    // (tokens rotate). Fallback: the connector binding has been broken
-    // platform-side ("No perplexity connection found") since ~2026-07,
-    // so when the connector transport fails OR the proxy 404s with a
-    // no-connection error, retry directly against api.perplexity.ai with
-    // the PERPLEXITY_API_KEY secret. Still fail-loud when neither works.
-    let connectorFailure: string | null = null;
-    let proxied: Response | null = null;
-    try {
-      const { ReplitConnectors } = await import("@replit/connectors-sdk");
-      const connectors = new ReplitConnectors();
-      proxied = (await connectors.proxy("perplexity", "/chat/completions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: payload,
-      })) as Response;
-    } catch (err) {
-      connectorFailure = err instanceof Error ? err.message : String(err);
-    }
-    if (proxied && proxied.status === 404) {
-      // Distinguish "connector not bound" (proxy-level 404) from a real
-      // Perplexity API 404 by sniffing the error body.
-      let text = "";
-      try {
-        text = await proxied.clone().text();
-      } catch {
-        /* ignore */
-      }
-      if (/no perplexity connection/i.test(text)) {
-        connectorFailure = `connector proxy 404 — ${text.slice(0, 120)}`;
-        proxied = null;
-      }
-    }
-    if (proxied) {
-      res = proxied;
-    } else {
-      const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
-      if (!apiKey) {
-        throw new PerplexityConnectionError(
-          `connection failed (${connectorFailure ?? "connector unavailable"}). ` +
-            "Check the Replit Perplexity connector is authorized, or set the PERPLEXITY_API_KEY secret.",
-        );
-      }
-      try {
-        res = await fetch("https://api.perplexity.ai/chat/completions", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${apiKey}`,
-          },
-          body: payload,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        throw new PerplexityConnectionError(
-          `connector failed (${connectorFailure ?? "unavailable"}) and direct API fallback failed (${msg}).`,
-        );
-      }
-    }
+  };
+
+  let res = await attempt();
+  if (res.status === 429 || res.status >= 500) {
+    // Exactly one short-backoff retry on rate-limit / server errors; a
+    // second failure propagates loudly below.
+    await new Promise((r) => setTimeout(r, retryBackoffMs));
+    res = await attempt();
   }
   if (!res.ok) {
     let snippet = "";
