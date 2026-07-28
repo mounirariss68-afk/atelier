@@ -1,27 +1,32 @@
 /**
- * Task #706 — Travel search from chat (flights, hotels, Airbnb links).
+ * Task #706 / #715 / #716 — Travel search from chat (flights, hotels, Airbnb links).
  *
- * Three read-only capabilities backed by Duffel (one provider for both
- * flights and Stays hotel inventory):
+ * Three read-only capabilities backed by self-serve providers with
+ * Middle East / Gulf-carrier coverage (Ignav for flights, StayingAPI
+ * for hotels — Duffel lacked ME coverage and Amadeus Self-Service was
+ * decommissioned 2026-07-17):
  *
  *   - travel.search_flights — multi-segment (multi-city capable) flight
- *     search with a multi-airline price comparison. Booking is a
+ *     search with a multi-airline price comparison and rich
+ *     Google-Flights-style cards (AED display prices). Booking is a
  *     deep-link handoff (Google Flights prefilled per offer) — no
  *     orders/payments in v1.
- *   - travel.search_stays — hotel search around a resolved place, with
- *     rates and a Google Hotels handoff link.
+ *   - travel.search_stays — hotel search by free-text location with
+ *     live cross-OTA prices and a direct listing / Google Hotels
+ *     handoff link.
  *   - travel.airbnb_link — pre-filled Airbnb search deep link. Airbnb
  *     has NO public API, so live prices/availability are impossible —
  *     the card says so honestly.
  *
  * All three are deliberately DB-free (no @workspace/db import) so the
- * offline probe can exercise them against a Duffel stub without a
- * database. ACL: partner/leadership roles only (mirrors agent
+ * offline probe can exercise them against local provider stubs without
+ * a database. ACL: partner/leadership roles only (mirrors agent
  * invocation); self-only chat roles never see non-me.* tools anyway,
  * and the module gating below keeps board observers out.
  *
- * Failure policy: no DUFFEL_API_KEY → DuffelConnectionError propagates
- * as a loud "travel search is not configured" tool error. Never stub
+ * Failure policy: missing IGNAV_API_KEY / STAYINGAPI_API_KEY →
+ * TravelConnectionError propagates as a loud "travel search is not
+ * configured" tool error (errorCode travel_unavailable). Never stub
  * data outside tests.
  */
 
@@ -32,16 +37,16 @@ import {
 import type { AtelierRole } from "../../routes/atelier/personaRoles.js";
 import type { ToolResult } from "./index.js";
 import {
-  DuffelConnectionError,
-  duffelIsTestMode,
-  duffelPlaceSuggestions,
-  duffelSearchFlights,
-  duffelSearchStays,
+  TravelConnectionError,
+  ignavAirportSuggestions,
+  ignavSearchFlights,
+  stayingIsSandbox,
+  stayingSearchHotels,
+  type AirportPlace,
   type CabinClass,
-  type DuffelPlace,
   type FlightOffer,
   type FlightSlice,
-} from "../atelier-agents/duffel.js";
+} from "../atelier-agents/travel-providers.js";
 
 // Mirrors AGENT_INVOCABLE_ROLES — travel planning is a delivery-side
 // convenience, not a board/finance surface.
@@ -62,36 +67,28 @@ function isValidFutureDate(s: string): boolean {
   return d.getTime() >= Date.now() - 36 * 60 * 60 * 1000;
 }
 
-function duffelError(err: unknown): ToolResult {
-  if (err instanceof DuffelConnectionError) {
+function travelError(err: unknown): ToolResult {
+  if (err instanceof TravelConnectionError) {
     return { ok: false, errorCode: "travel_unavailable", errorMessage: err.message };
   }
   throw err;
 }
 
 /**
- * Resolve a free-text place ("Dubai", "IST", "Istanbul airport") to a
- * Duffel place. Bare 3-letter IATA codes pass through for flight
- * slices without a lookup. Returns null when nothing matched.
+ * Resolve a free-text place ("Dubai", "IST", "Istanbul airport") to an
+ * airport. Bare 3-letter IATA codes pass through for flight slices
+ * without a lookup. Returns null when nothing matched.
  */
-async function resolvePlace(
-  query: string,
-  opts: { preferType?: "airport" | "city" } = {},
-): Promise<DuffelPlace | null> {
-  const suggestions = await duffelPlaceSuggestions(query);
-  if (suggestions.length === 0) return null;
-  if (opts.preferType) {
-    const typed = suggestions.find((s) => s.type === opts.preferType && s.iataCode);
-    if (typed) return typed;
-  }
-  return suggestions.find((s) => s.iataCode) ?? suggestions[0];
+async function resolveAirport(query: string): Promise<AirportPlace | null> {
+  const suggestions = await ignavAirportSuggestions(query);
+  return suggestions[0] ?? null;
 }
 
 // ---------------------------------------------------------------------
 // Task #715 — AED display conversion.
 //
-// The firm's display currency is AED, but Duffel prices offers in the
-// account's settlement currency (often AUD/USD). The travel tools are
+// The firm's display currency is AED, but providers price offers in
+// their own settlement currencies (often USD/EUR). The travel tools are
 // deliberately DB-free (offline probe), so we do NOT use the finance FX
 // table here — a static approximate rate table with honest "approx."
 // labeling is used instead. Original amount + currency stay in the
@@ -138,7 +135,7 @@ function fmtDisplayPrice(amount: number, currency: string): string {
 }
 
 const TEST_MODE_NOTE =
-  "TEST DATA: the configured Duffel key is a test-mode key, so these offers are sandbox/synthetic data (e.g. 'Duffel Airways') and NOT bookable real flights. A live Duffel key is needed for real inventory.";
+  "TEST DATA: the configured StayingAPI key is a sandbox key (stay_test_ prefix), so these hotels are deterministic fixture data and NOT live inventory. Save the live StayingAPI key to get real hotels.";
 
 function fmtMoney(amount: number, currency: string): string {
   return `${currency} ${amount.toLocaleString("en-US", {
@@ -149,7 +146,7 @@ function fmtMoney(amount: number, currency: string): string {
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "?";
-  // Duffel departing_at is local time without offset — keep as-is.
+  // Provider times are local wall-clock without offset — keep as-is.
   const m = iso.match(/T(\d{2}:\d{2})/);
   return m ? m[1] : iso;
 }
@@ -222,7 +219,7 @@ defineCapability({
   module: "knowledge",
   toolName: "travel_search_flights",
   description:
-    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, baggage, total price (displayed in AED), and a booking handoff link. Call IMMEDIATELY when origin, destination, and date are known — cabin class defaults to economy and passengers to 1 adult, so NEVER ask the user about cabin class or passenger count unless they raise it themselves. The only thing worth clarifying is a missing/vague exact date (YYYY-MM-DD per segment): relative dates like 'tomorrow' or 'next Tuesday' should be resolved to a concrete date yourself from today's date, not asked about. If the tool itself asks a clarifying question, answer it via the clarification flow — the original route and dates are preserved automatically.",
+    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, total price (displayed in AED), and a booking handoff link. Call IMMEDIATELY when origin, destination, and date are known — cabin class defaults to economy and passengers to 1 adult, so NEVER ask the user about cabin class or passenger count unless they raise it themselves. The only thing worth clarifying is a missing/vague exact date (YYYY-MM-DD per segment): relative dates like 'tomorrow' or 'next Tuesday' should be resolved to a concrete date yourself from today's date, not asked about. If the tool itself asks a clarifying question, answer it via the clarification flow — the original route and dates are preserved automatically.",
   slashAliases: { en: ["/flights", "/flight-search"], fr: ["/vols"] },
   inputSchema: {
     type: "object",
@@ -346,8 +343,8 @@ defineCapability({
             resolved[role] = text.toUpperCase();
             continue;
           }
-          const place = await resolvePlace(text, { preferType: "city" });
-          if (!place?.iataCode) {
+          const place = await resolveAirport(text);
+          if (!place?.code) {
             return {
               ok: false,
               errorCode: "unknown_place",
@@ -360,7 +357,7 @@ defineCapability({
               },
             };
           }
-          resolved[role] = place.iataCode;
+          resolved[role] = place.code;
         }
         slices.push({
           origin: resolved.origin,
@@ -375,7 +372,7 @@ defineCapability({
         : undefined;
       const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 10) || 10));
 
-      const offers = await duffelSearchFlights({ slices, adults, cabinClass });
+      const offers = await ignavSearchFlights({ slices, adults, cabinClass });
       const sorted = [...offers].sort((a, b) => a.totalAmount - b.totalAmount);
 
       // Multi-airline price comparison: cheapest total per airline.
@@ -401,7 +398,8 @@ defineCapability({
               slices[1].destination === slices[0].origin
             ? "round trip"
             : "multi-city";
-      const testMode = duffelIsTestMode();
+      // Ignav has no sandbox mode — flight fares are always live.
+      const testMode = false;
 
       const items = sorted.slice(0, maxResults).map((o) => {
         const route = o.segments
@@ -419,6 +417,7 @@ defineCapability({
           cabin: o.cabinClass ?? cabinClass ?? "economy",
           stops: Math.max(0, o.segments.length - slices.length),
           checkedBags: o.checkedBags,
+          selfTransfer: o.selfTransfer,
           priceAmount: o.totalAmount,
           currency: o.currency,
           priceAedAmount: aed?.amount ?? null,
@@ -430,6 +429,7 @@ defineCapability({
             tripType,
             cabin: o.cabinClass ?? cabinClass ?? "economy",
             checkedBags: o.checkedBags,
+            selfTransfer: o.selfTransfer,
             airline: o.airlineName,
             airlineIata: o.airlineIata,
             legs,
@@ -446,8 +446,12 @@ defineCapability({
       });
 
       const anyConverted = items.some((i) => i.priceAedApprox === true);
+      const anySelfTransfer = items.some((i) => i.selfTransfer === true);
       const noteParts = [
-        testMode ? TEST_MODE_NOTE : "Prices are live offers.",
+        "Prices are live fares.",
+        anySelfTransfer
+          ? "Some itineraries combine separate tickets per leg (no through-ticketing) — marked as self-transfer."
+          : null,
         anyConverted
           ? "Prices are shown in AED using an approximate exchange rate; the original fare amount and currency are included with each offer."
           : null,
@@ -468,7 +472,7 @@ defineCapability({
         },
       };
     } catch (err) {
-      return duffelError(err);
+      return travelError(err);
     }
   },
 });
@@ -482,7 +486,7 @@ defineCapability({
   module: "knowledge",
   toolName: "travel_search_stays",
   description:
-    "Search hotels for business travel around a city, neighbourhood, or landmark: name, rating, total price for the stay (displayed in AED), cancellation info, and a booking handoff link. Call immediately when location and dates are known — guest/room counts default to 1, never ask about them. Requires exact check-in/check-out dates (YYYY-MM-DD); resolve relative dates yourself from today's date.",
+    "Search hotels for business travel around a city, neighbourhood, or landmark: name, star rating, guest score, live total price for the stay (displayed in AED), and a booking handoff link. Call immediately when location and dates are known — guest/room counts default to 1, never ask about them. Requires exact check-in/check-out dates (YYYY-MM-DD); resolve relative dates yourself from today's date.",
   slashAliases: { en: ["/hotels", "/stays"], fr: ["/hotels"] },
   inputSchema: {
     type: "object",
@@ -540,26 +544,13 @@ defineCapability({
       };
     }
     try {
-      const place = await resolvePlace(location, { preferType: "city" });
-      if (!place || place.latitude === null || place.longitude === null) {
-        return {
-          ok: false,
-          errorCode: "unknown_place",
-          errorMessage: `Could not resolve "${location}" to a searchable location.`,
-          clarification: {
-            field: "location",
-            question: `I couldn't place "${location}" — can you give me the city (and country)?`,
-            tool: "travel_search_stays",
-            partial: { ...input },
-          },
-        };
-      }
       const adults = Math.max(1, Math.min(9, Number(input.adults ?? 1) || 1));
       const rooms = Math.max(1, Math.min(9, Number(input.rooms ?? 1) || 1));
       const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 10) || 10));
-      const stays = await duffelSearchStays({
-        latitude: place.latitude,
-        longitude: place.longitude,
+      // StayingAPI takes free-text locations directly — no coordinate
+      // resolution step needed.
+      const stays = await stayingSearchHotels({
+        location,
         checkInDate: checkIn,
         checkOutDate: checkOut,
         adults,
@@ -578,7 +569,7 @@ defineCapability({
             86_400_000,
         ),
       );
-      const testMode = duffelIsTestMode();
+      const testMode = stayingIsSandbox();
       const items = priced.slice(0, maxResults).map((s) => {
         const aed =
           s.totalAmount !== null && s.currency ? toAed(s.totalAmount, s.currency) : null;
@@ -596,18 +587,15 @@ defineCapability({
         priceAedAmount: aed?.amount ?? null,
         priceAedApprox: aed?.approx ?? null,
         nightly:
-          s.totalAmount !== null && s.currency
-            ? fmtDisplayPrice(s.totalAmount / nights, s.currency)
-            : null,
-        cancellation:
-          s.freeCancellation === true
-            ? "free cancellation available"
-            : s.freeCancellation === false
-              ? "non-refundable"
+          s.nightlyAmount !== null && s.currency
+            ? fmtDisplayPrice(s.nightlyAmount, s.currency)
+            : s.totalAmount !== null && s.currency
+              ? fmtDisplayPrice(s.totalAmount / nights, s.currency)
               : null,
-        href: `https://www.google.com/travel/search?q=${encodeURIComponent(
-          `${s.name} ${place.cityName ?? location}`,
-        )}`,
+        platform: s.platform,
+        href:
+          s.bookingUrl ??
+          `https://www.google.com/travel/search?q=${encodeURIComponent(`${s.name} ${location}`)}`,
         };
       });
       const anyConverted = items.some((i) => i.priceAedApprox === true);
@@ -616,14 +604,14 @@ defineCapability({
         anyConverted
           ? "Prices are shown in AED using an approximate exchange rate; original amounts and currencies are included per hotel."
           : null,
-        "Links open a hotel search to complete booking (in-chat hotel booking is not enabled).",
+        "Links open the hotel's listing (or a hotel search) to complete booking (in-chat hotel booking is not enabled).",
       ].filter(Boolean);
       return {
         ok: true,
         data: {
           items,
           total: priced.length,
-          location: { query: location, resolved: place.name },
+          location: { query: location, resolved: location },
           checkIn,
           checkOut,
           nights,
@@ -633,7 +621,7 @@ defineCapability({
         },
       };
     } catch (err) {
-      return duffelError(err);
+      return travelError(err);
     }
   },
 });
