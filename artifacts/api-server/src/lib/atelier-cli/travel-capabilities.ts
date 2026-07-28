@@ -33,12 +33,14 @@ import type { AtelierRole } from "../../routes/atelier/personaRoles.js";
 import type { ToolResult } from "./index.js";
 import {
   DuffelConnectionError,
+  duffelIsTestMode,
   duffelPlaceSuggestions,
   duffelSearchFlights,
   duffelSearchStays,
   type CabinClass,
   type DuffelPlace,
   type FlightOffer,
+  type FlightSlice,
 } from "../atelier-agents/duffel.js";
 
 // Mirrors AGENT_INVOCABLE_ROLES — travel planning is a delivery-side
@@ -85,6 +87,59 @@ async function resolvePlace(
   return suggestions.find((s) => s.iataCode) ?? suggestions[0];
 }
 
+// ---------------------------------------------------------------------
+// Task #715 — AED display conversion.
+//
+// The firm's display currency is AED, but Duffel prices offers in the
+// account's settlement currency (often AUD/USD). The travel tools are
+// deliberately DB-free (offline probe), so we do NOT use the finance FX
+// table here — a static approximate rate table with honest "approx."
+// labeling is used instead. Original amount + currency stay in the
+// payload.
+// ---------------------------------------------------------------------
+const AED_PER_UNIT: Record<string, number> = {
+  AED: 1,
+  USD: 3.6725,
+  AUD: 2.41,
+  EUR: 3.98,
+  GBP: 4.65,
+  SAR: 0.979,
+  TRY: 0.093,
+  CAD: 2.68,
+  CHF: 4.12,
+  SGD: 2.72,
+  JPY: 0.0243,
+  INR: 0.0424,
+};
+
+/** Convert to AED for display. Returns null for unknown currencies —
+ * callers then show the original amount honestly, never a fake rate. */
+function toAed(
+  amount: number,
+  currency: string,
+): { amount: number; approx: boolean } | null {
+  const cur = (currency || "").toUpperCase();
+  const rate = AED_PER_UNIT[cur];
+  if (rate === undefined) return null;
+  if (cur === "AED") return { amount, approx: false };
+  return { amount: Math.round(amount * rate * 100) / 100, approx: true };
+}
+
+/** Display price string: AED when convertible (approx-labeled), else
+ * the original currency. */
+function fmtDisplayPrice(amount: number, currency: string): string {
+  const aed = toAed(amount, currency);
+  if (!aed) return fmtMoney(amount, currency);
+  if (!aed.approx) return fmtMoney(amount, "AED");
+  return `AED ${aed.amount.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })} (≈, from ${fmtMoney(amount, currency)})`;
+}
+
+const TEST_MODE_NOTE =
+  "TEST DATA: the configured Duffel key is a test-mode key, so these offers are sandbox/synthetic data (e.g. 'Duffel Airways') and NOT bookable real flights. A live Duffel key is needed for real inventory.";
+
 function fmtMoney(amount: number, currency: string): string {
   return `${currency} ${amount.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -97,6 +152,53 @@ function fmtTime(iso: string | null): string {
   // Duffel departing_at is local time without offset — keep as-is.
   const m = iso.match(/T(\d{2}:\d{2})/);
   return m ? m[1] : iso;
+}
+
+/** "5 hr 10 min" from minutes. */
+function fmtDuration(mins: number | null): string | null {
+  if (mins === null || mins <= 0) return null;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} min`;
+  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+}
+
+/** Summarize one slice (leg) for the rich flight card. */
+function summarizeLeg(slice: FlightSlice) {
+  const first = slice.segments[0];
+  const last = slice.segments[slice.segments.length - 1];
+  const depDate = first.departingAt?.slice(0, 10) ?? null;
+  const arrDate = last.arrivingAt?.slice(0, 10) ?? null;
+  const arrivesNextDay =
+    depDate !== null && arrDate !== null && arrDate > depDate;
+  const stops = Math.max(0, slice.segments.length - 1);
+  // Marketing carriers (unique, in order), plus operating carriers that
+  // differ from their marketing carrier (e.g. "flydubai · Emirates").
+  const carriers: string[] = [];
+  for (const seg of slice.segments) {
+    if (seg.carrierName && !carriers.includes(seg.carrierName))
+      carriers.push(seg.carrierName);
+    if (
+      seg.operatingCarrierName &&
+      seg.operatingCarrierName !== seg.carrierName &&
+      !carriers.includes(seg.operatingCarrierName)
+    )
+      carriers.push(seg.operatingCarrierName);
+  }
+  return {
+    departTime: fmtTime(first.departingAt),
+    arriveTime: fmtTime(last.arrivingAt),
+    departDate: depDate,
+    originIata: first.originIata,
+    destinationIata: last.destinationIata,
+    arrivesNextDay,
+    stops,
+    stopsLabel: stops === 0 ? "Non-stop" : stops === 1 ? "1 stop" : `${stops} stops`,
+    durationMinutes: slice.durationMinutes,
+    durationLabel: fmtDuration(slice.durationMinutes),
+    carriers,
+    carriersLabel: carriers.join(" · ") || null,
+  };
 }
 
 /** Google Flights handoff deep link for one offer's itinerary. */
@@ -120,7 +222,7 @@ defineCapability({
   module: "knowledge",
   toolName: "travel_search_flights",
   description:
-    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, baggage, total price, and a booking handoff link. Requires an exact date (YYYY-MM-DD) per segment — ask the user rather than guessing.",
+    "Search real flight offers for business travel: one-way, return, or multi-city (pass one segment per leg). Compares prices across airlines and returns offers with times, cabin, baggage, total price (displayed in AED), and a booking handoff link. Call IMMEDIATELY when origin, destination, and date are known — cabin class defaults to economy and passengers to 1 adult, so NEVER ask the user about cabin class or passenger count unless they raise it themselves. The only thing worth clarifying is a missing/vague exact date (YYYY-MM-DD per segment): relative dates like 'tomorrow' or 'next Tuesday' should be resolved to a concrete date yourself from today's date, not asked about. If the tool itself asks a clarifying question, answer it via the clarification flow — the original route and dates are preserved automatically.",
   slashAliases: { en: ["/flights", "/flight-search"], fr: ["/vols"] },
   inputSchema: {
     type: "object",
@@ -285,10 +387,21 @@ defineCapability({
       }
       const airlineComparison = [...byAirline.values()].map((x) => ({
         airline: x.airline,
-        cheapestTotal: fmtMoney(x.cheapest.totalAmount, x.cheapest.currency),
+        cheapestTotal: fmtDisplayPrice(x.cheapest.totalAmount, x.cheapest.currency),
         cheapestTotalAmount: x.cheapest.totalAmount,
         currency: x.cheapest.currency,
       }));
+
+      // Trip-type qualifier ("one way" / "round trip" / "multi-city").
+      const tripType =
+        slices.length === 1
+          ? "one way"
+          : slices.length === 2 &&
+              slices[1].origin === slices[0].destination &&
+              slices[1].destination === slices[0].origin
+            ? "round trip"
+            : "multi-city";
+      const testMode = duffelIsTestMode();
 
       const items = sorted.slice(0, maxResults).map((o) => {
         const route = o.segments
@@ -297,18 +410,49 @@ defineCapability({
               `${s.originIata} ${fmtTime(s.departingAt)} → ${s.destinationIata} ${fmtTime(s.arrivingAt)}`,
           )
           .join(" · ");
+        const legs = o.slices.map(summarizeLeg);
+        const aed = toAed(o.totalAmount, o.currency);
         return {
           id: o.id,
-          label: `${o.airlineName} — ${fmtMoney(o.totalAmount, o.currency)}`,
+          label: `${o.airlineName} — ${fmtDisplayPrice(o.totalAmount, o.currency)}`,
           route,
           cabin: o.cabinClass ?? cabinClass ?? "economy",
           stops: Math.max(0, o.segments.length - slices.length),
           checkedBags: o.checkedBags,
           priceAmount: o.totalAmount,
           currency: o.currency,
+          priceAedAmount: aed?.amount ?? null,
+          priceAedApprox: aed?.approx ?? null,
+          priceDisplay: fmtDisplayPrice(o.totalAmount, o.currency),
           href: flightHandoffLink(o, slices),
+          // Structured payload for the rich (Google-Flights-style) card.
+          flight: {
+            tripType,
+            cabin: o.cabinClass ?? cabinClass ?? "economy",
+            checkedBags: o.checkedBags,
+            airline: o.airlineName,
+            airlineIata: o.airlineIata,
+            legs,
+            outbound: legs[0] ?? null,
+            price: {
+              amount: o.totalAmount,
+              currency: o.currency,
+              aedAmount: aed?.amount ?? null,
+              aedApprox: aed?.approx ?? null,
+            },
+            testMode,
+          },
         };
       });
+
+      const anyConverted = items.some((i) => i.priceAedApprox === true);
+      const noteParts = [
+        testMode ? TEST_MODE_NOTE : "Prices are live offers.",
+        anyConverted
+          ? "Prices are shown in AED using an approximate exchange rate; the original fare amount and currency are included with each offer."
+          : null,
+        "Links open a prefilled flight search to complete booking with the airline (in-chat ticketing is not enabled).",
+      ].filter(Boolean);
 
       return {
         ok: true,
@@ -316,9 +460,11 @@ defineCapability({
           items,
           total: sorted.length,
           slices,
+          tripType,
           airlineComparison,
-          note:
-            "Prices are live offers. Links open a prefilled flight search to complete booking with the airline (in-chat ticketing is not enabled).",
+          testMode,
+          displayCurrency: "AED",
+          note: noteParts.join(" "),
         },
       };
     } catch (err) {
@@ -336,7 +482,7 @@ defineCapability({
   module: "knowledge",
   toolName: "travel_search_stays",
   description:
-    "Search hotels for business travel around a city, neighbourhood, or landmark: name, rating, total price for the stay, cancellation info, and a booking handoff link. Requires exact check-in/check-out dates (YYYY-MM-DD) — ask the user rather than guessing.",
+    "Search hotels for business travel around a city, neighbourhood, or landmark: name, rating, total price for the stay (displayed in AED), cancellation info, and a booking handoff link. Call immediately when location and dates are known — guest/room counts default to 1, never ask about them. Requires exact check-in/check-out dates (YYYY-MM-DD); resolve relative dates yourself from today's date.",
   slashAliases: { en: ["/hotels", "/stays"], fr: ["/hotels"] },
   inputSchema: {
     type: "object",
@@ -432,18 +578,26 @@ defineCapability({
             86_400_000,
         ),
       );
-      const items = priced.slice(0, maxResults).map((s) => ({
+      const testMode = duffelIsTestMode();
+      const items = priced.slice(0, maxResults).map((s) => {
+        const aed =
+          s.totalAmount !== null && s.currency ? toAed(s.totalAmount, s.currency) : null;
+        return {
         id: s.id,
         label:
           s.totalAmount !== null && s.currency
-            ? `${s.name} — ${fmtMoney(s.totalAmount, s.currency)} total`
+            ? `${s.name} — ${fmtDisplayPrice(s.totalAmount, s.currency)} total`
             : s.name,
         rating: s.rating,
         reviewScore: s.reviewScore,
         address: s.address,
+        priceAmount: s.totalAmount,
+        currency: s.currency,
+        priceAedAmount: aed?.amount ?? null,
+        priceAedApprox: aed?.approx ?? null,
         nightly:
           s.totalAmount !== null && s.currency
-            ? fmtMoney(s.totalAmount / nights, s.currency)
+            ? fmtDisplayPrice(s.totalAmount / nights, s.currency)
             : null,
         cancellation:
           s.freeCancellation === true
@@ -454,7 +608,16 @@ defineCapability({
         href: `https://www.google.com/travel/search?q=${encodeURIComponent(
           `${s.name} ${place.cityName ?? location}`,
         )}`,
-      }));
+        };
+      });
+      const anyConverted = items.some((i) => i.priceAedApprox === true);
+      const noteParts = [
+        testMode ? TEST_MODE_NOTE : null,
+        anyConverted
+          ? "Prices are shown in AED using an approximate exchange rate; original amounts and currencies are included per hotel."
+          : null,
+        "Links open a hotel search to complete booking (in-chat hotel booking is not enabled).",
+      ].filter(Boolean);
       return {
         ok: true,
         data: {
@@ -464,7 +627,9 @@ defineCapability({
           checkIn,
           checkOut,
           nights,
-          note: "Links open a hotel search to complete booking (in-chat hotel booking is not enabled).",
+          testMode,
+          displayCurrency: "AED",
+          note: noteParts.join(" "),
         },
       };
     } catch (err) {

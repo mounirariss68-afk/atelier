@@ -33,6 +33,8 @@ import {
   CheckCircle2,
   Map as MapIcon,
   Inbox,
+  Luggage,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -2130,8 +2132,29 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
     ? Math.max(1, ...items.map((it) => asNum(it[numericKey]) ?? 0))
     : 0;
 
+  // Task #715 — rich flight cards: travel.search_flights items carry a
+  // structured `flight` object; render those Google-Flights style. Other
+  // ranked-list tools without flight fields keep the generic rows.
+  const isFlightList = items.some(
+    (it) => it.flight && typeof it.flight === "object",
+  );
+  const testMode = data.testMode === true;
+
   return (
     <div data-testid="ranked-list">
+      {testMode && (
+        <div
+          className="flex items-center gap-1.5 text-[11px] text-warning bg-warning/10 border border-warning/30 rounded px-2 py-1 mb-1.5"
+          data-testid="travel-test-mode"
+        >
+          <FlaskConical className="w-3 h-3 shrink-0" />
+          <span>
+            {locale === "ar"
+              ? "بيانات تجريبية — هذه العروض من بيئة اختبار وليست رحلات حقيقية قابلة للحجز."
+              : "Test data — these offers come from a sandbox key and are not bookable real flights."}
+          </span>
+        </div>
+      )}
       {total != null && total > items.length && (
         <div className="text-[11px] text-text-faint mb-1.5">
           {locale === "ar"
@@ -2139,6 +2162,13 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
             : `Showing ${items.length} of ${total}`}
         </div>
       )}
+      {isFlightList ? (
+        <ul className="space-y-1.5">
+          {items.slice(0, 20).map((it, idx) => (
+            <FlightOfferRow key={asStr(it.id) || idx} item={it} />
+          ))}
+        </ul>
+      ) : (
       <ul className="space-y-1">
         {items.slice(0, 20).map((it, idx) => {
           const id = asStr(it.id);
@@ -2211,7 +2241,144 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
           );
         })}
       </ul>
+      )}
     </div>
+  );
+}
+
+/* ───────────── Task #715 — Google-Flights-style flight card ───────────── */
+
+function FlightOfferRow({ item }: { item: Json }) {
+  const f = asObj(item.flight);
+  const legs = asArr(f.legs).map((l) => asObj(l));
+  const outbound = asObj(f.outbound ?? legs[0]);
+  const price = asObj(f.price);
+  const href = asStr(item.href);
+  const aedAmount = asNum(price.aedAmount);
+  const amount = asNum(price.amount);
+  const currency = asStr(price.currency) || "";
+  const approx = price.aedApprox === true;
+  const priceMain =
+    aedAmount != null
+      ? `AED ${Math.round(aedAmount).toLocaleString("en-US")}`
+      : amount != null
+        ? `${currency} ${amount.toLocaleString("en-US")}`
+        : asStr(item.label);
+  const tripType = asStr(f.tripType);
+  const checkedBags = asNum(f.checkedBags);
+  const noBag = checkedBags === 0;
+  const carriers = asStr(outbound.carriersLabel) || asStr(f.airline);
+  const stopsDur = [asStr(outbound.stopsLabel), asStr(outbound.durationLabel)]
+    .filter(Boolean)
+    .join(" · ");
+  const returnLegs = legs.slice(1);
+  const Container: React.ElementType = href ? "a" : "div";
+  const containerProps = href
+    ? {
+        href,
+        ...(/^https?:\/\//i.test(href)
+          ? { target: "_blank", rel: "noopener noreferrer" }
+          : {}),
+      }
+    : {};
+  return (
+    <li data-testid="flight-offer-card">
+      <Container
+        {...containerProps}
+        className="block bg-bg-deep border border-border-soft hover:border-gold/50 rounded-lg px-3 py-2.5 transition-colors"
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex-1 min-w-0">
+            {/* Times row: 20:40 ⟶ 00:50⁺¹ */}
+            <div className="flex items-center gap-2">
+              <div>
+                <div className="text-base font-semibold leading-tight tabular-nums">
+                  {asStr(outbound.departTime)}
+                </div>
+                <div className="text-[10px] font-mono text-text-faint">
+                  {asStr(outbound.originIata)}
+                </div>
+              </div>
+              <div className="flex-1 flex items-center min-w-6" aria-hidden>
+                <div className="h-px flex-1 bg-border-soft" />
+                <span className="text-text-faint text-[10px] px-0.5">→</span>
+              </div>
+              <div>
+                <div className="text-base font-semibold leading-tight tabular-nums">
+                  {asStr(outbound.arriveTime)}
+                  {outbound.arrivesNextDay === true && (
+                    <sup
+                      className="text-[10px] text-warning ms-0.5"
+                      data-testid="flight-next-day"
+                    >
+                      +1
+                    </sup>
+                  )}
+                </div>
+                <div className="text-[10px] font-mono text-text-faint">
+                  {asStr(outbound.destinationIata)}
+                </div>
+              </div>
+            </div>
+            {/* Stops · duration, carriers */}
+            {stopsDur && (
+              <div className="text-[11px] text-text-mute mt-1">{stopsDur}</div>
+            )}
+            {carriers && (
+              <div className="text-[11px] text-text-faint">{carriers}</div>
+            )}
+            {returnLegs.length > 0 && (
+              <div className="text-[10px] font-mono text-text-faint mt-1">
+                {returnLegs
+                  .map(
+                    (l) =>
+                      `↩ ${asStr(l.originIata)} ${asStr(l.departTime)} → ${asStr(l.destinationIata)} ${asStr(l.arriveTime)}${l.arrivesNextDay === true ? "⁺¹" : ""}`,
+                  )
+                  .join(" · ")}
+              </div>
+            )}
+          </div>
+          {/* Price column */}
+          <div className="text-end shrink-0">
+            <div className="flex items-center justify-end gap-1">
+              {noBag && (
+                <span
+                  className="relative inline-flex text-text-faint"
+                  title="No checked bag included"
+                  data-testid="flight-no-bag"
+                >
+                  <Luggage className="w-3.5 h-3.5" />
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="w-4 h-px bg-text-faint rotate-45" />
+                  </span>
+                </span>
+              )}
+              {checkedBags != null && checkedBags > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[10px] text-text-faint"
+                  title={`${checkedBags} checked bag${checkedBags > 1 ? "s" : ""} included`}
+                  data-testid="flight-bags"
+                >
+                  <Luggage className="w-3.5 h-3.5" />
+                  {checkedBags}
+                </span>
+              )}
+              <span className="text-base font-semibold text-success tabular-nums">
+                {priceMain}
+              </span>
+            </div>
+            {tripType && (
+              <div className="text-[11px] text-text-faint">{tripType}</div>
+            )}
+            {approx && aedAmount != null && amount != null && (
+              <div className="text-[10px] text-text-faint">
+                ≈ from {currency} {amount.toLocaleString("en-US")}
+              </div>
+            )}
+          </div>
+        </div>
+      </Container>
+    </li>
   );
 }
 

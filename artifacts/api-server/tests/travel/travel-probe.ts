@@ -102,8 +102,8 @@ const stub = createServer((req, res) => {
                 total_currency: "USD",
                 owner: { name: "Emirates", iata_code: "EK" },
                 slices: [
-                  { segments: [mkSeg("DXB", "IST", "2027-03-02T08:10:00", "2027-03-02T12:20:00", ["Emirates", "EK"])] },
-                  { segments: [mkSeg("IST", "DXB", "2027-03-06T14:00:00", "2027-03-06T19:45:00", ["Emirates", "EK"])] },
+                  { duration: "PT4H10M", segments: [mkSeg("DXB", "IST", "2027-03-02T08:10:00", "2027-03-02T12:20:00", ["Emirates", "EK"])] },
+                  { duration: "PT5H45M", segments: [mkSeg("IST", "DXB", "2027-03-06T14:00:00", "2027-03-06T19:45:00", ["Emirates", "EK"])] },
                 ],
               },
               {
@@ -112,8 +112,17 @@ const stub = createServer((req, res) => {
                 total_currency: "USD",
                 owner: { name: "Pegasus", iata_code: "PC" },
                 slices: [
-                  { segments: [mkSeg("DXB", "IST", "2027-03-02T02:15:00", "2027-03-02T06:30:00", ["Pegasus", "PC"])] },
-                  { segments: [mkSeg("IST", "DXB", "2027-03-06T22:00:00", "2027-03-07T03:30:00", ["Pegasus", "PC"])] },
+                  {
+                    duration: "PT4H15M",
+                    segments: [
+                      {
+                        ...mkSeg("DXB", "IST", "2027-03-02T02:15:00", "2027-03-02T06:30:00", ["Pegasus", "PC"]),
+                        // Distinct operating carrier → "Pegasus · SunExpress".
+                        operating_carrier: { name: "SunExpress", iata_code: "XQ" },
+                      },
+                    ],
+                  },
+                  { duration: "PT5H30M", segments: [mkSeg("IST", "DXB", "2027-03-06T22:00:00", "2027-03-07T03:30:00", ["Pegasus", "PC"])] },
                 ],
               },
               {
@@ -316,6 +325,135 @@ const ok = (name: string) => {
   ok("airbnb deep link builder");
 }
 
+// 7b. Task #715 — defaults: only segments provided → searches
+// immediately (no clarification), 1 adult, no cabin_class in the body.
+{
+  requests.length = 0;
+  const r = await flights.run(
+    { segments: [{ origin: "DXB", destination: "IST", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const offerReq = requests.find((q) => q.url.startsWith("/air/offer_requests"));
+  assert.ok(offerReq, "search ran immediately with defaults");
+  const body = offerReq!.body as { data: { passengers: unknown[]; cabin_class?: string } };
+  assert.equal(body.data.passengers.length, 1, "defaults to 1 adult");
+  assert.equal(body.data.cabin_class, undefined, "no cabin_class sent when unspecified");
+  ok("defaults: immediate search with economy/1-adult, no clarification");
+}
+
+// 7c. Task #715 — clarification resume: bad date → clarification carries
+// the full partial; merging the answered date re-runs with the ORIGINAL
+// route intact.
+{
+  requests.length = 0;
+  const r1 = await flights.run(
+    { segments: [{ origin: "Dubai", destination: "IST", date: "tomorrow" }] },
+    ctx,
+  );
+  assert.equal(r1.ok, false);
+  assert.equal(r1.clarification!.field, "segments.0.date");
+  const partial = r1.clarification!.partial as {
+    segments: Array<{ origin: string; destination: string; date: string }>;
+  };
+  assert.equal(partial.segments[0].origin, "Dubai", "partial keeps the route");
+  assert.equal(requests.length, 0, "no API call before the date is known");
+  // Simulate the orchestrator's mergeClarificationAnswer for the dotted
+  // field path segments.0.date, then re-run with the merged input.
+  const merged = structuredClone(partial);
+  merged.segments[0].date = "2027-03-02";
+  const r2 = await flights.run(merged as never, ctx);
+  assert.equal(r2.ok, true, JSON.stringify(r2));
+  const offerReq = requests.find((q) => q.url.startsWith("/air/offer_requests"));
+  const slices = (offerReq!.body as { data: { slices: Array<{ origin: string; destination: string }> } }).data.slices;
+  assert.equal(slices[0].origin, "DXB", "original origin (Dubai→DXB) survived the clarification");
+  assert.equal(slices[0].destination, "IST", "original destination survived");
+  ok("clarification resume: answered date re-runs with original route intact");
+}
+
+// 7d. Task #715 — structured rich-card payload + AED conversion.
+{
+  const r = await flights.run(
+    {
+      segments: [
+        { origin: "DXB", destination: "IST", date: "2027-03-02" },
+        { origin: "IST", destination: "DXB", date: "2027-03-06" },
+      ],
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true);
+  const data = r.data as Record<string, unknown>;
+  assert.equal(data.tripType, "round trip");
+  assert.equal(data.displayCurrency, "AED");
+  assert.equal(data.testMode, false);
+  const items = data.items as Array<Record<string, unknown>>;
+  const cheap = items[0]; // Pegasus 410.50 USD
+  // AED conversion: 410.50 × 3.6725 ≈ 1500.56, original preserved.
+  assert.equal(cheap.currency, "USD");
+  assert.equal(cheap.priceAmount, 410.5);
+  assert.ok(Math.abs((cheap.priceAedAmount as number) - 410.5 * 3.6725) < 0.01);
+  assert.equal(cheap.priceAedApprox, true);
+  assert.ok(String(cheap.label).includes("AED"), "label shows AED");
+  assert.ok(String(data.note).includes("approximate exchange rate"));
+  const flight = cheap.flight as Record<string, unknown>;
+  assert.equal(flight.tripType, "round trip");
+  const legs = flight.legs as Array<Record<string, unknown>>;
+  assert.equal(legs.length, 2);
+  // Outbound: DXB 02:15 → IST 06:30, non-stop, 4 hr 15 min, same day.
+  const out = flight.outbound as Record<string, unknown>;
+  assert.equal(out.departTime, "02:15");
+  assert.equal(out.arriveTime, "06:30");
+  assert.equal(out.originIata, "DXB");
+  assert.equal(out.destinationIata, "IST");
+  assert.equal(out.arrivesNextDay, false);
+  assert.equal(out.stops, 0);
+  assert.equal(out.stopsLabel, "Non-stop");
+  assert.equal(out.durationMinutes, 255);
+  assert.equal(out.durationLabel, "4 hr 15 min");
+  // Marketing + distinct operating carrier both surfaced.
+  assert.equal(out.carriersLabel, "Pegasus · SunExpress");
+  // Return leg: IST 22:00 → DXB 03:30 next day.
+  assert.equal(legs[1].arrivesNextDay, true);
+  // Baggage: 1 checked bag per segment × 2 slices = 2 included.
+  assert.equal(flight.checkedBags, 2);
+  const price = flight.price as Record<string, unknown>;
+  assert.equal(price.currency, "USD");
+  assert.equal(price.aedApprox, true);
+  ok("rich card payload: legs, next-day flag, stops/duration, carriers, AED price");
+}
+
+// 7e. Task #715 — test-mode key → prominent test-data labeling.
+{
+  process.env.DUFFEL_API_KEY = "duffel_test_abc123";
+  const rf = await flights.run(
+    { segments: [{ origin: "DXB", destination: "IST", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(rf.ok, true);
+  const fd = rf.data as Record<string, unknown>;
+  assert.equal(fd.testMode, true);
+  assert.ok(/test-mode|sandbox/i.test(String(fd.note)), "flight note flags test data");
+  assert.ok(String(fd.note).toLowerCase().includes("live duffel key"), "note says live key needed");
+  const fitems = fd.items as Array<Record<string, unknown>>;
+  assert.equal((fitems[0].flight as Record<string, unknown>).testMode, true);
+  const rs = await stays.run(
+    { location: "Taksim", checkIn: "2027-03-02", checkOut: "2027-03-06" },
+    ctx,
+  );
+  assert.equal(rs.ok, true);
+  const sd = rs.data as Record<string, unknown>;
+  assert.equal(sd.testMode, true);
+  assert.ok(/test-mode|sandbox/i.test(String(sd.note)));
+  // Stays AED conversion: 480 USD × 3.6725, original preserved.
+  const sitems = sd.items as Array<Record<string, unknown>>;
+  assert.ok(Math.abs((sitems[0].priceAedAmount as number) - 480 * 3.6725) < 0.01);
+  assert.equal(sitems[0].currency, "USD");
+  assert.ok(String(sitems[0].label).includes("AED"));
+  delete process.env.DUFFEL_API_KEY;
+  ok("test-mode key → sandbox labeling on flights + stays; stays AED conversion");
+}
+
 // 8. No stub + no key → loud failure.
 {
   delete process.env.ATELIER_DUFFEL_BASE_URL;
@@ -344,4 +482,4 @@ const ok = (name: string) => {
 }
 
 stub.close();
-console.log(`\ntravel-probe: ${passed}/8 groups passed`);
+console.log(`\ntravel-probe: ${passed}/12 groups passed`);

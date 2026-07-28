@@ -353,8 +353,52 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
     return <FallbackGrid data={data} lang={lang} />;
   }
   const currency = asStr(data.currency) || null;
+  // Task #715 — rich flight cards: travel.search_flights items carry a
+  // structured `flight` object; render those Google-Flights style.
+  const isFlightList = rows.some((r) => r.flight && typeof r.flight === "object");
+  const testBanner =
+    data.testMode === true ? (
+      <View
+        style={{
+          flexDirection: rtl.row,
+          alignItems: "center",
+          gap: 6,
+          backgroundColor: c.warningTint,
+          borderRadius: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+          marginBottom: 6,
+        }}
+      >
+        <Feather name="alert-triangle" size={12} color={c.warning} />
+        <Text
+          style={{
+            flex: 1,
+            color: c.warning,
+            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontSize: 11,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {lang === "ar"
+            ? "بيانات تجريبية — هذه العروض ليست رحلات حقيقية قابلة للحجز."
+            : "Test data — these offers are sandbox results, not bookable real flights."}
+        </Text>
+      </View>
+    ) : null;
+  if (isFlightList) {
+    return (
+      <View style={{ gap: 8 }}>
+        {testBanner}
+        {rows.slice(0, 8).map((r, i) => (
+          <FlightOfferRow key={i} item={r} />
+        ))}
+      </View>
+    );
+  }
   return (
     <View style={{ gap: 2 }}>
+      {testBanner}
       {rows.slice(0, 8).map((r, i) => {
         const label =
           asStr(r.name) || asStr(r.title) || asStr(r.label) || asStr(r.account) || `#${i + 1}`;
@@ -439,6 +483,196 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
         );
       })}
     </View>
+  );
+}
+
+/* ────────── Task #715 — Google-Flights-style flight card (mobile) ────────── */
+
+function FlightOfferRow({ item }: { item: Json }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const f = asObj(item.flight);
+  const legs = asArr(f.legs).map((l) => asObj(l));
+  const outbound = asObj(f.outbound ?? legs[0]);
+  const price = asObj(f.price);
+  const href = asStr(item.href);
+  const externalUrl = /^https?:\/\//i.test(href) ? href : null;
+  const aedAmount = asNum(price.aedAmount);
+  const amount = asNum(price.amount);
+  const currency = asStr(price.currency);
+  const approx = price.aedApprox === true;
+  const priceMain =
+    aedAmount != null
+      ? `AED ${Math.round(aedAmount).toLocaleString("en-US")}`
+      : amount != null
+        ? `${currency} ${amount.toLocaleString("en-US")}`
+        : asStr(item.label);
+  const tripType = asStr(f.tripType);
+  const checkedBags = asNum(f.checkedBags);
+  const carriers = asStr(outbound.carriersLabel) || asStr(f.airline);
+  const stopsDur = [asStr(outbound.stopsLabel), asStr(outbound.durationLabel)]
+    .filter(Boolean)
+    .join(" · ");
+  const returnLegs = legs.slice(1);
+  const Row = externalUrl ? Pressable : View;
+  const rowPressProps = externalUrl
+    ? { onPress: () => Linking.openURL(externalUrl).catch(() => {}) }
+    : {};
+  const timeStyle = {
+    color: c.foreground,
+    fontFamily: "PlusJakartaSans_800ExtraBold",
+    fontSize: 17,
+    fontVariant: ["tabular-nums"] as ("tabular-nums")[],
+  };
+  const iataStyle = {
+    color: c.faint,
+    fontFamily: "PlusJakartaSans_600SemiBold",
+    fontSize: 10.5,
+    letterSpacing: 0.4,
+  };
+  return (
+    <Row
+      {...rowPressProps}
+      style={{
+        borderWidth: 1,
+        borderColor: c.borderSoft,
+        borderRadius: 12,
+        padding: 10,
+        gap: 4,
+      }}
+    >
+      <View style={{ flexDirection: rtl.row, alignItems: "flex-start", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+            <View>
+              <Text style={timeStyle}>{asStr(outbound.departTime)}</Text>
+              <Text style={iataStyle}>{asStr(outbound.originIata)}</Text>
+            </View>
+            <View
+              style={{
+                flex: 1,
+                height: 1,
+                backgroundColor: c.borderSoft,
+                minWidth: 16,
+              }}
+            />
+            <View>
+              <Text style={timeStyle}>
+                {asStr(outbound.arriveTime)}
+                {outbound.arrivesNextDay === true ? (
+                  <Text
+                    style={{
+                      color: c.warning,
+                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontSize: 11,
+                    }}
+                  >
+                    {" "}
+                    +1
+                  </Text>
+                ) : null}
+              </Text>
+              <Text style={iataStyle}>{asStr(outbound.destinationIata)}</Text>
+            </View>
+          </View>
+          {stopsDur ? (
+            <Text
+              style={{
+                color: c.mutedForeground,
+                fontFamily: "PlusJakartaSans_600SemiBold",
+                fontSize: 12,
+                marginTop: 4,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {stopsDur}
+            </Text>
+          ) : null}
+          {carriers ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 12,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {carriers}
+            </Text>
+          ) : null}
+          {returnLegs.length > 0 ? (
+            <Text
+              numberOfLines={2}
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 11,
+                marginTop: 3,
+                textAlign: rtl.textAlign,
+              }}
+            >
+              {returnLegs
+                .map(
+                  (l) =>
+                    `↩ ${asStr(l.originIata)} ${asStr(l.departTime)} → ${asStr(l.destinationIata)} ${asStr(l.arriveTime)}${l.arrivesNextDay === true ? " +1" : ""}`,
+                )
+                .join("\n")}
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ alignItems: "flex-end" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            {checkedBags === 0 ? (
+              <Feather name="slash" size={11} color={c.faint} />
+            ) : null}
+            {checkedBags != null && checkedBags > 0 ? (
+              <Text
+                style={{
+                  color: c.faint,
+                  fontFamily: "PlusJakartaSans_600SemiBold",
+                  fontSize: 11,
+                }}
+              >
+                🧳{checkedBags}
+              </Text>
+            ) : null}
+            <Text
+              style={{
+                color: c.success,
+                fontFamily: "PlusJakartaSans_800ExtraBold",
+                fontSize: 16,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {priceMain}
+            </Text>
+          </View>
+          {tripType ? (
+            <Text
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 11,
+              }}
+            >
+              {tripType}
+            </Text>
+          ) : null}
+          {approx && aedAmount != null && amount != null ? (
+            <Text
+              style={{
+                color: c.faint,
+                fontFamily: "PlusJakartaSans_500Medium",
+                fontSize: 10,
+              }}
+            >
+              ≈ from {currency} {amount.toLocaleString("en-US")}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </Row>
   );
 }
 

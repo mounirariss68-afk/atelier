@@ -24,6 +24,15 @@ export class DuffelConnectionError extends Error {
 
 const DUFFEL_VERSION = "v2";
 
+/**
+ * Task #715 — test-mode key detection. Duffel test keys are prefixed
+ * `duffel_test`; their offers are synthetic ("Duffel Airways",
+ * implausible fares) and NOT bookable. Callers surface this honestly.
+ */
+export function duffelIsTestMode(): boolean {
+  return (process.env.DUFFEL_API_KEY ?? "").trim().startsWith("duffel_test");
+}
+
 function baseUrl(): string {
   const stub = process.env.ATELIER_DUFFEL_BASE_URL;
   if (stub) return stub.replace(/\/$/, "");
@@ -148,7 +157,17 @@ export interface FlightSegment {
   arrivingAt: string | null;
   carrierName: string | null;
   carrierIata: string | null;
+  /** Operating carrier when Duffel reports one distinct from marketing. */
+  operatingCarrierName: string | null;
+  operatingCarrierIata: string | null;
   flightNumber: string | null;
+}
+
+/** One slice (origin→destination leg, possibly multi-segment). */
+export interface FlightSlice {
+  segments: FlightSegment[];
+  /** Total slice duration in minutes, from Duffel's ISO-8601 `duration`. */
+  durationMinutes: number | null;
 }
 
 export interface FlightOffer {
@@ -158,9 +177,23 @@ export interface FlightOffer {
   airlineName: string;
   airlineIata: string | null;
   cabinClass: string | null;
+  /** Flattened segments across all slices (legacy consumers). */
   segments: FlightSegment[];
+  /** Per-slice structure (Task #715 rich cards). */
+  slices: FlightSlice[];
   /** Checked-bag quantity included, when Duffel reports baggage. */
   checkedBags: number | null;
+}
+
+/** Parse an ISO-8601 duration ("PT5H10M") to minutes. */
+function isoDurationMinutes(v: unknown): number | null {
+  const s = str(v);
+  if (!s) return null;
+  const m = s.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:\d+(?:\.\d+)?S)?)?$/i);
+  if (!m) return null;
+  const mins =
+    (Number(m[1] ?? 0) * 24 + Number(m[2] ?? 0)) * 60 + Number(m[3] ?? 0);
+  return mins > 0 ? mins : null;
 }
 
 type RawOffer = Record<string, unknown>;
@@ -172,12 +205,14 @@ function parseOffer(raw: RawOffer): FlightOffer | null {
   const owner = (raw.owner ?? {}) as Record<string, unknown>;
   const slices = Array.isArray(raw.slices) ? (raw.slices as Array<Record<string, unknown>>) : [];
   const segments: FlightSegment[] = [];
+  const parsedSlices: FlightSlice[] = [];
   let checkedBags: number | null = null;
   let cabinClass: string | null = null;
   for (const slice of slices) {
     const segs = Array.isArray(slice.segments)
       ? (slice.segments as Array<Record<string, unknown>>)
       : [];
+    const sliceSegments: FlightSegment[] = [];
     for (const seg of segs) {
       const origin = (seg.origin ?? {}) as Record<string, unknown>;
       const destination = (seg.destination ?? {}) as Record<string, unknown>;
@@ -185,15 +220,20 @@ function parseOffer(raw: RawOffer): FlightOffer | null {
         string,
         unknown
       >;
-      segments.push({
+      const opCarrier = (seg.operating_carrier ?? {}) as Record<string, unknown>;
+      const parsedSeg: FlightSegment = {
         originIata: str(origin.iata_code) ?? "?",
         destinationIata: str(destination.iata_code) ?? "?",
         departingAt: str(seg.departing_at),
         arrivingAt: str(seg.arriving_at),
         carrierName: str(carrier.name),
         carrierIata: str(carrier.iata_code),
+        operatingCarrierName: str(opCarrier.name),
+        operatingCarrierIata: str(opCarrier.iata_code),
         flightNumber: str(seg.marketing_carrier_flight_number),
-      });
+      };
+      segments.push(parsedSeg);
+      sliceSegments.push(parsedSeg);
       const paxes = Array.isArray(seg.passengers)
         ? (seg.passengers as Array<Record<string, unknown>>)
         : [];
@@ -209,6 +249,12 @@ function parseOffer(raw: RawOffer): FlightOffer | null {
         }
       }
     }
+    if (sliceSegments.length > 0) {
+      parsedSlices.push({
+        segments: sliceSegments,
+        durationMinutes: isoDurationMinutes(slice.duration),
+      });
+    }
   }
   if (segments.length === 0) return null;
   return {
@@ -219,6 +265,7 @@ function parseOffer(raw: RawOffer): FlightOffer | null {
     airlineIata: str(owner.iata_code),
     cabinClass,
     segments,
+    slices: parsedSlices,
     checkedBags,
   };
 }
