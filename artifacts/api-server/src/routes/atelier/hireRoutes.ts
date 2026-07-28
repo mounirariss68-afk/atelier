@@ -14,6 +14,7 @@
  * login stays traceable.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { randomUUID } from "node:crypto";
 import multer from "multer";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
@@ -655,7 +656,7 @@ router.get(
       res.setHeader("Content-Type", doc.mime || "application/octet-stream");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${(doc.fileName || doc.title).replace(/"/g, "")}"`,
+        contentDispositionFilename("attachment", doc.fileName || doc.title),
       );
       res.send(bytes);
     } catch (err) {

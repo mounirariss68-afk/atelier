@@ -23,6 +23,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import multer from "multer";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import {
@@ -594,7 +595,7 @@ router.get("/documents/:id/download", async (req, res) => {
   res.setHeader("Content-Type", version.mime || "application/octet-stream");
   res.setHeader(
     "Content-Disposition",
-    `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(version.fileName)}"`,
+    contentDispositionFilename(inline ? "inline" : "attachment", version.fileName),
   );
   res.send(bytes);
 });

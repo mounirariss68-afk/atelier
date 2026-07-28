@@ -17,6 +17,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { and, desc, eq, isNull, or, ilike, inArray, sql } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -2421,7 +2422,7 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       res.setHeader("Content-Type", doc.backMime || "application/octet-stream");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${(doc.backFileName || "document-back").replace(/[^\w.\- ]+/g, "_")}"`,
+        contentDispositionFilename("attachment", doc.backFileName || "document-back"),
       );
       res.setHeader("Cache-Control", "private, no-store");
       res.send(bytes);
@@ -2438,7 +2439,7 @@ router.get("/roster/people/:id/documents/:docId/download", async (req, res, next
       res.setHeader("Content-Type", doc.mime || "application/octet-stream");
       res.setHeader(
         "Content-Disposition",
-        `attachment; filename="${(doc.fileName || "document").replace(/[^\w.\- ]+/g, "_")}"`,
+        contentDispositionFilename("attachment", doc.fileName || "document"),
       );
       res.setHeader("Cache-Control", "private, no-store");
       res.send(bytes);
@@ -2503,7 +2504,7 @@ router.get("/roster/people/:id/business-card.pdf", async (req, res, next) => {
       payloadSummary: `${me.name} generated ${person.fullName}'s business-card PDF (${variant})`,
     });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
     res.setHeader("Cache-Control", "private, no-store");
     res.send(pdf);
   } catch (err) {

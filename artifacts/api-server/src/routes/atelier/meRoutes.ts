@@ -15,6 +15,7 @@
  * card on someone's Me home ("timesheet due Friday", "expense approved").
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
   db,
@@ -644,7 +645,7 @@ router.get("/me/learning/:id/download", async (req, res, next) => {
     res.setHeader("Content-Type", m.mime || "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${(m.fileName || "material").replace(/"/g, "")}"`,
+      contentDispositionFilename("attachment", m.fileName || "material"),
     );
     res.send(bytes);
   } catch (err) {

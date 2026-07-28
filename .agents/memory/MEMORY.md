@@ -143,4 +143,5 @@
 - [Atelier payroll person fields](atelier-payroll-person-fields.md) — payroll comp fields write ONLY via the dedicated audited roster payroll PATCH (general PATCH field-locked); dev data passes never merge.
 - [Atelier finance close stack quirks](atelier-finance-654.md) — probe journals must use cash not 1100 (ar_tie check); payroll entity match is fuzzy; CT accrual non-reversing; reopen lock-release is conditional.
 - [Intent-router resilience](atelier-intent-router-resilience.md) — turn-opening classifier retries then degrades to deterministic (never throws); clarification continuations skip it entirely.
+- [Download filename headers](download-filename-headers.md) — any Content-Disposition built from user data must use the shared httpFilename helper (RFC 5987 dual form) or non-ASCII names crash Node with a 500 HTML page.
 - [Statutory filing register actions](atelier-statutory-filings.md) — overdue derived at read time; mark-filed/reopen via audited dedicated route; payroll-page register fetch must wait for overview backfill.

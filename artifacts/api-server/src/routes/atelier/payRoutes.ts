@@ -32,6 +32,7 @@
  * in-row bytes keep every download behind the ACL-gated route.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import multer from "multer";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
@@ -484,7 +485,7 @@ router.get("/me/pay/documents/:docId/download", async (req, res, next) => {
     res.setHeader("Content-Type", doc.mime);
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${doc.fileName.replace(/["\r\n]/g, "")}"`,
+      contentDispositionFilename("attachment", doc.fileName),
     );
     res.send(buf);
   } catch (err) {
@@ -731,7 +732,7 @@ router.get("/roster/pay/documents/:docId/download", async (req, res, next) => {
     res.setHeader("Content-Type", doc.mime);
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${doc.fileName.replace(/["\r\n]/g, "")}"`,
+      contentDispositionFilename("attachment", doc.fileName),
     );
     res.send(buf);
   } catch (err) {

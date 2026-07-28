@@ -33,6 +33,7 @@
  */
 
 import { Router, type IRouter, type Request, type Response } from "express";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import multer from "multer";
 import { z } from "zod";
 import { and, desc, eq, isNull } from "drizzle-orm";
@@ -799,7 +800,7 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
     res.setHeader("Content-Type", mime || "application/octet-stream");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${(fname || "document").replace(/[^\w.\- ]+/g, "_")}"`,
+      contentDispositionFilename("attachment", fname || "document"),
     );
     res.setHeader("Cache-Control", "private, no-store");
     res.send(bytes);
@@ -976,7 +977,7 @@ router.get("/me/business-card.pdf", async (req, res, next) => {
       summary: `${ctx.me.name} generated their business-card PDF (${variant})`,
     });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
     res.setHeader("Cache-Control", "private, no-store");
     res.send(pdf);
   } catch (err) {

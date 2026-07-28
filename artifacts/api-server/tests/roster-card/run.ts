@@ -34,6 +34,7 @@ const MGR_PERSON = `emp_test_rcmgr_${STAMP}`;
 const REPORT_PERSON = `emp_test_rcrep_${STAMP}`;
 const OUTSIDE_PERSON = `emp_test_rcout_${STAMP}`;
 const EMP_PERSON = `emp_test_rcemp_${STAMP}`;
+const TR_PERSON = `emp_test_rctr_${STAMP}`;
 
 const failures: string[] = [];
 function check(name: string, cond: boolean, detail?: string): void {
@@ -116,6 +117,8 @@ async function main(): Promise<void> {
       { id: REPORT_PERSON, userId: null, fullName: "RC Report", role: "employee", title: "Consultant" },
       { id: OUTSIDE_PERSON, userId: null, fullName: "RC Outside Tree", role: "employee", title: "Analyst" },
       { id: EMP_PERSON, userId: EMP_ID, fullName: "RC Employee", role: "employee", title: "Analyst" },
+      // Task #694 — non-ASCII (Turkish) name must not break the download header.
+      { id: TR_PERSON, userId: null, fullName: "Ömer Barbaros Yiş", role: "employee", title: "CEO Türkiye" },
     ];
     for (const p of people) {
       await db.insert(atelierEmployees).values({
@@ -188,6 +191,25 @@ async function main(): Promise<void> {
     );
 
     // =====================================================================
+    group("Task #694 \u2014 Turkish-character name downloads as real PDF");
+    // =====================================================================
+    const tr = await card(HR_ID, TR_PERSON);
+    check(
+      "turkish name 200 %PDF (no header crash)",
+      tr.status === 200 &&
+        tr.type === "application/pdf" &&
+        tr.buf.subarray(0, 4).toString() === "%PDF",
+      `status=${tr.status} type=${tr.type}`,
+    );
+    check(
+      "header carries RFC 5987 filename* with UTF-8 name + ASCII fallback",
+      tr.disp.includes("filename*=UTF-8''") &&
+        tr.disp.includes('filename="Omer_Barbaros_Yis_Cognirise_Business_Card.pdf"') &&
+        /^[\x20-\x7e]+$/.test(tr.disp),
+      `disp=${tr.disp}`,
+    );
+
+    // =====================================================================
     group("request validation parity");
     // =====================================================================
     const missing = await card(HR_ID, `emp_test_nope_${STAMP}`);
@@ -234,7 +256,7 @@ async function main(): Promise<void> {
     for (const id of edgeIds) {
       await db.delete(atelierRosterReportsTo).where(eq(atelierRosterReportsTo.id, id));
     }
-    for (const id of [MGR_PERSON, REPORT_PERSON, OUTSIDE_PERSON, EMP_PERSON]) {
+    for (const id of [MGR_PERSON, REPORT_PERSON, OUTSIDE_PERSON, EMP_PERSON, TR_PERSON]) {
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, id));
     }
     await db
