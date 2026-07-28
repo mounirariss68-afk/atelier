@@ -364,9 +364,19 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
         const valueRaw = moneyRaw ?? r.count ?? r.score;
         const valueKey = moneyRaw != null ? "valueUsd" : "count";
         const sub = asStr(r.stage ?? r.status ?? r.owner ?? r.subtitle);
+        // Task #706 — external links (travel booking handoffs etc.)
+        // open in the device browser; internal hrefs stay non-pressable
+        // (mobile has no portal webview for arbitrary paths).
+        const href = asStr(r.href);
+        const externalUrl = /^https?:\/\//i.test(href) ? href : null;
+        const Row = externalUrl ? Pressable : View;
+        const rowPressProps = externalUrl
+          ? { onPress: () => Linking.openURL(externalUrl).catch(() => {}) }
+          : {};
         return (
-          <View
+          <Row
             key={i}
+            {...rowPressProps}
             style={{
               flexDirection: rtl.row,
               alignItems: "center",
@@ -425,7 +435,7 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
                 {formatField(valueKey, valueRaw, asStr(r.currency) || currency, lang)}
               </Text>
             ) : null}
-          </View>
+          </Row>
         );
       })}
     </View>

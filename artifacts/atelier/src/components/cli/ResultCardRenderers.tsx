@@ -2154,6 +2154,12 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
           const containerProps = href
             ? {
                 href,
+                // Task #706 — external links (travel booking handoffs
+                // etc.) open in a new tab; internal hrefs keep SPA-tab
+                // behaviour.
+                ...(/^https?:\/\//i.test(href)
+                  ? { target: "_blank", rel: "noopener noreferrer" }
+                  : {}),
                 className:
                   "block bg-bg-deep border border-border-soft hover:border-gold/50 rounded px-2 py-1.5 transition-colors",
               }

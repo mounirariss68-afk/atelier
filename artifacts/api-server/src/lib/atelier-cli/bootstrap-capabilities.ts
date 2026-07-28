@@ -85,6 +85,9 @@ import "./alliance-partner-capabilities.js";
 // ("email our registration certificate to Gokhan") — visibility-scoped
 // via canSeeDocument, recipients resolved against roster + CRM contacts.
 import "./document-email-capabilities.js";
+// Task #706 — travel search (Duffel flights + Stays, Airbnb deep links).
+// Read-only; booking is a deep-link handoff in v1.
+import "./travel-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

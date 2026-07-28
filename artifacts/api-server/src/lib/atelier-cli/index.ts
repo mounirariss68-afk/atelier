@@ -482,7 +482,21 @@ export interface ToolResult {
      * single-field `field`/`question` pair above remains authoritative
      * for backward compatibility (and MUST name the first entry).
      */
-    fields?: Array<{ field: string; label: string; hint?: string }>;
+    fields?: Array<{
+      field: string;
+      label: string;
+      hint?: string;
+      /**
+       * Task #291 / #706 — richer clarification inputs, mirrored in
+       * `@workspace/chat-core` ClarificationField: `options` renders a
+       * dropdown, `inputType: "date"` a date picker, `defaultValue`
+       * pre-fills the input. Long-standing emitters (contract_prepare,
+       * travel tools) rely on these being part of the contract.
+       */
+      inputType?: "date" | string;
+      options?: string[];
+      defaultValue?: string;
+    }>;
   };
   /**
    * Task #340 — graceful refusal envelope. The orchestrator emits a
