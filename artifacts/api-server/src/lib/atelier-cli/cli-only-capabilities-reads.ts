@@ -950,6 +950,152 @@ defineCapability({
 });
 
 // ---------------------------------------------------------------------
+// account.procurement — entity_card (Task #733)
+// ---------------------------------------------------------------------
+// "How do we register with X's procurement?" — surfaces the account's
+// procurement registration status, channel/portal and the approved
+// Procurement Navigator guide (step summary + source links). Read-only,
+// gated on the same canSeeAccount perimeter as the REST account reads;
+// me-lens personas never reach it (they get me.* tools only).
+defineCapability({
+  id: "account.procurement",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "account",
+  toolName: "account_procurement",
+  description:
+    "Procurement / vendor-registration guide for one account: registration status, procurement channel or portal (e.g. Etimad, Ariba, Coupa), step-by-step registration summary, required documents, fees, timeline, renewal and source links.",
+  slashAliases: { en: ["/procurement", "/vendor-registration"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: { type: "string" },
+      accountQuery: { type: "string" },
+    },
+  },
+  isWrite: false,
+  irreversible: false,
+  surfaceOn: ["account_workspace"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: [
+      "How do we register with DEWA's procurement?",
+      "What's the vendor registration process for Acme?",
+      "Are we registered as a supplier with Tasama?",
+    ],
+    ar: ["كيف نسجّل كمورّد لدى Acme؟"],
+    fr: ["Comment s'enregistrer auprès des achats de Acme ?"],
+  },
+  async run(input, ctx) {
+    let accountId = String(input.accountId ?? "").trim();
+    if (!accountId) {
+      const q = String(input.accountQuery ?? "").trim();
+      if (!q) {
+        return { ok: false, errorCode: "invalid_input", errorMessage: "accountId or accountQuery required" };
+      }
+      const r = await resolveAccount(q, ctx.persona);
+      if (r.kind === "match") accountId = r.id;
+      else if (r.kind === "choices") {
+        return {
+          ok: true,
+          data: { prompt: r.prompt, options: r.options },
+          disambiguation: { kind: "account", options: r.options },
+        };
+      } else {
+        return { ok: false, errorCode: "not_found", errorMessage: "no account matched" };
+      }
+    }
+    const [acc] = await db
+      .select()
+      .from(atelierAccounts)
+      .where(
+        and(
+          eq(atelierAccounts.id, accountId),
+          eq(atelierAccounts.orgId, ctx.persona.orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!acc) {
+      return { ok: false, errorCode: "not_found", errorMessage: `account ${accountId} not found` };
+    }
+    // Same perimeter as the REST account reads: engagement grants,
+    // partner-owner, or firm-wide access — otherwise the persona must not
+    // learn anything about this account (including its existence beyond
+    // the resolver match, so deny explicitly).
+    const acl = await accessibleEngagementIds({
+      id: ctx.persona.id,
+      role: ctx.persona.role,
+    } as Parameters<typeof accessibleEngagementIds>[0]);
+    if (!(await canSeeAccount(acl, { id: ctx.persona.id }, acc.id))) {
+      return denyForbidden("You don't have access to this account.");
+    }
+    const proc = acc.procurement ?? null;
+    const guide = proc?.guide ?? null;
+    const href = `/accounts/${acc.id}?tab=procurement`;
+    const STATUS_LABELS: Record<string, string> = {
+      not_registered: "Not registered",
+      in_progress: "Registration in progress",
+      registered: "Registered",
+      renewal_due: "Renewal due",
+    };
+    const status = proc?.status ?? "not_registered";
+    return {
+      ok: true,
+      data: {
+        accountId: acc.id,
+        accountName: acc.name,
+        href,
+        status,
+        statusLabel: STATUS_LABELS[status] ?? status,
+        statusNotes: proc?.statusNotes ?? null,
+        statusUpdatedAt: proc?.statusUpdatedAt ?? null,
+        lastResearchedAt: proc?.lastResearchedAt ?? null,
+        hasGuide: !!guide,
+        // No approved guide yet — status only; the model should say the
+        // registration guide hasn't been researched/approved for this
+        // account and point at the Procurement tab.
+        ...(guide
+          ? {
+              jurisdiction: guide.jurisdiction ?? null,
+              summary: guide.summary ?? null,
+              channel: guide.channel
+                ? {
+                    name: guide.channel.name ?? null,
+                    type: guide.channel.type ?? null,
+                    portalUrl: guide.channel.portalUrl ?? null,
+                  }
+                : null,
+              steps: (guide.steps ?? [])
+                .slice()
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                .map((s) => ({
+                  order: s.order,
+                  title: s.title,
+                  detail: s.detail,
+                  sourceUrls: s.sourceUrls ?? [],
+                })),
+              requiredInformation: guide.requiredInformation ?? [],
+              requiredDocuments: guide.requiredDocuments ?? [],
+              fees: guide.fees ?? null,
+              timeline: guide.timeline ?? null,
+              renewal: guide.renewal ?? null,
+              sources: (guide.sources ?? []).map((s) => ({
+                url: s.url,
+                title: s.title ?? null,
+              })),
+              confidence: guide.confidence ?? null,
+            }
+          : {}),
+        navigateTo: { path: href, when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
 // account.changes — audit_timeline
 // ---------------------------------------------------------------------
 defineCapability({
