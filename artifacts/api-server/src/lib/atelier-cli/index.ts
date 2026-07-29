@@ -131,6 +131,13 @@ import {
 } from "./prompt-guard.js";
 import { stripLocalePreamble } from "./locale.js";
 import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
+import {
+  clarificationResolverMode,
+  resolveClarificationReply,
+  resolveWithModel,
+  type FactRow,
+  type ResolverOutcome,
+} from "./clarification-resolver.js";
 import { DEFAULT_CHAT_TZ, normalizeChatTz, wallParts as tzWallParts } from "./chat-tz.js";
 // Task #484 — static import of DISPATCH_TABLE so getToolsForPersona can
 // strip legacy chat-writes whose (kind, verb) is now owned by
@@ -3023,6 +3030,28 @@ export async function runTurn(
           isClarificationResumable(contTurn.status, contTurn.frames)
         ) {
           explicitContinuation = rehydrateFromTurnRow(contTurn);
+        } else if (
+          contTurn &&
+          contTurn.userId === persona.id &&
+          contTurn.orgId === persona.orgId
+        ) {
+          // Task #740 — exactly-once consumption: the named question was
+          // already consumed (second tab / duplicate answer / SSE retry).
+          // Say so explicitly instead of silently re-running the prompt.
+          record({
+            type: "narration",
+            data: {
+              text: "That question was already answered — I'm continuing from the latest state.",
+              step: 0,
+            },
+          });
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "clarification_already_answered",
+              turnId,
+              sourceTurnId: contTurn.id,
+            })}`,
+          );
         }
       }
       if (!getSessionDraft(session.id).pendingClarification && !_drRehydrate.pendingClarification) {
@@ -3072,20 +3101,53 @@ export async function runTurn(
     // pending question — clear it so neither the primer nor the
     // deterministic continuation below fires, and let the newer-turn
     // supersession rule retire the stranded question.
+    // Task #740 — resolver-driven gate. The legacy shape heuristic
+    // (short/single-line/no command opener) silently DROPPED pending
+    // questions on a miss. Now the shared resolver classifies the reply:
+    // anything except an explicit fresh request stays on the answer
+    // path, and a fresh request keeps the question RESUMABLE (source
+    // turn untouched) and carries it into the model context below.
+    let supersededPendingQuestion: { question: string; tool: string } | null = null;
     {
       const _drGate = getSessionDraft(session.id);
       const hasMultiFieldAnswers =
         !!input.clarificationValues &&
         typeof input.clarificationValues === "object" &&
         Object.keys(input.clarificationValues).length > 0;
-      if (
-        _drGate.pendingClarification &&
-        !explicitContinuation &&
-        !hasMultiFieldAnswers &&
-        !looksLikeClarificationAnswer(input.prompt ?? "")
-      ) {
-        _drGate.pendingClarification = null;
-        pendingSourceTurnId = null;
+      if (_drGate.pendingClarification && !explicitContinuation && !hasMultiFieldAnswers) {
+        const pcGate = _drGate.pendingClarification;
+        const isFresh =
+          clarificationResolverMode() === "on"
+            ? resolveClarificationReply({
+                reply: input.prompt ?? "",
+                pending: {
+                  tool: pcGate.tool,
+                  field: pcGate.field,
+                  question: pcGate.question,
+                  partial: pcGate.partial ?? {},
+                  fields: pcGate.fields ?? null,
+                },
+                // Facts load below; classification into fresh-vs-answer
+                // never needs them (referential replies classify as
+                // answers and resolve with facts in the continuation).
+                facts: [],
+                timezone: turnTz,
+              }).kind === "fresh_request"
+            : !looksLikeClarificationAnswer(input.prompt ?? "");
+        if (isFresh) {
+          supersededPendingQuestion = { question: pcGate.question, tool: pcGate.tool };
+          _drGate.pendingClarification = null;
+          pendingSourceTurnId = null;
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "clarification_superseded",
+              turnId,
+              tool: pcGate.tool,
+              field: pcGate.field,
+              resolver: clarificationResolverMode(),
+            })}`,
+          );
+        }
       }
     }
 
@@ -3245,6 +3307,20 @@ export async function runTurn(
         role: "assistant",
         content: "(noted)",
       });
+    }
+    // Task #740 — a fresh request superseding a pending clarification
+    // carries the question into the model context (never silently
+    // dropped): the model can answer the new request AND remind the
+    // user the earlier question is still open.
+    if (supersededPendingQuestion) {
+      history.push({
+        role: "user",
+        content:
+          `[pending question] Before this message you asked the user: "${supersededPendingQuestion.question}" ` +
+          `(for ${supersededPendingQuestion.tool}). They have NOT answered it — this new message is a different request. ` +
+          "Handle the new request, then briefly note the earlier question is still open if it remains relevant.",
+      });
+      history.push({ role: "assistant", content: "(noted)" });
     }
     // Task #741 — typed session facts block. In "on" mode the block is
     // rendered into context; in "shadow" mode facts are written+logged
@@ -3638,16 +3714,36 @@ export async function runTurn(
       // field; affirm/decline are surfaced via telemetry and to the
       // merge path below (additive — free-text answers behave as before).
       const controlIntent = normalizeControlIntent(input.prompt ?? "");
+      // Task #740 — shared resolver: classify + type the reply against
+      // the pending question and session facts BEFORE any merge.
+      const resolverOn = clarificationResolverMode() === "on";
+      const resolverOutcome: ResolverOutcome | null = resolverOn
+        ? resolveClarificationReply({
+            reply: stripLocalePreamble(input.prompt ?? ""),
+            pending: {
+              tool: pc.tool,
+              field: pc.field,
+              question: pc.question,
+              partial: pc.partial ?? {},
+              fields: pc.fields ?? null,
+            },
+            facts: sessionFactRows as FactRow[],
+            timezone: turnTz,
+          })
+        : null;
       console.log(
         `[cli-telemetry] ${JSON.stringify({
-          evt: "clarification_control_intent",
+          evt: "clarification_resumed",
           turnId,
           tool: pc.tool,
           field: pc.field,
           controlIntent,
+          resolver: resolverOn ? (resolverOutcome as ResolverOutcome).kind : "off",
+          via:
+            resolverOutcome && "via" in resolverOutcome ? resolverOutcome.via : undefined,
         })}`,
       );
-      if (controlIntent === "cancel") {
+      if (controlIntent === "cancel" || resolverOutcome?.kind === "cancel") {
         const _drCancel = getSessionDraft(session.id);
         if (
           _drCancel.pendingClarification &&
@@ -3726,6 +3822,67 @@ export async function runTurn(
             : null;
           if (reroute) {
             mergedInput = mergeClarificationAnswer(mergedInput, reroute.field, reroute.value);
+          } else if (
+            resolverOutcome &&
+            (resolverOutcome.kind === "values" || resolverOutcome.kind === "confirm")
+          ) {
+            // Task #740 — typed values from the shared resolver ("5
+            // nights", "same dates I specified", relative dates, option
+            // picks). `confirm` runs the tool with the confirmed partial
+            // plus any fact-derived fills; an empty fill set is fine —
+            // the tool re-validates and, if fields are still missing,
+            // re-asks (honest, never a generic dead-end).
+            for (const [k, v] of Object.entries(resolverOutcome.values)) {
+              mergedInput = mergeClarificationAnswer(mergedInput, k, v);
+            }
+          } else if (resolverOutcome) {
+            // `unparsed` (or an explicit continuation the gate never
+            // saw) — try the model-assisted fallback, then degrade to
+            // the legacy raw merge. NEVER clears pending on failure.
+            let llmValues: Record<string, string> | null = null;
+            try {
+              const wall = tzWallParts(new Date(), turnTz);
+              llmValues = await resolveWithModel({
+                reply: answer,
+                pending: {
+                  tool: pc.tool,
+                  field: pc.field,
+                  question: pc.question,
+                  partial: pc.partial ?? {},
+                  fields: pc.fields ?? null,
+                },
+                timezone: turnTz,
+                model: HAIKU_CLASSIFIER_MODEL,
+                todayIso: wall.ymd,
+              });
+            } catch {
+              llmValues = null;
+            }
+            if (llmValues) {
+              const allowed = new Set<string>([
+                pc.field,
+                ...(pc.fields ?? []).map((f) => f.field),
+              ]);
+              let merged = false;
+              for (const [k, v] of Object.entries(llmValues)) {
+                if (!allowed.has(k) || !v.trim()) continue;
+                mergedInput = mergeClarificationAnswer(mergedInput, k, v.trim());
+                merged = true;
+              }
+              if (!merged) {
+                mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
+              }
+              console.log(
+                `[cli-telemetry] ${JSON.stringify({
+                  evt: "clarification_llm_assist",
+                  turnId,
+                  tool: pc.tool,
+                  merged,
+                })}`,
+              );
+            } else {
+              mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
+            }
           } else {
             mergedInput = mergeClarificationAnswer(mergedInput, pc.field, answer);
           }
@@ -3811,6 +3968,19 @@ export async function runTurn(
         if (cont.clarification) {
           // Still missing more fields — re-pause with updated partial.
           const cl = cont.clarification;
+          // Task #740 — telemetry: same-field re-asks (answer didn't
+          // land) and confirm dead-ends ("confirmed" still re-asked).
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "clarification_issued",
+              turnId,
+              tool: cl.tool,
+              field: cl.field,
+              continuation: true,
+              reaskSameField: cl.field === pc.field,
+              confirmDeadEnd: resolverOutcome?.kind === "confirm",
+            })}`,
+          );
           recordSessionResult(session.id, {
             pendingClarification: {
               field: cl.field,

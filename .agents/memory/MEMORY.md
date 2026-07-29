@@ -153,4 +153,5 @@
 - [Procurement Navigator invariants](atelier-procurement-navigator.md) — deterministic GCC jurisdiction routing (not prompt-only); approve merges guide but keeps manual status; backfill re-run needed on main+prod; account tabs deep-link via ?tab=.
 - [Chat verbatim replay window](atelier-chat-replay.md) — recent turns replay verbatim via pure composer + char budget; rollover lineage via predecessorSessionId; rolling summary is beyond-window only.
 - [Atelier session facts](atelier-session-facts.md) — typed facts table (RLS-listed) written from tool successes only; every NEW commit path needs its own ingest call; facts/replay are authoritative, summaries are not; adaptive tool cap tie-window 0.04.
+- [Atelier clarification resolver](atelier-clarification-resolver.md) — shared resolver classifies clarification replies; fresh requests never drop pending; opener sets in resolver+index.ts must stay in sync.
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.
