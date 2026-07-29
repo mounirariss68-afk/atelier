@@ -792,9 +792,19 @@ export async function parseReceiptForExpense(args: {
 
   if (aliasApplied) merchantResolution = `org_alias_${merchantResolution}`;
 
+  // Task #757 — prefill the user-facing description from what the parse
+  // understood (merchant summary + trip/flight/stay enrichment). NEVER
+  // overwrite a description the user already typed: only fill when the
+  // row's description is empty/blank.
+  const enrichedSummary = composeEnrichedSummary(proposal.summary, details);
+  const descriptionPatch = !row.description?.trim()
+    ? { description: enrichedSummary.slice(0, 2000) || null }
+    : {};
+
   const [updated] = await db
     .update(atelierExpenses)
     .set({
+      ...descriptionPatch,
       merchant: merchantDisplay.slice(0, 200),
       merchantNormalized: merchantForMemory
         ? normalizeMerchant(merchantForMemory).slice(0, 200)
@@ -819,7 +829,7 @@ export async function parseReceiptForExpense(args: {
       ocrPayload: ocr,
       policyStatus: policy.status,
       policyFindings: policy.findings,
-      summary: composeEnrichedSummary(proposal.summary, details),
+      summary: enrichedSummary,
       updatedAt: new Date(),
     })
     .where(eq(atelierExpenses.id, row.id))

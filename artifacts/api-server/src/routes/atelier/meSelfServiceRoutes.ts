@@ -2083,7 +2083,10 @@ router.post("/me/expenses", async (req, res, next) => {
       expenseDate: dateStr,
       captureSource: "manual",
       merchant,
-      description: typeof b.description === "string" ? b.description.slice(0, 2000) : null,
+      description:
+        typeof b.description === "string" && b.description.trim()
+          ? b.description.slice(0, 2000)
+          : null,
       ...extras,
       category:
         extras.category ??
@@ -2098,7 +2101,7 @@ router.post("/me/expenses", async (req, res, next) => {
       internalProjectLabel: ctxTag.internalProjectLabel,
       receiptFileRef: receiptPath,
       receiptEncryptedAtRest: !!receiptPath,
-      summary: (typeof b.description === "string" && b.description) || merchant,
+      summary: (typeof b.description === "string" && b.description.trim()) || merchant,
       status: "draft",
       policyStatus: "green",
       createdByUserId: me.id,
@@ -2193,13 +2196,24 @@ router.patch("/me/expenses/:id", async (req, res, next) => {
       if (!merchant) return void res.status(400).json({ error: "merchant-required" });
       patch.merchant = merchant;
     }
-    if (b.description !== undefined) patch.description = String(b.description).slice(0, 2000);
-    if (b.category !== undefined) patch.category = String(b.category);
+    // Task #757 — empty string clears the description (stored as null so
+    // a later receipt parse may prefill it again); create path matches.
+    if (b.description !== undefined) {
+      const d = String(b.description).slice(0, 2000);
+      patch.description = d.trim() ? d : null;
+    }
+    if (b.category !== undefined) {
+      // Task #757 — mirror create: an empty category falls back to "other"
+      // (the policy engine keys on this flat value; never store "").
+      patch.category = String(b.category).trim() || "other";
+    }
     if (b.expenseDate !== undefined) {
       if (!isIsoDate(b.expenseDate)) return void res.status(400).json({ error: "invalid-date" });
       patch.expenseDate = b.expenseDate;
     }
-    if (b.amount !== undefined || b.currency !== undefined) {
+    // Task #757 — a date change alone must also recompute FX: the USD
+    // amount is pinned to the rate on the expense date (parity with create).
+    if (b.amount !== undefined || b.currency !== undefined || b.expenseDate !== undefined) {
       const amount = b.amount !== undefined ? Number(b.amount) : row.amount;
       const currency =
         b.currency !== undefined ? String(b.currency).toUpperCase().slice(0, 3) : row.currency;
@@ -2241,6 +2255,16 @@ router.patch("/me/expenses/:id", async (req, res, next) => {
       const extras = await resolveExpenseExtras(res, me.orgId, b, effCtx);
       if (!extras) return;
       Object.assign(patch, extras);
+    }
+    // Task #757 — keep the display summary consistent with a manual edit,
+    // but never clobber an auditor-composed summary (auditorRunId set).
+    if (!row.auditorRunId && (b.description !== undefined || b.merchant !== undefined)) {
+      const desc =
+        patch.description !== undefined
+          ? (patch.description as string | null)
+          : row.description;
+      const merch = (patch.merchant as string | undefined) ?? row.merchant;
+      patch.summary = (desc && desc.trim()) || merch || row.summary;
     }
     const [updated] = await db
       .update(atelierExpenses)

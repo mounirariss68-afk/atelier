@@ -81,6 +81,11 @@ export async function getQueueCount(): Promise<number> {
   return (await readQueue()).length;
 }
 
+/** Task #757 — expose queued items so the list can slot them into month groups. */
+export async function listQueue(): Promise<QueuedExpense[]> {
+  return readQueue();
+}
+
 async function processItem(item: QueuedExpense): Promise<void> {
   let receiptPath: string | undefined;
   if (item.localUri) {

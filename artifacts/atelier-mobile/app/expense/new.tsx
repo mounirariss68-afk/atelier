@@ -329,6 +329,10 @@ export default function NewExpenseScreen() {
         } else {
           setBusyLabel(t("exp.creating"));
           const amt = Number(amount);
+          // Task #757 — carry ALL fields the user already typed into the
+          // auto-created draft (previously description/category/funding were
+          // silently dropped). The parse never overwrites a non-empty
+          // description, so a typed description survives the pipeline.
           const created = await create.mutateAsync({
             data: {
               amount: Number.isFinite(amt) && amt > 0 ? amt : 0.01,
@@ -336,6 +340,17 @@ export default function NewExpenseScreen() {
               merchant: merchant.trim() || "Receipt",
               expenseDate: date || today(),
               receiptPath: uploadURL,
+              ...(description.trim() ? { description: description.trim() } : {}),
+              ...(category.trim() ? { category: category.trim() } : {}),
+              ...(categoryCode && subCategoryCode
+                ? { categoryCode, subCategoryCode }
+                : {}),
+              ...(fundingSource
+                ? { fundingSource: fundingSource as AtelierSelfExpenseCreate["fundingSource"] }
+                : {}),
+              ...(fundingSource === "company_account" && fundingBankAccountId
+                ? { fundingBankAccountId }
+                : {}),
             },
           });
           id = created.expense.id;
@@ -364,7 +379,7 @@ export default function NewExpenseScreen() {
         setBusyLabel("");
       }
     },
-    [draftId, amount, currency, merchant, date, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
+    [draftId, amount, currency, merchant, date, description, category, categoryCode, subCategoryCode, fundingSource, fundingBankAccountId, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
   );
   autoProcessRef.current = autoProcess;
 

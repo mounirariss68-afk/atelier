@@ -2,11 +2,13 @@ import { Feather } from "@expo/vector-icons";
 import { useAtelierListMyExpenses } from "@workspace/api-client-react";
 import type { AtelierSelfExpense } from "@workspace/api-client-react";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
+  Pressable,
   RefreshControl,
+  ScrollView,
   Text,
   View,
 } from "react-native";
@@ -28,7 +30,7 @@ import {
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { formatMoney } from "@/lib/format";
-import { flushQueue, getQueueCount } from "@/lib/offlineQueue";
+import { flushQueue, listQueue, type QueuedExpense } from "@/lib/offlineQueue";
 
 function statusStyle(
   status: string,
@@ -164,17 +166,187 @@ function ExpenseRow({
   );
 }
 
+// Task #757 — queued offline expense rendered inside its month group.
+function QueuedRow({ item }: { item: QueuedExpense }) {
+  const c = useColors();
+  const { t, lang } = useI18n();
+  const rtl = useRTL();
+  const date = item.fields.expenseDate ?? item.createdAt.slice(0, 10);
+  return (
+    <Card style={{ gap: 12, borderStyle: "dashed", borderColor: c.warning }}>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 12 }}>
+        <View
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 15,
+            backgroundColor: c.warningTint,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Feather name="cloud-off" size={19} color={c.warning} />
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_700Bold",
+              fontSize: 15.5,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {item.fields.merchant || t("exp.merchant")}
+          </Text>
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_500Medium",
+              fontSize: 12.5,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {date}
+          </Text>
+        </View>
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 16.5,
+            fontVariant: ["tabular-nums"],
+          }}
+        >
+          {formatMoney(item.fields.amount, item.fields.currency ?? "USD", lang)}
+        </Text>
+      </View>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+        <Chip icon="cloud-off" label={t("exp.queuedRow")} color={c.warning} bg={c.warningTint} />
+      </View>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Task #757 — status filters. The single server `status` field is split
+// into three user-facing axes; each axis is optional (null = all) and
+// they combine with AND.
+// ---------------------------------------------------------------------
+type SubmissionFilter = "draft" | "submitted" | null;
+type ApprovalFilter = "pending" | "approved" | "rejected" | null;
+type PaymentFilter = "reimbursed" | "unpaid" | null;
+
+function matchesFilters(
+  status: string,
+  submission: SubmissionFilter,
+  approval: ApprovalFilter,
+  payment: PaymentFilter,
+): boolean {
+  if (submission === "draft" && status !== "draft") return false;
+  if (submission === "submitted" && status === "draft") return false;
+  if (approval === "pending" && status !== "submitted") return false;
+  if (approval === "approved" && status !== "approved" && status !== "reimbursed") return false;
+  if (approval === "rejected" && status !== "rejected") return false;
+  if (payment === "reimbursed" && status !== "reimbursed") return false;
+  if (payment === "unpaid" && status !== "approved") return false;
+  return true;
+}
+
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const c = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: active ? c.primary : c.tint25,
+        backgroundColor: active ? c.primary : c.tint08,
+      }}
+    >
+      <Text
+        style={{
+          color: active ? "#FFFFFF" : c.foreground,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 12.5,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------
+// Task #757 — month grouping. Rows are grouped by the month of their
+// expense date (falling back to created date), newest month first; the
+// current month is expanded by default, others toggle on tap.
+// ---------------------------------------------------------------------
+type ListRow =
+  | { kind: "header"; key: string; monthKey: string; label: string; count: number; total: string; expanded: boolean }
+  | { kind: "expense"; key: string; item: AtelierSelfExpense; index: number }
+  | { kind: "queued"; key: string; item: QueuedExpense };
+
+function monthKeyOf(dateStr: string | null | undefined): string {
+  const s = (dateStr ?? "").slice(0, 7);
+  return /^\d{4}-\d{2}$/.test(s) ? s : new Date().toISOString().slice(0, 7);
+}
+
+function monthLabel(monthKey: string, lang: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  try {
+    const locale = lang === "ar" ? "ar" : lang === "tr" ? "tr" : "en";
+    return new Date(Date.UTC(y, (m ?? 1) - 1, 1)).toLocaleDateString(locale, {
+      month: "long",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  } catch {
+    return monthKey;
+  }
+}
+
 export default function ExpensesScreen() {
   const c = useColors();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const rtl = useRTL();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const query = useAtelierListMyExpenses();
-  const [queued, setQueued] = useState(0);
+  const [queuedItems, setQueuedItems] = useState<QueuedExpense[]>([]);
+
+  const [submission, setSubmission] = useState<SubmissionFilter>(null);
+  const [approval, setApproval] = useState<ApprovalFilter>(null);
+  const [payment, setPayment] = useState<PaymentFilter>(null);
+  const hasFilters = submission !== null || approval !== null || payment !== null;
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  // Months the user explicitly toggled; current month starts expanded.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const isExpanded = useCallback(
+    (monthKey: string) => toggled[monthKey] ?? monthKey === currentMonth,
+    [toggled, currentMonth],
+  );
+  const toggleMonth = useCallback((monthKey: string) => {
+    setToggled((prev) => ({
+      ...prev,
+      [monthKey]: !(prev[monthKey] ?? monthKey === currentMonth),
+    }));
+  }, [currentMonth]);
 
   const refreshQueued = useCallback(async () => {
-    setQueued(await getQueueCount());
+    setQueuedItems(await listQueue());
   }, []);
 
   const syncAndRefresh = useCallback(async () => {
@@ -203,6 +375,90 @@ export default function ExpensesScreen() {
   const fabBottom = (Platform.OS === "web" ? WEB_TAB_BAR + 12 : Math.max(insets.bottom, 10) + 80);
 
   const expenses = query.data?.expenses ?? [];
+  const queued = queuedItems.length;
+
+  // Queued drafts have no server status yet — they behave like drafts for
+  // filtering (visible under All and Draft; hidden by approval/payment
+  // filters, which they cannot satisfy yet).
+  const queuedVisible = useMemo(
+    () =>
+      queuedItems.filter(() =>
+        matchesFilters("draft", submission, approval, payment),
+      ),
+    [queuedItems, submission, approval, payment],
+  );
+
+  const rows: ListRow[] = useMemo(() => {
+    const filtered = expenses.filter((e) =>
+      matchesFilters(e.status, submission, approval, payment),
+    );
+    type Group = { expenses: AtelierSelfExpense[]; queued: QueuedExpense[] };
+    const groups = new Map<string, Group>();
+    const groupOf = (key: string): Group => {
+      let g = groups.get(key);
+      if (!g) {
+        g = { expenses: [], queued: [] };
+        groups.set(key, g);
+      }
+      return g;
+    };
+    for (const e of filtered) {
+      groupOf(monthKeyOf(e.expenseDate ?? e.createdAt)).expenses.push(e);
+    }
+    for (const q of queuedVisible) {
+      groupOf(monthKeyOf(q.fields.expenseDate ?? q.createdAt)).queued.push(q);
+    }
+    const keys = Array.from(groups.keys()).sort((a, b) => (a < b ? 1 : -1));
+    const out: ListRow[] = [];
+    for (const key of keys) {
+      const g = groups.get(key)!;
+      const count = g.expenses.length + g.queued.length;
+      // Per-currency totals collapse to the dominant currency for the
+      // header hint; mixed currencies show just the count.
+      const currencies = new Set([
+        ...g.expenses.map((e) => e.currency),
+        ...g.queued.map((q) => q.fields.currency ?? "USD"),
+      ]);
+      let total = "";
+      if (currencies.size === 1) {
+        const cur = Array.from(currencies)[0];
+        const sum =
+          g.expenses.reduce((s, e) => s + e.amount, 0) +
+          g.queued.reduce((s, q) => s + q.fields.amount, 0);
+        total = formatMoney(sum, cur, lang);
+      }
+      const expanded = isExpanded(key);
+      out.push({
+        kind: "header",
+        key: `h_${key}`,
+        monthKey: key,
+        label: monthLabel(key, lang),
+        count,
+        total,
+        expanded,
+      });
+      if (expanded) {
+        let idx = 0;
+        for (const q of g.queued) {
+          out.push({ kind: "queued", key: `q_${q.id}`, item: q });
+          idx += 1;
+        }
+        for (const e of g.expenses) {
+          out.push({ kind: "expense", key: e.id, item: e, index: idx });
+          idx += 1;
+        }
+      }
+    }
+    return out;
+  }, [expenses, queuedVisible, submission, approval, payment, isExpanded, lang]);
+
+  const clearFilters = useCallback(() => {
+    setSubmission(null);
+    setApproval(null);
+    setPayment(null);
+  }, []);
+
+  const hasAnyData = expenses.length > 0 || queuedItems.length > 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -279,6 +535,66 @@ export default function ExpensesScreen() {
         </Glass>
       ) : null}
 
+      {/* Task #757 — filter chips: submission / approval / payment axes. */}
+      {hasAnyData && !query.isLoading && !query.isError ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 12,
+            gap: 8,
+            flexDirection: rtl.row,
+            alignItems: "center",
+          }}
+          style={{ flexGrow: 0 }}
+        >
+          <FilterChip
+            label={t("exp.filter.all")}
+            active={!hasFilters}
+            onPress={clearFilters}
+          />
+          <View style={{ width: 1, height: 18, backgroundColor: c.tint25 }} />
+          <FilterChip
+            label={t("exp.status.draft")}
+            active={submission === "draft"}
+            onPress={() => setSubmission(submission === "draft" ? null : "draft")}
+          />
+          <FilterChip
+            label={t("exp.status.submitted")}
+            active={submission === "submitted"}
+            onPress={() => setSubmission(submission === "submitted" ? null : "submitted")}
+          />
+          <View style={{ width: 1, height: 18, backgroundColor: c.tint25 }} />
+          <FilterChip
+            label={t("exp.filter.pending")}
+            active={approval === "pending"}
+            onPress={() => setApproval(approval === "pending" ? null : "pending")}
+          />
+          <FilterChip
+            label={t("exp.status.approved")}
+            active={approval === "approved"}
+            onPress={() => setApproval(approval === "approved" ? null : "approved")}
+          />
+          <FilterChip
+            label={t("exp.status.rejected")}
+            active={approval === "rejected"}
+            onPress={() => setApproval(approval === "rejected" ? null : "rejected")}
+          />
+          <View style={{ width: 1, height: 18, backgroundColor: c.tint25 }} />
+          <FilterChip
+            label={t("exp.status.reimbursed")}
+            active={payment === "reimbursed"}
+            onPress={() => setPayment(payment === "reimbursed" ? null : "reimbursed")}
+          />
+          <FilterChip
+            label={t("exp.filter.unpaid")}
+            active={payment === "unpaid"}
+            onPress={() => setPayment(payment === "unpaid" ? null : "unpaid")}
+          />
+        </ScrollView>
+      ) : null}
+
       {query.isLoading ? (
         <View style={{ padding: 16, gap: 12 }}>
           {[0, 1, 2, 3].map((i) => (
@@ -295,14 +611,29 @@ export default function ExpensesScreen() {
         </View>
       ) : query.isError ? (
         <ErrorState onRetry={() => query.refetch()} message={t("common.error")} />
-      ) : expenses.length === 0 ? (
+      ) : !hasAnyData ? (
         <View style={{ flex: 1, justifyContent: "center" }}>
           <EmptyState icon="credit-card" title={t("exp.empty")} body={t("exp.emptyBody")} />
         </View>
+      ) : rows.length === 0 ? (
+        <View style={{ flex: 1, justifyContent: "center", gap: 14 }}>
+          <EmptyState icon="filter" title={t("exp.filterEmpty")} body="" />
+          <Pressable onPress={clearFilters} style={{ alignSelf: "center" }}>
+            <Text
+              style={{
+                color: c.primary,
+                fontFamily: "PlusJakartaSans_700Bold",
+                fontSize: 14,
+              }}
+            >
+              {t("exp.filterClear")}
+            </Text>
+          </Pressable>
+        </View>
       ) : (
         <FlatList
-          data={expenses}
-          keyExtractor={(item) => item.id}
+          data={rows}
+          keyExtractor={(row) => row.key}
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad }}
           refreshControl={
             <RefreshControl
@@ -313,13 +644,79 @@ export default function ExpensesScreen() {
               progressBackgroundColor={c.card}
             />
           }
-          renderItem={({ item, index }) => (
-            <ExpenseRow
-              item={item}
-              index={index}
-              onPress={() => router.push(`/expense/${item.id}`)}
-            />
-          )}
+          renderItem={({ item: row }) =>
+            row.kind === "header" ? (
+              <Pressable
+                onPress={() => toggleMonth(row.monthKey)}
+                style={{
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 8,
+                  paddingHorizontal: 4,
+                  paddingTop: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_800ExtraBold",
+                    fontSize: 16,
+                    letterSpacing: -0.2,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {row.label}
+                </Text>
+                <View
+                  style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 999,
+                    backgroundColor: c.tint08,
+                    borderWidth: 1,
+                    borderColor: c.tint25,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontSize: 11.5,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {row.count}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }} />
+                {row.total ? (
+                  <Text
+                    style={{
+                      color: c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_600SemiBold",
+                      fontSize: 12.5,
+                      fontVariant: ["tabular-nums"],
+                    }}
+                  >
+                    {row.total}
+                  </Text>
+                ) : null}
+                <Feather
+                  name={row.expanded ? "chevron-up" : "chevron-down"}
+                  size={17}
+                  color={c.mutedForeground}
+                />
+              </Pressable>
+            ) : row.kind === "queued" ? (
+              <QueuedRow item={row.item} />
+            ) : (
+              <ExpenseRow
+                item={row.item}
+                index={row.index}
+                onPress={() => router.push(`/expense/${row.item.id}`)}
+              />
+            )
+          }
         />
       )}
 

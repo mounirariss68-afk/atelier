@@ -645,13 +645,22 @@ router.post("/wallet/expenses", async (req, res) => {
     | "manual"
     | "mileage"
     | "per_diem";
-  const dateStr = b.expenseDate ?? new Date().toISOString().slice(0, 10);
+  // Task #757 — validation parity with the Me-lens create path: ISO date,
+  // 3-letter currency, capped merchant/description, bounded amount.
+  const dateStr =
+    typeof b.expenseDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.expenseDate)
+      ? b.expenseDate
+      : new Date().toISOString().slice(0, 10);
 
   // Compute amount from path-specific inputs if not given.
-  let amount = b.amount ?? 0;
-  let currency = (b.currency ?? "USD").toUpperCase();
-  let merchant = b.merchant ?? "";
-  let category = b.category ?? "other";
+  let amount = Number(b.amount ?? 0);
+  let currency = String(b.currency ?? "USD").toUpperCase().slice(0, 3);
+  let merchant = String(b.merchant ?? "").trim().slice(0, 200);
+  let category = String(b.category ?? "other").trim() || "other";
+  const description =
+    typeof b.description === "string" && b.description.trim()
+      ? b.description.slice(0, 2000)
+      : null;
 
   if (captureSource === "mileage") {
     const km = Math.max(0, Number(b.km ?? 0));
@@ -669,6 +678,12 @@ router.post("/wallet/expenses", async (req, res) => {
     category = "per_diem";
   }
 
+  // Task #757 — bound the final amount the same way the Me-lens create does.
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
+    res.status(400).json({ error: "invalid-amount" });
+    return;
+  }
+
   const fx = await convertToUsd(amount, currency, dateStr);
 
   const id = rid("exp");
@@ -683,7 +698,7 @@ router.post("/wallet/expenses", async (req, res) => {
     captureSource,
     cardId: b.cardId ?? null,
     merchant,
-    description: b.description ?? null,
+    description,
     category,
     amount,
     currency,
@@ -694,7 +709,7 @@ router.post("/wallet/expenses", async (req, res) => {
     receiptFixtureKey: b.receiptFixtureKey ?? null,
     receiptFileRef,
     receiptEncryptedAtRest: !!receiptFileRef,
-    summary: b.description ?? merchant,
+    summary: description ?? merchant,
     status: "draft",
     policyStatus: "green",
     createdByUserId: me.id,

@@ -73,7 +73,8 @@
     "test:pricing-structures": "tsx ./tests/crm/pricing-structures-probe.ts",
     "test:procurement": "tsx ./tests/crm/procurement-probe.ts",
     "test:procurement-renewal": "tsx ./tests/crm/procurement-renewal-probe.ts",
-    "test:alliance": "tsx ./tests/alliance/run.ts"
+    "test:alliance": "tsx ./tests/alliance/run.ts",
+    "test:expense-edit": "tsx ./tests/expense-edit/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

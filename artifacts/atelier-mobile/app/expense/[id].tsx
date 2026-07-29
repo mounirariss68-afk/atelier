@@ -1,6 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import {
   useAtelierDeleteMyExpense,
+  useAtelierGetExpenseTaxonomy,
   useAtelierGetMyProfile,
   useAtelierListMyExpenseContexts,
   useAtelierListMyExpenses,
@@ -45,6 +46,51 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { HttpError, apiJson } from "@/lib/api";
 import { formatMoney } from "@/lib/format";
+
+// Task #757 — compact tappable row that opens a picker sheet (parity with
+// the New Expense screen).
+function PickerRow({
+  label,
+  value,
+  onPress,
+}: {
+  label: string;
+  value: string;
+  onPress: () => void;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "center",
+        justifyContent: "space-between",
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: c.tint25,
+        backgroundColor: c.tint08,
+        gap: 10,
+      }}
+    >
+      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+        {label}
+      </Text>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, flexShrink: 1 }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, flexShrink: 1 }}
+        >
+          {value}
+        </Text>
+        <Feather name="chevron-down" size={14} color={c.mutedForeground} />
+      </View>
+    </Pressable>
+  );
+}
 
 const CONTEXT_TYPES: AtelierSelfExpenseCreateContextType[] = [
   "bd",
@@ -126,6 +172,21 @@ export default function ExpenseDetailScreen() {
   const [date, setDate] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
+  // Task #757 — parity with the New Expense screen: taxonomy + funding are
+  // editable on a draft too, not only at create time.
+  const taxonomyQuery = useAtelierGetExpenseTaxonomy();
+  const [categoryCode, setCategoryCode] = useState("");
+  const [subCategoryCode, setSubCategoryCode] = useState("");
+  const [fundingSource, setFundingSource] = useState("personal_claim");
+  const [fundingBankAccountId, setFundingBankAccountId] = useState("");
+  const [catSheet, setCatSheet] = useState(false);
+  const [subSheet, setSubSheet] = useState(false);
+  const [fundingSheet, setFundingSheet] = useState(false);
+  const [bankSheet, setBankSheet] = useState(false);
+  const selectedCat =
+    taxonomyQuery.data?.categories.find((cc) => cc.code === categoryCode) ?? null;
+  const selectedSub =
+    selectedCat?.subCategories.find((s) => s.code === subCategoryCode) ?? null;
   const [contextType, setContextType] = useState<AtelierSelfExpenseCreateContextType>("bd");
   const [accountId, setAccountId] = useState<string | null>(null);
   const [engagementId, setEngagementId] = useState<string | null>(null);
@@ -152,17 +213,46 @@ export default function ExpenseDetailScreen() {
     setEngagementId(expense.engagementId ?? null);
     setInternalLabel(expense.internalProjectLabel ?? "");
     setFindings(expense.policyFindings ?? null);
+    setCategoryCode(expense.categoryCode ?? "");
+    setSubCategoryCode(expense.subCategoryCode ?? "");
+    setFundingSource(expense.fundingSource ?? "personal_claim");
+    setFundingBankAccountId(expense.fundingBankAccountId ?? "");
   }, [expense]);
+
+  // Task #757 — validation parity with the create screen: reject an
+  // unparseable/non-positive amount or missing merchant up front instead of
+  // silently dropping the field from the PATCH.
+  const validate = useCallback((): boolean => {
+    const amt = Number(amount);
+    if (!merchant.trim() || !Number.isFinite(amt) || amt <= 0) {
+      hapticError();
+      feedback.toast(t("exp.requiredFields"), "error");
+      return false;
+    }
+    return true;
+  }, [amount, merchant, feedback, t]);
 
   const patchBody = useCallback(() => {
     const amt = Number(amount);
     return {
       merchant: merchant.trim(),
-      amount: Number.isFinite(amt) ? amt : undefined,
+      amount: Number.isFinite(amt) && amt > 0 ? amt : undefined,
       currency: currency.trim().toUpperCase().slice(0, 3),
       expenseDate: date || undefined,
-      category: category.trim() || undefined,
-      description: description.trim() || undefined,
+      // Empty string is meaningful here: it clears the field server-side
+      // (category falls back to "other", description becomes null).
+      category: category.trim(),
+      description: description.trim(),
+      ...(categoryCode && subCategoryCode ? { categoryCode, subCategoryCode } : {}),
+      ...(fundingSource
+        ? {
+            fundingSource: fundingSource as "personal_claim" | "partner_paid" | "company_account",
+            fundingBankAccountId:
+              fundingSource === "company_account" && fundingBankAccountId
+                ? fundingBankAccountId
+                : undefined,
+          }
+        : {}),
       contextType,
       accountId: contextType === "account" ? accountId ?? undefined : undefined,
       engagementId: contextType === "engagement" ? engagementId ?? undefined : undefined,
@@ -176,6 +266,10 @@ export default function ExpenseDetailScreen() {
     date,
     category,
     description,
+    categoryCode,
+    subCategoryCode,
+    fundingSource,
+    fundingBankAccountId,
     contextType,
     accountId,
     engagementId,
@@ -184,6 +278,7 @@ export default function ExpenseDetailScreen() {
 
   const save = useCallback(async () => {
     if (!id) return;
+    if (!validate()) return;
     try {
       await update.mutateAsync({ id, data: patchBody() });
       await list.refetch();
@@ -193,7 +288,7 @@ export default function ExpenseDetailScreen() {
       hapticError();
       feedback.toast(t("common.error"), "error");
     }
-  }, [id, update, patchBody, list, t, feedback]);
+  }, [id, update, patchBody, validate, list, t, feedback]);
 
   const remove = useCallback(async () => {
     if (!id) return;
@@ -219,6 +314,7 @@ export default function ExpenseDetailScreen() {
   const doSubmit = useCallback(
     async (overrideRationale?: string) => {
       if (!id) return;
+      if (!validate()) return;
       setBlocked(null);
       try {
         await update.mutateAsync({ id, data: patchBody() });
@@ -245,7 +341,7 @@ export default function ExpenseDetailScreen() {
         feedback.toast(t("common.error"), "error");
       }
     },
-    [id, update, submit, patchBody, list, router, t, feedback],
+    [id, update, submit, patchBody, validate, list, router, t, feedback],
   );
 
   // Task #501 — founding partners may approve/reject their OWN submitted
@@ -493,12 +589,43 @@ export default function ExpenseDetailScreen() {
                     ) : null}
                   </View>
                 )}
-                <Field
-                  label={t("exp.category")}
-                  value={category}
-                  onChangeText={setCategory}
-                  placeholder={t("exp.categoryPlaceholder")}
-                />
+                {taxonomyQuery.data ? (
+                  <View style={{ gap: 10 }}>
+                    <PickerRow
+                      label={t("exp.category")}
+                      value={selectedCat?.label ?? (category || t("exp.pickCategory"))}
+                      onPress={() => setCatSheet(true)}
+                    />
+                    <PickerRow
+                      label={t("exp.subcategory")}
+                      value={selectedSub?.label ?? (selectedCat ? t("exp.pickSubcategory") : "—")}
+                      onPress={() => selectedCat && setSubSheet(true)}
+                    />
+                    <PickerRow
+                      label={t("exp.funding")}
+                      value={t(`exp.funding.${fundingSource}`)}
+                      onPress={() => setFundingSheet(true)}
+                    />
+                    {fundingSource === "company_account" ? (
+                      <PickerRow
+                        label={t("exp.fundingBank")}
+                        value={
+                          (taxonomyQuery.data.bankAccounts ?? []).find(
+                            (b) => b.id === fundingBankAccountId,
+                          )?.label ?? t("exp.fundingBank.select")
+                        }
+                        onPress={() => setBankSheet(true)}
+                      />
+                    ) : null}
+                  </View>
+                ) : (
+                  <Field
+                    label={t("exp.category")}
+                    value={category}
+                    onChangeText={setCategory}
+                    placeholder={t("exp.categoryPlaceholder")}
+                  />
+                )}
                 <Field
                   label={t("exp.description")}
                   value={description}
@@ -677,6 +804,61 @@ export default function ExpenseDetailScreen() {
           if (contextType === "account") setAccountId(item.id);
           else setEngagementId(item.id);
         }}
+      />
+
+      {/* Task #757 — taxonomy + funding sheets (parity with New Expense). */}
+      <Sheet
+        visible={catSheet}
+        title={t("exp.pickCategory")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setCatSheet(false)}
+        options={(taxonomyQuery.data?.categories ?? []).map((cat) => ({
+          label: cat.label,
+          icon: "tag" as const,
+          onPress: () => {
+            setCategoryCode(cat.code);
+            setSubCategoryCode("");
+          },
+        }))}
+      />
+      <Sheet
+        visible={subSheet}
+        title={t("exp.pickSubcategory")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setSubSheet(false)}
+        options={(selectedCat?.subCategories ?? []).map((s) => ({
+          label: s.label,
+          icon: "tag" as const,
+          onPress: () => setSubCategoryCode(s.code),
+        }))}
+      />
+      <Sheet
+        visible={fundingSheet}
+        title={t("exp.funding")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setFundingSheet(false)}
+        options={(taxonomyQuery.data?.fundingSources ?? ["personal_claim", "partner_paid", "company_account"]).map(
+          (fs) => ({
+            label: t(`exp.funding.${fs}`),
+            icon: "credit-card" as const,
+            onPress: () => setFundingSource(fs),
+          }),
+        )}
+      />
+      <Sheet
+        visible={bankSheet}
+        title={t("exp.fundingBank")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setBankSheet(false)}
+        options={
+          (taxonomyQuery.data?.bankAccounts ?? []).length > 0
+            ? (taxonomyQuery.data?.bankAccounts ?? []).map((b) => ({
+                label: b.label,
+                icon: "credit-card" as const,
+                onPress: () => setFundingBankAccountId(b.id),
+              }))
+            : [{ label: t("exp.fundingBank.none"), icon: "credit-card" as const, onPress: () => {} }]
+        }
       />
 
       <RationaleModal
