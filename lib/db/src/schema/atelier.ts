@@ -4066,6 +4066,10 @@ export const atelierCliSessions = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     createdByUserId: text("created_by_user_id"),
+    // Task #739 — session lineage. When an inactivity rollover mints a
+    // fresh session, this points at the soft-deleted predecessor so the
+    // verbatim replay window can seed from its tail (same org/user).
+    predecessorSessionId: text("predecessor_session_id"),
     deletedAt: timestamp("deleted_at"),
   },
   (t) => [

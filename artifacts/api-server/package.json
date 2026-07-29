@@ -23,6 +23,7 @@
     "test:chat-doc-download": "tsx ./tests/crm/chat-doc-download-probe.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
+    "test:chat-replay": "tsx ./tests/chat/replay-probe.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
     "test:cli-parity": "tsx ./tests/cli-parity/run.ts",

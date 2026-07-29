@@ -39,6 +39,11 @@ import {
   atelierEngagementAccess,
 } from "@workspace/db";
 import { and, desc, eq, gte, ilike, isNull, ne, or, inArray } from "drizzle-orm";
+import {
+  composeReplayFromTurns,
+  DEFAULT_REPLAY_BUDGET,
+  type ReplayTurnRow,
+} from "./replay.js";
 import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
 import type { Response } from "express";
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
@@ -1180,6 +1185,22 @@ export async function getOrCreateSession(
         .update(atelierCliSessions)
         .set({ deletedAt: new Date(), updatedAt: new Date() })
         .where(eq(atelierCliSessions.id, row.id));
+      // Task #739 — session lineage: the fresh session records its
+      // predecessor and carries the rolling summary forward so the
+      // replay window + recap never reference facts the model can't see.
+      const [fresh] = await db
+        .insert(atelierCliSessions)
+        .values({
+          id: rid("clis"),
+          orgId: persona.orgId,
+          userId: persona.id,
+          createdByUserId: persona.id,
+          spentCentsDay: todayUtc(),
+          predecessorSessionId: row.id,
+          rollingSummary: row.rollingSummary ?? "",
+        })
+        .returning();
+      return fresh;
     }
   }
   const id = rid("clis");
@@ -3028,7 +3049,93 @@ export async function runTurn(
     // synthetic system extension via the user channel — we keep the
     // system prompt fixed so the SDK caching can kick in.
     const history: Array<{ role: "user" | "assistant"; content: unknown }> = [];
-    if (session.rollingSummary && session.rollingSummary.length > 0) {
+    // Task #739 — verbatim replay window. Fetch the tail of this session
+    // (and, when it holds fewer turns than the window, the tail of its
+    // rollover predecessor — same org/user by construction) and replay
+    // the recent turns verbatim under a partitioned char budget. The
+    // rolling summary below then only matters for turns beyond the window.
+    let replayedTurnCount = 0;
+    try {
+      const replayBudget = DEFAULT_REPLAY_BUDGET;
+      const fetchTail = (sid: string, limit: number) =>
+        db
+          .select({
+            prompt: atelierCliTurns.prompt,
+            status: atelierCliTurns.status,
+            frames: atelierCliTurns.frames,
+            createdAt: atelierCliTurns.createdAt,
+          })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.sessionId, sid),
+              eq(atelierCliTurns.orgId, persona.orgId),
+              eq(atelierCliTurns.userId, persona.id),
+              ne(atelierCliTurns.id, turnId),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(limit);
+      // Newest-first; over-fetch by one so telemetry can tell "window full".
+      let replayRows = await fetchTail(session.id, replayBudget.maxTurns + 1);
+      const predecessorId = (session as { predecessorSessionId?: string | null })
+        .predecessorSessionId;
+      let crossSession = false;
+      if (replayRows.length < replayBudget.maxTurns && predecessorId) {
+        const carried = await fetchTail(
+          predecessorId,
+          replayBudget.maxTurns + 1 - replayRows.length,
+        );
+        crossSession = carried.length > 0;
+        replayRows = [...replayRows, ...carried];
+      }
+      if (replayRows.length > 0) {
+        const { history: replayHistory, telemetry } = composeReplayFromTurns(
+          replayRows as ReplayTurnRow[],
+          replayBudget,
+        );
+        replayedTurnCount = telemetry.turnsIncluded;
+        if (replayHistory.length > 0) {
+          history.push({
+            role: "user",
+            content:
+              "[conversation so far] The following messages replay our recent conversation verbatim " +
+              "(assistant lines may include compact tool-result digests). Treat facts the user stated " +
+              "here — dates, names, places, amounts, choices — as given; do not re-ask for them.",
+          });
+          history.push({ role: "assistant", content: "(noted)" });
+          for (const m of replayHistory) history.push(m);
+        }
+        console.log(
+          `[cli-telemetry] ${JSON.stringify({
+            evt: "replay_window",
+            turnId,
+            sessionId: session.id,
+            turnsAvailable: telemetry.turnsAvailable,
+            turnsIncluded: telemetry.turnsIncluded,
+            chars: telemetry.chars,
+            truncated: telemetry.truncated,
+            crossSession,
+          })}`,
+        );
+      }
+    } catch (err) {
+      // Replay is an enhancement — a fetch/compose failure must never
+      // block the turn. Log loudly so regressions are visible.
+      console.error(
+        "[atelier-cli] replay window failed",
+        turnId,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+    // Rolling summary covers turns beyond the replay window. Skip it for
+    // short sessions fully covered by verbatim replay to save tokens.
+    if (
+      session.rollingSummary &&
+      session.rollingSummary.length > 0 &&
+      (session.rollingSummary.split("\n").length > replayedTurnCount ||
+        replayedTurnCount === 0)
+    ) {
       history.push({
         role: "user",
         content: `[prior session summary]\n${session.rollingSummary}`,
