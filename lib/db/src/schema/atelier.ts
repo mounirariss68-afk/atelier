@@ -2303,6 +2303,37 @@ export const atelierEmployees = pgTable(
       .notNull()
       .default([]),
     officeAddress: text("office_address"),
+    // Task #744 — travel loyalty programs + preferences (EMPLOYEES ONLY;
+    // contractors/partner-firm resources never carry this field). Shaped for
+    // a future Amadeus traveler-profile mapper: airline programs keyed by the
+    // operating airline's 2-letter IATA code + membership id, hotel programs
+    // by chain code, tier stored as a label. Membership numbers are personal
+    // data — read surfaces redact them unless the viewer is the person
+    // themself or holds the sensitive-people gate.
+    travelProfile: jsonb("travel_profile").$type<{
+      airlinePrograms: Array<{
+        airlineIata: string; // 2-letter IATA carrier code (e.g. "EK")
+        programName: string; // e.g. "Emirates Skywards"
+        membershipNumber: string;
+        tier?: string | null; // label, e.g. "Gold"
+      }>;
+      hotelPrograms: Array<{
+        chainCode: string; // chain code (e.g. "MC" Marriott, "HH" Hilton)
+        programName: string; // e.g. "Marriott Bonvoy"
+        membershipNumber: string;
+        tier?: string | null;
+      }>;
+      preferences: {
+        preferredAirlines: string[]; // IATA codes or names
+        preferredHotelChains: string[];
+        cabinClass?: string | null; // economy | premium_economy | business | first
+        seatPreference?: string | null; // aisle | window | middle | no_preference
+        mealPreference?: string | null;
+        departureTimeWindow?: string | null; // free text, e.g. "08:00–12:00"
+        arrivalTimeWindow?: string | null;
+        notes?: string | null;
+      };
+    }>(),
     // Task #412 — self-identified demographics for the People Lens
     // Team Composition dashboard. Optional, defaulting to `unspecified` /
     // null so we never imply coverage we don't actually have.

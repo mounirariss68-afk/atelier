@@ -391,6 +391,563 @@ export const AtelierUpdateMyProfileResponse = zod.object({
 });
 
 /**
+ * @summary Me lens — own travel loyalty programs & preferences (employees only)
+ */
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMin = 2;
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMax = 2;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemProgramNameMax = 120;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemMembershipNumberMax = 60;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemTierMax = 60;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsMax = 20;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMin = 2;
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMax = 3;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemProgramNameMax = 120;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemMembershipNumberMax = 60;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemTierMax = 60;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsMax = 20;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesItemMax = 80;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesMax = 10;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsItemMax = 80;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsMax = 10;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesMealPreferenceMax = 120;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesDepartureTimeWindowMax = 120;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesArrivalTimeWindowMax = 120;
+
+export const atelierGetMyTravelProfileResponseTravelProfileOnePreferencesNotesMax = 2000;
+
+export const AtelierGetMyTravelProfileResponse = zod.object({
+  travelProfile: zod.union([
+    zod.object({
+      airlinePrograms: zod
+        .array(
+          zod.object({
+            airlineIata: zod
+              .string()
+              .min(
+                atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMin,
+              )
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMax,
+              )
+              .describe("2-letter IATA carrier code, e.g. EK"),
+            programName: zod
+              .string()
+              .min(1)
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemProgramNameMax,
+              ),
+            membershipNumber: zod
+              .string()
+              .min(1)
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemMembershipNumberMax,
+              )
+              .describe(
+                "Personal data — masked for viewers without the sensitive-people gate",
+              ),
+            tier: zod
+              .string()
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsItemTierMax,
+              )
+              .nullish(),
+          }),
+        )
+        .max(
+          atelierGetMyTravelProfileResponseTravelProfileOneAirlineProgramsMax,
+        )
+        .optional(),
+      hotelPrograms: zod
+        .array(
+          zod.object({
+            chainCode: zod
+              .string()
+              .min(
+                atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMin,
+              )
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMax,
+              )
+              .describe("Hotel chain code, e.g. MC (Marriott), HH (Hilton)"),
+            programName: zod
+              .string()
+              .min(1)
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemProgramNameMax,
+              ),
+            membershipNumber: zod
+              .string()
+              .min(1)
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemMembershipNumberMax,
+              ),
+            tier: zod
+              .string()
+              .max(
+                atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsItemTierMax,
+              )
+              .nullish(),
+          }),
+        )
+        .max(atelierGetMyTravelProfileResponseTravelProfileOneHotelProgramsMax)
+        .optional(),
+      preferences: zod
+        .object({
+          preferredAirlines: zod
+            .array(
+              zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesItemMax,
+                ),
+            )
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesMax,
+            )
+            .optional(),
+          preferredHotelChains: zod
+            .array(
+              zod
+                .string()
+                .min(1)
+                .max(
+                  atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsItemMax,
+                ),
+            )
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsMax,
+            )
+            .optional(),
+          cabinClass: zod
+            .union([
+              zod.literal("economy"),
+              zod.literal("premium_economy"),
+              zod.literal("business"),
+              zod.literal("first"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          seatPreference: zod
+            .union([
+              zod.literal("aisle"),
+              zod.literal("window"),
+              zod.literal("middle"),
+              zod.literal("no_preference"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          mealPreference: zod
+            .string()
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesMealPreferenceMax,
+            )
+            .nullish(),
+          departureTimeWindow: zod
+            .string()
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesDepartureTimeWindowMax,
+            )
+            .nullish(),
+          arrivalTimeWindow: zod
+            .string()
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesArrivalTimeWindowMax,
+            )
+            .nullish(),
+          notes: zod
+            .string()
+            .max(
+              atelierGetMyTravelProfileResponseTravelProfileOnePreferencesNotesMax,
+            )
+            .nullish(),
+        })
+        .optional(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
+ * Full-replace of the caller's own travel profile. 403 for
+contractors — travel profiles are an employee-only concept.
+Audited under `person.travel.self_updated` (section-level; raw
+membership numbers never enter the audit payload).
+
+ * @summary Me lens — replace own travel loyalty programs & preferences (employees only)
+ */
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsItemAirlineIataMin = 2;
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsItemAirlineIataMax = 2;
+
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsItemTierMax = 60;
+
+export const atelierUpdateMyTravelProfileBodyAirlineProgramsMax = 20;
+
+export const atelierUpdateMyTravelProfileBodyHotelProgramsItemChainCodeMin = 2;
+export const atelierUpdateMyTravelProfileBodyHotelProgramsItemChainCodeMax = 3;
+
+export const atelierUpdateMyTravelProfileBodyHotelProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateMyTravelProfileBodyHotelProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateMyTravelProfileBodyHotelProgramsItemTierMax = 60;
+
+export const atelierUpdateMyTravelProfileBodyHotelProgramsMax = 20;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesPreferredAirlinesItemMax = 80;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesPreferredAirlinesMax = 10;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesPreferredHotelChainsItemMax = 80;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesPreferredHotelChainsMax = 10;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesMealPreferenceMax = 120;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesDepartureTimeWindowMax = 120;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesArrivalTimeWindowMax = 120;
+
+export const atelierUpdateMyTravelProfileBodyPreferencesNotesMax = 2000;
+
+export const AtelierUpdateMyTravelProfileBody = zod.object({
+  airlinePrograms: zod
+    .array(
+      zod.object({
+        airlineIata: zod
+          .string()
+          .min(
+            atelierUpdateMyTravelProfileBodyAirlineProgramsItemAirlineIataMin,
+          )
+          .max(
+            atelierUpdateMyTravelProfileBodyAirlineProgramsItemAirlineIataMax,
+          )
+          .describe("2-letter IATA carrier code, e.g. EK"),
+        programName: zod
+          .string()
+          .min(1)
+          .max(
+            atelierUpdateMyTravelProfileBodyAirlineProgramsItemProgramNameMax,
+          ),
+        membershipNumber: zod
+          .string()
+          .min(1)
+          .max(
+            atelierUpdateMyTravelProfileBodyAirlineProgramsItemMembershipNumberMax,
+          )
+          .describe(
+            "Personal data — masked for viewers without the sensitive-people gate",
+          ),
+        tier: zod
+          .string()
+          .max(atelierUpdateMyTravelProfileBodyAirlineProgramsItemTierMax)
+          .nullish(),
+      }),
+    )
+    .max(atelierUpdateMyTravelProfileBodyAirlineProgramsMax)
+    .optional(),
+  hotelPrograms: zod
+    .array(
+      zod.object({
+        chainCode: zod
+          .string()
+          .min(atelierUpdateMyTravelProfileBodyHotelProgramsItemChainCodeMin)
+          .max(atelierUpdateMyTravelProfileBodyHotelProgramsItemChainCodeMax)
+          .describe("Hotel chain code, e.g. MC (Marriott), HH (Hilton)"),
+        programName: zod
+          .string()
+          .min(1)
+          .max(atelierUpdateMyTravelProfileBodyHotelProgramsItemProgramNameMax),
+        membershipNumber: zod
+          .string()
+          .min(1)
+          .max(
+            atelierUpdateMyTravelProfileBodyHotelProgramsItemMembershipNumberMax,
+          ),
+        tier: zod
+          .string()
+          .max(atelierUpdateMyTravelProfileBodyHotelProgramsItemTierMax)
+          .nullish(),
+      }),
+    )
+    .max(atelierUpdateMyTravelProfileBodyHotelProgramsMax)
+    .optional(),
+  preferences: zod
+    .object({
+      preferredAirlines: zod
+        .array(
+          zod
+            .string()
+            .min(1)
+            .max(
+              atelierUpdateMyTravelProfileBodyPreferencesPreferredAirlinesItemMax,
+            ),
+        )
+        .max(atelierUpdateMyTravelProfileBodyPreferencesPreferredAirlinesMax)
+        .optional(),
+      preferredHotelChains: zod
+        .array(
+          zod
+            .string()
+            .min(1)
+            .max(
+              atelierUpdateMyTravelProfileBodyPreferencesPreferredHotelChainsItemMax,
+            ),
+        )
+        .max(atelierUpdateMyTravelProfileBodyPreferencesPreferredHotelChainsMax)
+        .optional(),
+      cabinClass: zod
+        .union([
+          zod.literal("economy"),
+          zod.literal("premium_economy"),
+          zod.literal("business"),
+          zod.literal("first"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      seatPreference: zod
+        .union([
+          zod.literal("aisle"),
+          zod.literal("window"),
+          zod.literal("middle"),
+          zod.literal("no_preference"),
+          zod.literal(null),
+        ])
+        .nullish(),
+      mealPreference: zod
+        .string()
+        .max(atelierUpdateMyTravelProfileBodyPreferencesMealPreferenceMax)
+        .nullish(),
+      departureTimeWindow: zod
+        .string()
+        .max(atelierUpdateMyTravelProfileBodyPreferencesDepartureTimeWindowMax)
+        .nullish(),
+      arrivalTimeWindow: zod
+        .string()
+        .max(atelierUpdateMyTravelProfileBodyPreferencesArrivalTimeWindowMax)
+        .nullish(),
+      notes: zod
+        .string()
+        .max(atelierUpdateMyTravelProfileBodyPreferencesNotesMax)
+        .nullish(),
+    })
+    .optional(),
+});
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMin = 2;
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMax = 2;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemTierMax = 60;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsMax = 20;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMin = 2;
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMax = 3;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemTierMax = 60;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsMax = 20;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesItemMax = 80;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesMax = 10;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsItemMax = 80;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsMax = 10;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesMealPreferenceMax = 120;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesDepartureTimeWindowMax = 120;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesArrivalTimeWindowMax = 120;
+
+export const atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesNotesMax = 2000;
+
+export const AtelierUpdateMyTravelProfileResponse = zod.object({
+  travelProfile: zod.union([
+    zod.object({
+      airlinePrograms: zod
+        .array(
+          zod.object({
+            airlineIata: zod
+              .string()
+              .min(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMin,
+              )
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemAirlineIataMax,
+              )
+              .describe("2-letter IATA carrier code, e.g. EK"),
+            programName: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemProgramNameMax,
+              ),
+            membershipNumber: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemMembershipNumberMax,
+              )
+              .describe(
+                "Personal data — masked for viewers without the sensitive-people gate",
+              ),
+            tier: zod
+              .string()
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsItemTierMax,
+              )
+              .nullish(),
+          }),
+        )
+        .max(
+          atelierUpdateMyTravelProfileResponseTravelProfileOneAirlineProgramsMax,
+        )
+        .optional(),
+      hotelPrograms: zod
+        .array(
+          zod.object({
+            chainCode: zod
+              .string()
+              .min(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMin,
+              )
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemChainCodeMax,
+              )
+              .describe("Hotel chain code, e.g. MC (Marriott), HH (Hilton)"),
+            programName: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemProgramNameMax,
+              ),
+            membershipNumber: zod
+              .string()
+              .min(1)
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemMembershipNumberMax,
+              ),
+            tier: zod
+              .string()
+              .max(
+                atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsItemTierMax,
+              )
+              .nullish(),
+          }),
+        )
+        .max(
+          atelierUpdateMyTravelProfileResponseTravelProfileOneHotelProgramsMax,
+        )
+        .optional(),
+      preferences: zod
+        .object({
+          preferredAirlines: zod
+            .array(
+              zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesItemMax,
+                ),
+            )
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredAirlinesMax,
+            )
+            .optional(),
+          preferredHotelChains: zod
+            .array(
+              zod
+                .string()
+                .min(1)
+                .max(
+                  atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsItemMax,
+                ),
+            )
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesPreferredHotelChainsMax,
+            )
+            .optional(),
+          cabinClass: zod
+            .union([
+              zod.literal("economy"),
+              zod.literal("premium_economy"),
+              zod.literal("business"),
+              zod.literal("first"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          seatPreference: zod
+            .union([
+              zod.literal("aisle"),
+              zod.literal("window"),
+              zod.literal("middle"),
+              zod.literal("no_preference"),
+              zod.literal(null),
+            ])
+            .nullish(),
+          mealPreference: zod
+            .string()
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesMealPreferenceMax,
+            )
+            .nullish(),
+          departureTimeWindow: zod
+            .string()
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesDepartureTimeWindowMax,
+            )
+            .nullish(),
+          arrivalTimeWindow: zod
+            .string()
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesArrivalTimeWindowMax,
+            )
+            .nullish(),
+          notes: zod
+            .string()
+            .max(
+              atelierUpdateMyTravelProfileResponseTravelProfileOnePreferencesNotesMax,
+            )
+            .nullish(),
+        })
+        .optional(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
  * @summary Me lens — the caller's Microsoft 365 connection status (self-scope)
  */
 export const AtelierGetMyMsConnectionResponse = zod.object({
@@ -4412,6 +4969,44 @@ export const atelierUpdateRosterPersonBodyCellPhonesMax = 3;
 
 export const atelierUpdateRosterPersonBodyOfficeAddressMax = 500;
 
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemAirlineIataMin = 2;
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemAirlineIataMax = 2;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemTierMax = 60;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsMax = 20;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemChainCodeMin = 2;
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemChainCodeMax = 3;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemProgramNameMax = 120;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemMembershipNumberMax = 60;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemTierMax = 60;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsMax = 20;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredAirlinesItemMax = 80;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredAirlinesMax = 10;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredHotelChainsItemMax = 80;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredHotelChainsMax = 10;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesMealPreferenceMax = 120;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesDepartureTimeWindowMax = 120;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesArrivalTimeWindowMax = 120;
+
+export const atelierUpdateRosterPersonBodyTravelProfileOnePreferencesNotesMax = 2000;
+
 export const AtelierUpdateRosterPersonBody = zod
   .object({
     fullName: zod
@@ -4523,6 +5118,160 @@ export const AtelierUpdateRosterPersonBody = zod
       .string()
       .max(atelierUpdateRosterPersonBodyOfficeAddressMax)
       .nullish(),
+    travelProfile: zod
+      .union([
+        zod.object({
+          airlinePrograms: zod
+            .array(
+              zod.object({
+                airlineIata: zod
+                  .string()
+                  .min(
+                    atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemAirlineIataMin,
+                  )
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemAirlineIataMax,
+                  )
+                  .describe("2-letter IATA carrier code, e.g. EK"),
+                programName: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemProgramNameMax,
+                  ),
+                membershipNumber: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemMembershipNumberMax,
+                  )
+                  .describe(
+                    "Personal data — masked for viewers without the sensitive-people gate",
+                  ),
+                tier: zod
+                  .string()
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsItemTierMax,
+                  )
+                  .nullish(),
+              }),
+            )
+            .max(
+              atelierUpdateRosterPersonBodyTravelProfileOneAirlineProgramsMax,
+            )
+            .optional(),
+          hotelPrograms: zod
+            .array(
+              zod.object({
+                chainCode: zod
+                  .string()
+                  .min(
+                    atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemChainCodeMin,
+                  )
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemChainCodeMax,
+                  )
+                  .describe(
+                    "Hotel chain code, e.g. MC (Marriott), HH (Hilton)",
+                  ),
+                programName: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemProgramNameMax,
+                  ),
+                membershipNumber: zod
+                  .string()
+                  .min(1)
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemMembershipNumberMax,
+                  ),
+                tier: zod
+                  .string()
+                  .max(
+                    atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsItemTierMax,
+                  )
+                  .nullish(),
+              }),
+            )
+            .max(atelierUpdateRosterPersonBodyTravelProfileOneHotelProgramsMax)
+            .optional(),
+          preferences: zod
+            .object({
+              preferredAirlines: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredAirlinesItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredAirlinesMax,
+                )
+                .optional(),
+              preferredHotelChains: zod
+                .array(
+                  zod
+                    .string()
+                    .min(1)
+                    .max(
+                      atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredHotelChainsItemMax,
+                    ),
+                )
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesPreferredHotelChainsMax,
+                )
+                .optional(),
+              cabinClass: zod
+                .union([
+                  zod.literal("economy"),
+                  zod.literal("premium_economy"),
+                  zod.literal("business"),
+                  zod.literal("first"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+              seatPreference: zod
+                .union([
+                  zod.literal("aisle"),
+                  zod.literal("window"),
+                  zod.literal("middle"),
+                  zod.literal("no_preference"),
+                  zod.literal(null),
+                ])
+                .nullish(),
+              mealPreference: zod
+                .string()
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesMealPreferenceMax,
+                )
+                .nullish(),
+              departureTimeWindow: zod
+                .string()
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesDepartureTimeWindowMax,
+                )
+                .nullish(),
+              arrivalTimeWindow: zod
+                .string()
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesArrivalTimeWindowMax,
+                )
+                .nullish(),
+              notes: zod
+                .string()
+                .max(
+                  atelierUpdateRosterPersonBodyTravelProfileOnePreferencesNotesMax,
+                )
+                .nullish(),
+            })
+            .optional(),
+        }),
+        zod.null(),
+      ])
+      .optional(),
   })
   .describe(
     "Whitelisted editable fields. Which keys are accepted depends on the\nperson's worker type; the server rejects keys that don't apply and\nexplicitly refuses pay\/bank\/lifecycle fields.\n",

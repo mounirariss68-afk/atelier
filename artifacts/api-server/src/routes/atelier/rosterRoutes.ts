@@ -54,6 +54,13 @@ import {
   type StructuredName,
 } from "../../lib/atelier-person-model.js";
 import { writePersonAndSync } from "../../lib/atelier-person-sync.js";
+// Task #744 — travel loyalty programs + preferences (employees only).
+import {
+  zTravelProfile,
+  travelProfileToWire,
+  redactTravelProfile,
+  type TravelProfile,
+} from "../../lib/atelier-travel-profile.js";
 import { syncMsDisplayName } from "../../lib/atelier-ms-provisioning.js";
 // Task #51 — stream self-uploaded scans from private object storage.
 import {
@@ -136,6 +143,9 @@ export interface PersonWire {
   basicWageMonthly?: number | null;
   housingAllowanceMonthly?: number | null;
   schemeRegisteredOn?: string | null;
+  // Task #744 — travel loyalty programs + preferences (EMPLOYEES ONLY).
+  // Membership numbers masked for viewers without the sensitive gate.
+  travelProfile?: TravelProfile | null;
 }
 
 // Task #292 — Compensation visibility now spans leadership + finance + HR.
@@ -300,7 +310,15 @@ export function sanitizeForViewer(
   me: typeof atelierUsers.$inferSelect,
 ): PersonWire {
   if (canViewSensitivePeopleData(me.role)) return p;
-  return { ...p, notes: null, gender: "unspecified", nationality: null };
+  return {
+    ...p,
+    notes: null,
+    gender: "unspecified",
+    nationality: null,
+    // Task #744 — loyalty membership numbers are personal data; mask them
+    // for viewers without the sensitive-people gate.
+    travelProfile: p.travelProfile ? redactTravelProfile(p.travelProfile) : p.travelProfile,
+  };
 }
 
 /**
@@ -567,6 +585,9 @@ function employeeToWire(
     notes: r.notes,
     gender: r.gender ?? "unspecified",
     nationality: r.nationality ?? null,
+    // Task #744 — travel loyalty + preferences (employees only; membership
+    // numbers are masked downstream by sanitizeForViewer).
+    travelProfile: travelProfileToWire(r.travelProfile),
   };
   if (includeComp) {
     base.iban = r.iban;
@@ -1403,6 +1424,10 @@ const employeeEditSchema = z
     gender: zGender,
     cellPhones: zCells,
     officeAddress: zNullableTrimmed(500),
+    // Task #744 — travel loyalty programs + preferences (employees only;
+    // contractor/PFR schemas deliberately omit this field so writes for
+    // non-employees fail with invalid-body).
+    travelProfile: zTravelProfile.nullable(),
   })
   .partial()
   .strict();

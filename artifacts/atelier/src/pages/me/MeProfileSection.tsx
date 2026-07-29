@@ -28,6 +28,10 @@ import {
   useAtelierCreateMyEmergencyContact,
   useAtelierUpdateMyEmergencyContact,
   useAtelierDeleteMyEmergencyContact,
+  // Task #744 — travel loyalty & preferences (employees only).
+  useAtelierGetMyTravelProfile,
+  getAtelierGetMyTravelProfileQueryKey,
+  useAtelierUpdateMyTravelProfile,
   type AtelierSelfProfile,
   type AtelierDependent,
   type AtelierEmergencyContact,
@@ -35,6 +39,12 @@ import {
 } from "@workspace/api-client-react";
 import { Card, MonoChip } from "@/components/ui/primitives";
 import { ConnectedAccountsCard, AutoLoggedMeetingsCard } from "@/components/ms/MsMeetings";
+// Task #744 — shared travel loyalty & preferences card (also used on the
+// roster employee profile).
+import {
+  TravelProfileCard,
+  type TravelProfileValue,
+} from "@/components/travel/TravelProfileCard";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
 
@@ -73,6 +83,8 @@ export default function MeProfileSection({
         <EmploymentCard loading={loading} profile={profile} />
       </div>
       <BioAndCardCard />
+      {/* Task #744 — travel loyalty & preferences (employees only). */}
+      {profile?.person?.workerType === "employee" && <MyTravelCard />}
       {/* Task #327 — Microsoft 365 connect/disconnect. */}
       <ConnectedAccountsCard />
       {/* Task #336 — meetings the auto-logger recorded to the CRM. */}
@@ -82,6 +94,44 @@ export default function MeProfileSection({
         <DependentsCard />
         <EmergencyContactsCard />
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Task #744 — travel loyalty & preferences (employees only). The
+// self-scope always sees full membership numbers.
+// ------------------------------------------------------------------
+function MyTravelCard() {
+  const qc = useQueryClient();
+  const q = useAtelierGetMyTravelProfile();
+  const save = useAtelierUpdateMyTravelProfile();
+  if (q.isLoading) {
+    return (
+      <Card className="p-4">
+        <p className="text-sm text-text-mute">Loading travel profile…</p>
+      </Card>
+    );
+  }
+  // Contractors get a 403 — the parent already hides this card, so an
+  // error here just renders nothing rather than a broken card.
+  if (q.isError) return null;
+  return (
+    <div className="grid" data-testid="me-travel-card">
+      <TravelProfileCard
+        value={(q.data?.travelProfile ?? null) as TravelProfileValue | null}
+        canEdit
+        testIdPrefix="me-travel"
+        onSave={async (next) => {
+          try {
+            await save.mutateAsync({ data: next as never });
+            await qc.invalidateQueries({ queryKey: getAtelierGetMyTravelProfileQueryKey() });
+            return { ok: true };
+          } catch (err) {
+            return { ok: false, error: err instanceof Error ? err.message : "Save failed." };
+          }
+        }}
+      />
     </div>
   );
 }

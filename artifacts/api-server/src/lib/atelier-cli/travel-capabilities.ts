@@ -36,6 +36,9 @@ import {
 } from "./capability-catalog.js";
 import type { AtelierRole } from "../../routes/atelier/personaRoles.js";
 import type { ToolResult } from "./index.js";
+// Task #744 — requester travel-preference context (DB-free indirection;
+// the real resolver is registered by bootstrap-capabilities).
+import { resolveTravelPreferences, travelPrefsNote } from "./travel-preferences.js";
 import {
   TravelConnectionError,
   ignavAirportSuggestions,
@@ -617,7 +620,7 @@ defineCapability({
     ar: ["ابحث عن رحلات من دبي إلى إسطنبول"],
     fr: ["Trouve des vols Dubaï–Istanbul"],
   },
-  async run(input) {
+  async run(input, ctx) {
     const rawSegments = Array.isArray(input.segments)
       ? (input.segments as Array<Record<string, unknown>>)
       : [];
@@ -714,9 +717,21 @@ defineCapability({
       }
 
       const adults = Math.max(1, Math.min(9, Number(input.adults ?? 1) || 1));
-      const cabinClass = input.cabinClass
+      // Task #744 — requester's saved preferences (advisory context; a
+      // missing/failed lookup never blocks the search).
+      const prefs = await resolveTravelPreferences(ctx);
+      let prefCabinApplied = false;
+      let cabinClass = input.cabinClass
         ? (String(input.cabinClass) as CabinClass)
         : undefined;
+      if (
+        !cabinClass &&
+        prefs?.cabinClass &&
+        ["economy", "premium_economy", "business", "first"].includes(prefs.cabinClass)
+      ) {
+        cabinClass = prefs.cabinClass as CabinClass;
+        prefCabinApplied = true;
+      }
       // Task #721 — fetch up to 20 so clients can page (10 per page).
       const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 20) || 20));
 
@@ -857,7 +872,11 @@ defineCapability({
           ? "Prices are shown in AED using an approximate exchange rate; the original fare amount and currency are included with each offer."
           : null,
         "Links open a prefilled flight search to complete booking with the airline (in-chat ticketing is not enabled).",
+        prefCabinApplied && cabinClass
+          ? `Cabin defaulted to the traveller's saved preference (${cabinClass.replace("_", " ")}); say so and offer other cabins on request.`
+          : null,
       ].filter(Boolean);
+      const prefsNote = prefs ? travelPrefsNote(prefs, "flights") : null;
 
       return {
         ok: true,
@@ -867,6 +886,8 @@ defineCapability({
           pageSize: 10,
           slices,
           tripType,
+          ...(prefsNote ? { travelerPreferences: prefsNote } : {}),
+          ...(prefCabinApplied ? { cabinFromPreferences: cabinClass } : {}),
           ...(airlineFilterApplied ? { airlineFilter: airlineFilterApplied } : {}),
           ...(legContextOut ? { legContext: legContextOut } : {}),
           airlineComparison,
@@ -1406,7 +1427,7 @@ defineCapability({
     ar: ["ابحث عن فنادق قرب تقسيم"],
     fr: ["Trouve des hôtels près de Taksim"],
   },
-  async run(input) {
+  async run(input, ctx) {
     const location = String(input.location ?? "").trim();
     const checkIn = String(input.checkIn ?? "").trim();
     const checkOut = String(input.checkOut ?? "").trim();
@@ -1496,11 +1517,15 @@ defineCapability({
           : null,
         "Links open the hotel's listing (or a hotel search) to complete booking (in-chat hotel booking is not enabled).",
       ].filter(Boolean);
+      // Task #744 — saved-preference context rides beside the results.
+      const stayPrefs = await resolveTravelPreferences(ctx);
+      const stayPrefsNote = stayPrefs ? travelPrefsNote(stayPrefs, "stays") : null;
       return {
         ok: true,
         data: {
           items,
           total: priced.length,
+          ...(stayPrefsNote ? { travelerPreferences: stayPrefsNote } : {}),
           location: { query: location, resolved: location },
           checkIn,
           checkOut,

@@ -3146,6 +3146,122 @@ export const AtelierRosterPersonEditGender = {
   unspecified: "unspecified",
 } as const;
 
+export interface AtelierTravelLoyaltyAirline {
+  /**
+   * 2-letter IATA carrier code, e.g. EK
+   * @minLength 2
+   * @maxLength 2
+   */
+  airlineIata: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  programName: string;
+  /**
+   * Personal data — masked for viewers without the sensitive-people gate
+   * @minLength 1
+   * @maxLength 60
+   */
+  membershipNumber: string;
+  /**
+   * @maxLength 60
+   * @nullable
+   */
+  tier?: string | null;
+}
+
+export interface AtelierTravelLoyaltyHotel {
+  /**
+   * Hotel chain code, e.g. MC (Marriott), HH (Hilton)
+   * @minLength 2
+   * @maxLength 3
+   */
+  chainCode: string;
+  /**
+   * @minLength 1
+   * @maxLength 120
+   */
+  programName: string;
+  /**
+   * @minLength 1
+   * @maxLength 60
+   */
+  membershipNumber: string;
+  /**
+   * @maxLength 60
+   * @nullable
+   */
+  tier?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type AtelierTravelPreferencesCabinClass =
+  | (typeof AtelierTravelPreferencesCabinClass)[keyof typeof AtelierTravelPreferencesCabinClass]
+  | null;
+
+export const AtelierTravelPreferencesCabinClass = {
+  economy: "economy",
+  premium_economy: "premium_economy",
+  business: "business",
+  first: "first",
+} as const;
+
+/**
+ * @nullable
+ */
+export type AtelierTravelPreferencesSeatPreference =
+  | (typeof AtelierTravelPreferencesSeatPreference)[keyof typeof AtelierTravelPreferencesSeatPreference]
+  | null;
+
+export const AtelierTravelPreferencesSeatPreference = {
+  aisle: "aisle",
+  window: "window",
+  middle: "middle",
+  no_preference: "no_preference",
+} as const;
+
+export interface AtelierTravelPreferences {
+  /** @maxItems 10 */
+  preferredAirlines?: string[];
+  /** @maxItems 10 */
+  preferredHotelChains?: string[];
+  /** @nullable */
+  cabinClass?: AtelierTravelPreferencesCabinClass;
+  /** @nullable */
+  seatPreference?: AtelierTravelPreferencesSeatPreference;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  mealPreference?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  departureTimeWindow?: string | null;
+  /**
+   * @maxLength 120
+   * @nullable
+   */
+  arrivalTimeWindow?: string | null;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export interface AtelierTravelProfile {
+  /** @maxItems 20 */
+  airlinePrograms?: AtelierTravelLoyaltyAirline[];
+  /** @maxItems 20 */
+  hotelPrograms?: AtelierTravelLoyaltyHotel[];
+  preferences?: AtelierTravelPreferences;
+}
+
 /**
  * Whitelisted editable fields. Which keys are accepted depends on the
 person's worker type; the server rejects keys that don't apply and
@@ -3257,6 +3373,11 @@ export interface AtelierRosterPersonEdit {
    * @nullable
    */
   officeAddress?: string | null;
+  travelProfile?: AtelierTravelProfile | null;
+}
+
+export interface AtelierTravelProfileResponse {
+  travelProfile: AtelierTravelProfile | null;
 }
 
 export interface AtelierRosterPersonFieldChange {

@@ -312,6 +312,8 @@ import type {
   AtelierTrainingMaterial,
   AtelierTrainingMaterialInput,
   AtelierTrainingMaterialPatch,
+  AtelierTravelProfile,
+  AtelierTravelProfileResponse,
   AtelierUpdateAccountActionInput,
   AtelierUpdateAccountInput,
   AtelierUpdateAccountInsightInput,
@@ -1168,6 +1170,180 @@ export const useAtelierUpdateMyProfile = <
   TContext
 > => {
   return useMutation(getAtelierUpdateMyProfileMutationOptions(options));
+};
+
+/**
+ * @summary Me lens — own travel loyalty programs & preferences (employees only)
+ */
+export const getAtelierGetMyTravelProfileUrl = () => {
+  return `/api/atelier/me/travel`;
+};
+
+export const atelierGetMyTravelProfile = async (
+  options?: RequestInit,
+): Promise<AtelierTravelProfileResponse> => {
+  return customFetch<AtelierTravelProfileResponse>(
+    getAtelierGetMyTravelProfileUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAtelierGetMyTravelProfileQueryKey = () => {
+  return [`/api/atelier/me/travel`] as const;
+};
+
+export const getAtelierGetMyTravelProfileQueryOptions = <
+  TData = Awaited<ReturnType<typeof atelierGetMyTravelProfile>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyTravelProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAtelierGetMyTravelProfileQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof atelierGetMyTravelProfile>>
+  > = ({ signal }) => atelierGetMyTravelProfile({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyTravelProfile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AtelierGetMyTravelProfileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof atelierGetMyTravelProfile>>
+>;
+export type AtelierGetMyTravelProfileQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — own travel loyalty programs & preferences (employees only)
+ */
+
+export function useAtelierGetMyTravelProfile<
+  TData = Awaited<ReturnType<typeof atelierGetMyTravelProfile>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof atelierGetMyTravelProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAtelierGetMyTravelProfileQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * Full-replace of the caller's own travel profile. 403 for
+contractors — travel profiles are an employee-only concept.
+Audited under `person.travel.self_updated` (section-level; raw
+membership numbers never enter the audit payload).
+
+ * @summary Me lens — replace own travel loyalty programs & preferences (employees only)
+ */
+export const getAtelierUpdateMyTravelProfileUrl = () => {
+  return `/api/atelier/me/travel`;
+};
+
+export const atelierUpdateMyTravelProfile = async (
+  atelierTravelProfile: AtelierTravelProfile,
+  options?: RequestInit,
+): Promise<AtelierTravelProfileResponse> => {
+  return customFetch<AtelierTravelProfileResponse>(
+    getAtelierUpdateMyTravelProfileUrl(),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierTravelProfile),
+    },
+  );
+};
+
+export const getAtelierUpdateMyTravelProfileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>,
+    TError,
+    { data: BodyType<AtelierTravelProfile> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>,
+  TError,
+  { data: BodyType<AtelierTravelProfile> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateMyTravelProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>,
+    { data: BodyType<AtelierTravelProfile> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierUpdateMyTravelProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateMyTravelProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>
+>;
+export type AtelierUpdateMyTravelProfileMutationBody =
+  BodyType<AtelierTravelProfile>;
+export type AtelierUpdateMyTravelProfileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Me lens — replace own travel loyalty programs & preferences (employees only)
+ */
+export const useAtelierUpdateMyTravelProfile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>,
+    TError,
+    { data: BodyType<AtelierTravelProfile> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateMyTravelProfile>>,
+  TError,
+  { data: BodyType<AtelierTravelProfile> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdateMyTravelProfileMutationOptions(options));
 };
 
 /**

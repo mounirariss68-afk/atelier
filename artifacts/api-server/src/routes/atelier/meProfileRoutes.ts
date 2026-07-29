@@ -63,6 +63,11 @@ import {
 import { assertAuditAction } from "./auditContract";
 // Task #538 — mirror preferredName self-edits onto the person record.
 import { writePersonAndSync } from "../../lib/atelier-person-sync";
+// Task #744 — travel loyalty programs + preferences (employees only).
+import {
+  zTravelProfile,
+  travelProfileToWire,
+} from "../../lib/atelier-travel-profile.js";
 
 const router: IRouter = Router();
 
@@ -286,6 +291,79 @@ router.patch("/me/profile", async (req, res, next) => {
     }
     const fresh = await resolveSelfPersonRow(ctx.me);
     res.json({ person: fresh ? selfPersonWire(fresh) : null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------
+// Task #744 — travel loyalty programs + preferences (EMPLOYEES ONLY).
+// Self-scope: the person always sees their own membership numbers in
+// full. Contractors get a 403 — travel profiles are an employee-roster
+// concept and non-employee writes are rejected server-side.
+// ------------------------------------------------------------------
+
+// @cli-skip: self-scope travel profile read; no CLI shape (Task #744)
+router.get("/me/travel", async (req, res, next) => {
+  try {
+    const ctx = await requireSelfPerson(req, res);
+    if (!ctx) return;
+    if (ctx.person.workerType !== "employee") {
+      res.status(403).json({ error: "travel-profile-employees-only" });
+      return;
+    }
+    res.json({
+      travelProfile: travelProfileToWire(ctx.person.row.travelProfile),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope travel profile edit; no CLI shape (Task #744)
+router.put("/me/travel", async (req, res, next) => {
+  try {
+    const ctx = await requireSelfPerson(req, res);
+    if (!ctx) return;
+    if (ctx.person.workerType !== "employee") {
+      res.status(403).json({ error: "travel-profile-employees-only" });
+      return;
+    }
+    const parsed = zTravelProfile.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+      return;
+    }
+    const before = travelProfileToWire(ctx.person.row.travelProfile);
+    const after = parsed.data;
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      await db
+        .update(atelierEmployees)
+        .set({ travelProfile: after, updatedAt: new Date() })
+        .where(eq(atelierEmployees.id, ctx.person.row.id));
+      // Audit like other self-service profile edits — but never write raw
+      // membership numbers into the audit payload; log section-level deltas.
+      const sections: string[] = [];
+      if (JSON.stringify(before?.airlinePrograms ?? []) !== JSON.stringify(after.airlinePrograms))
+        sections.push("airlinePrograms");
+      if (JSON.stringify(before?.hotelPrograms ?? []) !== JSON.stringify(after.hotelPrograms))
+        sections.push("hotelPrograms");
+      if (JSON.stringify(before?.preferences ?? null) !== JSON.stringify(after.preferences))
+        sections.push("preferences");
+      await audit({
+        me: ctx.me,
+        entityType: "employee",
+        entityId: ctx.person.row.id,
+        action: "person.travel.self_updated",
+        payload: {
+          sections,
+          airlineProgramCount: after.airlinePrograms.length,
+          hotelProgramCount: after.hotelPrograms.length,
+        },
+        summary: `${ctx.me.name} updated their travel loyalty & preferences (${sections.join(", ") || "no-op"})`,
+      });
+    }
+    res.json({ travelProfile: after });
   } catch (err) {
     next(err);
   }

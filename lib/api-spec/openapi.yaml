@@ -212,6 +212,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierSelfProfilePatchResponse"
+  /atelier/me/travel:
+    get:
+      operationId: atelierGetMyTravelProfile
+      tags: [atelier]
+      summary: Me lens — own travel loyalty programs & preferences (employees only)
+      responses:
+        "200":
+          description: Own travel profile (null when none saved yet)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierTravelProfileResponse"
+    put:
+      operationId: atelierUpdateMyTravelProfile
+      tags: [atelier]
+      summary: Me lens — replace own travel loyalty programs & preferences (employees only)
+      description: |
+        Full-replace of the caller's own travel profile. 403 for
+        contractors — travel profiles are an employee-only concept.
+        Audited under `person.travel.self_updated` (section-level; raw
+        membership numbers never enter the audit payload).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierTravelProfile"
+      responses:
+        "200":
+          description: Saved travel profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierTravelProfileResponse"
   /atelier/me/msconnection:
     get:
       operationId: atelierGetMyMsConnection
@@ -8718,6 +8752,77 @@ components:
           maxItems: 3
           items: { $ref: "#/components/schemas/AtelierCellPhone" }
         officeAddress: { type: ["string", "null"], maxLength: 500 }
+        # Task #744 — employees only; rejected (invalid-body) for
+        # contractors and partner-firm resources.
+        travelProfile:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierTravelProfile"
+            - type: "null"
+
+    # ---- Employee travel loyalty & preferences (Task #744) ----
+    # Amadeus-ready shape: airline programs keyed by 2-letter IATA carrier
+    # code + membership id, hotel programs by chain code, tier as a label.
+    AtelierTravelLoyaltyAirline:
+      type: object
+      required: [airlineIata, programName, membershipNumber]
+      properties:
+        airlineIata: { type: string, minLength: 2, maxLength: 2, description: "2-letter IATA carrier code, e.g. EK" }
+        programName: { type: string, minLength: 1, maxLength: 120 }
+        membershipNumber: { type: string, minLength: 1, maxLength: 60, description: "Personal data — masked for viewers without the sensitive-people gate" }
+        tier: { type: ["string", "null"], maxLength: 60 }
+
+    AtelierTravelLoyaltyHotel:
+      type: object
+      required: [chainCode, programName, membershipNumber]
+      properties:
+        chainCode: { type: string, minLength: 2, maxLength: 3, description: "Hotel chain code, e.g. MC (Marriott), HH (Hilton)" }
+        programName: { type: string, minLength: 1, maxLength: 120 }
+        membershipNumber: { type: string, minLength: 1, maxLength: 60 }
+        tier: { type: ["string", "null"], maxLength: 60 }
+
+    AtelierTravelPreferences:
+      type: object
+      properties:
+        preferredAirlines:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 80 }
+        preferredHotelChains:
+          type: array
+          maxItems: 10
+          items: { type: string, minLength: 1, maxLength: 80 }
+        cabinClass:
+          type: ["string", "null"]
+          enum: [economy, premium_economy, business, first, null]
+        seatPreference:
+          type: ["string", "null"]
+          enum: [aisle, window, middle, no_preference, null]
+        mealPreference: { type: ["string", "null"], maxLength: 120 }
+        departureTimeWindow: { type: ["string", "null"], maxLength: 120 }
+        arrivalTimeWindow: { type: ["string", "null"], maxLength: 120 }
+        notes: { type: ["string", "null"], maxLength: 2000 }
+
+    AtelierTravelProfile:
+      type: object
+      properties:
+        airlinePrograms:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/AtelierTravelLoyaltyAirline" }
+        hotelPrograms:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/AtelierTravelLoyaltyHotel" }
+        preferences: { $ref: "#/components/schemas/AtelierTravelPreferences" }
+
+    AtelierTravelProfileResponse:
+      type: object
+      required: [travelProfile]
+      properties:
+        travelProfile:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierTravelProfile"
+            - type: "null"
 
     AtelierRosterPersonFieldChange:
       type: object

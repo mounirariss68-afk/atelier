@@ -91,6 +91,9 @@ import "./travel-capabilities.js";
 // Task #745 — DB-backed traveller lookup for guided flight booking
 // (kept out of travel-capabilities.ts so the travel probe stays DB-free).
 import "./travel-companion-capabilities.js";
+// Task #744 — DB-backed requester travel-preferences resolver (kept out of
+// travel-capabilities.ts so the offline probe stays DB-free).
+import "./travel-preferences-db.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

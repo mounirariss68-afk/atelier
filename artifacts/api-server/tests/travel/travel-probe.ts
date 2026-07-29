@@ -1102,6 +1102,74 @@ assert.ok(planTrip, "travel_plan_trip registered");
   ok("traveller scoping filter + companions/planner persona gating");
 }
 
+// 25. Task #744 — saved travel preferences read-through. The tools stay
+// DB-free: a registered resolver supplies the requester's preferences
+// before providers run. No resolver (default in this probe) = no prefs.
+{
+  const prefsMod = await import("../../src/lib/atelier-cli/travel-preferences.js");
+  const { setTravelPreferencesResolver } = prefsMod;
+  try {
+    setTravelPreferencesResolver(async () => ({
+      preferredAirlines: ["EK", "Turkish Airlines"],
+      preferredHotelChains: ["Marriott"],
+      cabinClass: "business",
+      seatPreference: "aisle",
+      mealPreference: null,
+      departureTimeWindow: "08:00-12:00",
+      arrivalTimeWindow: null,
+      notes: null,
+    }));
+    requests.length = 0;
+    // No cabinClass in the input → saved preference becomes the default.
+    const r = await flights.run(
+      { segments: [{ origin: "DXB", destination: "RUH", date: "2027-03-02" }] },
+      ctx,
+    );
+    assert.equal(r.ok, true, JSON.stringify(r));
+    const ow = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+    const body = ow!.body as { cabin_class?: string };
+    assert.equal(body.cabin_class, "business", "saved cabin preference applied");
+    const data = r.data as Record<string, unknown>;
+    assert.equal(data.cabinFromPreferences, "business");
+    assert.ok(String(data.travelerPreferences ?? "").includes("EK"));
+    assert.ok(String(data.note ?? "").toLowerCase().includes("business"));
+    // Explicit input still wins over the saved preference.
+    requests.length = 0;
+    const r2 = await flights.run(
+      {
+        segments: [{ origin: "DXB", destination: "RUH", date: "2027-03-02" }],
+        cabinClass: "economy",
+      },
+      ctx,
+    );
+    assert.equal(r2.ok, true, JSON.stringify(r2));
+    const ow2 = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+    assert.equal((ow2!.body as { cabin_class?: string }).cabin_class, "economy");
+    assert.equal((r2.data as Record<string, unknown>).cabinFromPreferences, undefined);
+    // Stays surface the hotel-chain preference note (never a silent filter).
+    const rs = await stays.run(
+      { location: "Taksim, Istanbul", checkIn: "2027-03-02", checkOut: "2027-03-06" },
+      ctx,
+    );
+    assert.equal(rs.ok, true, JSON.stringify(rs));
+    assert.ok(String((rs.data as Record<string, unknown>).travelerPreferences ?? "").includes("Marriott"));
+    // Resolver removed → results carry no preference context at all.
+    setTravelPreferencesResolver(null);
+    requests.length = 0;
+    const r3 = await flights.run(
+      { segments: [{ origin: "DXB", destination: "RUH", date: "2027-03-02" }] },
+      ctx,
+    );
+    assert.equal(r3.ok, true);
+    const ow3 = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+    assert.equal((ow3!.body as { cabin_class?: string }).cabin_class, undefined);
+    assert.equal((r3.data as Record<string, unknown>).travelerPreferences, undefined);
+    ok("saved preferences: cabin default, explicit input wins, notes on flights+stays, clean without resolver");
+  } finally {
+    setTravelPreferencesResolver(null);
+  }
+}
+
 ignavStub.close();
 stayingStub.close();
-console.log(`\ntravel-probe: ${passed}/25 groups passed`);
+console.log(`\ntravel-probe: ${passed}/26 groups passed`);

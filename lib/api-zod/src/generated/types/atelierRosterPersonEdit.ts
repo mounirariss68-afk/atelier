@@ -10,6 +10,7 @@ import type { AtelierRosterPersonEditContractType } from "./atelierRosterPersonE
 import type { AtelierRosterPersonEditEmploymentStatus } from "./atelierRosterPersonEditEmploymentStatus";
 import type { AtelierRosterPersonEditEmploymentType } from "./atelierRosterPersonEditEmploymentType";
 import type { AtelierRosterPersonEditGender } from "./atelierRosterPersonEditGender";
+import type { AtelierTravelProfile } from "./atelierTravelProfile";
 
 /**
  * Whitelisted editable fields. Which keys are accepted depends on the
@@ -122,4 +123,5 @@ export interface AtelierRosterPersonEdit {
    * @nullable
    */
   officeAddress?: string | null;
+  travelProfile?: AtelierTravelProfile | null;
 }

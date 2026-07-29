@@ -9,6 +9,11 @@ import { EditPersonForm } from "./EditPersonForm";
 // Task #509 (T4) — full country-name display everywhere in HR.
 import { countryName } from "@/lib/countries";
 import { CountryCombobox } from "@/components/CountryCombobox";
+// Task #744 — employee travel loyalty & preferences.
+import {
+  TravelProfileCard,
+  type TravelProfileValue,
+} from "@/components/travel/TravelProfileCard";
 
 interface Person {
   id: string;
@@ -46,6 +51,8 @@ interface Person {
   employingEntity?: string | null;
   contractType?: string | null;
   partnerFirmId?: string | null;
+  // Task #744 — employees only; membership numbers may arrive masked.
+  travelProfile?: TravelProfileValue | null;
 }
 
 const TABS = [
@@ -256,6 +263,34 @@ function ProfileTab({
         <BusinessCardQR
           person={person}
           onUpdated={(patch) => onUpdated({ ...person, ...patch })}
+        />
+      )}
+      {/* Task #744 — travel loyalty & preferences (employees only; hidden
+          for contractors and partner-firm resources). */}
+      {person.workerType === "employee" && (
+        <TravelProfileCard
+          value={person.travelProfile ?? null}
+          canEdit={viewerCanEdit}
+          testIdPrefix="roster-travel"
+          onSave={async (next) => {
+            try {
+              const r = await fetch(`/api/atelier/roster/people/${person.id}`, {
+                method: "PATCH",
+                credentials: "include",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ travelProfile: next }),
+              });
+              if (!r.ok) {
+                const d = await r.json().catch(() => null);
+                return { ok: false, error: d?.error ?? `Save failed (${r.status}).` };
+              }
+              const d = await r.json();
+              if (d.person) onUpdated(d.person as Person);
+              return { ok: true };
+            } catch {
+              return { ok: false, error: "Network error." };
+            }
+          }}
         />
       )}
       <Card className="p-4 space-y-3 md:col-span-2">
