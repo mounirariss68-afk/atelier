@@ -52,6 +52,39 @@ export interface ClarificationChoice {
   label: string;
 }
 
+/* ── Task #745 — guided flight planner card (shared protocol) ────────
+ * A clarification field with `inputType: "flight_planner"` carries a
+ * `planner` prefill and is rendered by BOTH clients as the interactive
+ * trip planner card (Return / One-way / Multi-city tabs, FROM/TO with
+ * swap, dates, passengers & cabin). Submission rides the normal
+ * clarification path: the confirmed plan is JSON-stringified into the
+ * field's value (`clarificationValues: { plan: "<json>" }`). */
+export interface ChatPlannerAirport {
+  /** Free text the user typed / said ("Dubai", "IST"). */
+  text: string;
+  /** Resolved IATA code when known (prefill best-effort). */
+  iata?: string | null;
+  /** Human label for the resolved airport ("Dubai — DXB"). */
+  label?: string | null;
+}
+
+export interface ChatPlannerSegment {
+  origin: ChatPlannerAirport;
+  destination: ChatPlannerAirport;
+  /** YYYY-MM-DD, empty string when not yet chosen. */
+  date: string;
+}
+
+export type ChatPlannerTripType = "return" | "one_way" | "multi_city";
+
+export interface ChatFlightPlanner {
+  tripType: ChatPlannerTripType;
+  /** In travel order. Return trips carry 2 segments (out + back). */
+  segments: ChatPlannerSegment[];
+  adults: number;
+  cabinClass: string;
+}
+
 /**
  * Clarification fields may carry richer input hints: `options` renders
  * a dropdown, `inputType: "date"` a date picker, and `defaultValue`
@@ -65,8 +98,10 @@ export interface ChatClarificationField {
   hint?: string;
   options?: string[];
   choices?: ClarificationChoice[];
-  inputType?: "date" | string;
+  inputType?: "date" | "flight_planner" | string;
   defaultValue?: string;
+  /** Task #745 — prefill for `inputType: "flight_planner"` fields. */
+  planner?: ChatFlightPlanner;
 }
 
 export interface ChatClarification {

@@ -11,6 +11,10 @@ import type {
   ChatClarification,
   ChatClarificationField,
   ChatDisambigOption,
+  ChatFlightPlanner,
+  ChatPlannerAirport,
+  ChatPlannerSegment,
+  ChatPlannerTripType,
   ChatFrame,
   ChatFrameType,
   ChatPendingConfirmation,
@@ -28,6 +32,10 @@ export type CliFrame = ChatFrame;
 export type CliTurnStatus = ChatTurnStatus;
 export type CliClarification = ChatClarification;
 export type CliClarificationField = ChatClarificationField;
+export type CliFlightPlanner = ChatFlightPlanner;
+export type CliPlannerAirport = ChatPlannerAirport;
+export type CliPlannerSegment = ChatPlannerSegment;
+export type CliPlannerTripType = ChatPlannerTripType;
 export type CliRefusal = ChatRefusal;
 export type CliProactiveRecap = ChatProactiveRecap;
 export type CliPlanStep = ChatPlanStep;

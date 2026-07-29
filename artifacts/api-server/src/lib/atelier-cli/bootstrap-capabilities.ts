@@ -88,6 +88,9 @@ import "./document-email-capabilities.js";
 // Task #706/#716 — travel search (Ignav flights + StayingAPI hotels, Airbnb deep links).
 // Read-only; booking is a deep-link handoff in v1.
 import "./travel-capabilities.js";
+// Task #745 — DB-backed traveller lookup for guided flight booking
+// (kept out of travel-capabilities.ts so the travel probe stays DB-free).
+import "./travel-companion-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

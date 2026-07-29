@@ -203,6 +203,40 @@ export const STRINGS = {
     en: "Edit reopens your request so you can adjust it.",
     ar: "يعيد التعديل فتح طلبك لتتمكّن من ضبطه.",
   },
+  // Task #745 — guided flight planner card.
+  plannerReturn: { en: "Return", ar: "ذهاب وعودة" },
+  plannerOneWay: { en: "One-way", ar: "ذهاب فقط" },
+  plannerMultiCity: { en: "Multi-city", ar: "وجهات متعددة" },
+  plannerFrom: { en: "From", ar: "من" },
+  plannerTo: { en: "To", ar: "إلى" },
+  plannerSwap: { en: "Swap origin and destination", ar: "تبديل المغادرة والوصول" },
+  plannerDepartDate: { en: "Departure", ar: "المغادرة" },
+  plannerReturnDate: { en: "Return", ar: "العودة" },
+  plannerDate: { en: "Date", ar: "التاريخ" },
+  plannerPassengers: { en: "Passengers", ar: "المسافرون" },
+  plannerAdults: { en: "Adults", ar: "بالغون" },
+  plannerCabin: { en: "Cabin", ar: "الدرجة" },
+  plannerCabinEconomy: { en: "Economy", ar: "الاقتصادية" },
+  plannerCabinPremiumEconomy: { en: "Premium economy", ar: "الاقتصادية المميزة" },
+  plannerCabinBusiness: { en: "Business", ar: "رجال الأعمال" },
+  plannerCabinFirst: { en: "First", ar: "الأولى" },
+  plannerAddLeg: { en: "Add another flight", ar: "أضف رحلة أخرى" },
+  plannerRemoveLeg: { en: "Remove", ar: "إزالة" },
+  plannerConfirm: { en: "Search flights", ar: "ابحث عن رحلات" },
+  plannerLeg: { en: "Flight {n}", ar: "الرحلة {n}" },
+  plannerPassengersCount: { en: "{n} passenger", ar: "مسافر {n}" },
+  plannerPassengersCountPlural: { en: "{n} passengers", ar: "{n} مسافرين" },
+  // Task #745 — traveller picker card.
+  travellerTitle: { en: "Choose travellers ({n} passengers)", ar: "اختر المسافرين ({n} مسافرين)" },
+  travellerYou: { en: "You", ar: "أنت" },
+  travellerConfirm: { en: "Confirm travellers", ar: "تأكيد المسافرين" },
+  travellerColleague: { en: "colleague", ar: "زميل" },
+  // Task #745 — flight select / booking link affordances.
+  flightOpenBooking: { en: "Open booking link ↗", ar: "افتح رابط الحجز ↗" },
+  flightOtherCabins: {
+    en: "Other cabin options (real prices — no fare families available)",
+    ar: "خيارات درجات أخرى (أسعار حقيقية — لا تتوفر عائلات أسعار)",
+  },
 } satisfies Record<string, Bilingual>;
 
 export function s(key: keyof typeof STRINGS, locale: CliLocale): string {

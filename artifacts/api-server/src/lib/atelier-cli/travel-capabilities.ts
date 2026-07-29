@@ -241,6 +241,317 @@ function flightHandoffLink(
 }
 
 // ---------------------------------------------------------------------
+// Task #745 — guided-flow leg context ("Leg 1 of 2 · DXB → RUH").
+// Stateless: the model passes it through search → select so the cards
+// can show sequential progress. Parsed defensively from tool input.
+// ---------------------------------------------------------------------
+type LegContext = { legIndex: number; legCount: number };
+
+function parseLegContext(raw: unknown): LegContext | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const legIndex = Number(o.legIndex);
+  const legCount = Number(o.legCount);
+  if (!Number.isInteger(legIndex) || !Number.isInteger(legCount)) return null;
+  if (legIndex < 1 || legCount < 1 || legIndex > legCount || legCount > 8)
+    return null;
+  return { legIndex, legCount };
+}
+
+function legContextLabel(
+  lc: LegContext,
+  origin: string,
+  destination: string,
+): string {
+  return `Leg ${lc.legIndex} of ${lc.legCount} · ${origin} → ${destination}`;
+}
+
+const LEG_CONTEXT_SCHEMA = {
+  type: "object",
+  description:
+    "Guided-flow progress context: which leg of the planned trip this call is for. Pass it through from travel_plan_trip's confirmed plan (legIndex is 1-based).",
+  properties: {
+    legIndex: { type: "integer", minimum: 1 },
+    legCount: { type: "integer", minimum: 1 },
+  },
+  required: ["legIndex", "legCount"],
+} as const;
+
+// ---------------------------------------------------------------------
+// Task #745 — travel.plan_trip: interactive planner card shown BEFORE
+// the first search. DB-free. Emits a clarification whose single field
+// has inputType "flight_planner" + a `planner` prefill (shared
+// chat-core shape); the client renders the Return/One-way/Multi-city
+// planner card and submits the confirmed plan back as JSON in
+// clarificationValues.plan. On the confirmed pass the tool validates
+// the plan and hands the model a sequential per-leg search script.
+// ---------------------------------------------------------------------
+type PlannerAirport = { text: string; iata: string | null; label: string | null };
+type PlannerSegment = { origin: PlannerAirport; destination: PlannerAirport; date: string };
+
+async function plannerAirport(textRaw: unknown): Promise<PlannerAirport> {
+  const text = String(textRaw ?? "").trim();
+  if (!text) return { text: "", iata: null, label: null };
+  if (/^[A-Za-z]{3}$/.test(text)) {
+    const code = text.toUpperCase();
+    return { text: code, iata: code, label: code };
+  }
+  try {
+    const place = await resolveAirport(text);
+    if (place?.code) {
+      return {
+        text,
+        iata: place.code,
+        label: `${place.city || place.name || text} — ${place.code}`,
+      };
+    }
+  } catch {
+    // Prefill is best-effort: provider down ⇒ keep the raw text and let
+    // the user fix it in the card (the search itself will fail loudly
+    // later if the provider is genuinely unavailable).
+  }
+  return { text, iata: null, label: null };
+}
+
+defineCapability({
+  id: "travel.plan_trip",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "knowledge",
+  toolName: "travel_plan_trip",
+  description:
+    "START HERE for any new flight request: shows the interactive trip-planner card (Return / One-way / Multi-city tabs, FROM/TO, dates, passengers, cabin) pre-filled with everything the user already said. Pass whatever the user stated — origin, destination, dates, passenger count, cabin, or explicit segments for multi-city — and leave the rest unset; the user completes and confirms the card. NEVER ask about missing details in prose first — emit this planner instead. After the user confirms, the tool returns the confirmed plan plus the exact next step: run travel_search_flights for leg 1 with the provided legContext, let the user pick a flight (travel_select_flight), then search the next leg, and finish with travel_itinerary_summary. Do NOT call this again mid-flow, and do not use it for hotel searches.",
+  slashAliases: { en: ["/plan-trip"], fr: ["/planifier-vol"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      tripType: {
+        type: "string",
+        enum: ["return", "one_way", "multi_city"],
+        description:
+          "Trip type the user implied. Default: return when both outbound and return dates were given, one_way when only one date, multi_city when 3+ distinct segments.",
+      },
+      origin: { type: "string", description: "Departure city/airport/IATA as stated." },
+      destination: { type: "string", description: "Arrival city/airport/IATA as stated." },
+      departDate: { type: "string", description: "Outbound date YYYY-MM-DD when stated." },
+      returnDate: { type: "string", description: "Return date YYYY-MM-DD when stated." },
+      segments: {
+        type: "array",
+        description:
+          "Multi-city only: one entry per leg in travel order (overrides origin/destination).",
+        items: {
+          type: "object",
+          properties: {
+            origin: { type: "string" },
+            destination: { type: "string" },
+            date: { type: "string", description: "YYYY-MM-DD, omit when unknown." },
+          },
+          required: ["origin", "destination"],
+        },
+      },
+      adults: { type: "integer", minimum: 1, maximum: 9 },
+      cabinClass: {
+        type: "string",
+        enum: ["economy", "premium_economy", "business", "first"],
+      },
+      plan: {
+        type: "string",
+        description:
+          "INTERNAL — set only by the planner card via the clarification flow (JSON of the confirmed plan). Never fabricate this yourself.",
+      },
+    },
+  },
+  isWrite: false,
+  irreversible: false,
+  requiredRoles: TRAVEL_ROLES,
+  surfaceOn: ["global", "home"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "entity_card",
+  promoteAsSuggestion: false,
+  examplePhrases: {
+    en: [
+      "I need to fly to Riyadh next week",
+      "Plan a trip Dubai → London → New York",
+    ],
+    ar: ["أريد السفر إلى الرياض الأسبوع القادم"],
+    fr: ["Je dois aller à Riyad la semaine prochaine"],
+  },
+  async run(input) {
+    // ── Confirmed pass: the planner card submitted a JSON plan. ──
+    const planRaw = input.plan;
+    if (typeof planRaw === "string" && planRaw.trim().length > 0) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(planRaw);
+      } catch {
+        return {
+          ok: false,
+          errorCode: "invalid_plan",
+          errorMessage: "The confirmed plan was not valid JSON — re-emit the planner card by calling travel_plan_trip without the plan field.",
+        };
+      }
+      const p = (parsed ?? {}) as Record<string, unknown>;
+      const tripType = String(p.tripType ?? "");
+      if (!["return", "one_way", "multi_city"].includes(tripType)) {
+        return {
+          ok: false,
+          errorCode: "invalid_plan",
+          errorMessage: "Confirmed plan is missing a valid tripType.",
+        };
+      }
+      const rawSegs = Array.isArray(p.segments) ? p.segments : [];
+      const segs: Array<{ origin: string; destination: string; date: string }> = [];
+      for (let i = 0; i < rawSegs.length && i < 8; i++) {
+        const s = (rawSegs[i] ?? {}) as Record<string, unknown>;
+        const originObj = (s.origin ?? {}) as Record<string, unknown>;
+        const destObj = (s.destination ?? {}) as Record<string, unknown>;
+        const origin = String(originObj.iata ?? originObj.text ?? "").trim();
+        const destination = String(destObj.iata ?? destObj.text ?? "").trim();
+        const date = String(s.date ?? "").trim();
+        if (!origin || !destination) {
+          return {
+            ok: false,
+            errorCode: "invalid_plan",
+            errorMessage: `Leg ${i + 1} of the confirmed plan is missing its origin or destination.`,
+          };
+        }
+        if (!isValidFutureDate(date)) {
+          return {
+            ok: false,
+            errorCode: "invalid_plan",
+            errorMessage: `Leg ${i + 1} (${origin} → ${destination}) needs a valid future date (YYYY-MM-DD).`,
+          };
+        }
+        segs.push({ origin: origin.toUpperCase().length === 3 ? origin.toUpperCase() : origin, destination: destination.toUpperCase().length === 3 ? destination.toUpperCase() : destination, date });
+      }
+      const minSegs = tripType === "return" ? 2 : 1;
+      if (segs.length < minSegs) {
+        return {
+          ok: false,
+          errorCode: "invalid_plan",
+          errorMessage: `A ${tripType.replace("_", "-")} plan needs at least ${minSegs} segment${minSegs > 1 ? "s" : ""}.`,
+        };
+      }
+      const adults = Math.max(1, Math.min(9, Number(p.adults ?? 1) || 1));
+      const cabinClass = ["economy", "premium_economy", "business", "first"].includes(
+        String(p.cabinClass ?? ""),
+      )
+        ? String(p.cabinClass)
+        : "economy";
+      const legCount = segs.length;
+      const first = segs[0];
+      const travellerStep =
+        adults > 1
+          ? ` Because ${adults} passengers are travelling, call list_travel_companions BEFORE travel_itinerary_summary so the user can pick the travellers, then pass the chosen travellers to travel_itinerary_summary.`
+          : "";
+      return {
+        ok: true,
+        data: {
+          title: `Trip plan confirmed — ${legCount} leg${legCount > 1 ? "s" : ""}`,
+          entityType: "flight_plan",
+          clarificationPending: false,
+          plan: { tripType, segments: segs, adults, cabinClass, legCount },
+          fields: [
+            { label: "Trip type", value: tripType.replace("_", " ") },
+            ...segs.map((s, i) => ({
+              label: `Leg ${i + 1}`,
+              value: `${s.origin} → ${s.destination} on ${s.date}`,
+            })),
+            { label: "Passengers", value: String(adults) },
+            { label: "Cabin", value: cabinClass },
+          ],
+          nextStep:
+            `Plan confirmed. Now run travel_search_flights for leg 1 of ${legCount}: segments=[{origin:"${first.origin}", destination:"${first.destination}", date:"${first.date}"}], adults=${adults}, cabinClass=${cabinClass}, legContext={legIndex:1, legCount:${legCount}}. ` +
+            `After the user picks an offer, call travel_select_flight with that offer's fields AND the same legContext, then search the next leg the same way (legIndex 2, 3, …) until every leg is selected.${travellerStep} ` +
+            `Finish with travel_itinerary_summary listing every selected leg. Do NOT re-ask anything the plan already answers.`,
+          note: "Plan confirmed — proceed to sequential per-leg search without asking further questions.",
+        },
+      };
+    }
+
+    // ── Prefill pass: build the planner card from what was stated. ──
+    const explicitSegs = Array.isArray(input.segments)
+      ? (input.segments as Array<Record<string, unknown>>)
+      : [];
+    const departDate = String(input.departDate ?? "").trim();
+    const returnDate = String(input.returnDate ?? "").trim();
+    let tripType = String(input.tripType ?? "").trim();
+    if (!["return", "one_way", "multi_city"].includes(tripType)) {
+      tripType =
+        explicitSegs.length >= 3
+          ? "multi_city"
+          : returnDate
+            ? "return"
+            : "one_way";
+    }
+
+    const segments: PlannerSegment[] = [];
+    if (explicitSegs.length > 0) {
+      for (const s of explicitSegs.slice(0, 8)) {
+        segments.push({
+          origin: await plannerAirport(s.origin),
+          destination: await plannerAirport(s.destination),
+          date: DATE_RE.test(String(s.date ?? "").trim())
+            ? String(s.date).trim()
+            : "",
+        });
+      }
+    } else {
+      const origin = await plannerAirport(input.origin);
+      const destination = await plannerAirport(input.destination);
+      segments.push({
+        origin,
+        destination,
+        date: DATE_RE.test(departDate) ? departDate : "",
+      });
+      if (tripType === "return") {
+        segments.push({
+          origin: destination,
+          destination: origin,
+          date: DATE_RE.test(returnDate) ? returnDate : "",
+        });
+      }
+    }
+    if (tripType === "return" && segments.length === 1) {
+      segments.push({
+        origin: segments[0].destination,
+        destination: segments[0].origin,
+        date: DATE_RE.test(returnDate) ? returnDate : "",
+      });
+    }
+
+    const adults = Math.max(1, Math.min(9, Number(input.adults ?? 1) || 1));
+    const cabinClass = ["economy", "premium_economy", "business", "first"].includes(
+      String(input.cabinClass ?? ""),
+    )
+      ? String(input.cabinClass)
+      : "economy";
+
+    return {
+      ok: false,
+      errorCode: "plan_confirmation_needed",
+      errorMessage:
+        "Waiting for the user to review and confirm the trip planner card.",
+      clarification: {
+        field: "plan",
+        question:
+          "Here's your trip so far — adjust anything and confirm to start searching.",
+        tool: "travel_plan_trip",
+        partial: { ...input },
+        fields: [
+          {
+            field: "plan",
+            label: "Trip plan",
+            inputType: "flight_planner",
+            planner: { tripType, segments, adults, cabinClass },
+          },
+        ],
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
 // travel.search_flights — ranked_list
 // ---------------------------------------------------------------------
 defineCapability({
@@ -286,6 +597,7 @@ defineCapability({
           "Optional airline filter — airline name (e.g. 'Emirates') or 2-letter IATA code (e.g. EK). Only offers on that airline are returned; ALWAYS pass this when the user asks for a specific airline instead of filtering in prose.",
       },
       maxResults: { type: "integer", minimum: 1, maximum: 20 },
+      legContext: LEG_CONTEXT_SCHEMA,
     },
     required: ["segments"],
   },
@@ -521,6 +833,19 @@ defineCapability({
         };
       });
 
+      // Task #745 — guided-flow progress context on the results card.
+      const legContext = parseLegContext(input.legContext);
+      const legContextOut = legContext
+        ? {
+            ...legContext,
+            label: legContextLabel(
+              legContext,
+              slices[0]?.origin ?? "?",
+              slices[slices.length - 1]?.destination ?? "?",
+            ),
+          }
+        : null;
+
       const anyConverted = items.some((i) => i.priceAedApprox === true);
       const anySelfTransfer = items.some((i) => i.selfTransfer === true);
       const noteParts = [
@@ -543,6 +868,7 @@ defineCapability({
           slices,
           tripType,
           ...(airlineFilterApplied ? { airlineFilter: airlineFilterApplied } : {}),
+          ...(legContextOut ? { legContext: legContextOut } : {}),
           airlineComparison,
           testMode,
           displayCurrency: "AED",
@@ -607,6 +933,7 @@ defineCapability({
         type: "string",
         description: "Return departure date YYYY-MM-DD (when addReturn is yes).",
       },
+      legContext: LEG_CONTEXT_SCHEMA,
     },
     required: ["airline", "origin", "destination", "date"],
   },
@@ -643,9 +970,13 @@ defineCapability({
     const cabin = String(input.cabin ?? "economy").trim() || "economy";
     const addReturn = String(input.addReturn ?? "").trim().toLowerCase();
     const returnDate = String(input.returnDate ?? "").trim();
+    // Task #745 — planner-driven flows carry legContext; the planner
+    // already decided the trip shape, so the "add a return?" question
+    // is skipped (it only applies to ad-hoc one-way picks).
+    const legContext = parseLegContext(input.legContext);
 
     // One-way guided step: ask about a return flight before summarizing.
-    if (tripType === "one way" && addReturn !== "yes" && addReturn !== "no") {
+    if (!legContext && tripType === "one way" && addReturn !== "yes" && addReturn !== "no") {
       return {
         ok: false,
         errorCode: "return_choice_needed",
@@ -671,7 +1002,7 @@ defineCapability({
         },
       };
     }
-    if (tripType === "one way" && addReturn === "yes" && !isValidFutureDate(returnDate)) {
+    if (!legContext && tripType === "one way" && addReturn === "yes" && !isValidFutureDate(returnDate)) {
       return {
         ok: false,
         errorCode: "return_date_needed",
@@ -708,11 +1039,17 @@ defineCapability({
       "The flight provider exposes no branded-fare (fare family) data, so fare options beyond the quoted fare cannot be shown honestly. The only real alternatives are other cabin classes — offer to re-run the search with cabinClass " +
       cabinAlternatives.join("/") +
       " if the user wants different fares.";
-    const nextStep = wantsReturn
-      ? `Now run travel_search_flights for the return leg ${destination} → ${origin} on ${returnDate}${airline ? ` (offer to filter by ${airline} via the airline param, but show all airlines unless asked)` : ""}.`
-      : tripType === "one way"
-        ? "No return wanted — call travel_itinerary_summary with this leg to wrap up."
-        : "If every leg of the trip is now selected, call travel_itinerary_summary with all selected legs; otherwise continue selecting the remaining legs.";
+    // Task #745 — sequential guided flow: legContext drives the next
+    // step deterministically (next leg's search, or the summary).
+    const nextStep = legContext
+      ? legContext.legIndex < legContext.legCount
+        ? `Leg ${legContext.legIndex} of ${legContext.legCount} selected. Now run travel_search_flights for leg ${legContext.legIndex + 1} of ${legContext.legCount} from the confirmed plan, passing legContext={legIndex:${legContext.legIndex + 1}, legCount:${legContext.legCount}}.`
+        : "All legs are now selected. If more than one passenger is travelling and travellers have not been chosen yet, call list_travel_companions next; otherwise call travel_itinerary_summary with every selected leg (include travellers when chosen)."
+      : wantsReturn
+        ? `Now run travel_search_flights for the return leg ${destination} → ${origin} on ${returnDate}${airline ? ` (offer to filter by ${airline} via the airline param, but show all airlines unless asked)` : ""}.`
+        : tripType === "one way"
+          ? "No return wanted — call travel_itinerary_summary with this leg to wrap up."
+          : "If every leg of the trip is now selected, call travel_itinerary_summary with all selected legs; otherwise continue selecting the remaining legs.";
 
     return {
       ok: true,
@@ -749,6 +1086,14 @@ defineCapability({
           addReturn: tripType === "one way" ? addReturn : null,
           returnDate: wantsReturn ? returnDate : null,
         },
+        ...(legContext
+          ? {
+              legContext: {
+                ...legContext,
+                label: legContextLabel(legContext, origin, destination),
+              },
+            }
+          : {}),
         fareOptions: {
           fareFamiliesAvailable: false,
           cabinAlternatives,
@@ -802,6 +1147,23 @@ defineCapability({
         },
       },
       adults: { type: "integer", minimum: 1, maximum: 9 },
+      travellers: {
+        type: "array",
+        description:
+          "Task #745 — travellers chosen via list_travel_companions (plus the requester). One entry per person; include relationship for dependents.",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            kind: { type: "string", enum: ["self", "colleague", "dependent"] },
+            relationship: {
+              type: "string",
+              description: "For dependents: spouse / child / parent / other.",
+            },
+          },
+          required: ["name"],
+        },
+      },
     },
     required: ["legs"],
   },
@@ -909,6 +1271,22 @@ defineCapability({
           : originalTotals.join(" + ");
 
     const adults = Math.max(1, Math.min(9, Number(input.adults ?? 1) || 1));
+    // Task #745 — travellers chosen in the guided flow (self + scoped
+    // colleagues + own dependents). Names pass through verbatim.
+    const travellersRaw = Array.isArray(input.travellers)
+      ? (input.travellers as Array<Record<string, unknown>>)
+      : [];
+    const travellers = travellersRaw
+      .slice(0, 12)
+      .map((t) => {
+        const name = String(t.name ?? "").trim();
+        const kind = ["self", "colleague", "dependent"].includes(String(t.kind ?? ""))
+          ? String(t.kind)
+          : "colleague";
+        const relationship = String(t.relationship ?? "").trim() || null;
+        return name ? { name, kind, relationship } : null;
+      })
+      .filter((t): t is { name: string; kind: string; relationship: string | null } => t !== null);
     const items = legs.map((leg, i) => {
       const aed = leg.priceAmount !== null && leg.currency ? toAed(leg.priceAmount, leg.currency) : null;
       return {
@@ -975,9 +1353,14 @@ defineCapability({
           totalDisplay,
           totalAedAmount: pricedLegs > 0 && aedConvertible ? Math.round(aedTotal) : null,
           originalTotals,
+          travellers,
         },
         note:
-          `Itinerary summary — ${legs.length} leg${legs.length > 1 ? "s" : ""}${totalDisplay ? `, total ${totalDisplay}` : ""}. ` +
+          `Itinerary summary — ${legs.length} leg${legs.length > 1 ? "s" : ""}${totalDisplay ? `, total ${totalDisplay}` : ""}` +
+          (travellers.length > 0
+            ? `, travellers: ${travellers.map((t) => t.name).join(", ")}`
+            : "") +
+          ". " +
           "Prices are the selected live fares (AED totals are approximate conversions). Each leg's link opens a prefilled flight search to complete booking with the airline — in-chat ticketing is not enabled.",
       },
     };

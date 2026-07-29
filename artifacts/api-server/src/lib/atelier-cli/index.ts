@@ -2546,6 +2546,7 @@ export function sanitizeClarificationFields(
   inputType?: string;
   options?: string[];
   defaultValue?: string;
+  planner?: Record<string, unknown>;
 }> | null {
   if (!Array.isArray(raw)) return null;
   const out: Array<{
@@ -2555,6 +2556,7 @@ export function sanitizeClarificationFields(
     inputType?: string;
     options?: string[];
     defaultValue?: string;
+    planner?: Record<string, unknown>;
   }> = [];
   for (const f of raw.slice(0, 40)) {
     if (!f || typeof f !== "object") continue;
@@ -2565,6 +2567,7 @@ export function sanitizeClarificationFields(
       inputType?: unknown;
       options?: unknown;
       defaultValue?: unknown;
+      planner?: unknown;
     };
     if (typeof o.field !== "string" || o.field.length === 0) continue;
     // Task #721 — preserve rich-input props (date pickers, dropdowns,
@@ -2573,6 +2576,11 @@ export function sanitizeClarificationFields(
     const options = Array.isArray(o.options)
       ? o.options.filter((x): x is string => typeof x === "string" && x.length > 0).slice(0, 40)
       : null;
+    // Task #745 — preserve the flight-planner prefill through
+    // clarification rehydration (validated structurally); stripping it
+    // would break restored planner cards the same way #721's date
+    // pickers broke.
+    const planner = sanitizePlannerMeta(o.planner);
     out.push({
       field: o.field,
       label: typeof o.label === "string" && o.label.length > 0 ? o.label : o.field,
@@ -2584,9 +2592,67 @@ export function sanitizeClarificationFields(
       ...(typeof o.defaultValue === "string" && o.defaultValue.length > 0
         ? { defaultValue: o.defaultValue }
         : {}),
+      ...(planner ? { planner } : {}),
     });
   }
   return out.length > 0 ? out : null;
+}
+
+/**
+ * Task #745 — structural validation for the untrusted flight-planner
+ * prefill riding on a clarification field. Keeps only the documented
+ * shape (tripType / segments[{origin,destination,date}] / adults /
+ * cabinClass) with string-typed leaves; anything malformed is dropped
+ * wholesale so a poisoned frame can't smuggle arbitrary payloads.
+ */
+export function sanitizePlannerMeta(
+  raw: unknown,
+): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const tripType = typeof o.tripType === "string" ? o.tripType : "";
+  if (!["return", "one_way", "multi_city"].includes(tripType)) return null;
+  if (!Array.isArray(o.segments)) return null;
+  const airport = (v: unknown): Record<string, unknown> | null => {
+    if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+    const a = v as Record<string, unknown>;
+    return {
+      text: typeof a.text === "string" ? a.text.slice(0, 120) : "",
+      iata:
+        typeof a.iata === "string" && /^[A-Za-z]{3}$/.test(a.iata)
+          ? a.iata.toUpperCase()
+          : null,
+      label: typeof a.label === "string" ? a.label.slice(0, 160) : null,
+    };
+  };
+  const segments: Array<Record<string, unknown>> = [];
+  for (const s of o.segments.slice(0, 8)) {
+    if (!s || typeof s !== "object" || Array.isArray(s)) return null;
+    const seg = s as Record<string, unknown>;
+    const origin = airport(seg.origin);
+    const destination = airport(seg.destination);
+    if (!origin || !destination) return null;
+    segments.push({
+      origin,
+      destination,
+      date:
+        typeof seg.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(seg.date)
+          ? seg.date
+          : "",
+    });
+  }
+  if (segments.length === 0) return null;
+  const adultsNum = Number(o.adults);
+  const adults =
+    Number.isInteger(adultsNum) && adultsNum >= 1 && adultsNum <= 9
+      ? adultsNum
+      : 1;
+  const cabinClass =
+    typeof o.cabinClass === "string" &&
+    ["economy", "premium_economy", "business", "first"].includes(o.cabinClass)
+      ? o.cabinClass
+      : "economy";
+  return { tripType, segments, adults, cabinClass };
 }
 
 /**

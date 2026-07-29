@@ -65,6 +65,7 @@ import { emitCliOpened } from "./telemetry";
 import type { CliCapability, CliClarification, CliLocale, CliTurn } from "./types";
 import { slashInsertionText, shouldSlashMenuOpen, enterAction } from "./slashComposer";
 import { DuplicateWarningBlock, ToolResultCardList } from "./ResultCardRenderers";
+import { FlightPlannerCard } from "./FlightPlannerCard";
 import { Markdown } from "./Markdown";
 
 const MAX_INPUT_CHARS = 4000;
@@ -870,6 +871,13 @@ export function CommandBar(props: CommandBarProps) {
                 setInput(text);
                 requestAnimationFrame(() => composerRef.current?.focus());
               }}
+              // Task #745 — guided flight flow: result-card taps (flight
+              // select, cabin chips, traveller confirm) SUBMIT a new turn
+              // rather than merely prefilling the composer.
+              onPrompt={(text) => {
+                lastPromptRef.current = text;
+                void cli.submit({ prompt: text, pageContext: pageCtx });
+              }}
               onRequestCapability={(prompt) =>
                 void cli.submit({
                   prompt: `/request ${prompt}`,
@@ -1216,6 +1224,7 @@ function Transcript({
   onToggleStep,
   onSetRowEdit,
   onPickSuggestion,
+  onPrompt,
   onRequestCapability,
   onSubmitClarification,
   onCopyJson,
@@ -1243,6 +1252,7 @@ function Transcript({
   onToggleStep: (i: number) => void;
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
+  onPrompt: (text: string) => void;
   onRequestCapability: (prompt: string) => void;
   onSubmitClarification: (
     answer: string,
@@ -1329,6 +1339,7 @@ function Transcript({
                   onToggleStep={onToggleStep}
                   onSetRowEdit={onSetRowEdit}
                   onPickSuggestion={onPickSuggestion}
+                  onPrompt={onPrompt}
                   onRequestCapability={onRequestCapability}
                   onSubmitClarification={onSubmitClarification}
                   onCopyJson={() => onCopyJson(t)}
@@ -1428,6 +1439,7 @@ function TurnBody({
   onToggleStep,
   onSetRowEdit,
   onPickSuggestion,
+  onPrompt,
   onRequestCapability,
   onSubmitClarification,
   onCopyJson,
@@ -1453,6 +1465,7 @@ function TurnBody({
   onToggleStep: (i: number) => void;
   onSetRowEdit: (i: number, label: string) => void;
   onPickSuggestion: (t: string) => void;
+  onPrompt: (text: string) => void;
   onRequestCapability: (prompt: string) => void;
   onSubmitClarification: (
     answer: string,
@@ -1972,6 +1985,7 @@ function TurnBody({
             locale={locale}
             onPickDisambig={onPickDisambig}
             onRunSlash={(cmd) => onPickSuggestion(cmd)}
+            onPrompt={onPrompt}
           />
         )}
 
@@ -2002,6 +2016,48 @@ function ClarificationCard({
   onCancel: () => void;
 }) {
   const [answer, setAnswer] = useState("");
+  // Task #745 — guided flight planner: a field with
+  // inputType === "flight_planner" and a `planner` prefill renders the
+  // interactive Emirates-style trip planner instead of generic inputs.
+  const plannerField = (clarification.fields ?? []).find(
+    (f) => f.inputType === "flight_planner" && f.planner,
+  );
+  if (plannerField && plannerField.planner) {
+    return (
+      <div
+        className="bg-bg-elevate border border-gold/50 rounded-md p-3 space-y-2.5"
+        data-testid="cli-clarification"
+      >
+        <div className="text-xs font-mono uppercase tracking-wider text-gold">
+          {s("clarificationTitle", locale)}
+          {clarification.tool && (
+            <span className="ml-2 text-text-faint normal-case">
+              · {clarification.tool}
+            </span>
+          )}
+        </div>
+        {clarification.question && (
+          <div className="text-xs text-text leading-relaxed">
+            {clarification.question}
+          </div>
+        )}
+        <FlightPlannerCard
+          planner={plannerField.planner}
+          locale={locale}
+          onConfirm={(answerText, plan) =>
+            onSubmit(answerText, { [plannerField.field]: JSON.stringify(plan) })
+          }
+        />
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-xs text-text-mute hover:text-danger px-2 py-1.5 rounded hover:bg-bg-elevate-2"
+        >
+          {s("cancel", locale)}
+        </button>
+      </div>
+    );
+  }
   // Task #267 — multi-field clarification: one labeled input per
   // missing field, single submit. Only kicks in when the server sent
   // 2+ fields; single-field (incl. suggestion chips) keeps the classic

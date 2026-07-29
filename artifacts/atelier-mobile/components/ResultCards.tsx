@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Image, Linking, Pressable, Text, View } from "react-native";
 
-import { Card } from "@/components/ui";
+import { Button, Card } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -321,7 +321,15 @@ function KpiStrip({ data, lang }: { data: Json; lang: string }) {
   );
 }
 
-function RankedList({ data, lang }: { data: Json; lang: string }) {
+function RankedList({
+  data,
+  lang,
+  onPrompt,
+}: {
+  data: Json;
+  lang: string;
+  onPrompt?: (text: string) => void;
+}) {
   const c = useColors();
   const rtl = useRTL();
   // Task #721 — paging state must sit above the empty-list early return
@@ -425,38 +433,94 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
         })}
       </View>
     ) : null;
+  // Task #745 — itinerary travellers list ("Travellers: You — Mounir; …").
+  const travellers = asArr(itinerary.travellers).map((t) => asObj(t));
+  const travellerLine =
+    travellers.length > 0
+      ? travellers
+          .map((t) => {
+            const name = asStr(t.name);
+            const rel = asStr(t.relationship);
+            if (t.kind === "self") return `${lang === "ar" ? "أنت" : "You"} — ${name}`;
+            return rel ? `${name} (${rel})` : name;
+          })
+          .filter(Boolean)
+          .join("; ")
+      : "";
   const itineraryHeader = isItinerary ? (
-    <View
-      style={{
-        flexDirection: rtl.row,
-        alignItems: "baseline",
-        justifyContent: "space-between",
-        marginBottom: 4,
-      }}
-    >
-      <Text
+    <View style={{ marginBottom: 4, gap: 2 }}>
+      <View
         style={{
-          color: c.foreground,
-          fontFamily: "PlusJakartaSans_700Bold",
-          fontSize: 13,
+          flexDirection: rtl.row,
+          alignItems: "baseline",
+          justifyContent: "space-between",
         }}
       >
-        {lang === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
-      </Text>
-      {asStr(itinerary.totalDisplay) ? (
         <Text
           style={{
-            color: c.primary,
+            color: c.foreground,
             fontFamily: "PlusJakartaSans_700Bold",
             fontSize: 13,
-            fontVariant: ["tabular-nums"],
           }}
         >
-          {asStr(itinerary.totalDisplay)}
+          {lang === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
+        </Text>
+        {asStr(itinerary.totalDisplay) ? (
+          <Text
+            style={{
+              color: c.primary,
+              fontFamily: "PlusJakartaSans_700Bold",
+              fontSize: 13,
+              fontVariant: ["tabular-nums"],
+            }}
+          >
+            {asStr(itinerary.totalDisplay)}
+          </Text>
+        ) : null}
+      </View>
+      {travellerLine ? (
+        <Text
+          style={{
+            color: c.mutedForeground,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 11.5,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {(lang === "ar" ? "المسافرون: " : "Travellers: ") + travellerLine}
         </Text>
       ) : null}
     </View>
   ) : null;
+  // Task #745 — subtle multi-leg progress line ("Leg 1 of 2 · DXB → RUH").
+  const legContext = asObj(data.legContext);
+  const legLabel = asStr(legContext.label);
+  const legIndex = asNum(legContext.legIndex);
+  const legCount = asNum(legContext.legCount);
+  const legLine =
+    legLabel || (legIndex != null && legCount != null)
+      ? `${
+          legIndex != null && legCount != null
+            ? lang === "ar"
+              ? `الرحلة ${legIndex} من ${legCount}`
+              : `Leg ${legIndex} of ${legCount}`
+            : ""
+        }${legLabel ? (legIndex != null && legCount != null ? " · " : "") + legLabel : ""}`
+      : "";
+  const legProgress =
+    legLine && isFlightList ? (
+      <Text
+        style={{
+          color: c.faint,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 11,
+          letterSpacing: 0.3,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {legLine}
+      </Text>
+    ) : null;
   const testBanner =
     data.testMode === true ? (
       <View
@@ -491,9 +555,17 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
     return (
       <View style={{ gap: 8 }}>
         {itineraryHeader}
+        {legProgress}
         {testBanner}
         {paged.map((r, i) => (
-          <FlightOfferRow key={safePage * pageSize + i} item={r} />
+          <FlightOfferRow
+            key={safePage * pageSize + i}
+            item={r}
+            legContext={legContext}
+            // Itinerary-summary leg cards keep the link row only — they
+            // are NOT flight-select targets.
+            onPrompt={isItinerary ? undefined : onPrompt}
+          />
         ))}
         {pager}
       </View>
@@ -592,7 +664,15 @@ function RankedList({ data, lang }: { data: Json; lang: string }) {
 
 /* ────────── Task #715 — Google-Flights-style flight card (mobile) ────────── */
 
-function FlightOfferRow({ item }: { item: Json }) {
+function FlightOfferRow({
+  item,
+  onPrompt,
+  legContext,
+}: {
+  item: Json;
+  onPrompt?: (text: string) => void;
+  legContext?: Json;
+}) {
   const c = useColors();
   const rtl = useRTL();
   const f = asObj(item.flight);
@@ -601,6 +681,11 @@ function FlightOfferRow({ item }: { item: Json }) {
   const price = asObj(f.price);
   const href = asStr(item.href);
   const externalUrl = /^https?:\/\//i.test(href) ? href : null;
+  // Task #745 — the card body is now a flight-SELECT target (fires a
+  // normal chat turn the model turns into travel_select_flight) when a
+  // prompt callback is available AND the item carries a flight object.
+  const hasFlight = item.flight != null && typeof item.flight === "object";
+  const selectable = !!onPrompt && hasFlight;
   const aedAmount = asNum(price.aedAmount);
   const amount = asNum(price.amount);
   const currency = asStr(price.currency);
@@ -622,10 +707,43 @@ function FlightOfferRow({ item }: { item: Json }) {
   const [logoFailed, setLogoFailed] = React.useState(false);
   const flightNumbers = asStr(outbound.flightNumbersLabel);
   const returnLegs = legs.slice(1);
-  const Row = externalUrl ? Pressable : View;
-  const rowPressProps = externalUrl
-    ? { onPress: () => Linking.openURL(externalUrl).catch(() => {}) }
-    : {};
+
+  // Task #745 — assemble the select prompt from the flight/outbound
+  // fields, omitting missing pieces gracefully.
+  const buildSelectPrompt = (): string => {
+    const airline = carriers;
+    const flightNumbersLabel = flightNumbers;
+    const originIata = asStr(outbound.originIata);
+    const destinationIata = asStr(outbound.destinationIata);
+    const departDate = asStr(outbound.departDate ?? f.departDate);
+    const departTime = asStr(outbound.departTime);
+    const arriveTime = asStr(outbound.arriveTime);
+    const cabin = asStr(f.cabin ?? f.cabinClass);
+    const priceCurrency = currency;
+    const priceAmount = amount;
+    const stopsLabel = asStr(outbound.stopsLabel);
+    const durationLabel = asStr(outbound.durationLabel);
+    const lc = asObj(legContext);
+    const lcIndex = asNum(lc.legIndex);
+    const lcCount = asNum(lc.legCount);
+    let s = `I pick this flight: ${airline}${
+      flightNumbersLabel ? " " + flightNumbersLabel : ""
+    } ${originIata} → ${destinationIata} on ${departDate}, departs ${departTime}, arrives ${arriveTime}, cabin ${cabin}, price ${priceCurrency} ${
+      priceAmount != null ? priceAmount : ""
+    }`;
+    if (stopsLabel) s += `, ${stopsLabel}`;
+    if (durationLabel) s += `, ${durationLabel}`;
+    if (lcIndex != null && lcCount != null) s += ` (leg ${lcIndex} of ${lcCount})`;
+    if (href) s += `. Booking link: ${href}`;
+    return s;
+  };
+
+  const Row = selectable ? Pressable : externalUrl && !selectable ? Pressable : View;
+  const rowPressProps = selectable
+    ? { onPress: () => onPrompt!(buildSelectPrompt()) }
+    : externalUrl
+      ? { onPress: () => Linking.openURL(externalUrl).catch(() => {}) }
+      : {};
   const timeStyle = {
     color: c.foreground,
     fontFamily: "PlusJakartaSans_800ExtraBold",
@@ -818,6 +936,33 @@ function FlightOfferRow({ item }: { item: Json }) {
           ) : null}
         </View>
       </View>
+      {/* Task #745 — when the body is a select target, the booking link
+          still needs a dedicated affordance (a separate Pressable that
+          opens the URL externally, not the select action). */}
+      {selectable && externalUrl ? (
+        <Pressable
+          onPress={() => Linking.openURL(externalUrl).catch(() => {})}
+          style={{
+            flexDirection: rtl.row,
+            alignItems: "center",
+            gap: 5,
+            alignSelf: rtl.isRTL ? "flex-end" : "flex-start",
+            marginTop: 4,
+          }}
+          accessibilityRole="link"
+        >
+          <Feather name="external-link" size={12} color={c.primary} />
+          <Text
+            style={{
+              color: c.primary,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 12,
+            }}
+          >
+            Open booking link ↗
+          </Text>
+        </Pressable>
+      ) : null}
     </Row>
   );
 }
@@ -1073,8 +1218,314 @@ function FallbackGrid({ data, lang }: { data: Json; lang: string }) {
   return <FieldGrid entries={entries} currency={asStr(data.currency) || null} lang={lang} />;
 }
 
+/* ────────── Task #745 — traveller picker (mobile) ────────── */
+
+function TravellerPicker({
+  data,
+  lang,
+  onPrompt,
+}: {
+  data: Json;
+  lang: string;
+  onPrompt?: (text: string) => void;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const items = asArr(data.items).map((it) => asObj(it));
+  const requester = asObj(data.requester);
+  const requesterName = asStr(requester.name);
+  const adults = asNum(data.adults) ?? 1;
+  const maxPicks = Math.max(0, adults - 1);
+  const note = asStr(data.note);
+
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
+
+  // Dependents first, then colleagues.
+  const dependents = items.filter((it) => asStr(it.kind) === "dependent");
+  const colleagues = items.filter((it) => asStr(it.kind) !== "dependent");
+  const ordered = [...dependents, ...colleagues];
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < maxPicks) {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const confirm = () => {
+    if (!onPrompt) return;
+    let s = `Travellers for this trip: ${requesterName} (self)`;
+    for (const it of ordered) {
+      if (!selected.has(asStr(it.id))) continue;
+      const name = asStr(it.name);
+      const rel = asStr(it.relationship) || "colleague";
+      s += `, ${name} (${rel})`;
+    }
+    onPrompt(s);
+  };
+
+  const rowBase = {
+    flexDirection: rtl.row as "row" | "row-reverse",
+    alignItems: "center" as const,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <Text
+        style={{
+          color: c.foreground,
+          fontFamily: "PlusJakartaSans_700Bold",
+          fontSize: 14,
+          textAlign: rtl.textAlign,
+        }}
+      >
+        {ar
+          ? `اختر المسافرين (${adults} مسافر)`
+          : `Choose travellers (${adults} ${adults === 1 ? "passenger" : "passengers"})`}
+      </Text>
+
+      {/* Requester — fixed / always checked */}
+      <View
+        style={{
+          ...rowBase,
+          backgroundColor: c.tint08,
+          borderColor: c.borderSoft,
+        }}
+      >
+        <Feather name="check-circle" size={18} color={c.primary} />
+        <Text
+          style={{
+            flex: 1,
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_600SemiBold",
+            fontSize: 14,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {(ar ? "أنت — " : "You — ") + requesterName}
+        </Text>
+      </View>
+
+      {ordered.map((it) => {
+        const id = asStr(it.id);
+        const active = selected.has(id);
+        const kind = asStr(it.kind);
+        const rel = asStr(it.relationship);
+        const title = asStr(it.title);
+        const atCap = !active && selected.size >= maxPicks;
+        return (
+          <Pressable
+            key={id}
+            onPress={() => toggle(id)}
+            disabled={atCap}
+            style={{
+              ...rowBase,
+              backgroundColor: active ? c.tint08 : c.secondary,
+              borderColor: active ? c.primary : c.borderSoft,
+              opacity: atCap ? 0.45 : 1,
+            }}
+          >
+            <Feather
+              name={active ? "check-square" : "square"}
+              size={18}
+              color={active ? c.primary : c.faint}
+            />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6 }}>
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: c.foreground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 14,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {asStr(it.name)}
+                </Text>
+                {kind === "dependent" && rel ? (
+                  <View
+                    style={{
+                      backgroundColor: c.elevate2,
+                      borderRadius: 999,
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 10.5,
+                      }}
+                    >
+                      {rel}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+              {kind !== "dependent" && title ? (
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 12,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {title}
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+        );
+      })}
+
+      {note ? (
+        <Text
+          style={{
+            color: c.faint,
+            fontFamily: "PlusJakartaSans_500Medium",
+            fontSize: 11.5,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          {note}
+        </Text>
+      ) : null}
+
+      {onPrompt ? (
+        <Button
+          label={ar ? "تأكيد المسافرين" : "Confirm travellers"}
+          onPress={confirm}
+          icon="check"
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/* ────────── Task #745 — flight selection card affordances (mobile) ────────── */
+
+function FlightSelectionCard({
+  data,
+  lang,
+  onPrompt,
+}: {
+  data: Json;
+  lang: string;
+  onPrompt?: (text: string) => void;
+}) {
+  const c = useColors();
+  const rtl = useRTL();
+  const ar = lang === "ar";
+  const selection = asObj(data.selection);
+  const href = asStr(selection.href);
+  const externalUrl = /^https?:\/\//i.test(href) ? href : null;
+  const fareOptions = asObj(data.fareOptions);
+  const cabinAlternatives = asArr(fareOptions.cabinAlternatives)
+    .map((x) => asStr(x))
+    .filter(Boolean);
+
+  const cabinHuman = (cabin: string): string =>
+    ({
+      economy: "Economy",
+      premium_economy: "Premium economy",
+      business: "Business",
+      first: "First",
+    })[cabin] ?? humanLabel(cabin);
+
+  return (
+    <View style={{ gap: 8 }}>
+      <EntityBody data={data} lang={lang} />
+
+      {externalUrl ? (
+        <Pressable
+          onPress={() => Linking.openURL(externalUrl).catch(() => {})}
+          style={{
+            flexDirection: rtl.row,
+            alignItems: "center",
+            gap: 6,
+            paddingVertical: 4,
+          }}
+          accessibilityRole="link"
+        >
+          <Feather name="external-link" size={13} color={c.primary} />
+          <Text
+            style={{
+              color: c.primary,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 13,
+            }}
+          >
+            Open booking link ↗
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {cabinAlternatives.length > 0 && onPrompt ? (
+        <View style={{ gap: 6 }}>
+          <Text
+            style={{
+              color: c.faint,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 11,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {ar
+              ? "خيارات مقصورة أخرى (أسعار حقيقية — لا تتوفر عائلات أسعار)"
+              : "Other cabin options (real prices — no fare families available)"}
+          </Text>
+          <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 8 }}>
+            {cabinAlternatives.map((cabin) => (
+              <Pressable
+                key={cabin}
+                onPress={() =>
+                  onPrompt(`Show ${cabin} class options for this leg instead`)
+                }
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: c.secondary,
+                  borderWidth: 1,
+                  borderColor: c.borderSoft,
+                }}
+              >
+                <Text
+                  style={{
+                    color: c.secondaryForeground,
+                    fontFamily: "PlusJakartaSans_600SemiBold",
+                    fontSize: 12.5,
+                  }}
+                >
+                  {cabinHuman(cabin)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const SHAPE_ICON: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
   kpi_strip: "bar-chart-2",
+  traveller_picker: "users",
   ranked_list: "list",
   time_series: "trending-up",
   entity_card: "file-text",
@@ -1099,9 +1550,14 @@ const SHAPE_ICON: Record<string, React.ComponentProps<typeof Feather>["name"]> =
 export function ToolResultCards({
   toolResults,
   shapes,
+  onPrompt,
 }: {
   toolResults: ToolResult[];
   shapes: CapabilityShapes;
+  /** Task #745 — fires a normal chat turn (prompt submission). When
+   * present, flight result cards become tappable "select" targets and
+   * the traveller picker / cabin chips submit follow-up prompts. */
+  onPrompt?: (text: string) => void;
 }) {
   const c = useColors();
   const { t, lang } = useI18n();
@@ -1155,15 +1611,28 @@ export function ToolResultCards({
             case "cash_forecast_strip":
               body = <KpiStrip data={dataObj} lang={lang} />;
               break;
+            case "traveller_picker":
+              // Task #745 — multi-select traveller picker (colleagues +
+              // dependents) that submits a follow-up prompt.
+              body = <TravellerPicker data={dataObj} lang={lang} onPrompt={onPrompt} />;
+              break;
             case "ranked_list":
             case "time_series":
             case "ar_aging_grid":
-              body = <RankedList data={dataObj} lang={lang} />;
+              body = <RankedList data={dataObj} lang={lang} onPrompt={onPrompt} />;
               break;
             case "audit_timeline":
               body = <AuditTimeline data={dataObj} lang={lang} />;
               break;
             case "entity_card":
+              // Task #745 — a flight_selection entity card adds a
+              // booking-link affordance and other-cabin chips.
+              if (asStr(dataObj.entityType) === "flight_selection") {
+                body = <FlightSelectionCard data={dataObj} lang={lang} onPrompt={onPrompt} />;
+                break;
+              }
+              body = <EntityBody data={dataObj} lang={lang} />;
+              break;
             case "account_card":
             case "contact_card":
             case "opportunity_card":

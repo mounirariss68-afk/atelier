@@ -35,6 +35,7 @@ import {
   WEB_TOP_INSET,
   softShadow,
 } from "@/components/ui";
+import { FlightPlannerCard } from "@/components/FlightPlannerCard";
 import { ToolResultCards } from "@/components/ResultCards";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
@@ -152,6 +153,32 @@ function ClarificationCard({
         </Text>
       ) : null}
       {fields.map((f) => {
+        // Task #745 — a flight_planner field renders the interactive
+        // trip planner card instead of generic inputs. On confirm it
+        // submits the JSON-stringified plan through the normal
+        // clarification path (values = { [field]: "<plan json>" }).
+        if (f.inputType === "flight_planner" && f.planner) {
+          return (
+            <View key={f.field} style={{ gap: 6 }}>
+              {f.label ? (
+                <Text
+                  style={{
+                    color: c.mutedForeground,
+                    fontFamily: "PlusJakartaSans_500Medium",
+                    fontSize: 13,
+                    textAlign: rtl.textAlign,
+                  }}
+                >
+                  {f.label}
+                </Text>
+              ) : null}
+              <FlightPlannerCard
+                planner={f.planner}
+                onSubmit={(plan) => onSubmit({ ...values, [f.field]: plan })}
+              />
+            </View>
+          );
+        }
         // Task #410 — normalize both chip sources: server suggestion
         // choices ({id,label} — submit the id) and plain string options.
         const chips: { value: string; label: string }[] =
@@ -243,7 +270,11 @@ function ClarificationCard({
         </View>
         );
       })}
-      <Button label={t("chat.send")} onPress={() => onSubmit(values)} icon="send" />
+      {/* Task #745 — a planner field carries its own "Search flights"
+          confirm; suppress the generic Send button in that case. */}
+      {fields.some((f) => f.inputType === "flight_planner" && f.planner) ? null : (
+        <Button label={t("chat.send")} onPress={() => onSubmit(values)} icon="send" />
+      )}
     </Card>
   );
 }
@@ -413,6 +444,7 @@ function TurnBlock({
   onConfirm,
   onCancel,
   onRetry,
+  onPrompt,
 }: {
   turn: ChatTurn;
   onAnswer: (key: string, values: Record<string, string>) => void;
@@ -420,6 +452,7 @@ function TurnBlock({
   onConfirm: (key: string, typedName?: string) => void;
   onCancel: (key: string) => void;
   onRetry: (prompt: string) => void;
+  onPrompt: (text: string) => void;
 }) {
   const c = useColors();
   const { t } = useI18n();
@@ -518,7 +551,11 @@ function TurnBlock({
       ) : null}
 
       {turn.toolResults.length > 0 && turn.status !== "streaming" ? (
-        <ToolResultCards toolResults={turn.toolResults} shapes={shapes} />
+        <ToolResultCards
+          toolResults={turn.toolResults}
+          shapes={shapes}
+          onPrompt={onPrompt}
+        />
       ) : null}
 
       {turn.status === "needs_clarification" ? (
@@ -785,6 +822,7 @@ export default function ChatScreen() {
                 onConfirm={chat.confirm}
                 onCancel={chat.cancelConfirmation}
                 onRetry={(prompt) => chat.submit(prompt)}
+                onPrompt={(prompt) => chat.submit(prompt)}
               />
             )}
           />

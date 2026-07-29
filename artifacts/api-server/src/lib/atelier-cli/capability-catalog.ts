@@ -127,6 +127,8 @@ export type ResultCard =
   | "section_card"
   | "time_series"
   | "timesheet_card"
+  // Task #745 — guided flight-booking traveller picker.
+  | "traveller_picker"
   | "undo_card"
   // L2C Wave 1 (Task #360) — typed renderers for the new Codex/CLM,
   // change-order and deliverable-acceptance result shapes. The cards

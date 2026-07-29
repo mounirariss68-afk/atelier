@@ -881,6 +881,227 @@ assert.ok(selectFlight && itinerarySummary, "guided-booking capabilities registe
   ok("itinerary summary: legs, logos, flight numbers, AED total, links, validation");
 }
 
+// ────────────────────── Task #745 — guided planner flow ──────────────────────
+
+const planTrip = findByToolName("travel_plan_trip");
+assert.ok(planTrip, "travel_plan_trip registered");
+
+// 19. Planner prefill: everything stated rides the planner metadata,
+// free text resolves to IATA, missing dates stay empty (still DB-free).
+{
+  requests.length = 0;
+  const r = await planTrip.run(
+    { origin: "Dubai", destination: "IST", departDate: "2027-03-02", returnDate: "2027-03-06", adults: 2, cabinClass: "business" },
+    ctx,
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.errorCode, "plan_confirmation_needed");
+  const field = r.clarification!.fields![0] as Record<string, unknown>;
+  assert.equal(field.field, "plan");
+  assert.equal(field.inputType, "flight_planner");
+  const planner = field.planner as Record<string, unknown>;
+  assert.equal(planner.tripType, "return");
+  assert.equal(planner.adults, 2);
+  assert.equal(planner.cabinClass, "business");
+  const segs = planner.segments as Array<Record<string, unknown>>;
+  assert.equal(segs.length, 2);
+  assert.equal((segs[0].origin as Record<string, unknown>).iata, "DXB");
+  assert.equal((segs[0].destination as Record<string, unknown>).iata, "IST");
+  assert.equal(segs[0].date, "2027-03-02");
+  // Return leg mirrored.
+  assert.equal((segs[1].origin as Record<string, unknown>).iata, "IST");
+  assert.equal((segs[1].destination as Record<string, unknown>).iata, "DXB");
+  assert.equal(segs[1].date, "2027-03-06");
+  // No fares endpoint touched during prefill.
+  assert.ok(!requests.some((q) => q.url.startsWith("/api/fares")), "prefill makes no fare calls");
+
+  // One-way default when only one date; unknown place keeps raw text.
+  const r2 = await planTrip.run({ origin: "nowheresville", destination: "RUH" }, ctx);
+  assert.equal(r2.ok, false);
+  const p2 = (r2.clarification!.fields![0] as Record<string, unknown>).planner as Record<string, unknown>;
+  assert.equal(p2.tripType, "one_way");
+  const seg2 = (p2.segments as Array<Record<string, unknown>>)[0];
+  assert.equal((seg2.origin as Record<string, unknown>).iata, null);
+  assert.equal((seg2.origin as Record<string, unknown>).text, "nowheresville");
+  assert.equal(seg2.date, "");
+  ok("planner prefill: tabs prefill, IATA resolution, mirrored return, no fare calls");
+}
+
+// 20. Planner confirm: JSON plan → validated + sequential script; bad
+// plans fail loudly.
+{
+  const plan = {
+    tripType: "multi_city",
+    segments: [
+      { origin: { text: "DXB", iata: "DXB" }, destination: { text: "IST", iata: "IST" }, date: "2027-03-02" },
+      { origin: { text: "IST", iata: "IST" }, destination: { text: "RUH", iata: "RUH" }, date: "2027-03-06" },
+    ],
+    adults: 3,
+    cabinClass: "economy",
+  };
+  const r = await planTrip.run({ plan: JSON.stringify(plan) }, ctx);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const d = r.data as Record<string, unknown>;
+  const confirmed = d.plan as Record<string, unknown>;
+  assert.equal(confirmed.legCount, 2);
+  assert.ok(String(d.nextStep).includes("legContext={legIndex:1, legCount:2}"));
+  assert.ok(String(d.nextStep).includes('origin:"DXB"'));
+  // >1 adult → traveller step mandated before the summary.
+  assert.ok(String(d.nextStep).includes("list_travel_companions"));
+  // 1 adult → no traveller step.
+  const r1a = await planTrip.run(
+    { plan: JSON.stringify({ ...plan, adults: 1 }) },
+    ctx,
+  );
+  assert.ok(!String((r1a.data as Record<string, unknown>).nextStep).includes("list_travel_companions"));
+  // Missing date → loud invalid_plan.
+  const bad = await planTrip.run(
+    { plan: JSON.stringify({ ...plan, segments: [{ origin: { iata: "DXB" }, destination: { iata: "IST" }, date: "" }] }) },
+    ctx,
+  );
+  assert.equal(bad.ok, false);
+  assert.equal(bad.errorCode, "invalid_plan");
+  // Return trip with a single segment → invalid.
+  const bad2 = await planTrip.run(
+    { plan: JSON.stringify({ tripType: "return", segments: plan.segments.slice(0, 1), adults: 1 }) },
+    ctx,
+  );
+  assert.equal(bad2.ok, false);
+  ok("planner confirm: sequential script, traveller step at >1 pax, loud invalid plans");
+}
+
+// 21. legContext rides search results and select; select with
+// legContext never re-asks the add-return question.
+{
+  const r = await flights.run(
+    {
+      segments: [{ origin: "DXB", destination: "IST", date: "2027-03-02" }],
+      legContext: { legIndex: 1, legCount: 2 },
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const lc = (r.data as Record<string, unknown>).legContext as Record<string, unknown>;
+  assert.equal(lc.legIndex, 1);
+  assert.equal(lc.legCount, 2);
+  assert.equal(lc.label, "Leg 1 of 2 · DXB → IST");
+
+  const pick = {
+    airline: "Pegasus",
+    origin: "DXB",
+    destination: "IST",
+    date: "2027-03-02",
+    tripType: "one way",
+  };
+  const s1 = await selectFlight.run({ ...pick, legContext: { legIndex: 1, legCount: 2 } }, ctx);
+  assert.equal(s1.ok, true, "planner-driven select skips add-return question");
+  assert.ok(String((s1.data as Record<string, unknown>).nextStep).includes("legContext={legIndex:2, legCount:2}"));
+  const s1lc = (s1.data as Record<string, unknown>).legContext as Record<string, unknown>;
+  assert.equal(s1lc.label, "Leg 1 of 2 · DXB → IST");
+  // Final leg → summary (with traveller reminder).
+  const s2 = await selectFlight.run({ ...pick, legContext: { legIndex: 2, legCount: 2 } }, ctx);
+  assert.ok(String((s2.data as Record<string, unknown>).nextStep).includes("travel_itinerary_summary"));
+  // Ad-hoc one-way select (no legContext) still asks about the return.
+  const s3 = await selectFlight.run({ ...pick }, ctx);
+  assert.equal(s3.ok, false);
+  assert.equal(s3.errorCode, "return_choice_needed");
+  // Malformed legContext is ignored, not fatal.
+  const s4 = await selectFlight.run({ ...pick, addReturn: "no", legContext: { legIndex: 0, legCount: -1 } }, ctx);
+  assert.equal(s4.ok, true);
+  ok("legContext: progress labels, sequential next steps, add-return only for ad-hoc one-way");
+}
+
+// 22. Itinerary travellers echo with kinds/relationships.
+{
+  const r = await itinerarySummary.run(
+    {
+      legs: [
+        { airline: "Pegasus", origin: "DXB", destination: "IST", date: "2027-03-02", priceAmount: 400, currency: "USD" },
+      ],
+      adults: 3,
+      travellers: [
+        { name: "Test Partner", kind: "self" },
+        { name: "Sara", kind: "dependent", relationship: "spouse" },
+        { name: "Ali", kind: "colleague" },
+        { name: "", kind: "colleague" }, // dropped
+      ],
+    },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const itin = (r.data as Record<string, unknown>).itinerary as Record<string, unknown>;
+  const trav = itin.travellers as Array<Record<string, unknown>>;
+  assert.equal(trav.length, 3);
+  assert.deepEqual(trav[1], { name: "Sara", kind: "dependent", relationship: "spouse" });
+  assert.ok(String((r.data as Record<string, unknown>).note).includes("travellers: Test Partner, Sara, Ali"));
+  ok("itinerary summary: traveller list echoed with kinds + relationships");
+}
+
+// 23. Clarification sanitizer preserves the planner metadata (rehydrated
+// planner cards must not lose their prefill) and drops malformed ones.
+{
+  const { sanitizeClarificationFields, sanitizePlannerMeta } = await import(
+    "../../src/lib/atelier-cli/index.js"
+  );
+  const planner = {
+    tripType: "return",
+    segments: [
+      { origin: { text: "Dubai", iata: "DXB", label: "Dubai — DXB" }, destination: { text: "IST", iata: "IST", label: "IST" }, date: "2027-03-02" },
+      { origin: { text: "IST", iata: "IST" }, destination: { text: "Dubai", iata: "DXB" }, date: "" },
+    ],
+    adults: 2,
+    cabinClass: "business",
+  };
+  const out = sanitizeClarificationFields([
+    { field: "plan", label: "Trip plan", inputType: "flight_planner", planner },
+  ])!;
+  assert.ok(out[0].planner, "planner survives sanitization");
+  const p = out[0].planner as Record<string, unknown>;
+  assert.equal(p.tripType, "return");
+  assert.equal((p.segments as unknown[]).length, 2);
+  assert.equal(p.adults, 2);
+  // Malformed planner dropped wholesale, field itself kept.
+  assert.equal(sanitizePlannerMeta({ tripType: "teleport", segments: [] }), null);
+  assert.equal(sanitizePlannerMeta({ tripType: "return", segments: [{ origin: null, destination: {}, date: "x" }] }), null);
+  const out2 = sanitizeClarificationFields([
+    { field: "plan", label: "Trip plan", inputType: "flight_planner", planner: { tripType: "nope" } },
+  ])!;
+  assert.equal(out2[0].planner, undefined);
+  ok("clarification sanitizer keeps valid planner metadata, drops malformed");
+}
+
+// 24. Traveller scoping (pure filter): out-of-perimeter colleagues are
+// excluded for reports-scoped viewers; full scope sees all active.
+{
+  const { scopeColleagues } = await import(
+    "../../src/lib/atelier-cli/travel-companion-capabilities.js"
+  );
+  const persons = [
+    { id: "a", status: "active" },
+    { id: "b", status: "active" },
+    { id: "c", status: "inactive" },
+    { id: "self", status: "active" },
+  ];
+  const full = scopeColleagues(persons, { kind: "full" });
+  assert.deepEqual(full.map((p) => p.id), ["a", "b", "self"]);
+  const scoped = scopeColleagues(persons, {
+    kind: "reports",
+    personIds: new Set(["a"]),
+    selfPersonId: "self",
+  });
+  assert.deepEqual(scoped.map((p) => p.id), ["a", "self"], "out-of-perimeter colleague excluded");
+  // Persona gating: companions tool follows the travel perimeter.
+  const toolNames = (role: string) =>
+    capabilitiesForPersona({ id: "p", orgId: "aico", role, name: "x" } as never).map(
+      (e) => e.toolName,
+    );
+  assert.ok(toolNames("partner").includes("list_travel_companions"));
+  assert.ok(toolNames("partner").includes("travel_plan_trip"));
+  assert.ok(!toolNames("employee").includes("list_travel_companions"));
+  assert.ok(!toolNames("board_observer").includes("travel_plan_trip"));
+  ok("traveller scoping filter + companions/planner persona gating");
+}
+
 ignavStub.close();
 stayingStub.close();
-console.log(`\ntravel-probe: ${passed}/19 groups passed`);
+console.log(`\ntravel-probe: ${passed}/25 groups passed`);

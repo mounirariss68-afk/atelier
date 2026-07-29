@@ -149,6 +149,7 @@
 - [Atelier chat travel tools](atelier-travel-tools.md) — Duffel search tools are DB-free by design (offline tsx probe); booking = deep-link handoff only; DUFFEL_API_KEY fail-loud; clarification fields carry inputType first-class.
 - [Travel flight cards & AED](atelier-travel-flight-cards.md) — rich flight cards ride ranked_list via item.flight; AED display via static approx table (DB-free); duffel_test prefix → testMode banner.
 - [Atelier guided flight booking](atelier-travel-guided-booking.md) — select/itinerary tools are stateless + DB-free; airline filter is server-side; clarification sanitizer must keep inputType/options.
+- [Guided flight planner flow](atelier-travel-guided-planner.md) — planner card rides clarification (plan = JSON string, sanitizer validates); legContext skips add-return; traveller lookup is a separate DB-backed module (probe stays DB-free).
 - [Industry backfill rerun](atelier-industry-backfill.md) — governed industry backfill script targets null OR invalid (raw-NAICS) codes; DB data doesn't merge — re-run on main + prod.
 - [Procurement Navigator invariants](atelier-procurement-navigator.md) — deterministic GCC jurisdiction routing (not prompt-only); approve merges guide but keeps manual status; backfill re-run needed on main+prod; account tabs deep-link via ?tab=.
 - [Chat verbatim replay window](atelier-chat-replay.md) — recent turns replay verbatim via pure composer + char budget; rollover lineage via predecessorSessionId; rolling summary is beyond-window only.

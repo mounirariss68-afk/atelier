@@ -549,6 +549,7 @@ export function ToolResultCardList({
   locale,
   onPickDisambig,
   onRunSlash,
+  onPrompt,
 }: {
   toolResults: NonNullable<import("./types").CliTurn["toolResults"]>;
   capabilities: CliCapability[];
@@ -557,6 +558,9 @@ export function ToolResultCardList({
   onPickDisambig?: (id: string, label: string) => void;
   /** Task #411 round-6 — gate_report partner-override slash dispatcher. */
   onRunSlash?: (cmd: string) => void;
+  /** Task #745 — submit a prompt as a new turn (flight select, cabin
+   * chips, traveller confirm). When absent, cards keep link behaviour. */
+  onPrompt?: (text: string) => void;
 }) {
   // Task #645 — one action must never render two identical cards: drop
   // exact-duplicate tool results (same tool, outcome and payload) before
@@ -624,6 +628,7 @@ export function ToolResultCardList({
             locale={locale}
             onPickDisambig={onPickDisambig}
             onRunSlash={onRunSlash}
+            onPrompt={onPrompt}
           />
         );
       })}
@@ -640,6 +645,7 @@ function ToolResultCard({
   locale,
   onPickDisambig,
   onRunSlash,
+  onPrompt,
 }: {
   tool: string;
   ok: boolean;
@@ -649,6 +655,7 @@ function ToolResultCard({
   locale: CliLocale;
   onPickDisambig?: (id: string, label: string) => void;
   onRunSlash?: (cmd: string) => void;
+  onPrompt?: (text: string) => void;
 }) {
   // Task #573 — derive a concise, meaningful title from the tool name
   // (e.g. `account_snapshot` → "Account snapshot"). The capability
@@ -685,7 +692,7 @@ function ToolResultCard({
             {errorMessage ?? (locale === "ar" ? "فشلت الأداة" : "tool failed")}
           </div>
         ) : (
-          <ShapeBody shape={shape} data={asObj(data)} locale={locale} onPickDisambig={onPickDisambig} onRunSlash={onRunSlash} />
+          <ShapeBody shape={shape} data={asObj(data)} locale={locale} onPickDisambig={onPickDisambig} onRunSlash={onRunSlash} onPrompt={onPrompt} />
         )}
       </div>
     </div>
@@ -698,12 +705,14 @@ function ShapeBody({
   locale,
   onPickDisambig,
   onRunSlash,
+  onPrompt,
 }: {
   shape: string | null;
   data: Json;
   locale: CliLocale;
   onPickDisambig?: (id: string, label: string) => void;
   onRunSlash?: (cmd: string) => void;
+  onPrompt?: (text: string) => void;
 }) {
   switch (shape) {
     // Task #411 — orchestrator policy renderers.
@@ -714,11 +723,14 @@ function ShapeBody({
     case "kpi_strip":
       return <KpiStrip data={data} locale={locale} />;
     case "ranked_list":
-      return <RankedList data={data} locale={locale} />;
+      return <RankedList data={data} locale={locale} onPrompt={onPrompt} />;
     case "time_series":
       return <TimeSeries data={data} locale={locale} />;
     case "entity_card":
-      return <EntityCard data={data} locale={locale} />;
+      return <EntityCard data={data} locale={locale} onPrompt={onPrompt} />;
+    // Task #745 — traveller picker card.
+    case "traveller_picker":
+      return <TravellerPicker data={data} locale={locale} onPrompt={onPrompt} />;
     case "audit_timeline":
       return <AuditTimeline data={data} locale={locale} />;
     case "change_order_card":
@@ -2107,9 +2119,19 @@ function KpiStrip({ data, locale }: { data: Json; locale: CliLocale }) {
 
 /* ─────────────────────────── ranked_list ─────────────────────────── */
 
-function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
+function RankedList({
+  data,
+  locale,
+  onPrompt,
+}: {
+  data: Json;
+  locale: CliLocale;
+  onPrompt?: (text: string) => void;
+}) {
   const items = asArr(data.items) as Json[];
   const total = asNum(data.total);
+  const legContext = asObj(data.legContext);
+  const legContextLabel = asStr(legContext.label);
   // Task #721 — client-side Prev/Next paging over the fetched results.
   const pageSize = Math.max(1, asNum(data.pageSize) ?? 10);
   const [page, setPage] = React.useState(0);
@@ -2148,8 +2170,22 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
   );
   const testMode = data.testMode === true;
 
+  // Task #745 — subtle multi-leg progress line ("Leg 1 of 2 · DXB → RUH").
+  const legContextForItem = {
+    legIndex: asNum(legContext.legIndex),
+    legCount: asNum(legContext.legCount),
+  };
+
   return (
     <div data-testid="ranked-list">
+      {legContextLabel && (
+        <div
+          className="text-[11px] font-mono text-gold/80 mb-1.5"
+          data-testid="leg-context"
+        >
+          {legContextLabel}
+        </div>
+      )}
       {testMode && (
         <div
           className="flex items-center gap-1.5 text-[11px] text-warning bg-warning/10 border border-warning/30 rounded px-2 py-1 mb-1.5"
@@ -2164,26 +2200,47 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
         </div>
       )}
       {isItinerary && (
-        <div
-          className="flex items-baseline justify-between gap-2 mb-1.5"
-          data-testid="itinerary-summary-header"
-        >
-          <div className="text-xs font-semibold text-text">
-            {locale === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
-            <span className="text-text-faint font-normal ms-1.5">
-              {locale === "ar"
-                ? `${asNum(itinerary.legCount) ?? items.length} رحلة`
-                : `${asNum(itinerary.legCount) ?? items.length} leg${(asNum(itinerary.legCount) ?? items.length) > 1 ? "s" : ""}`}
-            </span>
-          </div>
-          {asStr(itinerary.totalDisplay) && (
-            <div
-              className="text-sm font-semibold text-gold tabular-nums"
-              data-testid="itinerary-total"
-            >
-              {asStr(itinerary.totalDisplay)}
+        <div className="mb-1.5" data-testid="itinerary-summary-header">
+          <div className="flex items-baseline justify-between gap-2">
+            <div className="text-xs font-semibold text-text">
+              {locale === "ar" ? "ملخص خط الرحلة" : "Itinerary summary"}
+              <span className="text-text-faint font-normal ms-1.5">
+                {locale === "ar"
+                  ? `${asNum(itinerary.legCount) ?? items.length} رحلة`
+                  : `${asNum(itinerary.legCount) ?? items.length} leg${(asNum(itinerary.legCount) ?? items.length) > 1 ? "s" : ""}`}
+              </span>
             </div>
-          )}
+            {asStr(itinerary.totalDisplay) && (
+              <div
+                className="text-sm font-semibold text-gold tabular-nums"
+                data-testid="itinerary-total"
+              >
+                {asStr(itinerary.totalDisplay)}
+              </div>
+            )}
+          </div>
+          {/* Task #745 — passenger list on the itinerary header. */}
+          {(() => {
+            const travellers = asArr(itinerary.travellers).map((t) => asObj(t));
+            if (travellers.length === 0) return null;
+            const parts = travellers.map((t) => {
+              const name = asStr(t.name);
+              const kind = asStr(t.kind);
+              const rel = asStr(t.relationship);
+              if (kind === "self") {
+                return `${locale === "ar" ? "أنت" : "You"} — ${name}`;
+              }
+              return rel ? `${name} (${rel})` : name;
+            });
+            return (
+              <div
+                className="text-[11px] text-text-mute mt-1"
+                data-testid="itinerary-travellers"
+              >
+                {(locale === "ar" ? "المسافرون: " : "Travellers: ") + parts.join("; ")}
+              </div>
+            );
+          })()}
         </div>
       )}
       {total != null && total > items.length && (
@@ -2196,7 +2253,20 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
       {isFlightList ? (
         <ul className="space-y-1.5">
           {paged.map((it, idx) => (
-            <FlightOfferRow key={asStr(it.id) || idx} item={it} />
+            <FlightOfferRow
+              key={asStr(it.id) || idx}
+              item={it}
+              locale={locale}
+              // Task #745 — itinerary summary legs keep href links and
+              // must NOT become select targets; only real search-result
+              // flight offers are selectable.
+              onPrompt={isItinerary ? undefined : onPrompt}
+              legContext={
+                legContextForItem.legIndex != null && legContextForItem.legCount != null
+                  ? { legIndex: legContextForItem.legIndex, legCount: legContextForItem.legCount }
+                  : undefined
+              }
+            />
           ))}
         </ul>
       ) : (
@@ -2310,7 +2380,17 @@ function RankedList({ data, locale }: { data: Json; locale: CliLocale }) {
 
 /* ───────────── Task #715 — Google-Flights-style flight card ───────────── */
 
-function FlightOfferRow({ item }: { item: Json }) {
+function FlightOfferRow({
+  item,
+  locale,
+  onPrompt,
+  legContext,
+}: {
+  item: Json;
+  locale: CliLocale;
+  onPrompt?: (text: string) => void;
+  legContext?: { legIndex: number; legCount: number };
+}) {
   const f = asObj(item.flight);
   const legs = asArr(f.legs).map((l) => asObj(l));
   const outbound = asObj(f.outbound ?? legs[0]);
@@ -2338,20 +2418,72 @@ function FlightOfferRow({ item }: { item: Json }) {
   const [logoFailed, setLogoFailed] = React.useState(false);
   const flightNumbers = asStr(outbound.flightNumbersLabel);
   const returnLegs = legs.slice(1);
-  const Container: React.ElementType = href ? "a" : "div";
-  const containerProps = href
+
+  // Task #745 — select-on-tap. Only real flight offers become select
+  // targets, and only when a prompt-submit callback is available. The
+  // model turns this prompt into travel_select_flight; the booking link
+  // becomes a small secondary affordance.
+  const hasFlight = item.flight != null && typeof item.flight === "object";
+  const selectable = !!onPrompt && hasFlight;
+  const isExternalHref = /^https?:\/\//i.test(href);
+
+  function buildSelectPrompt(): string {
+    const airline = asStr(f.airline) || carriers;
+    const flightNumbersLabel = flightNumbers;
+    const originIata = asStr(outbound.originIata);
+    const destinationIata = asStr(outbound.destinationIata);
+    const departDate = asStr(outbound.departDate) || asStr(f.departDate);
+    const departTime = asStr(outbound.departTime);
+    const arriveTime = asStr(outbound.arriveTime);
+    const cabin = asStr(f.cabin) || asStr(f.cabinClass);
+    const amt = amount != null ? amount.toLocaleString("en-US") : "";
+    const stopsLabel = asStr(outbound.stopsLabel);
+    const durationLabel = asStr(outbound.durationLabel);
+    let out = `I pick this flight: ${airline}`;
+    if (flightNumbersLabel) out += ` ${flightNumbersLabel}`;
+    out += ` ${originIata} → ${destinationIata}`;
+    if (departDate) out += ` on ${departDate}`;
+    if (departTime) out += `, departs ${departTime}`;
+    if (arriveTime) out += `, arrives ${arriveTime}`;
+    if (cabin) out += `, cabin ${cabin}`;
+    if (currency || amt) out += `, price ${currency} ${amt}`.replace(/\s+/g, " ").replace(/ ,/g, ",");
+    if (stopsLabel) out += `, ${stopsLabel}`;
+    if (durationLabel) out += `, ${durationLabel}`;
+    if (legContext) out += ` (leg ${legContext.legIndex} of ${legContext.legCount})`;
+    if (href) out += `. Booking link: ${href}`;
+    return out.trim();
+  }
+
+  // Legacy link behaviour: when not selectable, keep the whole card as a
+  // link (external opens a new tab).
+  const Container: React.ElementType = selectable ? "div" : href ? "a" : "div";
+  const containerProps = selectable
     ? {
-        href,
-        ...(/^https?:\/\//i.test(href)
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {}),
+        role: "button" as const,
+        tabIndex: 0,
+        onClick: () => onPrompt!(buildSelectPrompt()),
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPrompt!(buildSelectPrompt());
+          }
+        },
       }
-    : {};
+    : href
+      ? {
+          href,
+          ...(isExternalHref ? { target: "_blank", rel: "noopener noreferrer" } : {}),
+        }
+      : {};
   return (
     <li data-testid="flight-offer-card">
       <Container
         {...containerProps}
-        className="block bg-bg-deep border border-border-soft hover:border-gold/50 rounded-lg px-3 py-2.5 transition-colors"
+        className={cn(
+          "block bg-bg-deep border border-border-soft hover:border-gold/50 rounded-lg px-3 py-2.5 transition-colors",
+          selectable && "cursor-pointer",
+        )}
+        {...(selectable ? { "data-testid": "flight-select" } : {})}
       >
         <div className="flex items-start gap-3">
           {logoUrl && !logoFailed && (
@@ -2471,6 +2603,20 @@ function FlightOfferRow({ item }: { item: Json }) {
             )}
           </div>
         </div>
+        {/* Task #745 — when the card is a select target, expose the
+            booking link as a small secondary affordance (does not
+            trigger the card's select handler). */}
+        {selectable && href && (
+          <a
+            href={href}
+            {...(isExternalHref ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-text-mute hover:text-gold"
+            data-testid="flight-booking-link"
+          >
+            {s("flightOpenBooking", locale)}
+          </a>
+        )}
       </Container>
     </li>
   );
@@ -2677,10 +2823,28 @@ function CapacityBanner({
   );
 }
 
-function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
+function EntityCard({
+  data,
+  locale,
+  onPrompt,
+}: {
+  data: Json;
+  locale: CliLocale;
+  onPrompt?: (text: string) => void;
+}) {
   const name = asStr(data.name) || asStr(data.label) || asStr(data.id);
   const nav = asObj(data.navigateTo);
   const href = asStr(data.href) || asStr(nav.path);
+  // Task #745 — flight_selection cards get extra affordances: a
+  // secondary booking link and "other cabin options" chips.
+  const isFlightSelection = asStr(data.entityType) === "flight_selection";
+  const selection = asObj(data.selection);
+  const selectionHref = asStr(selection.href);
+  const cabinAlternatives = isFlightSelection
+    ? asArr(asObj(data.fareOptions).cabinAlternatives)
+        .map((c) => asStr(c))
+        .filter((c) => c.trim().length > 0)
+    : [];
   const currency = asStr(data.currency) || null;
   // Task #539 — `navigateTo`/`shape`/`kind` are chrome, not attributes;
   // surfacing them in the grid produced "[object Object]" rows.
@@ -2821,6 +2985,176 @@ function EntityCard({ data, locale }: { data: Json; locale: CliLocale }) {
           ))}
         </div>
       )}
+      {isFlightSelection && (selectionHref || cabinAlternatives.length > 0) && (
+        <div className="mt-3 space-y-2 border-t border-border-soft pt-2">
+          {selectionHref && (
+            <a
+              href={selectionHref}
+              {...(/^https?:\/\//i.test(selectionHref)
+                ? { target: "_blank", rel: "noopener noreferrer" }
+                : {})}
+              className="inline-flex items-center gap-1 text-[11px] text-text-mute hover:text-gold"
+              data-testid="flight-booking-link"
+            >
+              {s("flightOpenBooking", locale)}
+            </a>
+          )}
+          {cabinAlternatives.length > 0 && (
+            <div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-text-faint mb-1">
+                {s("flightOtherCabins", locale)}
+              </div>
+              <div className="flex flex-wrap gap-1.5" data-testid="flight-cabin-alternatives">
+                {cabinAlternatives.map((cabin) => (
+                  <button
+                    key={cabin}
+                    type="button"
+                    disabled={!onPrompt}
+                    onClick={() =>
+                      onPrompt?.(`Show ${cabin} class options for this leg instead`)
+                    }
+                    className="text-xs bg-bg-deep border border-border-soft hover:border-gold/50 rounded-full px-3 py-1 text-text disabled:opacity-50"
+                    data-testid="flight-cabin-chip"
+                  >
+                    {humanLabel(cabin)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────────── Task #745 — traveller picker card ───────────── */
+
+function TravellerPicker({
+  data,
+  locale,
+  onPrompt,
+}: {
+  data: Json;
+  locale: CliLocale;
+  onPrompt?: (text: string) => void;
+}) {
+  const ar = locale === "ar";
+  const requester = asObj(data.requester);
+  const requesterName = asStr(requester.name) || (ar ? "أنت" : "You");
+  const adults = Math.max(1, asNum(data.adults) ?? 1);
+  const maxPicks = Math.max(0, adults - 1);
+  const note = asStr(data.note);
+  const items = asArr(data.items)
+    .map((it) => asObj(it))
+    .map((it) => ({
+      id: asStr(it.id),
+      name: asStr(it.name),
+      kind: asStr(it.kind),
+      title: asStr(it.title),
+      relationship: asStr(it.relationship),
+    }))
+    .filter((it) => it.id && it.name);
+  // Dependents first, then colleagues.
+  const ordered = [
+    ...items.filter((it) => it.kind === "dependent"),
+    ...items.filter((it) => it.kind !== "dependent"),
+  ];
+  const [selected, setSelected] = React.useState<string[]>([]);
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= maxPicks) return prev; // cap at adults-1
+      return [...prev, id];
+    });
+  }
+
+  function confirm() {
+    let prompt = `Travellers for this trip: ${requesterName} (self)`;
+    for (const id of selected) {
+      const it = items.find((x) => x.id === id);
+      if (!it) continue;
+      const rel = it.relationship || s("travellerColleague", locale);
+      prompt += `, ${it.name} (${rel})`;
+    }
+    onPrompt?.(prompt);
+  }
+
+  return (
+    <div data-testid="traveller-picker" className="space-y-2">
+      <div className="text-sm font-semibold text-text">
+        {s("travellerTitle", locale).replace("{n}", String(adults))}
+      </div>
+      {note && <div className="text-[11px] text-text-faint">{note}</div>}
+      {/* Requester (fixed / checked). */}
+      <div
+        className="flex items-center gap-2 bg-bg-deep border border-gold/40 rounded-md px-2.5 py-1.5"
+        data-testid="traveller-requester"
+      >
+        <CheckCircle2 className="w-4 h-4 text-gold shrink-0" />
+        <div className="min-w-0">
+          <div className="text-xs font-medium truncate">
+            {s("travellerYou", locale)} — {requesterName}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-1">
+        {ordered.map((it) => {
+          const checked = selected.includes(it.id);
+          const atCap = !checked && selected.length >= maxPicks;
+          return (
+            <button
+              key={it.id}
+              type="button"
+              onClick={() => toggle(it.id)}
+              disabled={atCap || maxPicks === 0}
+              className={cn(
+                "w-full text-start flex items-center gap-2 border rounded-md px-2.5 py-1.5 transition-colors",
+                checked
+                  ? "bg-gold/10 border-gold/50"
+                  : "bg-bg-deep border-border-soft hover:border-gold/40",
+                (atCap || maxPicks === 0) && "opacity-50 cursor-not-allowed",
+              )}
+              data-testid="traveller-option"
+              data-selected={checked}
+            >
+              <span
+                className={cn(
+                  "w-4 h-4 rounded border shrink-0 flex items-center justify-center",
+                  checked ? "bg-gold border-gold" : "border-border-soft",
+                )}
+              >
+                {checked && <CheckCircle2 className="w-3 h-3 text-bg-deep" />}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-xs font-medium truncate">{it.name}</span>
+                  {it.kind === "dependent" && it.relationship && (
+                    <span className="shrink-0 text-[10px] font-mono uppercase tracking-wider text-gold border border-gold/30 rounded px-1 py-px">
+                      {it.relationship}
+                    </span>
+                  )}
+                </span>
+                {it.title && (
+                  <span className="block text-[10px] text-text-faint truncate">
+                    {it.title}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={confirm}
+        disabled={!onPrompt}
+        className="inline-flex items-center gap-1.5 bg-gold text-bg-deep font-semibold text-xs px-3 py-1.5 rounded hover:bg-gold/90 disabled:opacity-50"
+        data-testid="traveller-confirm"
+      >
+        {s("travellerConfirm", locale)}
+      </button>
     </div>
   );
 }
