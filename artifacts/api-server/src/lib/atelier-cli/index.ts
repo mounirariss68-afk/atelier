@@ -44,6 +44,62 @@ import {
   DEFAULT_REPLAY_BUDGET,
   type ReplayTurnRow,
 } from "./replay.js";
+import {
+  extractFactsFromToolEvent,
+  factsMode,
+  FACTS_CONTRACT_VERSION,
+  loadSessionFacts,
+  normalizeControlIntent,
+  renderFactsBlock,
+  writeSessionFacts,
+  type SessionFact,
+} from "./session-facts.js";
+
+/**
+ * Task #741 — fire-and-forget facts capture from ANY successful tool
+ * event, including paths that run OUTSIDE the streamed turn loop
+ * (pending-write confirm, async job completions). Never throws.
+ */
+function ingestSessionFacts(args: {
+  orgId: string;
+  userId: string;
+  sessionId: string;
+  turnId: string;
+  tool: string;
+  input: unknown;
+  data?: unknown;
+  source?: SessionFact["source"];
+}): void {
+  if (factsMode() === "off") return;
+  try {
+    const facts = extractFactsFromToolEvent({
+      tool: args.tool,
+      input: args.input,
+      data: args.data,
+      source: args.source,
+    });
+    if (facts.length === 0) return;
+    void writeSessionFacts({
+      orgId: args.orgId,
+      userId: args.userId,
+      sessionId: args.sessionId,
+      sourceTurnId: args.turnId,
+      facts,
+    }).catch((err) =>
+      console.error(
+        "[atelier-cli] session facts write failed",
+        args.turnId,
+        err instanceof Error ? err.message : String(err),
+      ),
+    );
+  } catch (err) {
+    console.error(
+      "[atelier-cli] session facts extract failed",
+      args.turnId,
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
 import { runWithProgressSink } from "../atelier-agents/progress-sink.js";
 import type { Response } from "express";
 // Task #332 — capability catalog + perimeter helpers. Imported lazily
@@ -322,6 +378,19 @@ async function runAsyncJob(args: {
         ok = out.ok;
         result = out.data ?? null;
         errorMessage = out.ok ? null : (out.errorMessage ?? out.errorCode ?? null);
+        if (out.ok) {
+          // Task #741 — async job completions update session facts too.
+          ingestSessionFacts({
+            orgId: persona.orgId,
+            userId: persona.id,
+            sessionId,
+            turnId,
+            tool: pending.tool,
+            input: pending.input,
+            data: out.data,
+            source: "async_job",
+          });
+        }
       } catch (err) {
         errorMessage = err instanceof Error ? err.message : String(err);
       }
@@ -1246,9 +1315,15 @@ const SYSTEM_PROMPT = [
   "   by a resolver/lookup that produced the IDs the write depends on. Do not guess.",
   "3. AMBIGUITY: when more than one plausible target exists, you MUST call",
   "   `present_choices` and STOP. Do not pick one arbitrarily.",
-  "4. PREFER LIVE LOOKUP: rolling-summary primers and prior-turn context are hints only.",
-  "   When acting on entities, re-fetch via the appropriate read tool rather than relying",
-  "   on summarized or stale data.",
+  // Task #741 (facts contract v1): replayed conversation + typed session
+  // facts are TRUSTED context — the old "hints only, re-fetch everything"
+  // policy made the model re-ask things the user already said.
+  "4. TRUST RECOVERED CONTEXT: the replayed conversation ([conversation so far]) and the",
+  "   [session facts] block are authoritative for what the user already stated or chose —",
+  "   dates, places, party sizes, selections. NEVER re-ask for them. Re-fetch via read tools",
+  "   only for live entity DATA (records that may have changed) or when the user changes",
+  "   their mind. The [prior session summary] line log is display metadata only — do not",
+  "   treat it as factual grounding.",
   "5. CONFIRMATION: when a write-tool returns a confirmation diff, STOP and let the user",
   "   confirm — do not retry, do not re-call the tool.",
   "6. DISAMBIGUATION: when a tool returns disambiguation options, STOP and let the user",
@@ -3022,6 +3097,28 @@ export async function runTurn(
     const dormantMs = lastTurnAt > 0 ? Date.now() - lastTurnAt : 0;
     const PROACTIVE_RECAP_DORMANT_MS = 6 * 60 * 60 * 1000;
     const draftPriorToTurn = getSessionDraft(session.id);
+    // Task #741 — typed session facts (incl. one hop of rollover lineage).
+    // Loaded once per turn; used by the recap (so it only claims facts the
+    // model can actually see) and rendered into the context below.
+    let sessionFactRows: Array<{ kind: string; key: string; value: unknown; display: string }> =
+      [];
+    try {
+      if (factsMode() !== "off") {
+        sessionFactRows = await loadSessionFacts({
+          orgId: persona.orgId,
+          userId: persona.id,
+          sessionId: session.id,
+          predecessorSessionId: (session as { predecessorSessionId?: string | null })
+            .predecessorSessionId,
+        });
+      }
+    } catch (err) {
+      console.error(
+        "[atelier-cli] session facts load failed",
+        turnId,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     if (
       session.rollingSummary &&
       session.rollingSummary.length > 0 &&
@@ -3040,6 +3137,10 @@ export async function runTurn(
           turnCount: session.turnCount ?? 0,
           dormantMs,
           entities: draftEntities,
+          // Task #741 — recap contract: only claim facts that are actually
+          // available to the model this turn (additive field; clients that
+          // don't know it ignore it).
+          facts: sessionFactRows.slice(0, 8).map((f) => f.display),
           schemaVersion: CATALOG_SCHEMA_VERSION,
         },
       });
@@ -3144,6 +3245,27 @@ export async function runTurn(
         role: "assistant",
         content: "(noted)",
       });
+    }
+    // Task #741 — typed session facts block. In "on" mode the block is
+    // rendered into context; in "shadow" mode facts are written+logged
+    // but not yet read by the model (per-phase kill switch).
+    if (sessionFactRows.length > 0) {
+      const block = renderFactsBlock(sessionFactRows);
+      if (block && factsMode() === "on") {
+        history.push({ role: "user", content: `[session facts]\n${block}` });
+        history.push({ role: "assistant", content: "(noted)" });
+      }
+      console.log(
+        `[cli-telemetry] ${JSON.stringify({
+          evt: "session_facts",
+          turnId,
+          sessionId: session.id,
+          mode: factsMode(),
+          contractVersion: FACTS_CONTRACT_VERSION,
+          count: sessionFactRows.length,
+          rendered: factsMode() === "on" && block.length > 0,
+        })}`,
+      );
     }
     // Page-context priming + attachment hint, then the actual prompt.
     const pageCtx = input.pageContext ?? session.pageContextSnapshot ?? null;
@@ -3510,6 +3632,59 @@ export async function runTurn(
     // and skip the Claude loop entirely.
     if (_draft.pendingClarification) {
       const pc = _draft.pendingClarification;
+      // Task #741 — normalized control intent bound to the pending
+      // clarification. "cancel" deterministically clears the pending
+      // question instead of raw-text-merging "never mind" into a typed
+      // field; affirm/decline are surfaced via telemetry and to the
+      // merge path below (additive — free-text answers behave as before).
+      const controlIntent = normalizeControlIntent(input.prompt ?? "");
+      console.log(
+        `[cli-telemetry] ${JSON.stringify({
+          evt: "clarification_control_intent",
+          turnId,
+          tool: pc.tool,
+          field: pc.field,
+          controlIntent,
+        })}`,
+      );
+      if (controlIntent === "cancel") {
+        const _drCancel = getSessionDraft(session.id);
+        if (
+          _drCancel.pendingClarification &&
+          _drCancel.pendingClarification.tool === pc.tool
+        ) {
+          _drCancel.pendingClarification = null;
+        }
+        record({
+          type: "narration",
+          data: {
+            text: "Okay — I've dropped that question. What would you like to do instead?",
+            step: 0,
+          },
+        });
+        status = "success";
+        clarificationHandled = true;
+        // Retire the paused source turn so rehydration can't resurrect it.
+        if (pendingSourceTurnId && pendingSourceTurnId !== turnId) {
+          await db
+            .update(atelierCliTurns)
+            .set({
+              status: "cancelled",
+              statusMessage: `cancelled by user in turn ${turnId}`,
+            })
+            .where(
+              and(
+                eq(atelierCliTurns.id, pendingSourceTurnId),
+                inArray(atelierCliTurns.status, [
+                  "awaiting_clarification",
+                  "error",
+                  "partial",
+                ]),
+              ),
+            );
+        }
+      }
+      if (!clarificationHandled) {
       const tool = findToolByName(pc.tool, persona);
       if (tool) {
         // Task #484 — defense-in-depth strip. The HTTP ingress in
@@ -3611,6 +3786,17 @@ export async function runTurn(
         if (cont.ok) {
           ingestEntitiesFromToolResult(session.id, pc.tool, cont.data);
           recordSessionResult(session.id, { lastTurnId: turnId });
+          // Task #741 — clarification answers become typed session facts.
+          ingestSessionFacts({
+            orgId: persona.orgId,
+            userId: persona.id,
+            sessionId: session.id,
+            turnId,
+            tool: pc.tool,
+            input: mergedInput,
+            data: cont.data,
+            source: "clarification",
+          });
         }
         // Clear stale pendingClarification on EVERY continuation outcome
         // except the "still missing more fields" case below — otherwise
@@ -3747,6 +3933,7 @@ export async function runTurn(
             );
         }
       }
+      } // end !clarificationHandled (Task #741 cancel short-circuit)
     }
     // Task #645 — narration/card output-contract state for this turn.
     let pendingNarration: { text: string; step: number } | null = null;
@@ -4210,6 +4397,17 @@ export async function runTurn(
       if (toolResult.ok) {
         ingestEntitiesFromToolResult(session.id, tc.name, toolResult.data);
         recordSessionResult(session.id, { lastTurnId: turnId });
+        // Task #741 — successful tool inputs/selections become typed facts.
+        ingestSessionFacts({
+          orgId: persona.orgId,
+          userId: persona.id,
+          sessionId: session.id,
+          turnId,
+          tool: tc.name,
+          input: tc.input,
+          data: toolResult.data,
+          source: "tool_result",
+        });
         if (tool.isWrite && (tc.input as { confirm?: unknown }).confirm === true) {
           const dataObj = (toolResult.data ?? {}) as Record<string, unknown>;
           recordSessionResult(session.id, {
@@ -4876,6 +5074,21 @@ export async function confirmPendingWrite(
   // is on the original input.
   if (result.ok) {
     const dataObj = (result.data ?? {}) as Record<string, unknown>;
+    // Task #741 — confirmed writes update session facts too (the confirm
+    // path runs OUTSIDE runTurn, so the in-loop ingestion never fires).
+    // Attribute facts to the SESSION OWNER (turn.userId), not the
+    // confirmer — cross-user approver confirms must leave the facts
+    // visible to the initiator's later turns.
+    ingestSessionFacts({
+      orgId: persona.orgId,
+      userId: turn.userId,
+      sessionId: turn.sessionId,
+      turnId,
+      tool: pending.tool,
+      input: pending.input,
+      data: result.data,
+      source: "confirm",
+    });
     recordSessionResult(turn.sessionId, {
       lastWriteTurnId: turnId,
       lastWriteTool: pending.tool,

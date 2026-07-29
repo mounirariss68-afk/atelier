@@ -4078,6 +4078,45 @@ export const atelierCliSessions = pgTable(
   ],
 );
 
+/**
+ * Typed per-session chat facts — durable, org/user-scoped record of the
+ * concrete facts a user states or resolves during a session (dates,
+ * destinations, party sizes, selected options, resolved entities), so
+ * later turns and confirmations can bind to explicit values instead of
+ * re-deriving them from prose. Facts are session-scoped with a TTL;
+ * lineage rides on atelier_cli_sessions.predecessor_session_id.
+ */
+export const atelierCliSessionFacts = pgTable(
+  "atelier_cli_session_facts",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    userId: text("user_id").notNull(),
+    sessionId: text("session_id").notNull(),
+    /** Fact category: date | place | person | entity | quantity | selection | other */
+    kind: text("kind").notNull(),
+    /** Stable key within the session, e.g. "travel.departure_date". */
+    key: text("key").notNull(),
+    /** Resolved, typed value (dates stored as resolved ISO strings). */
+    value: jsonb("value").$type<unknown>().notNull(),
+    /** Human-readable one-line rendering for the model context block. */
+    display: text("display").notNull(),
+    /** Turn that stated/resolved this fact. */
+    sourceTurnId: text("source_turn_id"),
+    /** Where the fact came from: user_stated | tool_result | clarification | confirm | async_job */
+    source: text("source").notNull().default("tool_result"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    /** Retention cutoff — rows past this are purged opportunistically. */
+    expiresAt: timestamp("expires_at"),
+  },
+  (t) => [
+    index("idx_atelier_cli_session_facts_session").on(t.sessionId),
+    index("idx_atelier_cli_session_facts_org_user").on(t.orgId, t.userId),
+    uniqueIndex("uq_atelier_cli_session_facts_key").on(t.sessionId, t.key),
+  ],
+);
+
 export const atelierCliTurns = pgTable(
   "atelier_cli_turns",
   {

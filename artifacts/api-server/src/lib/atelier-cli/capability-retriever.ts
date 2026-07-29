@@ -41,11 +41,51 @@ const ALWAYS_INCLUDE = new Set([
   "propose_write",
 ]);
 
-/** Hard maximum tools surfaced to the model per step (always-on + ranked). */
-const HARD_CAP = 12;
+/**
+ * Task #741 — adaptive tool budget replacing the fixed 12-tool cap.
+ * The BASE cap keeps the surface small for typical turns; when the
+ * cosine ranking shows a cluster of near-tied candidates at the cutoff
+ * (score within EPSILON of the last admitted tool), the budget extends
+ * up to MAX so relevant tools aren't dropped by an arbitrary boundary.
+ * Both knobs are env-tunable so the policy scales with catalog growth
+ * without a code change.
+ */
+const envInt = (name: string, fallback: number): number => {
+  const v = Number(process.env[name]);
+  return Number.isFinite(v) && v > 0 ? Math.floor(v) : fallback;
+};
+const BASE_CAP = () => envInt("ATELIER_CLI_TOOL_CAP", 12);
+const MAX_CAP = () => Math.max(BASE_CAP(), envInt("ATELIER_CLI_TOOL_CAP_MAX", 20));
+/** Score-tie window for adaptive extension past the base cap. */
+const ADAPTIVE_EPSILON = 0.04;
 
 /** Cap for the widened retry pool (see `widen` below). */
 const WIDE_CAP = 40;
+
+/**
+ * Pure adaptive selection over a DESC-sorted scored list: admit up to
+ * `baseBudget` by rank, then keep admitting while the next candidate's
+ * score is within `epsilon` of the last admitted one, up to `maxBudget`.
+ * Exported for the offline ranking probe (run at 1x and 2x catalog size).
+ */
+export function selectRankedAdaptive(
+  scored: ReadonlyArray<{ tool: string; score: number }>,
+  opts: { baseBudget: number; maxBudget: number; epsilon?: number },
+): string[] {
+  const epsilon = opts.epsilon ?? ADAPTIVE_EPSILON;
+  const out: string[] = [];
+  for (const s of scored) {
+    if (out.length < opts.baseBudget) {
+      out.push(s.tool);
+      continue;
+    }
+    if (out.length >= opts.maxBudget) break;
+    const lastScore = scored[out.length - 1]!.score;
+    if (lastScore - s.score <= epsilon) out.push(s.tool);
+    else break;
+  }
+  return out;
+}
 
 /**
  * Task #644 — deterministic per-intent-kind tool floor. When the typed
@@ -261,11 +301,13 @@ export async function retrieveCapabilities(args: {
   widen?: boolean;
 }): Promise<RetrievedTools> {
   const persona = args.persona;
-  const cap = args.widen ? WIDE_CAP : HARD_CAP;
-  // Reserve always-on slots; ranked slots fill the rest of HARD_CAP.
+  const baseCap = BASE_CAP();
+  const cap = args.widen ? WIDE_CAP : MAX_CAP();
+  // Reserve always-on slots; ranked slots fill the rest of the base cap
+  // (adaptive extension up to MAX_CAP happens in the selection step).
   const rankedBudget = args.widen
     ? cap
-    : Math.max(1, (args.topK ?? HARD_CAP - ALWAYS_INCLUDE.size));
+    : Math.max(1, (args.topK ?? baseCap - ALWAYS_INCLUDE.size));
   const decommissionLegacy = args.decommissionLegacy ?? true;
   const intentVerb = args.intentVerb ?? "";
   const isReadIntent = intentVerb === "read" || intentVerb === "trivial";
@@ -324,16 +366,20 @@ export async function retrieveCapabilities(args: {
     }
   }
 
-  // 2. Top-K by cosine over the eligible pool, capped.
+  // 2. Ranked selection by cosine over the eligible pool — adaptive:
+  // base budget by rank, extended while scores are near-tied at the
+  // cutoff (Task #741), never past the overall cap.
   const scored = rows
     .filter((r) => eligibleNames.has(r.toolName) && !selected.has(r.toolName))
     .map((r) => ({ tool: r.toolName, score: cosine(queryEmb.vec, r.vec) }))
     .sort((a, b) => b.score - a.score);
-  let added = 0;
-  for (const s of scored) {
-    if (selected.size >= cap || added >= rankedBudget) break;
-    selected.add(s.tool);
-    added++;
+  const rankedPick = selectRankedAdaptive(scored, {
+    baseBudget: rankedBudget,
+    maxBudget: Math.max(rankedBudget, cap - selected.size),
+  });
+  for (const name of rankedPick) {
+    if (selected.size >= cap) break;
+    selected.add(name);
   }
 
   // 3. Cold-start fallback — when we have no embeddings for the
@@ -357,7 +403,11 @@ export async function retrieveCapabilities(args: {
   return {
     tools,
     selected: tools.map((t) => t.name),
-    scores: scored.slice(0, rankedBudget).map((s) => ({ tool: s.tool, score: s.score })),
+    // Telemetry must cover the FULL adaptive pick, not just the base
+    // budget, so surfaced tools and score audit stay consistent.
+    scores: scored
+      .slice(0, Math.max(rankedBudget, rankedPick.length))
+      .map((s) => ({ tool: s.tool, score: s.score })),
     ranked: scored.length > 0,
   };
 }

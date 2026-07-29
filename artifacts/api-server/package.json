@@ -24,6 +24,7 @@
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:chat-replay": "tsx ./tests/chat/replay-probe.ts",
+    "test:chat-facts": "tsx ./tests/chat/session-facts-probe.ts",
     "test:cli-attachments": "tsx ./tests/cli-attachments/run.ts",
     "test:cli-use-cases": "tsx ./tests/cli-use-cases/run.ts",
     "test:cli-parity": "tsx ./tests/cli-parity/run.ts",

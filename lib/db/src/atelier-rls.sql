@@ -50,6 +50,10 @@ DECLARE
     -- Task #331 — Atelier CLI sessions / turns / async jobs. Org-scoped
     -- only; per-engagement narrowing happens inside the tool layer.
     'atelier_cli_sessions','atelier_cli_turns','atelier_cli_jobs',
+    -- Task #741 — typed per-session chat facts. Org-scoped; user_id
+    -- narrowing is enforced in the read/write helpers (facts are only
+    -- ever queried under the stating user's own id).
+    'atelier_cli_session_facts',
     -- Task #569 — human account insights + account-team membership.
     -- Org-scoped; per-account visibility is enforced in route logic.
     'atelier_account_insights','atelier_account_team_members',
