@@ -447,6 +447,8 @@ export default function AgentsLensHome() {
   return (
     <div className="animate-in fade-in" data-testid="agents-dashboard">
       <LensPageHeader
+        backHref="/"
+        backLabel="Home"
         headline="Agent management — portfolio, evals, incidents, lifecycle"
         lede="The head-of-agents morning briefing, built only from recorded data: portfolio composition, eval results, deployments, incidents and the open action queue. Run telemetry (latency, cost, success rates) isn't collected yet — those panels say so instead of guessing."
       />

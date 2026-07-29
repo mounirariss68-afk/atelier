@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useLocation } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 import { SubSectionTabs } from "@/components/layout/SubSectionTabs";
 
 const FIXTURE_KEYS = [
@@ -212,6 +212,9 @@ export default function WalletNewExpense() {
   return (
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
+        <BackLink href="/wallet/expenses" className="mb-4" data-testid="link-back">
+          Back to expenses
+        </BackLink>
         <SectionHead
           eyebrow="Firm · Wallet"
           headline="New expense"

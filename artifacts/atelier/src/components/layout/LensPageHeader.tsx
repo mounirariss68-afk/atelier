@@ -23,7 +23,7 @@
  */
 
 import * as React from "react";
-import { PageHero, SectionHead } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead } from "@/components/ui/primitives";
 import { useLensSection } from "@/lib/lensSection";
 
 export interface LensPageHeaderProps {
@@ -45,6 +45,14 @@ export interface LensPageHeaderProps {
   actions?: React.ReactNode;
   /** Extra classnames on the inner SectionHead wrapper. */
   className?: string;
+  /**
+   * Optional back affordance rendered above the headline using the
+   * shared `BackLink`. Lens home pages pass `backHref="/"` +
+   * `backLabel="Home"` so no top-level screen feels like a dead end;
+   * detail pages point at their logical parent list.
+   */
+  backHref?: string;
+  backLabel?: React.ReactNode;
 }
 
 export function LensPageHeader({
@@ -53,6 +61,8 @@ export function LensPageHeader({
   eyebrow,
   actions,
   className,
+  backHref,
+  backLabel,
 }: LensPageHeaderProps) {
   const auto = useLensSection();
   // `undefined` = use auto. `null` = suppress. Anything else = override.
@@ -61,6 +71,11 @@ export function LensPageHeader({
 
   return (
     <PageHero>
+      {backHref && (
+        <BackLink href={backHref} className="mb-4" data-testid="link-back">
+          {backLabel ?? "Back"}
+        </BackLink>
+      )}
       {actions ? (
         <div className="flex items-start justify-between gap-6 flex-wrap">
           <div className="flex-1 min-w-[280px]">

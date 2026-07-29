@@ -249,6 +249,8 @@ export default function ClientsHome() {
   return (
     <div className="animate-in fade-in" data-testid="clients-overview">
       <LensPageHeader
+        backHref="/"
+        backLabel="Home"
         headline="Pipeline dashboard"
         lede={`Open pipeline, weighted value, expected closures and projected FY${fiscalYear} revenue at a glance.`}
       />

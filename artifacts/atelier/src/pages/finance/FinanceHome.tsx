@@ -32,7 +32,7 @@ import * as React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAtelierGetPipelineForecast, useAtelierListEngagements } from "@workspace/api-client-react";
-import { PageHero, SectionHead, Card, MonoChip, Eyebrow } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip, Eyebrow } from "@/components/ui/primitives";
 import { useFinanceEntities, useEntityExpiries, type FinanceEntityRow, type EntityExpiryRow } from "@/lib/v5-hooks";
 import {
   CfoFilterBar,
@@ -977,6 +977,9 @@ export default function FinanceHome() {
   return (
     <div className="animate-in fade-in" data-testid="cfo-dashboard">
       <PageHero>
+        <BackLink href="/" className="mb-4" data-testid="link-back">
+          Home
+        </BackLink>
         <SectionHead
           eyebrow="Manage · Finance · CFO Dashboard"
           headline="CFO morning view"

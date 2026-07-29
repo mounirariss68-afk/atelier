@@ -2,7 +2,7 @@ import * as React from "react";
 import { useParams } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Link } from "wouter";
-import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { BackLink, Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 import { useChartPalette } from "@/lib/theme";
 
 interface InvoiceDraftSummary {
@@ -231,6 +231,9 @@ export default function EngagementEconomics() {
   return (
     <div className="space-y-6">
       <PageHero>
+        <BackLink href="/finance/reports" className="mb-4" data-testid="link-back">
+          Back to reports
+        </BackLink>
         <div className="flex items-start justify-between gap-4">
           <SectionHead
             eyebrow="Firm · Ledger"

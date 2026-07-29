@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 
 interface Line { id: string; ord: number; description: string; qty: number; unitPrice: number; amount: number; sourceKind: string; sourceRef: string | null }
 interface Submission { id: string; channel: string; status: string; clearanceUuid: string | null; qrCodePayload: string | null; clearedAt: string | null; rejectedReason: string | null }
@@ -57,6 +57,9 @@ export default function WalletInvoiceDetail() {
   return (
     <div className="min-h-screen bg-bg text-text">
       <PageHero>
+        <BackLink href="/wallet/invoices" className="mb-4" data-testid="link-back">
+          Back to invoices
+        </BackLink>
         <SectionHead
           eyebrow={inv.invoiceNumber ?? "(draft)"}
           headline={inv.invoiceNumber ?? "(draft)"}
@@ -70,9 +73,6 @@ export default function WalletInvoiceDetail() {
           }
         />
       </PageHero>
-      <TabNav>
-        <TabNavLink href="/wallet/invoices" active={false}>← All invoices</TabNavLink>
-      </TabNav>
 
       <div className="px-6 py-4 max-w-5xl mx-auto space-y-4">
         <Card className="p-4 grid grid-cols-2 gap-4 text-sm">

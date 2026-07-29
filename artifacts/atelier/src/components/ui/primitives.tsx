@@ -46,13 +46,14 @@ export const PageHero = ({ children, className }: { children: React.ReactNode, c
 );
 
 /** Standard back link used at the top of detail pages. */
-export const BackLink = ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+export const BackLink = ({ href, children, className, ...rest }: { href: string; children: React.ReactNode; className?: string } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "children" | "className">) => (
   <Link
     href={href}
     className={cn(
       "inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-text-mute hover:text-gold mb-6 transition-colors",
       className,
     )}
+    {...rest}
   >
     <ArrowLeft className="w-3.5 h-3.5" /> {children}
   </Link>

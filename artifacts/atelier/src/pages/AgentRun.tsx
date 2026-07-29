@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Link, useRoute } from "wouter";
 import {
-  ArrowLeft,
   Activity,
   FileText,
   Wrench,
@@ -24,7 +23,7 @@ import type {
   AtelierAgentRunDetail,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SectionHead, PageHero, MonoChip, Card } from "@/components/ui/primitives";
+import { BackLink, SectionHead, PageHero, MonoChip, Card } from "@/components/ui/primitives";
 import { AuditTab } from "@/components/AuditTab";
 import { useFileIncident, type FileIncidentInput } from "@/lib/agents-lens-seed";
 
@@ -73,13 +72,9 @@ export default function AgentRun() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
-        <Link
-          href="/agents/monitor"
-          className="inline-flex items-center gap-2 text-xs font-mono text-text-mute hover:text-text mb-6 transition-colors"
-          data-testid="link-back-agents"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back to monitor
-        </Link>
+        <BackLink href="/agents/monitor" data-testid="link-back-agents">
+          Back to monitor
+        </BackLink>
 
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-6">
           <SectionHead

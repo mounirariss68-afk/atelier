@@ -169,6 +169,8 @@ export default function PartnersIndex() {
   return (
     <div className="animate-in fade-in">
       <LensPageHeader
+        backHref="/"
+        backLabel="Home"
         headline="Alliance lifecycle — from ecosystem map to framework renewal"
         lede="One registry of partner firms drives the whole lens: identify targets, qualify capability and NDAs, co-sell into a CRM-linked joint pipeline, co-deliver with partner resources and self-billing, govern agreements and conflicts, and manage renewal on the firm record itself."
       />

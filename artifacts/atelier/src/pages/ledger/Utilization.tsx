@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useParams, Link } from "wouter";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
+import { BackLink, Card, MonoChip, PageHero, PillButton, SectionHead } from "@/components/ui/primitives";
 import { useChartPalette } from "@/lib/theme";
 
 interface WeekRow { weekIso: string; weekStartDate: string; billableHours: number; totalHours: number; utilizationPct: number; targetPct: number; }
@@ -103,6 +103,9 @@ export default function Utilization() {
   return (
     <div className="space-y-6">
       <PageHero>
+        <BackLink href="/finance/reports" className="mb-4" data-testid="link-back">
+          Back to reports
+        </BackLink>
         <SectionHead
           eyebrow="Firm · Ledger"
           headline={data?.personLabel ?? personId}

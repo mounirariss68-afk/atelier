@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { useRoute } from "wouter";
 import { Calendar, FileText, Users, Mic, Eye } from "lucide-react";
 import {
@@ -28,6 +28,9 @@ export default function PressIndex() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
+        <BackLink href="/" className="mb-4" data-testid="link-back">
+          Home
+        </BackLink>
         <SectionHead
           eyebrow="Firm · Press"
           headline="Thought leadership at firm cadence"

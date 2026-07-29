@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useRoute, Link } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { BusinessCardQR } from "./BusinessCardQR";
 // Task #159 — contract records linked to this roster person.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
@@ -113,9 +113,9 @@ export default function RosterPerson() {
   return (
     <div>
       <PageHero>
-        <Link href={dirHref} className="text-text-mute hover:text-gold text-xs font-mono uppercase">
-          ← {underPeople ? "People directory" : "The Roster"}
-        </Link>
+        <BackLink href={dirHref} className="mb-4" data-testid="link-back">
+          {underPeople ? "People directory" : "The Roster"}
+        </BackLink>
         <SectionHead headline={person.fullName} />
         <div className="flex flex-wrap gap-2 mt-1">
           <MonoChip>

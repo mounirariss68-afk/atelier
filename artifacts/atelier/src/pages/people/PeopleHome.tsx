@@ -7,6 +7,8 @@ export default function PeopleHome() {
   return (
     <PeopleShell>
       <LensPageHeader
+        backHref="/"
+        backLabel="Home"
         headline="The CHRO morning briefing"
         lede="Headcount and workforce composition — the signals that tell you how the people function is running today, in one screen."
       />

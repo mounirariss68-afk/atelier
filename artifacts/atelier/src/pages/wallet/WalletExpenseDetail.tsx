@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useRoute, useLocation } from "wouter";
-import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitives";
 
 interface Finding {
   ruleId: string;
@@ -272,6 +272,9 @@ export default function WalletExpenseDetail() {
   return (
     <div className="space-y-6 p-6">
       <PageHero>
+        <BackLink href="/wallet/expenses" className="mb-4" data-testid="link-back">
+          Back to expenses
+        </BackLink>
         <SectionHead
           eyebrow={expense?.merchant ?? "Expense"}
           headline={expense?.merchant ?? "Expense"}

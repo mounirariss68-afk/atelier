@@ -10,7 +10,7 @@
 import * as React from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { BackLink, PageHero, SectionHead, Card, MonoChip, PillButton } from "@/components/ui/primitives";
 import { ArrowRight, AlertTriangle } from "lucide-react";
 
 const API_BASE = `${import.meta.env?.BASE_URL ?? "/"}api/atelier`;
@@ -144,6 +144,9 @@ export default function EngagementHealth(): JSX.Element {
   return (
     <div>
       <PageHero>
+        <BackLink href="/finance/plan" className="mb-4" data-testid="link-back">
+          Back to plan
+        </BackLink>
         <SectionHead
           eyebrow="Finance · Plan · Engagement Health"
           headline="Engagement P&L register"

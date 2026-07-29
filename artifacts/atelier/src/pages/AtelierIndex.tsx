@@ -8,7 +8,7 @@ import {
   useAtelierListPersonas,
   useAtelierConciergeSearch,
 } from "@workspace/api-client-react";
-import { SectionHead, PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
+import { BackLink, SectionHead, PageHero, Card, MonoChip, TabNav, TabNavLink } from "@/components/ui/primitives";
 import { useRoute } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, Search, FileText, Users, KeyRound, Sparkles } from "lucide-react";
@@ -565,6 +565,9 @@ export default function AtelierIndex() {
   return (
     <div className="animate-in fade-in">
       <PageHero>
+        <BackLink href="/" className="mb-4" data-testid="link-back">
+          Home
+        </BackLink>
         <SectionHead
           eyebrow="Firm · Atelier"
           headline="Knowledge Atelier"

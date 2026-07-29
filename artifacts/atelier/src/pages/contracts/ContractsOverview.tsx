@@ -135,6 +135,8 @@ export default function ContractsOverview() {
   return (
     <div className="flex flex-col min-h-[calc(100vh-3.5rem)]">
       <LensPageHeader
+        backHref="/"
+        backLabel="Home"
         headline="Contracts"
         lede="Prepare, sign and track the firm’s contracts — NDAs, MoUs, employment and partnership agreements."
         actions={
