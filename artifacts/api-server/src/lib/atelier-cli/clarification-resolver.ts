@@ -262,19 +262,47 @@ const isBeginField = (f: string): boolean => /(check_?in|start|begin|departure|f
 const isEndField = (f: string): boolean => /(check_?out|end|until|return)/i.test(f);
 
 /**
+ * When falling back to chronological ordering, restrict date facts to
+ * the pending tool's family (first `_`-token of the fact key's tool
+ * segment, e.g. "travel_search_flights" ↔ "travel_search_stays" share
+ * "travel") whenever any family match exists — unrelated date facts in
+ * the session (deadlines, meetings) must not become trip anchors.
+ */
+function scopeDateFactsToToolFamily(dateFacts: FactRow[], tool?: string): FactRow[] {
+  if (!tool) return dateFacts;
+  const family = tool.split("_")[0];
+  if (!family) return dateFacts;
+  const scoped = dateFacts.filter((f) => f.key.split(".")[0]?.split("_")[0] === family);
+  return scoped.length > 0 ? scoped : dateFacts;
+}
+
+/**
  * Resolve "same dates" against typed session facts: find the stated
  * begin/end date pair and map it onto the asked date fields.
  */
 export function resolveSameDates(
   askedFields: PendingFieldSpec[],
   facts: FactRow[],
+  tool?: string,
 ): Record<string, string> | null {
   const dateFacts = facts.filter(
     (f) => f.kind === "date" && typeof f.value === "string" && /^\d{4}-\d{2}-\d{2}/.test(f.value as string),
   );
   if (dateFacts.length === 0) return null;
-  const begin = dateFacts.find((f) => isBeginKey(f.key))?.value as string | undefined;
-  const end = dateFacts.find((f) => isEndKey(f.key))?.value as string | undefined;
+  let begin = dateFacts.find((f) => isBeginKey(f.key))?.value as string | undefined;
+  let end = dateFacts.find((f) => isEndKey(f.key))?.value as string | undefined;
+  // Positional keys (e.g. "travel_search_flights.segments.0.date") carry
+  // no begin/end semantics — fall back to chronological order: earliest
+  // stated date = begin, latest = end (only when they're distinct). To
+  // avoid mis-anchoring in mixed-fact sessions, prefer facts from the
+  // pending tool's family (shared key prefix, e.g. "travel_") when any
+  // exist; only then fall back to the whole session.
+  if (!begin || !end) {
+    const scoped = scopeDateFactsToToolFamily(dateFacts, tool);
+    const sorted = [...new Set(scoped.map((f) => (f.value as string).slice(0, 10)))].sort();
+    if (!begin) begin = sorted[0];
+    if (!end && sorted.length >= 2) end = sorted[sorted.length - 1];
+  }
   const out: Record<string, string> = {};
   for (const f of askedFields) {
     if (f.inputType !== "date" && !/date|check/i.test(f.field)) continue;
@@ -329,7 +357,16 @@ function deriveDates(args: {
     const beginFact = facts.find(
       (f) => f.kind === "date" && isBeginKey(f.key) && typeof f.value === "string",
     );
-    return beginFact ? (beginFact.value as string).slice(0, 10) : null;
+    if (beginFact) return (beginFact.value as string).slice(0, 10);
+    // Chronological fallback for positional fact keys: earliest date,
+    // scoped to the pending tool's family when any match exists.
+    const dateFacts = facts.filter(
+      (f) => f.kind === "date" && typeof f.value === "string" && /^\d{4}-\d{2}-\d{2}/.test(f.value as string),
+    );
+    const sorted = scopeDateFactsToToolFamily(dateFacts, pending.tool)
+      .map((f) => (f.value as string).slice(0, 10))
+      .sort();
+    return sorted[0] ?? null;
   };
   for (const f of asked) {
     if (values[f.field] || !isDateField(f)) continue;
@@ -388,14 +425,14 @@ export function resolveClarificationReply(args: {
     // date fields from facts when derivable so "confirmed" after
     // "same dates" style exchanges executes instead of re-asking.
     const fills: Record<string, string> = {};
-    const same = resolveSameDates(asked, args.facts);
+    const same = resolveSameDates(asked, args.facts, args.pending.tool);
     if (same) for (const [k, v] of Object.entries(same)) if (!fills[k]) fills[k] = v;
     return { kind: "confirm", values: fills, via: "confirm" };
   }
 
   // 2. Referential — "same dates I specified".
   if (SAME_DATES_RE.test(reply)) {
-    const same = resolveSameDates(asked, args.facts);
+    const same = resolveSameDates(asked, args.facts, args.pending.tool);
     if (same) {
       const values = { ...same };
       const nightsFact = args.facts.find((f) => f.kind === "quantity" && /night/i.test(f.key));

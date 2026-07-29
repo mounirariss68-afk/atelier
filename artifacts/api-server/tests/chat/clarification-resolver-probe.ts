@@ -226,6 +226,38 @@ check("gibberish short → unparsed", r("hmm not sure").kind === "unparsed");
   );
   check("resolveSameDates maps begin/end", same?.checkIn === "2027-03-02" && same?.checkOut === "2027-03-07", same);
 }
+// resolveSameDates — positional keys + tool-family scoping in a MIXED
+// fact set: unrelated date facts (contract deadlines, meetings) must
+// never become trip anchors when travel facts exist.
+{
+  const mixed = [
+    { kind: "date", key: "contract_status.dueDate", value: "2027-01-15" },
+    { kind: "date", key: "travel_search_flights.segments.0.date", value: "2027-03-02" },
+    { kind: "date", key: "travel_search_flights.segments.1.date", value: "2027-03-07" },
+    { kind: "date", key: "meeting_list.when", value: "2027-12-31" },
+  ] as any[];
+  const same = resolveSameDates(
+    [{ field: "checkIn", inputType: "date" }, { field: "checkOut", inputType: "date" }],
+    mixed,
+    "travel_search_stays",
+  );
+  check(
+    "resolveSameDates scopes chronological fallback to the tool family",
+    same?.checkIn === "2027-03-02" && same?.checkOut === "2027-03-07",
+    same,
+  );
+  // Without a family match the whole session is still usable.
+  const global = resolveSameDates(
+    [{ field: "checkIn", inputType: "date" }, { field: "checkOut", inputType: "date" }],
+    mixed.filter((f) => !f.key.startsWith("travel_")),
+    "travel_search_stays",
+  );
+  check(
+    "resolveSameDates falls back to session-wide dates when no family match",
+    global?.checkIn === "2027-01-15" && global?.checkOut === "2027-12-31",
+    global,
+  );
+}
 check("addDaysIso month rollover", addDaysIso("2027-02-27", 5) === "2027-03-04");
 check("flag default on", clarificationResolverMode() === "on");
 process.env.ATELIER_CLI_CLARIFICATION_RESOLVER = "off";

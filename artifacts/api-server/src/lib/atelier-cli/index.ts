@@ -2902,6 +2902,11 @@ export async function runTurn(
     // tool_result frames for the same step+tool in one turn.
     const emittedToolResultKeys = new Set<string>();
 
+    // Declared BEFORE record() — record can run well before the model
+    // loop (e.g. the "already answered" narration), and a `let` further
+    // down would be a temporal-dead-zone crash, not just undefined.
+    let lastModel: string | undefined;
+
     function record(frame: CliFrame): void {
       if (frame.type === "tool_result") {
         const key = toolResultFrameKey(frame.data as Record<string, unknown>);
@@ -3525,7 +3530,6 @@ export async function runTurn(
     let totalCost = 0;
     let totalIn = 0;
     let totalOut = 0;
-    let lastModel: string | undefined;
     let pendingWrite: { tool: string; input: Record<string, unknown> } | null = null;
     let runtimeError: string | null = null;
     let clarificationHandled = false;
