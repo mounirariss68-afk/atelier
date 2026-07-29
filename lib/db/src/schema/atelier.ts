@@ -280,6 +280,44 @@ export const atelierAccounts = pgTable(
       // Concrete plays/moves the account team will run.
       keyPlays: string[];
     }>(),
+    // Task #722 — vendor/procurement registration intelligence. Written by
+    // the Procurement Navigator agent (on partner approval) and by the
+    // manual status-tracking PATCH. `status`/`statusNotes` are human-owned;
+    // the rest is the approved research guide (citations required).
+    procurement: jsonb("procurement").$type<{
+      // Human-tracked registration state.
+      status: "not_registered" | "in_progress" | "registered" | "renewal_due";
+      statusNotes?: string | null;
+      statusUpdatedAt?: string | null;
+      statusUpdatedBy?: string | null;
+      // Agent-researched guide (present after a partner approves a run).
+      guide?: {
+        jurisdiction: string; // e.g. "saudi_gov", "uae_federal_gov", "dubai_gov", "abu_dhabi_gov", "qatar_gov", "private_sector"
+        summary: string;
+        channel: {
+          name: string; // e.g. "Etimad", "SAP Ariba"
+          type: "government_portal" | "eprocurement_platform" | "direct" | "prequalification" | "other";
+          portalUrl?: string | null;
+        };
+        responsibleContact?: {
+          department?: string | null;
+          title?: string | null;
+          email?: string | null;
+          phone?: string | null;
+          notes?: string | null;
+        } | null;
+        steps: Array<{ order: number; title: string; detail: string; sourceUrls?: string[] }>;
+        requiredInformation: string[];
+        requiredDocuments: string[];
+        fees?: string | null;
+        timeline?: string | null;
+        renewal?: string | null;
+        sources: Array<{ url: string; title?: string | null }>;
+        confidence: "green" | "amber" | "red";
+      } | null;
+      lastResearchedAt?: string | null;
+      lastResearchRunId?: string | null;
+    }>(),
     // Task #699 — free-text partner guidance on the account strategy. The
     // account partner's thoughts / direction that steer the Strategy
     // Developer agent's drafts. Lives OUTSIDE the accountStrategy jsonb so

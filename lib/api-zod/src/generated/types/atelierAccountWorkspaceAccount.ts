@@ -12,6 +12,7 @@ import type { AtelierAccountHealth } from "./atelierAccountHealth";
 import type { AtelierAccountHierarchyRef } from "./atelierAccountHierarchyRef";
 import type { AtelierAccountHierarchyRollup } from "./atelierAccountHierarchyRollup";
 import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStructure";
+import type { AtelierAccountProcurement } from "./atelierAccountProcurement";
 import type { AtelierAccountResearchQuality } from "./atelierAccountResearchQuality";
 import type { AtelierAccountStrategy } from "./atelierAccountStrategy";
 import type { AtelierAccountSummary } from "./atelierAccountSummary";
@@ -32,6 +33,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   accountStrategy?: AtelierAccountStrategy | null;
   /** @nullable */
   strategyGuidance?: string | null;
+  procurement?: AtelierAccountProcurement | null;
   competitors?: AtelierAccountCompetitor[];
   researchBrief?: AtelierResearchBrief | null;
   researchQuality?: AtelierAccountResearchQuality;

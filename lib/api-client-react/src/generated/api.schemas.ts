@@ -689,6 +689,116 @@ export interface AtelierAccountStrategy {
   keyPlays: string[];
 }
 
+export type AtelierProcurementRegistrationStatus =
+  (typeof AtelierProcurementRegistrationStatus)[keyof typeof AtelierProcurementRegistrationStatus];
+
+export const AtelierProcurementRegistrationStatus = {
+  not_registered: "not_registered",
+  in_progress: "in_progress",
+  registered: "registered",
+  renewal_due: "renewal_due",
+} as const;
+
+export type AtelierProcurementGuideChannelType =
+  (typeof AtelierProcurementGuideChannelType)[keyof typeof AtelierProcurementGuideChannelType];
+
+export const AtelierProcurementGuideChannelType = {
+  government_portal: "government_portal",
+  eprocurement_platform: "eprocurement_platform",
+  direct: "direct",
+  prequalification: "prequalification",
+  other: "other",
+} as const;
+
+export type AtelierProcurementGuideChannel = {
+  name: string;
+  type: AtelierProcurementGuideChannelType;
+  /** @nullable */
+  portalUrl?: string | null;
+};
+
+export type AtelierProcurementGuideResponsibleContact = {
+  /** @nullable */
+  department?: string | null;
+  /** @nullable */
+  title?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  notes?: string | null;
+} | null;
+
+export type AtelierProcurementGuideStepsItem = {
+  order: number;
+  title: string;
+  detail: string;
+  sourceUrls?: string[];
+};
+
+export type AtelierProcurementGuideSourcesItem = {
+  url: string;
+  /** @nullable */
+  title?: string | null;
+};
+
+export type AtelierProcurementGuideConfidence =
+  (typeof AtelierProcurementGuideConfidence)[keyof typeof AtelierProcurementGuideConfidence];
+
+export const AtelierProcurementGuideConfidence = {
+  green: "green",
+  amber: "amber",
+  red: "red",
+} as const;
+
+export interface AtelierProcurementGuide {
+  jurisdiction: string;
+  summary: string;
+  channel: AtelierProcurementGuideChannel;
+  responsibleContact?: AtelierProcurementGuideResponsibleContact;
+  steps: AtelierProcurementGuideStepsItem[];
+  requiredInformation: string[];
+  requiredDocuments: string[];
+  /** @nullable */
+  fees?: string | null;
+  /** @nullable */
+  timeline?: string | null;
+  /** @nullable */
+  renewal?: string | null;
+  sources: AtelierProcurementGuideSourcesItem[];
+  confidence: AtelierProcurementGuideConfidence;
+}
+
+export interface AtelierAccountProcurement {
+  status: AtelierProcurementRegistrationStatus;
+  /** @nullable */
+  statusNotes?: string | null;
+  /** @nullable */
+  statusUpdatedAt?: string | null;
+  /** @nullable */
+  statusUpdatedBy?: string | null;
+  guide?: AtelierProcurementGuide | null;
+  /** @nullable */
+  lastResearchedAt?: string | null;
+  /** @nullable */
+  lastResearchRunId?: string | null;
+}
+
+/**
+ * Task #722 — human-owned procurement tracking fields. PATCH semantics:
+only the keys present are written.
+
+ */
+export interface AtelierUpdateAccountProcurementInput {
+  status?: AtelierProcurementRegistrationStatus;
+  /**
+   * @maxLength 2000
+   * @nullable
+   */
+  statusNotes?: string | null;
+}
+
 export interface AtelierAccountCompetitor {
   id: string;
   /**
@@ -1613,6 +1723,7 @@ export type AtelierAccountWorkspaceAccount = AtelierAccountSummary & {
   accountStrategy?: AtelierAccountStrategy | null;
   /** @nullable */
   strategyGuidance?: string | null;
+  procurement?: AtelierAccountProcurement | null;
   competitors?: AtelierAccountCompetitor[];
   researchBrief?: AtelierResearchBrief | null;
   researchQuality?: AtelierAccountResearchQuality;
@@ -8929,6 +9040,11 @@ export const AtelierListAccountsStatus = {
   archived: "archived",
   all: "all",
 } as const;
+
+export type AtelierUpdateAccountProcurement200 = {
+  ok: boolean;
+  procurement: AtelierAccountProcurement | null;
+};
 
 export type AtelierListAuditParams = {
   entityType?: AtelierListAuditEntityType;

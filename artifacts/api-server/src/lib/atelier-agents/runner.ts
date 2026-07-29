@@ -6883,9 +6883,231 @@ export async function runStrategyDeveloper(
   return { runId: result.runId, output: result.output, costUsd: result.costUsd };
 }
 
+// ---------- Procurement Navigator (Task #722) ----------
+// Deep vendor-registration research: how does Cognirise get registered as a
+// supplier in this account's procurement system? Jurisdiction-aware (Etimad,
+// UAE DPP, Dubai eSupply/Ariba, ADERP, Qatar Monaqasat, private-sector
+// Ariba/Coupa/PQQ). Propose-then-approve: output lands on the run row and is
+// applied to accounts.procurement only via the /approve route.
+
+export interface ProcurementGuide {
+  jurisdiction: string;
+  summary: string;
+  channel: {
+    name: string;
+    type:
+      | "government_portal"
+      | "eprocurement_platform"
+      | "direct"
+      | "prequalification"
+      | "other";
+    portalUrl?: string | null;
+  };
+  responsibleContact?: {
+    department?: string | null;
+    title?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    notes?: string | null;
+  } | null;
+  steps: Array<{ order: number; title: string; detail: string; sourceUrls?: string[] }>;
+  requiredInformation: string[];
+  requiredDocuments: string[];
+  fees?: string | null;
+  timeline?: string | null;
+  renewal?: string | null;
+  sources: Array<{ url: string; title?: string | null }>;
+  confidence: "green" | "amber" | "red";
+}
+
+export interface ProcurementNavigatorOutput {
+  guide: ProcurementGuide;
+  rationale: string;
+  confidence: "green" | "amber" | "red";
+}
+
+/** A guide is junk unless it carries narrative, steps AND at least one source. */
+export function isProcurementGuideEmpty(
+  out: ProcurementNavigatorOutput | null | undefined,
+): boolean {
+  const g = out?.guide;
+  if (!g) return true;
+  const hasNarrative = (g.summary ?? "").trim().length > 0;
+  const hasSteps = (g.steps ?? []).some((s) => (s?.title ?? "").trim().length > 0);
+  const hasSources = (g.sources ?? []).some(
+    (s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url),
+  );
+  return !(hasNarrative && hasSteps && hasSources);
+}
+
+/**
+ * Jurisdiction-aware retrieval queries. Deterministic keyword routing (never
+ * the LLM) picks the specialised GCC playbook so the retrieval layer always
+ * asks about the RIGHT official portal for the account's jurisdiction.
+ */
+export function buildProcurementQueries(a: {
+  name: string;
+  country: string;
+  sector: string;
+  hqCity?: string | null;
+}): string[] {
+  const isGov = isGovernmentAccount({ sector: a.sector, name: a.name });
+  const c = (a.country ?? "").toLowerCase();
+  const city = (a.hqCity ?? "").toLowerCase();
+  const label = `${a.name} (${a.country})`;
+  const qs: string[] = [];
+  if (isGov && /saudi|ksa/.test(c)) {
+    qs.push(
+      `Etimad platform supplier vendor registration process requirements Saudi Arabia government ${a.name}`,
+      `Foreign company requirements to register as supplier on Etimad etimad.sa — documents, commercial registration, fees, timeline, renewal`,
+    );
+  } else if (isGov && /qatar/.test(c)) {
+    qs.push(
+      `Qatar government procurement Monaqasat portal supplier vendor registration process requirements ${a.name}`,
+      `Documents fees timeline to register a foreign consulting company as a vendor with Qatar Ministry of Finance government procurement portal`,
+    );
+  } else if (isGov && /(united arab emirates|uae)/.test(c) && /dubai/.test(city + " " + a.name.toLowerCase())) {
+    qs.push(
+      `Dubai government eSupply iSupplier SAP Ariba supplier registration process Department of Finance ${a.name}`,
+      `Requirements documents fees to register as a supplier with Dubai government procurement (esupply / Ariba) — trade licence, renewal`,
+    );
+  } else if (isGov && /(united arab emirates|uae)/.test(c) && /abu dhabi/.test(city + " " + a.name.toLowerCase())) {
+    qs.push(
+      `Abu Dhabi government procurement ADERP supplier registration process Department of Finance ${a.name}`,
+      `Requirements documents to register as a supplier on the Abu Dhabi Government Procurement Gate — fees, timeline, renewal, ICV`,
+    );
+  } else if (isGov && /(united arab emirates|uae)/.test(c)) {
+    qs.push(
+      `UAE federal government Digital Procurement Platform DPP supplier registration Ministry of Finance ${a.name}`,
+      `Requirements documents fees to register as a supplier on the UAE federal Digital Procurement Platform — trade licence, ICV, renewal`,
+    );
+  } else if (isGov) {
+    qs.push(
+      `${label} government supplier vendor registration official procurement portal process requirements`,
+      `Documents fees timeline for foreign consulting firm vendor registration with ${label} public procurement`,
+    );
+  } else {
+    qs.push(
+      `${label} supplier vendor registration procurement portal — SAP Ariba, Coupa, Oracle iSupplier or prequalification questionnaire`,
+      `How to become an approved supplier / vendor onboarding process documents requirements ${label}`,
+    );
+  }
+  qs.push(
+    `${label} procurement department supplier registration contact vendor management`,
+  );
+  return qs;
+}
+
+export interface ProcurementNavigatorInput extends V5RunCommonArgs {
+  accountId: string;
+}
+
+export async function runProcurementNavigator(
+  input: ProcurementNavigatorInput,
+): Promise<{ runId: string; output: ProcurementNavigatorOutput; costUsd: number }> {
+  const [account] = await db
+    .select()
+    .from(atelierAccounts)
+    .where(and(eq(atelierAccounts.id, input.accountId), isNull(atelierAccounts.deletedAt)))
+    .limit(1);
+  if (!account) throw new Error(`runProcurementNavigator: account ${input.accountId} not found`);
+
+  const result = await runAgent(
+    {
+      agentId: "ag_procurement_navigator",
+      input: { accountId: account.id, accountName: account.name },
+      triggeredByUserId: input.triggeredByUserId,
+      targetType: "account",
+      targetId: account.id,
+      targetLabel: account.brandName ?? account.name,
+      actorLabel: input.actorLabel ?? "Procurement Navigator",
+    },
+    async (c) => {
+      await c.progress(15, "Determining procurement jurisdiction");
+      const queries = buildProcurementQueries({
+        name: account.brandName ?? account.name,
+        country: account.country,
+        sector: account.sector,
+        hqCity: account.hqCity ?? null,
+      });
+      await c.progress(20, "Researching the procurement channel");
+      const system = loadPrompt("procurement_navigator", 1);
+      const userPrompt = JSON.stringify({
+        account: {
+          name: account.name,
+          brandName: account.brandName ?? null,
+          country: account.country,
+          sector: account.sector,
+          hqCity: account.hqCity ?? null,
+          size: account.size ?? null,
+          notes: account.notes ?? null,
+        },
+        isLikelyGovernment: isGovernmentAccount({
+          sector: account.sector,
+          name: account.name,
+        }),
+      });
+      const { value, costUsd, citationUrls } =
+        await callResearchJson<ProcurementNavigatorOutput>(
+          "claude-sonnet-4-5",
+          system,
+          userPrompt,
+          { progressRunId: c.runId, researchQueries: queries },
+        );
+      // Merge retrieval citations the model dropped, then fail loud on junk —
+      // an empty or source-free guide must never be stored as research.
+      const guideSources = Array.isArray(value?.guide?.sources)
+        ? value.guide.sources.filter(
+            (s) => typeof s?.url === "string" && /^https?:\/\//i.test(s.url),
+          )
+        : [];
+      const seen = new Set(guideSources.map((s) => s.url));
+      for (const c2 of citationUrls) {
+        if (!seen.has(c2.url)) {
+          seen.add(c2.url);
+          guideSources.push({ url: c2.url, title: c2.title ?? null });
+        }
+      }
+      const output: ProcurementNavigatorOutput = {
+        guide: {
+          ...(value?.guide as ProcurementGuide),
+          steps: (value?.guide?.steps ?? [])
+            .filter((s) => (s?.title ?? "").trim().length > 0)
+            .map((s, i) => ({
+              order: typeof s.order === "number" ? s.order : i + 1,
+              title: String(s.title).slice(0, 300),
+              detail: String(s.detail ?? "").slice(0, 2000),
+              sourceUrls: (s.sourceUrls ?? []).filter(
+                (u): u is string => typeof u === "string" && /^https?:\/\//i.test(u),
+              ),
+            })),
+          sources: guideSources.slice(0, 40),
+          confidence: value?.guide?.confidence ?? "amber",
+        },
+        rationale:
+          typeof value?.rationale === "string" ? value.rationale.slice(0, 2000) : "",
+        confidence: value?.confidence ?? value?.guide?.confidence ?? "amber",
+      };
+      if (isProcurementGuideEmpty(output)) {
+        throw new Error(
+          "Procurement Navigator returned an empty or ungrounded guide (no narrative, steps, or sources) — nothing was stored.",
+        );
+      }
+      return {
+        output,
+        costUsd,
+        confidence: output.confidence,
+        sourcesCount: output.guide.sources.length,
+      };
+    },
+  );
+  return { runId: result.runId, output: result.output, costUsd: result.costUsd };
+}
+
 export const ATELIER_V5_DISPATCH: Record<string, V5DispatcherFn> = {
   ag_next_best_action: (i) => runNextBestAction(i as never),
   ag_strategy_developer: (i) => runStrategyDeveloper(i as never),
+  ag_procurement_navigator: (i) => runProcurementNavigator(i as never),
   ag_relationship_health: (i) => runRelationshipHealth(i as never),
   ag_pre_meeting_briefing: (i) => runPreMeetingBriefing(i as never),
   ag_linkedin_composer: (i) => runLinkedInComposer(i as never),

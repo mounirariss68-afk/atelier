@@ -64,6 +64,7 @@
     "test:selfonly-refusal": "tsx ./tests/crm/selfonly-refusal-probe.ts",
     "test:finance-reports": "tsx ./tests/finance-reports/run.ts",
     "test:pricing-structures": "tsx ./tests/crm/pricing-structures-probe.ts",
+    "test:procurement": "tsx ./tests/crm/procurement-probe.ts",
     "test:alliance": "tsx ./tests/alliance/run.ts"
   },
   "dependencies": {

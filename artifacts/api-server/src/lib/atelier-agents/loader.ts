@@ -81,7 +81,9 @@ export type AtelierAgentId =
   | "relationship_health"
   | "pre_meeting_briefing"
   // Task #699 — Account Strategy Developer
-  | "strategy_developer";
+  | "strategy_developer"
+  // Task #722 — Procurement Navigator (vendor-registration research)
+  | "procurement_navigator";
 
 /**
  * Load an agent prompt from `prompts/<agentId>/v<version>.md`.

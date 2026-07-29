@@ -2054,6 +2054,81 @@ export const StrategyDeveloper = defineAgent({
   ],
 });
 
+// Task #722 — Procurement Navigator (deep vendor-registration research).
+export const ProcurementNavigator = defineAgent({
+  id: "ag_procurement_navigator",
+  name: "Procurement Navigator",
+  group: "Account Management",
+  stage: "Cross-cutting",
+  purpose:
+    "Researches how Cognirise gets registered as a vendor in a client's procurement system — jurisdiction-aware (Etimad, UAE DPP, Dubai eSupply/Ariba, ADERP, Qatar Monaqasat, SAP Ariba/Coupa) — and drafts a cited end-to-end registration guide for partner review.",
+  model: "claude-sonnet-4-6",
+  starred: true,
+  status: "mvp",
+  systemPromptRef: "prompts/procurement_navigator/v1.md",
+  inputSchema: z.object({
+    accountId: z.string().min(1),
+    accountName: z.string().optional(),
+  }),
+  outputSchema: z.object({
+    guide: z.object({
+      jurisdiction: z.string(),
+      summary: z.string(),
+      channel: z.object({
+        name: z.string(),
+        type: z.enum([
+          "government_portal",
+          "eprocurement_platform",
+          "direct",
+          "prequalification",
+          "other",
+        ]),
+        portalUrl: z.string().nullable().optional(),
+      }),
+      responsibleContact: z
+        .object({
+          department: z.string().nullable().optional(),
+          title: z.string().nullable().optional(),
+          email: z.string().nullable().optional(),
+          phone: z.string().nullable().optional(),
+          notes: z.string().nullable().optional(),
+        })
+        .nullable()
+        .optional(),
+      steps: z.array(
+        z.object({
+          order: z.number(),
+          title: z.string(),
+          detail: z.string(),
+          sourceUrls: z.array(z.string()).optional(),
+        }),
+      ),
+      requiredInformation: z.array(z.string()),
+      requiredDocuments: z.array(z.string()),
+      fees: z.string().nullable().optional(),
+      timeline: z.string().nullable().optional(),
+      renewal: z.string().nullable().optional(),
+      sources: z.array(
+        z.object({ url: z.string(), title: z.string().nullable().optional() }),
+      ),
+      confidence: Confidence,
+    }),
+    rationale: z.string(),
+    confidence: Confidence,
+  }),
+  tools: ["web_search"],
+  guardrails: [
+    "The guide is a proposal — it is NEVER applied without explicit partner approval",
+    "Every claim must be grounded in the retrieved research; a guide with no sources is rejected, never stored",
+    "Government-jurisdiction guides must name the official portal for that jurisdiction and cite official sources",
+    "Never invent fees, contacts, or portal URLs — omit what the research does not establish",
+  ],
+  humanCheckpoints: [
+    leadCheck("Account partner reviews the registration guide (approve / dismiss)"),
+  ],
+  evals: [],
+});
+
 // ====================== REGISTRY ======================
 
 export const ATELIER_AGENTS: Agent[] = [
@@ -2125,6 +2200,7 @@ export const ATELIER_AGENTS: Agent[] = [
   PreMeetingBriefing,
   // Task #699 — Account Strategy Developer
   StrategyDeveloper,
+  ProcurementNavigator,
 ];
 
 export const AGENT_BY_ID: Record<string, Agent> = Object.fromEntries(

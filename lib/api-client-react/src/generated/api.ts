@@ -315,6 +315,8 @@ import type {
   AtelierUpdateAccountActionInput,
   AtelierUpdateAccountInput,
   AtelierUpdateAccountInsightInput,
+  AtelierUpdateAccountProcurement200,
+  AtelierUpdateAccountProcurementInput,
   AtelierUpdateAccountRiskInput,
   AtelierUpdateAccountTeamMemberInput,
   AtelierUpdateActivityInput,
@@ -16883,6 +16885,105 @@ export const useAtelierUpdateAccount = <
   TContext
 > => {
   return useMutation(getAtelierUpdateAccountMutationOptions(options));
+};
+
+/**
+ * Task #722 — Partner-tier / Senior Manager only. Edits the human-owned
+procurement registration tracking fields (status + notes). The
+agent-researched guide itself is written only via the Procurement
+Navigator approve flow. Changes are audited.
+
+ * @summary Update the manually-tracked procurement registration status/notes
+ */
+export const getAtelierUpdateAccountProcurementUrl = (accountId: string) => {
+  return `/api/atelier/accounts/${accountId}/procurement`;
+};
+
+export const atelierUpdateAccountProcurement = async (
+  accountId: string,
+  atelierUpdateAccountProcurementInput: AtelierUpdateAccountProcurementInput,
+  options?: RequestInit,
+): Promise<AtelierUpdateAccountProcurement200> => {
+  return customFetch<AtelierUpdateAccountProcurement200>(
+    getAtelierUpdateAccountProcurementUrl(accountId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierUpdateAccountProcurementInput),
+    },
+  );
+};
+
+export const getAtelierUpdateAccountProcurementMutationOptions = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUpdateAccountProcurementInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUpdateAccountProcurementInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdateAccountProcurement"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>,
+    { accountId: string; data: BodyType<AtelierUpdateAccountProcurementInput> }
+  > = (props) => {
+    const { accountId, data } = props ?? {};
+
+    return atelierUpdateAccountProcurement(accountId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdateAccountProcurementMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>
+>;
+export type AtelierUpdateAccountProcurementMutationBody =
+  BodyType<AtelierUpdateAccountProcurementInput>;
+export type AtelierUpdateAccountProcurementMutationError =
+  ErrorType<AtelierError>;
+
+/**
+ * @summary Update the manually-tracked procurement registration status/notes
+ */
+export const useAtelierUpdateAccountProcurement = <
+  TError = ErrorType<AtelierError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>,
+    TError,
+    { accountId: string; data: BodyType<AtelierUpdateAccountProcurementInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdateAccountProcurement>>,
+  TError,
+  { accountId: string; data: BodyType<AtelierUpdateAccountProcurementInput> },
+  TContext
+> => {
+  return useMutation(
+    getAtelierUpdateAccountProcurementMutationOptions(options),
+  );
 };
 
 /**

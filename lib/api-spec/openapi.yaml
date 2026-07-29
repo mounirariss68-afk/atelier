@@ -4075,6 +4075,51 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+  /atelier/accounts/{accountId}/procurement:
+    patch:
+      operationId: atelierUpdateAccountProcurement
+      tags: [atelier]
+      summary: Update the manually-tracked procurement registration status/notes
+      description: |
+        Task #722 — Partner-tier / Senior Manager only. Edits the human-owned
+        procurement registration tracking fields (status + notes). The
+        agent-researched guide itself is written only via the Procurement
+        Navigator approve flow. Changes are audited.
+      parameters:
+        - in: path
+          name: accountId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierUpdateAccountProcurementInput"
+      responses:
+        "200":
+          description: Updated procurement payload
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, procurement]
+                properties:
+                  ok: { type: boolean }
+                  procurement:
+                    oneOf:
+                      - $ref: "#/components/schemas/AtelierAccountProcurement"
+                      - type: "null"
+        "403":
+          description: Not allowed (insufficient persona)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/accounts/{accountId}/cartographer/refresh:
     post:
       operationId: atelierRefreshAccountCartographer
@@ -6641,6 +6686,94 @@ components:
           maxItems: 12
           items: { type: string, minLength: 1, maxLength: 400 }
 
+# Task #722 — vendor/procurement registration intelligence on the account.
+    AtelierProcurementRegistrationStatus:
+      type: string
+      enum: [not_registered, in_progress, registered, renewal_due]
+
+    AtelierProcurementGuide:
+      type: object
+      required:
+        [jurisdiction, summary, channel, steps, requiredInformation, requiredDocuments, sources, confidence]
+      properties:
+        jurisdiction: { type: string }
+        summary: { type: string }
+        channel:
+          type: object
+          required: [name, type]
+          properties:
+            name: { type: string }
+            type:
+              type: string
+              enum: [government_portal, eprocurement_platform, direct, prequalification, other]
+            portalUrl: { type: ["string", "null"] }
+        responsibleContact:
+          oneOf:
+            - type: object
+              properties:
+                department: { type: ["string", "null"] }
+                title: { type: ["string", "null"] }
+                email: { type: ["string", "null"] }
+                phone: { type: ["string", "null"] }
+                notes: { type: ["string", "null"] }
+            - type: "null"
+        steps:
+          type: array
+          items:
+            type: object
+            required: [order, title, detail]
+            properties:
+              order: { type: number }
+              title: { type: string }
+              detail: { type: string }
+              sourceUrls:
+                type: array
+                items: { type: string }
+        requiredInformation:
+          type: array
+          items: { type: string }
+        requiredDocuments:
+          type: array
+          items: { type: string }
+        fees: { type: ["string", "null"] }
+        timeline: { type: ["string", "null"] }
+        renewal: { type: ["string", "null"] }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [url]
+            properties:
+              url: { type: string }
+              title: { type: ["string", "null"] }
+        confidence:
+          type: string
+          enum: [green, amber, red]
+
+    AtelierAccountProcurement:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/AtelierProcurementRegistrationStatus" }
+        statusNotes: { type: ["string", "null"] }
+        statusUpdatedAt: { type: ["string", "null"] }
+        statusUpdatedBy: { type: ["string", "null"] }
+        guide:
+          oneOf:
+            - $ref: "#/components/schemas/AtelierProcurementGuide"
+            - type: "null"
+        lastResearchedAt: { type: ["string", "null"] }
+        lastResearchRunId: { type: ["string", "null"] }
+
+    AtelierUpdateAccountProcurementInput:
+      type: object
+      description: |
+        Task #722 — human-owned procurement tracking fields. PATCH semantics:
+        only the keys present are written.
+      properties:
+        status: { $ref: "#/components/schemas/AtelierProcurementRegistrationStatus" }
+        statusNotes: { type: ["string", "null"], maxLength: 2000 }
+
     AtelierAccountCompetitor:
       type: object
       required: [id, name]
@@ -7365,6 +7498,11 @@ components:
                     - type: "null"
                 # Task #699 — free-text partner guidance on the strategy.
                 strategyGuidance: { type: ["string", "null"] }
+                # Task #722 — vendor/procurement registration intelligence.
+                procurement:
+                  oneOf:
+                    - $ref: "#/components/schemas/AtelierAccountProcurement"
+                    - type: "null"
                 # Task #566 — competitive landscape / incumbents.
                 competitors:
                   type: array

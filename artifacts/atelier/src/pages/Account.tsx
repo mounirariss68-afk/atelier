@@ -102,6 +102,7 @@ import {
   AlertTriangle,
   PenLine,
   Plus,
+  Landmark,
 } from "lucide-react";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
@@ -111,6 +112,8 @@ import { AccountAgreementsPanel } from "@/components/esign/AccountAgreementsPane
 // Task #159 — contract records linked to this account.
 import { ContractsPanel } from "@/components/contracts/ContractsPanel";
 import { AccountUpcomingMeetings } from "@/components/ms/MsMeetings";
+// Task #722 — procurement registration research + status tracking.
+import { ProcurementTab } from "@/components/ProcurementTab";
 
 type TabKey =
   | "profile"
@@ -125,6 +128,7 @@ type TabKey =
   | "whitespace"
   | "qbr"
   | "account_ai"
+  | "procurement"
   | "documents"
   | "audit";
 
@@ -141,6 +145,8 @@ const TABS: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
   { key: "whitespace", label: "Whitespace", icon: <LayoutGrid className="w-3.5 h-3.5" /> },
   { key: "qbr", label: "QBR", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "account_ai", label: "Account AI", icon: <Bot className="w-3.5 h-3.5" /> },
+  // Task #722 — vendor/procurement registration intelligence.
+  { key: "procurement", label: "Procurement", icon: <Landmark className="w-3.5 h-3.5" /> },
   { key: "documents", label: "Documents", icon: <FileText className="w-3.5 h-3.5" /> },
   { key: "audit", label: "Audit", icon: <History className="w-3.5 h-3.5" /> },
 ];
@@ -209,7 +215,11 @@ export default function Account() {
     },
   });
   const refresh = useAtelierRefreshAccountCartographer();
-  const [tab, setTab] = useState<TabKey>("profile");
+  const [tab, setTab] = useState<TabKey>(() => {
+    // Task #722 — allow deep-linking a tab via ?tab= (e.g. ?tab=procurement).
+    const wanted = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some((t) => t.key === wanted) ? (wanted as TabKey) : "profile";
+  });
   const [esignOpen, setEsignOpen] = useState(false);
 
   const invalidate = () =>
@@ -488,6 +498,13 @@ export default function Account() {
         {tab === "qbr" && <QbrTab accountId={accountId} />}
         {tab === "account_ai" && (
           <AccountAgentsTab accountId={accountId} contacts={ws.contacts} />
+        )}
+        {tab === "procurement" && (
+          <ProcurementTab
+            accountId={accountId}
+            procurement={ws.account.procurement ?? null}
+            canEdit={canMerge}
+          />
         )}
         {tab === "documents" && (
           <>
@@ -3184,12 +3201,12 @@ export function RelationshipsTab({
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // Account AI — three account-management agents (Next-Best-Action,
 // Relationship-Health, Pre-Meeting Briefing). Every result is a
 // human-checkpointed proposal: nothing is applied until the user
 // accepts (NBA → a real task) or acts/dismisses (Relationship-Health).
-// ============================================================
+// ------------------------------------------------------------
 
 type Conf = "green" | "amber" | "red";
 
@@ -4403,12 +4420,12 @@ function AuditTab({
   );
 }
 
-// ============================================================
+// ------------------------------------------------------------
 // INSIGHTS TAB (Task #569) — human, attributed insight feed +
 // account team. Visually distinct from AI research (Profile) and
 // the immutable audit trail: warm gold-tinted cards, author
 // avatars, category chips, author-scoped edit/delete.
-// ============================================================
+// ------------------------------------------------------------
 
 function InsightsTab({
   ws,

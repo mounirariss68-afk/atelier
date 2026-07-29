@@ -682,6 +682,7 @@ export {
   getAtelierUpdateAccountUrl,
   getAtelierUpdateAccountMutationOptions,
   useAtelierUpdateAccount,
+  useAtelierUpdateAccountProcurement,
   getAtelierListAccountContactsUrl,
   getAtelierListAccountContactsQueryKey,
   getAtelierListAccountContactsQueryOptions,

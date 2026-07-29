@@ -10071,6 +10071,76 @@ export const AtelierMergeAccountsResponse = zod.object({
             ])
             .optional(),
           strategyGuidance: zod.string().nullish(),
+          procurement: zod
+            .union([
+              zod.object({
+                status: zod.enum([
+                  "not_registered",
+                  "in_progress",
+                  "registered",
+                  "renewal_due",
+                ]),
+                statusNotes: zod.string().nullish(),
+                statusUpdatedAt: zod.string().nullish(),
+                statusUpdatedBy: zod.string().nullish(),
+                guide: zod
+                  .union([
+                    zod.object({
+                      jurisdiction: zod.string(),
+                      summary: zod.string(),
+                      channel: zod.object({
+                        name: zod.string(),
+                        type: zod.enum([
+                          "government_portal",
+                          "eprocurement_platform",
+                          "direct",
+                          "prequalification",
+                          "other",
+                        ]),
+                        portalUrl: zod.string().nullish(),
+                      }),
+                      responsibleContact: zod
+                        .union([
+                          zod.object({
+                            department: zod.string().nullish(),
+                            title: zod.string().nullish(),
+                            email: zod.string().nullish(),
+                            phone: zod.string().nullish(),
+                            notes: zod.string().nullish(),
+                          }),
+                          zod.null(),
+                        ])
+                        .optional(),
+                      steps: zod.array(
+                        zod.object({
+                          order: zod.number(),
+                          title: zod.string(),
+                          detail: zod.string(),
+                          sourceUrls: zod.array(zod.string()).optional(),
+                        }),
+                      ),
+                      requiredInformation: zod.array(zod.string()),
+                      requiredDocuments: zod.array(zod.string()),
+                      fees: zod.string().nullish(),
+                      timeline: zod.string().nullish(),
+                      renewal: zod.string().nullish(),
+                      sources: zod.array(
+                        zod.object({
+                          url: zod.string(),
+                          title: zod.string().nullish(),
+                        }),
+                      ),
+                      confidence: zod.enum(["green", "amber", "red"]),
+                    }),
+                    zod.null(),
+                  ])
+                  .optional(),
+                lastResearchedAt: zod.string().nullish(),
+                lastResearchRunId: zod.string().nullish(),
+              }),
+              zod.null(),
+            ])
+            .optional(),
           competitors: zod
             .array(
               zod.object({
@@ -11176,6 +11246,76 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -12527,6 +12667,76 @@ export const AtelierUpdateAccountResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -13236,6 +13446,106 @@ export const AtelierUpdateAccountResponse = zod.object({
 });
 
 /**
+ * Task #722 — Partner-tier / Senior Manager only. Edits the human-owned
+procurement registration tracking fields (status + notes). The
+agent-researched guide itself is written only via the Procurement
+Navigator approve flow. Changes are audited.
+
+ * @summary Update the manually-tracked procurement registration status/notes
+ */
+export const AtelierUpdateAccountProcurementParams = zod.object({
+  accountId: zod.coerce.string(),
+});
+
+export const atelierUpdateAccountProcurementBodyStatusNotesMax = 2000;
+
+export const AtelierUpdateAccountProcurementBody = zod
+  .object({
+    status: zod
+      .enum(["not_registered", "in_progress", "registered", "renewal_due"])
+      .optional(),
+    statusNotes: zod
+      .string()
+      .max(atelierUpdateAccountProcurementBodyStatusNotesMax)
+      .nullish(),
+  })
+  .describe(
+    "Task #722 — human-owned procurement tracking fields. PATCH semantics:\nonly the keys present are written.\n",
+  );
+
+export const AtelierUpdateAccountProcurementResponse = zod.object({
+  ok: zod.boolean(),
+  procurement: zod.union([
+    zod.object({
+      status: zod.enum([
+        "not_registered",
+        "in_progress",
+        "registered",
+        "renewal_due",
+      ]),
+      statusNotes: zod.string().nullish(),
+      statusUpdatedAt: zod.string().nullish(),
+      statusUpdatedBy: zod.string().nullish(),
+      guide: zod
+        .union([
+          zod.object({
+            jurisdiction: zod.string(),
+            summary: zod.string(),
+            channel: zod.object({
+              name: zod.string(),
+              type: zod.enum([
+                "government_portal",
+                "eprocurement_platform",
+                "direct",
+                "prequalification",
+                "other",
+              ]),
+              portalUrl: zod.string().nullish(),
+            }),
+            responsibleContact: zod
+              .union([
+                zod.object({
+                  department: zod.string().nullish(),
+                  title: zod.string().nullish(),
+                  email: zod.string().nullish(),
+                  phone: zod.string().nullish(),
+                  notes: zod.string().nullish(),
+                }),
+                zod.null(),
+              ])
+              .optional(),
+            steps: zod.array(
+              zod.object({
+                order: zod.number(),
+                title: zod.string(),
+                detail: zod.string(),
+                sourceUrls: zod.array(zod.string()).optional(),
+              }),
+            ),
+            requiredInformation: zod.array(zod.string()),
+            requiredDocuments: zod.array(zod.string()),
+            fees: zod.string().nullish(),
+            timeline: zod.string().nullish(),
+            renewal: zod.string().nullish(),
+            sources: zod.array(
+              zod.object({
+                url: zod.string(),
+                title: zod.string().nullish(),
+              }),
+            ),
+            confidence: zod.enum(["green", "amber", "red"]),
+          }),
+          zod.null(),
+        ])
+        .optional(),
+      lastResearchedAt: zod.string().nullish(),
+      lastResearchRunId: zod.string().nullish(),
+    }),
+    zod.null(),
+  ]),
+});
+
+/**
  * @summary Trigger Account Cartographer for this account
  */
 export const AtelierRefreshAccountCartographerParams = zod.object({
@@ -13625,6 +13935,76 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -15430,6 +15810,76 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -16533,6 +16983,76 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -17647,6 +18167,76 @@ export const AtelierCreateAccountInsightResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -18760,6 +19350,76 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -19857,6 +20517,76 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -20963,6 +21693,76 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -22069,6 +22869,76 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -23168,6 +24038,76 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -24279,6 +25219,76 @@ export const AtelierCreateAccountActionResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -25387,6 +26397,76 @@ export const AtelierUpdateAccountActionResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -26484,6 +27564,76 @@ export const AtelierDeleteAccountActionResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -27590,6 +28740,76 @@ export const AtelierCreateAccountRiskResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -28697,6 +29917,76 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -29794,6 +31084,76 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({
@@ -30899,6 +32259,76 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
           ])
           .optional(),
         strategyGuidance: zod.string().nullish(),
+        procurement: zod
+          .union([
+            zod.object({
+              status: zod.enum([
+                "not_registered",
+                "in_progress",
+                "registered",
+                "renewal_due",
+              ]),
+              statusNotes: zod.string().nullish(),
+              statusUpdatedAt: zod.string().nullish(),
+              statusUpdatedBy: zod.string().nullish(),
+              guide: zod
+                .union([
+                  zod.object({
+                    jurisdiction: zod.string(),
+                    summary: zod.string(),
+                    channel: zod.object({
+                      name: zod.string(),
+                      type: zod.enum([
+                        "government_portal",
+                        "eprocurement_platform",
+                        "direct",
+                        "prequalification",
+                        "other",
+                      ]),
+                      portalUrl: zod.string().nullish(),
+                    }),
+                    responsibleContact: zod
+                      .union([
+                        zod.object({
+                          department: zod.string().nullish(),
+                          title: zod.string().nullish(),
+                          email: zod.string().nullish(),
+                          phone: zod.string().nullish(),
+                          notes: zod.string().nullish(),
+                        }),
+                        zod.null(),
+                      ])
+                      .optional(),
+                    steps: zod.array(
+                      zod.object({
+                        order: zod.number(),
+                        title: zod.string(),
+                        detail: zod.string(),
+                        sourceUrls: zod.array(zod.string()).optional(),
+                      }),
+                    ),
+                    requiredInformation: zod.array(zod.string()),
+                    requiredDocuments: zod.array(zod.string()),
+                    fees: zod.string().nullish(),
+                    timeline: zod.string().nullish(),
+                    renewal: zod.string().nullish(),
+                    sources: zod.array(
+                      zod.object({
+                        url: zod.string(),
+                        title: zod.string().nullish(),
+                      }),
+                    ),
+                    confidence: zod.enum(["green", "amber", "red"]),
+                  }),
+                  zod.null(),
+                ])
+                .optional(),
+              lastResearchedAt: zod.string().nullish(),
+              lastResearchRunId: zod.string().nullish(),
+            }),
+            zod.null(),
+          ])
+          .optional(),
         competitors: zod
           .array(
             zod.object({

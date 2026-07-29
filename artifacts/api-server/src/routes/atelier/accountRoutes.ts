@@ -129,6 +129,7 @@ import {
   AtelierCreateCredentialBody as AtelierCredentialInput,
   AtelierCreateAccountBody as AtelierCreateAccountInput,
   AtelierUpdateAccountBody as AtelierUpdateAccountInput,
+  AtelierUpdateAccountProcurementBody as AtelierUpdateAccountProcurementInput,
   AtelierCreateContactBody as AtelierCreateContactInput,
   AtelierUpdateContactBody as AtelierUpdateContactInput,
   AtelierCreateContactRelationshipBody as AtelierCreateContactRelationshipInput,
@@ -164,6 +165,9 @@ import {
   runPreMeetingBriefing,
   runStrategyDeveloper,
   clampStrategyDraft,
+  runProcurementNavigator,
+  isProcurementGuideEmpty,
+  type ProcurementNavigatorOutput,
   type StrategyDeveloperOutput,
   type PendingProfileUpdate,
   type WhitespaceOutput,
@@ -212,6 +216,60 @@ type AgentLaunchState = {
 };
 const agentLaunches = new Map<string, AgentLaunchState>();
 const launchKey = (agentId: string, accountId: string) => `${agentId}:${accountId}`;
+
+/**
+ * Task #722 — non-blocking Procurement Navigator auto-run on account
+ * creation. Registers a launch entry (so the Procurement tab shows the
+ * in-progress state immediately) and degrades gracefully on any failure —
+ * the error is recorded on the launch entry / run row, never thrown into
+ * the create path. Results land as a reviewable draft (never auto-applied).
+ */
+function autoRunProcurementNavigator(
+  accountId: string,
+  userId: string,
+  accountLabel: string,
+): void {
+  const key = launchKey("ag_procurement_navigator", accountId);
+  if (agentLaunches.get(key)?.status === "running") return;
+  agentLaunches.set(key, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
+  void (async () => {
+    try {
+      const result = await runProcurementNavigator({
+        accountId,
+        triggeredByUserId: userId,
+        actorLabel: "Procurement Navigator (auto)",
+      });
+      agentLaunches.set(key, {
+        status: "succeeded",
+        error: null,
+        runId: result.runId,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[atelier] auto-on-create procurement navigator failed for ${accountLabel}: ${message}`,
+      );
+      agentLaunches.set(key, {
+        status: "failed",
+        error: message,
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    }
+  })();
+}
 
 async function loadCartographerStatus(
   accountId: string,
@@ -763,12 +821,18 @@ router.post("/accounts", async (req, res) => {
         err instanceof Error ? err.message : err,
       );
     });
+    // Task #722 — procurement research auto-runs on every new account.
+    autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
     const fresh = (await loadAccount(inserted.id)) ?? inserted;
     const access = await accessibleEngagementIds(me);
     const summary = await summariseAccount(fresh, access, me);
     res.status(201).json(summary);
     return;
   }
+
+  // Task #722 — procurement research auto-runs on every new account
+  // (non-blocking; degrades gracefully — the create never fails on it).
+  autoRunProcurementNavigator(inserted.id, me.id, inserted.brandName ?? inserted.name);
 
   // Fire-and-forget Cartographer auto-run. We do not await so the HTTP
   // response stays snappy; the Profile tab polls for completion. Only taken
@@ -1375,6 +1439,8 @@ async function buildWorkspace(
       }>,
       cogniriseHypothesis: a.cogniriseHypothesis ?? null,
       accountStrategy: a.accountStrategy ?? null,
+      // Task #722 — vendor/procurement registration intelligence.
+      procurement: a.procurement ?? null,
       // Task #699 — free-text partner guidance on the strategy.
       strategyGuidance: a.strategyGuidance ?? null,
       competitors: a.competitors ?? [],
@@ -2091,6 +2157,306 @@ router.post("/accounts/:accountId/agents/strategy-developer/dismiss", async (req
     payloadSummary: `${guard.me.name} dismissed the Strategy Developer draft for ${guard.account.brandName ?? guard.account.name}.`,
   });
   res.json({ ok: true });
+});
+
+// ---------- Procurement Navigator (Task #722) ----------
+// Vendor-registration deep research. Propose-then-approve, async launch +
+// poll (identical contract to strategy-developer). Anyone who can see the
+// account may READ the procurement section (it rides the workspace payload);
+// running the agent, approving/dismissing drafts, and editing the tracked
+// status require CREATE_ROLES (partner-tier + senior manager) on top of
+// canSeeAccount — mirroring the other account write surfaces.
+const PROCUREMENT_AGENT = "ag_procurement_navigator";
+
+async function guardProcurementNavigator(req: Request, res: Response) {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return null;
+  if (!CREATE_ROLES.has(guard.me.role)) {
+    res.status(403).json({
+      error: "partner-only",
+      reason:
+        "Only Partner or Senior Manager personas can run procurement research or edit the registration status.",
+    });
+    return null;
+  }
+  return guard;
+}
+
+async function loadLatestProcurementDraft(accountId: string) {
+  // Latest COMPLETE run that has not been decided (approved/dismissed) since
+  // it finished. Decisions are audit events keyed on runId, so check them.
+  const [run] = await db
+    .select()
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, PROCUREMENT_AGENT),
+        eq(atelierAgentRuns.targetType, "account"),
+        eq(atelierAgentRuns.targetId, accountId),
+        eq(atelierAgentRuns.status, "complete"),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const decisions = await db
+    .select({ id: atelierAuditEvents.id, payload: atelierAuditEvents.payload })
+    .from(atelierAuditEvents)
+    .where(
+      and(
+        eq(atelierAuditEvents.entityType, "account"),
+        eq(atelierAuditEvents.entityId, accountId),
+        inArray(atelierAuditEvents.action, ["agent.approved", "agent.dismissed"]),
+      ),
+    );
+  const decided = decisions.some((d) => {
+    const p = d.payload as { agentId?: string; runId?: string } | null;
+    return p?.agentId === PROCUREMENT_AGENT && p?.runId === run.id;
+  });
+  return decided ? null : run;
+}
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/procurement-navigator/run", async (req, res) => {
+  const guard = await guardProcurementNavigator(req, res);
+  if (!guard) return;
+  const key = launchKey(PROCUREMENT_AGENT, guard.account.id);
+  const existing = agentLaunches.get(key);
+  if (existing?.status === "running") {
+    res.status(409).json({ error: "already-running" });
+    return;
+  }
+  agentLaunches.set(key, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
+  void (async () => {
+    try {
+      const result = await runProcurementNavigator({
+        accountId: guard.account.id,
+        triggeredByUserId: guard.me.id,
+      });
+      agentLaunches.set(key, {
+        status: "succeeded",
+        error: null,
+        runId: result.runId,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    } catch (err) {
+      agentLaunches.set(key, {
+        status: "failed",
+        error: err instanceof Error ? err.message : String(err),
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    }
+  })();
+  res.status(202).json({ started: true });
+});
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.get("/accounts/:accountId/agents/procurement-navigator/status", async (req, res) => {
+  const guard = await guardAccountAgent(req, res);
+  if (!guard) return;
+  const key = launchKey(PROCUREMENT_AGENT, guard.account.id);
+  const launch = agentLaunches.get(key);
+  if (launch?.status === "running") {
+    const [row] = await db
+      .select({
+        statusMessage: atelierAgentRuns.statusMessage,
+        progressPct: atelierAgentRuns.progressPct,
+      })
+      .from(atelierAgentRuns)
+      .where(
+        and(
+          eq(atelierAgentRuns.agentId, PROCUREMENT_AGENT),
+          eq(atelierAgentRuns.targetType, "account"),
+          eq(atelierAgentRuns.targetId, guard.account.id),
+          eq(atelierAgentRuns.status, "running"),
+        ),
+      )
+      .orderBy(desc(atelierAgentRuns.createdAt))
+      .limit(1);
+    res.json({
+      status: "running",
+      phase: row?.statusMessage ?? "Starting procurement research…",
+      progressPct: row?.progressPct ?? 5,
+      runId: null,
+      draft: null,
+      procurement: guard.account.procurement ?? null,
+    });
+    return;
+  }
+  const run = await loadLatestProcurementDraft(guard.account.id);
+  res.json({
+    status: launch?.status === "failed" ? "failed" : run ? "drafted" : "idle",
+    phase: launch?.status === "failed" ? launch.error : null,
+    progressPct: null,
+    runId: run?.id ?? null,
+    draft: (run?.output as ProcurementNavigatorOutput | null) ?? null,
+    procurement: guard.account.procurement ?? null,
+  });
+});
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/procurement-navigator/approve", async (req, res) => {
+  const guard = await guardProcurementNavigator(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { runId?: string };
+  const run = await loadLatestProcurementDraft(guard.account.id);
+  if (!run || (typeof body.runId === "string" && body.runId !== run.id)) {
+    res.status(409).json({ error: "no-pending-draft" });
+    return;
+  }
+  const output = run.output as ProcurementNavigatorOutput | null;
+  if (isProcurementGuideEmpty(output)) {
+    res.status(409).json({ error: "empty-draft" });
+    return;
+  }
+  const prior = guard.account.procurement ?? null;
+  const next = {
+    // Human-tracked state survives re-research; a fresh account starts
+    // not_registered.
+    status: prior?.status ?? ("not_registered" as const),
+    statusNotes: prior?.statusNotes ?? null,
+    statusUpdatedAt: prior?.statusUpdatedAt ?? null,
+    statusUpdatedBy: prior?.statusUpdatedBy ?? null,
+    guide: output!.guide,
+    lastResearchedAt: new Date(run.updatedAt ?? run.createdAt).toISOString(),
+    lastResearchRunId: run.id,
+  };
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccounts)
+      .set({ procurement: next, updatedAt: new Date() })
+      .where(eq(atelierAccounts.id, guard.account.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: guard.account.orgId,
+      entityType: "account",
+      entityId: guard.account.id,
+      actorType: "human",
+      actorId: guard.me.id,
+      actorLabel: guard.me.name,
+      action: "agent.approved",
+      payload: {
+        agentId: PROCUREMENT_AGENT,
+        runId: run.id,
+        fields: ["procurement.guide"],
+        jurisdiction: output!.guide.jurisdiction,
+        channel: output!.guide.channel?.name ?? null,
+      },
+      payloadSummary: `${guard.me.name} approved the Procurement Navigator guide (${output!.guide.channel?.name ?? output!.guide.jurisdiction}) on ${guard.account.brandName ?? guard.account.name}.`,
+    });
+  });
+  res.json({ ok: true, procurement: next });
+});
+
+// @cli-skip: bespoke UI agent run/approve/dismiss surface (raw-fetch contract)
+router.post("/accounts/:accountId/agents/procurement-navigator/dismiss", async (req, res) => {
+  const guard = await guardProcurementNavigator(req, res);
+  if (!guard) return;
+  const body = (req.body ?? {}) as { runId?: string; reason?: string };
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    orgId: guard.account.orgId,
+    entityType: "account",
+    entityId: guard.account.id,
+    actorType: "human",
+    actorId: guard.me.id,
+    actorLabel: guard.me.name,
+    action: "agent.dismissed",
+    payload: {
+      agentId: PROCUREMENT_AGENT,
+      runId: typeof body.runId === "string" ? body.runId : null,
+      reason: typeof body.reason === "string" ? body.reason.slice(0, 240) : null,
+    },
+    payloadSummary: `${guard.me.name} dismissed the Procurement Navigator guide for ${guard.account.brandName ?? guard.account.name}.`,
+  });
+  res.json({ ok: true });
+});
+
+// ---------- Procurement registration status (manual tracking, Task #722) ----------
+const PROCUREMENT_STATUSES = new Set([
+  "not_registered",
+  "in_progress",
+  "registered",
+  "renewal_due",
+]);
+
+// @cli-skip: manual procurement status tracking is a UI-form surface (Task #722)
+router.patch("/accounts/:accountId/procurement", async (req, res) => {
+  const guard = await guardProcurementNavigator(req, res);
+  if (!guard) return;
+  const parsed = AtelierUpdateAccountProcurementInput.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", issues: parsed.error.issues });
+    return;
+  }
+  const { status, statusNotes } = parsed.data;
+  if (status !== undefined && !PROCUREMENT_STATUSES.has(status)) {
+    res.status(400).json({ error: "invalid-status" });
+    return;
+  }
+  const prior = guard.account.procurement ?? null;
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  const next = {
+    status: prior?.status ?? ("not_registered" as const),
+    statusNotes: prior?.statusNotes ?? null,
+    statusUpdatedAt: prior?.statusUpdatedAt ?? null,
+    statusUpdatedBy: prior?.statusUpdatedBy ?? null,
+    guide: prior?.guide ?? null,
+    lastResearchedAt: prior?.lastResearchedAt ?? null,
+    lastResearchRunId: prior?.lastResearchRunId ?? null,
+  };
+  if (status !== undefined && status !== next.status) {
+    changes.status = { from: next.status, to: status };
+    next.status = status as typeof next.status;
+  }
+  if (statusNotes !== undefined) {
+    const trimmed = (statusNotes ?? "").trim() || null;
+    if (trimmed !== (next.statusNotes ?? null)) {
+      changes.statusNotes = { from: next.statusNotes ?? null, to: trimmed };
+      next.statusNotes = trimmed;
+    }
+  }
+  if (Object.keys(changes).length === 0) {
+    res.json({ ok: true, procurement: prior ?? next });
+    return;
+  }
+  next.statusUpdatedAt = new Date().toISOString();
+  next.statusUpdatedBy = guard.me.id;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierAccounts)
+      .set({ procurement: next, updatedAt: new Date() })
+      .where(eq(atelierAccounts.id, guard.account.id));
+    await tx.insert(atelierAuditEvents).values({
+      id: rid("aud"),
+      orgId: guard.account.orgId,
+      entityType: "account",
+      entityId: guard.account.id,
+      actorType: "human",
+      actorId: guard.me.id,
+      actorLabel: guard.me.name,
+      action: "account.procurement_status_updated",
+      payload: { changes },
+      payloadSummary: `${guard.me.name} updated procurement registration ${
+        changes.status
+          ? `status to ${String((changes.status as { to: unknown }).to).replace(/_/g, " ")}`
+          : "notes"
+      } on ${guard.account.brandName ?? guard.account.name}.`,
+    });
+  });
+  res.json({ ok: true, procurement: next });
 });
 
 // ---------- edit insight (author only) ----------
