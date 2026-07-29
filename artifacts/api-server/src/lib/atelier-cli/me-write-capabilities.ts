@@ -333,6 +333,35 @@ defineSelfWriteCapability({
 // ---------------------------------------------------------------------
 // me.expense_create — draft an expense (mirrors POST /me/expenses)
 // ---------------------------------------------------------------------
+
+/**
+ * Task #743 — tolerant amount parsing for clarification answers. The
+ * clarification resolver merges the user's raw reply into the asked
+ * field, so `amount` can arrive as "120 dollars" / "45 AED" / "1,200".
+ * Extracts the numeric value plus an optional 3-letter currency code.
+ */
+const EXPENSE_ANSWER_CURRENCIES = new Set(["USD", "AED", "SAR", "EUR", "GBP", "TRY"]);
+function parseExpenseAmountAnswer(raw: unknown): {
+  amount: number | null;
+  currency: string | null;
+} {
+  if (typeof raw === "number") return { amount: raw, currency: null };
+  if (typeof raw !== "string") return { amount: null, currency: null };
+  const s = raw.trim().replace(/dollars?|bucks?/gi, "USD");
+  if (!s) return { amount: null, currency: null };
+  let currency: string | null = null;
+  for (const m of s.matchAll(/\b([A-Za-z]{3})\b/g)) {
+    const code = m[1]!.toUpperCase();
+    if (EXPENSE_ANSWER_CURRENCIES.has(code)) {
+      currency = code;
+      break;
+    }
+  }
+  const num = /-?\d+(?:[.,]\d+)?/.exec(s.replace(/,(?=\d{3}\b)/g, ""));
+  if (!num) return { amount: null, currency };
+  return { amount: Number(num[0].replace(",", ".")), currency };
+}
+
 defineSelfWriteCapability({
   id: "me.expense_create",
   module: "roster",
@@ -378,7 +407,44 @@ defineSelfWriteCapability({
   twoPhaseConfirm: true,
   irreversible: false,
   async runSelf(input, subject, ctx) {
-    const amount = Number(input.amount);
+    // Task #743 — a MISSING or unparseable amount degrades to a
+    // clarification (never a dead-end tool error): the resolver merges
+    // the user's next reply into `amount`, which can be free text.
+    const parsed = parseExpenseAmountAnswer(input.amount);
+    if (parsed.amount == null) {
+      const partial: Record<string, unknown> = {};
+      for (const k of [
+        "currency",
+        "merchant",
+        "expenseDate",
+        "description",
+        "contextType",
+        "internalProjectLabel",
+        "receiptAttachmentId",
+      ] as const) {
+        const v = input[k];
+        if (v !== undefined && v !== null && String(v).trim() !== "") partial[k] = v;
+      }
+      const rawTyped = typeof input.amount === "string" ? input.amount.trim() : "";
+      const today = new Date().toISOString().slice(0, 10);
+      return {
+        ok: true,
+        data: { partial },
+        clarification: {
+          field: "amount",
+          question: rawTyped
+            ? `Sorry, I couldn't read "${rawTyped}" as an amount — how much was it? (e.g. "120" or "45 AED")`
+            : 'How much was this expense? (e.g. "120" or "45 AED" — the date defaults to today unless you pick one.)',
+          tool: "create_my_expense",
+          partial,
+          fields: [
+            { field: "amount", label: "Amount", hint: 'e.g. "120" or "45 AED"' },
+            { field: "expenseDate", label: "Date", inputType: "date", defaultValue: today },
+          ],
+        },
+      };
+    }
+    const amount = parsed.amount;
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
       return {
         ok: false,
@@ -393,7 +459,9 @@ defineSelfWriteCapability({
     const dateStr = isIsoDate(input.expenseDate)
       ? input.expenseDate
       : new Date().toISOString().slice(0, 10);
-    const currency = String(input.currency ?? "USD").toUpperCase().slice(0, 3);
+    const currency = String(input.currency ?? parsed.currency ?? "USD")
+      .toUpperCase()
+      .slice(0, 3);
     const contextType = input.contextType === "internal" ? "internal" : "bd";
     const internalProjectLabel =
       contextType === "internal" && typeof input.internalProjectLabel === "string"

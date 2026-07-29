@@ -37,6 +37,17 @@ first run can exceed 2 minutes; never points at the live DB).
   deterministically; unparsed answers degrade to an honest re-ask.
 - **S7** self-only persona isolation: employees clamped to me.* tools,
   cannot resume another user's clarification, cross-user facts load empty.
+- **M1** meetings (stub Microsoft Graph via `MS_LOGIN_BASE_URL` /
+  `MS_GRAPH_BASE_URL`): schedule → topic ask → location ask → two-phase
+  confirm books ONE Outlook invite; a double-send of the same confirm
+  replays without booking twice.
+- **M2** ambiguous colleague name → disambiguation (nothing booked); the
+  disambiguated retry proceeds to the topic ask.
+- **E1** expenses (employee persona): create with missing amount →
+  clarification (amount + date-picker fields) → "120 dollars" answer →
+  preview → CONCURRENT double confirm commits exactly ONE draft row.
+- **E2** fully-specified expense goes straight to preview; a sequential
+  re-confirm after success replays with no second row.
 
 Adding a scenario: reuse `seedFlightFacts`/`askHotels`/`postTurn` helpers;
 every turn must pass `assertAlive` (final frame, non-error status) — that

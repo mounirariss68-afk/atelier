@@ -24,6 +24,17 @@
  *       honest re-ask — never an error, never a dropped question.
  *   S7. Self-only persona isolation: employees get 403 on /cli/turn
  *       and session facts never load across users.
+ *   M1. Meetings (stub Microsoft Graph via MS_*_BASE_URL): schedule →
+ *       topic ask → answer → location ask → answer → two-phase confirm
+ *       books ONE Outlook invite; a double-send of the same confirm
+ *       replays and never books twice.
+ *   M2. Ambiguous colleague name → disambiguation (no invite booked),
+ *       and the disambiguated retry proceeds to the topic ask.
+ *   E1. Expenses (employee persona, me.* clamp): create → missing
+ *       amount ask → "120 dollars" answer → preview → CONCURRENT
+ *       double confirm commits exactly ONE draft expense row.
+ *   E2. Fully-specified expense goes straight to preview; a sequential
+ *       re-confirm after success replays (no second row).
  *
  * Fails loudly on re-ask loops (same field asked twice after a valid
  * answer) and dead ends (no final frame / error status).
@@ -53,6 +64,9 @@ function check(name: string, ok: boolean, detail?: unknown) {
 }
 
 const TAG = `probe742_${Date.now()}`;
+// Run-unique roster-name/merchant salt: the scratch DB is shared, so a
+// concurrent or leaked probe run must never make "Vexley" ambiguous.
+const NT = Date.now().toString(36);
 
 // ---------------------------------------------------------------------
 // Travel provider stubs (Ignav flights + StayingAPI hotels) — offline.
@@ -180,6 +194,60 @@ const stayingStub = createServer((req, res) => {
 });
 
 // ---------------------------------------------------------------------
+// Microsoft Graph stub (meetings scenarios) — env BEFORE app import.
+// ---------------------------------------------------------------------
+
+process.env.MS_TOKEN_ENC_SECRET = "probe743-enc-secret";
+process.env.MS_CLIENT_ID = "stub-client";
+process.env.MS_TENANT_ID = "stub-tenant";
+process.env.MS_CLIENT_SECRET = "stub-secret";
+
+const graphEvents: any[] = [];
+const graphStub = createServer((req, res) => {
+  let raw = "";
+  req.on("data", (c) => (raw += c));
+  req.on("end", () => {
+    const url = req.url ?? "";
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && url.includes("/oauth2/v2.0/token")) {
+      res.end(
+        JSON.stringify({
+          access_token: "stub-access",
+          refresh_token: "stub-refresh-2",
+          expires_in: 3600,
+          scope: "Calendars.ReadWrite User.Read",
+        }),
+      );
+      return;
+    }
+    if (url.includes("calendarView") || url.includes("getSchedule")) {
+      res.end(JSON.stringify({ value: [] })); // everyone free
+      return;
+    }
+    if (req.method === "POST" && url.startsWith("/me/events")) {
+      const payload = JSON.parse(raw || "{}");
+      graphEvents.push(payload);
+      res.statusCode = 201;
+      res.end(
+        JSON.stringify({
+          id: `evt-${graphEvents.length}`,
+          iCalUId: `uid-${graphEvents.length}`,
+          subject: payload.subject,
+          webLink: "https://outlook.test/evt",
+          onlineMeeting: payload.isOnlineMeeting ? { joinUrl: "https://teams.test/join/probe" } : null,
+        }),
+      );
+      return;
+    }
+    res.statusCode = 404;
+    res.end("{}");
+  });
+});
+
+// Future meeting date so slot validation never rejects it as past.
+const MEET_DATE = new Date(Date.now() + 5 * 86400e3).toISOString().slice(0, 10);
+
+// ---------------------------------------------------------------------
 // Scriptable stub Anthropic server (must exist before app import).
 // ---------------------------------------------------------------------
 
@@ -236,6 +304,77 @@ const anthropicStub = createServer((req, res) => {
     const promptText = Array.isArray(lastUser?.content)
       ? lastUser.content.map((b: any) => (typeof b === "string" ? b : b?.text ?? "")).join(" ")
       : String(lastUser?.content ?? "");
+    if (/meeting with aydan probemate/i.test(promptText)) {
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_m2b`,
+            name: "schedule_internal_meeting",
+            input: { attendees: [`Aydan ${NT} Probemate`], date: MEET_DATE, time: "11:00" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
+    if (/meeting with aydan/i.test(promptText)) {
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_m2`,
+            name: "schedule_internal_meeting",
+            input: { attendees: [`Aydan ${NT}`], date: MEET_DATE, time: "11:00" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
+    if (/meeting with vexley/i.test(promptText)) {
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_m1`,
+            name: "schedule_internal_meeting",
+            input: { attendees: [`Vexley ${NT}`], date: MEET_DATE, time: "10:00" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
+    if (/expense at marina cafe/i.test(promptText)) {
+      // Deliberately NO amount — pins the missing-amount clarification.
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_e1`,
+            name: "create_my_expense",
+            input: { merchant: `Marina Cafe ${NT}`, description: "Client coffee" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
+    if (/45 aed taxi/i.test(promptText)) {
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_e2`,
+            name: "create_my_expense",
+            input: { amount: 45, currency: "AED", merchant: `City Taxi ${NT}` },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
     if (/find flights/i.test(promptText)) {
       send(
         [
@@ -277,7 +416,10 @@ await Promise.all([
   new Promise<void>((r) => ignavStub.listen(0, r)),
   new Promise<void>((r) => stayingStub.listen(0, r)),
   new Promise<void>((r) => anthropicStub.listen(0, r)),
+  new Promise<void>((r) => graphStub.listen(0, r)),
 ]);
+process.env.MS_LOGIN_BASE_URL = `http://127.0.0.1:${(graphStub.address() as AddressInfo).port}`;
+process.env.MS_GRAPH_BASE_URL = `http://127.0.0.1:${(graphStub.address() as AddressInfo).port}`;
 process.env.ATELIER_IGNAV_BASE_URL = `http://127.0.0.1:${(ignavStub.address() as AddressInfo).port}`;
 process.env.ATELIER_STAYING_BASE_URL = `http://127.0.0.1:${(stayingStub.address() as AddressInfo).port}`;
 delete process.env.IGNAV_API_KEY;
@@ -290,9 +432,19 @@ process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY = `${TAG}-stub-key`;
 // ---------------------------------------------------------------------
 
 const D = await import("@workspace/db");
-const { db, pool, atelierUsers, atelierCliSessions, atelierCliTurns, atelierCliSessionFacts, atelierAuditEvents } =
-  D as any;
-const { eq, inArray } = await import("drizzle-orm");
+const {
+  db,
+  pool,
+  atelierUsers,
+  atelierCliSessions,
+  atelierCliTurns,
+  atelierCliSessionFacts,
+  atelierAuditEvents,
+  atelierMsConnections,
+  atelierMeetings,
+  atelierExpenses,
+} = D as any;
+const { eq, inArray, like } = await import("drizzle-orm");
 const { loadSessionFacts } = await import("../../src/lib/atelier-cli/session-facts.js");
 const appMod = await import("../../src/app.js");
 const app = appMod.default;
@@ -300,6 +452,10 @@ const app = appMod.default;
 const ORG = "aico";
 const FP = `u_${TAG}_fp`;
 const EMP = `u_${TAG}_emp`;
+const VEX = `u_${TAG}_vex`;
+const AY1 = `u_${TAG}_ay1`;
+const AY2 = `u_${TAG}_ay2`;
+const ALL_USERS = [FP, EMP, VEX, AY1, AY2];
 
 await db.insert(atelierUsers).values([
   {
@@ -324,7 +480,52 @@ await db.insert(atelierUsers).values([
     title: "Analyst",
     permissions: [],
   },
+  {
+    id: VEX,
+    orgId: ORG,
+    email: `${TAG}.vex@cognirise.ai`,
+    name: `Vexley ${NT}`,
+    initials: "VP",
+    role: "consultant",
+    roleLabel: "Consultant",
+    title: "Consultant",
+    permissions: [],
+  },
+  {
+    id: AY1,
+    orgId: ORG,
+    email: `${TAG}.ay1@cognirise.ai`,
+    name: `Aydan ${NT} Probeleague`,
+    initials: "AP",
+    role: "consultant",
+    roleLabel: "Consultant",
+    title: "Consultant",
+    permissions: [],
+  },
+  {
+    id: AY2,
+    orgId: ORG,
+    email: `${TAG}.ay2@cognirise.ai`,
+    name: `Aydan ${NT} Probemate`,
+    initials: "AP",
+    role: "consultant",
+    roleLabel: "Consultant",
+    title: "Consultant",
+    permissions: [],
+  },
 ]);
+
+// FP's Microsoft connection (encrypted refresh token; stub refreshes it).
+const gm = await import("../../src/lib/msGraph.js");
+await db.insert(atelierMsConnections).values({
+  id: `msc_${TAG}`,
+  orgId: ORG,
+  userId: FP,
+  msEmail: `${TAG}.fp@cognirise.ai`,
+  msOid: "oid-probe743",
+  encRefreshToken: gm.encryptToken("stub-refresh-1"),
+  scopes: ["Calendars.ReadWrite", "User.Read"],
+});
 
 const server = app.listen(0);
 await new Promise<void>((r) => server.once("listening", () => r()));
@@ -337,6 +538,31 @@ interface Frame {
 
 const sessionIds = new Set<string>();
 const turnIds = new Set<string>();
+
+function parseSse(raw: string): Frame[] {
+  const frames: Frame[] = [];
+  for (const block of raw.split(/\n\n+/)) {
+    const evLine = block.split("\n").find((l) => l.startsWith("event:"));
+    const dataLine = block.split("\n").find((l) => l.startsWith("data:"));
+    if (!evLine || !dataLine) continue;
+    let data: any = {};
+    try {
+      data = JSON.parse(dataLine.slice("data:".length).trim());
+    } catch {}
+    frames.push({ event: evLine.slice("event:".length).trim(), data });
+  }
+  return frames;
+}
+
+/** Commit a pending two-phase write via POST /cli/turn/:id/confirm (SSE). */
+async function postConfirm(turnId: string, who: string = FP): Promise<{ status: number; frames: Frame[] }> {
+  const res = await fetch(`${BASE}/cli/turn/${turnId}/confirm`, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: `atelier_persona=${who}` },
+    body: "{}",
+  });
+  return { status: res.status, frames: parseSse(await res.text()) };
+}
 
 async function postTurn(args: {
   who?: string;
@@ -355,17 +581,7 @@ async function postTurn(args: {
     }),
   });
   const raw = await res.text();
-  const frames: Frame[] = [];
-  for (const block of raw.split(/\n\n+/)) {
-    const evLine = block.split("\n").find((l) => l.startsWith("event:"));
-    const dataLine = block.split("\n").find((l) => l.startsWith("data:"));
-    if (!evLine || !dataLine) continue;
-    let data: any = {};
-    try {
-      data = JSON.parse(dataLine.slice("data:".length).trim());
-    } catch {}
-    frames.push({ event: evLine.slice("event:".length).trim(), data });
-  }
+  const frames = parseSse(raw);
   let turnId: string | null = null;
   for (const f of frames) if (typeof f.data?.turnId === "string") turnId = f.data.turnId;
   let sessionId: string | null = null;
@@ -634,6 +850,145 @@ try {
       check("S7: another user sees ZERO facts for the same session", other.length === 0, other.length);
     }
   }
+  // =====================================================================
+  // M1 — meetings: topic ask → location ask → confirm books ONE invite;
+  // double-send of the same confirm replays and never books twice.
+  // =====================================================================
+  {
+    const TOPIC = `Quarterly pipeline review ${TAG}`;
+    const t1 = await postTurn({ prompt: "schedule a meeting with Vexley" });
+    assertAlive("M1/ask", t1.frames);
+    const cl1 = clarOf(t1.frames);
+    check(
+      "M1: asks for topic",
+      cl1?.data?.tool === "schedule_internal_meeting" && cl1?.data?.field === "topic",
+      cl1?.data ?? t1.frames.map((f) => f.event),
+    );
+    const t2 = await postTurn({ prompt: TOPIC, sessionId: t1.sessionId, continuesTurnId: t1.turnId });
+    assertAlive("M1/topic-answer", t2.frames);
+    const cl2 = clarOf(t2.frames);
+    check("M1: then asks online/in-person (no topic re-ask)", cl2?.data?.field === "locationType", cl2?.data);
+    const t3 = await postTurn({ prompt: "online", sessionId: t1.sessionId, continuesTurnId: t2.turnId });
+    assertAlive("M1/location-answer", t3.frames);
+    const confFrame = t3.frames.find((f) => f.event === "needs_confirmation");
+    check(
+      "M1: preview → needs_confirmation (no further re-ask)",
+      !!confFrame && !clarOf(t3.frames),
+      t3.frames.map((f) => f.event),
+    );
+    const before = graphEvents.length;
+    const c1 = await postConfirm(t3.turnId!);
+    assertAlive("M1/confirm", c1.frames);
+    check("M1: confirm books exactly one Outlook invite", graphEvents.length === before + 1, graphEvents.length - before);
+    const invited = (graphEvents[graphEvents.length - 1]?.attendees ?? []).map(
+      (a: any) => a?.emailAddress?.address,
+    );
+    check("M1: invite includes the colleague", invited.includes(`${TAG}.vex@cognirise.ai`), invited);
+    const rows = await db.select().from(atelierMeetings).where(like(atelierMeetings.title, `%${TAG}%`));
+    check("M1: one internal meeting row", rows.length === 1 && rows[0]?.parentType === "internal", rows.length);
+    // Double-send of the SAME confirm (second tab / retried request).
+    const c2 = await postConfirm(t3.turnId!);
+    assertAlive("M1/double-confirm", c2.frames);
+    const fin2 = finalOf(c2.frames);
+    check(
+      "M1: double confirm replays — no second invite",
+      graphEvents.length === before + 1 && fin2?.data?.replay === true,
+      { extraEvents: graphEvents.length - before - 1, final: fin2?.data },
+    );
+    const rows2 = await db.select().from(atelierMeetings).where(like(atelierMeetings.title, `%${TAG}%`));
+    check("M1: still exactly one meeting row", rows2.length === 1, rows2.length);
+  }
+
+  // =====================================================================
+  // M2 — ambiguous colleague → disambiguation (never a dead end, never a
+  // booking); the disambiguated retry proceeds to the topic ask.
+  // =====================================================================
+  {
+    const before = graphEvents.length;
+    const t1 = await postTurn({ prompt: "schedule a meeting with Aydan" });
+    assertAlive("M2/ambiguous", t1.frames);
+    const dis = t1.frames.find((f) => f.event === "needs_disambiguation");
+    const labels = ((dis?.data?.options as any[]) ?? []).map((o) => o?.label);
+    check(
+      "M2: ambiguous name → disambiguation with both Aydans",
+      !!dis && labels.includes(`Aydan ${NT} Probeleague`) && labels.includes(`Aydan ${NT} Probemate`),
+      dis?.data ?? t1.frames.map((f) => f.event),
+    );
+    check("M2: nothing booked while ambiguous", graphEvents.length === before);
+    const t2 = await postTurn({ prompt: "schedule a meeting with Aydan Probemate", sessionId: t1.sessionId });
+    assertAlive("M2/resolved", t2.frames);
+    const cl = clarOf(t2.frames);
+    check(
+      "M2: disambiguated retry proceeds to the topic ask",
+      cl?.data?.tool === "schedule_internal_meeting" && cl?.data?.field === "topic",
+      cl?.data ?? t2.frames.map((f) => f.event),
+    );
+  }
+
+  // =====================================================================
+  // E1 — expenses (employee persona): missing amount → clarification →
+  // "120 dollars" → preview → CONCURRENT double confirm commits ONCE.
+  // =====================================================================
+  {
+    const t1 = await postTurn({ who: EMP, prompt: "log an expense at Marina Cafe" });
+    assertAlive("E1/ask", t1.frames);
+    const cl = clarOf(t1.frames);
+    check(
+      "E1: missing amount → clarification (not a dead-end tool error)",
+      cl?.data?.tool === "create_my_expense" && cl?.data?.field === "amount",
+      cl?.data ?? t1.frames.map((f) => f.event),
+    );
+    const fields = ((cl?.data?.fields as any[]) ?? []);
+    check(
+      "E1: clarification payload offers amount + date (date picker)",
+      fields.some((f) => f.field === "amount") &&
+        fields.some((f) => f.field === "expenseDate" && f.inputType === "date"),
+      fields,
+    );
+    const t2 = await postTurn({ who: EMP, prompt: "120 dollars", sessionId: t1.sessionId, continuesTurnId: t1.turnId });
+    assertAlive("E1/amount-answer", t2.frames);
+    check("E1: no re-ask after the amount answer", !clarOf(t2.frames), clarOf(t2.frames)?.data);
+    const confFrame = t2.frames.find((f) => f.event === "needs_confirmation");
+    check("E1: two-phase preview issued", !!confFrame, t2.frames.map((f) => f.event));
+    // CONCURRENT double-send of the same confirm — the double-click race.
+    const [c1, c2] = await Promise.all([postConfirm(t2.turnId!, EMP), postConfirm(t2.turnId!, EMP)]);
+    assertAlive("E1/confirm-a", c1.frames);
+    assertAlive("E1/confirm-b", c2.frames);
+    const rows = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.merchant, `Marina Cafe ${NT}`));
+    check(
+      "E1: concurrent double confirm commits exactly ONE expense (amount parsed from '120 dollars')",
+      rows.length === 1 &&
+        Number(rows[0]?.amount) === 120 &&
+        rows[0]?.currency === "USD" &&
+        rows[0]?.status === "draft" &&
+        rows[0]?.personId === EMP,
+      rows.map((r: any) => ({ amount: r.amount, currency: r.currency, status: r.status })),
+    );
+  }
+
+  // =====================================================================
+  // E2 — fully-specified expense: straight to preview; sequential
+  // re-confirm after success replays (no second row).
+  // =====================================================================
+  {
+    const t1 = await postTurn({ who: EMP, prompt: "log a 45 AED taxi expense" });
+    assertAlive("E2/ask", t1.frames);
+    check("E2: fully-specified → no clarification round", !clarOf(t1.frames), clarOf(t1.frames)?.data);
+    const confFrame = t1.frames.find((f) => f.event === "needs_confirmation");
+    check("E2: goes straight to the two-phase preview", !!confFrame, t1.frames.map((f) => f.event));
+    const c1 = await postConfirm(t1.turnId!, EMP);
+    assertAlive("E2/confirm", c1.frames);
+    const rows = await db.select().from(atelierExpenses).where(eq(atelierExpenses.merchant, `City Taxi ${NT}`));
+    check("E2: one committed draft (AED kept)", rows.length === 1 && rows[0]?.currency === "AED", rows.length);
+    const c2 = await postConfirm(t1.turnId!, EMP);
+    assertAlive("E2/re-confirm", c2.frames);
+    check("E2: re-confirm after success replays", finalOf(c2.frames)?.data?.replay === true, finalOf(c2.frames)?.data);
+    const rows2 = await db.select().from(atelierExpenses).where(eq(atelierExpenses.merchant, `City Taxi ${NT}`));
+    check("E2: still exactly one expense row", rows2.length === 1, rows2.length);
+  }
 } finally {
   // Cleanup (scratch DB, but keep it tidy for reuse) + __t sweep pattern.
   try {
@@ -647,7 +1002,27 @@ try {
       await db.delete(atelierCliSessionFacts).where(inArray(atelierCliSessionFacts.sessionId, sids));
       await db.delete(atelierCliSessions).where(inArray(atelierCliSessions.id, sids));
     }
-    await db.delete(atelierUsers).where(inArray(atelierUsers.id, [FP, EMP]));
+    // Meetings + expenses rows created by the M/E scenarios (with audits).
+    const mrows = await db
+      .select({ id: atelierMeetings.id })
+      .from(atelierMeetings)
+      .where(like(atelierMeetings.title, `%${TAG}%`));
+    const mids = mrows.map((r: any) => r.id);
+    if (mids.length > 0) {
+      await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, mids));
+      await db.delete(atelierMeetings).where(inArray(atelierMeetings.id, mids));
+    }
+    const erows = await db
+      .select({ id: atelierExpenses.id })
+      .from(atelierExpenses)
+      .where(inArray(atelierExpenses.personId, ALL_USERS));
+    const eids = erows.map((r: any) => r.id);
+    if (eids.length > 0) {
+      await db.delete(atelierAuditEvents).where(inArray(atelierAuditEvents.entityId, eids));
+      await db.delete(atelierExpenses).where(inArray(atelierExpenses.id, eids));
+    }
+    await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, FP));
+    await db.delete(atelierUsers).where(inArray(atelierUsers.id, ALL_USERS));
   } catch (err) {
     console.error("cleanup failed", err);
   }
@@ -655,6 +1030,7 @@ try {
   ignavStub.close();
   stayingStub.close();
   anthropicStub.close();
+  graphStub.close();
   await pool.end().catch(() => {});
 }
 
