@@ -10229,7 +10229,7 @@ components:
         title: { type: string }
         summary: { type: string }
         priority: { type: string, enum: [high, medium, low] }
-        hrefKind: { type: string, enum: [opportunity, engagement, deliverable, atelier] }
+        hrefKind: { type: string, enum: [opportunity, engagement, deliverable, atelier, account] }
         hrefTargetId: { type: string }
         dueLabel: { type: string }
 

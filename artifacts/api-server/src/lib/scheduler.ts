@@ -11,6 +11,7 @@ import { cleanupExpiredSessions } from "./auth/session";
 import { runMsMeetingAutolog } from "./msMeetingAutolog";
 import { runCalendarSubscriptionMaintenance } from "./msCalendarSync";
 import { runMsLicenseSeatForecast } from "./msLicenseForecast";
+import { runProcurementRenewalScan } from "./atelier-procurement-renewal";
 
 const SCRAPE_CRON = process.env.PRICE_SCRAPE_CRON ?? "0 3 * * *";
 const ROSTER_STEWARD_CRON = process.env.ROSTER_STEWARD_CRON ?? "0 6 * * *";
@@ -36,6 +37,10 @@ const CASH_FORECASTER_CRON = process.env.CASH_FORECASTER_CRON ?? "0 5 * * 1";
 // seats get bought in the GoDaddy portal before day one. Cheap no-op when
 // MS admin creds/consent are missing.
 const MS_LICENSE_FORECAST_CRON = process.env.MS_LICENSE_FORECAST_CRON ?? "15 5 * * *";
+// Task #732 — daily 05:45 UTC: surface upcoming vendor-registration renewals
+// (procurement.status renewal_due, or approaching per the researched guide's
+// renewal cadence) on the responsible partner's Pane A + one-time email nudge.
+const PROCUREMENT_RENEWAL_CRON = process.env.PROCUREMENT_RENEWAL_CRON ?? "45 5 * * *";
 
 let scheduledTask: ScheduledTask | null = null;
 let rosterStewardTask: ScheduledTask | null = null;
@@ -48,6 +53,7 @@ let billingOrchestratorTask: ScheduledTask | null = null;
 let cashForecasterTask: ScheduledTask | null = null;
 let msCalSyncTask: ScheduledTask | null = null;
 let msLicenseForecastTask: ScheduledTask | null = null;
+let procurementRenewalTask: ScheduledTask | null = null;
 
 // Task #629 — hourly: renew Graph calendar subscriptions (max ~3-day
 // lifetime), roll cache windows forward, and safety-sync stale caches.
@@ -362,6 +368,30 @@ export function startScheduler(): void {
     );
   }
 
+  // Procurement renewal reminders (Task #732) — daily scan of tracked
+  // vendor-registration statuses + researched renewal cadences; emits
+  // Pane A reminders (and a one-time email nudge) to responsible partners.
+  if (cron.validate(PROCUREMENT_RENEWAL_CRON)) {
+    procurementRenewalTask = cron.schedule(
+      PROCUREMENT_RENEWAL_CRON,
+      async () => {
+        try {
+          const out = await runProcurementRenewalScan();
+          logger.info(out, "Procurement renewal scan finished");
+        } catch (err) {
+          logger.error({ err }, "Procurement renewal scan encountered an error");
+        }
+      },
+      { timezone: "Etc/UTC" },
+    );
+    logger.info({ cron: PROCUREMENT_RENEWAL_CRON }, "Procurement renewal scheduler started");
+  } else {
+    logger.error(
+      { cron: PROCUREMENT_RENEWAL_CRON },
+      "Invalid PROCUREMENT_RENEWAL_CRON expression, procurement renewal scan not scheduled",
+    );
+  }
+
   // Boot pass: ensure subscriptions exist for already-connected users
   // shortly after startup (delayed so boot isn't slowed by Graph calls).
   setTimeout(() => {
@@ -421,6 +451,10 @@ export function stopScheduler(): void {
     msCalSyncTask.stop();
     msCalSyncTask = null;
     logger.info("MS calendar sync scheduler stopped");
+  }
+  if (procurementRenewalTask) {
+    procurementRenewalTask.stop();
+    procurementRenewalTask = null;
   }
   if (msLicenseForecastTask) {
     msLicenseForecastTask.stop();

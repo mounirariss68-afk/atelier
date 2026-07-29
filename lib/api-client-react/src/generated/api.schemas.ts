@@ -5342,6 +5342,7 @@ export const PaneAItemHrefKind = {
   engagement: "engagement",
   deliverable: "deliverable",
   atelier: "atelier",
+  account: "account",
 } as const;
 
 export interface PaneAItem {

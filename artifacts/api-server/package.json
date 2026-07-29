@@ -65,6 +65,7 @@
     "test:finance-reports": "tsx ./tests/finance-reports/run.ts",
     "test:pricing-structures": "tsx ./tests/crm/pricing-structures-probe.ts",
     "test:procurement": "tsx ./tests/crm/procurement-probe.ts",
+    "test:procurement-renewal": "tsx ./tests/crm/procurement-renewal-probe.ts",
     "test:alliance": "tsx ./tests/alliance/run.ts"
   },
   "dependencies": {

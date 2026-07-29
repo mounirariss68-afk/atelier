@@ -631,10 +631,32 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
         )
     : [];
   const livePaneDelIds = new Set(livePaneDels.map((d) => d.id));
+  // Task #732 — account-linked items (procurement renewal reminders) must
+  // not surface for deleted or archived accounts.
+  const paneAccIds = [
+    ...new Set(
+      paneARowsRaw.filter((r) => r.hrefKind === "account").map((r) => r.hrefTargetId),
+    ),
+  ];
+  const livePaneAccs = paneAccIds.length
+    ? await db
+        .select({ id: atelierAccounts.id, status: atelierAccounts.status })
+        .from(atelierAccounts)
+        .where(
+          and(
+            inArray(atelierAccounts.id, paneAccIds),
+            isNull(atelierAccounts.deletedAt),
+          ),
+        )
+    : [];
+  const livePaneAccIds = new Set(
+    livePaneAccs.filter((a) => (a.status ?? "active") !== "archived").map((a) => a.id),
+  );
   const paneARows = paneARowsRaw.filter((r) => {
     if (r.hrefKind === "opportunity") return livePaneOppIds.has(r.hrefTargetId);
     if (r.hrefKind === "engagement") return livePaneEngIds.has(r.hrefTargetId);
     if (r.hrefKind === "deliverable") return livePaneDelIds.has(r.hrefTargetId);
+    if (r.hrefKind === "account") return livePaneAccIds.has(r.hrefTargetId);
     return true;
   });
   const paneA = paneARows
@@ -647,7 +669,12 @@ router.get("/home", rejectNonEmployeePersona, async (req, res) => {
         | "high"
         | "medium"
         | "low",
-      hrefKind: r.hrefKind as "opportunity" | "engagement" | "deliverable" | "atelier",
+      hrefKind: r.hrefKind as
+        | "opportunity"
+        | "engagement"
+        | "deliverable"
+        | "atelier"
+        | "account",
       hrefTargetId: r.hrefTargetId,
       dueLabel: r.dueLabel,
     }));

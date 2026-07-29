@@ -810,6 +810,9 @@ export default function Home() {
     if (kind === 'opportunity') setLocation(`/pipeline/${targetId}`);
     else if (kind === 'engagement') setLocation(`/clients/deliver/engagements/${targetId}`);
     else if (kind === 'atelier') setLocation(`/atelier/assets?focus=${targetId}`);
+    // Task #732 — procurement renewal reminders deep-link to the account's
+    // Procurement tab.
+    else if (kind === 'account') setLocation(`/accounts/${targetId}?tab=procurement`);
   };
 
   return (

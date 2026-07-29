@@ -174,6 +174,10 @@ import {
   type QbrOutput,
 } from "../../lib/atelier-agents/runner.js";
 import { indexAccountStrategyExemplar } from "../../lib/atelier-agents/strategy-exemplars.js";
+import {
+  runProcurementRenewalScan,
+  resolveProcurementRenewalPaneItems,
+} from "../../lib/atelier-procurement-renewal.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -2432,8 +2436,14 @@ router.patch("/accounts/:accountId/procurement", async (req, res) => {
     res.json({ ok: true, procurement: prior ?? next });
     return;
   }
-  next.statusUpdatedAt = new Date().toISOString();
-  next.statusUpdatedBy = guard.me.id;
+  // Task #732 — statusUpdatedAt anchors the renewal-cadence computation
+  // ("registered at X + cadence"). A notes-only edit must NOT move the
+  // anchor, or routine note updates would silently postpone approaching-
+  // renewal reminders forever.
+  if (changes.status) {
+    next.statusUpdatedAt = new Date().toISOString();
+    next.statusUpdatedBy = guard.me.id;
+  }
   await db.transaction(async (tx) => {
     await tx
       .update(atelierAccounts)
@@ -2456,6 +2466,28 @@ router.patch("/accounts/:accountId/procurement", async (req, res) => {
       } on ${guard.account.brandName ?? guard.account.name}.`,
     });
   });
+  // Task #732 — renewal reminders track the human-owned status in real time:
+  // moving INTO renewal_due surfaces a Pane A reminder for the responsible
+  // partner immediately (no waiting for the daily scan); moving OUT of
+  // renewal_due/registered resolves any open reminders so stale nags vanish.
+  // Fire-and-forget: reminder plumbing must never fail the status PATCH.
+  if (changes.status) {
+    void (async () => {
+      try {
+        if (next.status === "renewal_due") {
+          await runProcurementRenewalScan({ accountId: guard.account.id });
+        } else {
+          await resolveProcurementRenewalPaneItems(guard.account.id);
+        }
+      } catch (err) {
+        console.warn(
+          `[atelier] procurement renewal reminder sync failed for ${guard.account.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+  }
   res.json({ ok: true, procurement: next });
 });
 

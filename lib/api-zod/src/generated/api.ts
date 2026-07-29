@@ -6801,6 +6801,7 @@ export const AtelierGetHomeResponse = zod.object({
         "engagement",
         "deliverable",
         "atelier",
+        "account",
       ]),
       hrefTargetId: zod.string(),
       dueLabel: zod.string(),
