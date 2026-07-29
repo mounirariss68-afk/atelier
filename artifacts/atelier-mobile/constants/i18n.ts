@@ -213,6 +213,10 @@ const en: Dict = {
   "exp.fundingBank.none": "No active company bank accounts",
   // permissions
   "picker.failed": "Couldn't open the file picker. Please try again.",
+  // share sheet import (Task #748)
+  "share.unsupported": "That file type isn't supported. Share a photo (JPG/PNG) or a PDF receipt.",
+  "share.heicFailed": "This photo format (HEIC) couldn't be converted. Try sharing it as JPG or PNG.",
+  "exp.demoReadOnly": "The demo account is read-only — it can't create expenses.",
   "attach.failed": "Couldn't attach the file. Please try again.",
   "attach.tooLarge": "This file is too large. The limit is 25 MB.",
   "attach.rejected.over-size-cap": "This file is too large. The limit is 25 MB.",
@@ -489,6 +493,10 @@ const tr: Dict = {
   "exp.fundingBank.select": "Hesap seçin…",
   "exp.fundingBank.none": "Aktif şirket banka hesabı yok",
   "picker.failed": "Dosya seçici açılamadı. Lütfen tekrar deneyin.",
+  // share sheet import (Task #748)
+  "share.unsupported": "Bu dosya türü desteklenmiyor. Fotoğraf (JPG/PNG) veya PDF fiş paylaşın.",
+  "share.heicFailed": "Bu fotoğraf formatı (HEIC) dönüştürülemedi. JPG veya PNG olarak paylaşmayı deneyin.",
+  "exp.demoReadOnly": "Demo hesabı salt okunur — masraf oluşturamaz.",
   "attach.failed": "Dosya eklenemedi. Lütfen tekrar deneyin.",
   "attach.tooLarge": "Bu dosya çok büyük. Sınır 25 MB.",
   "attach.rejected.over-size-cap": "Bu dosya çok büyük. Sınır 25 MB.",
@@ -763,6 +771,10 @@ const ar: Dict = {
   "exp.fundingBank.select": "اختر الحساب…",
   "exp.fundingBank.none": "لا توجد حسابات بنكية نشطة للشركة",
   "picker.failed": "تعذّر فتح منتقي الملفات. يرجى المحاولة مرة أخرى.",
+  // share sheet import (Task #748)
+  "share.unsupported": "نوع الملف هذا غير مدعوم. شارك صورة (JPG/PNG) أو إيصال PDF.",
+  "share.heicFailed": "تعذّر تحويل صيغة الصورة (HEIC). جرّب مشاركتها بصيغة JPG أو PNG.",
+  "exp.demoReadOnly": "الحساب التجريبي للقراءة فقط — لا يمكنه إنشاء مصروفات.",
   "attach.failed": "تعذّر إرفاق الملف. يرجى المحاولة مرة أخرى.",
   "attach.tooLarge": "هذا الملف كبير جدًا. الحد الأقصى 25 ميغابايت.",
   "attach.rejected.over-size-cap": "هذا الملف كبير جدًا. الحد الأقصى 25 ميغابايت.",

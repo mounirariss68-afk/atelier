@@ -24,6 +24,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FeedbackProvider } from "@/components/feedback";
+import { ShareIntentHandler } from "@/components/ShareIntentHandler";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { I18nProvider } from "@/contexts/I18nContext";
 import { ThemeProvider, useThemePref, useThemeScheme } from "@/contexts/ThemeContext";
@@ -163,6 +164,7 @@ export default function RootLayout() {
                 <KeyboardProvider>
                   <FeedbackProvider>
                     <AuthProvider>
+                      <ShareIntentHandler />
                       <Gate />
                     </AuthProvider>
                   </FeedbackProvider>

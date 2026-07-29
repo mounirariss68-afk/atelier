@@ -48,6 +48,16 @@
         }
       ],
       "expo-font",
+      [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsImageWithMaxCount": 1,
+            "NSExtensionActivationSupportsFileWithMaxCount": 1
+          },
+          "androidIntentFilters": ["image/*", "*/*"]
+        }
+      ],
       "expo-web-browser",
       "expo-secure-store",
       "@react-native-community/datetimepicker"

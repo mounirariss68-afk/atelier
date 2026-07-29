@@ -53,13 +53,12 @@
 - [Long LLM jobs need a workflow](long-llm-jobs-need-workflow.md) — multi-minute web-search LLM probes stall/die under nohup in the shell; run one-offs as a temp console workflow.
 - [Opportunity-child FK integrity](atelier-opp-child-fks.md) — opp children FK-cascade (or SET NULL); meetings/transcripts are polymorphic → hard-delete opps ONLY via shared hardDeleteOpportunities helper; broad meeting reads filter on live parent.
 - [Me-tab data linkage split](atelier-me-tab-linkage.md) — timesheets/skills key on roster person id; expenses/payments key on user id (expense `personId` IS the user id); pay shows dayRateAmount only.
-- [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions (no revoked_at); orval may skip response zod consts.
+- [Atelier Me lens self-scope](atelier-me-lens.md) — employee/contractor locked to /me/*; deactivate deletes sessions; person docs/photos in private object storage (owner/HR only); sensitive HR fields never in self-PATCH whitelist.
 - [db push blocked by orphaned FK rows](db-push-orphan-fk.md) — schema push re-validates FKs; delete orphaned child rows (old test data) before re-push; stale api-zod dist mimics missing exports.
 - [drizzle push embedding fix](drizzle-push-embedding-fix.md) — pgvector `embedding` col is now Drizzle-declared so push no longer aborts; without clean push, dev DB (and thus Publish diff) misses new schema.
 - [Atelier pay hub invariants](atelier-pay-hub.md) — pay doc bytes base64 in-row behind ACL routes on purpose; HR approve is sole IBAN write path; contractor variant has no bank/insurance.
 - [Me-lens self-service policy quirks](atelier-selfservice-policy.md) — expense personId=user id vs roster id; policy table empty ⇒ all green; firm-overhead needs partner/ops approver; reimburse idempotent-200.
 - [Atelier performance & learning](atelier-perf-learning.md) — hrNotes never in self shape; contractors 403 on reviews/goals but DO get audience-filtered /me/learning; name inline orval bodies.
-- [Me-lens self-service profile](atelier-me-lens.md) — person docs/photos live in private object storage (persondoc: refs), readable only by owner or HR; sensitive HR fields must stay out of the self-PATCH whitelist.
 - [Prod DB replace path](prod-db-replace.md) — prod DB is read-only to the agent; only Publish "Overwrite data" can replace it; chunked read-only exports for backups; pre-replace snapshot in backups/.
 - [Atelier tsx UI tests of page modules](atelier-tsx-ui-tests.md) — need --tsconfig with jsx react-jsx + guard module-level import.meta.env?.BASE_URL, or import crashes under Node.
 - [Bio PPTX & business-card PDF](atelier-bio-card.md) — bios = versioned person_documents kind "biography" (excluded from /me/documents); card PDF is server-side pdf-lib from real 90×50mm template EMUs; rasterize checks via pdftoppm (no gs).
@@ -156,4 +155,5 @@
 - [Atelier session facts](atelier-session-facts.md) — typed facts table (RLS-listed) written from tool successes only; every NEW commit path needs its own ingest call; facts/replay are authoritative, summaries are not; adaptive tool cap tie-window 0.04.
 - [Atelier clarification resolver](atelier-clarification-resolver.md) — shared resolver classifies clarification replies; fresh requests never drop pending; opener sets in resolver+index.ts must stay in sync.
 - [Chat reliability harness](chat-reliability-harness.md) — run validation step `chat-reliability` (test:chat-suite) before merging orchestrator/resolver/chat-core changes; assertAlive = dead-end guard; employee chat is 200+me.*-clamped, not 403.
+- [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.

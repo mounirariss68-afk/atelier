@@ -7,9 +7,10 @@ import {
 } from "@workspace/api-client-react";
 import type { AtelierSelfExpenseCreate } from "@workspace/api-client-react";
 import * as DocumentPicker from "expo-document-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -39,9 +40,20 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { apiJson, putFileToSignedUrl } from "@/lib/api";
 import { enqueueExpense, isOnline } from "@/lib/offlineQueue";
+import { classifyShareFile, consumePendingShare } from "@/lib/pendingShare";
 import { runExclusivePick } from "@/lib/pickerGuard";
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+// Task #748 — the read-only demo/reviewer account gets a 403 with a
+// machine-readable code on every write; surface a friendly message instead
+// of the generic error toast.
+function isDemoReadOnly(err: unknown): boolean {
+  const e = err as { status?: number; data?: unknown } | null;
+  if (!e || e.status !== 403) return false;
+  const data = e.data as { error?: string } | null;
+  return data?.error === "demo-read-only";
+}
 
 // Task #383 — compact tappable row that opens a picker sheet.
 function PickerRow({
@@ -335,6 +347,10 @@ export default function NewExpenseScreen() {
         router.replace(`/expense/${id}?parsed=1`);
       } catch (err) {
         hapticError();
+        if (isDemoReadOnly(err)) {
+          feedback.toast(t("exp.demoReadOnly"), "error");
+          return;
+        }
         if (id) {
           setParseFailedId(id);
           setParseErrorText(
@@ -351,6 +367,78 @@ export default function NewExpenseScreen() {
     [draftId, amount, currency, merchant, date, uploadUrl, create, runParse, parseErrorMessage, router, t, feedback],
   );
   autoProcessRef.current = autoProcess;
+
+  // Task #748 — a file shared in from the OS share sheet. Consumed once on
+  // mount (the pending-share store is one-shot, so a second share while this
+  // screen is busy opens a fresh screen instance / new draft — never a
+  // duplicate against this one). Validates + converts the file to what the
+  // server receipt parser accepts, then feeds the existing pipeline.
+  const shareHandledRef = React.useRef(false);
+  useEffect(() => {
+    if (shareHandledRef.current) return;
+    shareHandledRef.current = true;
+    const share = consumePendingShare();
+    if (!share) return;
+    void (async () => {
+      const kind = classifyShareFile(share.fileName, share.mime);
+      if (kind === "unsupported") {
+        hapticError();
+        feedback.toast(t("share.unsupported"), "error");
+        return;
+      }
+      let uri = share.uri;
+      let mime = kind === "pdf" ? "application/pdf" : share.mime || "image/jpeg";
+      if (kind === "heic") {
+        // The share sheet delivers HEIC/HEIF raw (unlike the image picker,
+        // which transcodes) — convert to JPEG or fail with a clear message.
+        try {
+          const out = await manipulateAsync(share.uri, [], {
+            compress: 0.85,
+            format: SaveFormat.JPEG,
+          });
+          uri = out.uri;
+          mime = "image/jpeg";
+        } catch {
+          hapticError();
+          feedback.toast(t("share.heicFailed"), "error");
+          return;
+        }
+      }
+      // Pre-flight size guard (server caps: 8MB photo / 15MB PDF). HEIC is
+      // exempt — conversion re-encodes and typically shrinks the file.
+      const maxBytes = kind === "pdf" ? 15 * 1024 * 1024 : 8 * 1024 * 1024;
+      if (kind !== "heic" && share.size != null && share.size > maxBytes) {
+        hapticError();
+        feedback.toast(t("exp.errTooLarge"), "error");
+        return;
+      }
+      if (!(await isOnline())) {
+        // Offline share → enqueue as a NEW expense via the existing queue
+        // (never against an existing draft); it syncs when back online.
+        try {
+          await enqueueExpense({
+            localUri: uri,
+            mime,
+            fields: {
+              amount: 0.01,
+              currency: "USD",
+              merchant: "Receipt",
+              expenseDate: today(),
+            },
+          });
+          hapticSuccess();
+          feedback.toast(t("exp.offlineBody"), "success");
+          router.back();
+        } catch {
+          hapticError();
+          feedback.toast(t("common.error"), "error");
+        }
+        return;
+      }
+      void autoProcessRef.current(uri, mime);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const save = useCallback(async () => {
     const fields = buildFields();
@@ -417,9 +505,12 @@ export default function NewExpenseScreen() {
       }
       hapticSuccess();
       router.replace(`/expense/${id}`);
-    } catch {
+    } catch (err) {
       hapticError();
-      feedback.toast(t("common.error"), "error");
+      feedback.toast(
+        isDemoReadOnly(err) ? t("exp.demoReadOnly") : t("common.error"),
+        "error",
+      );
     } finally {
       setBusy(false);
       setBusyLabel("");
