@@ -1691,6 +1691,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AtelierOkResponse"
+  /atelier/roster/people:
+    post:
+      operationId: atelierQuickAddRosterPerson
+      tags: [atelier]
+      summary: Roster — quick-add a person (HR / Partner / Finance / Founding Partner)
+      description: |
+        Streamlined direct create of an employee or contractor on the
+        roster, with no candidate/offer/invitation prerequisite. Defaults
+        to `active`; optional flags start the standard onboarding
+        checklist and/or provision the portal login + welcome invitation
+        through the existing create-login machinery. Audited under
+        `roster.person.created` with `method: quick_add`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierRosterQuickAddRequest"
+      responses:
+        "201":
+          description: Person created (login result included when requested)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierRosterQuickAddResponse"
+        "400":
+          description: Invalid worker type, name, email, start date or manager
+        "403":
+          description: Caller may not create roster people
+        "409":
+          description: A roster person with this email already exists
   /atelier/roster/people/{id}:
     patch:
       operationId: atelierUpdateRosterPerson
@@ -8714,6 +8745,75 @@ components:
           items: { $ref: "#/components/schemas/AtelierEmergencyContact" }
 
     # ---- Task #199 — full Edit Person form ----
+    AtelierRosterQuickAddRequest:
+      type: object
+      additionalProperties: false
+      required: [workerType, firstName, lastName, email]
+      properties:
+        workerType:
+          type: string
+          enum: [employee, contractor]
+        honorific: { type: string, nullable: true }
+        firstName: { type: string }
+        middleName: { type: string, nullable: true }
+        lastName: { type: string }
+        preferredName: { type: string, nullable: true }
+        email: { type: string }
+        role: { type: string, nullable: true }
+        seniority: { type: string, nullable: true }
+        title: { type: string, nullable: true }
+        country:
+          type: string
+          nullable: true
+          description: ISO-3166 alpha-2
+        startDate:
+          type: string
+          nullable: true
+          description: YYYY-MM-DD
+        employingEntity: { type: string, nullable: true }
+        vendorEntity: { type: string, nullable: true }
+        managerPersonId:
+          type: string
+          nullable: true
+          description: Roster id of an existing employee to report to
+        runOnboarding:
+          type: boolean
+          description: Start the standard onboarding checklist (person lands as `onboarding` instead of `active`)
+        createLogin:
+          type: boolean
+          description: Provision the portal login + send the welcome invitation
+        skipMsProvisioning: { type: boolean }
+        msServiceProfile:
+          type: string
+          nullable: true
+          enum: [employee, contractor]
+
+    AtelierRosterQuickAddResponse:
+      type: object
+      required: [ok, id, workerType, fullName, status]
+      properties:
+        ok: { type: boolean }
+        id:
+          type: string
+          description: Roster row id (emp_* / ctr_*)
+        personId:
+          type: string
+          nullable: true
+          description: Unified person-record id
+        workerType: { type: string }
+        fullName: { type: string }
+        displayName: { type: string, nullable: true }
+        status: { type: string }
+        onboardingId: { type: string, nullable: true }
+        login:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Present when createLogin was requested. On success carries
+            userId, activationUrl, activationExpiresAt and welcomeEmail;
+            on failure `ok: false` plus the error code.
+
     AtelierRosterPersonEdit:
       type: object
       additionalProperties: false

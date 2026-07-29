@@ -45,6 +45,7 @@ import {
   atelierOffboardingSteps,
   atelierComplianceRecords,
   atelierPaneAItems,
+  atelierRosterReportsTo,
   atelierStudioCandidates,
   atelierStudioOffers,
   atelierAuthCredentials,
@@ -1185,13 +1186,301 @@ router.post("/roster/onboarding/:id/steps/:stepId/advance", async (req, res, nex
   }
 });
 
-// Task #509 — create the portal login as the FINAL pre-boarding step.
-// Replaces the parallel "Add joiner" form: the person row already exists
-// (materialised at invitation-accept), so this creates only the
-// atelier_users identity + credential, links employees.user_id, marks the
-// "login.created" onboarding step done, and emails the invitee a one-time
-// temporary password (returned once, never persisted in plaintext).
-// @cli-skip: HR admin mutation returning a one-time secret; no CLI shape
+// -----------------------------------------------------------------
+// Portal-login provisioning core (shared).
+//
+// Task #759 — extracted from the create-login route body so the quick-add
+// flow can reuse the EXACT same login-creation path (credential row with
+// unguessable placeholder hash + one-time activation token + welcome
+// email + M365 provisioning). Logins are ONLY ever created through this
+// helper; both callers keep their own ACL gates.
+// -----------------------------------------------------------------
+
+interface ProvisionLoginArgs {
+  me: typeof atelierUsers.$inferSelect;
+  person: {
+    id: string;
+    workerType: WorkerType;
+    fullName: string;
+    email: string | null;
+    personId: string | null;
+  };
+  /** When provided, the login.created onboarding step is marked done and
+   *  the sequence auto-completes if login was the last outstanding step. */
+  onboarding: { id: string; personType: string; personId: string } | null;
+  skipMsProvisioning?: boolean;
+  msServiceProfile?: "employee" | "contractor" | null;
+  /** Origin header of the calling request (for the activation link). */
+  origin?: string | null;
+}
+
+type ProvisionLoginResult =
+  | { ok: false; status: number; body: Record<string, unknown> }
+  | {
+      ok: true;
+      status: 201;
+      body: {
+        ok: true;
+        userId: string;
+        activationUrl: string;
+        activationExpiresAt: string;
+        welcomeEmail: unknown;
+      };
+    };
+
+async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<ProvisionLoginResult> {
+  const { me, person, onboarding } = args;
+  const email = (person.email ?? "").trim().toLowerCase();
+  if (!email.includes("@")) {
+    return { ok: false, status: 422, body: { error: "person-has-no-email" } };
+  }
+  const existingUserId = await resolveLinkedUserIdForPerson(person);
+  if (existingUserId) {
+    const [cred] = await db
+      .select({ email: atelierAuthCredentials.email })
+      .from(atelierAuthCredentials)
+      .where(eq(atelierAuthCredentials.userId, existingUserId));
+    if (cred) {
+      return { ok: false, status: 409, body: { error: "login-already-exists" } };
+    }
+  }
+  const [credByEmail] = await db
+    .select({ email: atelierAuthCredentials.email })
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, email));
+  if (credByEmail) {
+    return {
+      ok: false,
+      status: 409,
+      body: { error: "email-taken", message: "A login already exists for that email." },
+    };
+  }
+
+  const initials =
+    person.fullName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((p) => p[0]!.toUpperCase())
+      .slice(0, 2)
+      .join("") || "??";
+  const role =
+    person.workerType === "employee"
+      ? "employee"
+      : person.workerType === "contractor"
+        ? "contractor"
+        : "partner_firm_resource";
+  const roleLabel =
+    person.workerType === "employee"
+      ? "Employee"
+      : person.workerType === "contractor"
+        ? "Contractor"
+        : "Partner Firm Resource";
+  // Security: no temporary password is ever generated, returned, or
+  // emailed. The credential row is created with an unguessable random
+  // hash (the account cannot sign in yet) and a one-time, short-TTL
+  // activation token lets the joiner choose their own password.
+  const activationToken = randomBytes(32).toString("hex");
+  const activationTokenHash = createHash("sha256").update(activationToken).digest("hex");
+  const activationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+  const userId = existingUserId ?? rid("p_joiner");
+
+  await db.transaction(async (tx) => {
+    if (!existingUserId) {
+      await tx.insert(atelierUsers).values({
+        id: userId,
+        orgId: me.orgId,
+        email,
+        name: person.fullName,
+        // Task #538 — link the login row to the roster person record.
+        personId: person.personId ?? null,
+        initials,
+        role,
+        roleLabel,
+        title: roleLabel,
+      });
+      if (person.workerType === "employee") {
+        await tx
+          .update(atelierEmployees)
+          .set({ userId, updatedAt: new Date() })
+          .where(eq(atelierEmployees.id, person.id));
+      }
+    }
+    await tx.insert(atelierAuthCredentials).values({
+      email,
+      userId,
+      // Placeholder hash of 48 random bytes that are immediately
+      // discarded — sign-in is impossible until the activation link is
+      // used to set a real password.
+      passwordHash: hashPassword(randomBytes(48).toString("hex")),
+      // user_managed=true: the boot seed must never overwrite this hash.
+      userManaged: true,
+      mustChangePassword: true,
+      mustChangeReason: "joiner",
+    });
+    await tx.insert(atelierLoginActivationTokens).values({
+      tokenHash: activationTokenHash,
+      email,
+      userId,
+      createdByUserId: me.id,
+      expiresAt: activationExpiresAt,
+    });
+    // Mark the login.created step done (if the sequence has one).
+    if (onboarding) {
+      const [loginStep] = await tx
+        .select()
+        .from(atelierOnboardingSteps)
+        .where(
+          and(
+            eq(atelierOnboardingSteps.onboardingId, onboarding.id),
+            eq(atelierOnboardingSteps.code, LOGIN_STEP_CODE),
+          ),
+        );
+      if (loginStep && loginStep.status !== "done") {
+        await tx
+          .update(atelierOnboardingSteps)
+          .set({
+            status: "done",
+            completedAt: new Date(),
+            completedByUserId: me.id,
+            blockedReason: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierOnboardingSteps.id, loginStep.id));
+      }
+    }
+    await tx.insert(atelierAuditEvents).values({
+      id: `audit_${randomUUID()}`,
+      entityType: onboarding ? "onboarding" : "person",
+      entityId: onboarding ? onboarding.id : person.id,
+      actorType: "human",
+      actorId: me.id,
+      actorLabel: me.name,
+      action: "onboarding.login.created",
+      payload: { personId: person.id, userId, email, workerType: person.workerType },
+      payloadSummary: `${me.name} created the portal login for ${person.fullName} (${email}).`,
+    });
+    await emitSelfNotification(
+      {
+        orgId: me.orgId,
+        userId,
+        kind: "welcome",
+        title: "Welcome to Cognirise",
+        body: "Your workspace is ready. Start by reviewing your profile, then explore your Time and Expenses tabs.",
+        href: "/me/profile",
+      },
+      tx,
+    );
+  });
+
+  // Task #628 — Microsoft 365 provisioning rides on login creation but
+  // never blocks it: the run fires in the background after commit, and
+  // any tenant refusal lands on the ledger row + notifies founders/HR.
+  // `skipMsProvisioning` is the "don't create an email address" tickbox.
+  // Partner-firm resources use their own firm's tooling — no M365 account.
+  if (person.workerType === "employee" || person.workerType === "contractor") {
+    const skipMs = args.skipMsProvisioning === true;
+    const msProfile =
+      args.msServiceProfile === "employee" || args.msServiceProfile === "contractor"
+        ? args.msServiceProfile
+        : defaultProfileForWorkerType(person.workerType);
+    try {
+      await ensureProvisioningRow({
+        orgId: me.orgId,
+        personId: person.id,
+        personType: person.workerType,
+        userId,
+        email,
+        serviceProfile: msProfile,
+      });
+      if (!skipMs) {
+        launchProvisioning({
+          orgId: me.orgId,
+          personId: person.id,
+          actor: { id: me.id, name: me.name },
+          serviceProfile: msProfile,
+        });
+      }
+    } catch (err) {
+      console.error("[create-login] M365 provisioning launch failed (non-fatal):", err);
+    }
+  }
+
+  // If login was the last outstanding step, complete the sequence and
+  // activate the person (same rule as the advance route).
+  if (onboarding) {
+    const allSteps = await db
+      .select()
+      .from(atelierOnboardingSteps)
+      .where(eq(atelierOnboardingSteps.onboardingId, onboarding.id));
+    const blockedCompliance = allSteps.some((s) => s.isComplianceGate && s.status === "blocked");
+    const allFinal = allSteps.every((s) => s.status === "done" || s.status === "skipped");
+    if (!blockedCompliance && allFinal) {
+      await db
+        .update(atelierOnboardings)
+        .set({ status: "complete", completedAt: new Date(), blockedAt: null, blockedReason: null, updatedAt: new Date() })
+        .where(eq(atelierOnboardings.id, onboarding.id));
+      const tbl =
+        onboarding.personType === "employee"
+          ? atelierEmployees
+          : onboarding.personType === "contractor"
+            ? atelierContractors
+            : atelierPartnerFirmResources;
+      await db
+        .update(tbl)
+        .set({ status: "active", updatedAt: new Date() })
+        .where(eq(tbl.id, onboarding.personId));
+      await audit({
+        entityType: "onboarding",
+        entityId: onboarding.id,
+        actor: { id: "ag_onboarding_concierge", name: "Onboarding Concierge", role: "agent" },
+        actorIsAgent: true,
+        agentId: "ag_onboarding_concierge",
+        action: "onboarding.completed",
+        summary: `Onboarding Concierge completed sequence — person activated.`,
+      });
+    }
+  }
+
+  // Welcome email — best-effort, after commit; never fails the request.
+  let signInUrl: string | null = null;
+  try {
+    const parsedOrigin = new URL(args.origin?.trim() ?? "");
+    if (parsedOrigin.protocol === "https:" || parsedOrigin.protocol === "http:") {
+      signInUrl = parsedOrigin.origin;
+    }
+  } catch {
+    // No/invalid Origin — omit the link.
+  }
+  const activationUrl = signInUrl
+    ? `${signInUrl}/activate?token=${activationToken}`
+    : `/activate?token=${activationToken}`;
+  const welcomeEmail = await sendJoinerWelcomeEmail({
+    fullName: person.fullName,
+    email,
+    activationUrl: signInUrl ? activationUrl : null,
+    activationValidity: "72 hours",
+    workerType: person.workerType === "employee" ? "employee" : "contractor",
+    signInUrl,
+    sender: { actor: { name: me.name, email: me.email } },
+  });
+
+  // The activation URL is returned once so HR can share it through a
+  // secure channel when email delivery isn't configured. It is a
+  // single-use, 72-hour token — never a password.
+  return {
+    ok: true,
+    status: 201,
+    body: {
+      ok: true,
+      userId,
+      activationUrl,
+      activationExpiresAt: activationExpiresAt.toISOString(),
+      welcomeEmail,
+    },
+  };
+}
+
+// @cli-skip: pending Task #340 read-parity migration
 router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
   try {
     const me = ensurePersona(req, res);
@@ -1220,253 +1509,272 @@ router.post("/roster/onboarding/:id/create-login", async (req, res, next) => {
       res.status(404).json({ error: "person-not-found" });
       return;
     }
-    const email = (person.email ?? "").trim().toLowerCase();
-    if (!email.includes("@")) {
-      res.status(422).json({ error: "person-has-no-email" });
+    const rawBody = (req.body ?? {}) as {
+      skipMsProvisioning?: unknown;
+      msServiceProfile?: unknown;
+    };
+    const result = await provisionPortalLogin({
+      me,
+      person,
+      onboarding: { id: onb.id, personType: onb.personType, personId: onb.personId },
+      skipMsProvisioning: rawBody.skipMsProvisioning === true,
+      msServiceProfile:
+        rawBody.msServiceProfile === "employee" || rawBody.msServiceProfile === "contractor"
+          ? rawBody.msServiceProfile
+          : null,
+      origin: req.get("origin") ?? null,
+    });
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// -----------------------------------------------------------------
+// /roster/people — quick add (Task #759)
+//
+// Streamlined direct create for people who are ALREADY hired (or
+// historical joiners): one dialog, no candidate/offer/invitation
+// prerequisite. The formal pipeline (candidates → offers → invitations
+// → onboarding) remains untouched for formal recruits.
+// -----------------------------------------------------------------
+
+// @cli-skip: bespoke roster admin dialog; chat parity not planned
+router.post("/roster/people", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    // Same gate as invitation creation.
+    if (!isPartnerOrOps(me)) {
+      res.status(403).json({ error: "partner-or-operations-only" });
       return;
     }
-    const existingUserId = await resolveLinkedUserIdForPerson(person);
-    if (existingUserId) {
-      const [cred] = await db
-        .select({ email: atelierAuthCredentials.email })
-        .from(atelierAuthCredentials)
-        .where(eq(atelierAuthCredentials.userId, existingUserId));
-      if (cred) {
-        res.status(409).json({ error: "login-already-exists" });
+    const body = req.body as {
+      workerType?: string;
+      fullName?: string;
+      honorific?: string | null;
+      firstName?: string;
+      middleName?: string | null;
+      lastName?: string;
+      preferredName?: string | null;
+      email?: string;
+      role?: string | null;
+      seniority?: string | null;
+      title?: string | null;
+      country?: string | null;
+      startDate?: string | null;
+      employingEntity?: string | null;
+      vendorEntity?: string | null;
+      managerPersonId?: string | null;
+      runOnboarding?: boolean;
+      createLogin?: boolean;
+      skipMsProvisioning?: boolean;
+      msServiceProfile?: string | null;
+    };
+    const wt = body.workerType;
+    if (wt !== "employee" && wt !== "contractor") {
+      // Partner-firm resources always flow through the partner-firm
+      // registry + invitation pipeline (firm linkage is mandatory there).
+      res.status(400).json({ error: "invalid-worker-type", message: "Quick add supports employee or contractor." });
+      return;
+    }
+    let structured: StructuredName | null = null;
+    try {
+      structured = resolveStructuredNameInput({
+        fullName: body.fullName ?? undefined,
+        honorific: body.honorific,
+        firstName: body.firstName ?? undefined,
+        middleName: body.middleName,
+        lastName: body.lastName ?? undefined,
+        preferredName: body.preferredName,
+      });
+    } catch (err) {
+      if (err instanceof PersonNameValidationError) {
+        res.status(400).json({ error: "invalid-name", message: err.message });
+        return;
+      }
+      throw err;
+    }
+    if (!structured) {
+      res.status(400).json({ error: "invalid-name", message: "name required" });
+      return;
+    }
+    const email = (body.email ?? "").trim().toLowerCase();
+    if (!email.includes("@")) {
+      res.status(400).json({ error: "invalid-email", message: "A valid email is required." });
+      return;
+    }
+    const startDate = (body.startDate ?? "").trim() || null;
+    if (startDate && !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+      res.status(400).json({ error: "invalid-start-date" });
+      return;
+    }
+    // Duplicate guard — an existing (non-deleted) roster person with the
+    // same email is almost certainly the same human.
+    const [dupEmp] = await db
+      .select({ id: atelierEmployees.id })
+      .from(atelierEmployees)
+      .where(and(sql`lower(${atelierEmployees.email}) = ${email}`, isNull(atelierEmployees.deletedAt)));
+    const [dupCtr] = await db
+      .select({ id: atelierContractors.id })
+      .from(atelierContractors)
+      .where(and(sql`lower(${atelierContractors.email}) = ${email}`, isNull(atelierContractors.deletedAt)));
+    const dup = dupEmp ?? dupCtr;
+    if (dup) {
+      res.status(409).json({
+        error: "email-already-on-roster",
+        message: "A roster person with this email already exists.",
+        personId: dup.id,
+      });
+      return;
+    }
+    // Optional manager — must be an existing (non-deleted) employee.
+    const managerPersonId = (body.managerPersonId ?? "").trim() || null;
+    if (managerPersonId) {
+      const [mgr] = await db
+        .select({ id: atelierEmployees.id })
+        .from(atelierEmployees)
+        .where(and(eq(atelierEmployees.id, managerPersonId), isNull(atelierEmployees.deletedAt)));
+      if (!mgr) {
+        res.status(400).json({ error: "manager-not-found" });
         return;
       }
     }
-    const [credByEmail] = await db
-      .select({ email: atelierAuthCredentials.email })
-      .from(atelierAuthCredentials)
-      .where(eq(atelierAuthCredentials.email, email));
-    if (credByEmail) {
-      res.status(409).json({ error: "email-taken", message: "A login already exists for that email." });
-      return;
-    }
+    const runOnboarding = body.runOnboarding === true;
+    const status = runOnboarding ? "onboarding" : "active";
 
-    const initials =
-      person.fullName
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((p) => p[0]!.toUpperCase())
-        .slice(0, 2)
-        .join("") || "??";
-    const role =
-      person.workerType === "employee"
-        ? "employee"
-        : person.workerType === "contractor"
-          ? "contractor"
-          : "partner_firm_resource";
-    const roleLabel =
-      person.workerType === "employee"
-        ? "Employee"
-        : person.workerType === "contractor"
-          ? "Contractor"
-          : "Partner Firm Resource";
-    // Security: no temporary password is ever generated, returned, or
-    // emailed. The credential row is created with an unguessable random
-    // hash (the account cannot sign in yet) and a one-time, short-TTL
-    // activation token lets the joiner choose their own password.
-    const activationToken = randomBytes(32).toString("hex");
-    const activationTokenHash = createHash("sha256").update(activationToken).digest("hex");
-    const activationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
-    const userId = existingUserId ?? rid("p_joiner");
-
-    await db.transaction(async (tx) => {
-      if (!existingUserId) {
-        await tx.insert(atelierUsers).values({
-          id: userId,
-          orgId: me.orgId,
-          email,
-          name: person.fullName,
-          // Task #538 — link the login row to the roster person record.
-          personId: person.personId ?? null,
-          initials,
-          role,
-          roleLabel,
-          title: roleLabel,
-        });
-        if (person.workerType === "employee") {
-          await tx
-            .update(atelierEmployees)
-            .set({ userId, updatedAt: new Date() })
-            .where(eq(atelierEmployees.id, person.id));
-        }
-      }
-      await tx.insert(atelierAuthCredentials).values({
+    // Person row (structured-name SoT) + roster row.
+    const personWrite = await writePersonAndSync(db, {
+      orgId: me.orgId,
+      structured,
+      sourceKind: wt,
+      createdByUserId: me.id,
+    });
+    let personId: string;
+    if (wt === "employee") {
+      personId = `emp_${rid("x").slice(2)}`;
+      await db.insert(atelierEmployees).values({
+        id: personId,
+        orgId: me.orgId,
+        personId: personWrite.personId,
+        fullName: personWrite.fullName,
+        preferredName: personWrite.structured.preferredName ?? null,
         email,
-        userId,
-        // Placeholder hash of 48 random bytes that are immediately
-        // discarded — sign-in is impossible until the activation link is
-        // used to set a real password.
-        passwordHash: hashPassword(randomBytes(48).toString("hex")),
-        // user_managed=true: the boot seed must never overwrite this hash.
-        userManaged: true,
-        mustChangePassword: true,
-        mustChangeReason: "joiner",
+        role: body.role?.trim() || "consultant",
+        seniority: body.seniority?.trim() || "consultant",
+        title: body.title?.trim() || null,
+        country: body.country?.trim() || null,
+        startDate,
+        employingEntity: body.employingEntity?.trim() || null,
+        status,
       });
-      await tx.insert(atelierLoginActivationTokens).values({
-        tokenHash: activationTokenHash,
+    } else {
+      personId = `ctr_${rid("x").slice(2)}`;
+      await db.insert(atelierContractors).values({
+        id: personId,
+        orgId: me.orgId,
+        personId: personWrite.personId,
+        fullName: personWrite.fullName,
         email,
-        userId,
+        country: body.country?.trim() || null,
+        vendorEntity: body.vendorEntity?.trim() || null,
+        startDate,
+        status,
+      });
+    }
+    if (managerPersonId) {
+      await db.insert(atelierRosterReportsTo).values({
+        id: rid("rrt"),
+        orgId: me.orgId,
+        personId,
+        managerPersonId,
         createdByUserId: me.id,
-        expiresAt: activationExpiresAt,
       });
-      // Mark the login.created step done (if the sequence has one).
-      const [loginStep] = await tx
-        .select()
-        .from(atelierOnboardingSteps)
-        .where(
-          and(
-            eq(atelierOnboardingSteps.onboardingId, onb.id),
-            eq(atelierOnboardingSteps.code, LOGIN_STEP_CODE),
-          ),
-        );
-      if (loginStep && loginStep.status !== "done") {
-        await tx
-          .update(atelierOnboardingSteps)
-          .set({
-            status: "done",
-            completedAt: new Date(),
-            completedByUserId: me.id,
-            blockedReason: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(atelierOnboardingSteps.id, loginStep.id));
-      }
-      await tx.insert(atelierAuditEvents).values({
-        id: `audit_${randomUUID()}`,
-        entityType: "onboarding",
-        entityId: onb.id,
-        actorType: "human",
-        actorId: me.id,
-        actorLabel: me.name,
-        action: "onboarding.login.created",
-        payload: { personId: person.id, userId, email, workerType: person.workerType },
-        payloadSummary: `${me.name} created the portal login for ${person.fullName} (${email}).`,
-      });
-      await emitSelfNotification(
-        {
-          orgId: me.orgId,
-          userId,
-          kind: "welcome",
-          title: "Welcome to Cognirise",
-          body: "Your workspace is ready. Start by reviewing your profile, then explore your Time and Expenses tabs.",
-          href: "/me/profile",
-        },
-        tx,
-      );
-    });
-
-    // Task #628 — Microsoft 365 provisioning rides on login creation but
-    // never blocks it: the run fires in the background after commit, and
-    // any tenant refusal lands on the ledger row + notifies founders/HR.
-    // `skipMsProvisioning` is the "don't create an email address" tickbox.
-    // Partner-firm resources use their own firm's tooling — no M365 account.
-    if (person.workerType === "employee" || person.workerType === "contractor") {
-      const rawBody = (req.body ?? {}) as {
-        skipMsProvisioning?: unknown;
-        msServiceProfile?: unknown;
-      };
-      const skipMs = rawBody.skipMsProvisioning === true;
-      const msProfile =
-        rawBody.msServiceProfile === "employee" || rawBody.msServiceProfile === "contractor"
-          ? rawBody.msServiceProfile
-          : defaultProfileForWorkerType(person.workerType);
-      try {
-        await ensureProvisioningRow({
-          orgId: me.orgId,
-          personId: person.id,
-          personType: person.workerType,
-          userId,
-          email,
-          serviceProfile: msProfile,
-        });
-        if (!skipMs) {
-          launchProvisioning({
-            orgId: me.orgId,
-            personId: person.id,
-            actor: { id: me.id, name: me.name },
-            serviceProfile: msProfile,
-          });
-        }
-      } catch (err) {
-        console.error("[create-login] M365 provisioning launch failed (non-fatal):", err);
-      }
-    }
-
-    // If login was the last outstanding step, complete the sequence and
-    // activate the person (same rule as the advance route).
-    const allSteps = await db
-      .select()
-      .from(atelierOnboardingSteps)
-      .where(eq(atelierOnboardingSteps.onboardingId, onb.id));
-    const blockedCompliance = allSteps.some((s) => s.isComplianceGate && s.status === "blocked");
-    const allFinal = allSteps.every((s) => s.status === "done" || s.status === "skipped");
-    if (!blockedCompliance && allFinal) {
-      await db
-        .update(atelierOnboardings)
-        .set({ status: "complete", completedAt: new Date(), blockedAt: null, blockedReason: null, updatedAt: new Date() })
-        .where(eq(atelierOnboardings.id, onb.id));
-      const tbl =
-        onb.personType === "employee"
-          ? atelierEmployees
-          : onb.personType === "contractor"
-            ? atelierContractors
-            : atelierPartnerFirmResources;
-      await db
-        .update(tbl)
-        .set({ status: "active", updatedAt: new Date() })
-        .where(eq(tbl.id, onb.personId));
       await audit({
-        entityType: "onboarding",
-        entityId: onb.id,
-        actor: { id: "ag_onboarding_concierge", name: "Onboarding Concierge", role: "agent" },
-        actorIsAgent: true,
-        agentId: "ag_onboarding_concierge",
-        action: "onboarding.completed",
-        summary: `Onboarding Concierge completed sequence — person activated.`,
+        entityType: "person",
+        entityId: personId,
+        actor: me,
+        action: "roster.reports_to.set",
+        payload: { managerPersonId, via: "quick_add" },
+        summary: `${me.name} set the manager for ${personWrite.fullName} during quick add.`,
+      });
+    }
+    await audit({
+      entityType: "person",
+      entityId: personId,
+      actor: me,
+      action: "roster.person.created",
+      payload: {
+        method: "quick_add",
+        workerType: wt,
+        status,
+        email,
+        title: body.title ?? null,
+        country: body.country ?? null,
+        startDate,
+        managerPersonId,
+        runOnboarding,
+        createLogin: body.createLogin === true,
+      },
+      summary: `${me.name} quick-added ${personWrite.fullName} (${wt}, ${status}) directly to the roster.`,
+    });
+
+    // Optional onboarding checklist (same sequence the formal flow uses).
+    let onboardingId: string | null = null;
+    if (runOnboarding) {
+      onboardingId = await startOnboardingSequence({
+        personId,
+        workerType: wt,
+        targetStartDate: startDate,
+        ownerUserId: me.id,
       });
     }
 
-    // Welcome email — best-effort, after commit; never fails the request.
-    let signInUrl: string | null = null;
-    try {
-      const parsedOrigin = new URL(req.get("origin")?.trim() ?? "");
-      if (parsedOrigin.protocol === "https:" || parsedOrigin.protocol === "http:") {
-        signInUrl = parsedOrigin.origin;
-      }
-    } catch {
-      // No/invalid Origin — omit the link.
+    // Optional welcome invitation + portal login — the SAME provisioning
+    // path the onboarding create-login step uses. A login failure never
+    // rolls back the roster person; it's reported in the response.
+    let login: Record<string, unknown> | null = null;
+    if (body.createLogin === true) {
+      const result = await provisionPortalLogin({
+        me,
+        person: {
+          id: personId,
+          workerType: wt,
+          fullName: personWrite.fullName,
+          email,
+          personId: personWrite.personId,
+        },
+        onboarding: onboardingId
+          ? { id: onboardingId, personType: wt, personId }
+          : null,
+        skipMsProvisioning: body.skipMsProvisioning === true,
+        msServiceProfile:
+          body.msServiceProfile === "employee" || body.msServiceProfile === "contractor"
+            ? body.msServiceProfile
+            : null,
+        origin: req.get("origin") ?? null,
+      });
+      login = result.ok
+        ? { ...result.body }
+        : { ok: false, ...result.body };
     }
-    const activationUrl = signInUrl
-      ? `${signInUrl}/activate?token=${activationToken}`
-      : `/activate?token=${activationToken}`;
-    const welcomeEmail = await sendJoinerWelcomeEmail({
-      fullName: person.fullName,
-      email,
-      activationUrl: signInUrl ? activationUrl : null,
-      activationValidity: "72 hours",
-      workerType: person.workerType === "employee" ? "employee" : "contractor",
-      signInUrl,
-      sender: { actor: { name: me.name, email: me.email } },
-    });
 
-    // The activation URL is returned once so HR can share it through a
-    // secure channel when email delivery isn't configured. It is a
-    // single-use, 72-hour token — never a password.
     res.status(201).json({
       ok: true,
-      userId,
-      activationUrl,
-      activationExpiresAt: activationExpiresAt.toISOString(),
-      welcomeEmail,
+      id: personId,
+      personId: personWrite.personId,
+      workerType: wt,
+      fullName: personWrite.fullName,
+      displayName: personWrite.displayName,
+      status,
+      onboardingId,
+      login,
     });
   } catch (err) {
     next(err);
   }
 });
+
 
 // -----------------------------------------------------------------
 // /roster/offboarding

@@ -279,6 +279,8 @@ import type {
   AtelierRosterPersonEdit,
   AtelierRosterPersonEditResponse,
   AtelierRosterPersonalView,
+  AtelierRosterQuickAddRequest,
+  AtelierRosterQuickAddResponse,
   AtelierScoutInput,
   AtelierSearchContractCounterpartiesParams,
   AtelierSelfDocumentList,
@@ -7064,6 +7066,103 @@ export const useAtelierDeleteMyEmergencyContact = <
   return useMutation(
     getAtelierDeleteMyEmergencyContactMutationOptions(options),
   );
+};
+
+/**
+ * Streamlined direct create of an employee or contractor on the
+roster, with no candidate/offer/invitation prerequisite. Defaults
+to `active`; optional flags start the standard onboarding
+checklist and/or provision the portal login + welcome invitation
+through the existing create-login machinery. Audited under
+`roster.person.created` with `method: quick_add`.
+
+ * @summary Roster — quick-add a person (HR / Partner / Finance / Founding Partner)
+ */
+export const getAtelierQuickAddRosterPersonUrl = () => {
+  return `/api/atelier/roster/people`;
+};
+
+export const atelierQuickAddRosterPerson = async (
+  atelierRosterQuickAddRequest: AtelierRosterQuickAddRequest,
+  options?: RequestInit,
+): Promise<AtelierRosterQuickAddResponse> => {
+  return customFetch<AtelierRosterQuickAddResponse>(
+    getAtelierQuickAddRosterPersonUrl(),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(atelierRosterQuickAddRequest),
+    },
+  );
+};
+
+export const getAtelierQuickAddRosterPersonMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>,
+    TError,
+    { data: BodyType<AtelierRosterQuickAddRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>,
+  TError,
+  { data: BodyType<AtelierRosterQuickAddRequest> },
+  TContext
+> => {
+  const mutationKey = ["atelierQuickAddRosterPerson"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>,
+    { data: BodyType<AtelierRosterQuickAddRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return atelierQuickAddRosterPerson(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierQuickAddRosterPersonMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>
+>;
+export type AtelierQuickAddRosterPersonMutationBody =
+  BodyType<AtelierRosterQuickAddRequest>;
+export type AtelierQuickAddRosterPersonMutationError = ErrorType<void>;
+
+/**
+ * @summary Roster — quick-add a person (HR / Partner / Finance / Founding Partner)
+ */
+export const useAtelierQuickAddRosterPerson = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>,
+    TError,
+    { data: BodyType<AtelierRosterQuickAddRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierQuickAddRosterPerson>>,
+  TError,
+  { data: BodyType<AtelierRosterQuickAddRequest> },
+  TContext
+> => {
+  return useMutation(getAtelierQuickAddRosterPersonMutationOptions(options));
 };
 
 /**

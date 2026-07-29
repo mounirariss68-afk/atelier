@@ -168,6 +168,7 @@ export {
   getAtelierUpdateRosterPersonUrl,
   getAtelierUpdateRosterPersonMutationOptions,
   useAtelierUpdateRosterPerson,
+  useAtelierQuickAddRosterPerson,
   getAtelierListMyEmergencyContactsUrl,
   getAtelierListMyEmergencyContactsQueryKey,
   getAtelierListMyEmergencyContactsQueryOptions,

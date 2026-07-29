@@ -3105,6 +3105,78 @@ export interface AtelierRosterPersonalView {
   emergencyContacts: AtelierEmergencyContact[];
 }
 
+export type AtelierRosterQuickAddRequestWorkerType =
+  (typeof AtelierRosterQuickAddRequestWorkerType)[keyof typeof AtelierRosterQuickAddRequestWorkerType];
+
+export const AtelierRosterQuickAddRequestWorkerType = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export type AtelierRosterQuickAddRequestMsServiceProfile =
+  | (typeof AtelierRosterQuickAddRequestMsServiceProfile)[keyof typeof AtelierRosterQuickAddRequestMsServiceProfile]
+  | null;
+
+export const AtelierRosterQuickAddRequestMsServiceProfile = {
+  employee: "employee",
+  contractor: "contractor",
+} as const;
+
+export interface AtelierRosterQuickAddRequest {
+  workerType: AtelierRosterQuickAddRequestWorkerType;
+  honorific?: string | null;
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  preferredName?: string | null;
+  email: string;
+  role?: string | null;
+  seniority?: string | null;
+  title?: string | null;
+  /** ISO-3166 alpha-2 */
+  country?: string | null;
+  /** YYYY-MM-DD */
+  startDate?: string | null;
+  employingEntity?: string | null;
+  vendorEntity?: string | null;
+  /** Roster id of an existing employee to report to */
+  managerPersonId?: string | null;
+  /** Start the standard onboarding checklist (person lands as `onboarding` instead of `active`) */
+  runOnboarding?: boolean;
+  /** Provision the portal login + send the welcome invitation */
+  createLogin?: boolean;
+  skipMsProvisioning?: boolean;
+  msServiceProfile?: AtelierRosterQuickAddRequestMsServiceProfile;
+}
+
+/**
+ * Present when createLogin was requested. On success carries
+userId, activationUrl, activationExpiresAt and welcomeEmail;
+on failure `ok: false` plus the error code.
+
+ */
+export type AtelierRosterQuickAddResponseLogin = {
+  [key: string]: unknown;
+} | null;
+
+export interface AtelierRosterQuickAddResponse {
+  ok: boolean;
+  /** Roster row id (emp_* / ctr_*) */
+  id: string;
+  /** Unified person-record id */
+  personId?: string | null;
+  workerType: string;
+  fullName: string;
+  displayName?: string | null;
+  status: string;
+  onboardingId?: string | null;
+  /** Present when createLogin was requested. On success carries
+userId, activationUrl, activationExpiresAt and welcomeEmail;
+on failure `ok: false` plus the error code.
+ */
+  login?: AtelierRosterQuickAddResponseLogin;
+}
+
 export type AtelierRosterPersonEditEmploymentType =
   (typeof AtelierRosterPersonEditEmploymentType)[keyof typeof AtelierRosterPersonEditEmploymentType];
 

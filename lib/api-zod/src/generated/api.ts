@@ -4911,6 +4911,49 @@ export const AtelierDeleteMyEmergencyContactResponse = zod.object({
 });
 
 /**
+ * Streamlined direct create of an employee or contractor on the
+roster, with no candidate/offer/invitation prerequisite. Defaults
+to `active`; optional flags start the standard onboarding
+checklist and/or provision the portal login + welcome invitation
+through the existing create-login machinery. Audited under
+`roster.person.created` with `method: quick_add`.
+
+ * @summary Roster — quick-add a person (HR / Partner / Finance / Founding Partner)
+ */
+export const AtelierQuickAddRosterPersonBody = zod.object({
+  workerType: zod.enum(["employee", "contractor"]),
+  honorific: zod.string().nullish(),
+  firstName: zod.string(),
+  middleName: zod.string().nullish(),
+  lastName: zod.string(),
+  preferredName: zod.string().nullish(),
+  email: zod.string(),
+  role: zod.string().nullish(),
+  seniority: zod.string().nullish(),
+  title: zod.string().nullish(),
+  country: zod.string().nullish().describe("ISO-3166 alpha-2"),
+  startDate: zod.string().nullish().describe("YYYY-MM-DD"),
+  employingEntity: zod.string().nullish(),
+  vendorEntity: zod.string().nullish(),
+  managerPersonId: zod
+    .string()
+    .nullish()
+    .describe("Roster id of an existing employee to report to"),
+  runOnboarding: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Start the standard onboarding checklist (person lands as `onboarding` instead of `active`)",
+    ),
+  createLogin: zod
+    .boolean()
+    .optional()
+    .describe("Provision the portal login + send the welcome invitation"),
+  skipMsProvisioning: zod.boolean().optional(),
+  msServiceProfile: zod.enum(["employee", "contractor"]).nullish(),
+});
+
+/**
  * Updates a whitelisted set of editable person fields per worker type.
 Pay, bank (IBAN/SWIFT), day-rate and lifecycle fields are rejected —
 they stay locked to their dedicated flows. Job title stays

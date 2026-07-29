@@ -4,8 +4,14 @@ import { PageHero, SectionHead, Card, MonoChip } from "@/components/ui/primitive
 import { RecordCard } from "@/components/ui/record-card";
 import { ViewToggle, useViewMode, RecordRow } from "@/components/ui/view-toggle";
 import { Input } from "@/components/ui/input";
-import { Users, Filter, X } from "lucide-react";
+import { Users, Filter, X, UserPlus } from "lucide-react";
 import { countryName } from "@/lib/countries";
+import { useAuth } from "@/lib/auth";
+import { QuickAddPersonDialog } from "./QuickAddPersonDialog";
+
+// Task #759 — quick-add gate mirrors the server's invitation/quick-add
+// permission (isPartnerOrOps): founding partner, partner, finance, HR.
+const QUICK_ADD_ROLES = new Set(["founding_partner", "partner", "finance", "hr"]);
 
 type WorkerType = "employee" | "contractor" | "partner_firm_resource";
 
@@ -69,6 +75,10 @@ const COHORT_LABEL: Record<CohortKey, string> = {
 
 export default function RosterPeople() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const canQuickAdd = QUICK_ADD_ROLES.has(user?.role ?? "");
+  const [quickAddOpen, setQuickAddOpen] = React.useState(false);
+  const [reloadKey, setReloadKey] = React.useState(0);
   const [people, setPeople] = React.useState<PersonRow[] | null>(null);
   const [viewerScope, setViewerScope] = React.useState<"full" | "reports">("full");
   const [filter, setFilter] = React.useState<WorkerType | "all">(() => {
@@ -117,7 +127,7 @@ export default function RosterPeople() {
         setViewerScope(d.viewerScope === "reports" ? "reports" : "full");
       })
       .catch(() => setPeople([]));
-  }, [filter, q, cohort]);
+  }, [filter, q, cohort, reloadKey]);
 
   const counts = React.useMemo(() => {
     const c = { all: 0, employee: 0, contractor: 0, partner_firm_resource: 0 };
@@ -165,6 +175,17 @@ export default function RosterPeople() {
           ),
         )}
         <div className="ml-auto flex items-center gap-3">
+          {canQuickAdd && (
+            // Task #759 — streamlined direct create for already-hired /
+            // historical joiners; formal recruits still use the Hire flow.
+            <button
+              onClick={() => setQuickAddOpen(true)}
+              className="whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-mono uppercase tracking-widest bg-gold text-bg border border-gold hover:opacity-90 transition-opacity"
+              data-testid="quick-add-person-button"
+            >
+              <UserPlus className="w-3.5 h-3.5" /> Add person
+            </button>
+          )}
           {viewerScope === "full" && (
             // Task #387 — one-click print-ready card bundle (zip of PRINT-
             // variant PDFs for all active employees with card contact
@@ -189,6 +210,14 @@ export default function RosterPeople() {
           <ViewToggle mode={viewMode} onChange={setViewMode} data-testid="view-toggle-roster" />
         </div>
       </div>
+
+      {canQuickAdd && (
+        <QuickAddPersonDialog
+          open={quickAddOpen}
+          onOpenChange={setQuickAddOpen}
+          onCreated={() => setReloadKey((k) => k + 1)}
+        />
+      )}
 
       {activeChips.length > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="cohort-chips">
