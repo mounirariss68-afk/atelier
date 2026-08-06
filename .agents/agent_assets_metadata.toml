@@ -227,3 +227,10 @@ id = "Yl0aci6L0CYyG8hEAqNv5"
 uri = "file://exports/DUNS_Questionnaire_Cognirise_UAE.docx"
 type = "word_document"
 title = "DUNS Questionnaire — Cognirise UAE (filled)"
+
+[[outputs]]
+id = "DQbQfUgjSTgJv38PI8HQL"
+uri = "file://exports/atelier-travel-search-kit.zip"
+type = "unspecified"
+title = "Atelier Travel Search Kit (zip)"
+description = "Portable extract of the flights & hotels chat capabilities — Ignav + StayingAPI clients, travel tools, preference registry, offline test suite (26/26 passing), UI references, and a README covering setup and integration points."

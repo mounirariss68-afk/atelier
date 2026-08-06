@@ -1,0 +1,19 @@
+{
+  "name": "atelier-travel-search-kit",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Portable extract of the Atelier flights & hotels search capabilities (Ignav + StayingAPI).",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "tsx tests/travel/travel-probe.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.39.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
