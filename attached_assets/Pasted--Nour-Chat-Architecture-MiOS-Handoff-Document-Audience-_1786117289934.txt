@@ -1,0 +1,598 @@
+# Nour Chat Architecture — MiOS Handoff Document
+
+> **Audience**: engineers building a comparable multi-specialist chat system in a different codebase. Every mechanism described here is verified against the MiOS source; illustrative code snippets and contracts are drawn directly from the implementation.
+
+---
+
+## 1. Overview & Philosophy
+
+Nour is the **single chat entry point** for all ministry staff. Users never pick an agent — they open the chat and type naturally. Under the hood, Nour is a thin orchestrator persona whose only job per message is to classify the request and delegate it to one of **14 specialist personas**, each with its own system prompt and grounding context.
+
+The specialists, by slug, are:
+
+| Slug | Bilingual name | Domain |
+|---|---|---|
+| `mureed` | Mureed / مريد | General fallback / orchestrator |
+| `raaha` | Raaha / راحة | Leave & time-off |
+| `musaanid` | Musaanid / مساند | HR (certificates, performance, EOS, mobility, training) |
+| `kaatib` | Kaatib / كاتب | Official correspondence drafting |
+| `mustashar` | Mustashar / مستشار | Policy & legal research |
+| `muhallil` | Muhallil / محلل | Data analysis & KPIs |
+| `mufattish` | Mufattish / مفتّش | Field inspection |
+| `munassiq` | Munassiq / منسق | Meeting scheduling |
+| `hasib` | Hasib / حاسب | Finance & budgets |
+| `muhaqqiq` | Muhaqqiq / محقّق | Completeness verification |
+| `mustaqbil` | Mustaqbil / مستقبِل | New-request intake |
+| `sayyah` | Sayyarah / سيّارة | Travel search (flights, hotels) |
+| `nour_tenders` | Munaaqis / مُناقِص | Procurement & tenders |
+| `raqeeb` | Raqeeb / رقيب | Automated reminders (non-chat) |
+
+The `raqeeb` persona is listed in the capability manifest but does not handle inbound chat turns; the remaining 13 handle all user messages.
+
+**Why one entry point?** Requiring users to choose an agent before typing creates friction and errors — users do not know which specialist covers their question. A single box with invisible routing is lower cognitive load and makes cross-domain questions (e.g. "I need a certificate and want to check my leave balance") flow naturally.
+
+**Best practices**
+- Expose a single chat surface; hide agent selection.
+- Name specialists in the user's primary language so they appear in answers (citation badges, "via Raaha") but never as a burden during input.
+- Keep a default fallback agent (`mureed`) for everything that does not match a specialist.
+
+---
+
+## 2. Orchestration / Routing
+
+### 2.1 Classification
+
+Every message passes through `classifyAgent(message, previousAgentSlug)` before the LLM call. The classifier is a **bilingual keyword-regex list**: an ordered array of `{ slug, patterns[] }` rules where the **first matching rule wins**.
+
+```typescript
+// artifacts/api-server/src/lib/orchestrator.ts (illustrative excerpt)
+const RULES: Array<{ slug: string; patterns: RegExp[] }> = [
+  { slug: "sayyah",       patterns: [ /\bflights?\b.{0,40}\b(to|from)\b/is, /حجز طيران/, … ] },
+  { slug: "nour_tenders", patterns: [ /\btender(s|ing)?\b/i, /مناقصة/, … ] },
+  { slug: "musaanid",     patterns: [ /\bhr (policy|procedure)\b/i, … ] },  // narrow HR first
+  { slug: "muhaqqiq",     patterns: [ /\bverify\b/i, /تحقق من/, … ] },
+  { slug: "raaha",        patterns: [ /\bleaves?\b/i, /إجاز/, … ] },
+  { slug: "musaanid",     patterns: [ /\bend.?of.?service\b/i, /\bcertificat/i, … ] }, // broad HR
+  { slug: "kaatib",       patterns: [ /\bdraft\b/i, /خطاب/, … ] },
+  // … more specialists …
+  { slug: "mustashar",    patterns: [ /\bpolic(y|ies)\b/i, /قانون/, … ] },  // policy last
+];
+export const DEFAULT_AGENT_SLUG = "mureed";
+```
+
+**Rule ordering matters.** Narrow, high-confidence patterns must come before broad ones:
+- `musaanid` with `hr (policy|procedure)` fires before the broad `musaanid` block and before `mustashar`, so "what is the HR policy for leave encashment?" routes to the HR specialist, not the policy/law specialist.
+- `sayyah` carries explicit negative guards on every flight/hotel pattern so "travel allowance policy" — which lacks booking-specific vocabulary — falls through to the correct HR or policy specialist.
+- `mustashar` is deliberately last among content specialists because `/\bpolic(y|ies)\b/i` and `/قانون/` appear in many non-policy questions that are better served by a domain specialist.
+
+### 2.2 Sticky Multi-turn Routing
+
+When the previous assistant turn belonged to a `STICKY_SPECIALISTS` set, the classifier first runs all rules **excluding suppressed slugs**, and only falls back to the current specialist if nothing fires. This prevents short follow-up answers ("confirm", a department name, yes/no) from bouncing out of an intake flow mid-stream.
+
+```typescript
+const STICKY_SPECIALISTS = new Set([
+  "musaanid", "raaha", "kaatib", "mustaqbil", "nour_tenders", "sayyah",
+]);
+const STICKY_SUPPRESS_SLUGS = new Set(["muhallil"]);
+// muhallil patterns like /\bdata\b/i fire on intake answers ("Senior Data Engineer")
+// and would incorrectly break a sticky session.
+
+export function classifyAgent(message: string, previousAgentSlug?: string): string {
+  if (previousAgentSlug && STICKY_SPECIALISTS.has(previousAgentSlug)) {
+    for (const rule of RULES) {
+      if (STICKY_SUPPRESS_SLUGS.has(rule.slug)) continue;
+      if (rule.patterns.some(re => re.test(message))) return rule.slug;
+    }
+    return previousAgentSlug; // stay sticky
+  }
+  for (const rule of RULES) {
+    if (rule.patterns.some(re => re.test(message))) return rule.slug;
+  }
+  return DEFAULT_AGENT_SLUG;
+}
+```
+
+### 2.3 Why Heuristics, Not an LLM Classifier
+
+A keyword classifier fires in **< 1 ms** with no extra token cost or latency. The alternative — a small LLM call to classify intent before the main call — would double first-token latency for every message. Because the specialist list is finite and stable, a carefully maintained regex ruleset is cheaper, deterministic, easier to debug, and easily extended. The cost is that rule order must be manually curated.
+
+### 2.4 DB-Stored Specialist Prompts
+
+Specialist system prompts are defined as string constants in `agentPrompts.ts` and written to the `agents` table on every server start via `ensureSchemaColumns`. Prompts are loaded from the DB at request time (one query per turn). Storing prompts in the DB rather than shipping them hardcoded to the model call site means:
+1. The prompt can be queried for the capability manifest without coupling the manifest builder to the server runtime.
+2. A deploy-safe `update-agent-prompts.mjs` script can update them independently of a server restart.
+
+**Best practices**
+- Order classification rules narrowest-first. Broad catch-all patterns (numbers, common words, generic verbs) must appear last.
+- Apply sticky routing for multi-turn intake flows — intake questions often produce answers that contain none of the specialist's trigger keywords.
+- Suppress suppress broad-match specialists (analytics, data patterns) from sticky-break eligibility.
+- Use a heuristic classifier unless classification accuracy is demonstrably poor; LLM classification doubles latency and cost for every message.
+- Store prompts in the DB and sync from code constants on start — keeps in-flight and in-DB state identical.
+
+---
+
+## 3. Streaming Protocol
+
+The server streams assistant responses as **Server-Sent Events** (SSE) with `Content-Type: text/event-stream`. Every event is a `data:` line containing a JSON object. The client holds a single `useChatStream` React hook that consumes the stream.
+
+### 3.1 Event Vocabulary
+
+All event names are verified against `useChatStream.ts` and `openai.ts`.
+
+| Event field | Payload | Meaning |
+|---|---|---|
+| `content` | `{ content: string }` | Incremental text chunk for the current assistant message |
+| `agent` | `{ slug: string }` | Specialist slug for the current turn (emitted once, early in the stream) |
+| `study` | `{ status: string }` | Study-loop progress (transient — not saved, not part of message text) |
+| `intakeOptions` | `{ options: [{label,value}] }` | Quick-reply buttons stripped from `[[OPTIONS]]` marker |
+| `leaveOffer` | domain prefill object | Pre-filled leave application card |
+| `certOffer` | domain prefill object | Certificate application card |
+| `erOffer` | domain prefill object | Employee-relations application card |
+| `studyLeaveOffer` | domain prefill object | Study-leave application card |
+| `eosOffer` | domain prefill object | End-of-service application card |
+| `positionOffer` | domain prefill object | JD-card / position draft card |
+| `mobilityOffer` | domain prefill object | Mobility request card |
+| `trainingOffer` | domain prefill object | Training nomination card |
+| `correspondenceOffer` | domain prefill object | Correspondence draft card |
+| `tenderComplianceOffer` | domain prefill object | Tender compliance report card |
+| `tenderAwardOffer` | domain prefill object | Tender award authorization card |
+| `travelPlannerOffer` | domain prefill object | Trip planner / flight-hotel search card |
+| `defectStatusOffer` | domain prefill object | Road-defect intake confirmation card |
+| `serviceMatch` | `{ subprocessId?, instanceId? }` | Navigate to catalog subprocess or instance page |
+| `instanceCreated` | `{ id: number }` | Standard process instance created — navigate to runner |
+| `workItemCreated` | `{ id: number }` | Infrastructure work item created — navigate to Infra Hub |
+| `clarificationSent` | `{ recipient, subject, dispatched, email }` | Tender clarification letter dispatched via Bareed |
+| `done` | `{ done: true }` | Stream complete |
+| `error` | `{ error: string }` | Stream-level failure (model rejected content, provider down) |
+
+### 3.2 Frontend Stream Hook
+
+`useChatStream` is a single shared React hook powering both the full portal and the companion mobile app:
+
+```typescript
+// lib/chat-core/src/hooks/useChatStream.ts (condensed)
+const processLine = (rawLine: string) => {
+  const data = rawLine.slice(5).trim();          // strip "data: "
+  const parsed = JSON.parse(data);
+  if (parsed.done)            { done = true; }
+  else if (parsed.error)      { onStreamError?.(); }
+  else if (parsed.content)    { appendToLastMessage(parsed.content); }
+  else if (parsed.agent)      { setMetadata({ agentSlug: parsed.agent.slug }); }
+  else if (parsed.study)      { onStudyStatus?.(parsed.study.status); }
+  else if (parsed.serviceMatch)   { onNavigate?.(`/catalog/subprocess/${parsed.serviceMatch.subprocessId}`); }
+  else if (parsed.instanceCreated){ onNavigate?.(`/instances/${parsed.instanceCreated.id}`); }
+  else if (parsed.workItemCreated){ onNavigate?.(`/infra?id=${parsed.workItemCreated.id}`); }
+  else if (parsed.clarificationSent) { setMetadata({ clarificationSent: parsed.clarificationSent }); }
+  else if (parsed.leaveOffer || parsed.certOffer || /* … all offer types … */) {
+    setMetadata({ ...parsed }); // merge all offer keys into message metadata
+  }
+};
+```
+
+Navigation events (`serviceMatch`, `instanceCreated`, `workItemCreated`) call the caller-supplied `onNavigate` callback with a relative path; the companion app translates some paths to its own routing (e.g. `/catalog/subprocess/123` → `/catalogue?sub=123`) while falling back to `window.open` for portal-only pages.
+
+**Best practices**
+- Give each semantic event type its own field key in the JSON object — never overload `content` with structured data.
+- Separate navigation/state events from text content so the UI can handle them without parsing prose.
+- Keep the streaming hook stable (no re-creation) and use a ref to always access the latest `opts` callbacks without stale closure problems.
+- `study` events are transient — they drive UI spinners but are never saved to the message record.
+- Action cards are disabled while streaming; only enable them after `done`.
+
+---
+
+## 4. RAG Pipeline
+
+### 4.1 Architecture Overview
+
+The RAG layer uses **Postgres full-text search** with a custom Arabic normalization SQL function (`ar_normalize`). No vector embeddings are used — the Replit AI integration proxy does not expose an embeddings endpoint.
+
+All corpus documents live in the `rag_documents` table with columns: `corpus`, `title`, `content`, `source_type`, `source_id`. The `source_type`/`source_id` pair links a document to a live DB record so citation chips can navigate to it.
+
+### 4.2 Arabic Normalization
+
+`ar_normalize` is an immutable Postgres function that the GIN index expression uses:
+
+```sql
+CREATE OR REPLACE FUNCTION ar_normalize(t text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $fn$
+  SELECT regexp_replace(
+    translate(
+      regexp_replace(lower(coalesce(t, '')), '[\u064B-\u0652\u0640\u0670]', '', 'g'),
+      'أإآٱؤئىة', 'ааааоyиh'   -- simplified; actual maps to ASCII-equivalent base letters
+    ),
+    '(^|[[:space:]])(وال|بال|كال|فال|لل|ال)([^[:space:]]{2,})', '\1\3', 'g'
+  );
+$fn$;
+
+CREATE INDEX rag_documents_ar_fts_idx_v4
+ON rag_documents
+USING gin (to_tsvector('simple', ar_normalize(title || ' ' || content)));
+```
+
+The same normalization runs in JavaScript (in `arabicSearch.ts`) before query building, so query tokens and index tokens are processed identically. Light morphological stemming strips common Arabic prefixes (`ال`, `و`, `ب`, etc.) and suffixes, then each token becomes an OR of prefix-match (`lexeme:*`) variants joined with AND across tokens:
+
+```
+"نهاية الخدمة" → (نهايه:* | نهاي:*) & (خدمه:* | خدم:*)
+```
+
+### 4.3 Strict-AND Then OR Relaxation
+
+```typescript
+let rows = await runRagQuery(strict, pattern, corpus, limit, includeTenderSources);
+if (rows.length < limit && strict.includes(" & ")) {
+  // Relax: "How is X calculated?" often matches nothing strictly.
+  const relaxed = await runRagQuery(strict.replaceAll(" & ", " | "), pattern, corpus, limit, …);
+  // De-duplicate and append only new results.
+}
+```
+
+Two-pass retrieval catches both precisely-worded queries (strict AND) and broad phrasing, comparison questions, and multi-article requests (OR relaxation).
+
+### 4.4 Title Weighting
+
+Title matches are scored 4× body matches:
+
+```sql
+GREATEST(
+  ts_rank(to_tsvector('simple', ar_normalize(title || ' ' || content)), query),   -- body
+  4 * ts_rank(to_tsvector('simple', ar_normalize(title)),               query),   -- title
+  CASE WHEN ar_normalize(title) ILIKE pattern THEN 0.5 ELSE 0 END,
+  CASE WHEN ar_normalize(content) ILIKE pattern THEN 0.25 ELSE 0 END
+) AS score
+```
+
+This ensures an article with the queried term in its heading ranks above a large background document that mentions the term once in its body.
+
+### 4.5 Corpus Scoping and Default-Deny for Tenders
+
+The `ragRetrieve` function accepts a `corpus` filter and an `includeTenderSources` flag. The flag defaults to `false`, meaning tender and tender_doc rows are **excluded at the SQL level** for every caller that does not hold a tenders-personnel badge or executive role. This is defense-in-depth: the tenders agent's system prompt says "unauthorized users get policy answers only," but even if the prompt were bypassed, no tender content would enter the model context.
+
+```typescript
+const tenderClause = includeTenderSources
+  ? sql``
+  : sql`AND source_type NOT IN ('tender', 'tender_doc')`;
+```
+
+### 4.6 Per-Article Chunking of Verbatim Law Corpora
+
+HR-law and pension-law corpora use **one row per article**. This is critical: if multiple articles are merged into one `rag_documents` row, a query for a specific article competes against the merged document's score, and unrelated articles within that document are retrieved alongside the target. Per-article rows ensure the FTS score for the article the user asked about dominates.
+
+Ingestion scripts (`ingest-hr-law.mjs`) extract each article as its own row with `source_type='hr_law'` and `source_id=<article_number>`.
+
+### 4.7 Corpus Pitfalls
+
+- **All-corpus retrieval buries law articles for many phrasings.** When a query is routed to the `all` corpus, large background documents (policy handbooks, subprocess descriptions) often outscore verbatim law articles because the handbook contains more matching tokens overall. The fix is per-article chunking (above) and the 4× title boost.
+- **Summarized provisions must never merge with verbatim articles.** A commentary row and a verbatim article row for the same article number produce FTS conflicts where the commentary crowds out the authoritative text.
+- **Re-seeding clears law rows.** Seed scripts must re-run law ingestion or law articles disappear from the corpus after a reseed.
+
+**Best practices**
+- Chunk law corpora one article per row; never merge provisions.
+- Normalize at query time and at index time using the same function.
+- Use a two-pass (strict AND then OR) strategy for multilingual legal queries.
+- Score title matches 3–5× body matches to surface definitional articles.
+- Default-deny sensitive sources at the SQL level, not only in the model prompt.
+
+---
+
+## 5. Citation Contract
+
+### 5.1 Token Grammar
+
+The citation token is a **prompt↔frontend contract**. Both sides must change together:
+
+```
+[[cite:type:id|Title]]
+```
+
+- `type` — one of the linkable source types: `subprocess`, `decision`, `correspondence`, `instance`, `jd_card`, `hr_law`, `pension_law`, `law`, `article`, `policy`, `document`, `tender`, `tender_doc`
+- `id` — integer primary key in the corresponding DB table
+- `Title` — human-readable label (bilingual strings are allowed)
+
+Non-linkable sources use the plain fallback `[Source: Title]`, which the frontend renders as a non-clickable chip.
+
+### 5.2 Server-Side Sanitization
+
+The model sometimes invents tokens with unlinkable types (e.g. `[[cite:policies:Article (18)...]]`) or non-numeric IDs. A streaming sanitizer (`createCiteSanitizer`) intercepts every text chunk:
+
+```typescript
+// lib: citations.ts
+export function createCiteSanitizer(write: (text: string) => void) {
+  let pending = "";
+  return {
+    push(text: string) {
+      pending += text;
+      // Hold back any trailing "[[" that hasn't closed yet (cross-chunk token).
+      const idx = pending.lastIndexOf("[[");
+      let safeEnd = pending.length;
+      if (idx !== -1 && !pending.slice(idx).includes("]]")) safeEnd = idx;
+      if (safeEnd === pending.length && pending.endsWith("[")) safeEnd = pending.length - 1;
+      const out = sanitizeCiteText(pending.slice(0, safeEnd));
+      pending = pending.slice(safeEnd);
+      if (out) write(out);
+    },
+    flush() {
+      if (pending) { write(sanitizeCiteText(pending)); pending = ""; }
+    },
+  };
+}
+
+function sanitizeCiteText(text: string): string {
+  return text.replace(
+    /\[\[cite:([a-z_]+):(\d+)\|([^\]]+?)\]\]|\[\[cite:([^\]]*?)\]\]/g,
+    (all, type, _id, _title, badInner) => {
+      if (type !== undefined) {
+        if (LINKABLE_SOURCE_TYPES.has(type)) return all;   // valid — pass through
+        return `[Source: ${_title.trim()}]`;               // bad type — degrade
+      }
+      // Malformed inner (no type:id prefix): extract title, degrade.
+      const pipe = String(badInner).indexOf("|");
+      if (pipe !== -1) return `[Source: ${String(badInner).slice(pipe + 1).trim()}]`;
+      return `[Source: ${String(badInner).trim()}]`;
+    },
+  );
+}
+```
+
+The sanitizer **holds back** any trailing `[[` that has not closed yet, ensuring a citation token split across two chunks is still validated as a complete token before being written to the wire.
+
+### 5.3 Frontend Rendering — `cite:` URL Transform
+
+`react-markdown` strips any URL scheme it does not recognize. A custom `urlTransform` passthrough is required:
+
+```tsx
+// lib/chat-core/src/components/MessageMarkdown.tsx
+<ReactMarkdown
+  urlTransform={(url) => {
+    if (url.startsWith('cite:'))    return url;   // MUST pass through
+    if (/^https?:\/\//i.test(url)) return url;
+    if (!url.includes(':'))        return url;
+    return '';                                    // strip unrecognized schemes
+  }}
+  components={{ a: MarkdownLink as any }}
+>
+  {preprocess(content, streaming)}
+</ReactMarkdown>
+```
+
+The `preprocess` step rewrites `[[cite:type/id|Title]]` → `[Title](cite:type/id)` before the markdown parser runs, so `react-markdown` sees a normal link whose `href` starts with `cite:`. The `MarkdownLink` component routes `cite:` hrefs through a `CitationRouterContext` that each consuming app provides, mapping `(type, id)` to its own navigation path.
+
+**Best practices**
+- Treat the citation token grammar as a versioned API between server and client — document it, lint it, change both sides together.
+- Sanitize in the streaming path (not only at persistence) so the user never sees a raw malformed token even during typing.
+- Hold back trailing `[[` fragments across chunk boundaries before sanitizing.
+- Pass `cite:` URLs through `urlTransform` or all citations silently degrade to dead links.
+- Let each app supply its own citation resolver via context — the shared library has no knowledge of the app's routing.
+
+---
+
+## 6. Deterministic Workflow Integration
+
+### 6.1 Marker Protocol
+
+Specialists embed **server-intercepted markers** at the end of their response to trigger backend actions. The marker pattern is:
+
+```
+[[MARKER_NAME]]{"key":"value",...}
+```
+
+The markers in production, all defined in `streamChatAnswerAndPersist`:
+
+| Marker | Agent | Action |
+|---|---|---|
+| `[[OPTIONS]]` | Any | Strip from visible text; parse JSON options; emit `intakeOptions` SSE |
+| `[[CREATE_INSTANCE]]` | `mustaqbil` | Create process instance or infra work item; emit `instanceCreated`/`workItemCreated` |
+| `[[FILE_GRIEVANCE]]` | `musaanid` | Insert appraisal grievance record; notify |
+| `[[CREATE_OUTSOURCING_NEED]]` | `musaanid` | Insert outsourcing need record |
+| `[[SAVE_TENDER_EVALUATION]]` | `nour_tenders` | Persist bid evaluation scores |
+| `[[CONFIRM_TENDER_AWARD]]` | `nour_tenders` | Emit `tenderAwardOffer` card for human confirmation |
+| `[[SEND_CLARIFICATION_LETTER]]` | `kaatib` | Dispatch email via Bareed; emit `clarificationSent` |
+
+All markers are **stripped from the visible text** — the holdback buffer collects the response and emits text only up to the first detected marker. The JSON payload is parsed and executed server-side, then an appropriate SSE event is emitted to trigger the client-side card or navigation.
+
+### 6.2 Confirmation Gating
+
+Marker execution includes an explicit **double-guard** against accidental firing:
+
+```typescript
+if (createIdx !== -1 && intake) {
+  if (!intake.allowedSubprocessIds.includes(subprocessId))
+    throw new Error('subprocess not among retrieved catalog candidates');
+  if (!isIntakeConfirmation(question))
+    throw new Error('latest user message is not an explicit confirmation');
+  if (!ctx?.employee) throw new Error('no employee profile');
+  // … create the instance …
+}
+```
+
+`isIntakeConfirmation` matches bilingual confirmation phrases (`yes`, `confirm`, `نعم`, `أؤكد`, etc.). The subprocess ID must also appear in the server-held allowlist of RAG-retrieved candidates, so the model cannot hallucinate an arbitrary subprocess ID into existence.
+
+### 6.3 Server-Emitted Typed Offers (Cards)
+
+For domain-specific action cards (leave, certificates, EOS, mobility, study leave, training, ER, travel), the server emits a typed SSE event **after the stream completes** — it is not driven by a marker in the model output. The server parses the model's collected response (or any separately executed logic), constructs a prefill object, and writes the event:
+
+```typescript
+// e.g. for leave (openai.ts, simplified)
+res.write(`data: ${JSON.stringify({ leaveOffer: { leaveType, startDate, endDate, … } })}\n\n`);
+```
+
+The hook merges this into the message metadata; the React page renders the card component below the message bubble after streaming ends.
+
+### 6.4 Intake Options — Server-Side Only
+
+`[[OPTIONS]]` markers are **always written by the specialist prompt**, never generated by the model reasoning about which options to present. Prompts specify the exact JSON format including labels and values. This is intentional: the UI buttons must match what the server expects to receive as the next user turn. Letting the model invent option labels dynamically creates hard-to-test surface area.
+
+**Best practices**
+- Strip markers server-side before they reach the client — markers are an internal protocol, not part of the conversational text.
+- Gate every marker execution on an explicit user confirmation phrase plus a server-held allowlist of valid IDs.
+- Emit typed offer cards as separate SSE events, not as content text; this decouples visual card rendering from markdown rendering.
+- Keep options objects server-authored; do not let the model freely invent option labels.
+- Re-validate authorization at marker execution time — the model call is untrusted.
+
+---
+
+## 7. Shared Chat-Core Library
+
+### 7.1 Structure
+
+MiOS ships two frontends: the full browser portal (`artifacts/mios`) and a mobile companion app (`artifacts/mios-companion`). Both consume the `@workspace/chat-core` package, which exports:
+
+- `useChatStream` — SSE stream hook (all event handling)
+- `MessageMarkdown` — markdown renderer with `cite:` URL transform
+- `CitationRouterProvider` + `useCitationRouter` — context for app-specific `(type, id) → path` resolvers
+- All card components: `LeaveApplicationCard`, `CertificateApplicationCard`, `EosApplicationCard`, `MobilityRequestCard`, `StudyLeaveApplicationCard`, `TrainingNominationCard`, `ERApplicationCard`, `EosApplicationCard`, `TenderComplianceCard`, `TenderAwardCard`, `TripPlannerCard`, `DefectStatusCard`, `ClarificationSentCard`, and more
+- `IntakeOptionButtons` — quick-reply button row
+- `NourAvatar`, `SpecialistBadge`, `MessageActions` — shared UI primitives
+
+### 7.2 Single Context Instance Rule
+
+Both apps wrap their chat page with `<CitationRouterProvider resolve={appSpecificResolver}>`. The resolver is the **only** surface that differs between apps:
+
+```typescript
+// Portal — artifacts/mios/src/lib/citationResolver.ts
+export const portalCitationResolver = (type: string, id: number): string | null => { … };
+
+// Companion — artifacts/mios-companion/src/lib/citationResolver.ts
+export const companionCitationResolver = (type: string, id: number): string | null => { … };
+```
+
+Each app passes a single resolver instance; the context must not be multiply nested or instantiated inside loops, or citation chips from different message slots will use different resolvers.
+
+### 7.3 Navigation Split
+
+The companion app maps service-match paths to its own routing when the path is companion-native:
+
+```typescript
+const COMPANION_NATIVE = [ /^\/catalogue/, /^\/instances/, /^\/infra/, … ];
+
+function resolveNavPath(path: string): { companion: boolean; url: string } {
+  const subMatch = path.match(/^\/catalog\/subprocess\/(\d+)/);
+  if (subMatch) return { companion: true, url: `/catalogue?sub=${subMatch[1]}` };
+  if (COMPANION_NATIVE.some(r => r.test(path))) return { companion: true, url: path };
+  return { companion: false, url: `${PORTAL_BASE}${path}` };   // open portal in browser tab
+}
+```
+
+**Best practices**
+- Extract streaming logic, citation rendering, and card components into a shared library consumed by all frontends.
+- Use a context (not prop drilling) for citation routing — cards deep in the tree need it.
+- Keep `useChatStream` stable (no re-creation on re-render) — use a ref for mutable options callbacks.
+- One context provider instance per page — do not nest multiple providers.
+- The companion app's navigation handler is the correct place to map portal paths to mobile-native equivalents, not the shared hook.
+
+---
+
+## 8. Reliability Lessons
+
+### 8.1 Marker Flakiness and Server-Side Intent Fallbacks
+
+Model-generated markers occasionally fail — the model omits a trailing marker in edge cases (long responses, non-English messages, unusual phrasing). For critical intake paths (leave creation, certificate requests), MiOS adds a **server-side intent fallback**: after the stream, if the response strongly implies intent to create a form but the marker is absent, the server re-runs the marker-handler creation path on its own initiative, using keywords extracted from the conversation.
+
+This means markers are the primary path, not the only path. Any marker whose absence would silently block a user journey needs a companion intent-detection fallback.
+
+### 8.2 Holdback Buffer for Protocol Marker Stripping
+
+The `[[OPTIONS]]` marker and its JSON payload must never appear in the visible message text. The server uses a **holdback buffer**: incoming stream chunks accumulate in `pending`; the buffer emits the safe prefix and holds back anything from the start of the first detected marker onwards.
+
+```typescript
+const MARKERS = ['[[OPTIONS]]', '[[CREATE_INSTANCE]]', /* … */];
+const MAX_MARKER_LEN = Math.max(...MARKERS.map(m => m.length));
+
+const flushPending = () => {
+  if (markerSeen) return;
+  const indices = MARKERS.map(m => pending.indexOf(m)).filter(i => i !== -1);
+  if (indices.length) {
+    markerSeen = true;
+    emit(pending.slice(0, Math.min(...indices)).replace(/\s+$/, ''));
+    citeSanitizer.flush();
+    return;
+  }
+  const keep = Math.min(pending.length, MAX_MARKER_LEN - 1);
+  emit(pending.slice(0, pending.length - keep));
+  pending = pending.slice(pending.length - keep);
+};
+```
+
+The holdback buffer and the citation sanitizer **compose**: the citation sanitizer wraps the marker-stripped output, so both protocols operate correctly in the same stream.
+
+### 8.3 Attachment Handling — Only Latest Image Inlined
+
+The model receives conversation history as an array of messages. If every image attachment in history were inlined as a vision `image_url` turn, a single corrupt or outdated image from an earlier exchange would poison every subsequent turn. The rule: **only the last user message may inline its image**. All earlier image messages are replaced with a bracketed filename note.
+
+```typescript
+async function toModelMessages(history: Message[]) {
+  return Promise.all(
+    history.map((m, i) => toModelMessage(m, /* inlineImage: */ i === history.length - 1))
+  );
+}
+```
+
+Non-image attachments are never inlined — they are always replaced with the filename note, because the model cannot parse binary files.
+
+### 8.4 Conditional Writes for Auto-Title Races
+
+Conversation titles are generated after the first exchange by a fire-and-forget async call. Because the title generation takes time, a user could rename the conversation manually in the same window. The DB write is conditional:
+
+```sql
+UPDATE conversations
+SET title = $generatedTitle
+WHERE id = $conversationId
+  AND title_user_edited = false
+  AND title = $titleAtTimeOfRead;  -- only overwrite what we saw before the LLM call
+```
+
+This two-predicate guard means a concurrent manual rename (which sets `title_user_edited = true`) wins: both predicates fail, and the auto-title becomes a safe no-op.
+
+**Best practices**
+- Add server-side intent fallbacks for any marker whose absence silently blocks a user journey.
+- Holdback buffers for protocol markers must be sized to `max_marker_length - 1` to catch markers split across chunk boundaries.
+- Compose holdback and citation sanitizer in sequence — both operate on the same stream.
+- Inline only the latest attachment image to the model; replace older ones with a filename note.
+- Use conditional SQL (`WHERE title = <value_we_read>`) for any AI-generated write that races with a user action.
+
+---
+
+## 9. Best Practices Summary
+
+A closing checklist of transferable patterns for any multi-agent chat implementation:
+
+**Architecture**
+- [ ] Single chat entry point — hide agent selection from users; route invisibly.
+- [ ] Keyword heuristic for classification (< 1 ms, no extra LLM call) unless accuracy is provably poor.
+- [ ] Order rules narrowest-first; broad catch-alls (policy, data) go last.
+- [ ] Sticky routing for multi-turn intake flows; suppress broad-match specialists from breaking stickiness.
+- [ ] DB-stored prompts synced from code constants — one source of truth, queryable at runtime.
+
+**Streaming**
+- [ ] One SSE JSON key per semantic event type — never overload `content` with structured data.
+- [ ] Markers are stripped server-side before reaching the client.
+- [ ] Holdback buffer length ≥ `max_marker_length - 1`.
+- [ ] Citation sanitizer composes with marker holdback in sequence.
+- [ ] Navigation events carry validated IDs only (allowlist on the server).
+
+**RAG**
+- [ ] Arabic (and other morphologically rich language) queries need normalization at both index and query time, using identical rules.
+- [ ] Per-article chunking for verbatim law corpora — never merge articles.
+- [ ] Two-pass retrieval: strict AND first, then OR relaxation for question-style and comparison queries.
+- [ ] Boost title matches (3–5×) over body matches.
+- [ ] Default-deny sensitive corpora at the SQL level, not only in the prompt.
+
+**Citations**
+- [ ] Token grammar is a versioned prompt↔frontend contract — lint both sides together.
+- [ ] Sanitize malformed tokens in the streaming path (not only at save time).
+- [ ] Hold back trailing `[[` fragments across chunk boundaries before sanitizing.
+- [ ] Pass `cite:` URLs through `react-markdown`'s `urlTransform` — omitting this silently breaks all citations.
+- [ ] App-specific citation routing goes in a context, not hardcoded in the shared library.
+
+**Workflow integration**
+- [ ] Gate every marker action on: explicit confirmation phrase + server-held allowlist of valid IDs + bound user identity.
+- [ ] Re-authorize at marker execution time — the model call is untrusted.
+- [ ] Emit typed offer cards as separate SSE events; render them after streaming ends.
+- [ ] Keep options objects server-authored in prompts; do not let the model invent option labels.
+- [ ] Add intent fallbacks for any marker whose absence silently breaks a user journey.
+
+**Shared library**
+- [ ] Extract hook, citation rendering, and cards into one package consumed by all frontends.
+- [ ] One `CitationRouterProvider` per page; do not nest.
+- [ ] Keep the stream hook stable (no re-creation) — use a ref for mutable callbacks.
+- [ ] Only the latest image attachment is inlined to the model.
+- [ ] Conditional SQL writes for AI-generated content that races with user actions.
