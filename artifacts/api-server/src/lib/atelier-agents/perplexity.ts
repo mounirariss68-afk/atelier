@@ -81,15 +81,30 @@ export async function perplexitySearch(
     model?: string;
     /** Restrict retrieval to recent sources (press monitoring etc.). */
     searchRecencyFilter?: "day" | "week" | "month" | "year";
+    /**
+     * Task #771 — ISO date "YYYY-MM-DD" injected into the system prompt so
+     * Perplexity knows today's date and can prioritise recent sources.
+     * Falls back to ATELIER_PERPLEXITY_TODAY env var (useful for stubs), then
+     * new Date().toISOString().slice(0, 10) at call time.
+     */
+    today?: string;
   },
 ): Promise<PerplexityQueryResult> {
+  const todayStr =
+    opts?.today ??
+    process.env.ATELIER_PERPLEXITY_TODAY ??
+    new Date().toISOString().slice(0, 10);
   const body = {
     model: opts?.model ?? DEFAULT_MODEL(),
     messages: [
       {
         role: "system",
         content:
-          "You are a factual web-research assistant. Answer with dense, specific, sourced facts (names, titles, figures, dates). Prefer primary/official sources.",
+          `You are a factual web-research assistant. Today is ${todayStr}. ` +
+          `Answer with dense, specific, sourced facts — names, titles, figures, and exact dates. ` +
+          `State the date of each event or announcement where known. ` +
+          `Prioritise the most recent information; prefer sources from ${todayStr.slice(0, 4)} ` +
+          `and the preceding 12 months. Prefer primary and official sources.`,
       },
       { role: "user", content: query },
     ],
@@ -195,26 +210,86 @@ export interface PerplexityDossier {
  * Run the agent's retrieval queries sequentially and assemble a citation-
  * annotated dossier. `onPhase` receives progress breadcrumbs for the run row
  * / chat transcript. Any query failure propagates (fail loud, no fallback).
+ *
+ * Task #771 additions:
+ *  - `today` is injected into each Perplexity system prompt.
+ *  - `recencyQueries` runs with search_recency_filter:"month" regardless of
+ *    the global filter — used for focused recent-news queries.
+ *  - `entityLabel` triggers an automatic supplemental recency query
+ *    ("Latest news, announcements and milestones for <entity> as of <today>")
+ *    generated in this shared layer so ALL callers benefit without per-agent
+ *    changes. The auto-supplement only fires when capacity remains under the
+ *    8-query cap and no caller-supplied recencyQueries already cover it.
+ *  - Combined base + recency + auto-supplement is capped at 8; excess recency
+ *    queries are silently dropped with a dev-mode warning.
  */
 export async function perplexityResearch(args: {
   queries: string[];
+  /** Run with search_recency_filter:"month" — focused recent-event queries. */
+  recencyQueries?: string[];
+  /**
+   * Entity name (account/firm) used to auto-generate a shared supplemental
+   * recency query in this layer so every caller gets at least one
+   * month-filtered recent-news pass.
+   */
+  entityLabel?: string;
   searchRecencyFilter?: "day" | "week" | "month" | "year";
+  /** ISO date "YYYY-MM-DD" passed to each perplexitySearch call. */
+  today?: string;
   onPhase?: (pct: number, message: string, data?: Record<string, unknown>) => void;
 }): Promise<PerplexityDossier> {
-  const queries = args.queries.map((q) => q.trim()).filter(Boolean).slice(0, 8);
-  if (queries.length === 0) {
+  const todayStr =
+    args.today ??
+    process.env.ATELIER_PERPLEXITY_TODAY ??
+    new Date().toISOString().slice(0, 10);
+
+  const baseQueries = args.queries.map((q) => q.trim()).filter(Boolean);
+  if (baseQueries.length === 0) {
     throw new PerplexityConnectionError("no research queries were provided");
   }
+
+  // Build the recency batch: caller-supplied recencyQueries + the shared
+  // auto-supplement (if entityLabel provided and capacity allows).
+  const callerRecency = (args.recencyQueries ?? []).map((q) => q.trim()).filter(Boolean);
+  const autoSupplements: string[] = args.entityLabel
+    ? [
+        `Latest news, announcements and milestones for ${args.entityLabel} as of ${todayStr}`,
+      ]
+    : [];
+
+  const cap = 8;
+  const baseSliced = baseQueries.slice(0, cap);
+  const remaining = Math.max(0, cap - baseSliced.length);
+  const allRecency = [...callerRecency, ...autoSupplements];
+  const recencySliced = allRecency.slice(0, remaining);
+
+  if (allRecency.length > remaining && process.env.NODE_ENV !== "production") {
+    console.warn(
+      `[perplexityResearch] ${allRecency.length - remaining} recency ` +
+        `query/queries truncated (8-query cap reached after ${baseSliced.length} base queries).`,
+    );
+  }
+
+  // Run everything sequentially; progress pct covers base + recency together.
+  const allQueries: Array<{ q: string; recency: boolean }> = [
+    ...baseSliced.map((q) => ({ q, recency: false })),
+    ...recencySliced.map((q) => ({ q, recency: true })),
+  ];
+  const total = allQueries.length;
+
   const sections: string[] = [];
   const citations: PerplexityCitation[] = [];
   const seen = new Set<string>();
-  for (let i = 0; i < queries.length; i++) {
+
+  for (let i = 0; i < total; i++) {
+    const { q, recency } = allQueries[i];
     args.onPhase?.(
-      15 + Math.round((i / queries.length) * 40),
-      `Searching the web (${i + 1}/${queries.length})`,
+      15 + Math.round((i / total) * 40),
+      `Searching the web (${i + 1}/${total})`,
     );
-    const r = await perplexitySearch(queries[i], {
-      searchRecencyFilter: args.searchRecencyFilter,
+    const r = await perplexitySearch(q, {
+      searchRecencyFilter: recency ? "month" : args.searchRecencyFilter,
+      today: todayStr,
     });
     for (const c of r.citations) {
       if (!seen.has(c.url)) {
@@ -229,13 +304,13 @@ export async function perplexityResearch(args: {
             .join("\n")
         : "  (no sources returned)";
     sections.push(
-      `### Research query ${i + 1}: ${r.query}\n${r.answer}\n\nSources:\n${sources}`,
+      `### Research query ${i + 1}${recency ? " [recency-filtered]" : ""}: ${r.query}\n${r.answer}\n\nSources:\n${sources}`,
     );
     args.onPhase?.(
-      15 + Math.round(((i + 1) / queries.length) * 40),
+      15 + Math.round(((i + 1) / total) * 40),
       `Read ${citations.length} source${citations.length === 1 ? "" : "s"}`,
       { sources: citations.slice(0, 40) },
     );
   }
-  return { dossier: sections.join("\n\n"), citations, queryCount: queries.length };
+  return { dossier: sections.join("\n\n"), citations, queryCount: total };
 }

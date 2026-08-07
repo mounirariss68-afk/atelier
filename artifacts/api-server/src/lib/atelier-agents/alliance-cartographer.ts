@@ -193,7 +193,7 @@ export async function runAllianceCartographer(args: {
   try {
     const system = loadPrompt("alliance_cartographer", 1);
     await progressRun(runId, 15, "Researching the partner firm");
-    const { value, costUsd, citationUrls } =
+    const { value, costUsd, citationUrls, potentiallyStale: allianceStale } =
       await callResearchJson<Record<string, unknown>>(
         "claude-sonnet-4-5",
         system,
@@ -206,11 +206,14 @@ export async function runAllianceCartographer(args: {
         }),
         {
           progressRunId: runId,
-          // Task #687 — partner-firm profiling via Perplexity retrieval.
+          // Task #771 — split catch-all news query; dedicated recency pass.
+          entityLabel: args.firmName,
           researchQueries: [
             `${args.firmName}${args.firmCountry ? ` (${args.firmCountry})` : ""} company profile: what they do${args.firmSpeciality ? ` (${args.firmSpeciality})` : ""}, size, ownership, headquarters, website`,
             `${args.firmName} partnerships, alliances, technology vendor certifications and notable clients`,
-            `${args.firmName} recent news, funding, expansion or leadership announcements`,
+          ],
+          recencyQueries: [
+            `${args.firmName} recent news, funding rounds, expansion and leadership announcements (last 3 months)`,
           ],
         },
       );
@@ -264,9 +267,17 @@ export async function runAllianceCartographer(args: {
 
     // --- fit scorecard: weights/total/verdict/watchouts computed HERE ---
     const rawDims = Array.isArray(raw.fitScorecard) ? (raw.fitScorecard as Array<Record<string, unknown>>) : [];
-    const openQuestions: string[] = Array.isArray(raw.openQuestions)
-      ? (raw.openQuestions as unknown[]).filter((q): q is string => typeof q === "string").slice(0, 20)
-      : [];
+    // Task #771 — prepend staleness warning when the dossier lacked recent dates.
+    const openQuestions: string[] = [
+      ...(allianceStale
+        ? [
+            "⚠ Web research may not reflect recent events: no content dated from this or the previous calendar year was found in the retrieved sources. Verify the firm name and re-run to capture recent developments.",
+          ]
+        : []),
+      ...(Array.isArray(raw.openQuestions)
+        ? (raw.openQuestions as unknown[]).filter((q): q is string => typeof q === "string").slice(0, 20)
+        : []),
+    ];
     const dimensions = ALLIANCE_FIT_DIMENSIONS.map((def) => {
       const found = rawDims.find((d) => d?.id === def.id);
       if (!found) {

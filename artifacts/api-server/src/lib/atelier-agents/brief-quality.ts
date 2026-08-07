@@ -20,6 +20,19 @@ import type { AgentFact, PursuitScoutOutput } from "./runner.js";
 /** Research older than this is flagged "refresh recommended". */
 export const RESEARCH_STALE_AFTER_DAYS = 30;
 
+/**
+ * Task #771 — stable prefix of the staleness warning injected into
+ * `openQuestions` by the perplexity research layer when the dossier contains
+ * no dates within the last 12 months. Both Cartographer and Scout use strings
+ * that start with this prefix, so `startsWith` detection is reliable.
+ *
+ * This constant is intentionally defined here (not in runner.ts) to avoid a
+ * circular import: brief-quality imports types from runner, so runner must
+ * not import back. Callers in runner.ts / alliance-cartographer.ts hardcode
+ * their injection strings but all start with this prefix.
+ */
+export const STALENESS_OQ_MARKER = "⚠ Web research may not reflect recent events";
+
 export type FiveCKey = "client" | "competition" | "capability" | "capacity" | "contract";
 export const FIVE_C_KEYS: FiveCKey[] = [
   "client",
@@ -100,6 +113,18 @@ export interface BriefCompleteness {
   confidenceMix: { green: number; amber: number; red: number };
   /** 0–100 — 60% section coverage, 40% sourced-fact ratio. */
   score: number;
+  /**
+   * Task #771 — true when the retrieval dossier contained no dates within the
+   * last 12 months, suggesting coverage may have missed recent events.
+   *
+   * Detected deterministically from `openQuestions`: the shared research layer
+   * injects a warning starting with `STALENESS_OQ_MARKER` when stale, which
+   * is persisted with the brief. Both `computeBriefCompleteness` and
+   * `computeAccountBriefCompleteness` set this by scanning `openQuestions`,
+   * so every read endpoint — GET and POST — returns the correct value without
+   * a separate DB column or re-running the dossier check.
+   */
+  potentiallyStale: boolean;
 }
 
 type BriefLike = Pick<
@@ -143,6 +168,15 @@ export function computeBriefCompleteness(
   const sectionScore = sectionKeys.length > 0 ? populated.length / sectionKeys.length : 0;
   const score = Math.round(sectionScore * 60 + (sourcedFactRatio ?? 0) * 40);
 
+  // Task #771 — detect staleness from the persisted openQuestions array.
+  // The shared research layer injects a warning starting with STALENESS_OQ_MARKER
+  // when the dossier had no dates within the last 12 months; since openQuestions
+  // is persisted with the brief, this survives DB round-trips without any schema
+  // change or re-running the dossier check at read time.
+  const potentiallyStale = (b.openQuestions ?? []).some(
+    (q) => typeof q === "string" && q.startsWith(STALENESS_OQ_MARKER),
+  );
+
   return {
     sections,
     missingSections,
@@ -151,6 +185,7 @@ export function computeBriefCompleteness(
     sourcedFactRatio: sourcedFactRatio === null ? null : Math.round(sourcedFactRatio * 100) / 100,
     confidenceMix,
     score,
+    potentiallyStale,
   };
 }
 
@@ -331,6 +366,13 @@ export function computeAccountBriefCompleteness(
   const sectionScore = sectionKeys.length > 0 ? populated.length / sectionKeys.length : 0;
   const score = Math.round(sectionScore * 60 + (sourcedFactRatio ?? 0) * 40);
 
+  // Task #771 — same sentinel detection as computeBriefCompleteness.
+  // The Account Cartographer injects the STALENESS_OQ_MARKER warning into
+  // researchBrief.openQuestions, which is persisted in atelierAccounts.research_brief.
+  const potentiallyStale = (b.openQuestions ?? []).some(
+    (q) => typeof q === "string" && q.startsWith(STALENESS_OQ_MARKER),
+  );
+
   return {
     sections,
     missingSections,
@@ -339,7 +381,94 @@ export function computeAccountBriefCompleteness(
     sourcedFactRatio: sourcedFactRatio === null ? null : Math.round(sourcedFactRatio * 100) / 100,
     confidenceMix,
     score,
+    potentiallyStale,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Dossier freshness check — Task #771
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan a Perplexity dossier for year markers in the ANSWER text only.
+ *
+ * The dossier assembled by `perplexityResearch` has the form:
+ *
+ *   ### Research query N [recency-filtered]: <query text>
+ *   <answer text>
+ *
+ *   Sources:
+ *     [1] <title> — <url>
+ *
+ * Two contamination vectors are excluded before scanning for year markers:
+ *
+ *   1. **Query headings** — the auto-supplement heading contains
+ *      "as of YYYY-MM-DD" (e.g. "Latest news for Acme as of 2026-08-01"),
+ *      which would otherwise always mark the dossier as fresh even when
+ *      every retrieved answer is old or undated.
+ *
+ *   2. **Sources blocks** — citation titles and URL slugs can contain
+ *      year tokens (e.g. "2026 Annual Report", "example.com/news-2026-recap")
+ *      that do not reflect the recency of the answer text itself.
+ *
+ * The function parses each section by splitting on "### Research query " and,
+ * within each section, keeps only the text *before* the "Sources:" delimiter.
+ * Only the actual answer paragraphs are scanned.
+ *
+ * Staleness rule: if no `20xx` year marker from the current or previous
+ * calendar year appears in the answer text, the dossier is considered
+ * potentially stale. This is a calendar-year heuristic: content from
+ * `currentYear` or `currentYear-1` is treated as current; anything older
+ * (or absent) is stale.
+ *
+ * Pure / deterministic — no model call.
+ *
+ * @param dossierText  Raw dossier markdown from perplexityResearch.
+ * @param today        ISO date string "YYYY-MM-DD".
+ */
+export function checkDossierFreshness(
+  dossierText: string,
+  today: string,
+): { potentiallyStale: boolean; latestYearFound: number | null } {
+  const currentYear = parseInt(today.slice(0, 4), 10);
+
+  // Parse per-section: split on "### Research query " headings, then within
+  // each section keep only the answer text before the "Sources:" delimiter.
+  // This excludes:
+  //   • heading lines (carry "as of YYYY-MM-DD" from auto-supplement queries)
+  //   • source metadata (citation titles + URLs may contain year tokens)
+  const answerText = dossierText
+    .split(/^(?=### Research query )/m)
+    .map((section) => {
+      // Drop the heading line only when this segment actually starts with one.
+      // Sections that don't start with "### Research query " are plain text
+      // (e.g. a dossier passed without structured headings) and must be kept
+      // in full — don't strip the first line blindly.
+      let body: string;
+      if (section.startsWith("### Research query ")) {
+        const newlineIdx = section.indexOf("\n");
+        body = newlineIdx >= 0 ? section.slice(newlineIdx + 1) : "";
+      } else {
+        body = section;
+      }
+      // Drop "Sources:" block and everything after it within this section
+      const sourcesMatch = /^Sources:/m.exec(body);
+      return sourcesMatch !== null ? body.slice(0, sourcesMatch.index) : body;
+    })
+    .join("\n");
+
+  const yearPattern = /\b(20\d{2})\b/g;
+  const years: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = yearPattern.exec(answerText)) !== null) {
+    years.push(parseInt(m[1], 10));
+  }
+  const latestYearFound = years.length > 0 ? Math.max(...years) : null;
+  // Stale when no year from the current or previous calendar year appears
+  // in the answer text (headings and source metadata excluded — see above).
+  const potentiallyStale =
+    latestYearFound === null || latestYearFound < currentYear - 1;
+  return { potentiallyStale, latestYearFound };
 }
 
 export function briefAge(createdAt: Date | string | null | undefined): {

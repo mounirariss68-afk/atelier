@@ -977,25 +977,42 @@ export async function runPursuitScout(args: {
       await ctx.progress(25, "Planning research lines");
       // Task #687 — Scout briefs are now web-grounded (Perplexity retrieval →
       // Claude synthesis) instead of model-memory-only.
-      const { value, costUsd } = await callResearchJson<PursuitScoutOutput>(
-        "claude-sonnet-4-5",
-        system,
-        JSON.stringify({
-          accountName: args.accountName,
-          accountCountry: args.accountCountry,
-          accountSector: args.accountSector,
-          opportunityName: args.opportunityName,
-          contextBlurb: args.contextBlurb,
-        }),
-        {
-          researchQueries: [
-            `${args.accountName} (${args.accountCountry}, ${args.accountSector}) company overview: scale, recent strategic moves, announcements and press`,
-            `${args.accountName} buying context for "${args.opportunityName}": relevant initiatives, technology investments, likely budget holders and competing suppliers${args.contextBlurb ? ` — context: ${args.contextBlurb.slice(0, 200)}` : ""}`,
-          ],
-        },
-      );
+      const { value, costUsd, potentiallyStale: scoutStale } =
+        await callResearchJson<PursuitScoutOutput>(
+          "claude-sonnet-4-5",
+          system,
+          JSON.stringify({
+            accountName: args.accountName,
+            accountCountry: args.accountCountry,
+            accountSector: args.accountSector,
+            opportunityName: args.opportunityName,
+            contextBlurb: args.contextBlurb,
+          }),
+          {
+            // Task #771 — split profile query from news; dedicated recency pass.
+            entityLabel: args.accountName,
+            researchQueries: [
+              `${args.accountName} (${args.accountCountry}, ${args.accountSector}) company profile: scale, strategy and major technology investments`,
+              `${args.accountName} buying context for "${args.opportunityName}": relevant initiatives, technology investments, likely budget holders and competing suppliers${args.contextBlurb ? ` — context: ${args.contextBlurb.slice(0, 200)}` : ""}`,
+            ],
+            recencyQueries: [
+              `${args.accountName} recent announcements, tenders and press coverage (last 3 months)`,
+            ],
+          },
+        );
       await ctx.progress(70, "Synthesising 5C draft");
-      const guarded: PursuitScoutOutput = { ...value, facts: applyCitationGuardrail(value.facts ?? []) };
+      // Task #771 — prepend staleness warning to openQuestions when the
+      // retrieved dossier contained no recent dates.
+      const staleWarn = scoutStale
+        ? [
+            "⚠ Web research may not reflect recent events: no content dated from this or the previous calendar year was found in the retrieved answers. Verify the account name and sector then re-run.",
+          ]
+        : [];
+      const guarded: PursuitScoutOutput = {
+        ...value,
+        facts: applyCitationGuardrail(value.facts ?? []),
+        openQuestions: [...staleWarn, ...(value.openQuestions ?? [])],
+      };
       // Pursuit Scout v2 governed-write — Task #238 §2.5.
       // Profile deltas enqueued onto the Cartographer approval queue.
       try {
@@ -2629,8 +2646,27 @@ export interface ResearchJsonOpts {
    * Claude synthesises from. Ignored in Anthropic web_search mode.
    */
   researchQueries: string[];
+  /**
+   * Task #771 — Queries that run with search_recency_filter:"month" so recent
+   * events are reliably captured. Combined with researchQueries under the
+   * 8-query cap.
+   */
+  recencyQueries?: string[];
+  /**
+   * Task #771 — Entity name (account/firm) passed to the shared Perplexity
+   * layer to auto-generate one supplemental "latest news/milestones as of
+   * <today>" recency query. Ensures ALL callers get a recency pass even when
+   * they do not supply explicit recencyQueries.
+   */
+  entityLabel?: string;
   /** Restrict Perplexity retrieval to recent sources (press monitoring). */
   searchRecencyFilter?: "day" | "week" | "month" | "year";
+  /**
+   * Task #771 — ISO date "YYYY-MM-DD" for date-anchoring the Perplexity
+   * system prompt. Defaults to today at call time; override via
+   * ATELIER_PERPLEXITY_TODAY env var (stubs) or this field (per-call).
+   */
+  today?: string;
 }
 
 /**
@@ -2669,6 +2705,8 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   tokensIn: number;
   tokensOut: number;
   citationUrls: Array<{ url: string; title?: string }>;
+  /** Task #771 — true when the dossier answer text contained no dates from this or the previous calendar year. */
+  potentiallyStale: boolean;
 }> {
   const progressRunId = opts.progressRunId ?? null;
   let maxPersistedPct = 0;
@@ -2693,15 +2731,27 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   };
 
   // ---- Stage 1: Perplexity retrieval (fails loudly, no fallback) ----
+  const todayStr =
+    opts.today ??
+    process.env.ATELIER_PERPLEXITY_TODAY ??
+    new Date().toISOString().slice(0, 10);
   const research = await perplexityResearch({
     queries: opts.researchQueries,
+    recencyQueries: opts.recencyQueries,
+    entityLabel: opts.entityLabel,
     searchRecencyFilter: opts.searchRecencyFilter,
+    today: todayStr,
     onPhase: emitPhase,
   });
 
+  // Task #771 — Freshness self-check: scan the raw dossier for year markers.
+  // If no year >= (currentYear - 1) appears the brief may have missed recent events.
+  const { checkDossierFreshness } = await import("./brief-quality.js");
+  const { potentiallyStale } = checkDossierFreshness(research.dossier, todayStr);
+
   // ---- Stage 2: Claude synthesis into the existing JSON contract ----
   const dossierPrompt =
-    `${userPrompt}\n\n## Web research dossier (retrieved ${new Date().toISOString().slice(0, 10)})\n` +
+    `${userPrompt}\n\n## Web research dossier (retrieved ${todayStr})\n` +
     `The following web research was retrieved for you. Base every web-sourced claim on it, ` +
     `and use ONLY the source URLs listed below when filling sourceUrl / sourceUrls / evidence ` +
     `fields — never invent URLs. If the dossier does not support a claim, omit the claim or ` +
@@ -2846,7 +2896,7 @@ async function callClaudeJsonWithPerplexityResearch<T>(
   const perplexityCostUsd = research.queryCount * 0.006;
   const costUsd =
     (tokensIn * inRate + tokensOut * outRate) / 1_000_000 + perplexityCostUsd;
-  return { value, costUsd, tokensIn, tokensOut, citationUrls: research.citations };
+  return { value, costUsd, tokensIn, tokensOut, citationUrls: research.citations, potentiallyStale };
 }
 
 /**
@@ -2854,6 +2904,9 @@ async function callClaudeJsonWithPerplexityResearch<T>(
  * web-research agents. Default: Perplexity retrieval → Claude synthesis.
  * ATELIER_RESEARCH_PROVIDER=anthropic keeps the legacy single-call
  * Anthropic web_search path. Same return contract either way.
+ *
+ * Task #771 — return includes `potentiallyStale` (Perplexity path only;
+ * always false on the Anthropic path where no dossier is built here).
  */
 export async function callResearchJson<T>(
   model: string,
@@ -2866,11 +2919,14 @@ export async function callResearchJson<T>(
   tokensIn: number;
   tokensOut: number;
   citationUrls: Array<{ url: string; title?: string }>;
+  /** Task #771 — true when retrieved dossier contained no dates in last 12 months. */
+  potentiallyStale: boolean;
 }> {
   if (researchProvider() === "anthropic") {
-    return callClaudeJsonWithWebSearch<T>(model, systemPrompt, userPrompt, {
+    const r = await callClaudeJsonWithWebSearch<T>(model, systemPrompt, userPrompt, {
       progressRunId: opts.progressRunId,
     });
+    return { ...r, potentiallyStale: false };
   }
   return callClaudeJsonWithPerplexityResearch<T>(model, systemPrompt, userPrompt, opts);
 }
@@ -3009,7 +3065,7 @@ export async function runAccountCartographer(args: {
     // (runId null) emit the same breadcrumb directly so chat still shows it.
     if (runId) await progressRun(runId, 25, "Searching the public web");
     else reportProgress(25, "Searching the public web");
-    const { value, costUsd, citationUrls } =
+    const { value, costUsd, citationUrls, potentiallyStale: cartographerStale } =
       await callResearchJson<CartographerOutput>(
         "claude-sonnet-4-5",
         system,
@@ -3024,11 +3080,17 @@ export async function runAccountCartographer(args: {
         // solely on the ambient sink streaming to the chat transcript.
         {
           progressRunId: runId,
-          // Task #687 — targeted Perplexity retrieval for the account brief.
+          // Task #771 — split catch-all news query into focused queries +
+          // dedicated recency pass (announcements/leadership/strategy).
+          entityLabel: args.accountName,
           researchQueries: [
             `${args.accountName} (${args.accountCountry}, ${args.accountSector}) company profile: ownership/holding structure, headquarters, size (employees, revenue), business units and main brands`,
             `${args.accountName} ${args.accountCountry} executive leadership: group CEO, CFO, board chairman, key C-suite names and exact titles (distinguish group-level from subsidiary roles)`,
-            `${args.accountName} recent strategy, announcements, digital/AI initiatives, expansions and press coverage`,
+            `${args.accountName} AI and digital strategy, technology partnerships and transformation programmes`,
+          ],
+          recencyQueries: [
+            `${args.accountName} announcements, product launches, deals and milestones in the last 3 months`,
+            `${args.accountName} ownership changes, leadership appointments or departures in the last 3 months`,
           ],
         });
     if (runId) {
@@ -3183,6 +3245,20 @@ export async function runAccountCartographer(args: {
       ),
     };
 
+    // Task #771 — if the dossier contained no recent dates, surface the
+    // staleness warning in openQuestions so partners see it in the brief.
+    if (cartographerStale) {
+      normalised.researchBrief = normalised.researchBrief
+        ? {
+            ...normalised.researchBrief,
+            openQuestions: [
+              "⚠ Web research may not reflect recent events: no content dated from this or the previous calendar year was found in the retrieved sources. Verify the account name and sector then re-run the brief.",
+              ...(normalised.researchBrief.openQuestions ?? []),
+            ],
+          }
+        : normalised.researchBrief;
+    }
+
     // Deterministic entity-scope safety net (entity-scope fix) — downgrade any
     // apex title mis-scoped to a subsidiary/brand even if the model slipped.
     guardCartographerEntityScope(normalised);
@@ -3312,6 +3388,8 @@ export async function runExecutiveMapper(args: {
         }),
         {
           progressRunId: runId,
+          // Task #771 — wire entity label so the shared recency auto-supplement fires.
+          entityLabel: args.accountName,
           // Task #687 — search stage only; PDL enrichment below is untouched.
           researchQueries: government
             ? [
@@ -6017,6 +6095,12 @@ async function runV5GenericAgent(args: {
   research?: {
     queries: string[];
     searchRecencyFilter?: "day" | "week" | "month" | "year";
+    /**
+     * Task #771 — entity label for the shared recency auto-supplement.
+     * Leave unset for multi-entity agents (e.g. press_monitor) that already
+     * cover recency via searchRecencyFilter + per-entity explicit queries.
+     */
+    entityLabel?: string;
   };
 }): Promise<V5GenericResult> {
   const result = await runAgent(
@@ -6044,6 +6128,7 @@ async function runV5GenericAgent(args: {
         ? await callResearchJson<unknown>(args.model, promptBody, userPrompt, {
             researchQueries: args.research.queries,
             searchRecencyFilter: args.research.searchRecencyFilter,
+            entityLabel: args.research.entityLabel,
           })
         : await callClaudeJson<unknown>(args.model, promptBody, userPrompt);
       return { output: value, costUsd, confidence: "amber" as const };
@@ -7052,7 +7137,12 @@ export async function runProcurementNavigator(
           "claude-sonnet-4-5",
           system,
           userPrompt,
-          { progressRunId: c.runId, researchQueries: queries },
+          {
+            progressRunId: c.runId,
+            researchQueries: queries,
+            // Task #771 — entity label for the shared recency auto-supplement.
+            entityLabel: account.brandName ?? account.name,
+          },
         );
       // Merge retrieval citations the model dropped, then fail loud on junk —
       // an empty or source-free guide must never be stored as research.
