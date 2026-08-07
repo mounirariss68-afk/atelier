@@ -20,6 +20,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db, atelierUsers, atelierContacts, atelierAccounts } from "@workspace/db";
 import { foldRosterName } from "./chat-normalizers.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 import { canSeeAccount } from "../../routes/atelier/accountRoutes";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes";
 
@@ -41,6 +42,9 @@ interface Candidate {
   name: string;
   source: "roster" | "contact";
   secondary: string;
+  /** Set for CRM-contact candidates — used to prefer an account's own
+   *  contacts when the request named the account (Task #783). */
+  accountId?: string;
 }
 
 /** "Name <email>" labels for confirm summaries. */
@@ -56,6 +60,12 @@ export function recipientLabel(r: ResolvedRecipient): string {
 export async function resolveEmailRecipients(
   entries: string[],
   persona: { id: string; orgId: string; role: string | null },
+  opts: {
+    /** Task #783 — when the request named an account ("…for U Mobile to
+     *  Sarah"), prefer that account's contacts on ambiguous names. */
+    preferAccountId?: string;
+    preferAccountName?: string;
+  } = {},
 ): Promise<RecipientResolution> {
   const out: ResolvedRecipient[] = [];
   const names: string[] = [];
@@ -130,6 +140,7 @@ export async function resolveEmailRecipients(
         name: c.fullName,
         source: "contact",
         secondary: [c.email, [c.title, c.accountName ? `@ ${c.accountName}` : null].filter(Boolean).join(" ") || "Contact"].join(" · "),
+        accountId: c.accountId,
       });
     }
     // Merge, dedupe by email (roster wins over contact for the same email).
@@ -137,14 +148,62 @@ export async function resolveEmailRecipients(
     for (const c of [...rosterHits, ...contactHits]) {
       if (!byEmail.has(c.email)) byEmail.set(c.email, c);
     }
-    const matches = [...byEmail.values()];
+    let matches = [...byEmail.values()];
+    // Task #783 — account context: when the request scoped the email to
+    // an account and several people match, prefer that account's own
+    // contacts (a single in-account match resolves without a question).
+    if (matches.length > 1 && opts.preferAccountId) {
+      const inAccount = matches.filter((m) => m.accountId === opts.preferAccountId);
+      if (inAccount.length >= 1) matches = inAccount;
+    }
     if (matches.length === 0) {
+      // Task #783 — friendly miss: offer the closest real people
+      // (roster + ACL-visible contacts) instead of a dead-end.
+      const pool: Array<{ id: string; label: string; secondary?: string; accountId?: string }> = [
+        ...roster
+          .filter((u) => u.email)
+          .map((u) => ({ id: u.email.toLowerCase(), label: u.name, secondary: u.email })),
+        ...contacts
+          .filter((c) => c.email)
+          .map((c) => ({
+            id: c.email!.toLowerCase(),
+            label: c.fullName,
+            secondary: [c.email, c.accountName ? `@ ${c.accountName}` : null].filter(Boolean).join(" · "),
+            accountId: c.accountId,
+          })),
+      ];
+      const ranked = rankNearestNames(name, pool, 6);
+      const nearest: typeof ranked = [];
+      for (const cand of ranked) {
+        const acct = (cand as { accountId?: string }).accountId;
+        if (acct) {
+          // Contact suggestion — ACL-check before offering it.
+          if (!meRow || !access) continue;
+          if (!(await canSeeAccount(access, meRow, acct))) continue;
+        }
+        nearest.push({ id: cand.id, label: cand.label, secondary: cand.secondary });
+        if (nearest.length >= 3) break;
+      }
+      if (nearest.length > 0) {
+        return {
+          kind: "result",
+          result: {
+            ok: true,
+            data: {
+              prompt: `I couldn't find "${name}" — did you mean one of these people?`,
+              options: nearest,
+              navigateTo: null,
+            },
+            disambiguation: { kind: "email_recipient", options: nearest },
+          },
+        };
+      }
       return {
         kind: "result",
         result: {
           ok: false,
           errorCode: "recipient_not_found",
-          errorMessage: `I couldn't find anyone named "${name}" on the roster or in the CRM contacts. Give me their email address, or add them as a contact first.`,
+          errorMessage: `I couldn't find anyone named "${name}" on the roster or in the CRM contacts. Give me their email address, or add them as a contact first and I'll take it from there.`,
         },
       };
     }

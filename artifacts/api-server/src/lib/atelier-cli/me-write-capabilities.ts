@@ -1928,7 +1928,8 @@ defineCapability({
       return {
         ok: false,
         errorCode: "invalid_recipients",
-        errorMessage: "No valid recipients could be resolved.",
+        errorMessage:
+          "I couldn't turn those recipients into email addresses — give me a person's name from the roster or CRM, or a full email address.",
       };
     }
     const mode = input.mode === "send" ? "send" : input.mode === "draft" || input.mode === undefined ? "draft" : null;

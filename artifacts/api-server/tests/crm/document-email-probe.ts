@@ -617,6 +617,122 @@ async function main() {
     );
 
     // ====================================================================
+    // 13b. Task #783 — account-scoped document + recipient resolution
+    // ====================================================================
+    // Doc linked to the account: "email the quarterly report for
+    // <account> to <contact>" resolves both in one request.
+    const acctDoc = await createDocument({
+      orgId: ORG,
+      uploader: { id: FP_UID, name: `Founder Probe ${TAG}` },
+      title: `Quarterly Report ${TAG}`,
+      category: "other",
+      accountId: ACC_ID,
+      fileName: "quarterly-report.pdf",
+      mime: "application/pdf",
+      bytes: Buffer.from(`%PDF-qreport-${TAG}`),
+    });
+    check("scoped: account doc created", acctDoc.ok === true, JSON.stringify(acctDoc).slice(0, 200));
+    const scopedFirst = await runCompany({
+      query: "quarterly report",
+      accountName: `Probe Account ${TAG}`,
+      to: ["Contactx"],
+    });
+    check(
+      "scoped: one-request confirm (doc + contact via account)",
+      scopedFirst.ok === true &&
+        Boolean(scopedFirst.confirmation) &&
+        String(scopedFirst.confirmation?.summary ?? "").includes(`contactx.${STAMP}@client.test`) &&
+        String(scopedFirst.confirmation?.summary ?? "").includes(`Quarterly Report ${TAG}`),
+      JSON.stringify(scopedFirst).slice(0, 400),
+    );
+
+    // Account context narrows an ambiguous recipient name to that
+    // account's contact instead of asking.
+    const ACC2_ID = `acc2_${TAG}`;
+    await db.insert(D.atelierAccounts).values({
+      id: ACC2_ID,
+      orgId: ORG,
+      name: `Other Account ${TAG}`,
+      country: "AE",
+      sector: "technology",
+    });
+    await db.insert(D.atelierContacts).values({
+      id: `ct2_${TAG}`,
+      orgId: ORG,
+      accountId: ACC2_ID,
+      fullName: `Contactx Person Two ${TAG}`,
+      email: `contactx2.${STAMP}@client.test`,
+    });
+    const preferRes = await runCompany({
+      query: "quarterly report",
+      accountName: `Probe Account ${TAG}`,
+      to: ["Contactx"],
+    });
+    check(
+      "scoped: ambiguous name auto-narrowed to the named account's contact",
+      preferRes.ok === true &&
+        Boolean(preferRes.confirmation) &&
+        String(preferRes.confirmation?.summary ?? "").includes(`contactx.${STAMP}@client.test`) &&
+        !String(preferRes.confirmation?.summary ?? "").includes("contactx2."),
+      JSON.stringify(preferRes).slice(0, 400),
+    );
+    // Without the account context the same name disambiguates.
+    const noCtx = await runCompany({ query: "quarterly report", to: ["Contactx"] });
+    check(
+      "scoped: same name without account context → pick-one options",
+      noCtx.ok === true && noCtx.disambiguation?.kind === "email_recipient",
+      JSON.stringify(noCtx).slice(0, 300),
+    );
+
+    // In-scope miss falls back to library-wide matches, honestly labeled.
+    const scopeMiss = await runCompany({
+      query: "registration certificate",
+      accountName: `Probe Account ${TAG}`,
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "scoped: miss offers library-wide matches (no raw code)",
+      scopeMiss.ok === true &&
+        scopeMiss.disambiguation?.kind === "document" &&
+        String((scopeMiss.data as any)?.prompt ?? "").includes(`Probe Account ${TAG}`),
+      JSON.stringify(scopeMiss).slice(0, 400),
+    );
+
+    // Unknown account → friendly copy with a next step.
+    const accMiss = await runCompany({
+      query: "quarterly report",
+      accountName: `Nonexistent Corp ${TAG}`,
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "scoped: unknown account → friendly miss",
+      accMiss.ok === false &&
+        String(accMiss.errorMessage ?? "").includes("couldn't find an account") &&
+        !String(accMiss.errorMessage ?? "").includes("doc_not_found"),
+      JSON.stringify(accMiss).slice(0, 300),
+    );
+
+    // Near-typo recipient miss → nearest-people suggestions, not a dead end.
+    const typoRecipient = await runCompany({ documentIds: [libDocId], to: ["Contactz Person"] });
+    check(
+      "scoped: recipient near-typo → suggestions",
+      typoRecipient.ok === true &&
+        typoRecipient.disambiguation?.kind === "email_recipient" &&
+        JSON.stringify(typoRecipient).includes(`contactx.${STAMP}@client.test`),
+      JSON.stringify(typoRecipient).slice(0, 400),
+    );
+
+    // Document miss with no plausible neighbor → friendly copy, no raw tool names.
+    const docMiss = await runCompany({ query: "zzqq flying carpet warranty", to: [`zeynepx.${STAMP}@test.local`] });
+    check(
+      "scoped: document miss → friendly copy",
+      docMiss.ok === false &&
+        String(docMiss.errorMessage ?? "").includes("list the documents") &&
+        !String(docMiss.errorMessage ?? "").includes("list_documents"),
+      JSON.stringify(docMiss).slice(0, 300),
+    );
+
+    // ====================================================================
     // 14. Task #679 — fold search, embedding floor, typed-name, card shapes
     // ====================================================================
     // 14a. accent-folded contact name search: "Gokhan" must find "Gökhan"

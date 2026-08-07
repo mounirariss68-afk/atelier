@@ -41,6 +41,8 @@ import { loadDocBytes } from "../atelier-documents.js";
 import { canSeeDocument } from "../../routes/atelier/documentRoutes.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes";
 import { resolveEmailRecipients, recipientLabel } from "./email-recipient-resolver.js";
+import { resolveAccount } from "./resolvers/index.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 import type { ToolResult } from "./index.js";
 
 const MAIL_ATTACH_MAX_BYTES = 3 * 1024 * 1024;
@@ -129,6 +131,11 @@ defineCapability({
         description:
           "Free-text document match ('registration certificate', 'trade license') when ids are unknown",
       },
+      accountName: {
+        type: "string",
+        description:
+          "Account/client name when the request scopes the document to an account, e.g. 'email the report for U Mobile to Sarah' → accountName 'U Mobile'. Also prefers that account's contacts when resolving recipient names.",
+      },
       to: {
         type: "array",
         items: { type: "string" },
@@ -162,13 +169,47 @@ defineCapability({
         errorMessage: "Provide between 1 and 10 recipients (email addresses or people names).",
       };
     }
-    const resolution = await resolveEmailRecipients(toEntries, ctx.persona);
+    // ---- account context (Task #783) ------------------------------------
+    // "email the report for U Mobile to Sarah" — resolve the account
+    // first so it can scope BOTH the document match and the recipient
+    // lookup.
+    let accountId: string | null = null;
+    let accountLabel: string | null = null;
+    const accountName = typeof input.accountName === "string" ? input.accountName.trim() : "";
+    if (accountName) {
+      const acc = await resolveAccount(accountName, ctx.persona);
+      if (acc.kind === "choices") {
+        return {
+          ok: true,
+          data: { prompt: acc.prompt, options: acc.options, navigateTo: null },
+          disambiguation: { kind: "account", options: acc.options },
+        };
+      }
+      if (acc.kind === "none") {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `I couldn't find an account matching "${accountName}" in the CRM. Check the name, or leave the account off and I'll search the whole document library.`,
+        };
+      }
+      accountId = acc.id;
+      accountLabel = acc.label;
+    }
+
+    const resolution = await resolveEmailRecipients(toEntries, ctx.persona, {
+      preferAccountId: accountId ?? undefined,
+    });
     if (resolution.kind === "result") return resolution.result as ToolResult;
     const resolved = resolution.recipients;
     const recipients = resolved.map((r) => r.email);
     const recipientLabels = resolved.map(recipientLabel);
     if (recipients.length === 0) {
-      return { ok: false, errorCode: "invalid_recipients", errorMessage: "No valid recipients could be resolved." };
+      return {
+        ok: false,
+        errorCode: "invalid_recipients",
+        errorMessage:
+          "I couldn't turn those recipients into email addresses — give me a person's name from the roster or CRM, or a full email address.",
+      };
     }
     const mode =
       input.mode === "send" ? "send" : input.mode === "draft" || input.mode === undefined ? "draft" : null;
@@ -237,7 +278,7 @@ defineCapability({
           return {
             ok: false,
             errorCode: "doc_not_found",
-            errorMessage: `Document ${id} was not found in the library (or you don't have access to it).`,
+            errorMessage: `Document ${id} was not found in the library (or you don't have access to it). Ask me to list the documents and pick from there.`,
           };
         }
         const r = requireVersion(pair);
@@ -253,12 +294,54 @@ defineCapability({
           errorMessage: "Which company document should I email? Give me a title, e.g. 'registration certificate'.",
         };
       }
-      const matches = matchLibraryDocuments(visible, query);
+      // Task #783 — account scope: match within the account's documents
+      // first; on an in-scope miss fall back to the whole visible
+      // library but say so honestly.
+      const scoped = accountId ? visible.filter((p) => p.doc.accountId === accountId) : visible;
+      let matches = matchLibraryDocuments(scoped, query);
+      let scopeNote: string | null = null;
+      if (matches.length === 0 && accountId) {
+        matches = matchLibraryDocuments(visible, query);
+        if (matches.length > 0) {
+          scopeNote = `No document matching "${query}" is linked to ${accountLabel}, but the library has these elsewhere — pick one if it's what you meant.`;
+          const options = matches.slice(0, 6).map(({ doc, version }) => ({
+            id: doc.id,
+            label: doc.title,
+            secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
+          }));
+          return {
+            ok: true,
+            data: { prompt: scopeNote, options, navigateTo: null },
+            disambiguation: { kind: "document", options },
+          };
+        }
+      }
       if (matches.length === 0) {
+        // Friendly miss: suggest the closest titles the caller can see.
+        const where = accountId ? `linked to ${accountLabel}` : "in the library";
+        const nearest = rankNearestNames(
+          query,
+          scoped.map(({ doc, version }) => ({
+            id: doc.id,
+            label: doc.title,
+            secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
+          })),
+        );
+        if (nearest.length > 0) {
+          return {
+            ok: true,
+            data: {
+              prompt: `I couldn't find a document matching "${query}" ${where} — did you mean one of these?`,
+              options: nearest,
+              navigateTo: null,
+            },
+            disambiguation: { kind: "document", options: nearest },
+          };
+        }
         return {
           ok: false,
           errorCode: "doc_not_found",
-          errorMessage: `No company document in the library matches "${query}". Try list_documents to browse what's available.`,
+          errorMessage: `I couldn't find a company document matching "${query}" ${where}. Ask me to list the documents to see what's available, or upload it to the Document Library first.`,
         };
       }
       if (matches.length > 1) {
@@ -282,7 +365,12 @@ defineCapability({
       selected = [r];
     }
     if (selected.length === 0) {
-      return { ok: false, errorCode: "doc_not_found", errorMessage: "No documents selected." };
+      return {
+        ok: false,
+        errorCode: "doc_not_found",
+        errorMessage:
+          "I couldn't work out which document to email — give me its title (e.g. 'trade license') or ask me to list the documents.",
+      };
     }
 
     // ---- size guard -----------------------------------------------------
