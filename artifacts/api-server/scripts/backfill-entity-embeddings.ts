@@ -15,7 +15,7 @@
 
 import "dotenv/config";
 import { eq, isNull, and, sql } from "drizzle-orm";
-import { db } from "../src/lib/db.js";
+import { db } from "@workspace/db";
 import {
   atelierAccounts,
   atelierOpportunities,
@@ -55,7 +55,7 @@ async function collectGaps(): Promise<Gap[]> {
       .from(atelierEntityEmbeddings)
       .where(
         and(
-          eq(atelierEntityEmbeddings.entityId, a.id),
+          eq(atelierEntityEmbeddings.targetId, a.id),
           eq(atelierEntityEmbeddings.orgId, a.orgId),
           eq(atelierEntityEmbeddings.kind, "account"),
         ),
@@ -78,7 +78,7 @@ async function collectGaps(): Promise<Gap[]> {
       .from(atelierEntityEmbeddings)
       .where(
         and(
-          eq(atelierEntityEmbeddings.entityId, o.id),
+          eq(atelierEntityEmbeddings.targetId, o.id),
           eq(atelierEntityEmbeddings.orgId, o.orgId),
           eq(atelierEntityEmbeddings.kind, "opportunity"),
         ),
@@ -101,7 +101,7 @@ async function collectGaps(): Promise<Gap[]> {
       .from(atelierEntityEmbeddings)
       .where(
         and(
-          eq(atelierEntityEmbeddings.entityId, e.id),
+          eq(atelierEntityEmbeddings.targetId, e.id),
           eq(atelierEntityEmbeddings.orgId, e.orgId),
           eq(atelierEntityEmbeddings.kind, "engagement"),
         ),
@@ -124,7 +124,7 @@ async function collectGaps(): Promise<Gap[]> {
       .from(atelierEntityEmbeddings)
       .where(
         and(
-          eq(atelierEntityEmbeddings.entityId, c.id),
+          eq(atelierEntityEmbeddings.targetId, c.id),
           eq(atelierEntityEmbeddings.orgId, c.orgId),
           eq(atelierEntityEmbeddings.kind, "contact"),
         ),

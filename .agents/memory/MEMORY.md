@@ -146,4 +146,5 @@
 - [Strategy Developer agent](atelier-strategy-developer.md) — exemplar RAG org-scoped in atelier_strategy_exemplars; approve/dismiss tracked ONLY via agent.approved/dismissed audit events keyed on runId; guidance is a separate column.
 - [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
 - [Roster quick-add & login provisioning](atelier-roster-quick-add.md) — direct roster create bypasses the hiring pipeline (same isPartnerOrOps gate); portal logins ONLY via the shared provisionPortalLogin helper.
+- [Entity embeddings backfill](atelier-entity-embeddings-backfill.md) — dev backfill done; MUST re-run script on prod at go-live; orphan rows for deleted entities are expected.
 - [Expense description/summary contract](atelier-expense-desc-contract.md) — blank description stores NULL everywhere so parse may prefill; parse NEVER overwrites user text; summary follows manual edits only when auditorRunId is null.
