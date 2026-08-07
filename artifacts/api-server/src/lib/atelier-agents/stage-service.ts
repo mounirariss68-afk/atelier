@@ -40,6 +40,7 @@ import {
 } from "./pipeline.js";
 import { runCharterArchitect } from "./runner.js";
 import { ensureAssignmentGrant } from "../atelier-access-autogrant.js";
+import { mirrorEntityEmbedding } from "../atelier-cli/entity-resolver.js";
 
 type OppRow = typeof atelierOpportunities.$inferSelect;
 
@@ -399,6 +400,10 @@ export async function ensureEngagementForContract(
         })
         .returning({ id: atelierEngagements.id, name: atelierEngagements.name });
       eng = created;
+      // Mirror into the semantic index so the AI resolver can find this
+      // engagement immediately on subsequent turns — matching the label
+      // composition used by the backfill script (name only, no summary).
+      void mirrorEntityEmbedding(opp.orgId, "engagement", eng.id, eng.name);
       await db.insert(atelierAuditEvents).values({
         id: rid("aud"),
         entityType: "engagement",
