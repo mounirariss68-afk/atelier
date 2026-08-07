@@ -45,6 +45,10 @@ import {
   type ReplayTurnRow,
 } from "./replay.js";
 import {
+  shouldEmitProactiveRecap,
+  composeRecapSummary,
+} from "./recap-relevance.js";
+import {
   extractFactsFromToolEvent,
   factsMode,
   FACTS_CONTRACT_VERSION,
@@ -3236,13 +3240,13 @@ export async function runTurn(
       }
     }
 
-    // Task #340 — proactive open-state recap. When a session is being
-    // re-opened after >6h dormant or this is the first turn against an
-    // existing rolling-summary, emit a `proactive_recap` frame so the
-    // user lands on what they were doing without asking.
+    // Task #340 — proactive open-state recap. Task #781 tightened the
+    // trigger: only after genuine dormancy (>6h) with something worth
+    // recapping. A cold in-memory draft (server restart, navigating back
+    // into the session) is NOT a resume signal, and trivial turns
+    // ("who are you?" etc.) never headline a recap.
     const lastTurnAt = session.lastTurnAt ? new Date(session.lastTurnAt).getTime() : 0;
     const dormantMs = lastTurnAt > 0 ? Date.now() - lastTurnAt : 0;
-    const PROACTIVE_RECAP_DORMANT_MS = 6 * 60 * 60 * 1000;
     const draftPriorToTurn = getSessionDraft(session.id);
     // Task #741 — typed session facts (incl. one hop of rollover lineage).
     // Loaded once per turn; used by the recap (so it only claims facts the
@@ -3267,9 +3271,11 @@ export async function runTurn(
       );
     }
     if (
-      session.rollingSummary &&
-      session.rollingSummary.length > 0 &&
-      (dormantMs > PROACTIVE_RECAP_DORMANT_MS || (session.turnCount ?? 0) > 0 && !draftPriorToTurn.lastTurnId)
+      shouldEmitProactiveRecap({
+        lastTurnAtMs: lastTurnAt,
+        nowMs: Date.now(),
+        rollingSummary: session.rollingSummary,
+      })
     ) {
       const draftEntities = Object.values(draftPriorToTurn.entities)
         .sort((a, b) => b.at - a.at)
@@ -3280,7 +3286,7 @@ export async function runTurn(
       emit({
         type: "proactive_recap",
         data: {
-          summary: session.rollingSummary.split("\n").slice(-5).join("\n"),
+          summary: composeRecapSummary(session.rollingSummary) ?? "",
           turnCount: session.turnCount ?? 0,
           dormantMs,
           entities: draftEntities,
