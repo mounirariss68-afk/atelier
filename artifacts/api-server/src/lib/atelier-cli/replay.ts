@@ -126,9 +126,12 @@ export function composeAssistantReplay(
   budget: ReplayBudget,
 ): { text: string; truncated: boolean } {
   const prose: string[] = [];
-  const toolBits: string[] = [];
+  // Task #771 Riser overhaul — deduplicate tool digests by tool name so
+  // probe chains (e.g. three account_detail calls) don't teach the model
+  // to repeat stage-by-stage searches. Last successful result per tool wins;
+  // an error is kept only when no successful digest exists for that tool.
+  const toolMap = new Map<string, { entry: string; ok: boolean }>();
   let truncated = false;
-  let digests = 0;
   for (const raw of frames ?? []) {
     const f = raw as FrameLike;
     const d = (f?.data ?? {}) as Record<string, unknown>;
@@ -162,23 +165,30 @@ export function composeAssistantReplay(
       case "tool_result": {
         // Skip pre-LLM prelude echoes; keep real tool outcomes.
         if (d.prelude === true) break;
-        if (digests >= budget.maxToolDigests) {
-          truncated = true;
-          break;
-        }
-        digests += 1;
         const tool = typeof d.tool === "string" ? d.tool : "tool";
         const ok = d.ok === true;
         const digest = ok
           ? digestToolResultData(d.data, budget.toolDigestChars)
           : clip(String(d.errorMessage ?? d.errorCode ?? "failed"), 200).text;
-        toolBits.push(`[${tool} → ${ok ? "ok" : `error`}] ${digest}`.trim());
+        const entry = `[${tool} → ${ok ? "ok" : "error"}] ${digest}`.trim();
+        // A successful result always overwrites a prior error for the same tool.
+        // An error only lands if the tool hasn't produced any result yet.
+        const prev = toolMap.get(tool);
+        if (!prev || ok) {
+          toolMap.set(tool, { entry, ok });
+        }
         break;
       }
       default:
         break;
     }
   }
+  // Honour the maxToolDigests cap after dedup (unique-tool basis now).
+  const allToolEntries = [...toolMap.values()].map((v) => v.entry);
+  if (allToolEntries.length > budget.maxToolDigests) {
+    truncated = true;
+  }
+  const toolBits = allToolEntries.slice(0, budget.maxToolDigests);
   const joined = [...toolBits, ...prose].join("\n");
   const clipped = clip(joined || "(no visible reply)", budget.assistantChars);
   return { text: clipped.text, truncated: truncated || clipped.cut };

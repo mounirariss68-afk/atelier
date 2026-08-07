@@ -182,4 +182,41 @@ const turn = (prompt: string, frames: unknown[] = [], status = "success"): Repla
   ok("empty session → empty replay");
 }
 
-console.log(`\nreplay-probe: ${passed}/8 groups passed`);
+// 9. Tool-name dedup — Riser Stage 2: same tool called multiple times in one
+//    turn should produce only ONE digest entry; later success beats earlier
+//    error for the same tool key.
+{
+  const frames = [
+    { type: "tool_result", data: { tool: "account_detail", ok: false, errorMessage: "temporary failure" } },
+    { type: "tool_result", data: { tool: "account_detail", ok: true, data: { name: "Acme Corp", id: "acc_1" } } },
+    { type: "tool_result", data: { tool: "account_detail", ok: true, data: { name: "Acme Corp v2", id: "acc_1" } } },
+  ];
+  const { text } = composeAssistantReplay(frames, B);
+  const occurrences = (text.match(/\[account_detail/g) ?? []).length;
+  assert.equal(occurrences, 1, `expected 1 [account_detail digest, got ${occurrences}`);
+  // Last success wins: v2 version appears, earlier entries do not.
+  assert.ok(text.includes("name=Acme Corp v2"), "last successful result wins in dedup");
+  assert.ok(!text.includes("temporary failure"), "earlier error suppressed by later success");
+  ok("tool-name dedup: same tool repeated → last-success-wins, single digest entry");
+}
+
+// 10. Tool-name dedup — lone error kept; error-then-success collapses to success.
+{
+  const frames = [
+    { type: "tool_result", data: { tool: "tool_a", ok: false, errorMessage: "first error" } },
+    { type: "tool_result", data: { tool: "tool_b", ok: false, errorMessage: "only error for b" } },
+    { type: "tool_result", data: { tool: "tool_a", ok: true, data: { resolved: true } } },
+  ];
+  const { text } = composeAssistantReplay(frames, B);
+  // tool_a: error+success → success wins, error suppressed.
+  assert.ok(text.includes("[tool_a → ok]"), "error-then-success: success kept");
+  assert.ok(!text.includes("[tool_a → error]"), "error for tool_a not kept when success follows");
+  // tool_b: lone error → kept honestly.
+  assert.ok(text.includes("[tool_b → error]"), "lone error kept with no follow-up success");
+  // Each tool appears exactly once.
+  assert.equal((text.match(/\[tool_a/g) ?? []).length, 1, "tool_a appears once");
+  assert.equal((text.match(/\[tool_b/g) ?? []).length, 1, "tool_b appears once");
+  ok("tool-name dedup: lone error kept; error+success collapses to success");
+}
+
+console.log(`\nreplay-probe: ${passed}/10 groups passed`);

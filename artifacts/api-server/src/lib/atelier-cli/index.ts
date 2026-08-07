@@ -296,6 +296,19 @@ const SESSION_DAILY_BUDGET_USD = Number(
 );
 const MAX_TOOL_STEPS = Number(process.env.ATELIER_CLI_MAX_STEPS ?? 12);
 
+// Task #769 — per-turn read-flail guard. When the same read tool is
+// called more than FLAIL_ESCALATION_THRESHOLD times in a single turn
+// (e.g. stage-by-stage pipeline brute-force), escalate the remaining
+// model steps to Sonnet so it can reason from a wider context window.
+// At FLAIL_STOP_THRESHOLD, surface a candidate-list clarification and
+// stop the turn instead of continuing to spin. Both are env-tunable.
+const FLAIL_ESCALATION_THRESHOLD = Number(
+  process.env.ATELIER_CLI_FLAIL_ESCALATION ?? 3,
+);
+const FLAIL_STOP_THRESHOLD = Number(
+  process.env.ATELIER_CLI_FLAIL_STOP ?? 4,
+);
+
 // Wall-clock budgets per turn. Soft = emit budget_exceeded + ask the user
 // (continue / hand off to async / cancel). Hard = abort.
 const SOFT_WALL_MS = Number(process.env.ATELIER_CLI_SOFT_WALL_MS ?? 60_000);
@@ -1312,7 +1325,8 @@ export {
 } from "./narration-contract.js";
 
 const SYSTEM_PROMPT = [
-  "You are the Atelier CLI orchestrator. Help the user accomplish a task using the tools you are given.",
+  // Task #771 Riser overhaul — persona rename.
+  "You are Riser, Cognirise's AI assistant. Help the user accomplish a task using the tools you are given.",
   "Be concise. Prefer one tool call per step.",
   "HARD RULES — these are non-negotiable:",
   "1. NEVER invent identifiers (engagement IDs, account IDs, user IDs, RAID IDs, etc.).",
@@ -3641,7 +3655,8 @@ export async function runTurn(
       })}`,
     );
     // Tier routing — reads land on Haiku, writes / transitions on Sonnet.
-    const turnTier: "haiku" | "sonnet" = typedIntent.tier;
+    // Task #769 — `let`: may be escalated mid-turn by the flail guard.
+    let turnTier: "haiku" | "sonnet" = typedIntent.tier;
 
     // Task #411 — DETERMINISTIC pre-LLM entity resolution + context
     // injection. Before the model loop runs, we try to resolve the
@@ -4180,6 +4195,22 @@ export async function runTurn(
     let committedWriteOk = false;
     let lastCardShape: string | null = null;
     let lastCardData: unknown = null;
+    // Task #769 — per-turn read-flail guard. Tracks how many times each
+    // read tool has been called this turn. On FLAIL_ESCALATION_THRESHOLD
+    // we switch the remaining steps to Sonnet; on FLAIL_STOP_THRESHOLD
+    // we emit a clarification and stop.
+    const readToolCallCount = new Map<string, number>();
+    // Task #771 Riser overhaul — card budget per turn. Read-tool ok:false
+    // frames are suppressed (probe noise; the model still sees the result in
+    // its history and retries or finishes with prose). After MAX_CARDS_PER_TURN
+    // successful read-tool cards the transcript is saturated — cap further ones.
+    const MAX_CARDS_PER_TURN = 6;
+    let cardsEmitted = 0;
+    // Narration budget: only one mid-turn "Let me check…" flush may go out per
+    // turn. The model's final closing prose (emitted at end_turn, not pre-tool)
+    // is NOT subject to this counter.
+    const MAX_NARRATION_FLUSHES_PER_TURN = 1;
+    let narrationFlushedCount = 0;
     for (let step = 0; step < MAX_TOOL_STEPS && !clarificationHandled; step++) {
       const elapsed = Date.now() - t0;
       if (aborted) {
@@ -4551,11 +4582,15 @@ export async function runTurn(
       // is known: suppress it when the tool failed (the optimistic "I'll do
       // X…" prose would contradict the error card the user is about to see).
       if (pendingNarration) {
-        if (toolResult.ok !== false) {
+        // Task #771 Riser overhaul — narration budget. Only the first mid-turn
+        // "I'll look into…" narration is flushed; subsequent ones are dropped
+        // so the transcript reads as a card-first answer, not a play-by-play.
+        if (toolResult.ok !== false && narrationFlushedCount < MAX_NARRATION_FLUSHES_PER_TURN) {
           record({
             type: "narration",
             data: { text: pendingNarration.text, step: pendingNarration.step },
           });
+          narrationFlushedCount++;
         }
         pendingNarration = null;
       }
@@ -4573,6 +4608,61 @@ export async function runTurn(
           lastCardData = toolResult.data;
         }
         if (isCommit) committedWriteOk = true;
+      }
+
+      // Task #769 — flail guard. Track read-tool call counts and
+      // escalate / stop before the loop burns through all MAX_TOOL_STEPS.
+      if (!tool.isWrite) {
+        const prev = readToolCallCount.get(tc.name) ?? 0;
+        const next = prev + 1;
+        readToolCallCount.set(tc.name, next);
+        if (next === FLAIL_ESCALATION_THRESHOLD) {
+          turnTier = "sonnet";
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "flail_escalation",
+              turnId,
+              tool: tc.name,
+              callCount: next,
+            })}`,
+          );
+        } else if (next >= FLAIL_STOP_THRESHOLD) {
+          console.log(
+            `[cli-telemetry] ${JSON.stringify({
+              evt: "flail_stop",
+              turnId,
+              tool: tc.name,
+              callCount: next,
+            })}`,
+          );
+          recordSessionResult(session.id, {
+            pendingClarification: {
+              field: "query",
+              question:
+                "I searched in several ways but couldn't pin down exactly what you're looking for. Could you give me a bit more detail — for example, which account, a deal name, or the pipeline stage?",
+              originalPrompt: input.prompt,
+              partial: {},
+              tool: tc.name,
+              fields: null,
+            },
+          });
+          record({
+            type: "needs_clarification",
+            data: {
+              step,
+              field: "query",
+              question:
+                "I searched in several ways but couldn't pin down exactly what you're looking for. Could you give me a bit more detail — for example, which account, a deal name, or the pipeline stage?",
+              tool: tc.name,
+              partial: {},
+              suggestions: [],
+              fields: [],
+              turnId,
+            },
+          });
+          status = "awaiting_clarification";
+          break;
+        }
       }
 
       toolCalls.push({
@@ -4603,17 +4693,27 @@ export async function runTurn(
         tc.name === "propose_write" &&
         (toolResult.data as { stage?: unknown } | null)?.stage === "preview";
       if (!isProposePreview) {
-        record({
-          type: "tool_result",
-          data: {
-            step,
-            tool: tc.name,
-            ok: toolResult.ok,
-            data: toolResult.data,
-            errorCode: toolResult.errorCode,
-            errorMessage: toolResult.errorMessage,
-          },
-        });
+        // Task #771 Riser overhaul — card budget. Suppress tool_result frames
+        // for failing read tools (probe noise; the model still sees the outcome
+        // in its history). Also cap successful read-card frames per turn so the
+        // transcript stays readable. Write results always get through.
+        const isReadFail = !tool.isWrite && toolResult.ok === false;
+        const isOverCap =
+          !tool.isWrite && toolResult.ok !== false && cardsEmitted >= MAX_CARDS_PER_TURN;
+        if (!isReadFail && !isOverCap) {
+          record({
+            type: "tool_result",
+            data: {
+              step,
+              tool: tc.name,
+              ok: toolResult.ok,
+              data: toolResult.data,
+              errorCode: toolResult.errorCode,
+              errorMessage: toolResult.errorMessage,
+            },
+          });
+          if (!tool.isWrite && toolResult.ok !== false) cardsEmitted++;
+        }
       }
 
       // Task #24 — deferred post-commit work (e.g. Pursuit Scout after

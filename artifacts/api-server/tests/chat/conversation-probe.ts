@@ -293,17 +293,87 @@ const anthropicStub = createServer((req, res) => {
       send([{ type: "text", text: "Probe conversation" }], "end_turn");
       return;
     }
-    const hasToolResult = messages.some(
-      (m) => Array.isArray(m?.content) && m.content.some((b: any) => b?.type === "tool_result"),
-    );
-    if (hasToolResult) {
-      send([{ type: "text", text: "Here is what I found." }], "end_turn");
-      return;
-    }
+    // Compute prompt and tool-result count early — multi-step test cases
+    // need to route based on the original user prompt even after tool results
+    // have accumulated in the message history.
     const lastUser = [...messages].reverse().find((m) => m?.role === "user");
     const promptText = Array.isArray(lastUser?.content)
       ? lastUser.content.map((b: any) => (typeof b === "string" ? b : b?.text ?? "")).join(" ")
       : String(lastUser?.content ?? "");
+    const toolResultCount = messages.reduce((acc: number, m: any) => {
+      if (!Array.isArray(m?.content)) return acc;
+      return acc + m.content.filter((b: any) => b?.type === "tool_result").length;
+    }, 0);
+    // Subsequent Anthropic calls have tool_result user messages, so the
+    // original prompt text only appears in the FIRST user message. Scan all
+    // user messages to detect multi-step test-case patterns.
+    const anyUserText = messages
+      .filter((m: any) => m?.role === "user")
+      .flatMap((m: any) =>
+        Array.isArray(m?.content)
+          ? m.content.filter((b: any) => b?.type === "text").map((b: any) => b?.text ?? "")
+          : [String(m?.content ?? "")]
+      )
+      .join(" ");
+
+    // ---- Stage-3 Riser regression probes ----
+
+    // S8 — card budget: call a read tool with a nonexistent id so it returns
+    // ok:false; the orchestrator must suppress the tool_result frame from SSE.
+    // Use engagement_detail (confirmed in the "read / kind:other" tool menu).
+    if (/riser_s8_budget/i.test(anyUserText) && toolResultCount === 0) {
+      send(
+        [{ type: "tool_use", id: `tu_${TAG}_s8`, name: "engagement_detail", input: { engagementId: "eng_probe_nonexistent_s8_99999" } }],
+        "tool_use",
+      );
+      return;
+    }
+
+    // S9 — narration budget: two consecutive (text + tool) pairs to verify
+    // MAX_NARRATION_FLUSHES_PER_TURN=1 suppresses the second mid-turn flush.
+    if (/riser_s9_narration/i.test(anyUserText)) {
+      if (toolResultCount === 0) {
+        send(
+          [
+            { type: "text", text: "First I will check stage explore." },
+            { type: "tool_use", id: `tu_${TAG}_s9a`, name: "opportunity_list_by_stage", input: { stage: "explore" } },
+          ],
+          "tool_use",
+        );
+      } else if (toolResultCount === 1) {
+        send(
+          [
+            { type: "text", text: "Now checking stage qualify." },
+            { type: "tool_use", id: `tu_${TAG}_s9b`, name: "opportunity_list_by_stage", input: { stage: "qualify" } },
+          ],
+          "tool_use",
+        );
+      } else {
+        send([{ type: "text", text: "Done checking both stages." }], "end_turn");
+      }
+      return;
+    }
+
+    // S10 — flail guard: repeat the same read tool indefinitely; the
+    // orchestrator must fire needs_clarification at FLAIL_STOP_THRESHOLD.
+    if (/riser_s10_flail/i.test(anyUserText)) {
+      if (toolResultCount < 10) {
+        send(
+          [{ type: "tool_use", id: `tu_${TAG}_s10_${toolResultCount}`, name: "opportunity_list_by_stage", input: { stage: "explore" } }],
+          "tool_use",
+        );
+      } else {
+        send([{ type: "text", text: "Done." }], "end_turn");
+      }
+      return;
+    }
+
+    // ---- Generic handler: return a closing answer after any tool result ----
+    const hasToolResult = toolResultCount > 0;
+    if (hasToolResult) {
+      send([{ type: "text", text: "Here is what I found." }], "end_turn");
+      return;
+    }
     if (/meeting with aydan probemate/i.test(promptText)) {
       send(
         [
@@ -989,6 +1059,106 @@ try {
     const rows2 = await db.select().from(atelierExpenses).where(eq(atelierExpenses.merchant, `City Taxi ${NT}`));
     check("E2: still exactly one expense row", rows2.length === 1, rows2.length);
   }
+  // =====================================================================
+  // S8 — card budget: a read tool returning ok:false must NOT emit a
+  // tool_result frame over SSE (the frame is suppressed client-side).
+  // The orchestrator must still complete the turn without dead-ending.
+  // =====================================================================
+  {
+    const t8 = await postTurn({ who: FP, prompt: "riser_s8_budget test suppression" });
+    assertAlive("S8/budget-suppression", t8.frames);
+    const trFrames8 = t8.frames.filter((f) => f.event === "tool_result");
+    check(
+      "S8: ok:false read-tool_result frame suppressed from SSE (card budget)",
+      trFrames8.length === 0,
+      trFrames8.map((f) => ({ tool: f.data?.tool, ok: f.data?.ok })),
+    );
+    const fin8 = finalOf(t8.frames);
+    check(
+      "S8: turn completes — orchestrator not dead-ended by the suppressed frame",
+      fin8?.data?.status !== "error",
+      fin8?.data,
+    );
+  }
+
+  // =====================================================================
+  // S9 — narration budget: two consecutive (text + tool) pairs in one turn.
+  // MAX_NARRATION_FLUSHES_PER_TURN=1 means only the first mid-turn narration
+  // is flushed; the second is suppressed. The closing prose (end_turn text)
+  // always emits, so total narration frames = 2.
+  // =====================================================================
+  {
+    const t9 = await postTurn({ who: FP, prompt: "riser_s9_narration check stages" });
+    assertAlive("S9/narration-budget", t9.frames);
+    const narFrames9 = t9.frames.filter((f) => f.event === "narration");
+    check(
+      "S9: narration budget — second mid-turn narration suppressed (2 total: 1st flush + closing prose)",
+      narFrames9.length === 2,
+      narFrames9.map((f) => f.data?.text?.slice(0, 60)),
+    );
+    // The flushed narration should be the FIRST one ("explore" step).
+    const texts9 = narFrames9.map((f) => String(f.data?.text ?? ""));
+    check(
+      "S9: first mid-turn narration is the 'explore' step, not the suppressed 'qualify' step",
+      texts9.some((t) => /explore/i.test(t)),
+      texts9,
+    );
+  }
+
+  // =====================================================================
+  // S10 — flail guard: stub calls the same read tool indefinitely.
+  // The orchestrator must emit needs_clarification at FLAIL_STOP_THRESHOLD
+  // (4 calls), not exhaust the full MAX_TOOL_STEPS (12).
+  // =====================================================================
+  {
+    const t10 = await postTurn({ who: FP, prompt: "riser_s10_flail repeated search" });
+    const clar10 = clarOf(t10.frames);
+    check(
+      "S10: flail guard fires → needs_clarification emitted",
+      !!clar10,
+      t10.frames.map((f) => f.event),
+    );
+    const toolCalls10 = t10.frames.filter(
+      (f) => f.event === "tool_call" && f.data?.tool === "opportunity_list_by_stage",
+    );
+    // FLAIL_STOP_THRESHOLD=4: exactly 4 calls made, far fewer than MAX_TOOL_STEPS=12.
+    check(
+      "S10: orchestrator made exactly FLAIL_STOP_THRESHOLD calls (not the full 12)",
+      toolCalls10.length === 4,
+      { calls: toolCalls10.length },
+    );
+  }
+
+  // =====================================================================
+  // S11 — session frames / mobile history parity: after a completed turn,
+  // GET /cli/sessions/:id must return a non-empty frames array containing at
+  // least one tool_result frame — this is what the mobile loadSession uses
+  // to replay cards via applyFrame on history load.
+  // =====================================================================
+  {
+    const { sessionId: sid11 } = await seedFlightFacts("S11");
+    const sessRes = await fetch(`${BASE}/cli/sessions/${sid11}`, {
+      headers: { cookie: `atelier_persona=${FP}` },
+    });
+    check("S11: GET /cli/sessions/:id returns 200", sessRes.ok, sessRes.status);
+    const sessJ = (await sessRes.json()) as any;
+    const turns11: any[] = sessJ.turns ?? [];
+    check("S11: session response includes turns", turns11.length > 0, turns11.length);
+    const recentTurn = turns11[0];
+    const frames11: any[] = recentTurn?.frames ?? [];
+    check(
+      "S11: turn has non-empty frames array (required by mobile applyFrame replay)",
+      Array.isArray(frames11) && frames11.length > 0,
+      { frameCount: frames11.length },
+    );
+    const hasToolResultFrame = frames11.some((f: any) => f.type === "tool_result");
+    check(
+      "S11: frames contain tool_result entry — mobile loadSession can reconstruct cards",
+      hasToolResultFrame,
+      frames11.slice(0, 5).map((f: any) => f.type),
+    );
+  }
+
 } finally {
   // Cleanup (scratch DB, but keep it tidy for reuse) + __t sweep pattern.
   try {

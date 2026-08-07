@@ -1646,6 +1646,11 @@ defineCapability({
     await db.update(atelierAccounts).set(patch)
       .where(and(eq(atelierAccounts.id, id), eq(atelierAccounts.orgId, ctx.persona.orgId), isNull(atelierAccounts.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "account", id, "update", input);
+    // Task #769 — if the name changed, refresh the entity embedding so the
+    // resolver immediately finds the account under its new label.
+    if (input.name !== undefined) {
+      void mirrorEntityEmbedding(ctx.persona.orgId, "account", id, String(input.name));
+    }
     return { ok: true, data: { id, kind: "account", navigateTo: null } };
   },
 });
@@ -2290,6 +2295,10 @@ defineCapability({
     await db.update(atelierOpportunities).set(patch)
       .where(and(eq(atelierOpportunities.id, id), eq(atelierOpportunities.orgId, ctx.persona.orgId), isNull(atelierOpportunities.deletedAt)));
     await audit(ctx.persona.orgId, ctx.persona.id, "opportunity", id, "update", input);
+    // Task #769 — refresh embedding when the opportunity name changes.
+    if (input.name !== undefined) {
+      void mirrorEntityEmbedding(ctx.persona.orgId, "opportunity", id, String(input.name));
+    }
     return { ok: true, data: { id, kind: "opportunity", navigateTo: null } };
   },
 });

@@ -653,7 +653,7 @@ export function CommandBar(props: CommandBarProps) {
   }
 
   function exportTranscriptMarkdown() {
-    const lines: string[] = [`# Atelier CLI transcript — ${new Date().toISOString()}`, ""];
+    const lines: string[] = [`# Riser transcript — ${new Date().toISOString()}`, ""];
     for (const t of [...cli.turns].reverse()) {
       lines.push(`## ${t.prompt}`);
       lines.push(`_status: ${t.status}_`);
@@ -668,7 +668,7 @@ export function CommandBar(props: CommandBarProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `atelier-cli-${Date.now()}.md`;
+    a.download = `riser-${Date.now()}.md`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -721,7 +721,7 @@ export function CommandBar(props: CommandBarProps) {
       dir={dir}
       role={embedded ? "region" : "dialog"}
       aria-modal={embedded ? undefined : true}
-      aria-label="Atelier command bar"
+      aria-label="Riser command bar"
       className={cn(
         embedded
           ? "relative w-full h-full bg-bg-deep flex flex-col overflow-hidden text-text"
@@ -1487,6 +1487,11 @@ function TurnBody({
     !!turn.pending ||
     (turn.toolResults?.some((t) => t.tool === "propose_write") ?? false);
 
+  // Riser Stage 3 — raw tool-name trace entries (kind "tool", e.g.
+  // "→ resolve_entity") are internal identifiers partners should not see by
+  // default. A debug toggle in the trace box reveals them for power users.
+  const [showToolTrace, setShowToolTrace] = React.useState(false);
+
   // Live mm:ss elapsed timer while the turn streams, so a multi-minute
   // agent run never looks frozen. Re-ticks once a second; stops as soon as
   // the turn leaves the streaming state.
@@ -1511,12 +1516,22 @@ function TurnBody({
     <div className="space-y-2.5">
       {!isActionTurn && turn.trace.length > 0 && (() => {
         const recent = turn.trace.slice(-12);
-        const breadcrumbs = recent.filter((l) => l.kind !== "narration");
         // Task #645 — narration is optional under the card-aware output
         // contract; only render prose rows that actually carry text.
         const narrations = recent.filter(
           (l) => l.kind === "narration" && l.text.trim().length > 0,
         );
+        // Riser Stage 3 — "tool" kind entries carry raw internal tool names
+        // (e.g. "→ resolve_entity", "✓ account_detail"). Hide them by default
+        // so partners never see implementation identifiers. The debug toggle
+        // below reveals them for power users and support workflows.
+        const hasToolEntries = recent.some((l) => l.kind === "tool");
+        const breadcrumbs = recent.filter((l) => {
+          if (l.kind === "narration") return false;
+          if (l.kind === "tool" && !showToolTrace) return false;
+          return true;
+        });
+        if (breadcrumbs.length === 0 && narrations.length === 0 && !hasToolEntries) return null;
         return (
           <div
             className="bg-bg-elevate border border-border rounded-md px-3 py-2 space-y-2"
@@ -1531,6 +1546,18 @@ function TurnBody({
             )}
             {narrations.length > 0 && (
               <Markdown text={narrations.map((n) => n.text).join("\n\n")} />
+            )}
+            {hasToolEntries && (
+              <div className="flex justify-end border-t border-border-soft pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowToolTrace((v) => !v)}
+                  className="text-[10px] font-mono text-text-mute hover:text-text-faint leading-none"
+                  data-testid="cli-trace-debug-toggle"
+                >
+                  {showToolTrace ? "hide debug" : "debug"}
+                </button>
+              </div>
             )}
           </div>
         );

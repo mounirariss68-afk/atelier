@@ -14,8 +14,8 @@ export const STRINGS = {
   open: { en: "Open command bar", ar: "افتح شريط الأوامر" },
   close: { en: "Close (Esc)", ar: "إغلاق (Esc)" },
   placeholder: {
-    en: "Ask The Atelier or type / for commands…",
-    ar: "اسأل The Atelier أو اكتب / للأوامر…",
+    en: "Ask Riser or type / for commands…",
+    ar: "اسأل Riser أو اكتب / للأوامر…",
   },
   send: { en: "Send (Enter)", ar: "إرسال (Enter)" },
   newline: { en: "Shift+Enter for newline", ar: "Shift+Enter لسطر جديد" },
@@ -104,10 +104,10 @@ export const STRINGS = {
   recallHint: { en: "↑ to recall last prompt", ar: "↑ لاستدعاء آخر مطالبة" },
   pickOne: { en: "Pick one to continue:", ar: "اختر واحدًا للمتابعة:" },
   // Task #342 — assistant discoverability strings.
-  askAtelier: { en: "Ask Atelier", ar: "اسأل Atelier" },
+  askAtelier: { en: "Ask Riser", ar: "اسأل Riser" },
   homeInputPlaceholder: {
-    en: "Ask Atelier anything…",
-    ar: "اسأل Atelier أي شيء…",
+    en: "Ask Riser anything…",
+    ar: "اسأل Riser أي شيء…",
   },
   emptyConversational: {
     en: "Hi — what would you like to do?",
@@ -118,20 +118,20 @@ export const STRINGS = {
     ar: "تلميح: اكتب / لتصفّح كل الأوامر.",
   },
   floatingBubbleLabel: {
-    en: "Ask Atelier — chat with the assistant",
-    ar: "اسأل Atelier — تحدّث مع المساعد",
+    en: "Ask Riser — chat with the assistant",
+    ar: "اسأل Riser — تحدّث مع المساعد",
   },
   floatingBubbleDismiss: {
     en: "Hide for this session",
     ar: "إخفاء لهذه الجلسة",
   },
   firstRunTooltipPartner: {
-    en: "Ask Atelier in plain language — try \"Approve this week's timesheets\".",
-    ar: "اسأل Atelier بلغة طبيعيّة — جرّب \"وافق على جداول الزمن لهذا الأسبوع\".",
+    en: "Ask Riser in plain language — try \"Approve this week's timesheets\".",
+    ar: "اسأل Riser بلغة طبيعيّة — جرّب \"وافق على جداول الزمن لهذا الأسبوع\".",
   },
   firstRunTooltipDefault: {
-    en: "Ask Atelier in plain language — try \"What's on my plate today?\".",
-    ar: "اسأل Atelier بلغة طبيعيّة — جرّب \"ما المهام التي بانتظاري اليوم؟\".",
+    en: "Ask Riser in plain language — try \"What's on my plate today?\".",
+    ar: "اسأل Riser بلغة طبيعيّة — جرّب \"ما المهام التي بانتظاري اليوم؟\".",
   },
   firstRunTooltipDismiss: { en: "Got it", ar: "فهمت" },
   clarificationTitle: {

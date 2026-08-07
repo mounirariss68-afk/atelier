@@ -395,18 +395,40 @@ export function useChat() {
       });
       if (!res.ok) return;
       const j = (await res.json()) as {
-        turns?: { id?: string; prompt?: string; result?: ResultCard; summary?: string }[];
+        turns?: {
+          id?: string;
+          prompt?: string;
+          result?: ResultCard;
+          summary?: string;
+          /** Persisted SSE frames — replayed to reconstruct toolResults/cards. */
+          frames?: unknown[];
+        }[];
       };
-      const loaded: ChatTurn[] = (j.turns ?? []).map((t, i) => ({
-        key: t.id ?? `h_${i}`,
-        prompt: t.prompt ?? "",
-        status: "complete",
-        text: [t.result?.title, t.result?.summary ?? t.summary].filter(Boolean).join("\n\n"),
-        trace: [],
-        toolResults: [],
-        result: t.result,
-        serverTurnId: t.id,
-      }));
+      const loaded: ChatTurn[] = (j.turns ?? []).map((t, i) => {
+        const key = t.id ?? `h_${i}`;
+        const seed: ChatTurn = {
+          key,
+          prompt: t.prompt ?? "",
+          status: "complete",
+          text: [t.result?.title, t.result?.summary ?? t.summary].filter(Boolean).join("\n\n"),
+          trace: [],
+          toolResults: [],
+          result: t.result,
+          serverTurnId: t.id,
+        };
+        // Task #771 — replay persisted frames to reconstruct toolResults and
+        // result cards exactly as live streaming would, so history loads render
+        // the same structured cards as a live turn did.
+        if (Array.isArray(t.frames) && t.frames.length > 0) {
+          let live = seed;
+          for (const frame of t.frames) {
+            live = applyFrame(live, frame as Parameters<typeof applyFrame>[1]);
+          }
+          // Pin status to complete regardless of what the final frame recorded.
+          return { ...live, status: "complete" as const };
+        }
+        return seed;
+      });
       setTurns(loaded);
     } catch {
       // best-effort history load

@@ -19,7 +19,7 @@
  * matrix) and by tests/cli-smoke (intent-router prompts).
  */
 
-import { and, eq, gte, isNull, desc, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, isNull, desc, inArray, lte, ilike, or } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
@@ -147,14 +147,22 @@ defineCapability({
   module: "opportunity",
   toolName: "opportunity_list_by_stage",
   description:
-    "List the top open opportunities in a given sales stage (suspect|prospect|convert|runner|contract|lost|no_decision|withdrawn), sorted by weighted USD value.",
+    "List the top open opportunities in a given sales stage (suspect|prospect|convert|runner|contract|lost|no_decision|withdrawn), sorted by weighted USD value. Stage is required — use opportunity_search when you want results across all stages.",
   slashAliases: { en: ["/opps-in-stage", "/opps"] },
   inputSchema: {
     type: "object",
     properties: {
-      stage: { type: "string" },
+      // Task #769 — stage is now required; the old silent default of
+      // "convert" caused stage-by-stage brute-force iteration. Use
+      // opportunity_search when no specific stage is requested.
+      stage: {
+        type: "string",
+        description:
+          "Required. One of: suspect | prospect | convert | runner | contract | lost | no_decision | withdrawn.",
+      },
       limit: { type: "integer", minimum: 1, maximum: 50 },
     },
+    required: ["stage"],
   },
   isWrite: false,
   irreversible: false,
@@ -169,7 +177,16 @@ defineCapability({
     fr: ["Liste les opportunités en convert"],
   },
   async run(input, ctx) {
-    const stage = String(input.stage ?? "convert").toLowerCase();
+    const stageRaw = String(input.stage ?? "").toLowerCase().trim();
+    if (!stageRaw) {
+      return {
+        ok: false,
+        errorCode: "invalid_input",
+        errorMessage:
+          "stage is required. Specify one of: suspect, prospect, convert, runner, contract, lost, no_decision, withdrawn. Use opportunity_search to find opportunities across all stages.",
+      };
+    }
+    const stage = stageRaw;
     const limit = Math.max(1, Math.min(50, Number(input.limit ?? 10)));
     const rows = await db
       .select({
@@ -205,6 +222,156 @@ defineCapability({
       .sort((a, b) => b.weightedValueUsd - a.weightedValueUsd)
       .slice(0, limit);
     return { ok: true, data: { stage, items, total: inStage.length } };
+  },
+});
+
+// ---------------------------------------------------------------------
+// opportunity.search — ranked_list (Task #769)
+//
+// Cross-stage opportunity search: accepts a name fragment and/or an
+// account reference, returns matching opportunities across ALL stages.
+// Replaces the floor entry previously held by opportunity_list_by_stage,
+// which had no account-scope input and silently defaulted stage to
+// "convert" — driving the model to iterate stage-by-stage.
+// ---------------------------------------------------------------------
+defineCapability({
+  id: "opportunity.search",
+  schemaVersion: CATALOG_SCHEMA_VERSION,
+  module: "opportunity",
+  toolName: "opportunity_search",
+  description:
+    "Search opportunities across all pipeline stages. Accepts a name fragment (q), an account id (accountId), or an account name (accountName) — at least one must be provided. Returns up to 10 matching opportunities with stage, deal size, and account name.",
+  slashAliases: { en: ["/opp-search", "/find-opp"], fr: ["/chercher-opportunite"] },
+  inputSchema: {
+    type: "object",
+    properties: {
+      q: { type: "string", description: "Fuzzy opportunity name fragment (optional when accountId/accountName is given)." },
+      accountId: { type: "string", description: "Scope results to a specific account by id." },
+      accountName: { type: "string", description: "Scope results to a specific account by name when id is unknown." },
+      limit: { type: "integer", minimum: 1, maximum: 20 },
+    },
+    additionalProperties: false,
+  },
+  isWrite: false,
+  irreversible: false,
+  // Global surface so mobile (null pageContext) and portal both see it.
+  surfaceOn: ["opportunity_workspace", "home", "global"],
+  twoPhaseConfirm: false,
+  outboundChannel: null,
+  resultCard: "ranked_list",
+  promoteAsSuggestion: true,
+  examplePhrases: {
+    en: [
+      "Find opportunities at U Mobile",
+      "Search for DEWA deals",
+      "What opportunities do we have with Tasama?",
+    ],
+    ar: ["ابحث عن الفرص مع U Mobile"],
+    fr: ["Chercher des opportunités chez U Mobile"],
+  },
+  async run(input, ctx) {
+    const q = typeof input.q === "string" ? input.q.trim() : "";
+    const limitRaw = Math.max(1, Math.min(20, Number(input.limit ?? 10)));
+
+    if (!q && !input.accountId && !input.accountName) {
+      return {
+        ok: false,
+        errorCode: "invalid_input",
+        errorMessage:
+          "Provide at least one of: q (name fragment), accountId, or accountName.",
+      };
+    }
+
+    // Resolve account scope.
+    let scopeAccountId: string | null = null;
+    let accountLabel: string | null = null;
+    if (typeof input.accountId === "string" && input.accountId.trim()) {
+      scopeAccountId = input.accountId.trim();
+    } else if (typeof input.accountName === "string" && input.accountName.trim()) {
+      const accQ = input.accountName.trim();
+      const accRows = await db
+        .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.orgId, ctx.persona.orgId),
+            isNull(atelierAccounts.deletedAt),
+            ilike(atelierAccounts.name, `%${accQ}%`),
+          ),
+        )
+        .limit(1);
+      if (accRows.length > 0) {
+        scopeAccountId = accRows[0]!.id;
+        accountLabel = accRows[0]!.name;
+      } else {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `No account matched "${accQ}". Check the spelling or try a shorter name fragment.`,
+        };
+      }
+    }
+
+    const conds = [
+      eq(atelierOpportunities.orgId, ctx.persona.orgId),
+      isNull(atelierOpportunities.deletedAt),
+    ];
+    if (scopeAccountId) {
+      conds.push(eq(atelierOpportunities.accountId, scopeAccountId) as unknown as Parameters<typeof and>[0]);
+    }
+    if (q) {
+      conds.push(ilike(atelierOpportunities.name, `%${q}%`) as unknown as Parameters<typeof and>[0]);
+    }
+
+    const rows = await db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        accountId: atelierOpportunities.accountId,
+        salesStage: atelierOpportunities.salesStage,
+        deal: atelierOpportunities.dealSizeHypothesis,
+        prob: atelierOpportunities.probabilityPct,
+        days: atelierOpportunities.daysInStage,
+        nextMilestone: atelierOpportunities.nextMilestone,
+      })
+      .from(atelierOpportunities)
+      .where(and(...(conds as [Parameters<typeof and>[0]])))
+      .limit(limitRaw);
+
+    // Enrich with account names for multi-account result sets.
+    const accIds = [...new Set(rows.map((r) => r.accountId))];
+    const accs =
+      accIds.length > 0
+        ? await db
+            .select({ id: atelierAccounts.id, name: atelierAccounts.name })
+            .from(atelierAccounts)
+            .where(inArray(atelierAccounts.id, accIds))
+            .limit(accIds.length)
+        : [];
+    const accMap = new Map(accs.map((a) => [a.id, a.name]));
+    if (accountLabel && scopeAccountId) accMap.set(scopeAccountId, accountLabel);
+
+    const items = rows
+      .map((r) => ({
+        id: r.id,
+        label: r.name,
+        accountName: accMap.get(r.accountId) ?? r.accountId,
+        stage: resolveSalesStage(r.salesStage),
+        weightedValueUsd: (r.deal * r.prob) / 100,
+        daysInStage: r.days,
+        nextMilestone: r.nextMilestone ?? null,
+        href: `/opportunities/${r.id}`,
+      }))
+      .sort((a, b) => b.weightedValueUsd - a.weightedValueUsd);
+
+    return {
+      ok: true,
+      data: {
+        items,
+        total: items.length,
+        filters: { q: q || null, accountId: scopeAccountId },
+      },
+    };
   },
 });
 

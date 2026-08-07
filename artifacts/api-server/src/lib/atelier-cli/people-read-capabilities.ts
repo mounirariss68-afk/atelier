@@ -1447,6 +1447,11 @@ defineCapability({
     properties: {
       opportunityId: { type: "string" },
       name: { type: "string" },
+      // Task #769 — optional account reference narrows name-based lookups
+      // so "show the DEWA opportunity" succeeds even when multiple orgs have
+      // a "DEWA" deal, and "opportunity at U Mobile" resolves by account name.
+      accountId: { type: "string", description: "Account id to scope the lookup." },
+      accountName: { type: "string", description: "Account name to scope the lookup when id is unknown." },
     },
     additionalProperties: false,
   },
@@ -1469,23 +1474,57 @@ defineCapability({
       if (q.length < 2) {
         return { ok: false, errorCode: "invalid_input", errorMessage: "Provide opportunityId or name." };
       }
+
+      // Task #769 — resolve account scope when provided, so a name search
+      // is narrowed to the correct account before ILIKE on opp name.
+      let scopeAccountId: string | null = null;
+      if (typeof input.accountId === "string" && input.accountId.trim()) {
+        scopeAccountId = input.accountId.trim();
+      } else if (typeof input.accountName === "string" && input.accountName.trim()) {
+        const accQ = input.accountName.trim();
+        const accRows = await db
+          .select({ id: atelierAccounts.id })
+          .from(atelierAccounts)
+          .where(
+            and(
+              eq(atelierAccounts.orgId, ctx.persona.orgId),
+              isNull(atelierAccounts.deletedAt),
+              or(
+                ilike(atelierAccounts.name, `%${accQ}%`),
+                ilike(atelierAccounts.brandName, `%${accQ}%`),
+              ),
+            ),
+          )
+          .limit(1);
+        if (accRows.length > 0) scopeAccountId = accRows[0]!.id;
+      }
+
+      const whereClauses: Parameters<typeof and>[] = [
+        eq(atelierOpportunities.orgId, ctx.persona.orgId),
+        isNull(atelierOpportunities.deletedAt),
+        ilike(atelierOpportunities.name, `%${q}%`),
+      ];
+      if (scopeAccountId) {
+        whereClauses.push(eq(atelierOpportunities.accountId, scopeAccountId) as unknown as Parameters<typeof and>[0]);
+      }
       const rows = await db
-        .select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage })
+        .select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage, accountId: atelierOpportunities.accountId })
         .from(atelierOpportunities)
-        .where(
-          and(
-            eq(atelierOpportunities.orgId, ctx.persona.orgId),
-            isNull(atelierOpportunities.deletedAt),
-            ilike(atelierOpportunities.name, `%${q}%`),
-          ),
-        )
+        .where(and(...(whereClauses as [Parameters<typeof and>[0]])))
         .limit(6);
       if (rows.length === 0) return notFound("opportunity");
       if (rows.length > 1) {
+        // Enrich options with account name so the user can tell them apart.
+        const accIds = [...new Set(rows.map((r) => r.accountId))];
+        const accs = await db
+          .select({ id: atelierAccounts.id, name: atelierAccounts.name, brandName: atelierAccounts.brandName })
+          .from(atelierAccounts)
+          .where(inArray(atelierAccounts.id, accIds));
+        const accMap = new Map(accs.map((a) => [a.id, a.brandName ?? a.name]));
         const options = rows.slice(0, 5).map((r) => ({
           id: r.id,
           label: r.name,
-          secondary: `stage: ${r.salesStage}`,
+          secondary: accMap.has(r.accountId) ? `${accMap.get(r.accountId)} — stage: ${r.salesStage}` : `stage: ${r.salesStage}`,
         }));
         return {
           ok: true,

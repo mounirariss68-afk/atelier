@@ -50,6 +50,7 @@ import {
   resolveMoney,
 } from "./resolvers/index.js";
 import { checkAndRecord } from "./outbound-rate-limit.js";
+import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes.js";
 import { applyStageTransition } from "../atelier-agents/stage-service.js";
 import { deriveSalesStage, SALES_TO_PLM } from "../atelier-agents/pipeline.js";
@@ -343,6 +344,9 @@ defineCapability({
       { name: row.name, country: row.country, sector: row.sector, tier: row.tier },
       `${ctx.persona.name} created account "${row.name}" via CLI.`,
     );
+    // Task #769 — populate the entity embedding so the resolver can find
+    // this account immediately by name (best-effort; write already committed).
+    void mirrorEntityEmbedding(ctx.persona.orgId, "account", row.id, row.name);
     // Task #511 — newly created account opens its workspace.
     return {
       ok: true,
@@ -736,6 +740,9 @@ defineCapability({
           };
         }
       : undefined;
+    // Task #769 — populate the entity embedding so "find the DEWA opp"
+    // resolves immediately after creation (best-effort).
+    void mirrorEntityEmbedding(ctx.persona.orgId, "opportunity", row.id, row.name);
     // Task #511 — newly created opportunity opens its workspace.
     return {
       ok: true,

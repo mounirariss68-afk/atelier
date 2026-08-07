@@ -120,7 +120,12 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
     "email_my_documents",
   ],
   account: ["account_lookup", "account_list", "account_dossier"],
-  opportunity: ["opportunity_detail", "opportunity_list_by_stage", "pipeline_by_stage"],
+  // Task #769 — opportunity_search replaces opportunity_list_by_stage in the
+  // floor. The search tool spans all stages and accepts an accountName input,
+  // eliminating the silent stage="convert" default that drove the model to
+  // brute-force iterate stage-by-stage. opportunity_list_by_stage stays
+  // registered (slash command, explicit stage) but exits the floor.
+  opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage"],
   contact: ["contact_detail", "contact_list"],
   engagement: ["engagement_detail", "engagement_list_active"],
 };

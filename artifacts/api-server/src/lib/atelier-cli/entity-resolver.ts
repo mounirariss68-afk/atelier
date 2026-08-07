@@ -22,7 +22,7 @@
  * runner-up is meaningfully behind).
  */
 
-import { sql, and, desc, eq, isNull, or, ilike } from "drizzle-orm";
+import { sql, and, desc, eq, isNull, or, ilike, inArray } from "drizzle-orm";
 import {
   db,
   atelierAccounts,
@@ -176,19 +176,33 @@ async function tryIdLookup(
   }
   if (kind === "opportunity") {
     const [r] = await db
-      .select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage })
+      .select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage, accountId: atelierOpportunities.accountId })
       .from(atelierOpportunities)
       .where(and(eq(atelierOpportunities.id, id), eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt)))
       .limit(1);
-    return r ? { id: r.id, label: r.name, secondary: `stage: ${r.salesStage}` } : null;
+    if (!r) return null;
+    const [acc] = await db
+      .select({ name: atelierAccounts.name, brandName: atelierAccounts.brandName })
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, r.accountId))
+      .limit(1);
+    const accLabel = acc ? (acc.brandName ?? acc.name) : null;
+    return { id: r.id, label: r.name, secondary: accLabel ? `${accLabel} — stage: ${r.salesStage}` : `stage: ${r.salesStage}` };
   }
   if (kind === "engagement") {
     const [r] = await db
-      .select({ id: atelierEngagements.id, name: atelierEngagements.name, plmStage: atelierEngagements.plmStage })
+      .select({ id: atelierEngagements.id, name: atelierEngagements.name, plmStage: atelierEngagements.plmStage, accountId: atelierEngagements.accountId })
       .from(atelierEngagements)
       .where(and(eq(atelierEngagements.id, id), eq(atelierEngagements.orgId, orgId), isNull(atelierEngagements.deletedAt)))
       .limit(1);
-    return r ? { id: r.id, label: r.name, secondary: r.plmStage } : null;
+    if (!r) return null;
+    const [acc] = await db
+      .select({ name: atelierAccounts.name, brandName: atelierAccounts.brandName })
+      .from(atelierAccounts)
+      .where(eq(atelierAccounts.id, r.accountId))
+      .limit(1);
+    const accLabel = acc ? (acc.brandName ?? acc.name) : null;
+    return { id: r.id, label: r.name, secondary: accLabel ? `${accLabel} — stage: ${r.plmStage}` : r.plmStage };
   }
   if (kind === "contact") {
     const [r] = await db
@@ -405,8 +419,16 @@ export async function mirrorEntityEmbedding(
         target: [atelierEntityEmbeddings.kind, atelierEntityEmbeddings.targetId, atelierEntityEmbeddings.orgId],
         set: { label, summaryText: text, provider, vec, dim, updatedAt: new Date() },
       });
-  } catch {
-    // intentional — embedding population is best-effort.
+  } catch (err) {
+    // Best-effort — the write already succeeded; an embedding miss only
+    // degrades resolver recall on this row. Log loudly so gaps are visible
+    // in workflow logs and can be diagnosed without a silent failure.
+    console.error(
+      "[entity-resolver] mirrorEntityEmbedding failed",
+      kind,
+      id,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }
 
@@ -491,12 +513,14 @@ async function trigramPass(
     }
     return [...contacts, ...people].sort((a, b) => b.score - a.score).slice(0, TOP_K);
   }
-  return safeTrigram(async () => {
+  const directHits = await safeTrigram(async () => {
     const scopeFilter = scopes.accountId && kind === "opportunity"
       ? sql` AND account_id = ${scopes.accountId}`
-      : scopes.engagementId && kind === "deliverable"
-        ? sql` AND engagement_id = ${scopes.engagementId}`
-        : sql``;
+      : scopes.accountId && kind === "engagement"
+        ? sql` AND account_id = ${scopes.accountId}`
+        : scopes.engagementId && kind === "deliverable"
+          ? sql` AND engagement_id = ${scopes.engagementId}`
+          : sql``;
     const r = await db.execute<{ id: string; label: string; secondary: string | null; sim: number }>(sql`
       SELECT id, ${desc.col} AS label, NULL::text AS secondary,
              similarity(${desc.col}, ${query}) AS sim
@@ -511,6 +535,30 @@ async function trigramPass(
       .filter((row) => row.sim >= TRGM_THRESHOLD)
       .map((row) => ({ id: row.id, label: row.label, score: Number(row.sim), via: "trgm" as const }));
   }, () => fallbackIlikeGeneric(kind, query, orgId, scopes) as Promise<Array<{ id: string; label: string; score: number; via: "trgm" }>>);
+
+  // Task #769 — account-name join pass. When the query does not match
+  // any opportunity/engagement name directly (no confident trgm hits),
+  // also try resolving the query as an ACCOUNT name and return entities
+  // under matching accounts. This lets "opportunity at U Mobile" succeed
+  // even when no opportunity name contains "U Mobile".
+  if (kind === "opportunity" || kind === "engagement") {
+    const hasConfident = directHits.some((c) => c.score >= 0.6);
+    if (!hasConfident) {
+      const accJoined = await accountNameJoinPass(kind, query, orgId, scopes);
+      const merged = new Map<string, ResolverCandidate>(
+        directHits.map((c) => [c.id, c]),
+      );
+      for (const c of accJoined) {
+        const prev = merged.get(c.id);
+        if (!prev || c.score > prev.score) merged.set(c.id, c);
+      }
+      return Array.from(merged.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, TOP_K);
+    }
+  }
+
+  return directHits;
 }
 
 /**
@@ -655,6 +703,136 @@ async function safeTrigram<T>(primary: () => Promise<T[]>, fallback: () => Promi
   }
 }
 
+/**
+ * Task #769 — Secondary resolver pass for opportunity/engagement: match
+ * `query` against account names (trgm, ILIKE fallback) then return
+ * all non-deleted entities linked to any matching account.
+ *
+ * Candidates score 0.45 — above the ILIKE floor (0.4) but below a
+ * strong direct name match (≥0.6), so they surface as plausible
+ * alternatives without displacing a direct hit.
+ */
+async function accountNameJoinPass(
+  kind: "opportunity" | "engagement",
+  query: string,
+  orgId: string,
+  scopes: ResolverScopes,
+): Promise<ResolverCandidate[]> {
+  // Step 1 — find accounts whose name/brandName resembles the query.
+  const accRows = await safeTrigram<{ id: string; label: string }>(
+    async () => {
+      const r = await db.execute<{
+        id: string;
+        name: string;
+        brand_name: string | null;
+        sim: number;
+      }>(sql`
+        SELECT id, name, brand_name,
+               GREATEST(similarity(name, ${query}),
+                        similarity(coalesce(brand_name,''), ${query})) AS sim
+          FROM atelier_accounts
+         WHERE org_id = ${orgId} AND deleted_at IS NULL
+           AND (name % ${query} OR brand_name % ${query})
+         ORDER BY sim DESC
+         LIMIT 3
+      `);
+      return (
+        r.rows as unknown as Array<{
+          id: string;
+          name: string;
+          brand_name: string | null;
+          sim: number;
+        }>
+      )
+        .filter((row) => row.sim >= TRGM_THRESHOLD)
+        .map((row) => ({ id: row.id, label: row.brand_name ?? row.name }));
+    },
+    async () => {
+      const like = `%${query.replace(/[%_]/g, "")}%`;
+      const r = await db
+        .select({
+          id: atelierAccounts.id,
+          name: atelierAccounts.name,
+          brandName: atelierAccounts.brandName,
+        })
+        .from(atelierAccounts)
+        .where(
+          and(
+            eq(atelierAccounts.orgId, orgId),
+            isNull(atelierAccounts.deletedAt),
+            or(
+              ilike(atelierAccounts.name, like),
+              ilike(atelierAccounts.brandName, like),
+            ),
+          ),
+        )
+        .limit(3);
+      return r.map((a) => ({ id: a.id, label: a.brandName ?? a.name }));
+    },
+  );
+  if (accRows.length === 0) return [];
+
+  // Honour an existing accountId scope: if the resolver is already
+  // restricted to one account, only return entities from that account.
+  const accIds = scopes.accountId
+    ? accRows.filter((a) => a.id === scopes.accountId).map((a) => a.id)
+    : accRows.map((a) => a.id);
+  if (accIds.length === 0) return [];
+
+  const accLabelById = new Map(accRows.map((a) => [a.id, a.label]));
+
+  if (kind === "opportunity") {
+    const rows = await db
+      .select({
+        id: atelierOpportunities.id,
+        name: atelierOpportunities.name,
+        salesStage: atelierOpportunities.salesStage,
+        accountId: atelierOpportunities.accountId,
+      })
+      .from(atelierOpportunities)
+      .where(
+        and(
+          eq(atelierOpportunities.orgId, orgId),
+          isNull(atelierOpportunities.deletedAt),
+          inArray(atelierOpportunities.accountId, accIds),
+        ),
+      )
+      .limit(TOP_K);
+    return rows.map((r) => ({
+      id: r.id,
+      label: r.name,
+      secondary: `${accLabelById.get(r.accountId) ?? r.accountId} — stage: ${r.salesStage}`,
+      score: 0.45,
+      via: "trgm" as const,
+    }));
+  }
+
+  // engagement
+  const rows = await db
+    .select({
+      id: atelierEngagements.id,
+      name: atelierEngagements.name,
+      plmStage: atelierEngagements.plmStage,
+      accountId: atelierEngagements.accountId,
+    })
+    .from(atelierEngagements)
+    .where(
+      and(
+        eq(atelierEngagements.orgId, orgId),
+        isNull(atelierEngagements.deletedAt),
+        inArray(atelierEngagements.accountId, accIds),
+      ),
+    )
+    .limit(TOP_K);
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.name,
+    secondary: `${accLabelById.get(r.accountId) ?? r.accountId} — stage: ${r.plmStage}`,
+    score: 0.45,
+    via: "trgm" as const,
+  }));
+}
+
 async function fallbackIlikeAccount(query: string, orgId: string): Promise<ResolverCandidate[]> {
   const like = `%${query.replace(/[%_]/g, "")}%`;
   const r = await db
@@ -675,12 +853,45 @@ async function fallbackIlikeGeneric(
   if (kind === "opportunity") {
     const conds = [eq(atelierOpportunities.orgId, orgId), isNull(atelierOpportunities.deletedAt), ilike(atelierOpportunities.name, like)];
     if (scopes.accountId) conds.push(eq(atelierOpportunities.accountId, scopes.accountId));
-    const r = await db.select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage }).from(atelierOpportunities).where(and(...conds)).limit(TOP_K);
-    return r.map((o) => ({ id: o.id, label: o.name, secondary: `stage: ${o.salesStage}`, score: 0.4, via: "trgm" as const }));
+    const r = await db
+      .select({ id: atelierOpportunities.id, name: atelierOpportunities.name, salesStage: atelierOpportunities.salesStage, accountId: atelierOpportunities.accountId })
+      .from(atelierOpportunities)
+      .where(and(...conds))
+      .limit(TOP_K);
+    // Enrich with account names so disambiguation options are informative.
+    const accIds = [...new Set(r.map((o) => o.accountId))];
+    const accs = accIds.length > 0
+      ? await db.select({ id: atelierAccounts.id, name: atelierAccounts.name, brandName: atelierAccounts.brandName }).from(atelierAccounts).where(inArray(atelierAccounts.id, accIds)).limit(accIds.length)
+      : [];
+    const accMap = new Map(accs.map((a) => [a.id, a.brandName ?? a.name]));
+    return r.map((o) => ({
+      id: o.id,
+      label: o.name,
+      secondary: accMap.has(o.accountId) ? `${accMap.get(o.accountId)} — stage: ${o.salesStage}` : `stage: ${o.salesStage}`,
+      score: 0.4,
+      via: "trgm" as const,
+    }));
   }
   if (kind === "engagement") {
-    const r = await db.select({ id: atelierEngagements.id, name: atelierEngagements.name }).from(atelierEngagements).where(and(eq(atelierEngagements.orgId, orgId), isNull(atelierEngagements.deletedAt), ilike(atelierEngagements.name, like))).limit(TOP_K);
-    return r.map((e) => ({ id: e.id, label: e.name, score: 0.4, via: "trgm" as const }));
+    const conds = [eq(atelierEngagements.orgId, orgId), isNull(atelierEngagements.deletedAt), ilike(atelierEngagements.name, like)];
+    if (scopes.accountId) conds.push(eq(atelierEngagements.accountId, scopes.accountId));
+    const r = await db
+      .select({ id: atelierEngagements.id, name: atelierEngagements.name, plmStage: atelierEngagements.plmStage, accountId: atelierEngagements.accountId })
+      .from(atelierEngagements)
+      .where(and(...conds))
+      .limit(TOP_K);
+    const accIds = [...new Set(r.map((e) => e.accountId))];
+    const accs = accIds.length > 0
+      ? await db.select({ id: atelierAccounts.id, name: atelierAccounts.name, brandName: atelierAccounts.brandName }).from(atelierAccounts).where(inArray(atelierAccounts.id, accIds)).limit(accIds.length)
+      : [];
+    const accMap = new Map(accs.map((a) => [a.id, a.brandName ?? a.name]));
+    return r.map((e) => ({
+      id: e.id,
+      label: e.name,
+      secondary: accMap.has(e.accountId) ? `${accMap.get(e.accountId)} — stage: ${e.plmStage}` : e.plmStage,
+      score: 0.4,
+      via: "trgm" as const,
+    }));
   }
   if (kind === "contact") {
     const nameMatch = or(

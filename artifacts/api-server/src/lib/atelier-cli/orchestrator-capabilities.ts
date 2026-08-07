@@ -290,6 +290,10 @@ defineCapability({
         ? "client contacts on this account, employees, and partner-firm people"
         : "client contacts, employees, and partner-firm people";
       const kindLabel = kind === "contact" ? `person (searched ${contactRosterLabel})` : kind;
+      // Task #769 — "a opportunity" / "a engagement" are wrong; use the
+      // correct article and a natural plural for the question phrasing.
+      const displayKind = kind === "contact" ? "person" : kind;
+      const article = /^[aeiou]/i.test(displayKind) ? "an" : "a";
       return {
         ok: false,
         errorCode: "not_found",
@@ -297,7 +301,7 @@ defineCapability({
         clarification: {
           field: "query",
           tool: "resolve_entity",
-          question: `I couldn't find a ${kind === "contact" ? "person" : kind} matching "${query}"${kind === "contact" ? (scopeAccountId ? " in this account's client contacts, the employee roster, or partner-firm people" : " in client contacts, the employee roster, or partner-firm people") : ""}. Try a different name or paste the id.`,
+          question: `I couldn't find ${article} ${displayKind} matching "${query}"${kind === "contact" ? (scopeAccountId ? " in this account's client contacts, the employee roster, or partner-firm people" : " in client contacts, the employee roster, or partner-firm people") : ""}. Try a different name or paste the id.`,
           partial: { kind, scopeAccountId, scopeEngagementId },
           suggestions: [],
         },
@@ -324,6 +328,13 @@ defineCapability({
       secondary: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
       hint: c.secondary ?? `${c.via} ${c.score.toFixed(2)}`,
     }));
+    // Task #769 — natural plural for kind ("opportunities" not "opportunitys").
+    const kindPlural = (k: string): string => {
+      if (k === "opportunity") return "opportunities";
+      if (k === "delivery") return "deliveries";
+      if (k.endsWith("y")) return `${k.slice(0, -1)}ies`;
+      return `${k}s`;
+    };
     return {
       ok: true,
       // Task #411 — flat top-level `options` so the EntityResolution
@@ -332,7 +343,7 @@ defineCapability({
         kind,
         candidateCount: candidates.length,
         options,
-        prompt: `Multiple ${kind}s match "${query}". Pick one.`,
+        prompt: `Multiple ${kindPlural(kind)} match "${query}". Pick one.`,
       },
       disambiguation: { kind, options },
     };
