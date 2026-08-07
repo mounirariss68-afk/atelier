@@ -1459,13 +1459,17 @@ defineCapability({
       const rooms = Math.max(1, Math.min(9, Number(input.rooms ?? 1) || 1));
       const maxResults = Math.max(1, Math.min(20, Number(input.maxResults ?? 10) || 10));
       // StayingAPI takes free-text locations directly — no coordinate
-      // resolution step needed.
+      // resolution step needed. Wire ctx.progress so the async 202→poll
+      // cycle streams live steps into chat instead of freezing at "Thinking…".
       const stays = await stayingSearchHotels({
         location,
         checkInDate: checkIn,
         checkOutDate: checkOut,
         adults,
         rooms,
+        progress: ctx.progress
+          ? (pct: number, msg: string) => ctx.progress!(pct, msg)
+          : undefined,
       });
       const priced = [...stays].sort((a, b) => {
         if (a.totalAmount === null) return 1;

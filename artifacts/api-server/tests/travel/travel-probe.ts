@@ -274,6 +274,75 @@ const stayingStub = createServer((req, res) => {
     requests.push({ method: req.method ?? "", url, body: raw || null });
     res.setHeader("content-type", "application/json");
     if (url.startsWith("/search")) {
+      // Route "never-completes" searches (used by the timeout test) to a
+      // separate job that always returns "pending".
+      const loc = decodeURIComponent(
+        new URLSearchParams(url.split("?")[1] ?? "").get("location") ?? "",
+      );
+      if (loc === "Timeout Test City") {
+        res.statusCode = 202;
+        res.setHeader("retry-after", "1");
+        res.end(
+          JSON.stringify({
+            data: {
+              jobId: "job_never",
+              status: "pending",
+              pollUrl: "/v1/jobs/job_never",
+              estimatedSeconds: 999,
+            },
+            meta: { requestId: "r_never", creditsCharged: 0 },
+          }),
+        );
+        return;
+      }
+      if (loc === "Hung Response City") {
+        // Returns a 202 immediately; the poll job will hang (no response bytes).
+        res.statusCode = 202;
+        res.setHeader("retry-after", "1");
+        res.end(
+          JSON.stringify({
+            data: {
+              jobId: "job_hung",
+              status: "pending",
+              pollUrl: "/v1/jobs/job_hung",
+              estimatedSeconds: 999,
+            },
+            meta: { requestId: "r_hung", creditsCharged: 0 },
+          }),
+        );
+        return;
+      }
+      if (loc === "Bodyhang City") {
+        // Returns a clean 202; the poll job will stall the body.
+        res.statusCode = 202;
+        res.setHeader("retry-after", "1");
+        res.end(
+          JSON.stringify({
+            data: {
+              jobId: "job_bodyhang",
+              status: "pending",
+              pollUrl: "/v1/jobs/job_bodyhang",
+              estimatedSeconds: 999,
+            },
+            meta: { requestId: "r_bh", creditsCharged: 0 },
+          }),
+        );
+        return;
+      }
+      if (loc === "Bodyhang Initial City") {
+        // Sends the 202 status + headers then stalls the body mid-stream.
+        // Tests that the initial-request body read is also deadline-bound.
+        res.on("error", () => {});
+        res.writeHead(202, { "content-type": "application/json", "retry-after": "1" });
+        // Partial body — valid JSON never completes.
+        res.write('{"data":{"jobId":"job_bi","status":"pending","pollUrl":"/v1/jobs/');
+        const tBi = setTimeout(() => {
+          try { res.end('job_bi","estimatedSeconds":999}}'); } catch { /* socket closed */ }
+        }, 60_000);
+        tBi.unref();
+        req.once("close", () => clearTimeout(tBi));
+        return;
+      }
       // Async job path: 202 + pollUrl (as StayingAPI does for slow searches).
       res.statusCode = 202;
       res.setHeader("retry-after", "1");
@@ -283,6 +352,39 @@ const stayingStub = createServer((req, res) => {
           meta: { requestId: "r1", creditsCharged: 0 },
         }),
       );
+      return;
+    }
+    // Never-completing job: always returns "pending" so the poll cap fires.
+    if (url.startsWith("/jobs/job_never")) {
+      res.end(JSON.stringify({ data: { status: "pending" } }));
+      return;
+    }
+    // Hung job: server accepts the TCP connection and the full HTTP request,
+    // but delays the response far beyond any test's poll cap. The client's
+    // AbortSignal fires first; when the socket closes, the cleanup timer is
+    // cancelled immediately via req.once("close"). The timer is unref'd so it
+    // does not keep the Node.js event loop alive after the probe exits.
+    if (url.startsWith("/jobs/job_hung")) {
+      res.on("error", () => {}); // absorb write-after-close errors
+      const t = setTimeout(() => {
+        try { res.end(JSON.stringify({ data: { status: "pending" } })); } catch { /* socket already closed */ }
+      }, 60_000);
+      t.unref();
+      req.once("close", () => clearTimeout(t));
+      return;
+    }
+    // Body-hang job: server sends status + headers immediately, then writes a
+    // partial JSON body and stalls — the response body never completes. Tests
+    // that body reads are bounded by the same deadline AbortController.
+    if (url.startsWith("/jobs/job_bodyhang")) {
+      res.on("error", () => {});
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write("{"); // partial JSON — body never completed
+      const tBh = setTimeout(() => {
+        try { res.end("}"); } catch { /* socket already closed */ }
+      }, 60_000);
+      tBh.unref();
+      req.once("close", () => clearTimeout(tBh));
       return;
     }
     if (url.startsWith("/jobs/job_1")) {
@@ -311,6 +413,13 @@ await Promise.all([
   new Promise<void>((resolve) => ignavStub.listen(0, resolve)),
   new Promise<void>((resolve) => stayingStub.listen(0, resolve)),
 ]);
+// Disable keep-alive on both stubs so the Node.js HTTP server closes each
+// connection after serving a response. Without this, undici reuses persistent
+// connections; if the probe's hotel-timing tests (7b-7f) push the idle window
+// past the default 5 s keepAliveTimeout, the next request to ignavStub would
+// arrive on a stale socket and fail with a generic "fetch failed" error.
+ignavStub.keepAliveTimeout = 0;
+stayingStub.keepAliveTimeout = 0;
 const ignavUrl = `http://127.0.0.1:${(ignavStub.address() as AddressInfo).port}`;
 const stayingUrl = `http://127.0.0.1:${(stayingStub.address() as AddressInfo).port}`;
 process.env.ATELIER_IGNAV_BASE_URL = ignavUrl;
@@ -572,6 +681,208 @@ const ok = (name: string) => {
   assert.ok(searchReq.url.includes("checkIn=2027-03-02"));
   assert.ok(decodeURIComponent(searchReq.url).includes("Taksim"));
   ok("hotel search: free-text location, 202→poll, price sort, AED display, direct links");
+}
+
+// 7b. Hotel search progress events — happy-path: at least "Searching hotels
+// in …" and the polling step and "Ranking N hotels…" events are emitted.
+{
+  // Import the provider directly; the module is already cached by the
+  // capability import above, so this is effectively free.
+  const { stayingSearchHotels: searchHotels } = await import(
+    "../../src/lib/atelier-agents/travel-providers.js"
+  );
+  const events: Array<{ pct: number; message: string }> = [];
+  const results = await searchHotels({
+    location: "Taksim, Istanbul",
+    checkInDate: "2027-03-02",
+    checkOutDate: "2027-03-06",
+    adults: 1,
+    progress: (pct, msg) => events.push({ pct, message: msg }),
+  });
+  assert.ok(results.length > 0, "happy-path returns results");
+  assert.ok(events.length >= 2, `at least 2 progress events (got ${events.length})`);
+  // First event: honest initial message mentioning the location.
+  assert.ok(
+    events[0].message.toLowerCase().includes("searching"),
+    `first event should mention "searching" (got "${events[0].message}")`,
+  );
+  assert.ok(
+    events[0].message.includes("Taksim"),
+    `first event should name the location (got "${events[0].message}")`,
+  );
+  // At least one poll-step event during the async window.
+  assert.ok(
+    events.some((e) => e.message.toLowerCase().includes("still searching")),
+    "a polling-step progress event was emitted",
+  );
+  // Final "Ranking N hotels…" event.
+  assert.ok(
+    events.some((e) => e.message.toLowerCase().includes("ranking")),
+    "a ranking progress event was emitted",
+  );
+  // Progress percentages are monotonically non-decreasing.
+  for (let i = 1; i < events.length; i++) {
+    assert.ok(
+      events[i].pct >= events[i - 1].pct,
+      `progress pct not monotonic at index ${i}: ${events[i - 1].pct} → ${events[i].pct}`,
+    );
+  }
+  ok("hotel search: progress events emitted in order during happy-path async poll");
+}
+
+// 7c. Hotel poll timeout — stub never completes → TravelConnectionError with
+// a clear "timed out" message within the capped window; never empty results.
+{
+  const { stayingSearchHotels: searchHotels, TravelConnectionError: TCE } = await import(
+    "../../src/lib/atelier-agents/travel-providers.js"
+  );
+  const start = Date.now();
+  let caughtErr: unknown = null;
+  try {
+    await searchHotels({
+      location: "Timeout Test City",
+      checkInDate: "2027-03-02",
+      checkOutDate: "2027-03-06",
+      adults: 1,
+      // Very short cap so the test completes in milliseconds, not seconds.
+      pollCapMs: 350,
+    });
+  } catch (err) {
+    caughtErr = err;
+  }
+  const elapsed = Date.now() - start;
+  assert.ok(caughtErr !== null, "timeout path must throw, not return empty results");
+  assert.ok(
+    caughtErr instanceof TCE,
+    `threw TravelConnectionError (got ${Object.prototype.toString.call(caughtErr)})`,
+  );
+  const msg = (caughtErr as Error).message;
+  assert.ok(
+    msg.toLowerCase().includes("timed out"),
+    `error message must say "timed out" (got: "${msg}")`,
+  );
+  // Sanity: completed well within ~30 s thanks to the short cap.
+  assert.ok(elapsed < 5_000, `timeout fired in ${elapsed} ms (expected < 5000 ms)`);
+  ok("hotel poll timeout → loud TravelConnectionError within capped window (never empty)");
+}
+
+// 7d. Hung-response timeout: the poll HTTP fetch itself hangs — the server
+// accepts the TCP connection and the request but never sends any response
+// bytes. The AbortSignal (keyed to the remaining deadline budget) must fire
+// and convert the abort into the same loud TravelConnectionError timeout
+// message, well within the configured cap.
+{
+  const { stayingSearchHotels: searchHotels, TravelConnectionError: TCE } = await import(
+    "../../src/lib/atelier-agents/travel-providers.js"
+  );
+  // pollCapMs: 1600 — the 1 s initial-wait sleep completes fine (~1 s
+  // consumed), then the poll fetch to /jobs/job_hung hangs; the AbortSignal
+  // fires with ~600 ms remaining and the error is thrown.
+  const start = Date.now();
+  let caughtErr: unknown = null;
+  try {
+    await searchHotels({
+      location: "Hung Response City",
+      checkInDate: "2027-03-02",
+      checkOutDate: "2027-03-06",
+      adults: 1,
+      pollCapMs: 1600,
+    });
+  } catch (err) {
+    caughtErr = err;
+  }
+  const elapsed = Date.now() - start;
+  assert.ok(caughtErr !== null, "hung fetch must throw, not return empty results");
+  assert.ok(
+    caughtErr instanceof TCE,
+    `threw TravelConnectionError (got ${Object.prototype.toString.call(caughtErr)})`,
+  );
+  const msg = (caughtErr as Error).message;
+  assert.ok(
+    msg.toLowerCase().includes("timed out"),
+    `error message must say "timed out" (got: "${msg}")`,
+  );
+  // Must complete within the cap + a generous buffer — well under 4 s total.
+  assert.ok(elapsed < 4_000, `hung-fetch timeout fired in ${elapsed} ms (expected < 4000 ms)`);
+  ok("hotel poll: hung HTTP response → AbortSignal fires → loud TravelConnectionError within cap");
+}
+
+// 7e. Poll body-hang: server sends status + headers immediately but stalls the
+// response body (partial JSON write, never ends). Under the old code res.json()
+// would hang indefinitely once stayingFetch returned the Response. With the
+// fix, res.text() is consumed inside stayingFetch under the same AbortController,
+// so the body stall is bounded by the same deadline and throws the same loud
+// TravelConnectionError timeout message.
+{
+  const { stayingSearchHotels: searchHotels, TravelConnectionError: TCE } = await import(
+    "../../src/lib/atelier-agents/travel-providers.js"
+  );
+  // pollCapMs: 1600 — the 1 s sleep fires first, then the poll fetch to
+  // /jobs/job_bodyhang starts. The server sends "200 OK" headers + '{'
+  // but never completes the body; the AbortSignal fires after ~600 ms.
+  const start = Date.now();
+  let caughtErr: unknown = null;
+  try {
+    await searchHotels({
+      location: "Bodyhang City",
+      checkInDate: "2027-03-02",
+      checkOutDate: "2027-03-06",
+      adults: 1,
+      pollCapMs: 1600,
+    });
+  } catch (err) {
+    caughtErr = err;
+  }
+  const elapsed = Date.now() - start;
+  assert.ok(caughtErr !== null, "poll body-hang must throw, not return empty results");
+  assert.ok(
+    caughtErr instanceof TCE,
+    `threw TravelConnectionError (got ${Object.prototype.toString.call(caughtErr)})`,
+  );
+  const msg = (caughtErr as Error).message;
+  assert.ok(
+    msg.toLowerCase().includes("timed out"),
+    `error message must say "timed out" (got: "${msg}")`,
+  );
+  assert.ok(elapsed < 4_000, `poll body-hang timeout fired in ${elapsed} ms (expected < 4000 ms)`);
+  ok("hotel poll: stalled JSON body → AbortSignal fires on body read → loud TravelConnectionError within cap");
+}
+
+// 7f. Initial-request body-hang: the /search request itself returns 202 headers
+// but stalls the body mid-stream. The initial stayingFetch in stayingRequest must
+// be bounded by the same deadline AbortController, not just the poll fetches.
+{
+  const { stayingSearchHotels: searchHotels, TravelConnectionError: TCE } = await import(
+    "../../src/lib/atelier-agents/travel-providers.js"
+  );
+  // Short cap — the very first /search fetch gets headers quickly but the body
+  // never arrives; AbortSignal fires after ~500 ms (no sleep in this path).
+  const start = Date.now();
+  let caughtErr: unknown = null;
+  try {
+    await searchHotels({
+      location: "Bodyhang Initial City",
+      checkInDate: "2027-03-02",
+      checkOutDate: "2027-03-06",
+      adults: 1,
+      pollCapMs: 500,
+    });
+  } catch (err) {
+    caughtErr = err;
+  }
+  const elapsed = Date.now() - start;
+  assert.ok(caughtErr !== null, "initial body-hang must throw, not return empty results");
+  assert.ok(
+    caughtErr instanceof TCE,
+    `threw TravelConnectionError (got ${Object.prototype.toString.call(caughtErr)})`,
+  );
+  const msg = (caughtErr as Error).message;
+  assert.ok(
+    msg.toLowerCase().includes("timed out"),
+    `error message must say "timed out" (got: "${msg}")`,
+  );
+  assert.ok(elapsed < 2_000, `initial body-hang timeout fired in ${elapsed} ms (expected < 2000 ms)`);
+  ok("hotel search (initial): stalled JSON body → AbortSignal fires on body read → loud TravelConnectionError within cap");
 }
 
 // 8. Hotels missing dates → multi-field clarification.

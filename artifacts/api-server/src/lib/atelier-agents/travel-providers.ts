@@ -45,6 +45,16 @@ function str(v: unknown): string | null {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Optional progress callback for StayingAPI hotel searches.
+ * Receives a 0–100 percentage and a human-readable message at each
+ * meaningful phase (initial request, each poll iteration, result ranking).
+ */
+export type StayingProgressCallback = (pct: number, message: string) => void;
+
+/** Default poll deadline in ms (~30 s as required). */
+const STAYING_DEFAULT_POLL_CAP_MS = 30_000;
+
 // =====================================================================
 // Ignav — flights
 // =====================================================================
@@ -352,7 +362,73 @@ function stayingBase(): string {
   return "https://api.stayingapi.com/v1";
 }
 
-async function stayingRequest<T>(path: string): Promise<T> {
+interface StayingRequestOpts {
+  progress?: StayingProgressCallback;
+  /** Poll deadline in ms. Default: STAYING_DEFAULT_POLL_CAP_MS (~30 s). */
+  pollCapMs?: number;
+}
+
+/** Internal opts for the poll loop — deadline + message computed once in stayingRequest. */
+interface StayingPollOpts {
+  progress?: StayingProgressCallback;
+  deadline: number;
+  timeoutMsg: string;
+}
+
+function stayingTimeoutMsg(capMs: number): string {
+  const capSec = Math.round(capMs / 1000);
+  return `hotel search timed out after ${capSec} second${capSec === 1 ? "" : "s"} — the provider did not return results in time. Please try again.`;
+}
+
+/**
+ * Deadline-bound fetch helper for all StayingAPI requests.
+ *
+ * The AbortController timer is kept alive until the ENTIRE response body has
+ * been consumed. This closes the window where a provider could send response
+ * headers immediately (making `fetch()` resolve) and then stall the body
+ * transfer indefinitely — `res.text()` is awaited under the same signal, so
+ * both the connection phase and the body-read phase are bounded by `deadline`.
+ *
+ * Returns `{ status, headers, bodyText }` so callers never call `res.json()`
+ * or `res.text()` outside the AbortController's protection window.
+ *
+ * Abort → TravelConnectionError(timeoutMsg).
+ * Other network error → TravelConnectionError(connErrPrefix + detail).
+ */
+async function stayingFetch(
+  url: string,
+  headers: Record<string, string>,
+  deadline: number,
+  timeoutMsg: string,
+  connErrPrefix: string,
+): Promise<{ status: number; headers: Headers; bodyText: string }> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new TravelConnectionError(timeoutMsg);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), remaining);
+  try {
+    const res = await fetch(url, { headers, signal: ac.signal });
+    // Read the body under the SAME AbortController — the timer is still armed
+    // here, so a provider that sends headers then stalls the body (partial
+    // write, never closes) is caught by the same deadline abort.
+    const bodyText = await res.text();
+    return { status: res.status, headers: res.headers, bodyText };
+  } catch (err) {
+    // AbortError means our deadline timer fired during fetch OR during the
+    // body read — convert both to the same loud timeout message.
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new TravelConnectionError(timeoutMsg);
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new TravelConnectionError(`${connErrPrefix} (${msg}).`);
+  } finally {
+    // Timer is cleared AFTER the body has been fully consumed (or on error).
+    // Never clear it before body reads complete.
+    clearTimeout(timer);
+  }
+}
+
+async function stayingRequest<T>(path: string, opts?: StayingRequestOpts): Promise<T> {
   const stub = process.env.ATELIER_STAYING_BASE_URL;
   const apiKey = process.env.STAYINGAPI_API_KEY?.trim();
   if (!stub && !apiKey) {
@@ -360,83 +436,120 @@ async function stayingRequest<T>(path: string): Promise<T> {
       "hotel search is not configured — set the STAYINGAPI_API_KEY secret (free instant key from stayingapi.com).",
     );
   }
-  let res: Response;
-  try {
-    res = await fetch(`${stayingBase()}${path}`, {
-      headers: {
-        accept: "application/json",
-        ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-      },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new TravelConnectionError(`hotel search connection failed (${msg}).`);
-  }
-  if (res.status === 202) {
-    // Async job — poll to a terminal state.
+  // Compute the deadline once; both the initial search request and every poll
+  // request share this same absolute timestamp via pollStayingJob.
+  const capMs = opts?.pollCapMs ?? STAYING_DEFAULT_POLL_CAP_MS;
+  const deadline = Date.now() + capMs;
+  const timeoutMsg = stayingTimeoutMsg(capMs);
+  const reqHeaders: Record<string, string> = {
+    accept: "application/json",
+    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+  };
+
+  // stayingFetch reads the full body under the deadline; no un-guarded
+  // res.json()/res.text() calls follow this point.
+  const { status, headers: resHeaders, bodyText } = await stayingFetch(
+    `${stayingBase()}${path}`,
+    reqHeaders,
+    deadline,
+    timeoutMsg,
+    "hotel search connection failed",
+  );
+
+  if (status === 202) {
+    // Async job — parse the poll URL from the already-read body text.
     let pollPath: string | null = null;
     try {
-      const body = (await res.json()) as { data?: { pollUrl?: unknown } };
+      const body = JSON.parse(bodyText) as { data?: { pollUrl?: unknown } };
       const pollUrl = str(body.data?.pollUrl);
       if (pollUrl) pollPath = pollUrl.replace(/^\/v1(?=\/)/, "");
     } catch {
       /* fall through to error below */
     }
     if (!pollPath) throw new TravelConnectionError("hotel search job had no poll URL");
-    const retryAfter = num(res.headers.get("retry-after")) ?? 2;
-    return pollStayingJob<T>(pollPath, retryAfter);
+    const retryAfter = num(resHeaders.get("retry-after")) ?? 2;
+    return pollStayingJob<T>(pollPath, retryAfter, {
+      progress: opts?.progress,
+      deadline,
+      timeoutMsg,
+    });
   }
-  if (!res.ok) {
-    let snippet = "";
-    try {
-      snippet = (await res.text()).slice(0, 300);
-    } catch {
-      /* ignore */
-    }
+  const ok = status >= 200 && status < 300;
+  if (!ok) {
+    const snippet = bodyText.slice(0, 300);
     throw new TravelConnectionError(
-      `StayingAPI returned HTTP ${res.status}${snippet ? ` — ${snippet}` : ""}`,
+      `StayingAPI returned HTTP ${status}${snippet ? ` — ${snippet}` : ""}`,
     );
   }
   try {
-    return (await res.json()) as T;
+    return JSON.parse(bodyText) as T;
   } catch {
     throw new TravelConnectionError("StayingAPI returned a non-JSON response body");
   }
 }
 
-async function pollStayingJob<T>(pollPath: string, firstWaitSec: number): Promise<T> {
+async function pollStayingJob<T>(
+  pollPath: string,
+  firstWaitSec: number,
+  opts: StayingPollOpts,
+): Promise<T> {
   const apiKey = process.env.STAYINGAPI_API_KEY?.trim();
+  const { deadline, timeoutMsg } = opts;
+  const reqHeaders: Record<string, string> = {
+    accept: "application/json",
+    ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
+  };
   let waitSec = Math.min(10, Math.max(1, firstWaitSec));
-  for (let attempt = 0; attempt < 12; attempt++) {
-    await sleep(waitSec * 1000);
-    let res: Response;
+  let attempt = 0;
+
+  while (true) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    // Cap the sleep to the remaining budget so we never overshoot the deadline.
+    await sleep(Math.min(waitSec * 1000, remaining));
+    if (Date.now() >= deadline) break;
+
+    attempt++;
+    // Progress: 20 % at first poll, climbing to 80 % — honest, never 100 %.
+    const pct = Math.min(80, 20 + attempt * 10);
+    opts.progress?.(pct, "Still searching — checking hotel availability…");
+
+    // stayingFetch reads the FULL response body under the deadline AbortController:
+    // a provider that sends status+headers then stalls the body (partial write,
+    // never closes) is aborted just like a completely hung connection.
+    const { status: httpStatus, headers: resHeaders, bodyText } = await stayingFetch(
+      `${stayingBase()}${pollPath}`,
+      reqHeaders,
+      deadline,
+      timeoutMsg,
+      "hotel search poll failed",
+    );
+    if (httpStatus < 200 || httpStatus >= 300) {
+      throw new TravelConnectionError(`StayingAPI job poll returned HTTP ${httpStatus}`);
+    }
+    let json: { data?: { status?: unknown; result?: unknown; error?: { message?: unknown } } };
     try {
-      res = await fetch(`${stayingBase()}${pollPath}`, {
-        headers: {
-          accept: "application/json",
-          ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
-        },
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new TravelConnectionError(`hotel search poll failed (${msg}).`);
+      json = JSON.parse(bodyText);
+    } catch {
+      throw new TravelConnectionError("StayingAPI poll returned a non-JSON response body");
     }
-    if (!res.ok) {
-      throw new TravelConnectionError(`StayingAPI job poll returned HTTP ${res.status}`);
+    const jobStatus = str(json.data?.status);
+    if (jobStatus === "completed") {
+      // Re-check deadline AFTER body is parsed: a very slow (but non-hung)
+      // response that finishes just as the budget expires is treated as a
+      // timeout rather than silently surfacing stale results.
+      if (Date.now() >= deadline) break;
+      return json.data!.result as T;
     }
-    const json = (await res.json()) as {
-      data?: { status?: unknown; result?: unknown; error?: { message?: unknown } };
-    };
-    const status = str(json.data?.status);
-    if (status === "completed") return json.data!.result as T;
-    if (status === "failed") {
+    if (jobStatus === "failed") {
       throw new TravelConnectionError(
         `hotel search job failed${str(json.data?.error?.message) ? ` — ${str(json.data?.error?.message)}` : ""}`,
       );
     }
-    waitSec = Math.min(10, Math.max(1, num(res.headers.get("retry-after")) ?? waitSec));
+    waitSec = Math.min(10, Math.max(1, num(resHeaders.get("retry-after")) ?? waitSec));
   }
-  throw new TravelConnectionError("hotel search job did not complete in time");
+
+  throw new TravelConnectionError(timeoutMsg);
 }
 
 export interface StayResult {
@@ -481,7 +594,17 @@ function parseProperty(raw: RawProperty): StayResult | null {
   };
 }
 
-/** Hotel search by free-text location with live prices for the stay. */
+/** Hotel search by free-text location with live prices for the stay.
+ *
+ * @param args.progress - Optional callback for live progress updates during
+ *   the async search cycle (emitted before the request, at each poll step,
+ *   and once results are ranked). The percentage (0–100) and a human-readable
+ *   message are provided; callers forward these to the chat progress sink.
+ * @param args.pollCapMs - Override the poll deadline in milliseconds (default
+ *   30 000 ms ≈ 30 s). Intended for tests only — never expose to end users.
+ *   On deadline expiry the function throws a TravelConnectionError with a
+ *   clear "timed out" message; it never silently returns an empty result set.
+ */
 export async function stayingSearchHotels(args: {
   location: string;
   checkInDate: string;
@@ -489,7 +612,14 @@ export async function stayingSearchHotels(args: {
   adults: number;
   rooms?: number;
   limit?: number;
+  progress?: StayingProgressCallback;
+  /** Override the poll deadline in ms. Default: ~30 s. Inject in tests only. */
+  pollCapMs?: number;
 }): Promise<StayResult[]> {
+  // Emit an honest first step before any network call so users see activity
+  // immediately rather than a frozen "Thinking…" for the full async window.
+  args.progress?.(5, `Searching hotels in ${args.location}…`);
+
   const qs = new URLSearchParams({
     location: args.location,
     checkIn: args.checkInDate,
@@ -499,7 +629,14 @@ export async function stayingSearchHotels(args: {
     limit: String(Math.max(1, Math.min(40, args.limit ?? 20))),
     sort: "price_asc",
   });
-  const json = await stayingRequest<{ data?: RawProperty[] }>(`/search?${qs.toString()}`);
+  const json = await stayingRequest<{ data?: RawProperty[] }>(
+    `/search?${qs.toString()}`,
+    { progress: args.progress, pollCapMs: args.pollCapMs },
+  );
   const rows = Array.isArray(json.data) ? json.data : [];
+
+  // Emit a final step so users see the ranking is happening, not just silence.
+  if (rows.length > 0) args.progress?.(90, `Ranking ${rows.length} hotel${rows.length === 1 ? "" : "s"}…`);
+
   return rows.map((r) => parseProperty(r)).filter((s): s is StayResult => s !== null);
 }
