@@ -86,6 +86,14 @@ import {
 import { getAgent } from "@workspace/agents";
 import { persistBriefAndFacts } from "../../lib/atelier-agents/scout-persist.js";
 import { findAccountDuplicates, findOpportunityDuplicates } from "../../lib/atelier-dedupe.js";
+import { canSeeAccount } from "./accountRoutes.js";
+import { accessibleEngagementIds } from "./engagementRoutes.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBriefDoc,
+  buildScoutBriefPdf,
+  buildPovPdf,
+} from "../../lib/atelier-brief-pdf.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random()
@@ -2079,6 +2087,157 @@ router.post("/agents/:agentId/run", async (req, res) => {
     const msg = err instanceof Error ? err.message : String(err);
     res.status(500).json({ error: "agent-run-failed", message: msg });
   }
+});
+
+// =============================================================
+// Opportunity brief — PDF download
+// =============================================================
+// @cli-skip: binary PDF export; no CLI tool shape
+router.get("/opportunities/:oppId/brief.pdf", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const { oppId } = req.params;
+
+  const opp = await loadOpp(oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+
+  // Gate: persona must be able to see the account that owns this opportunity.
+  // 404 (not 403) to avoid IDOR oracle — same pattern as the account route.
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, opp.accountId))) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+
+  const [acct] = await db.select({ name: atelierAccounts.name }).from(atelierAccounts).where(eq(atelierAccounts.id, opp.accountId));
+
+  const [briefRow] = await db
+    .select()
+    .from(atelierBriefs)
+    .where(and(eq(atelierBriefs.opportunityId, oppId), isNull(atelierBriefs.deletedAt)))
+    .orderBy(desc(atelierBriefs.createdAt))
+    .limit(1);
+
+  if (!briefRow) {
+    res.status(404).json({ error: "no-brief" });
+    return;
+  }
+
+  const facts = (briefRow.citations as AgentFact[]) ?? [];
+  const age = briefAge(briefRow.createdAt);
+  const completeness = computeBriefCompleteness(
+    {
+      accountSnapshot: briefRow.accountSnapshot as PursuitScoutOutput["accountSnapshot"],
+      buyerLandscape: briefRow.buyerLandscape as PursuitScoutOutput["buyerLandscape"],
+      fiveCDraft: briefRow.fiveCDraft as PursuitScoutOutput["fiveCDraft"],
+      openQuestions: (briefRow.openQuestions as string[]) ?? [],
+    },
+    facts,
+  );
+
+  const oppName = opp.name;
+  const accountName = acct?.name ?? "";
+  const slug = oppName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "opportunity";
+  const filename = `brief-${slug}.pdf`;
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+
+  const doc = createBriefDoc();
+  doc.pipe(res);
+  buildScoutBriefPdf(doc, {
+    oppName,
+    accountName,
+    brief: {
+      accountSnapshot: briefRow.accountSnapshot as Parameters<typeof buildScoutBriefPdf>[1]["brief"]["accountSnapshot"],
+      buyerLandscape: briefRow.buyerLandscape as Parameters<typeof buildScoutBriefPdf>[1]["brief"]["buyerLandscape"],
+      fiveCDraft: (briefRow.fiveCDraft as Record<string, string>) ?? {},
+      openQuestions: (briefRow.openQuestions as string[]) ?? [],
+    },
+    facts,
+    confidence: briefRow.confidence ?? "amber",
+    completeness,
+    generatedAt: new Date(),
+  });
+  doc.end();
+  void age; // referenced to satisfy lint (age computed but used only for data route)
+});
+
+// =============================================================
+// Opportunity POV (current version) — PDF download
+// =============================================================
+// @cli-skip: binary PDF export; no CLI tool shape
+router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const { oppId } = req.params;
+
+  const opp = await loadOpp(oppId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+
+  // Gate: persona must be able to see the account that owns this opportunity.
+  // 404 (not 403) to avoid IDOR oracle — same pattern as the account route.
+  const access = await accessibleEngagementIds(me);
+  if (!(await canSeeAccount(access, me, opp.accountId))) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+
+  // Fetch the most recent POV that has a drafted version.
+  const [pov] = await db
+    .select()
+    .from(atelierPovs)
+    .where(and(eq(atelierPovs.opportunityId, oppId), isNull(atelierPovs.deletedAt)))
+    .orderBy(desc(atelierPovs.createdAt))
+    .limit(1);
+
+  if (!pov || !pov.currentVersionId) {
+    res.status(404).json({ error: "no-pov-version" });
+    return;
+  }
+
+  const [version] = await db
+    .select()
+    .from(atelierPovVersions)
+    .where(and(eq(atelierPovVersions.id, pov.currentVersionId), isNull(atelierPovVersions.deletedAt)));
+
+  if (!version) {
+    res.status(404).json({ error: "no-pov-version" });
+    return;
+  }
+
+  const titleSlug = pov.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "pov";
+  const filename = `pov-${titleSlug}.pdf`;
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+
+  const doc = createBriefDoc();
+  doc.pipe(res);
+  buildPovPdf(doc, {
+    oppName: opp.name,
+    pov: {
+      title: pov.title,
+      audience: pov.audience ?? null,
+      objective: pov.objective ?? null,
+    },
+    version: {
+      versionNumber: version.versionNumber,
+      body: version.body ?? "",
+      sections: (version.sections as Parameters<typeof buildPovPdf>[1]["version"]["sections"]) ?? [],
+      citations: (version.citations as AgentFact[]) ?? [],
+      citationCoverage: version.citationCoverage ?? null,
+      notes: version.notes ?? null,
+    },
+    generatedAt: new Date(),
+  });
+  doc.end();
 });
 
 export default router;

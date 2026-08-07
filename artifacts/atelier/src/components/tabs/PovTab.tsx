@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus } from "lucide-react";
+import { Plus, Download } from "lucide-react";
 import { ApproveEditReject } from "../ApproveEditReject";
 
 export function PovTab({ oppId, personaName }: { oppId: string; personaName: string }) {
@@ -133,7 +133,7 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
           <p className="text-text-mute mb-4">Promote at least one research fact, then start a POV.</p>
         </Card>
       ) : (
-        <ActivePov pov={active} onGenerateDraft={generateDraft} draftPending={draftMut.isPending} personaName={personaName} onDecision={decide} />
+        <ActivePov pov={active} oppId={oppId} onGenerateDraft={generateDraft} draftPending={draftMut.isPending} personaName={personaName} onDecision={decide} />
       )}
     </div>
   );
@@ -141,12 +141,14 @@ export function PovTab({ oppId, personaName }: { oppId: string; personaName: str
 
 function ActivePov({
   pov,
+  oppId,
   onGenerateDraft,
   draftPending,
   personaName,
   onDecision,
 }: {
   pov: AtelierPov;
+  oppId: string;
   onGenerateDraft: () => void;
   draftPending: boolean;
   personaName: string;
@@ -160,7 +162,19 @@ function ActivePov({
       <Card className="p-6 space-y-3">
         <div className="flex items-baseline justify-between">
           <h3 className="text-lg font-semibold text-text">{pov.title}</h3>
-          <span className="text-xs font-mono text-text-mute">{pov.audience} · {pov.status}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-text-mute">{pov.audience} · {pov.status}</span>
+            {pov.currentVersionId && (
+              <a
+                href={`/api/atelier/opportunities/${oppId}/pov.pdf`}
+                download
+                className="pill-btn pill-btn-ghost text-xs inline-flex items-center gap-1"
+                data-testid="button-download-pov-pdf"
+              >
+                <Download className="w-3.5 h-3.5" /> Download PDF
+              </a>
+            )}
+          </div>
         </div>
         <p className="text-text-mute text-sm">{pov.objective}</p>
       </Card>

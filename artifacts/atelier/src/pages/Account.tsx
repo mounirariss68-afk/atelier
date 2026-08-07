@@ -103,6 +103,7 @@ import {
   PenLine,
   Plus,
   Landmark,
+  Download,
 } from "lucide-react";
 import { CreateOpportunityDialog } from "@/components/CreateOpportunityDialog";
 import { useReferenceBootstrap } from "@/components/ReferenceCombobox";
@@ -1006,11 +1007,21 @@ function ProfileTab({
           {/* Research brief — progressive disclosure */}
           {brief && (
             <Card className="p-6 space-y-3">
-              <SectionLabel>
-                <span className="inline-flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-gold" /> Research brief
-                </span>
-              </SectionLabel>
+              <div className="flex items-center justify-between">
+                <SectionLabel>
+                  <span className="inline-flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-gold" /> Research brief
+                  </span>
+                </SectionLabel>
+                <a
+                  href={`/api/atelier/accounts/${a.id}/research-brief.pdf`}
+                  download
+                  className="pill-btn pill-btn-ghost text-xs inline-flex items-center gap-1"
+                  data-testid="button-download-research-brief"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download PDF
+                </a>
+              </div>
               {/* Task #9 — surface unresearched sections instead of hiding them. */}
               {(() => {
                 const missing: string[] = [];

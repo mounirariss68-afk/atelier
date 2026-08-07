@@ -11,7 +11,7 @@ import { Card, PillButton, StatusCard, MonoChip } from "@/components/ui/primitiv
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { ConfidenceDot } from "./ConfidenceDot";
-import { Shield, ExternalLink, CheckCircle2, Circle, Clock } from "lucide-react";
+import { Shield, ExternalLink, CheckCircle2, Circle, Clock, Download } from "lucide-react";
 
 // Human labels for completeness section keys (Task #9).
 const SECTION_LABELS: Record<string, string> = {
@@ -110,6 +110,14 @@ export function BriefTab({ oppId, onOpenQualifier }: { oppId: string; onOpenQual
             <PillButton variant="ghost" onClick={rerun} disabled={run.isPending}>
               {run.isPending ? "Re-running…" : "Re-run Scout"}
             </PillButton>
+            <a
+              href={`/api/atelier/opportunities/${oppId}/brief.pdf`}
+              download
+              className="pill-btn pill-btn-ghost text-xs inline-flex items-center gap-1"
+              data-testid="button-download-brief-pdf"
+            >
+              <Download className="w-3.5 h-3.5" /> Download PDF
+            </a>
             {onOpenQualifier && (
               <PillButton variant="primary" onClick={onOpenQualifier}>
                 <span className="inline-flex items-center gap-1.5"><Shield className="w-3.5 h-3.5" /> Verify · 5C Qualifier</span>

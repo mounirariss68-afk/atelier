@@ -153,6 +153,11 @@ import {
   runExecutiveMapperAndQueue,
   chainExecutiveMapperAfterCartographer,
 } from "../../lib/atelier-agents/executive-mapper-chain.js";
+import { contentDispositionFilename } from "../../lib/httpFilename.js";
+import {
+  createBriefDoc,
+  buildAccountResearchBriefPdf,
+} from "../../lib/atelier-brief-pdf.js";
 import { CRITICAL_ROLES } from "../../lib/atelier-agents/critical-roles.js";
 import {
   runAccountCartographer,
@@ -6452,6 +6457,47 @@ router.delete("/credentials/:credentialId", async (req, res) => {
     });
   });
   res.status(204).send();
+});
+
+// =============================================================
+// Account research brief — PDF download
+// =============================================================
+// @cli-skip: binary PDF export; no CLI tool shape
+router.get("/accounts/:accountId/research-brief.pdf", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const { accountId } = req.params;
+  const access = await accessibleEngagementIds(me);
+  const visible = await canSeeAccount(access, me, accountId);
+  // 404 (not 403) to avoid IDOR oracle on account existence.
+  if (!visible) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  const account = await loadAccount(accountId);
+  if (!account) {
+    res.status(404).json({ error: "not-found" });
+    return;
+  }
+  if (!account.researchBrief) {
+    res.status(404).json({ error: "no-brief" });
+    return;
+  }
+
+  const brief = account.researchBrief as Parameters<typeof buildAccountResearchBriefPdf>[1]["researchBrief"];
+  const entityName = account.brandName ?? account.name;
+
+  // Safe ASCII slug for the filename; httpFilename handles non-ASCII via RFC 5987.
+  const slug = entityName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "account";
+  const filename = `research-brief-${slug}.pdf`;
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", contentDispositionFilename("attachment", filename));
+
+  const doc = createBriefDoc();
+  doc.pipe(res);
+  buildAccountResearchBriefPdf(doc, { accountName: entityName, researchBrief: brief, generatedAt: new Date() });
+  doc.end();
 });
 
 export default router;

@@ -22,6 +22,7 @@
     "test:client-meeting": "tsx ./tests/crm/client-meeting-probe.ts",
     "test:chat-doc-download": "tsx ./tests/crm/chat-doc-download-probe.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
+    "test:research-brief-pdf": "tsx ./tests/crm/research-brief-pdf-probe.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:chat-replay": "tsx ./tests/chat/replay-probe.ts",
     "test:chat-facts": "tsx ./tests/chat/session-facts-probe.ts",
