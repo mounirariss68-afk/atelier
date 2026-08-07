@@ -52,6 +52,11 @@ import {
   isSelfReference,
 } from "../../src/lib/atelier-cli/meeting-attendee-resolver.js";
 import {
+  rankNearestNames,
+  attendeeNeedleFromQuery,
+} from "../../src/lib/atelier-cli/nearest-suggestions.js";
+import { matchMeetingsByAttendee } from "../../src/lib/atelier-cli/internal-meeting-capabilities.js";
+import {
   extractTemporalHints,
   significantTitleWords,
   scoreTitleWordMatch,
@@ -485,6 +490,40 @@ console.log("15. Task #644 — per-kind tool floor + narration scrub");
   const untouched = scrubKnownToolNames("Expense exp_a1b2c3 for AED 500 at some_random_shop is approved.")!;
   ok(untouched.includes("exp_a1b2c3") && untouched.includes("some_random_shop"), "entity ids + generic snake_case prose untouched");
   ok(scrubKnownToolNames(null) === null, "null passthrough");
+}
+
+console.log("16. Task #782 — friendly misses + attendee-scoped lookup");
+{
+  // Nearest-name ranking (attendee/contact miss suggestions).
+  const roster = [
+    { id: "u1", label: "Gökhan Güney" },
+    { id: "u2", label: "Sarah Haddad" },
+    { id: "u3", label: "Mounir Khalil" },
+  ];
+  const near = rankNearestNames("Sara", roster);
+  ok(near.length > 0 && near[0]!.id === "u2", "typo 'Sara' suggests Sarah Haddad first");
+  const nearTr = rankNearestNames("gokan", roster);
+  ok(nearTr.length > 0 && nearTr[0]!.id === "u1", "'gokan' suggests Gökhan (accent-folded, near-typo)");
+  ok(rankNearestNames("zzqqxx", roster).length === 0, "nonsense needle yields no suggestions");
+  ok(rankNearestNames("s", roster).length === 0, "single-letter needle yields no suggestions");
+
+  // With-clause extraction.
+  ok(attendeeNeedleFromQuery("my meeting with Sarah") === "Sarah", "with-clause extracts 'Sarah'");
+  ok(attendeeNeedleFromQuery("catch-up w/ Gökhan") === "Gökhan", "w/ variant extracts the name");
+  ok(attendeeNeedleFromQuery("pipeline review") === null, "no with-clause → null");
+  ok(attendeeNeedleFromQuery("sync with") === null, "dangling 'with' → null");
+
+  // Attendee-scoped meeting matching (pure, folded).
+  const rows = [
+    { id: "m1", internalAttendees: [{ name: "Sarah Haddad" }, { name: "Mounir Khalil" }] },
+    { id: "m2", internalAttendees: [{ name: "Gökhan Güney" }] },
+    { id: "m3", internalAttendees: null },
+  ];
+  const bySarah = matchMeetingsByAttendee(rows, "my meeting with sarah");
+  ok(bySarah.length === 1 && bySarah[0]!.id === "m1", "'my meeting with sarah' matches by attendee");
+  const byGokhan = matchMeetingsByAttendee(rows, "meeting with gokhan");
+  ok(byGokhan.length === 1 && byGokhan[0]!.id === "m2", "accent-folded attendee match (gokhan → Gökhan)");
+  ok(matchMeetingsByAttendee(rows, "pipeline review").length === 0, "no with-clause → no attendee matches");
 }
 
 console.log(`\nAll ${passed} probes passed.`);

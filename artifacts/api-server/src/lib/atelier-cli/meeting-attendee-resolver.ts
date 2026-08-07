@@ -11,6 +11,7 @@
 import { eq } from "drizzle-orm";
 import { db, atelierUsers } from "@workspace/db";
 import { foldRosterName } from "./chat-normalizers.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 
 export interface RosterAttendee {
   userId: string;
@@ -86,12 +87,33 @@ export async function resolveRosterAttendees(
         includesSelf = true;
         continue;
       }
+      // Task #782 — friendly miss: offer the closest roster names as a
+      // ranked clarification instead of a dead-end.
+      const nearest = rankNearestNames(
+        name,
+        roster
+          .filter((u) => u.id !== persona.id)
+          .map((u) => ({ id: u.id, label: u.name, secondary: u.email })),
+      );
+      if (nearest.length > 0) {
+        return {
+          kind: "result",
+          result: {
+            ok: true,
+            data: {
+              prompt: `I couldn't find "${name}" on the roster — did you mean one of these colleagues?`,
+              options: nearest,
+            },
+            disambiguation: { kind: "user", options: nearest },
+          },
+        };
+      }
       return {
         kind: "result",
         result: {
           ok: false,
           errorCode: "not_found",
-          errorMessage: `I couldn't find a colleague named "${name}" on the roster.`,
+          errorMessage: `I couldn't find a colleague named "${name}" on the roster — try their first name on its own, or double-check the spelling.`,
         },
       };
     }

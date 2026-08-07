@@ -30,6 +30,7 @@ import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.j
 import { rid } from "./index.js";
 import { resolveAccount, resolveContact } from "./resolvers/index.js";
 import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
 import {
   buildDuplicateWarning,
@@ -352,10 +353,53 @@ defineCapability({
     for (const name of contactNames) {
       const res = await resolveContact(name, ctx.persona, { accountId: parent.accountId });
       if (res.kind === "none") {
+        // Task #782 — friendly miss: offer the account's actual contacts
+        // (closest names first) instead of a dead-end.
+        const accountContacts = await db
+          .select({
+            id: atelierContacts.id,
+            name: atelierContacts.fullName,
+            email: atelierContacts.email,
+          })
+          .from(atelierContacts)
+          .where(
+            and(
+              eq(atelierContacts.orgId, ctx.persona.orgId),
+              eq(atelierContacts.accountId, parent.accountId),
+              isNull(atelierContacts.deletedAt),
+            ),
+          )
+          .limit(50);
+        const pool = accountContacts.map((c) => ({
+          id: c.id,
+          label: c.name ?? c.email ?? c.id,
+          secondary: c.email ?? undefined,
+        }));
+        const nearest = rankNearestNames(name, pool);
+        if (nearest.length > 0) {
+          return {
+            ok: true,
+            data: {
+              prompt: `I couldn't find a contact named "${name}" at ${parent.accountName} — did you mean one of these?`,
+              options: nearest,
+            },
+            disambiguation: { kind: "contact", options: nearest },
+          };
+        }
+        // No plausibly-close contact: friendly copy with a genuine next
+        // step (name a few real contacts in prose — never as pick-one
+        // options, since none of them plausibly match what was typed).
+        const sample = pool
+          .slice(0, 3)
+          .map((c) => c.label)
+          .filter(Boolean);
         return {
           ok: false,
           errorCode: "not_found",
-          errorMessage: `I couldn't find a contact named "${name}" at ${parent.accountName}.`,
+          errorMessage:
+            sample.length > 0
+              ? `I couldn't find a contact named "${name}" at ${parent.accountName}. Contacts there include ${sample.join(", ")} — or add "${name}" as a contact on the account first and I'll invite them properly.`
+              : `I couldn't find a contact named "${name}" at ${parent.accountName} — there are no contacts on that account yet. Add them as a contact first and I'll invite them properly.`,
         };
       }
       if (res.kind === "choices") {

@@ -32,6 +32,7 @@ import {
   wallToUtcInTz,
 } from "./chat-tz.js";
 import { resolveRosterAttendees } from "./meeting-attendee-resolver.js";
+import { attendeeNeedleFromQuery } from "./nearest-suggestions.js";
 import {
   extractTemporalHints,
   scoreTitleWordMatch,
@@ -686,6 +687,26 @@ async function findOutlookEventAt(
   }
 }
 
+/**
+ * Task #782 — pure attendee-scoped meeting match: when the lookup phrase
+ * carries a with-clause ("my meeting with Sarah", "catch-up w/ Gökhan"),
+ * match meetings whose internal attendee names fold-include that person.
+ * Exported for the meeting-chat probes.
+ */
+export function matchMeetingsByAttendee<
+  T extends { internalAttendees: Array<{ name?: string }> | null },
+>(rows: T[], cleanedQuery: string): T[] {
+  const needle = attendeeNeedleFromQuery(cleanedQuery);
+  if (!needle) return [];
+  const folded = foldRosterName(needle);
+  if (!folded) return [];
+  return rows.filter((m) =>
+    (m.internalAttendees ?? []).some(
+      (a) => a.name && foldRosterName(a.name).includes(folded),
+    ),
+  );
+}
+
 async function resolveTargetMeeting(
   persona: { id: string; orgId: string; role: string },
   input: Record<string, unknown>,
@@ -736,6 +757,11 @@ async function resolveTargetMeeting(
         .filter((x) => x.s >= 0.5)
         .sort((a, b) => b.s - a.s)
         .map((x) => x.m);
+    }
+    if (matched.length === 0 && cleaned.length > 0) {
+      // Task #782 — attendee-scoped fallback: "my meeting with Sarah"
+      // matches meetings whose attendee list includes that colleague.
+      matched = matchMeetingsByAttendee(pool, cleaned);
     }
     if (matched.length === 0 && cleaned.length === 0 && qYmd) {
       // Purely temporal phrase ("tomorrow's meeting") — every meeting
@@ -812,7 +838,7 @@ async function resolveTargetMeeting(
           result: {
             ok: false,
             errorCode: "not_found",
-            errorMessage: `I couldn't find an upcoming meeting at ${hm}${ymd ? ` on ${ymd}` : ""} (${tzShortLabel(tz)}).`,
+            errorMessage: `I couldn't find an upcoming meeting at ${hm}${ymd ? ` on ${ymd}` : ""} (${tzShortLabel(tz)}) — try the meeting's topic words or who it's with instead.`,
           },
         };
       }
@@ -879,13 +905,38 @@ async function resolveTargetMeeting(
         };
       }
     }
+    // Task #782 — friendly miss: instead of a dead-end, offer the
+    // nearest upcoming meetings the requester can actually manage.
+    if (query) {
+      const manageable = onDay(allRows ?? (await findUpcomingMeetingRows(persona.orgId, "")))
+        .filter((m) => canManageInternalMeeting(persona, m))
+        .slice(0, 5);
+      if (manageable.length > 0) {
+        const options = manageable.map((m) => ({
+          id: m.id,
+          label: meetingLabel(m, tz),
+          secondary:
+            m.internalAttendees?.map((a) => a.name).filter(Boolean).join(", ") || undefined,
+        }));
+        return {
+          result: {
+            ok: true,
+            data: {
+              prompt: `I couldn't find a meeting matching "${cleaned || query}"${qYmd ? ` on ${qYmd}` : ""} — did you mean one of these upcoming meetings?`,
+              options,
+            },
+            disambiguation: { kind: "meeting", options, field: "meetingId" },
+          },
+        };
+      }
+    }
     return {
       result: {
         ok: false,
         errorCode: "not_found",
         errorMessage: query
-          ? `I couldn't find an upcoming meeting matching "${cleaned || query}"${qYmd ? ` on ${qYmd}` : ""}.`
-          : "You have no upcoming meetings that you can manage.",
+          ? `I couldn't find an upcoming meeting matching "${cleaned || query}"${qYmd ? ` on ${qYmd}` : ""} — try the meeting's topic words, the time it starts, or who it's with (e.g. "my meeting with Sarah").`
+          : "You have no upcoming meetings that you can manage — nothing to change right now.",
       },
     };
   }
@@ -923,7 +974,7 @@ defineCapability({
   inputSchema: {
     type: "object",
     properties: {
-      meeting: { type: "string", description: "Words from the meeting topic/title, OR the time/day phrase the user used to identify it (e.g. \"tomorrow 7am\", \"the 8:30\"). In \"X to Y\" phrasings pass the FIRST time here." },
+      meeting: { type: "string", description: "Words from the meeting topic/title, the time/day phrase the user used (e.g. \"tomorrow 7am\", \"the 8:30\"), OR who it is with (e.g. \"my meeting with Sarah\"). In \"X to Y\" phrasings pass the FIRST time here." },
       meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
       date: { type: "string", description: "New date YYYY-MM-DD (user's local timezone)." },
       time: { type: "string", description: "New start time HH:MM in the user's local timezone (the SECOND time in \"X to Y\" phrasings)." },
@@ -1075,7 +1126,7 @@ defineCapability({
   inputSchema: {
     type: "object",
     properties: {
-      meeting: { type: "string", description: "Words from the meeting topic/title, OR the time/day phrase the user used to identify it (e.g. \"tomorrow 7am\", \"the 8:30\")." },
+      meeting: { type: "string", description: "Words from the meeting topic/title, the time/day phrase the user used (e.g. \"tomorrow 7am\", \"the 8:30\"), OR who it is with (e.g. \"my meeting with Sarah\")." },
       meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
       confirm: { type: "boolean" },
     },
@@ -1186,7 +1237,7 @@ defineCapability({
   inputSchema: {
     type: "object",
     properties: {
-      meeting: { type: "string", description: "Words from the meeting topic/title to find it." },
+      meeting: { type: "string", description: "Words from the meeting topic/title, or who it is with (e.g. \"my meeting with Sarah\")." },
       meetingId: { type: "string", description: "Exact meeting id (from disambiguation)." },
       topic: { type: "string", maxLength: 200, description: "New meeting topic/subject." },
       addAttendees: {
