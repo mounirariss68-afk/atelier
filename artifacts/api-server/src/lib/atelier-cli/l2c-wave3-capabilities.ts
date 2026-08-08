@@ -34,6 +34,7 @@ import {
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
+import { resolveDunnableInvoiceByText } from "./finance-name-resolvers.js";
 
 function rid(p: string): string {
   return `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -587,9 +588,16 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "wallet",
   toolName: "wallet_dunning_next_action",
-  description: "Recommend the next dunning ladder step per overdue invoice.",
+  description:
+    "Recommend the next dunning ladder step per overdue invoice. Accepts an optional invoiceId, or free text (q) — an invoice number, client/account name — to narrow the list.",
   slashAliases: { en: ["/next-dun", "/collections-next"] },
-  inputSchema: { type: "object", properties: { invoiceId: { type: "string" } } },
+  inputSchema: {
+    type: "object",
+    properties: {
+      invoiceId: { type: "string" },
+      q: { type: "string", description: "Invoice number or client/account name to narrow by." },
+    },
+  },
   isWrite: false,
   twoPhaseConfirm: false,
   outboundChannel: null,
@@ -601,13 +609,44 @@ defineCapability({
     const denied = denyRestricted(ctx.persona);
     if (denied) return denied;
     const invoiceId = input.invoiceId ? String(input.invoiceId) : undefined;
+    const q = typeof input.q === "string" ? input.q.trim() : "";
     const where = [
       isNull(atelierInvoice.deletedAt),
       eq(atelierInvoice.orgId, ctx.persona.orgId),
       eq(atelierInvoice.status, "issued"),
     ];
     if (invoiceId) where.push(eq(atelierInvoice.id, invoiceId));
-    const invoices = await db.select().from(atelierInvoice).where(and(...where));
+    let invoices = await db.select().from(atelierInvoice).where(and(...where));
+    // Task #789 — free-text narrowing by invoice number or client name.
+    if (!invoiceId && q) {
+      const resolved = await resolveDunnableInvoiceByText(q, ctx.persona.orgId);
+      if (resolved.outcome === "match") {
+        invoices = invoices.filter((i) => i.id === resolved.row.id);
+      } else if (
+        resolved.outcome === "ambiguous" ||
+        (resolved.outcome === "not_found" && (resolved.options?.length ?? 0) > 0)
+      ) {
+        // Ambiguity or a near-miss must ask, never blend actions across
+        // candidate invoices — a typo could otherwise dun the wrong client.
+        const options = resolved.outcome === "ambiguous" ? resolved.options : resolved.options!;
+        const prompt = resolved.outcome === "ambiguous" ? resolved.prompt : resolved.message;
+        return {
+          ok: true,
+          data: { prompt, options, nextActions: [] },
+          disambiguation: { kind: "invoice", field: "invoiceId", options },
+        };
+      } else {
+        return {
+          ok: true,
+          data: {
+            nextActions: [],
+            note: resolved.message,
+            navigateTo: { path: "/wallet", when: "on_commit" as const },
+          },
+          resultCardHint: "dunning_card",
+        };
+      }
+    }
     const today = new Date();
     const out: Array<Record<string, unknown>> = [];
     for (const inv of invoices) {
@@ -667,12 +706,16 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "wallet",
   toolName: "wallet_dunning_send_next",
-  description: "Fire the next dunning ladder step on an overdue invoice. Step 2+ requires partner approval. Outbound channel: email.",
+  description:
+    "Fire the next dunning ladder step on an overdue invoice. Identify the invoice by invoiceId, or by free text (q) — invoice number or client/account name, e.g. \"send the dunning reminder for Acme\". Step 2+ requires partner approval. Outbound channel: email.",
   slashAliases: { en: ["/dun", "/send-reminder"] },
   inputSchema: {
     type: "object",
-    properties: { invoiceId: { type: "string" }, confirm: { type: "boolean" } },
-    required: ["invoiceId"],
+    properties: {
+      invoiceId: { type: "string" },
+      q: { type: "string", description: "Invoice number or client/account name when no id is known." },
+      confirm: { type: "boolean" },
+    },
   },
   isWrite: true,
   twoPhaseConfirm: true,
@@ -684,11 +727,54 @@ defineCapability({
   async run(input, ctx) {
     const denied = denyRestricted(ctx.persona);
     if (denied) return denied;
-    const invoiceId = String(input.invoiceId ?? "");
+    // Task #789 — resolve by id or by free text (invoice number / client
+    // name) with ranked disambiguation and friendly misses.
+    let invoiceId = input.invoiceId ? String(input.invoiceId) : "";
+    const q = typeof input.q === "string" ? input.q.trim() : "";
+    if (!invoiceId && q) {
+      const resolved = await resolveDunnableInvoiceByText(q, ctx.persona.orgId);
+      if (resolved.outcome === "ambiguous") {
+        return {
+          ok: true,
+          data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+          disambiguation: { kind: "invoice", field: "invoiceId", options: resolved.options },
+        };
+      }
+      if (resolved.outcome === "not_found") {
+        if (resolved.options && resolved.options.length > 0) {
+          return {
+            ok: true,
+            data: { prompt: resolved.message, options: resolved.options, navigateTo: null },
+            disambiguation: { kind: "invoice", field: "invoiceId", options: resolved.options },
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `${resolved.message} Say "what's the next collections action?" to see the overdue list.`,
+        };
+      }
+      invoiceId = resolved.row.id;
+    }
+    if (!invoiceId) {
+      return {
+        ok: false,
+        errorCode: "invalid_body",
+        errorMessage:
+          'Tell me which invoice — an invoice number or the client\'s name, e.g. "send the dunning reminder for Acme".',
+      };
+    }
     const [inv] = await db.select().from(atelierInvoice).where(
       and(eq(atelierInvoice.id, invoiceId), eq(atelierInvoice.orgId, ctx.persona.orgId), isNull(atelierInvoice.deletedAt)),
     );
-    if (!inv) return { ok: false, errorCode: "not_found", errorMessage: "Invoice not found." };
+    if (!inv) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage:
+          "I couldn't find that invoice — it may have been paid or removed. Say \"what's the next collections action?\" to see the current overdue list.",
+      };
+    }
     if (inv.status !== "issued") return denyInvalid("Only issued invoices can be dunned.");
     const [ladder] = await db.select().from(atelierDunningLadder).where(
       and(eq(atelierDunningLadder.jurisdiction, inv.jurisdiction), eq(atelierDunningLadder.isDefault, true), isNull(atelierDunningLadder.deletedAt)),

@@ -58,6 +58,7 @@ import {
 // parses it into a structured person record and mirrors legacy columns.
 import { writePersonFromFullName, syncLegacyColumns } from "../atelier-person-sync.js";
 import { CATALOG_SCHEMA_VERSION, defineCapability } from "./capability-catalog.js";
+import { resolveAccountRefByName } from "./finance-name-resolvers.js";
 import { mirrorEntityEmbedding } from "./entity-resolver.js";
 import { isHr, isFoundingPartner } from "../../routes/atelier/personaRoles.js";
 import {
@@ -605,6 +606,7 @@ defineCapability({
       currency: { type: "string", minLength: 3, maxLength: 3 },
       engagementId: { type: "string" },
       accountId: { type: "string" },
+      account: { type: "string", description: "Client/account name when no accountId is known." },
       notes: { type: "string" },
       dueDate: { type: "string" },
     },
@@ -619,6 +621,30 @@ defineCapability({
   surfaceOn: ["global"],
   source: "cli-only",
   async run(input, ctx) {
+    // Task #789 — resolve a client/account name to accountId server-side.
+    let accountId = input.accountId ? String(input.accountId) : null;
+    const accountName = typeof input.account === "string" ? input.account.trim() : "";
+    if (!accountId && accountName) {
+      const resolved = await resolveAccountRefByName(accountName, ctx.persona.orgId);
+      if (resolved.outcome === "ambiguous") {
+        return {
+          ok: true,
+          data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+          disambiguation: { kind: "account", field: "accountId", options: resolved.options },
+        };
+      }
+      if (resolved.outcome === "not_found") {
+        if (resolved.options && resolved.options.length > 0) {
+          return {
+            ok: true,
+            data: { prompt: resolved.message, options: resolved.options, navigateTo: null },
+            disambiguation: { kind: "account", field: "accountId", options: resolved.options },
+          };
+        }
+        return { ok: false, errorCode: "not_found", errorMessage: `${resolved.message} Say "list accounts" to browse clients.` };
+      }
+      accountId = resolved.row.id;
+    }
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "invoice_create requires confirm:true." };
     }
@@ -629,7 +655,7 @@ defineCapability({
       jurisdiction: String(input.jurisdiction),
       currency: String(input.currency),
       engagementId: input.engagementId ? String(input.engagementId) : null,
-      accountId: input.accountId ? String(input.accountId) : null,
+      accountId,
       notes: input.notes ? String(input.notes) : null,
       dueDate: input.dueDate ? String(input.dueDate) : null,
       status: "draft",
@@ -1271,6 +1297,7 @@ defineCapability({
     properties: {
       ...COMMON_INPUT_PROPS,
       accountId: { type: "string", minLength: 3 },
+      account: { type: "string", description: "Client/account name when no accountId is known." },
       engagementId: { type: "string" },
       contractId: { type: "string" },
       renewalDueAt: { type: "string" },
@@ -1279,7 +1306,7 @@ defineCapability({
       riskTier: { type: "string", enum: ["green", "amber", "red"] },
       rationaleText: { type: "string" },
     },
-    required: ["accountId"],
+    required: [],
     additionalProperties: false,
   },
   isWrite: true,
@@ -1290,6 +1317,37 @@ defineCapability({
   surfaceOn: ["global"],
   source: "cli-only",
   async run(input, ctx) {
+    // Task #789 — accept the client's name instead of a raw accountId.
+    let accountId = input.accountId ? String(input.accountId) : "";
+    const accountName = typeof input.account === "string" ? input.account.trim() : "";
+    if (!accountId && accountName) {
+      const resolved = await resolveAccountRefByName(accountName, ctx.persona.orgId);
+      if (resolved.outcome === "ambiguous") {
+        return {
+          ok: true,
+          data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+          disambiguation: { kind: "account", field: "accountId", options: resolved.options },
+        };
+      }
+      if (resolved.outcome === "not_found") {
+        if (resolved.options && resolved.options.length > 0) {
+          return {
+            ok: true,
+            data: { prompt: resolved.message, options: resolved.options, navigateTo: null },
+            disambiguation: { kind: "account", field: "accountId", options: resolved.options },
+          };
+        }
+        return { ok: false, errorCode: "not_found", errorMessage: `${resolved.message} Say "list accounts" to browse clients.` };
+      }
+      accountId = resolved.row.id;
+    }
+    if (!accountId) {
+      return {
+        ok: false,
+        errorCode: "invalid_body",
+        errorMessage: 'Tell me which client the renewal is for — e.g. "open a renewal for Acme, due Q3".',
+      };
+    }
     if (input.confirm !== true) {
       return { ok: false, errorCode: "needs_confirm", errorMessage: "renewal_create requires confirm:true." };
     }
@@ -1299,7 +1357,7 @@ defineCapability({
     await db.insert(atelierRenewal).values({
       id,
       orgId: ctx.persona.orgId,
-      accountId: String(input.accountId),
+      accountId,
       engagementId: input.engagementId ? String(input.engagementId) : null,
       contractId: input.contractId ? String(input.contractId) : null,
       renewalDueAt: input.renewalDueAt ? String(input.renewalDueAt) : null,
@@ -1312,7 +1370,7 @@ defineCapability({
       createdByUserId: ctx.persona.id,
     });
     await audit(ctx.persona.orgId, ctx.persona.id, "renewal", id, "create", input);
-    void mirrorEntityEmbedding(ctx.persona.orgId, "renewal", id, `renewal ${input.accountId}`);
+    void mirrorEntityEmbedding(ctx.persona.orgId, "renewal", id, `renewal ${accountId}`);
     return { ok: true, data: { id, kind: "renewal", navigateTo: null } };
   },
 });

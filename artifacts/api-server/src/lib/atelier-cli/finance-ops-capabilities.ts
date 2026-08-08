@@ -57,6 +57,7 @@ import {
 import { canSeeContract } from "../../routes/atelier/contractLifecycleRoutes.js";
 import { canApproveAsPartner } from "../../routes/atelier/personaRoles.js";
 import type { CliPersona, ToolResult } from "./index.js";
+import { resolveOpportunityByName } from "./finance-name-resolvers.js";
 
 type Me = typeof atelierUsers.$inferSelect;
 
@@ -320,40 +321,48 @@ defineCapability({
         errorMessage: "Provide an opportunity name or id.",
       };
     }
-    // Deterministic resolution: exact id first, then name substring.
-    const orgCond = and(
-      eq(atelierOpportunities.orgId, ctx.persona.orgId),
-      isNull(atelierOpportunities.deletedAt),
-    );
-    let [opp] = await db
+    // Task #789 — shared name resolver: exact id, unique name, ranked
+    // disambiguation on ambiguity, friendly copy (with did-you-mean
+    // candidates when plausible) on a miss. Never raw ambiguous/not-found.
+    const resolved = await resolveOpportunityByName(q, ctx.persona.orgId);
+    if (resolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: { prompt: resolved.prompt, options: resolved.options },
+        disambiguation: { kind: "opportunity", field: "opportunity", options: resolved.options },
+      };
+    }
+    if (resolved.outcome === "not_found") {
+      if (resolved.options && resolved.options.length > 0) {
+        return {
+          ok: true,
+          data: { prompt: resolved.message, options: resolved.options },
+          disambiguation: { kind: "opportunity", field: "opportunity", options: resolved.options },
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "not-found",
+        errorMessage: `${resolved.message} Say "list opportunities" to browse the pipeline, or give me the deal's exact name.`,
+      };
+    }
+    const [opp] = await db
       .select()
       .from(atelierOpportunities)
-      .where(and(orgCond, eq(atelierOpportunities.id, q)))
+      .where(
+        and(
+          eq(atelierOpportunities.orgId, ctx.persona.orgId),
+          eq(atelierOpportunities.id, resolved.row.id),
+          isNull(atelierOpportunities.deletedAt),
+        ),
+      )
       .limit(1);
     if (!opp) {
-      const matches = await db
-        .select()
-        .from(atelierOpportunities)
-        .where(and(orgCond, ilike(atelierOpportunities.name, `%${q}%`)))
-        .orderBy(desc(atelierOpportunities.updatedAt))
-        .limit(5);
-      if (matches.length === 0) {
-        return {
-          ok: false,
-          errorCode: "not-found",
-          errorMessage: `No opportunity matched "${q}".`,
-        };
-      }
-      if (matches.length > 1) {
-        return {
-          ok: false,
-          errorCode: "ambiguous",
-          errorMessage: `Multiple opportunities matched "${q}": ${matches
-            .map((m) => m.name)
-            .join(", ")}. Please be more specific.`,
-        };
-      }
-      opp = matches[0];
+      return {
+        ok: false,
+        errorCode: "not-found",
+        errorMessage: `That opportunity no longer exists — say "list opportunities" to browse the pipeline.`,
+      };
     }
     const [debrief] = await db
       .select()
