@@ -431,6 +431,21 @@ const anthropicStub = createServer((req, res) => {
       );
       return;
     }
+    if (/submit my cafe expense/i.test(promptText)) {
+      // Task #799 — deliberately ambiguous q: matches BOTH cafe drafts.
+      send(
+        [
+          {
+            type: "tool_use",
+            id: `tu_${TAG}_e3`,
+            name: "submit_my_expense",
+            input: { q: "cafe" },
+          },
+        ],
+        "tool_use",
+      );
+      return;
+    }
     if (/45 aed taxi/i.test(promptText)) {
       send(
         [
@@ -639,6 +654,7 @@ async function postTurn(args: {
   prompt: string;
   sessionId?: string | null;
   continuesTurnId?: string | null;
+  disambigOptionId?: string | null;
 }): Promise<{ status: number; frames: Frame[]; turnId: string | null; sessionId: string | null }> {
   const res = await fetch(`${BASE}/cli/turn`, {
     method: "POST",
@@ -647,6 +663,7 @@ async function postTurn(args: {
       prompt: args.prompt,
       sessionId: args.sessionId ?? undefined,
       continuesTurnId: args.continuesTurnId ?? undefined,
+      disambigOptionId: args.disambigOptionId ?? undefined,
       timezone: "Asia/Dubai",
     }),
   });
@@ -1058,6 +1075,130 @@ try {
     check("E2: re-confirm after success replays", finalOf(c2.frames)?.data?.replay === true, finalOf(c2.frames)?.data);
     const rows2 = await db.select().from(atelierExpenses).where(eq(atelierExpenses.merchant, `City Taxi ${NT}`));
     check("E2: still exactly one expense row", rows2.length === 1, rows2.length);
+  }
+
+  // =====================================================================
+  // E3 — Task #799: deterministic disambiguation continuation.
+  // Two similar cafe drafts → ambiguous submit → needs_disambiguation
+  // (tool + field declared) → chip pick / ordinal reply resolve
+  // SERVER-SIDE (no model extraction); foreign ids rejected honestly.
+  // =====================================================================
+  {
+    // Second cafe draft so q:"cafe" is ambiguous (Marina Cafe from E1 +
+    // this Harbor Cafe row).
+    const harborId = `exp_${TAG}_harbor`;
+    await db.insert(atelierExpenses).values({
+      id: harborId,
+      orgId: ORG,
+      personId: EMP,
+      merchant: `Harbor Cafe ${NT}`,
+      category: "other",
+      amount: 80,
+      currency: "AED",
+      usdAmount: 22,
+      expenseDate: "2026-08-01",
+      status: "draft",
+      contextType: "bd",
+      captureSource: "manual",
+    } as any);
+
+    const askDisambig = async (label: string) => {
+      const t = await postTurn({ who: EMP, prompt: "submit my cafe expense" });
+      assertAlive(`${label}/ask`, t.frames);
+      const nd = [...t.frames].reverse().find((f) => f.event === "needs_disambiguation");
+      check(
+        `${label}: ambiguous submit pauses on needs_disambiguation with tool+field declared`,
+        nd?.data?.tool === "submit_my_expense" &&
+          nd?.data?.field === "expenseId" &&
+          Array.isArray(nd?.data?.options) &&
+          nd.data.options.length >= 2,
+        nd?.data ?? t.frames.map((f) => f.event),
+      );
+      return { ...t, options: (nd?.data?.options ?? []) as Array<{ id: string; label: string }> };
+    };
+    const pendingWriteOf = async (id: string) => {
+      const [row] = await db
+        .select({ pendingWrite: atelierCliTurns.pendingWrite, status: atelierCliTurns.status })
+        .from(atelierCliTurns)
+        .where(eq(atelierCliTurns.id, id))
+        .limit(1);
+      return row as { pendingWrite: any; status: string } | undefined;
+    };
+
+    // --- E3a: explicit chip pick (disambigOptionId) — the web/mobile path.
+    const a1 = await askDisambig("E3a");
+    const picked = a1.options.find((o) => o.id === harborId) ?? a1.options[0]!;
+    const a2 = await postTurn({
+      who: EMP,
+      prompt: `submit my cafe expense\n\n(Use the one called "${picked.label}" — id ${picked.id})`,
+      sessionId: a1.sessionId,
+      continuesTurnId: a1.turnId,
+      disambigOptionId: picked.id,
+    });
+    assertAlive("E3a/pick", a2.frames);
+    check(
+      "E3a: pick reruns the originating tool deterministically → confirmation",
+      a2.frames.some((f) => f.event === "needs_confirmation") &&
+        a2.frames.some((f) => f.event === "tool_call" && f.data?.continuation === true),
+      a2.frames.map((f) => f.event),
+    );
+    const pw = await pendingWriteOf(a2.turnId!);
+    check(
+      "E3a: confirmation pending input contains EXACTLY the chosen expenseId",
+      pw?.status === "awaiting_confirmation" && pw?.pendingWrite?.input?.expenseId === picked.id,
+      { status: pw?.status, input: pw?.pendingWrite?.input },
+    );
+
+    // --- E3b: typed ordinal reply ("the second one") resolves too.
+    const b1 = await askDisambig("E3b");
+    const b2 = await postTurn({
+      who: EMP,
+      prompt: "the second one",
+      sessionId: b1.sessionId,
+      continuesTurnId: b1.turnId,
+    });
+    assertAlive("E3b/ordinal", b2.frames);
+    const pwB = await pendingWriteOf(b2.turnId!);
+    check(
+      "E3b: ordinal reply resolves to options[1] server-side",
+      pwB?.pendingWrite?.input?.expenseId === b1.options[1]?.id,
+      { expected: b1.options[1]?.id, input: pwB?.pendingWrite?.input },
+    );
+
+    // --- E3c: a FOREIGN option id is rejected honestly (options re-shown,
+    // question stays pending), never guessed or handed to the model.
+    const c1 = await askDisambig("E3c");
+    const c2 = await postTurn({
+      who: EMP,
+      prompt: `id exp_${TAG}_not_an_option`,
+      sessionId: c1.sessionId,
+      continuesTurnId: c1.turnId,
+    });
+    assertAlive("E3c/foreign", c2.frames);
+    const ndC = [...c2.frames].reverse().find((f) => f.event === "needs_disambiguation");
+    check(
+      "E3c: foreign id → honest rejection, same options re-shown, no confirmation",
+      !!ndC &&
+        ndC.data?.rejected === `exp_${TAG}_not_an_option` &&
+        Array.isArray(ndC.data?.options) &&
+        ndC.data.options.length === c1.options.length &&
+        !c2.frames.some((f) => f.event === "needs_confirmation"),
+      ndC?.data ?? c2.frames.map((f) => f.event),
+    );
+    // The re-shown card is still answerable: a valid pick now lands.
+    const c3 = await postTurn({
+      who: EMP,
+      prompt: "the first one",
+      sessionId: c1.sessionId,
+      continuesTurnId: c2.turnId,
+    });
+    assertAlive("E3c/recover", c3.frames);
+    const pwC = await pendingWriteOf(c3.turnId!);
+    check(
+      "E3c: after rejection, a valid pick still resolves deterministically",
+      pwC?.pendingWrite?.input?.expenseId === c1.options[0]?.id,
+      { expected: c1.options[0]?.id, input: pwC?.pendingWrite?.input },
+    );
   }
   // =====================================================================
   // S8 — card budget: a read tool returning ok:false must NOT emit a

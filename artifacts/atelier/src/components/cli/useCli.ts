@@ -57,6 +57,13 @@ interface SubmitArgs {
    * so all missing fields resume in one round-trip.
    */
   clarificationValues?: Record<string, string> | null;
+  /**
+   * Task #799 — deterministic disambiguation pick: the chosen option id
+   * from a needs_disambiguation card. The server merges it into the
+   * pending disambiguation's declared field and re-runs the originating
+   * tool — no model extraction involved.
+   */
+  disambigOptionId?: string | null;
 }
 
 interface UseCliOptions {
@@ -370,6 +377,7 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
           intent: args.intent ?? null,
           continuesTurnId: args.continuesTurnId ?? null,
           clarificationValues: args.clarificationValues ?? null,
+          disambigOptionId: args.disambigOptionId ?? null,
           timezone: deviceTimeZone(),
         },
         clientTurnKey,
@@ -493,11 +501,16 @@ export function useCli(opts: UseCliOptions): UseCliReturn {
   const pickDisambig = useCallback(
     async (optionId: string, optionLabel: string): Promise<void> => {
       if (!current) return;
-      // Re-enter the loop with the chosen ID appended to the prompt.
-      // The orchestrator's resolver layer treats `the one with id <id>`
-      // as a deterministic match (Task #332).
+      // Task #799 — deterministic pick: send the chosen option id (and
+      // the source turn) so the server merges it into the pending
+      // disambiguation's declared field and re-runs the originating tool
+      // directly. The human-readable prompt is kept for transcript
+      // display and as the legacy fallback for envelopes without a
+      // declared field.
       await submit({
         prompt: `${current.prompt}\n\n(Use the one called "${optionLabel}" — id ${optionId})`,
+        continuesTurnId: current.serverTurnId ?? null,
+        disambigOptionId: optionId,
       });
     },
     [current, submit],

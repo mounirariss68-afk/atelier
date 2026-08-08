@@ -113,6 +113,7 @@ router.post("/cli/turn", async (req, res) => {
     reset?: boolean;
     continuesTurnId?: string | null;
     clarificationValues?: Record<string, unknown> | null;
+    disambigOptionId?: string | null;
     timezone?: string | null;
   };
   // Task #581 — device IANA timezone (validated downstream; bounded here).
@@ -209,6 +210,13 @@ router.post("/cli/turn", async (req, res) => {
             ? body.continuesTurnId
             : null,
         clarificationValues,
+        // Task #799 — deterministic disambiguation pick (chip tap).
+        disambigOptionId:
+          typeof body.disambigOptionId === "string" &&
+          body.disambigOptionId.length > 0 &&
+          body.disambigOptionId.length <= 200
+            ? body.disambigOptionId
+            : null,
       },
       { persona, emit: (f) => (closed ? undefined : emit(f)) },
     );

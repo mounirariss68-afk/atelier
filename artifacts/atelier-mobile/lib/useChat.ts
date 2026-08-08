@@ -258,7 +258,12 @@ export function useChat() {
   );
 
   const submit = useCallback(
-    async (prompt: string, attachments?: { id: string; name: string }[]) => {
+    async (
+      prompt: string,
+      attachments?: { id: string; name: string }[],
+      // Task #799 — deterministic disambiguation pick extras.
+      extra?: { continuesTurnId?: string | null; disambigOptionId?: string | null },
+    ) => {
       activityRef.current = true;
       const key = uuid();
       const seed: ChatTurn = {
@@ -280,6 +285,8 @@ export function useChat() {
           pageContext: null,
           dryRun: false,
           clientTurnKey: key,
+          continuesTurnId: extra?.continuesTurnId ?? undefined,
+          disambigOptionId: extra?.disambigOptionId ?? undefined,
           timezone: deviceTimeZone(),
         },
         key,
@@ -315,11 +322,13 @@ export function useChat() {
     [runStream, turns, upsert],
   );
 
-  // Task #567 — disambiguation pick: mirror the web client, which
-  // re-enters the loop with the chosen id appended to the original
-  // prompt (the resolver layer treats `id <id>` as a deterministic
-  // match). Submits as a NEW turn; the picked turn's options are
-  // cleared so the chips can't be tapped twice.
+  // Task #799 — disambiguation pick: send the chosen option id (and the
+  // source turn) so the server deterministically merges it into the
+  // pending disambiguation's declared field and re-runs the originating
+  // tool — no model extraction. The human-readable prompt is kept for
+  // transcript display and as the legacy fallback for envelopes without
+  // a declared field. Submits as a NEW turn; the picked turn's options
+  // are cleared so the chips can't be tapped twice.
   const pickDisambig = useCallback(
     async (key: string, optionId: string, optionLabel: string) => {
       const turn = turns.find((t) => t.key === key);
@@ -327,6 +336,8 @@ export function useChat() {
       upsert(key, (t) => ({ ...t, status: "complete", disambig: undefined }));
       await submit(
         `${turn.prompt}\n\n(Use the one called "${optionLabel}" — id ${optionId})`,
+        undefined,
+        { continuesTurnId: turn.serverTurnId ?? null, disambigOptionId: optionId },
       );
     },
     [submit, turns, upsert],

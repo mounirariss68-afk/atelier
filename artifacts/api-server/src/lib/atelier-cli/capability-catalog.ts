@@ -658,6 +658,22 @@ export interface SessionDraft {
     /** Multi-field clarification: every missing field being asked for. */
     fields?: Array<{ field: string; label: string; hint?: string }> | null;
   } | null;
+  /**
+   * Task #799 — first-class disambiguation continuation. When a tool
+   * emits `disambiguation` with a declared `field`, the orchestrator
+   * stores the originating tool + partial input here; the user's pick
+   * (chip tap or typed reply) is merged into `field` and the tool is
+   * re-run server-side — no model extraction involved.
+   */
+  pendingDisambiguation?: {
+    tool: string;
+    /** The tool-input field the picked option id fills. */
+    field: string;
+    kind: string;
+    options: Array<{ id: string; label: string }>;
+    partial: Record<string, unknown>;
+    originalPrompt: string;
+  } | null;
 }
 
 const SESSION_DRAFTS = new Map<string, SessionDraft>();

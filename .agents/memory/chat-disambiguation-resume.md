@@ -1,10 +1,19 @@
 ---
-name: Chat disambiguation resume is prompt-injected
-description: How disambiguation option picks flow back into tools (not deterministic), and what tools must emit.
+name: Chat disambiguation resume
+description: How needs_disambiguation option picks resolve — first-class deterministic continuation (mirrors clarification resume), no model extraction.
 ---
 
-The rule: `ToolResult.disambiguation` ends the turn (`needs_disambiguation`, status partial); the server does NOT map the pick back into tool input. Web/mobile chip taps submit a NEW turn with the original prompt plus `(Use the one called "<label>" — id <optionId>)`; the model re-calls the tool with the id. `disambiguation.field` is carried through SSE but ignored server-side.
+# Chat disambiguation resume (deterministic, first-class)
 
-**Why:** clarifications have a deterministic merge/resume path (clarification-resolver), disambiguations never did — every existing tool (delete_my_document, meeting tools, person tools, expense tools) relies on prompt-injected ids. An architect review of Task #787 flagged this as fragile (model-extraction dependent), but changing it is a protocol-level project, not a per-tool fix.
+Option picks after a `needs_disambiguation` turn are resolved **server-side, deterministically** — the model is never asked to extract the id.
 
-**How to apply:** when a tool emits disambiguation, make each option `id` the exact value the tool accepts as input (e.g. expenseId, documentId), so the injected `id <optionId>` lands correctly. isWrite tools must also set `data.navigateTo: null`. Don't expect resolver-style deterministic resume, and don't re-flag this per tool; a dedicated task exists to make resume deterministic platform-wide.
+**How it works**
+- When a tool returns `disambiguation` with a declared string `field` (e.g. `{ kind:"expense", field:"expenseId", options }`), the orchestrator records `pendingDisambiguation` (tool, field, kind, options, partial input, original prompt) in the session draft and enriches the frame with `tool`/`partial`/`turnId`. Envelopes **without** a `field` stay on the legacy model path — declare a field on any new emitter to get the deterministic path.
+- A pre-model-loop continuation block (mirroring the clarification resume) resolves the reply via: explicit `disambigOptionId` in the request body (chip taps on web+mobile send it with `continuesTurnId`), an `id <x>` token in the text (legacy client format — still deterministic), a bare option id, ordinals ("the second one", TR/AR forms via `parseOrdinalChoice`), or a unique label match (`matchOption`). On match it merges `{[field]: id}` into the partial and re-runs the tool, handling every envelope (confirmation/clarification/nested disambiguation/refusal/ok/error) and retiring the source turn.
+- **Foreign/unknown option replies are rejected honestly**: options re-shown on the new turn (frame carries `rejected`), pending kept, never guessed or handed to the model.
+- Non-option replies clear the pending state and fall through to normal orchestration (supersession).
+- Rehydration works across restarts: explicit `continuesTurnId` or recency fallback reads the `needs_disambiguation` frame off the prior `partial`-status turn row (`disambigSpecFromFrames`).
+
+**Why:** prompt-injected `(Use the one called "X" — id Y)` relied on model extraction — flagged as the weakest link in every disambiguation flow.
+
+**How to apply:** new disambiguation emitters must set option `id` to the exact tool-input value AND declare `field`; new client surfaces should send `disambigOptionId` + `continuesTurnId` on pick. Regression coverage: conversation-probe E3 (chip pick / ordinal / foreign-id rejection).

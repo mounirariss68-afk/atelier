@@ -139,6 +139,8 @@ import { stripLocalePreamble } from "./locale.js";
 import { normalizeLocationAnswer, normalizeTimeInput } from "./chat-normalizers.js";
 import {
   clarificationResolverMode,
+  matchOption,
+  parseOrdinalChoice,
   resolveClarificationReply,
   resolveWithModel,
   type FactRow,
@@ -252,6 +254,15 @@ export interface RunTurnInput {
    * clarification actually asked for.
    */
   clarificationValues?: Record<string, string> | null;
+  /**
+   * Task #799 — deterministic disambiguation pick. When the client taps
+   * an option chip after a `needs_disambiguation` frame, it sends the
+   * chosen option id here (alongside the human-readable prompt). The
+   * orchestrator merges the id into the pending disambiguation's
+   * declared field and re-runs the originating tool server-side — no
+   * model extraction involved.
+   */
+  disambigOptionId?: string | null;
   /** Two-phase confirm: when set, replays the saved pendingWrite. */
   confirmTurnId?: string | null;
   /**
@@ -2733,6 +2744,147 @@ export function isClarificationResumable(
   );
 }
 
+// ---------------------------------------------------------------------
+// Task #799 — deterministic disambiguation continuation helpers.
+// ---------------------------------------------------------------------
+
+export interface PendingDisambigSpec {
+  tool: string;
+  field: string;
+  kind: string;
+  options: Array<{ id: string; label: string }>;
+  partial: Record<string, unknown>;
+  originalPrompt: string;
+}
+
+/**
+ * Extract a resumable disambiguation spec from a persisted frames array.
+ * Only frames that carry the Task #799 continuation payload (tool +
+ * declared field + string-id options) are resumable; legacy frames
+ * without it fall back to the prompt-injected model path.
+ */
+export function disambigSpecFromFrames(
+  frames: unknown,
+  originalPrompt: string,
+): PendingDisambigSpec | null {
+  if (!Array.isArray(frames)) return null;
+  const nd = [...frames]
+    .reverse()
+    .find((f) => (f as { type?: string } | null)?.type === "needs_disambiguation");
+  const d = (nd as { data?: Record<string, unknown> } | undefined)?.data;
+  if (!d || typeof d.tool !== "string" || typeof d.field !== "string") return null;
+  const rawOpts = Array.isArray(d.options) ? d.options : [];
+  const options: Array<{ id: string; label: string }> = [];
+  for (const o of rawOpts) {
+    const oo = o as Record<string, unknown> | null;
+    if (oo && typeof oo.id === "string" && oo.id) {
+      options.push({ id: oo.id, label: typeof oo.label === "string" ? oo.label : oo.id });
+    }
+  }
+  if (options.length === 0) return null;
+  return {
+    tool: d.tool,
+    field: d.field,
+    kind: typeof d.kind === "string" ? d.kind : "choice",
+    options,
+    partial:
+      d.partial && typeof d.partial === "object"
+        ? (d.partial as Record<string, unknown>)
+        : {},
+    originalPrompt,
+  };
+}
+
+/** Keep only options with usable string ids (label falls back to id). */
+export function sanitizeDisambigOptions(
+  raw: Array<Record<string, unknown>> | null | undefined,
+): Array<{ id: string; label: string }> {
+  const out: Array<{ id: string; label: string }> = [];
+  for (const o of raw ?? []) {
+    if (o && typeof o.id === "string" && o.id) {
+      out.push({ id: o.id, label: typeof o.label === "string" ? o.label : o.id });
+    }
+  }
+  return out;
+}
+
+/** Statuses under which an asked disambiguation is still pickable. */
+export function isDisambiguationResumable(
+  status: string | null | undefined,
+  frames: unknown,
+): boolean {
+  return (
+    (status === "partial" || status === "error") &&
+    Array.isArray(frames) &&
+    frames.some((f) => (f as { type?: string } | null)?.type === "needs_disambiguation")
+  );
+}
+
+export type DisambigPickOutcome =
+  /** A declared option was picked — merge `id` into the field and re-run. */
+  | { kind: "pick"; id: string; via: string }
+  /** The reply names an option that is NOT in the offered set. */
+  | { kind: "foreign"; token: string }
+  /** Explicit cancel of the pending question. */
+  | { kind: "cancel" }
+  /** Not an option reply — normal orchestration (question superseded). */
+  | { kind: "pass" };
+
+/**
+ * Resolve a user reply (or an explicit client pick) against a pending
+ * disambiguation's options. Pure and deterministic. Accepts:
+ * - explicit option id from the client chip tap,
+ * - "id <x>" / "— id <x>" (the legacy prompt-injected format),
+ * - a bare option id,
+ * - ordinals ("the second one", "2", "ikinci", "الثاني"),
+ * - unique label matches.
+ * Foreign ids / out-of-range ordinals are rejected honestly instead of
+ * being guessed at.
+ */
+export function resolveDisambigPick(args: {
+  reply: string;
+  explicitId?: string | null;
+  options: Array<{ id: string; label: string }>;
+}): DisambigPickOutcome {
+  const { options } = args;
+  const ids = new Set(options.map((o) => o.id));
+  if (typeof args.explicitId === "string" && args.explicitId.length > 0) {
+    return ids.has(args.explicitId)
+      ? { kind: "pick", id: args.explicitId, via: "explicit" }
+      : { kind: "foreign", token: args.explicitId };
+  }
+  const reply = (args.reply ?? "").trim();
+  if (!reply) return { kind: "pass" };
+  if (normalizeControlIntent(reply) === "cancel") return { kind: "cancel" };
+
+  // Legacy/prompt formats: "… — id <x>", "id <x>", "the one with id <x>".
+  const idTok = reply.match(/\bid[:\s]+([A-Za-z0-9_.:\-]+)/i)?.[1];
+  if (idTok) {
+    const cleaned = idTok.replace(/[).,;»"']+$/g, "");
+    return ids.has(cleaned)
+      ? { kind: "pick", id: cleaned, via: "id_token" }
+      : { kind: "foreign", token: cleaned };
+  }
+  // Bare option id typed/pasted verbatim.
+  if (ids.has(reply)) return { kind: "pick", id: reply, via: "bare_id" };
+
+  // A reply that is a single-line, short option reference: ordinal or label.
+  if (!/[\r\n]/.test(reply) && reply.length <= 120) {
+    const ord = parseOrdinalChoice(reply, options.length);
+    if (ord !== null) return { kind: "pick", id: options[ord]!.id, via: "ordinal" };
+    // Explicit but out-of-range "option N" → honest rejection.
+    if (/^(the\s+)?(option|number|no\.?|#)\s*\d{1,3}$/i.test(reply)) {
+      return { kind: "foreign", token: reply };
+    }
+    const label = matchOption(reply, options.map((o) => o.label));
+    if (label) {
+      const hit = options.find((o) => o.label === label);
+      if (hit) return { kind: "pick", id: hit.id, via: "label" };
+    }
+  }
+  return { kind: "pass" };
+}
+
 export interface RunTurnDeps {
   persona: CliPersona;
   emit: (frame: CliFrame) => void;
@@ -3091,6 +3243,20 @@ export async function runTurn(
     // otherwise the new prompt supersedes the question and runs normal
     // orchestration, so unrelated requests are never hijacked.
     let explicitContinuation = false;
+    // Task #799 — source turn of a resumable disambiguation, retired once
+    // the pick is consumed (mirrors pendingSourceTurnId for clarifications).
+    let pendingDisambigSourceTurnId: string | null = null;
+    const rehydrateDisambigFromTurnRow = (row: {
+      id: string;
+      prompt: string;
+      frames: unknown;
+    }): boolean => {
+      const spec = disambigSpecFromFrames(row.frames, row.prompt);
+      if (!spec) return false;
+      getSessionDraft(session.id).pendingDisambiguation = spec;
+      pendingDisambigSourceTurnId = row.id;
+      return true;
+    };
     const rehydrateFromTurnRow = (row: {
       id: string;
       prompt: string;
@@ -3157,6 +3323,16 @@ export async function runTurn(
         } else if (
           contTurn &&
           contTurn.userId === persona.id &&
+          contTurn.orgId === persona.orgId &&
+          isDisambiguationResumable(contTurn.status, contTurn.frames) &&
+          rehydrateDisambigFromTurnRow(contTurn)
+        ) {
+          // Task #799 — the answered card was a disambiguation. The pick
+          // is consumed deterministically by the continuation block below.
+          explicitContinuation = true;
+        } else if (
+          contTurn &&
+          contTurn.userId === persona.id &&
           contTurn.orgId === persona.orgId
         ) {
           // Task #740 — exactly-once consumption: the named question was
@@ -3200,6 +3376,15 @@ export async function runTurn(
         // answerable by recency.
         if (prevTurn && isClarificationResumable(prevTurn.status, prevTurn.frames)) {
           rehydrateFromTurnRow(prevTurn);
+        } else if (
+          // Task #799 — a typed reply right after a disambiguation card
+          // ("the second one", a pasted id) resumes it by recency too,
+          // even across a server restart.
+          prevTurn &&
+          !getSessionDraft(session.id).pendingDisambiguation &&
+          isDisambiguationResumable(prevTurn.status, prevTurn.frames)
+        ) {
+          rehydrateDisambigFromTurnRow(prevTurn);
         }
       } else if (_drRehydrate.pendingClarification && !pendingSourceTurnId) {
         // In-memory pending (no restart happened). Find its source turn
@@ -3217,6 +3402,32 @@ export async function runTurn(
           .orderBy(desc(atelierCliTurns.createdAt))
           .limit(1);
         if (prevTurn) pendingSourceTurnId = prevTurn.id;
+      }
+      // Task #799 — in-memory pending disambiguation (no restart): find
+      // its source turn so the pick can retire it below.
+      if (
+        getSessionDraft(session.id).pendingDisambiguation &&
+        !pendingDisambigSourceTurnId
+      ) {
+        const [prevDis] = await db
+          .select({
+            id: atelierCliTurns.id,
+            status: atelierCliTurns.status,
+            frames: atelierCliTurns.frames,
+          })
+          .from(atelierCliTurns)
+          .where(
+            and(
+              eq(atelierCliTurns.sessionId, session.id),
+              ne(atelierCliTurns.id, turnId),
+              eq(atelierCliTurns.status, "partial"),
+            ),
+          )
+          .orderBy(desc(atelierCliTurns.createdAt))
+          .limit(1);
+        if (prevDis && isDisambiguationResumable(prevDis.status, prevDis.frames)) {
+          pendingDisambigSourceTurnId = prevDis.id;
+        }
       }
     }
     // Apply the continuation gate: without an explicit `continuesTurnId`,
@@ -3826,13 +4037,288 @@ export async function runTurn(
     }
 
     try {
+    // Task #799 — DETERMINISTIC disambiguation continuation. Runs BEFORE
+    // the clarification continuation and the model loop: when a prior
+    // turn paused on `needs_disambiguation` (with a declared field), the
+    // user's pick — chip tap (explicit optionId), pasted/typed id,
+    // ordinal, or unique label — is merged into the declared field and
+    // the originating tool is re-run server-side. Foreign/unknown option
+    // replies are rejected honestly (options re-shown, pending kept).
+    // Anything that isn't an option reply falls through to normal
+    // orchestration (the question is superseded).
+    if (_draft.pendingDisambiguation && !_draft.pendingClarification) {
+      const pd = _draft.pendingDisambiguation;
+      const reply = stripLocalePreamble(input.prompt ?? "");
+      const pick = resolveDisambigPick({
+        reply,
+        explicitId: input.disambigOptionId ?? null,
+        options: pd.options,
+      });
+      console.log(
+        `[cli-telemetry] ${JSON.stringify({
+          evt: "disambiguation_resumed",
+          turnId,
+          tool: pd.tool,
+          field: pd.field,
+          outcome: pick.kind,
+          via: pick.kind === "pick" ? pick.via : undefined,
+        })}`,
+      );
+      const retireSource = async (message: string) => {
+        if (pendingDisambigSourceTurnId && pendingDisambigSourceTurnId !== turnId) {
+          await db
+            .update(atelierCliTurns)
+            .set({ status: "cancelled", statusMessage: message })
+            .where(
+              and(
+                eq(atelierCliTurns.id, pendingDisambigSourceTurnId),
+                inArray(atelierCliTurns.status, ["partial", "error"]),
+              ),
+            );
+        }
+      };
+      if (pick.kind === "cancel") {
+        getSessionDraft(session.id).pendingDisambiguation = null;
+        record({
+          type: "narration",
+          data: {
+            text: "Okay — I've dropped that choice. What would you like to do instead?",
+            step: 0,
+          },
+        });
+        status = "success";
+        clarificationHandled = true;
+        await retireSource(`cancelled by user in turn ${turnId}`);
+      } else if (pick.kind === "foreign") {
+        // Honest rejection: the reply names something that is NOT one of
+        // the offered options. Re-show the options and keep the question
+        // pending — never guess, never hand the reply to the model.
+        record({
+          type: "narration",
+          data: {
+            text: "That doesn't match any of the options I offered — please pick one of these.",
+            step: 0,
+          },
+        });
+        record({
+          type: "needs_disambiguation",
+          data: {
+            step: 0,
+            kind: pd.kind,
+            options: pd.options,
+            field: pd.field,
+            tool: pd.tool,
+            partial: pd.partial,
+            turnId,
+            continuation: true,
+            rejected: pick.token,
+          },
+        });
+        status = "partial";
+        clarificationHandled = true;
+        // The re-shown card lives on THIS turn now; retire the old source
+        // so recency-based rehydration resumes from the newest card.
+        await retireSource(`superseded by re-shown options in turn ${turnId}`);
+      } else if (pick.kind === "pick") {
+        const tool = findToolByName(pd.tool, persona);
+        if (!tool) {
+          // Tool no longer registered — drop the pending state and let
+          // normal orchestration (and its honest refusal paths) handle it.
+          getSessionDraft(session.id).pendingDisambiguation = null;
+        } else {
+          const mergedInput: Record<string, unknown> = {
+            ...(pd.partial ?? {}),
+            [pd.field]: pick.id,
+          };
+          const ctx0: ToolContext = {
+            persona,
+            turnId,
+            sessionId: session.id,
+            timezone: turnTz,
+            stepIdx: 0,
+            progress: (pct, message, data) =>
+              record({ type: "progress", data: { pct, message, ...(data ?? {}) } }),
+          };
+          record({
+            type: "tool_call",
+            data: { step: 0, tool: pd.tool, input: mergedInput, continuation: true },
+          });
+          let cont: ToolResult;
+          try {
+            cont = await runWithProgressSink(
+              (pct, message, data) => ctx0.progress?.(pct, message, data),
+              () => tool.run(mergedInput, ctx0),
+            );
+          } catch (err) {
+            cont = {
+              ok: false,
+              errorCode: "internal",
+              errorMessage: err instanceof Error ? err.message : String(err),
+            };
+          }
+          toolCalls.push({
+            step: 0,
+            tool: pd.tool,
+            input: mergedInput,
+            ok: cont.ok,
+            errorCode: cont.errorCode,
+            continuation: true,
+            ms: Date.now() - t0,
+          });
+          stepResults.push({
+            stepIdx: 0,
+            tool: pd.tool,
+            ok: cont.ok,
+            errorCode: cont.errorCode,
+          });
+          record({
+            type: "tool_result",
+            data: {
+              step: 0,
+              tool: pd.tool,
+              ok: cont.ok,
+              data: cont.data,
+              errorCode: cont.errorCode,
+              errorMessage: cont.errorMessage,
+              continuation: true,
+            },
+          });
+          if (cont.ok) {
+            ingestEntitiesFromToolResult(session.id, pd.tool, cont.data);
+            recordSessionResult(session.id, { lastTurnId: turnId });
+            ingestSessionFacts({
+              orgId: persona.orgId,
+              userId: persona.id,
+              sessionId: session.id,
+              turnId,
+              tool: pd.tool,
+              input: mergedInput,
+              data: cont.data,
+              source: "clarification",
+            });
+          }
+          // The pick was consumed — clear pending on every outcome except
+          // a re-pause (a NEW disambiguation/clarification below records
+          // its own fresh pending state).
+          getSessionDraft(session.id).pendingDisambiguation = null;
+          if (cont.clarification) {
+            const cl = cont.clarification;
+            recordSessionResult(session.id, {
+              pendingClarification: {
+                field: cl.field,
+                question: cl.question,
+                originalPrompt: pd.originalPrompt,
+                partial: cl.partial ?? mergedInput,
+                tool: cl.tool,
+                fields: cl.fields ?? null,
+              },
+            });
+            record({
+              type: "needs_clarification",
+              data: {
+                step: 0,
+                field: cl.field,
+                question: cl.question,
+                tool: cl.tool,
+                partial: cl.partial ?? mergedInput,
+                suggestions: cl.suggestions ?? [],
+                fields: cl.fields ?? [],
+                continuation: true,
+                turnId,
+              },
+            });
+            status = "awaiting_clarification";
+          } else if (cont.confirmation) {
+            const conf = cont.confirmation;
+            pendingWrite = conf.pending;
+            record({
+              type: "needs_confirmation",
+              data: {
+                step: 0,
+                tool: pd.tool,
+                summary: conf.summary,
+                diff: conf.diff,
+                continuation: true,
+              },
+            });
+            status = "awaiting_confirmation";
+          } else if (cont.disambiguation) {
+            // Narrowed but still ambiguous — re-pause with the new set.
+            const nd = cont.disambiguation as {
+              kind: string;
+              field?: string;
+              options: Array<Record<string, unknown>>;
+            };
+            const ndField = typeof nd.field === "string" && nd.field ? nd.field : pd.field;
+            recordSessionResult(session.id, {
+              pendingDisambiguation: {
+                tool: pd.tool,
+                field: ndField,
+                kind: nd.kind,
+                options: sanitizeDisambigOptions(nd.options),
+                partial: mergedInput,
+                originalPrompt: pd.originalPrompt,
+              },
+            });
+            record({
+              type: "needs_disambiguation",
+              data: {
+                ...nd,
+                step: 0,
+                field: ndField,
+                tool: pd.tool,
+                partial: mergedInput,
+                turnId,
+                continuation: true,
+              },
+            });
+            status = "partial";
+          } else if (cont.refusal) {
+            record({
+              type: "refusal",
+              data: {
+                step: 0,
+                reason: scrubToolIdentifiers(cont.refusal.reason) ?? cont.refusal.reason,
+                closestCapabilityId: cont.refusal.closestCapabilityId ?? null,
+                pageHref: cont.refusal.pageHref ?? null,
+                suggestion: scrubToolIdentifiers(cont.refusal.suggestion ?? null),
+                requestCapability: { tool: "request_feature", prompt: input.prompt },
+              },
+            });
+            status = "success";
+          } else if (cont.ok) {
+            status = "success";
+          } else {
+            record({
+              type: "error",
+              data: {
+                code: cont.errorCode ?? "tool_error",
+                message: cont.errorMessage ?? "continuation tool failed",
+              },
+            });
+            status = "error";
+            runtimeError = cont.errorMessage ?? cont.errorCode ?? "tool_error";
+          }
+          clarificationHandled = true;
+          await retireSource(
+            status === "partial"
+              ? `superseded by follow-up options in turn ${turnId}`
+              : `resolved by disambiguation pick in turn ${turnId}`,
+          );
+        }
+      } else {
+        // Not an option reply — the new prompt supersedes the question.
+        getSessionDraft(session.id).pendingDisambiguation = null;
+      }
+    }
     // Task #340 — DETERMINISTIC clarification continuation. Run BEFORE
     // the model loop so a missing-field follow-up is collected
     // server-side without depending on model compliance. If the
     // originating tool re-runs successfully (or transitions into
     // confirmation/clarification/refusal), we emit canonical frames
-    // and skip the Claude loop entirely.
-    if (_draft.pendingClarification) {
+    // and skip the Claude loop entirely. (Task #799 — skipped when the
+    // disambiguation continuation above already consumed this prompt.)
+    if (_draft.pendingClarification && !clarificationHandled) {
       const pc = _draft.pendingClarification;
       // Task #741 — normalized control intent bound to the pending
       // clarification. "cancel" deterministically clears the pending
@@ -4151,6 +4637,40 @@ export async function runTurn(
             },
           });
           status = "awaiting_confirmation";
+        } else if (cont.disambiguation) {
+          // Task #799 — the clarified input is now ambiguous ("which
+          // one?"). Pause on a first-class disambiguation so the pick
+          // resumes deterministically instead of being dropped.
+          const nd = cont.disambiguation as {
+            kind: string;
+            field?: string;
+            options: Array<Record<string, unknown>>;
+          };
+          const ndOptions = sanitizeDisambigOptions(nd.options);
+          if (typeof nd.field === "string" && nd.field && ndOptions.length > 0) {
+            recordSessionResult(session.id, {
+              pendingDisambiguation: {
+                tool: pc.tool,
+                field: nd.field,
+                kind: nd.kind,
+                options: ndOptions,
+                partial: mergedInput,
+                originalPrompt: pc.originalPrompt,
+              },
+            });
+          }
+          record({
+            type: "needs_disambiguation",
+            data: {
+              ...nd,
+              step: 0,
+              tool: pc.tool,
+              partial: mergedInput,
+              turnId,
+              continuation: true,
+            },
+          });
+          status = "partial";
         } else if (cont.refusal) {
           record({
             type: "refusal",
@@ -4849,10 +5369,14 @@ export async function runTurn(
             });
           }
         }
-        // Clear pending clarification if the originating tool just ran.
+        // Clear pending clarification/disambiguation if the originating
+        // tool just ran.
         const dr = getSessionDraft(session.id);
         if (dr.pendingClarification && dr.pendingClarification.tool === tc.name) {
           dr.pendingClarification = null;
+        }
+        if (dr.pendingDisambiguation && dr.pendingDisambiguation.tool === tc.name) {
+          dr.pendingDisambiguation = null;
         }
       }
 
@@ -4906,9 +5430,34 @@ export async function runTurn(
       }
 
       if (toolResult.disambiguation) {
+        // Task #799 — first-class continuation: store the originating
+        // tool + partial input + declared field so the user's pick is
+        // merged and re-run deterministically (no model extraction).
+        // Envelopes without a declared `field` stay on the legacy
+        // prompt-injected path.
+        const disField = (toolResult.disambiguation as { field?: unknown }).field;
+        const disOptions = sanitizeDisambigOptions(toolResult.disambiguation.options);
+        if (typeof disField === "string" && disField && disOptions.length > 0) {
+          recordSessionResult(session.id, {
+            pendingDisambiguation: {
+              tool: tc.name,
+              field: disField,
+              kind: toolResult.disambiguation.kind,
+              options: disOptions,
+              partial: (tc.input ?? {}) as Record<string, unknown>,
+              originalPrompt: input.prompt,
+            },
+          });
+        }
         record({
           type: "needs_disambiguation",
-          data: { ...toolResult.disambiguation, step },
+          data: {
+            ...toolResult.disambiguation,
+            step,
+            tool: tc.name,
+            partial: (tc.input ?? {}) as Record<string, unknown>,
+            turnId,
+          },
         });
         status = "partial";
         break;
