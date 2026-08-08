@@ -840,16 +840,19 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "wallet",
   toolName: "wallet_dunning_record_promise",
-  description: "Record a promise-to-pay on an invoice (promisedAmount, promisedDate, contactName).",
+  description:
+    "Record a promise-to-pay on an invoice (promisedAmount, promisedDate, contactName). Identify the invoice by invoiceId, or by free text (q) — invoice number or client/account name, e.g. \"log a promise to pay from Acme, 50k by June 15\".",
   slashAliases: { en: ["/p2p", "/promise"] },
   inputSchema: {
     type: "object",
     properties: {
-      invoiceId: { type: "string" }, promisedAmount: { type: "number" },
+      invoiceId: { type: "string" },
+      q: { type: "string", description: "Invoice number or client/account name when no id is known." },
+      promisedAmount: { type: "number" },
       promisedDate: { type: "string" }, contactName: { type: "string" },
       confirm: { type: "boolean" },
     },
-    required: ["invoiceId", "promisedAmount", "promisedDate"],
+    required: ["promisedAmount", "promisedDate"],
   },
   isWrite: true,
   twoPhaseConfirm: true,
@@ -861,14 +864,58 @@ defineCapability({
   async run(input, ctx) {
     const denied = denyRestricted(ctx.persona);
     if (denied) return denied;
-    const invoiceId = String(input.invoiceId ?? "");
     const promisedAmount = Number(input.promisedAmount ?? 0);
     const promisedDate = String(input.promisedDate ?? "");
     if (!(promisedAmount > 0) || !promisedDate) return denyInvalid("promisedAmount and promisedDate required.");
+    // Task #803 — resolve by id or by free text (invoice number / client
+    // name) with ranked disambiguation and friendly misses (same contract
+    // as wallet.dunning.send_next).
+    let invoiceId = input.invoiceId ? String(input.invoiceId) : "";
+    const q = typeof input.q === "string" ? input.q.trim() : "";
+    if (!invoiceId && q) {
+      const resolved = await resolveDunnableInvoiceByText(q, ctx.persona.orgId);
+      if (resolved.outcome === "ambiguous") {
+        return {
+          ok: true,
+          data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+          disambiguation: { kind: "invoice", field: "invoiceId", options: resolved.options },
+        };
+      }
+      if (resolved.outcome === "not_found") {
+        if (resolved.options && resolved.options.length > 0) {
+          return {
+            ok: true,
+            data: { prompt: resolved.message, options: resolved.options, navigateTo: null },
+            disambiguation: { kind: "invoice", field: "invoiceId", options: resolved.options },
+          };
+        }
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `${resolved.message} Say "what's the next collections action?" to see the overdue list.`,
+        };
+      }
+      invoiceId = resolved.row.id;
+    }
+    if (!invoiceId) {
+      return {
+        ok: false,
+        errorCode: "invalid_body",
+        errorMessage:
+          'Tell me which invoice — an invoice number or the client\'s name, e.g. "log a promise to pay from Acme, 50k by June 15".',
+      };
+    }
     const [inv] = await db.select().from(atelierInvoice).where(
       and(eq(atelierInvoice.id, invoiceId), eq(atelierInvoice.orgId, ctx.persona.orgId), isNull(atelierInvoice.deletedAt)),
     );
-    if (!inv) return { ok: false, errorCode: "not_found", errorMessage: "Invoice not found." };
+    if (!inv) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage:
+          "I couldn't find that invoice — it may have been paid or removed. Say \"what's the next collections action?\" to see the current overdue list.",
+      };
+    }
     if (input.confirm !== true) {
       return {
         ok: true,
@@ -876,7 +923,7 @@ defineCapability({
           summary: `Promise-to-pay on ${inv.invoiceNumber ?? inv.id} — ${promisedAmount} by ${promisedDate}`,
           steps: [{ label: "Record promise", isWrite: true }],
         },
-        data: { preview: input },
+        data: { preview: { ...input, invoiceId } },
       };
     }
     const id = rid("p2p");

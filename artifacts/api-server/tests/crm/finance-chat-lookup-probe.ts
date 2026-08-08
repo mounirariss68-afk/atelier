@@ -17,6 +17,10 @@
  *      disambiguation on accountId; unique name → row created with the
  *      resolved accountId.
  *   7. ACL parity: restricted persona still refused on dunning verbs.
+ *   8. Task #803 — wallet_dunning_record_promise accepts free text (q):
+ *      unique client name → two-phase confirm on the right invoice;
+ *      ambiguous → ranked disambiguation on invoiceId with navigateTo:null;
+ *      miss → friendly copy; no id/q → friendly ask; restricted denied.
  *
  * Run: NODE_ENV=test pnpm exec tsx tests/crm/finance-chat-lookup-probe.ts
  */
@@ -41,7 +45,7 @@ async function main() {
   const {
     db, pool, atelierUsers, atelierAccounts, atelierInvoice,
     atelierDunningLadder, atelierOpportunities, atelierWinLossDebriefs,
-    atelierRenewal, atelierDunningEvent,
+    atelierRenewal, atelierDunningEvent, atelierPromiseToPay,
   } = D;
   const { eq, inArray } = await import("drizzle-orm");
   await import("../../src/lib/atelier-cli/l2c-wave3-capabilities.js");
@@ -265,9 +269,62 @@ async function main() {
       denied?.ok === false && !JSON.stringify(denied).includes(IDS.inv1),
       JSON.stringify(denied).slice(0, 200),
     );
+
+    // 8 — Task #803: record_promise by client name (no raw invoiceId)
+    const p2p = findByToolName("wallet_dunning_record_promise")!;
+    const pUniq: any = await p2p.run({ q: "Tasama", promisedAmount: 50000, promisedDate: "2026-06-15" }, ctx);
+    check(
+      "803: promise by unique client name → confirm preview on the right invoice",
+      pUniq?.ok === true && !!pUniq?.confirmation && JSON.stringify(pUniq).includes(`INV-${TAG}-001`),
+      JSON.stringify(pUniq).slice(0, 300),
+    );
+    const pAmb: any = await p2p.run({ q: "Tadawul", promisedAmount: 1000, promisedDate: "2026-06-15" }, ctx);
+    const pOpts = pAmb?.disambiguation?.options ?? [];
+    check(
+      "803: promise ambiguous client → ranked disambiguation on invoiceId, navigateTo:null",
+      pAmb?.ok === true &&
+        pAmb?.disambiguation?.field === "invoiceId" &&
+        pOpts.length === 2 &&
+        pOpts.every((o: any) => [IDS.inv2, IDS.inv3].includes(o.id)) &&
+        pAmb?.data?.navigateTo === null,
+      JSON.stringify(pAmb).slice(0, 300),
+    );
+    const pTypo: any = await p2p.run({ q: "Tasma", promisedAmount: 1000, promisedDate: "2026-06-15" }, ctx);
+    check(
+      "803: promise near-miss name → did-you-mean candidates, no write",
+      pTypo?.ok === true && (pTypo?.disambiguation?.options ?? []).some((o: any) => o.id === IDS.inv1) && pTypo?.data?.navigateTo === null,
+      JSON.stringify(pTypo).slice(0, 300),
+    );
+    const pMiss: any = await p2p.run({ q: "Zzquine Industries", promisedAmount: 1000, promisedDate: "2026-06-15" }, ctx);
+    check(
+      "803: promise unknown client → friendly miss with a next step",
+      pMiss?.ok === false && /collections action|invoice/i.test(String(pMiss?.errorMessage ?? "")) && !/not_found|not-found/.test(String(pMiss?.errorMessage ?? "")),
+      JSON.stringify(pMiss).slice(0, 300),
+    );
+    const pAskWhich: any = await p2p.run({ promisedAmount: 1000, promisedDate: "2026-06-15" }, ctx);
+    check(
+      "803: promise without id or name → friendly ask",
+      pAskWhich?.ok === false && /which invoice|client/i.test(String(pAskWhich?.errorMessage ?? "")),
+      JSON.stringify(pAskWhich).slice(0, 200),
+    );
+    // Two-phase commit still works end-to-end via the resolved invoice.
+    const pCommit: any = await p2p.run({ q: "Tasama", promisedAmount: 50000, promisedDate: "2026-06-15", confirm: true }, ctx);
+    check(
+      "803: promise confirm=true commits on the resolved invoice",
+      pCommit?.ok === true && pCommit?.data?.navigateTo?.path === `/wallet/invoices/${IDS.inv1}` &&
+        (pCommit?.data?.promises ?? []).some((p: any) => p.promisedAmount === 50000),
+      JSON.stringify(pCommit).slice(0, 300),
+    );
+    const pDenied: any = await p2p.run({ q: "Tasama", promisedAmount: 1000, promisedDate: "2026-06-15" }, restricted);
+    check(
+      "803: restricted persona still refused on record_promise",
+      pDenied?.ok === false && !JSON.stringify(pDenied).includes(IDS.inv1),
+      JSON.stringify(pDenied).slice(0, 200),
+    );
   } finally {
     try {
       await db.delete(atelierDunningEvent).where(inArray(atelierDunningEvent.invoiceId, [IDS.inv1, IDS.inv2, IDS.inv3, IDS.inv4]));
+      await db.delete(atelierPromiseToPay).where(inArray(atelierPromiseToPay.invoiceId, [IDS.inv1, IDS.inv2, IDS.inv3, IDS.inv4]));
       if (created.renewals.length) await db.delete(atelierRenewal).where(inArray(atelierRenewal.id, created.renewals));
       await db.delete(atelierInvoice).where(inArray(atelierInvoice.id, [IDS.inv1, IDS.inv2, IDS.inv3, IDS.inv4, ...created.invoices]));
       await db.delete(atelierDunningLadder).where(eq(atelierDunningLadder.id, IDS.ladder));
