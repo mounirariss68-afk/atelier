@@ -1615,8 +1615,10 @@ defineSelfWriteCapability({
       data: {
         ...chatDocWire(doc),
         label: title,
-        href: "/me/documents",
-        navigateTo: { path: "/me/documents", when: "on_commit" as const },
+        // Task #785 — personal documents live under Me → Profile; the old
+        // /me/documents path 404-bounced on web and mobile.
+        href: "/me/profile",
+        navigateTo: { path: "/me/profile", when: "on_commit" as const },
       },
     };
   },
@@ -1667,10 +1669,45 @@ defineSelfWriteCapability({
         ),
       );
     if (!doc || doc.kind === "profile_photo" || doc.kind === "biography") {
+      // Task #785 — friendly miss: offer the caller's own documents as
+      // candidates (self-scoped, so there is nothing to leak) instead of
+      // a terse dead-end code.
+      const own = await db
+        .select({
+          id: atelierPersonDocuments.id,
+          title: atelierPersonDocuments.title,
+          kind: atelierPersonDocuments.kind,
+        })
+        .from(atelierPersonDocuments)
+        .where(
+          and(
+            eq(atelierPersonDocuments.personType, person.workerType),
+            eq(atelierPersonDocuments.personId, person.id),
+            isNull(atelierPersonDocuments.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierPersonDocuments.uploadedAt));
+      const options = own
+        .filter((d) => d.kind !== "profile_photo" && d.kind !== "biography")
+        .slice(0, 6)
+        .map((d) => ({ id: d.id, label: d.title, secondary: d.kind }));
+      if (options.length > 0) {
+        return {
+          ok: true,
+          data: {
+            prompt:
+              "I couldn't find that document on your record — did you mean one of these?",
+            options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "document", field: "documentId", options },
+        };
+      }
       return {
         ok: false,
-        errorCode: "doc_not_found",
-        errorMessage: "That document was not found on your record.",
+        errorCode: "not_found",
+        errorMessage:
+          "I couldn't find that document on your record — you don't have any personal documents saved yet. You can add one from Me → Profile or by attaching it here.",
       };
     }
     if (input.confirm !== true) {
@@ -1703,8 +1740,9 @@ defineSelfWriteCapability({
       data: {
         id: doc.id,
         label: `Removed "${doc.title}"`,
-        href: "/me/documents",
-        navigateTo: { path: "/me/documents", when: "on_commit" as const },
+        // Task #785 — real self-documents location (see my_documents).
+        href: "/me/profile",
+        navigateTo: { path: "/me/profile", when: "on_commit" as const },
       },
     };
   },
@@ -2228,7 +2266,8 @@ defineCapability({
             documents: selected.map((d) => d.title).join(", "),
             recipients: recipients.join(", "),
             outlookDraftLink: draft.webLink ?? null,
-            href: draft.webLink ?? "/me/documents",
+            // Task #785 — fallback lands on a real page (/me/profile).
+            href: draft.webLink ?? "/me/profile",
             navigateTo: null,
           },
         };

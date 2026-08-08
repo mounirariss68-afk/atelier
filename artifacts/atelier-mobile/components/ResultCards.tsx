@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React from "react";
 import { Image, Linking, Pressable, Text, View } from "react-native";
 
@@ -72,6 +73,49 @@ const SKIP_KEYS = new Set([
   // never as a raw-URL grid cell.
   "outlookDraftLink",
 ]);
+
+/** Task #785 — map internal web hrefs from write-success cards to the
+ * mobile route that shows the same content. Only self-scoped Me
+ * destinations are mapped (that is where self-document writes land);
+ * unmapped internal paths stay non-pressable as before. */
+function internalRouteFor(href: string): { route: string; label: string } | null {
+  if (!href.startsWith("/")) return null;
+  if (href === "/me/profile" || href === "/me" || href.startsWith("/me?") || href.startsWith("/me/")) {
+    return { route: "/(tabs)/me", label: "View in Me" };
+  }
+  return null;
+}
+
+/** Task #785 — tappable row that routes to an in-app screen. */
+function InternalLinkRow({ route, label }: { route: string; label: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const router = useRouter();
+  return (
+    <Pressable
+      onPress={() => router.push(route as never)}
+      style={{
+        flexDirection: rtl.row,
+        alignItems: "center",
+        gap: 6,
+        paddingVertical: 6,
+      }}
+      accessibilityRole="link"
+    >
+      <Feather name="arrow-right-circle" size={13} color={c.primary} />
+      <Text
+        numberOfLines={1}
+        style={{
+          color: c.primary,
+          fontFamily: "PlusJakartaSans_600SemiBold",
+          fontSize: 13,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 /** Task #637 — tappable row for an external https link on a result card
  * (e.g. the Outlook draft created by email_my_documents). */
@@ -240,8 +284,16 @@ function WriteSuccess({ data, lang }: { data: Json; lang: string }) {
         // Task #637 — surface the Outlook draft (or any external https
         // href) as a tappable row.
         const link = asStr(data.outlookDraftLink) || asStr(data.href);
-        return /^https?:\/\//i.test(link) ? (
-          <ExternalLinkRow url={link} label="Open in Outlook" />
+        if (/^https?:\/\//i.test(link)) {
+          return <ExternalLinkRow url={link} label="Open in Outlook" />;
+        }
+        // Task #785 — internal destinations (e.g. /me/profile after a
+        // document save/delete) get an in-app route row so mobile lands
+        // on the same real page web navigates to.
+        const nav = asStr(asObj(data.navigateTo).path) || link;
+        const internal = internalRouteFor(nav);
+        return internal ? (
+          <InternalLinkRow route={internal.route} label={internal.label} />
         ) : null;
       })()}
     </Card>

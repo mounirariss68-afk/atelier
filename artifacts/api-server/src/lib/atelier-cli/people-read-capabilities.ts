@@ -1539,12 +1539,27 @@ defineCapability({
           disambiguation: { kind: "engagement", options: r.options },
         };
       }
-      if (r.kind === "none") return notFound("engagement");
+      if (r.kind === "none") {
+        return {
+          ok: false,
+          errorCode: "not_found",
+          errorMessage: `I couldn't find an engagement matching "${input.engagementName}". Double-check the name, or ask me to list active engagements to browse.`,
+        };
+      }
       engagementFilter = r.id;
     }
     if (typeof input.accountName === "string" && input.accountName.trim()) {
       const acc = await resolveAccountRef({ accountName: input.accountName }, ctx.persona);
-      if (isToolResult(acc)) return acc;
+      if (isToolResult(acc)) {
+        if (acc.ok === false && acc.errorCode === "not_found") {
+          return {
+            ok: false,
+            errorCode: "not_found",
+            errorMessage: `I couldn't find an account matching "${input.accountName}". Double-check the name, or ask me to list accounts to browse.`,
+          };
+        }
+        return acc;
+      }
       accountFilter = acc.id;
     }
     // Task #679 — entity filter: "list trade licenses for the FZ-LLC".
@@ -1583,7 +1598,7 @@ defineCapability({
         return {
           ok: false,
           errorCode: "not_found",
-          errorMessage: `No legal entity matching "${input.entityName}" in the entity registry.`,
+          errorMessage: `I couldn't find a legal entity matching "${input.entityName}" in the firm's entity registry. Double-check the name, or ask me to list the firm's legal entities.`,
         };
       }
       if (hits.length > 1) {
@@ -1624,6 +1639,10 @@ defineCapability({
     const access = await engAclFor(ctx.persona);
     const qLower = q.toLowerCase();
     const items: Array<Record<string, unknown>> = [];
+    // Task #785 — ACL-visible titles that did NOT substring-match `q`,
+    // kept so a zero-match search can suggest close titles (ACL filter
+    // runs BEFORE anything is offered).
+    const visibleNonMatches: Array<{ id: string; label: string }> = [];
     for (const doc of docs) {
       if (items.length >= limit) break;
       let currentVersion: typeof atelierDocumentVersions.$inferSelect | null = null;
@@ -1637,7 +1656,12 @@ defineCapability({
       }
       if (qLower) {
         const hay = `${doc.title} ${doc.notes ?? ""} ${currentVersion?.fileName ?? ""}`.toLowerCase();
-        if (!hay.includes(qLower)) continue;
+        if (!hay.includes(qLower)) {
+          if (visibleNonMatches.length < 100 && (await canSeeDocument(me, access, doc))) {
+            visibleNonMatches.push({ id: doc.id, label: doc.title });
+          }
+          continue;
+        }
       }
       if (!(await canSeeDocument(me, access, doc))) continue;
       items.push({
@@ -1651,6 +1675,42 @@ defineCapability({
         fileName: currentVersion?.fileName ?? null,
         updatedAt: doc.updatedAt,
         href: `/documents`,
+      });
+    }
+    // Task #785 — friendly zero-match: suggest the closest visible titles
+    // instead of an empty list with no next step.
+    if (qLower && items.length === 0) {
+      const nearest = rankNearestNames(q, visibleNonMatches, 5);
+      if (nearest.length > 0) {
+        const options = nearest.map((n) => ({ id: n.id, label: n.label }));
+        return {
+          ok: true,
+          data: {
+            prompt: `I couldn't find a document matching "${q}" — did you mean one of these?`,
+            options,
+          },
+          disambiguation: { kind: "document", options },
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: `I couldn't find any documents matching "${q}". Double-check the title, or ask me to list documents by account, engagement, or category to browse.`,
+      };
+    }
+    // Task #785 — with a free-text query, order close title matches first
+    // (ranked candidates) instead of the silent recency order.
+    if (qLower && items.length > 1) {
+      const ranked = rankNearestNames(
+        q,
+        items.map((i) => ({ id: String(i.id), label: String(i.label) })),
+        items.length,
+      );
+      const rankIndex = new Map(ranked.map((r, idx) => [r.id, idx]));
+      items.sort((a, b) => {
+        const ra = rankIndex.has(String(a.id)) ? rankIndex.get(String(a.id))! : Number.MAX_SAFE_INTEGER;
+        const rb = rankIndex.has(String(b.id)) ? rankIndex.get(String(b.id))! : Number.MAX_SAFE_INTEGER;
+        return ra - rb;
       });
     }
     return { ok: true, data: { items, total: items.length } };
