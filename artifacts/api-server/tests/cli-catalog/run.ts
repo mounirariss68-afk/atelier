@@ -36,7 +36,15 @@ import {
 } from "../../src/lib/atelier-cli/capability-catalog.js";
 import "../../src/lib/atelier-cli/bootstrap-capabilities.js";
 import { ATELIER_AGENTS } from "@workspace/agents";
-import { lintAtelierRoutes } from "../../src/scripts/atelier-lint-routes.js";
+import {
+  lintAtelierRoutes,
+  lintMeChatParity,
+  listMutatingMeRoutes,
+} from "../../src/scripts/atelier-lint-routes.js";
+import {
+  ME_CHAT_PARITY,
+  selfServiceExclusionGuidance,
+} from "../../src/lib/atelier-cli/me-chat-parity.js";
 import { lintOpportunityDeletes } from "../../src/scripts/atelier-lint-opportunity-deletes.js";
 import {
   wrapAttachment,
@@ -392,6 +400,96 @@ async function main() {
         (fresh.length > 5 ? `\n  ... and ${fresh.length - 5} more` : ""),
       );
     }
+  });
+
+  console.log("\n[7b] Task #795 — /me chat-parity registry + lint");
+  await test("every mutating /me route has a parity entry (registry-driven lint passes)", () => {
+    const violations = lintMeChatParity();
+    assert.deepEqual(
+      violations,
+      [],
+      `parity violations:\n${violations
+        .map((v) => `  ${v.file}:${v.line} ${v.method} ${v.path} (${v.problem})`)
+        .join("\n")}`,
+    );
+  });
+  await test("a NEW unannotated /me mutating route fails the parity lint", () => {
+    const routes = listMutatingMeRoutes();
+    const fake = {
+      file: "src/routes/atelier/meSelfServiceRoutes.ts",
+      line: 9999,
+      method: "post",
+      path: "/me/some-brand-new-action",
+    };
+    const violations = lintMeChatParity([...routes, fake]);
+    assert.equal(violations.length, 1);
+    assert.equal(violations[0].problem, "missing_registry_entry");
+    assert.equal(violations[0].path, "/me/some-brand-new-action");
+  });
+  await test("a stale registry key (route deleted) fails the parity lint", () => {
+    const routes = listMutatingMeRoutes().filter(
+      (r) => !(r.method === "post" && r.path === "/me/leave/:id/cancel"),
+    );
+    const violations = lintMeChatParity(routes);
+    assert.ok(
+      violations.some(
+        (v) => v.problem === "stale_registry_entry" && v.path === "/me/leave/:id/cancel",
+      ),
+    );
+  });
+  await test("every parity capability id exists in the catalog", () => {
+    const ids = new Set(listCapabilities().map((c) => c.id));
+    for (const [key, entry] of Object.entries(ME_CHAT_PARITY)) {
+      if (entry.kind !== "capability") continue;
+      assert.ok(ids.has(entry.capability), `registry maps "${key}" to unknown capability "${entry.capability}"`);
+    }
+  });
+  await test("new parity write tools reach employee AND contractor slices (self-only clamp)", () => {
+    const expectEverywhere = [
+      "cancel_my_leave",
+      "update_my_expense",
+      "delete_my_expense",
+      "save_my_dependent",
+      "remove_my_dependent",
+      "save_my_emergency_contact",
+      "remove_my_emergency_contact",
+      "complete_my_learning",
+      "delete_my_time_entry",
+      "save_my_travel_profile",
+    ];
+    for (const role of ["employee", "contractor"] as const) {
+      const persona = { id: "p_x", orgId: "aico", role, name: "X" } as never;
+      const names = new Set(getToolsForPersona(persona).map((t) => t.name));
+      for (const tool of expectEverywhere) {
+        assert.ok(names.has(tool), `${role} slice missing ${tool}`);
+      }
+      // Clamp intact: nothing outside me.*/meta leaks in.
+      for (const name of names) {
+        const cap = findByToolName(name);
+        if (!cap) continue; // meta post-processors
+        assert.ok(
+          cap.id.startsWith("me."),
+          `unexpected non-self capability ${cap.id} in ${role} slice`,
+        );
+      }
+    }
+  });
+  await test("exclusion guidance is honest, platform-aware, and never names tools", () => {
+    const guidance = selfServiceExclusionGuidance();
+    // Bank change: web-only, must name the real place and forbid mobile claims.
+    assert.ok(/bank details/i.test(guidance));
+    assert.ok(/Pay & Benefits/.test(guidance));
+    const bankLine = guidance.split("\n").find((l) => /bank details/i.test(l))!;
+    assert.ok(/web only/i.test(bankLine), "bank change must be flagged web-only");
+    assert.ok(!/mobile app under/i.test(bankLine));
+    // MS disconnect: both platforms listed.
+    const msLine = guidance.split("\n").find((l) => /disconnect your Microsoft/i.test(l))!;
+    assert.ok(/web portal under/.test(msLine) && /mobile app under/.test(msLine));
+    // Delegation excluded.
+    assert.ok(/assistant \(EA\) delegation/i.test(guidance));
+    // Never leaks internal tool/capability identifiers.
+    assert.ok(!/me\.[a-z_]+/.test(guidance), "guidance leaked a capability id");
+    assert.ok(!/_my_|my_[a-z]+_/.test(guidance), "guidance leaked a tool name");
   });
 
   console.log("\n[8] Task #404 — read-capability coverage for resolvable entity kinds");

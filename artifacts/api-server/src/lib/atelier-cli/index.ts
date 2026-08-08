@@ -122,6 +122,8 @@ import {
   summarizeSessionDraft,
   pruneSessionDrafts,
 } from "./capability-catalog.js";
+// Task #795 — registry-driven honest refusals for excluded /me actions.
+import { selfServiceExclusionGuidance } from "./me-chat-parity.js";
 // Task #339 — single bootstrap entry point. Imports cli-only entries,
 // attachment+rubric capabilities, and walks the agent registry.
 import "./bootstrap-capabilities.js";
@@ -4292,7 +4294,16 @@ export async function runTurn(
           // relative dates ("tomorrow", "next Tuesday") resolve without
           // asking. Dubai is fixed UTC+4 (no DST), so plain offset math
           // is safe. Kept out of the cached SYSTEM_PROMPT on purpose.
-          contextBlock: [buildDateContextBlock(), preludeContextBlock]
+          contextBlock: [
+            buildDateContextBlock(),
+            preludeContextBlock,
+            // Task #795 — self-only personas get the registry-driven
+            // honest-refusal copy for the deliberately excluded /me
+            // self-service actions (bank change, MS disconnect, EA
+            // delegation, …) so the model names the real UI location
+            // instead of inventing a workaround or a generic dead-end.
+            SELF_ONLY_CHAT_ROLES.has(persona.role) ? selfServiceExclusionGuidance() : null,
+          ]
             .filter(Boolean)
             .join("\n\n"),
         });

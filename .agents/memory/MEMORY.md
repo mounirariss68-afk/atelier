@@ -148,4 +148,5 @@
 - [Mobile share-sheet import](atelier-mobile-share-intent.md) — expo-share-intent major must match Expo SDK major; pending share cleared only when New Expense consumes it (route-aware retry past auth redirects); raw HEIC needs JPEG conversion.
 - [Roster quick-add & login provisioning](atelier-roster-quick-add.md) — direct roster create bypasses the hiring pipeline (same isPartnerOrOps gate); portal logins ONLY via the shared provisionPortalLogin helper.
 - [Entity embeddings backfill](atelier-entity-embeddings-backfill.md) — dev backfill done; MUST re-run script on prod at go-live; orphan rows for deleted entities are expected.
+- [/me chat-parity registry & ratchet](me-chat-parity.md) — every mutating /me route needs a registry entry (capability or reasoned exclusion); refusal copy is generated, never hand-written; `email` schema prop trips the selector lint.
 - [Expense description/summary contract](atelier-expense-desc-contract.md) — blank description stores NULL everywhere so parse may prefill; parse NEVER overwrites user text; summary follows manual edits only when auditorRunId is null.

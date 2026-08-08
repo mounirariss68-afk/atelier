@@ -309,7 +309,10 @@ async function main() {
     await db.delete(atelierPovVersions as any).where(eq((atelierPovVersions as any).povId, povId)).catch(() => {});
     await db.delete(atelierPovs as any).where(eq((atelierPovs as any).id, povId)).catch(() => {});
     await db.delete(atelierBriefs as any).where(eq((atelierBriefs as any).id, briefId)).catch(() => {});
-    await db.delete(atelierOpportunities as any).where(eq((atelierOpportunities as any).id, oppId)).catch(() => {});
+    // Opportunity hard-deletes go through the shared cascade helper
+    // (enforced by atelier-lint-opportunity-deletes).
+    const { hardDeleteOpportunity } = await import("../../src/lib/atelier-opportunity-delete.js");
+    await hardDeleteOpportunity(oppId).catch(() => {});
     await db.delete(atelierAccounts as any)
       .where(eq((atelierAccounts as any).id, acctId)).catch(() => {});
     await db.delete(atelierAccounts as any)

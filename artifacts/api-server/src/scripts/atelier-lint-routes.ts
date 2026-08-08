@@ -16,6 +16,8 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+// Task #795 — chat-parity registry for /me self-service actions (pure module).
+import { ME_CHAT_PARITY } from "../lib/atelier-cli/me-chat-parity.js";
 
 const ROUTES_DIR = new URL("../routes/atelier", import.meta.url).pathname;
 const ROOT = new URL("../../../..", import.meta.url).pathname;
@@ -113,7 +115,94 @@ export function lintAtelierRoutes(): RouteViolation[] {
   return out;
 }
 
+// ---------------------------------------------------------------------
+// Task #795 — chat-parity lint for MUTATING /me routes.
+//
+// Every post/put/patch/delete route whose path starts with /me must
+// appear in ME_CHAT_PARITY (src/lib/atelier-cli/me-chat-parity.ts):
+// either mapped to a chat capability id or excluded with a reason and
+// the real UI location(s). An @cli-skip marker is NOT enough for these
+// routes — the registry is what drives the honest refusal copy.
+// ---------------------------------------------------------------------
+const MUTATING = new Set(["post", "put", "patch", "delete"]);
+
+export interface MeParityViolation {
+  file: string;
+  line: number;
+  method: string;
+  path: string;
+  problem: "missing_registry_entry" | "stale_registry_entry";
+}
+
+/** Scan every mutating router call across the route files. */
+export function listMutatingMeRoutes(): RouteViolation[] {
+  const out: RouteViolation[] = [];
+  for (const file of listTsFiles(ROUTES_DIR)) {
+    const lines = readFileSync(file, "utf8").split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      let m = lines[i].match(ROUTE_RE);
+      let method: string;
+      let path: string;
+      if (m) {
+        method = m[1];
+        path = m[3];
+      } else {
+        // Multi-line declaration: `router.post(` with the path on the
+        // next line (multipart routes with middleware args).
+        const open = lines[i].match(/^\s*router\.(get|post|put|patch|delete)\s*\(\s*$/);
+        if (!open || i + 1 >= lines.length) continue;
+        const p = lines[i + 1].match(/^\s*(["'`])([^"'`]+)\1/);
+        if (!p) continue;
+        method = open[1];
+        path = p[2];
+      }
+      if (!MUTATING.has(method)) continue;
+      if (!path.startsWith("/me/") && path !== "/me") continue;
+      out.push({ file: relative(ROOT, file), line: i + 1, method, path });
+    }
+  }
+  return out;
+}
+
+/**
+ * Returns violations: routes missing a registry entry, plus stale
+ * registry keys that no longer match any route (so the registry can't
+ * silently rot). `routes` is injectable for tests.
+ */
+export function lintMeChatParity(
+  routes: RouteViolation[] = listMutatingMeRoutes(),
+): MeParityViolation[] {
+  const out: MeParityViolation[] = [];
+  const seenKeys = new Set<string>();
+  for (const r of routes) {
+    const key = `${r.method} ${r.path}`;
+    seenKeys.add(key);
+    if (!ME_CHAT_PARITY[key]) {
+      out.push({ ...r, problem: "missing_registry_entry" });
+    }
+  }
+  for (const key of Object.keys(ME_CHAT_PARITY)) {
+    if (!seenKeys.has(key)) {
+      const [method, path] = key.split(" ");
+      out.push({ file: "(registry)", line: 0, method, path, problem: "stale_registry_entry" });
+    }
+  }
+  return out;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
+  const parity = lintMeChatParity();
+  if (parity.length > 0) {
+    console.error(`[atelier-lint-routes] ${parity.length} /me chat-parity violation(s):`);
+    for (const v of parity) {
+      console.error(
+        v.problem === "missing_registry_entry"
+          ? `  ${v.file}:${v.line}  ${v.method.toUpperCase()} ${v.path}  → add a ME_CHAT_PARITY entry (capability id, or exclusion with reason + UI location) in me-chat-parity.ts`
+          : `  registry key "${v.method} ${v.path}" matches no route — remove or fix it in me-chat-parity.ts`,
+      );
+    }
+    process.exit(1);
+  }
   const violations = lintAtelierRoutes();
   if (violations.length === 0) {
     // eslint-disable-next-line no-console

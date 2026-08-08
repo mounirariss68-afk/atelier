@@ -62,6 +62,11 @@ import "./me-capabilities.js";
 // create + receipt, timesheet log/submit, profile edit, personal
 // documents, notification dismiss). Identity-locked + confirm-gated.
 import "./me-write-capabilities.js";
+// Task #795 — chat-parity writes closing the remaining /me self-service
+// gaps (leave cancel, expense edit/delete, dependents, emergency
+// contacts, travel profile, learning complete, timesheet entry delete).
+// The route ↔ capability mapping lives in me-chat-parity.ts.
+import "./me-write-capabilities-parity.js";
 // Task #406 — read-only finance reports (P&L/BS/CF/profitability),
 // entity expiries, win/loss knowledge, manager-scoped leave queues, and
 // contract/template browsing. Mirrors REST ACLs with explicit refusals.

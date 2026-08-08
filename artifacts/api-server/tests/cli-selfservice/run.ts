@@ -95,6 +95,17 @@ async function main(): Promise<void> {
     "save_my_document",
     "delete_my_document",
     "dismiss_my_notification",
+    // Task #795 — chat-parity writes.
+    "cancel_my_leave",
+    "update_my_expense",
+    "delete_my_expense",
+    "save_my_dependent",
+    "remove_my_dependent",
+    "save_my_emergency_contact",
+    "remove_my_emergency_contact",
+    "save_my_travel_profile",
+    "complete_my_learning",
+    "delete_my_time_entry",
   ];
   const SELECTOR_FIELDS = ["userId", "personId", "email", "forUser", "subject", "user"];
 
@@ -195,6 +206,18 @@ async function main(): Promise<void> {
       fullName: `SS Con ${TAG}`,
       email: `sscon${STAMP}@test.local`,
     });
+    // Scratch DBs are reused across runs — prior runs' expense-submit
+    // founder notifications would false-fail the 5b parity check below.
+    await db
+      .delete(atelierSelfNotifications)
+      .where(
+        inArray(atelierSelfNotifications.kind, [
+          "leave_requested",
+          "expense_submitted",
+          "expense_drafted",
+          "timesheet_submitted",
+        ]),
+      );
     await db.insert(atelierSelfNotifications).values([
       { id: `sn_${TAG}_mine`, orgId: ORG, userId: EMP_UID, title: `Mine ${TAG}`, kind: "generic" },
       { id: `sn_${TAG}_other`, orgId: ORG, userId: OTHER_UID, title: `Other ${TAG}`, kind: "generic" },
@@ -572,8 +595,13 @@ async function main(): Promise<void> {
     });
     const subAmbiguous = await runTool("submit_my_expense", empPersona, {});
     check(
-      "multiple drafts without an id refused with a listing",
-      subAmbiguous.ok === false && subAmbiguous.errorCode === "multiple_drafts",
+      // Task #787 contract: multiple drafts yield a friendly self-scoped
+      // disambiguation (never a guess, never a submit).
+      "multiple drafts without an id yields a disambiguation listing",
+      (subAmbiguous.ok === false && subAmbiguous.errorCode === "multiple_drafts") ||
+        (subAmbiguous.ok === true &&
+          Boolean((subAmbiguous as any).disambiguation) &&
+          ((subAmbiguous as any).disambiguation.options as any[]).length === 2),
       JSON.stringify(subAmbiguous),
     );
     // AMBER: over cap → rationale required; row stamped amber, stays draft.
@@ -658,16 +686,16 @@ async function main(): Promise<void> {
       personalEmail: `personal${STAMP}@example.com`,
       preferredName: "Essie",
     });
-    const [empRow] = await db
+    const [empRowOrig795] = await db
       .select()
       .from(atelierEmployees)
       .where(eq(atelierEmployees.id, EMP_PERSON));
     check(
       "employee profile fields updated (incl. preferredName)",
       prof.second?.ok === true &&
-        empRow.personalEmail === `personal${STAMP}@example.com` &&
-        empRow.preferredName === "Essie",
-      JSON.stringify({ pe: empRow.personalEmail, pn: empRow.preferredName }),
+        empRowOrig795.personalEmail === `personal${STAMP}@example.com` &&
+        empRowOrig795.preferredName === "Essie",
+      JSON.stringify({ pe: empRowOrig795.personalEmail, pn: empRowOrig795.preferredName }),
     );
     const profBad = await runTool("update_my_profile", empPersona, {
       title: "Founding Partner",
@@ -811,9 +839,22 @@ async function main(): Promise<void> {
       documentId: `pdoc_${TAG}_other`,
       confirm: true,
     });
+    // Task #785 friendly-miss contract: a foreign id resolves to a
+    // self-scoped disambiguation (own docs only) — never a delete.
+    const [foreignDocRow] = await db
+      .select()
+      .from(atelierPersonDocuments)
+      .where(eq(atelierPersonDocuments.id, `pdoc_${TAG}_other`));
     check(
       "another person's document cannot be deleted",
-      delForeign.ok === false && delForeign.errorCode === "doc_not_found",
+      Boolean(foreignDocRow) &&
+        foreignDocRow.deletedAt === null &&
+        (delForeign.ok === false ||
+          (Boolean((delForeign as any).disambiguation) &&
+            ((delForeign as any).disambiguation.options as any[]).every(
+              (o) => o.id !== `pdoc_${TAG}_other`,
+            ))),
+      JSON.stringify(delForeign),
     );
 
     // ---------------- 8. notification dismiss -------------------------
@@ -884,6 +925,360 @@ async function main(): Promise<void> {
       receiptCands.every((c: any) => c.intent !== "identity_doc"),
       JSON.stringify(receiptCands),
     );
+    // ---------------- 11. Task #795 — chat-parity writes --------------
+    group("Leave cancel (Task #795)");
+    // Section 3 left one PENDING annual request for EMP_PERSON.
+    const cancel = await runConfirmed("cancel_my_leave", empPersona, {
+      startDate: `${year}-03-02`,
+    });
+    check("pending leave: confirm frame first", Boolean(cancel.first.confirmation));
+    const [cancelledLv] = await db
+      .select()
+      .from(atelierLeaveRequests)
+      .where(eq(atelierLeaveRequests.userId, EMP_UID));
+    check(
+      "confirm cancels the pending request",
+      cancel.second?.ok === true && cancelledLv.status === "cancelled",
+      JSON.stringify({ status: cancelledLv?.status }),
+    );
+    check(
+      "cancel commit carries navigateTo",
+      (cancel.second as any)?.data?.navigateTo?.path === "/me/leave",
+    );
+    const cancelNone = await runTool("cancel_my_leave", empPersona, {});
+    check(
+      "no cancellable leave → honest not_found",
+      cancelNone.ok === false && cancelNone.errorCode === "not_found",
+    );
+    // Approved leave revokes (status → cancelled).
+    await db.insert(atelierLeaveRequests).values({
+      id: `lr_${TAG}_appr`,
+      orgId: ORG,
+      userId: EMP_UID,
+      personId: EMP_PERSON,
+      personType: "employee",
+      leaveType: "annual",
+      startDate: `${year}-10-05`,
+      endDate: `${year}-10-06`,
+      workingDays: 2,
+      status: "approved",
+    });
+    const revoke = await runConfirmed("cancel_my_leave", empPersona, {
+      leaveId: `lr_${TAG}_appr`,
+    });
+    check(
+      "approved leave: confirm mentions revoke, commit cancels",
+      /revoke/i.test(revoke.first.confirmation?.summary ?? "") && revoke.second?.ok === true,
+    );
+    // Another user's leave is invisible to the resolver.
+    await db.insert(atelierLeaveRequests).values({
+      id: `lr_${TAG}_other`,
+      orgId: ORG,
+      userId: OTHER_UID,
+      personId: OTHER_PERSON,
+      personType: "employee",
+      leaveType: "annual",
+      startDate: `${year}-11-02`,
+      endDate: `${year}-11-03`,
+      workingDays: 2,
+      status: "pending",
+    });
+    const cancelForeign = await runTool("cancel_my_leave", empPersona, {
+      leaveId: `lr_${TAG}_other`,
+      confirm: true,
+    });
+    check(
+      "another user's leave cannot be cancelled",
+      cancelForeign.ok === false && cancelForeign.errorCode === "not_found",
+    );
+
+    group("Expense edit + delete (Task #795)");
+    // Two fresh drafts so matchMerchant can both disambiguate and hit.
+    const lunchA = await runConfirmed("create_my_expense", empPersona, {
+      amount: 20,
+      currency: "usd",
+      merchant: `Lunch Alpha ${TAG}`,
+    });
+    const lunchB = await runConfirmed("create_my_expense", empPersona, {
+      amount: 30,
+      currency: "usd",
+      merchant: `Lunch Beta ${TAG}`,
+    });
+    check("two draft lunches created", lunchA.second?.ok === true && lunchB.second?.ok === true);
+    const ambiguous = await runTool("update_my_expense", empPersona, {
+      matchMerchant: "Lunch",
+      amount: 25,
+    });
+    check(
+      "ambiguous merchant → disambiguation with navigateTo:null",
+      ambiguous.ok === true &&
+        Boolean((ambiguous as any).disambiguation) &&
+        (ambiguous as any).data?.navigateTo === null,
+      JSON.stringify(ambiguous),
+    );
+    const upd = await runConfirmed("update_my_expense", empPersona, {
+      matchMerchant: `Lunch Alpha ${TAG}`,
+      amount: 25,
+      description: `working lunch ${TAG}`,
+    });
+    check("edit: confirm frame first", Boolean(upd.first.confirmation));
+    const [lunchARow] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.merchant, `Lunch Alpha ${TAG}`));
+    check(
+      "edit commits amount + description + fresh USD conversion",
+      upd.second?.ok === true &&
+        lunchARow.amount === 25 &&
+        lunchARow.description === `working lunch ${TAG}` &&
+        lunchARow.usdAmount === 25,
+      JSON.stringify({ amount: lunchARow?.amount, usd: lunchARow?.usdAmount }),
+    );
+    // Submitted expenses (Taxi from section 5c) are out of reach.
+    const updSubmitted = await runTool("update_my_expense", empPersona, {
+      expenseId: taxiId,
+      amount: 99,
+      confirm: true,
+    });
+    check(
+      "submitted expense cannot be edited",
+      updSubmitted.ok === false && updSubmitted.errorCode === "not_found",
+    );
+    const delExp = await runConfirmed("delete_my_expense", empPersona, {
+      matchMerchant: `Lunch Beta ${TAG}`,
+    });
+    const [lunchBRow] = await db
+      .select()
+      .from(atelierExpenses)
+      .where(eq(atelierExpenses.merchant, `Lunch Beta ${TAG}`));
+    check(
+      "delete: confirm then soft-delete",
+      Boolean(delExp.first.confirmation) && delExp.second?.ok === true && Boolean(lunchBRow.deletedAt),
+    );
+
+    group("Dependents (Task #795)");
+    const depAdd = await runConfirmed("save_my_dependent", empPersona, {
+      fullName: `Maya ${TAG}`,
+      relationship: "child",
+      dateOfBirth: "2019-04-02",
+      nationality: "ae",
+    });
+    check("dependent add: confirm then create", Boolean(depAdd.first.confirmation) && depAdd.second?.ok === true);
+    const depRows = await db
+      .select()
+      .from((D as any).atelierDependents)
+      .where(eq((D as any).atelierDependents.personId, EMP_PERSON));
+    check(
+      "dependent row keyed on the CALLER's roster record, nationality upcased",
+      depRows.length === 1 && depRows[0].nationality === "AE" && depRows[0].relationship === "child",
+      JSON.stringify(depRows),
+    );
+    const depEdit = await runConfirmed("save_my_dependent", empPersona, {
+      dependentId: depRows[0].id,
+      notes: `allergy note ${TAG}`,
+    });
+    check("dependent edit by id commits", depEdit.second?.ok === true);
+    const depBadRel = await runTool("save_my_dependent", empPersona, {
+      fullName: "X",
+      relationship: "cousin",
+    });
+    check("invalid relationship refused", depBadRel.ok === false && depBadRel.errorCode === "invalid_relationship");
+    const depDel = await runConfirmed("remove_my_dependent", empPersona, {
+      fullName: `Maya ${TAG}`,
+    });
+    const [depGone] = await db
+      .select()
+      .from((D as any).atelierDependents)
+      .where(eq((D as any).atelierDependents.id, depRows[0].id));
+    check("dependent remove soft-deletes", depDel.second?.ok === true && Boolean(depGone.deletedAt));
+
+    group("Emergency contacts (Task #795)");
+    const ecAdd = await runConfirmed("save_my_emergency_contact", empPersona, {
+      name: `Omar ${TAG}`,
+      relationship: "brother",
+      phones: ["+971501234567"],
+    });
+    check("contact add: confirm then create", Boolean(ecAdd.first.confirmation) && ecAdd.second?.ok === true);
+    const ecRows = await db
+      .select()
+      .from((D as any).atelierEmergencyContacts)
+      .where(eq((D as any).atelierEmergencyContacts.personId, EMP_PERSON));
+    check("contact keyed on caller's roster record", ecRows.length === 1 && ecRows[0].phones.length === 1);
+    const ecNoPhone = await runTool("save_my_emergency_contact", empPersona, {
+      name: "Nobody",
+      relationship: "friend",
+      phones: [],
+    });
+    check(
+      "empty phones refused",
+      ecNoPhone.ok === false &&
+        (ecNoPhone.errorCode === "invalid_phones" || ecNoPhone.errorCode === "missing_fields"),
+    );
+    const ecDel = await runConfirmed("remove_my_emergency_contact", empPersona, {
+      name: `Omar ${TAG}`,
+    });
+    const [ecGone] = await db
+      .select()
+      .from((D as any).atelierEmergencyContacts)
+      .where(eq((D as any).atelierEmergencyContacts.id, ecRows[0].id));
+    check("contact remove soft-deletes", ecDel.second?.ok === true && Boolean(ecGone.deletedAt));
+
+    group("Travel profile (Task #795)");
+    const tp = await runConfirmed("save_my_travel_profile", empPersona, {
+      cabinClass: "business",
+      seatPreference: "aisle",
+      airlineProgram: {
+        airlineIata: "ek",
+        programName: "Skywards",
+        membershipNumber: "EK123456",
+        tier: "Gold",
+      },
+    });
+    check("travel save: confirm then commit", Boolean(tp.first.confirmation) && tp.second?.ok === true);
+    check(
+      "confirm summary/diff never echo the membership number (pending replay input may)",
+      !tp.first.confirmation.summary.includes("EK123456") &&
+        !JSON.stringify(tp.first.confirmation.diff).includes("EK123456") &&
+        !JSON.stringify(tp.first.data ?? {}).includes("EK123456"),
+      JSON.stringify(tp.first.confirmation.diff),
+    );
+    const [empRowTp] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.id, EMP_PERSON));
+    const tpStored = empRowTp.travelProfile as any;
+    check(
+      "travel profile merged (prefs + EK program, IATA upcased)",
+      tpStored?.preferences?.cabinClass === "business" &&
+        tpStored?.preferences?.seatPreference === "aisle" &&
+        tpStored?.airlinePrograms?.[0]?.airlineIata === "EK",
+      JSON.stringify(tpStored),
+    );
+    // Merge, not replace: a second save keeps the airline program.
+    const tp2 = await runConfirmed("save_my_travel_profile", empPersona, {
+      mealPreference: "vegetarian",
+    });
+    const [empRowTp2] = await db
+      .select()
+      .from(atelierEmployees)
+      .where(eq(atelierEmployees.id, EMP_PERSON));
+    check(
+      "second save merges (program survives)",
+      tp2.second?.ok === true && (empRowTp2.travelProfile as any)?.airlinePrograms?.length === 1,
+    );
+    const tpCon = await runTool("save_my_travel_profile", conPersona, {
+      seatPreference: "aisle",
+      confirm: true,
+    });
+    check(
+      "contractor refused (employees only)",
+      tpCon.ok === false && tpCon.errorCode === "employees_only",
+      JSON.stringify(tpCon),
+    );
+
+    group("Learning complete (Task #795)");
+    await db.insert((D as any).atelierTrainingMaterials).values([
+      {
+        id: `tm_${TAG}_emp`,
+        orgId: ORG,
+        title: `Security Training ${TAG}`,
+        kind: "link",
+        url: "https://example.test/sec",
+        audience: "employees",
+      },
+      {
+        id: `tm_${TAG}_con`,
+        orgId: ORG,
+        title: `Contractor Onboarding ${TAG}`,
+        kind: "link",
+        url: "https://example.test/con",
+        audience: "contractors",
+      },
+    ]);
+    const learn = await runConfirmed("complete_my_learning", empPersona, {
+      title: `Security Training ${TAG}`,
+    });
+    check("learning: confirm then complete", Boolean(learn.first.confirmation) && learn.second?.ok === true);
+    const doneRows = await db
+      .select()
+      .from((D as any).atelierTrainingCompletions)
+      .where(eq((D as any).atelierTrainingCompletions.materialId, `tm_${TAG}_emp`));
+    check("completion row keyed on caller's user id", doneRows.length === 1 && doneRows[0].userId === EMP_UID);
+    const learnAgain = await runTool("complete_my_learning", empPersona, {
+      materialId: `tm_${TAG}_emp`,
+    });
+    check(
+      "re-marking is an idempotent no-op (no second confirm)",
+      learnAgain.ok === true && /already/i.test((learnAgain as any).data?.label ?? ""),
+      JSON.stringify(learnAgain),
+    );
+    const learnWrongAudience = await runTool("complete_my_learning", empPersona, {
+      materialId: `tm_${TAG}_con`,
+      confirm: true,
+    });
+    check(
+      "audience scoping: employee cannot complete a contractors-only item",
+      learnWrongAudience.ok === false && learnWrongAudience.errorCode === "not_found",
+    );
+
+    group("Timesheet entry delete (Task #795)");
+    // Current week was submitted in section 5 — locked.
+    const lockedEntries = await db
+      .select()
+      .from(atelierTimesheetEntries)
+      .where(eq(atelierTimesheetEntries.personId, EMP_PERSON));
+    const lockedDel = await runTool("delete_my_time_entry", empPersona, {
+      entryId: lockedEntries[0].id,
+      confirm: true,
+    });
+    check(
+      "entry in a submitted week refuses (week_locked)",
+      lockedDel.ok === false && lockedDel.errorCode === "week_locked",
+      JSON.stringify(lockedDel),
+    );
+    // Seed a DRAFT week + entry in the past and delete it by date.
+    await db.insert(atelierTimesheetWeeks).values({
+      id: `tw_${TAG}_del`,
+      orgId: ORG,
+      personId: EMP_PERSON,
+      personType: "employee",
+      weekIso: "2020-W02",
+      weekStartDate: "2020-01-06",
+      status: "draft",
+      totalHours: 3,
+    });
+    await db.insert(atelierTimesheetEntries).values({
+      id: `te_${TAG}_del`,
+      orgId: ORG,
+      weekId: `tw_${TAG}_del`,
+      personId: EMP_PERSON,
+      personType: "employee",
+      workDate: "2020-01-07",
+      hours: 3,
+      activityCode: "internal",
+    });
+    const tsDel = await runConfirmed("delete_my_time_entry", empPersona, {
+      workDate: "2020-01-07",
+    });
+    check("entry delete: confirm frame first", Boolean(tsDel.first.confirmation));
+    const [deadEntry] = await db
+      .select()
+      .from(atelierTimesheetEntries)
+      .where(eq(atelierTimesheetEntries.id, `te_${TAG}_del`));
+    const [delWeek] = await db
+      .select()
+      .from(atelierTimesheetWeeks)
+      .where(eq(atelierTimesheetWeeks.id, `tw_${TAG}_del`));
+    check(
+      "entry soft-deleted + week totals recomputed to 0",
+      tsDel.second?.ok === true && Boolean(deadEntry.deletedAt) && Number(delWeek.totalHours) === 0,
+      JSON.stringify({ deleted: deadEntry?.deletedAt, total: delWeek?.totalHours }),
+    );
+    const noSelector = await runTool("delete_my_time_entry", empPersona, {});
+    check(
+      "no selector → asks for date/id instead of guessing",
+      noSelector.ok === false && noSelector.errorCode === "missing_selector",
+    );
   } finally {
     // ---------------- cleanup (tag sweep) -----------------------------
     const D2 = await import("@workspace/db");
@@ -922,6 +1317,19 @@ async function main(): Promise<void> {
         .where(inArray(PDoc.personId, [EMP_PERSON, OTHER_PERSON, CON_PERSON]));
       await dbx.delete(SN).where(like(SN.id, `sn_${TAG}%`));
       await dbx.delete(ATT).where(like(ATT.id, `att_${TAG}%`));
+      // Task #795 sweep — dependents / contacts / training rows.
+      await dbx
+        .delete((D2 as any).atelierDependents)
+        .where(inArray((D2 as any).atelierDependents.personId, [EMP_PERSON, CON_PERSON]));
+      await dbx
+        .delete((D2 as any).atelierEmergencyContacts)
+        .where(inArray((D2 as any).atelierEmergencyContacts.personId, [EMP_PERSON, CON_PERSON]));
+      await dbx
+        .delete((D2 as any).atelierTrainingCompletions)
+        .where(like((D2 as any).atelierTrainingCompletions.materialId, `tm_${TAG}%`));
+      await dbx
+        .delete((D2 as any).atelierTrainingMaterials)
+        .where(like((D2 as any).atelierTrainingMaterials.id, `tm_${TAG}%`));
       await dbx.delete(C).where(eq(C.id, CON_PERSON));
       await dbx.delete(E).where(inArray(E.id, [EMP_PERSON, OTHER_PERSON]));
       await dbx.delete(U).where(inArray(U.id, [EMP_UID, CON_UID, OTHER_UID, BOARD_UID]));

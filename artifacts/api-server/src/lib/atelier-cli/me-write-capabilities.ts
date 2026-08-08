@@ -103,7 +103,7 @@ function isIsoDate(s: unknown): s is string {
   return typeof s === "string" && ISO_DATE.test(s);
 }
 
-async function audit(args: {
+export async function selfWriteAudit(args: {
   subject: SelfSubject;
   entityType: string;
   entityId: string;
@@ -138,14 +138,14 @@ function personRowOf(subject: SelfSubject): PersonRow | null {
   };
 }
 
-const NO_ROSTER: ToolResult = {
+export const NO_ROSTER: ToolResult = {
   ok: false,
   errorCode: "no_roster_record",
   errorMessage:
     "Your login is not linked to an employee or contractor record yet. Ask HR to link your profile.",
 };
 
-type SelfWriteInput = Omit<
+export type SelfWriteInput = Omit<
   CapabilityInput,
   "isWrite" | "outboundChannel" | "run" | "schemaVersion"
 > & {
@@ -161,7 +161,9 @@ type SelfWriteInput = Omit<
  * carry only the write's own fields — never a person/user selector —
  * and the subject is always re-resolved from the session persona.
  */
-function defineSelfWriteCapability(entry: SelfWriteInput): void {
+const audit = selfWriteAudit;
+
+export function defineSelfWriteCapability(entry: SelfWriteInput): void {
   const { runSelf, ...rest } = entry;
   defineCapability({
     ...rest,
