@@ -59,6 +59,7 @@ const stubState = {
   primerSeenOnReceiptTurn: false,
   primerIdOnReceiptTurn: null as string | null,
   primerLinesOnPassportTurn: [] as string[],
+  cDocIdSeen: null as string | null,
 };
 
 function flattenMessages(messages: any[]): string {
@@ -130,16 +131,101 @@ async function main() {
           Array.isArray(m?.content) &&
           m.content.some((b: any) => b?.type === "tool_result"),
       );
-      if (hasToolResult) {
-        send([{ type: "text", text: "Done." }], "end_turn");
-        return;
-      }
 
       const lastUser = [...messages].reverse().find((m) => m?.role === "user");
       const promptText = Array.isArray(lastUser?.content)
         ? lastUser.content.map((b: any) => (typeof b === "string" ? b : b?.text ?? "")).join(" ")
         : String(lastUser?.content ?? "");
       const allText = flattenMessages(messages);
+      const attRef = allText.match(/opaque attachment ref ([A-Za-z0-9_-]+)/)?.[1] ?? null;
+
+      // ---- Task #792 scenario C: back of an Emirates ID with a front-only
+      // doc already on file — my_documents first, then attach by id. ----
+      if (/back of my emirates id/i.test(allText)) {
+        if (!hasToolResult) {
+          send(
+            [
+              // Task #792 — promised-write prose alongside a READ call must
+              // be scrubbed at flush time (no write has committed yet).
+              { type: "text", text: "I'll attach the back side to your saved ID now." },
+              { type: "tool_use", id: `tu_${TAG}_list`, name: "my_documents", input: {} },
+            ],
+            "tool_use",
+          );
+          return;
+        }
+        const rawMessages = JSON.stringify(messages);
+        const docId = rawMessages.match(/(pdoc_probe792_[A-Za-z0-9_]+?)\\?"/)?.[1] ?? null;
+        stubState.cDocIdSeen = docId;
+        const toolResultCount = messages.reduce(
+          (n, m) =>
+            n +
+            (Array.isArray(m?.content)
+              ? m.content.filter((b: any) => b?.type === "tool_result").length
+              : 0),
+          0,
+        );
+        if (docId && attRef && toolResultCount === 1) {
+          send(
+            [
+              // Task #792 — a promise alongside the UNCONFIRMED attach
+              // preview (needs_confirmation) must also be scrubbed.
+              { type: "text", text: "I'll save it as the back side now." },
+              {
+                type: "tool_use",
+                id: `tu_${TAG}_attach`,
+                name: "attach_my_document_file",
+                input: { documentId: docId, attachmentId: attRef, side: "back" },
+              },
+            ],
+            "tool_use",
+          );
+          return;
+        }
+        send([{ type: "text", text: "Done." }], "end_turn");
+        return;
+      }
+
+      // ---- Task #792 scenario D: back side onto a passport → rejected. ----
+      if (/back of my passport/i.test(allText)) {
+        const docId = promptText.match(/(pdoc_[A-Za-z0-9_]+)/)?.[1] ?? allText.match(/(pdoc_pass792_[A-Za-z0-9_]+)/)?.[1] ?? null;
+        if (!hasToolResult && docId && attRef) {
+          send(
+            [
+              {
+                type: "tool_use",
+                id: `tu_${TAG}_badback`,
+                name: "attach_my_document_file",
+                input: { documentId: docId, attachmentId: attRef, side: "back" },
+              },
+            ],
+            "tool_use",
+          );
+          return;
+        }
+        send([{ type: "text", text: "Understood — that document can't take a back side." }], "end_turn");
+        return;
+      }
+
+      // ---- Task #792 scenario E: promise-then-refusal prose (no tool). ----
+      if (/promise refusal test/i.test(allText)) {
+        send(
+          [
+            {
+              type: "text",
+              text:
+                "I'll save the back side of your ID now. Unfortunately, that isn't available in this interface — please upload it from the profile page instead.",
+            },
+          ],
+          "end_turn",
+        );
+        return;
+      }
+
+      if (hasToolResult) {
+        send([{ type: "text", text: "Done." }], "end_turn");
+        return;
+      }
 
       // Turn 1 — attachment block present, ambiguous → plain-text question.
       if (allText.includes("<attachment") && /just uploaded a photo/i.test(promptText)) {
@@ -422,6 +508,111 @@ async function main() {
       stubState.primerLinesOnPassportTurn.some((l) => attX && l.includes(attX)) ||
       (stubState.primerIdOnReceiptTurn === attX);
     check("X: primer never lists another user's attachment", !leaked, { attX, stubState });
+
+    // ---------- Task #792 Scenario C: back side onto existing front-only ID ----------
+    const frontOnlyId = `pdoc_probe792_${TAG}`;
+    await db.insert(atelierPersonDocuments).values({
+      id: frontOnlyId,
+      orgId: ORG,
+      personType: "employee",
+      personId: EMP,
+      kind: "national_id",
+      title: "Emirates ID",
+      fileRef: `persondoc:${TAG}_front_fake`,
+      fileName: "eid-front.png",
+      mime: "image/png",
+      sizeBytes: 10,
+      uploadedByUserId: FP,
+      createdByUserId: FP,
+    });
+    const upC = await upload(FP, `${TAG}_eid_back.jpg`);
+    const attC: string = upC.json.attachmentIds?.[0];
+    check("C: upload ok", upC.status === 200 && Boolean(attC), upC);
+    if (attC) cleanupIds.attachments.add(attC);
+
+    const c1 = await postTurn(FP, {
+      prompt: "Here is the back of my Emirates ID — add it to my saved ID",
+      attachmentIds: [attC],
+    });
+    const c1Session = String(c1.frames.find((f) => f.data?.sessionId)?.data?.sessionId ?? "");
+    if (c1Session) cleanupIds.sessions.add(c1Session);
+    check("C: stub saw the existing doc id via my_documents", stubState.cDocIdSeen === frontOnlyId, stubState);
+    const cConf = c1.frames.find((f) => f.event === "needs_confirmation");
+    check("C: attach_my_document_file → needs_confirmation", Boolean(cConf), c1.raw.slice(0, 1500));
+    // Task #792 — pre-tool write promises never surface before the commit:
+    // neither the promise flushed after the my_documents READ nor the one
+    // alongside the unconfirmed attach preview may appear in the stream.
+    check(
+      "C: promise alongside read/preview scrubbed from narration",
+      !/I'll attach the back side/.test(c1.raw) && !/I'll save it as the back side/.test(c1.raw),
+      c1.raw.slice(0, 2000),
+    );
+    const c1TurnId = String(
+      cConf?.data?.turnId ?? c1.frames.find((f) => f.data?.turnId)?.data?.turnId ?? "",
+    );
+    const cCommit = await confirmTurn(FP, c1TurnId);
+    check("C: confirm commits", cCommit.status === 200 && cCommit.frames.some((f) => f.event === "final"), cCommit.raw.slice(0, 1500));
+
+    const [eidRow] = await db
+      .select()
+      .from(atelierPersonDocuments)
+      .where(eq(atelierPersonDocuments.id, frontOnlyId));
+    check("C: back file landed on the SAME doc row", Boolean(eidRow?.backFileRef), eidRow);
+    const meDocsC = await fetch(`${BASE}/me/documents`, { headers: { cookie: `atelier_persona=${FP}` } });
+    const meDocsCJson: any = await meDocsC.json().catch(() => ({}));
+    const eidWire = (meDocsCJson.documents ?? []).find((d: any) => d.id === frontOnlyId);
+    check("C: /me/documents shows sides=front_back", eidWire?.sides === "front_back", eidWire);
+    const dupIds = (meDocsCJson.documents ?? []).filter((d: any) => d.kind === "national_id");
+    check("C: no duplicate national_id document created", dupIds.length === 1, dupIds);
+
+    // ---------- Task #792 Scenario D: back side onto a passport → rejected ----------
+    const passDocId = `pdoc_pass792_${TAG}`;
+    await db.insert(atelierPersonDocuments).values({
+      id: passDocId,
+      orgId: ORG,
+      personType: "employee",
+      personId: EMP,
+      kind: "passport",
+      title: "Probe Passport",
+      fileRef: `persondoc:${TAG}_pass_fake`,
+      fileName: "pass.png",
+      mime: "image/png",
+      sizeBytes: 10,
+      uploadedByUserId: FP,
+      createdByUserId: FP,
+    });
+    const upD = await upload(FP, `${TAG}_pass_back.jpg`);
+    const attD: string = upD.json.attachmentIds?.[0];
+    if (attD) cleanupIds.attachments.add(attD);
+    const d1 = await postTurn(FP, {
+      prompt: `Attach this as the back of my passport ${passDocId}`,
+      attachmentIds: [attD],
+    });
+    const d1Session = String(d1.frames.find((f) => f.data?.sessionId)?.data?.sessionId ?? "");
+    if (d1Session) cleanupIds.sessions.add(d1Session);
+    check(
+      "D: non-national_id back attach rejected",
+      d1.status === 200 && d1.raw.includes("back_side_not_allowed"),
+      d1.raw.slice(0, 1500),
+    );
+    const [passRow] = await db
+      .select()
+      .from(atelierPersonDocuments)
+      .where(eq(atelierPersonDocuments.id, passDocId));
+    check("D: passport row untouched", !passRow?.backFileRef, passRow);
+
+    // ---------- Task #792 Scenario E: promise-then-refusal prose scrubbed ----------
+    const e1 = await postTurn(FP, { prompt: "promise refusal test please" });
+    const e1Session = String(e1.frames.find((f) => f.data?.sessionId)?.data?.sessionId ?? "");
+    if (e1Session) cleanupIds.sessions.add(e1Session);
+    check("E: turn completes", e1.status === 200, e1.raw.slice(0, 800));
+    check("E: no unfulfilled write promise emitted", !/I'll save/i.test(e1.raw), e1.raw.slice(0, 1500));
+    check(
+      "E: no 'isn't available in this interface' claim emitted",
+      !/available in this interface/i.test(e1.raw),
+      e1.raw.slice(0, 1500),
+    );
+    check("E: no profile-page upload deflection emitted", !/profile page/i.test(e1.raw), e1.raw.slice(0, 1500));
   } finally {
     // ---------- cleanup (tag sweep per crm-harness memory) ----------
     try {

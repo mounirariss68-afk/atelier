@@ -53,7 +53,11 @@ import { resolveSelfSubject, type SelfSubject } from "./me-capabilities.js";
 // Me-lens REST submit paths so requests don't sit invisible.
 import { emitSelfNotification } from "../../routes/atelier/meRoutes.js";
 import { loadAttachment, loadAttachmentBytes } from "./attachments/index.js";
-import { storePersonDocBytes, loadPersonDocBytes } from "../personDocStorage.js";
+import {
+  storePersonDocBytes,
+  loadPersonDocBytes,
+  dropPersonDocBytes,
+} from "../personDocStorage.js";
 // Task #637 — email own documents via the caller's Outlook mailbox.
 import {
   MsAuthError,
@@ -1748,7 +1752,7 @@ defineSelfWriteCapability({
   module: "roster",
   toolName: "save_my_document",
   description:
-    "Save a file uploaded in this chat as one of the signed-in user's personal documents (passport, national ID, residency, visa, other). National ID cards need both sides: pass a front and a back attachment, or a single combined PDF.",
+    "Save a file uploaded in this chat as a NEW personal document for the signed-in user (passport, national ID, residency, visa, other). National ID cards need both sides: pass a front and a back attachment, or a single combined PDF. Check my_documents FIRST — if the document already exists (e.g. a front-only national ID), use attach_my_document_file to add the missing side or replace the scan instead of creating a duplicate.",
   slashAliases: { en: ["/save-document"], fr: ["/enregistrer-document"] },
   representativePrompts: {
     en: ["Save this as my passport", "File this ID card — front and back attached"],
@@ -1827,7 +1831,7 @@ defineSelfWriteCapability({
         ok: false,
         errorCode: "back_side_required",
         errorMessage:
-          "National ID cards need both sides: upload the back too and pass it as the back attachment, or provide a single combined PDF.",
+          "National ID cards need both sides: upload the back too and pass it as the back attachment, or provide a single combined PDF. If one side is already saved as an existing document, attach the new side to that document instead of creating a new one.",
       };
     }
     let back: { fileName: string; mime: string; buf: Buffer } | null = null;
@@ -1923,6 +1927,217 @@ defineSelfWriteCapability({
         label: title,
         // Task #785 — personal documents live under Me → Profile; the old
         // /me/documents path 404-bounced on web and mobile.
+        href: "/me/profile",
+        navigateTo: { path: "/me/profile", when: "on_commit" as const },
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.document_file_attach — Task #792: attach/replace a scan on an
+// EXISTING personal document (mirrors POST /me/documents/:id/file).
+// This is the ONLY mobile path for adding the back of a national ID
+// when the front is already on file — the mobile Personal Documents
+// section is view/download only.
+// ---------------------------------------------------------------------
+defineSelfWriteCapability({
+  id: "me.document_file_attach",
+  module: "roster",
+  toolName: "attach_my_document_file",
+  description:
+    "Attach or replace the scan on one of the signed-in user's EXISTING personal documents (from the my_documents list) using a file uploaded in this chat. Use side=back to add the back of a national ID whose front is already saved (back side is national_id only); use side=front (default) to replace/renew the main scan of any document. Never create a new document with this — use save_my_document for that.",
+  slashAliases: { en: ["/attach-document-file"], fr: ["/joindre-fichier-document"] },
+  representativePrompts: {
+    en: [
+      "Here's the back of my Emirates ID — add it to my saved ID",
+      "Replace my passport scan with this new one",
+    ],
+    ar: ["أضف الوجه الخلفي لبطاقة الهوية"],
+    fr: ["Ajouter le verso de ma carte d'identité"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "entity_card",
+  examplePhrases: {
+    en: ["Attach this as the back of my national ID"],
+    ar: ["أضف الوجه الخلفي لبطاقة الهوية"],
+    fr: ["Ajouter le verso de ma carte d'identité"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      documentId: {
+        type: "string",
+        description: "Existing document id from the my_documents list",
+      },
+      attachmentId: {
+        type: "string",
+        description: "Attachment id of the file uploaded in this chat",
+      },
+      side: {
+        type: "string",
+        enum: ["front", "back"],
+        description: "Which side to attach — back is national_id only. Default front.",
+      },
+      confirm: { type: "boolean" },
+    },
+    required: ["documentId", "attachmentId"],
+    additionalProperties: false,
+  },
+  twoPhaseConfirm: true,
+  irreversible: false,
+  async runSelf(input, subject, ctx) {
+    const person = subject.person;
+    if (!person) return NO_ROSTER;
+    const side = input.side === "back" ? "back" : "front";
+    const [doc] = await db
+      .select()
+      .from(atelierPersonDocuments)
+      .where(
+        and(
+          eq(atelierPersonDocuments.id, String(input.documentId ?? "")),
+          eq(atelierPersonDocuments.personType, person.workerType),
+          eq(atelierPersonDocuments.personId, person.id),
+          isNull(atelierPersonDocuments.deletedAt),
+        ),
+      );
+    if (!doc || doc.kind === "profile_photo" || doc.kind === "biography") {
+      // Friendly miss — offer the caller's own documents as candidates
+      // (self-scoped, nothing to leak) instead of a dead-end code.
+      const own = await db
+        .select({
+          id: atelierPersonDocuments.id,
+          title: atelierPersonDocuments.title,
+          kind: atelierPersonDocuments.kind,
+        })
+        .from(atelierPersonDocuments)
+        .where(
+          and(
+            eq(atelierPersonDocuments.personType, person.workerType),
+            eq(atelierPersonDocuments.personId, person.id),
+            isNull(atelierPersonDocuments.deletedAt),
+          ),
+        )
+        .orderBy(desc(atelierPersonDocuments.uploadedAt));
+      const options = own
+        .filter((d) => d.kind !== "profile_photo" && d.kind !== "biography")
+        .slice(0, 6)
+        .map((d) => ({ id: d.id, label: d.title, secondary: d.kind }));
+      if (options.length > 0) {
+        return {
+          ok: true,
+          data: {
+            prompt:
+              "I couldn't find that document on your record — which one should this file go on?",
+            options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "document", field: "documentId", options },
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage:
+          "You don't have any personal documents saved yet, so there is nothing to attach this file to. Save it as a new document instead (for a national ID, both sides or one combined PDF are needed).",
+      };
+    }
+    // Mirror the REST route's side rule — back is national_id only.
+    if (side === "back" && doc.kind !== "national_id") {
+      return {
+        ok: false,
+        errorCode: "back_side_not_allowed",
+        errorMessage: `Only national ID cards take a back-side scan — "${doc.title}" is a ${doc.kind} document. To replace its main scan, attach it as the front side instead.`,
+      };
+    }
+    const file = await loadOwnAttachmentBytes(String(input.attachmentId ?? ""), ctx);
+    if (!file.ok) return file.error;
+    const replacing = side === "back" ? !!doc.backFileRef : !!(doc.fileRef || doc.fileUrl);
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            ...chatDocWire(doc),
+            newFileName: file.fileName,
+            side,
+            replacing,
+          },
+        },
+        confirmation: {
+          summary:
+            side === "back"
+              ? `${replacing ? "Replace" : "Attach"} ${file.fileName} as the BACK side of your ${doc.kind} document "${doc.title}"?`
+              : replacing
+                ? `Replace the scan on your ${doc.kind} document "${doc.title}" with ${file.fileName}?`
+                : `Attach ${file.fileName} to your ${doc.kind} document "${doc.title}"?`,
+          diff: {
+            update: {
+              table: "atelier_person_documents",
+              id: doc.id,
+              values:
+                side === "back"
+                  ? { backFileName: file.fileName }
+                  : { fileName: file.fileName },
+            },
+          },
+          pending: { tool: "attach_my_document_file", input: { ...input, side, confirm: true } },
+        },
+      };
+    }
+    const stored = await storePersonDocBytes(file.buf, file.mime);
+    const oldRef = side === "back" ? doc.backFileRef : doc.fileRef;
+    const upd =
+      side === "back"
+        ? {
+            backFileRef: stored.fileRef,
+            backFileName: file.fileName,
+            backMime: file.mime,
+            backSizeBytes: stored.sizeBytes,
+          }
+        : {
+            fileRef: stored.fileRef,
+            fileName: file.fileName,
+            mime: file.mime,
+            sizeBytes: stored.sizeBytes,
+          };
+    const [updated] = await db
+      .update(atelierPersonDocuments)
+      .set({
+        ...upd,
+        uploadedAt: new Date(),
+        uploadedByUserId: subject.user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierPersonDocuments.id, doc.id))
+      .returning();
+    // Drop the superseded object AFTER the row points at the new one
+    // (same ordering as the REST route).
+    if (oldRef && oldRef.startsWith("persondoc:")) {
+      await dropPersonDocBytes(oldRef).catch((err) =>
+        console.error(
+          "[atelier-cli] person-doc old scan cleanup failed",
+          oldRef,
+          err instanceof Error ? err.message : String(err),
+        ),
+      );
+    }
+    await audit({
+      subject,
+      entityType: "person_document",
+      entityId: doc.id,
+      action: "person_document.self_scan_replaced",
+      payload: { kind: doc.kind, title: doc.title, replaced: !!oldRef, side, via: "chat" },
+      summary: `${subject.user.name} ${replacing ? "replaced" : "attached"} the ${side} scan on their ${doc.kind} document "${doc.title}"`,
+    });
+    return {
+      ok: true,
+      data: {
+        ...chatDocWire(updated),
+        label:
+          side === "back"
+            ? `Back side added to "${doc.title}"`
+            : `Scan updated on "${doc.title}"`,
         href: "/me/profile",
         navigateTo: { path: "/me/profile", when: "on_commit" as const },
       },

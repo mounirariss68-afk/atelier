@@ -1322,12 +1322,18 @@ export async function getOrCreateSession(
 import {
   trimNarrationForCard,
   toolResultFrameKey,
+  looksLikeWritePromise,
+  stripUnfulfilledWritePromises,
+  stripDeadEndDocumentAdvice,
 } from "./narration-contract.js";
 export {
   cardPayloadTokens,
   narrationRestatesCard,
   firstSentence,
   trimNarrationForCard,
+  looksLikeWritePromise,
+  stripUnfulfilledWritePromises,
+  stripDeadEndDocumentAdvice,
 } from "./narration-contract.js";
 
 const SYSTEM_PROMPT = [
@@ -1367,6 +1373,25 @@ const SYSTEM_PROMPT = [
   "   any ingest or save tool. Never guess between those two flows.",
   "8. CAPABILITY MISS: when you cannot do what the user asked, explain the limit in plain",
   "   words. NEVER mention internal tool or capability names in refusals.",
+  "9. NEVER promise a write you have not completed. Do not say \"I'll save/attach/log X now\"",
+  "   unless you are calling the tool in the same step. If a save cannot be done, say only",
+  "   what IS possible — never a promise followed by a refusal.",
+  "",
+  // Task #792 — personal-document uploads must consult the user's existing
+  // documents before choosing create vs attach, and chat is the ONLY
+  // mobile upload path (the mobile profile page is view/download only).
+  "PERSONAL DOCUMENTS (passport / national ID / residency / visa uploads):",
+  "- FIRST call `my_documents` to see what is already on file before saving anything.",
+  "- If the uploaded file is one side (or a renewal) of a document that ALREADY exists —",
+  "  e.g. the BACK of a national ID whose front is saved — call `attach_my_document_file`",
+  "  with that document's id and the correct side. Do NOT create a duplicate document and",
+  "  do NOT ask the user to re-upload a side that is already on file.",
+  "- Only when no matching document exists, call `save_my_document` to create one (ask for",
+  "  the front only if it is truly absent). If the same side seems to be uploaded twice,",
+  "  ask ONE short clarifying question.",
+  "- Saving, attaching and replacing personal-document scans IS available right here in",
+  "  chat. NEVER claim it isn't available in this interface, and NEVER send the user to a",
+  "  profile page to upload — on mobile no such upload form exists.",
   "",
   // Task #469 — person questions must route to the right domain and
   // cross-check the sibling domain before declaring anyone nonexistent.
@@ -2475,7 +2500,11 @@ export function looksLikeToolMiss(raw: string | null | undefined): boolean {
     /(don'?t|do not|doesn'?t|does not|no longer)\s+(currently\s+)?(have|see|find)\s+(access to\s+)?(a|any|the)?\s*(suitable\s+|available\s+|specific\s+)?(tool|capabilit(?:y|ies)|function|way to)/.test(t) ||
     /\bno\s+(suitable\s+|available\s+|matching\s+)?(tools?|capabilit(?:y|ies)|functions?)\b/.test(t) ||
     /\b(i'?m|i am)\s+(unable|not able)\s+to\s+(do|perform|handle|complete)\s+(this|that)\b/.test(t) ||
-    /\bnot\s+(currently\s+)?(supported|available)\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface)\b/.test(t) ||
+    // Task #792 — "isn't available in this interface/app" variants, and
+    // deflections to a (nonexistent on mobile) profile-page upload.
+    /\bnot\s+(currently\s+)?(supported|available)\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface|interface|app)\b/.test(t) ||
+    /\b(isn'?t|is not)\s+(currently\s+)?available\s+(in|on|through)\s+(this|the)\s+(chat|cli|assistant|surface|interface|app)\b/.test(t) ||
+    /\b(upload|update|add|manage|do)\s+(it|this|that|them)?\s*(from|on|via|through)\s+(the\s+|your\s+)?profile\s+page\b/.test(t) ||
     /\bcannot\s+(find|locate)\s+(a|any)\s+(tool|capabilit(?:y|ies)|function)/.test(t)
   );
 }
@@ -4397,12 +4426,21 @@ export async function runTurn(
             // Task #645 — a committed write's success card is the answer;
             // suppress the closing prose recap entirely.
           } else {
+            // Task #792 — promise guard: prose emitted with NO tool call
+            // while no write has succeeded this turn must not promise a
+            // save ("I'll save X now" + refusal in the same message).
+            // Also scrub impossible-deflection advice ("not available in
+            // this interface" / "upload it from the profile page").
+            let guarded = stripDeadEndDocumentAdvice(cleanText);
+            if (guarded && looksLikeWritePromise(guarded)) {
+              guarded = stripUnfulfilledWritePromises(guarded);
+            }
             // Task #645 — final prose after a card-rendering tool result:
             // clamp anything that restates the card payload to one sentence.
             const trimmed =
-              lastCardShape != null
-                ? trimNarrationForCard(cleanText, lastCardData)
-                : cleanText;
+              guarded && lastCardShape != null
+                ? trimNarrationForCard(guarded, lastCardData)
+                : guarded;
             if (trimmed) {
               record({ type: "narration", data: { text: trimmed, step } });
             }
@@ -4607,11 +4645,23 @@ export async function runTurn(
         // "I'll look into…" narration is flushed; subsequent ones are dropped
         // so the transcript reads as a card-first answer, not a play-by-play.
         if (toolResult.ok !== false && narrationFlushedCount < MAX_NARRATION_FLUSHES_PER_TURN) {
-          record({
-            type: "narration",
-            data: { text: pendingNarration.text, step: pendingNarration.step },
-          });
-          narrationFlushedCount++;
+          // Task #792 — write-promise guard at flush time: promised-write
+          // prose ("I'll save X now") may only surface once a write has
+          // actually COMMITTED. Reads, previews awaiting confirmation, and
+          // idempotent-replay results scrub the promise sentences; the
+          // dead-end deflection scrub applies to all flushed narration.
+          const wroteOk = isCommit && toolResult.ok === true && !toolResult.confirmation;
+          let flushText = stripDeadEndDocumentAdvice(pendingNarration.text);
+          if (flushText && !wroteOk && !committedWriteOk && looksLikeWritePromise(flushText)) {
+            flushText = stripUnfulfilledWritePromises(flushText);
+          }
+          if (flushText) {
+            record({
+              type: "narration",
+              data: { text: flushText, step: pendingNarration.step },
+            });
+            narrationFlushedCount++;
+          }
         }
         pendingNarration = null;
       }

@@ -110,6 +110,9 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
   leave: ["request_leave", "my_leave"],
   document: [
     "save_my_document",
+    // Task #792 — attach a side / replace the scan on an EXISTING
+    // personal document (the only mobile path for an ID back side).
+    "attach_my_document_file",
     "my_documents",
     "search_documents",
     "document_list",
