@@ -8,7 +8,20 @@
  * object storage.
  */
 import * as React from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { Card, MonoChip, PillButton } from "@/components/ui/primitives";
+import { ChartContainer, type ChartConfig } from "@/components/ui/chart";
 
 const API = "/api/atelier/me";
 
@@ -89,6 +102,162 @@ function statusTone(s: string): "default" | "amber" | "green" | "gold" | "red" {
   return "default";
 }
 
+// ---------------------------------------------------------------------
+// Task #814 — month grouping + charts helpers.
+// ---------------------------------------------------------------------
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const MONTH_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/** "2026-08" from an ISO date string; falls back to createdAt when needed. */
+function monthKeyOf(c: Claim): string {
+  const d = c.expenseDate || c.createdAt;
+  return typeof d === "string" && /^\d{4}-\d{2}/.test(d) ? d.slice(0, 7) : "unknown";
+}
+
+function monthLabel(key: string): string {
+  if (key === "unknown") return "Undated";
+  const [y, m] = key.split("-").map(Number);
+  return `${MONTH_NAMES[(m ?? 1) - 1]} ${y}`;
+}
+
+/**
+ * Per-currency totals, matching the way rows print amounts (no FX
+ * conversion is invented — each currency sums separately).
+ */
+function currencyTotals(rows: Claim[]): string {
+  const m = new Map<string, number>();
+  for (const c of rows) m.set(c.currency, (m.get(c.currency) ?? 0) + c.amount);
+  return Array.from(m.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([cur, amt]) => `${cur} ${amt.toFixed(2)}`)
+    .join(" · ");
+}
+
+const CHART_PALETTE = [
+  "var(--gold)",
+  "var(--gold-soft)",
+  "var(--gold-deep)",
+  "#5B8DEF",
+  "#3FBF8F",
+  "#E0B354",
+  "#9aa0a6",
+  "#C25E5E",
+];
+const EMPTY_CHART_CONFIG: ChartConfig = {};
+
+/**
+ * Charts band under the banner — pie of category distribution and bar of
+ * monthly totals, both for the CURRENT YEAR. Amounts stay per-currency
+ * (no FX): the charts show the dominant currency and say so when other
+ * currencies were left out, keeping numbers consistent with the rows.
+ */
+function ExpenseCharts({ claims }: { claims: Claim[] }) {
+  const year = new Date().getFullYear();
+  const yearClaims = claims.filter((c) => monthKeyOf(c).startsWith(String(year)));
+
+  // Dominant currency = the one with the largest number of claims this year.
+  const byCurrency = new Map<string, number>();
+  for (const c of yearClaims) byCurrency.set(c.currency, (byCurrency.get(c.currency) ?? 0) + 1);
+  const dominant =
+    Array.from(byCurrency.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "USD";
+  const charted = yearClaims.filter((c) => c.currency === dominant);
+  const excluded = yearClaims.length - charted.length;
+
+  const catTotals = new Map<string, number>();
+  for (const c of charted) {
+    const label = (c.category || "other").replace(/_/g, " ");
+    catTotals.set(label, (catTotals.get(label) ?? 0) + c.amount);
+  }
+  const pieData = Array.from(catTotals.entries())
+    .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
+    .sort((a, b) => b.value - a.value);
+
+  const monthTotals = new Array(12).fill(0) as number[];
+  for (const c of charted) {
+    const m = Number(monthKeyOf(c).slice(5, 7));
+    if (m >= 1 && m <= 12) monthTotals[m - 1] += c.amount;
+  }
+  const barData = monthTotals.map((v, i) => ({
+    name: MONTH_SHORT[i],
+    value: Number(v.toFixed(2)),
+  }));
+  const hasData = charted.length > 0;
+
+  const fmt = (v: number) => `${dominant} ${v.toFixed(2)}`;
+
+  const frame = (label: string, note: string | null, chart: React.ReactElement) => (
+    <Card className="p-4 space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+          {label}
+        </div>
+        {note && <div className="text-[10px] text-text-faint">{note}</div>}
+      </div>
+      <div style={{ width: "100%", height: 200 }}>
+        {hasData ? (
+          <ChartContainer config={EMPTY_CHART_CONFIG} className="aspect-auto h-full w-full">
+            {chart}
+          </ChartContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-center text-xs text-text-faint border border-dashed border-border-soft rounded px-6">
+            No claims yet this year — charts appear as soon as you log your first expense.
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+
+  const note =
+    excluded > 0
+      ? `${dominant} only — ${excluded} claim${excluded === 1 ? "" : "s"} in other currencies not charted`
+      : hasData
+        ? `amounts in ${dominant}`
+        : null;
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2" data-testid="me-expense-charts">
+      {frame(
+        `Spend by category · ${year}`,
+        note,
+        <PieChart>
+          <Pie
+            data={pieData}
+            dataKey="value"
+            nameKey="name"
+            innerRadius={42}
+            outerRadius={70}
+            stroke="none"
+          >
+            {pieData.map((d, i) => (
+              <Cell key={d.name} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+            ))}
+          </Pie>
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Tooltip formatter={(v: number) => fmt(Number(v))} />
+        </PieChart>,
+      )}
+      {frame(
+        `Monthly spend · ${year}`,
+        note,
+        <BarChart data={barData}>
+          <CartesianGrid vertical={false} stroke="#2a2c33" />
+          <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} />
+          <YAxis tick={{ fontSize: 10, fill: "#9aa0a6" }} width={52} />
+          <Tooltip formatter={(v: number) => fmt(Number(v))} cursor={{ fill: "rgba(154,160,166,0.08)" }} />
+          <Bar dataKey="value" fill="var(--gold)" radius={[3, 3, 0, 0]} />
+        </BarChart>,
+      )}
+    </div>
+  );
+}
+
 // Task #76 — inline receipt thumbnail in claim history. Receipts may be
 // images or PDFs; try an <img> first and fall back to a text link when the
 // bytes are not renderable as an image.
@@ -114,6 +283,15 @@ function ReceiptThumb({ src, id }: { src: string; id: string }) {
         />
       )}
     </a>
+  );
+}
+
+/** Task #814 — marks a field the receipt scan prefilled on the review form. */
+function FromReceiptBadge() {
+  return (
+    <span className="ml-1.5 inline-flex items-center rounded-sm bg-gold/15 px-1.5 py-px font-mono text-[9px] uppercase tracking-wider text-gold align-middle">
+      from receipt
+    </span>
   );
 }
 
@@ -161,6 +339,23 @@ export default function MeExpenses() {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [autoBusyText, setAutoBusyText] = React.useState<string | null>(null);
   const [autoNote, setAutoNote] = React.useState<{ text: string; ok: boolean } | null>(null);
+  // Task #814 — receipt-first entry flow: the New Claim panel opens on a
+  // choice step (scan a receipt vs. enter manually); the review form is one
+  // shared component either way, with scan-prefilled fields badged.
+  const [entryStep, setEntryStep] = React.useState<"start" | "form">("start");
+  const [scannedFields, setScannedFields] = React.useState<Set<string>>(new Set());
+  // Task #814 — collapsible month sections; current month open by default.
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const [openMonths, setOpenMonths] = React.useState<Set<string>>(
+    () => new Set([currentMonthKey]),
+  );
+  const toggleMonth = (k: string) =>
+    setOpenMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
 
   const load = React.useCallback(async () => {
     setError(null);
@@ -347,6 +542,19 @@ export default function MeExpenses() {
       setAutoBusyText("Reading receipt…");
       const parsed = await runAsyncParse(id);
       if (parsed) {
+        // Task #814 — remember which fields the scan actually filled so the
+        // review form can badge them as "from receipt".
+        const filled = new Set<string>();
+        const mark = (key: string, v: unknown) => {
+          if (v !== null && v !== undefined && v !== "") filled.add(key);
+        };
+        mark("merchant", parsed.merchant);
+        mark("amount", parsed.amount);
+        mark("currency", parsed.currency);
+        mark("expenseDate", parsed.expenseDate);
+        mark("category", parsed.categoryCode ?? parsed.category);
+        mark("description", parsed.description);
+        setScannedFields(filled);
         setForm((f) => ({
           ...f,
           merchant: (parsed.merchant as string) ?? f.merchant,
@@ -368,6 +576,9 @@ export default function MeExpenses() {
       setAutoNote({ ok: false, text: (e as Error).message });
     } finally {
       setAutoBusyText(null);
+      // Whatever happened, land on the review form: on failure it is simply
+      // all-manual (same field set), which is the flow's whole point.
+      setEntryStep("form");
     }
   };
 
@@ -418,6 +629,8 @@ export default function MeExpenses() {
       setReceiptFile(null);
       setEditingId(null);
       setAutoNote(null);
+      setScannedFields(new Set());
+      setEntryStep("start");
       setShowForm(false);
       await load();
     } catch (e) {
@@ -522,7 +735,9 @@ export default function MeExpenses() {
                 setAutoNote(null);
                 setReceiptFile(null);
                 setForm({ ...emptyForm });
+                setScannedFields(new Set());
               }
+              setEntryStep("start");
               return !v;
             });
           }}
@@ -531,6 +746,16 @@ export default function MeExpenses() {
           {showForm ? "Close" : "New claim"}
         </PillButton>
       </div>
+
+      {/* Task #814 — charts band: category pie + monthly trend, current year. */}
+      {loading ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card className="p-4 h-[248px] animate-pulse" />
+          <Card className="p-4 h-[248px] animate-pulse" />
+        </div>
+      ) : (
+        <ExpenseCharts claims={claims} />
+      )}
 
       {error && (
         <Card className="border-red-500/40 bg-red-500/5 p-3 text-sm text-red-300">{error}</Card>
@@ -567,11 +792,71 @@ export default function MeExpenses() {
         </Card>
       )}
 
-      {showForm && (
+      {showForm && entryStep === "start" && (
+        <Card className="p-4 space-y-3" data-testid="me-expense-start">
+          <div>
+            <h4 className="text-sm font-semibold text-text">Start with your receipt</h4>
+            <p className="mt-1 text-xs text-text-mute">
+              Scan or upload a receipt and we'll read the merchant, amount, date and category
+              for you — you review everything before saving. Or skip the receipt and type the
+              details yourself; the form is the same either way.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label
+              className={`inline-flex min-h-[44px] cursor-pointer items-center rounded-full border border-gold/50 bg-gold/10 px-4 text-sm font-medium text-gold hover:bg-gold/15 ${autoBusyText ? "pointer-events-none opacity-60" : ""}`}
+              data-testid="exp-start-scan"
+            >
+              Scan / upload receipt
+              <input
+                type="file"
+                accept="image/*,.heic,.heif,application/pdf"
+                capture="environment"
+                className="hidden"
+                disabled={autoBusyText !== null}
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  if (f) void autoProcess(f);
+                }}
+              />
+            </label>
+            <PillButton
+              variant="ghost"
+              className="min-h-[44px]"
+              onClick={() => setEntryStep("form")}
+              disabled={autoBusyText !== null}
+              data-testid="exp-start-manual"
+            >
+              Enter manually
+            </PillButton>
+          </div>
+          {autoBusyText && (
+            <span className="flex items-center gap-2 text-xs text-gold" data-testid="exp-auto-progress">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border border-gold border-t-transparent" />
+              {autoBusyText}
+            </span>
+          )}
+        </Card>
+      )}
+
+      {showForm && entryStep === "form" && (
         <Card className="p-4 space-y-3" data-testid="me-expense-form">
+          {autoNote && (
+            <div
+              className={`rounded-md border p-2.5 text-xs ${autoNote.ok ? "border-emerald-500/40 bg-emerald-500/5 text-emerald-300" : "border-amber-500/40 bg-amber-500/5 text-amber-300"}`}
+              data-testid="exp-auto-note"
+            >
+              {autoNote.text}
+            </div>
+          )}
+          <div className="font-mono text-[10px] uppercase tracking-widest text-text-faint">
+            Receipt details{scannedFields.size > 0 ? " — auto-filled fields are marked" : ""}
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs text-text-mute space-y-1">
-              <span className="font-mono uppercase tracking-wider text-[10px]">Merchant *</span>
+              <span className="font-mono uppercase tracking-wider text-[10px]">
+                Merchant *{scannedFields.has("merchant") && <FromReceiptBadge />}
+              </span>
               <input
                 type="text"
                 className={inputCls}
@@ -581,7 +866,9 @@ export default function MeExpenses() {
               />
             </label>
             <label className="text-xs text-text-mute space-y-1">
-              <span className="font-mono uppercase tracking-wider text-[10px]">Date</span>
+              <span className="font-mono uppercase tracking-wider text-[10px]">
+                Date{scannedFields.has("expenseDate") && <FromReceiptBadge />}
+              </span>
               <input
                 type="date"
                 className={inputCls}
@@ -591,7 +878,9 @@ export default function MeExpenses() {
               />
             </label>
             <label className="text-xs text-text-mute space-y-1">
-              <span className="font-mono uppercase tracking-wider text-[10px]">Amount *</span>
+              <span className="font-mono uppercase tracking-wider text-[10px]">
+                Amount *{scannedFields.has("amount") && <FromReceiptBadge />}
+              </span>
               <input
                 type="number"
                 min="0"
@@ -604,7 +893,9 @@ export default function MeExpenses() {
               />
             </label>
             <label className="text-xs text-text-mute space-y-1">
-              <span className="font-mono uppercase tracking-wider text-[10px]">Currency</span>
+              <span className="font-mono uppercase tracking-wider text-[10px]">
+                Currency{scannedFields.has("currency") && <FromReceiptBadge />}
+              </span>
               <select
                 className={inputCls}
                 value={form.currency}
@@ -618,7 +909,9 @@ export default function MeExpenses() {
             {taxonomy ? (
               <>
                 <label className="text-xs text-text-mute space-y-1">
-                  <span className="font-mono uppercase tracking-wider text-[10px]">Category</span>
+                  <span className="font-mono uppercase tracking-wider text-[10px]">
+                    Category{scannedFields.has("category") && <FromReceiptBadge />}
+                  </span>
                   <select
                     className={inputCls}
                     value={form.categoryCode}
@@ -677,9 +970,12 @@ export default function MeExpenses() {
                   {suggestError && <p className="text-xs text-amber-300">{suggestError}</p>}
                 </div>
               </>
-            ) : (
+            ) : null}
+            {!taxonomy && (
               <label className="text-xs text-text-mute space-y-1">
-                <span className="font-mono uppercase tracking-wider text-[10px]">Category</span>
+                <span className="font-mono uppercase tracking-wider text-[10px]">
+                  Category{scannedFields.has("category") && <FromReceiptBadge />}
+                </span>
                 <select
                   className={inputCls}
                   value={form.category}
@@ -691,6 +987,11 @@ export default function MeExpenses() {
                 </select>
               </label>
             )}
+          </div>
+          <div className="pt-1 font-mono text-[10px] uppercase tracking-widest text-text-faint border-t border-border-soft">
+            Attribution &amp; funding — always entered by you
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs text-text-mute space-y-1">
               <span className="font-mono uppercase tracking-wider text-[10px]">Funding source</span>
               <select
@@ -859,7 +1160,9 @@ export default function MeExpenses() {
             )}
           </div>
           <label className="block text-xs text-text-mute space-y-1">
-            <span className="font-mono uppercase tracking-wider text-[10px]">Description</span>
+            <span className="font-mono uppercase tracking-wider text-[10px]">
+              Description{scannedFields.has("description") && <FromReceiptBadge />}
+            </span>
             <input
               type="text"
               className={inputCls}
@@ -869,7 +1172,7 @@ export default function MeExpenses() {
           </label>
           <label className="block text-xs text-text-mute space-y-1">
             <span className="font-mono uppercase tracking-wider text-[10px]">
-              Receipt (photo or file)
+              Receipt (photo or file){receiptFile ? " — replace to re-scan" : ""}
             </span>
             <input
               type="file"
@@ -894,14 +1197,6 @@ export default function MeExpenses() {
                 {autoBusyText}
               </span>
             )}
-            {autoNote && (
-              <span
-                className={`block text-xs ${autoNote.ok ? "text-emerald-300" : "text-amber-300"}`}
-                data-testid="exp-auto-note"
-              >
-                {autoNote.text}
-              </span>
-            )}
           </label>
           <PillButton
             onClick={create}
@@ -914,16 +1209,48 @@ export default function MeExpenses() {
         </Card>
       )}
 
-      <Card className="p-0 overflow-hidden">
-        {loading ? (
+      {loading ? (
+        <Card className="p-0 overflow-hidden">
           <p className="p-4 text-sm text-text-faint">Loading claims…</p>
-        ) : claims.length === 0 ? (
+        </Card>
+      ) : claims.length === 0 ? (
+        <Card className="p-0 overflow-hidden">
           <p className="p-4 text-sm text-text-mute" data-testid="me-expenses-empty">
             No expense claims yet.
           </p>
-        ) : (
-          <ul className="divide-y divide-border-soft" data-testid="me-expenses-list">
-            {claims.map((c) => (
+        </Card>
+      ) : (
+        <div className="space-y-3" data-testid="me-expenses-list">
+          {groupClaimsByMonth(claims).map(([mk, rows]) => {
+            const open = openMonths.has(mk);
+            return (
+              <Card key={mk} className="p-0 overflow-hidden" data-testid={`exp-month-${mk}`}>
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gold/5 min-h-[44px]"
+                  onClick={() => toggleMonth(mk)}
+                  aria-expanded={open}
+                  data-testid={`exp-month-toggle-${mk}`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`inline-block text-text-faint transition-transform ${open ? "rotate-90" : ""}`}
+                      aria-hidden
+                    >
+                      ▸
+                    </span>
+                    <span className="text-sm font-semibold text-text">{monthLabel(mk)}</span>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-text-faint">
+                      {rows.length} claim{rows.length === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <span className="font-mono text-xs text-text-mute" data-testid={`exp-month-total-${mk}`}>
+                    {currencyTotals(rows)}
+                  </span>
+                </button>
+                {open && (
+                  <ul className="divide-y divide-border-soft border-t border-border-soft">
+                    {rows.map((c) => (
               <li key={c.id} className="p-3 text-sm space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <MonoChip tone={statusTone(c.status)}>{c.status}</MonoChip>
@@ -983,10 +1310,31 @@ export default function MeExpenses() {
                   </div>
                 )}
               </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
+}
+
+/** Newest month first; rows within a month newest expenseDate first. */
+function groupClaimsByMonth(claims: Claim[]): Array<[string, Claim[]]> {
+  const groups = new Map<string, Claim[]>();
+  for (const c of claims) {
+    const k = monthKeyOf(c);
+    const arr = groups.get(k);
+    if (arr) arr.push(c);
+    else groups.set(k, [c]);
+  }
+  return Array.from(groups.entries())
+    .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
+    .map(([k, rows]) => [
+      k,
+      rows.slice().sort((a, b) => ((a.expenseDate || a.createdAt) < (b.expenseDate || b.createdAt) ? 1 : -1)),
+    ]);
 }
