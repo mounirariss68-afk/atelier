@@ -34,6 +34,7 @@ import {
   type PersonWire,
 } from "../../routes/atelier/rosterRoutes.js";
 import type { ToolContext, ToolResult } from "./index.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 
 // Same perimeter as the travel tools (travel-capabilities.ts).
 const TRAVEL_ROLES: AtelierRole[] = [
@@ -153,17 +154,17 @@ defineCapability({
     // Roster colleagues — SCOPED before display (listPersons is not
     // viewer-scoped; leaking out-of-perimeter names is a regression).
     const scope = await resolveRosterScope(me);
-    const all = await listPersons({
-      workerType: "all",
-      ...(q ? { q } : {}),
-      includeComp: false,
-    });
+    // Task #786 — fetch the pool UNFILTERED and match names locally so
+    // near-misses ("Samira" vs "Samir") can still be offered as ranked
+    // candidates. Scope filter runs before any name is considered.
+    const all = await listPersons({ workerType: "all", includeComp: false });
     const self = await resolveSelfPerson(me);
     const visible = scopeColleagues(all, scope) as PersonWire[];
-    const colleagues = visible
+    const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").trim();
+    const needleFold = fold(q);
+    const colleaguePool = visible
       .filter((p) => !(self && p.id === self.id))
       .sort((a, b) => (a.fullName ?? "").localeCompare(b.fullName ?? ""))
-      .slice(0, 30)
       .map((p) => ({
         id: `colleague:${p.id}`,
         name: p.preferredName || p.fullName,
@@ -192,9 +193,9 @@ defineCapability({
             isNull(atelierDependents.deletedAt),
           ),
         );
-      const needle = q.toLowerCase();
+      // No q pre-filter here — the shared name-resolution below (#786)
+      // needs the full scoped pool to rank near-miss candidates.
       dependents = rows
-        .filter((d) => !q || d.fullName.toLowerCase().includes(needle))
         .sort((a, b) => a.fullName.localeCompare(b.fullName))
         .map((d) => ({
           id: `dependent:${d.id}`,
@@ -205,7 +206,59 @@ defineCapability({
         }));
     }
 
-    const items = [...dependents, ...colleagues];
+    // Task #786 — name-filter resolution over the SCOPED pool:
+    //  - no q            → full picker (dependents first, colleagues capped)
+    //  - q, one match    → picker with just that person (one step)
+    //  - q, several      → standard ranked-candidate disambiguation
+    //  - q, no substring → nearest-name candidates from the same pool
+    const pool = [...dependents, ...colleaguePool];
+    let items = pool;
+    if (q) {
+      const substr = pool.filter((p) => fold(p.name).includes(needleFold));
+      const ambiguousSet =
+        substr.length > 0
+          ? substr
+          : (() => {
+              const ranked = rankNearestNames(
+                q,
+                pool.map((p) => ({ id: p.id, label: p.name })),
+                6,
+              );
+              const ids = new Set(ranked.map((r) => r.id));
+              return pool.filter((p) => ids.has(p.id));
+            })();
+      if (ambiguousSet.length > 1) {
+        const ranked = rankNearestNames(
+          q,
+          ambiguousSet.map((p) => ({ id: p.id, label: p.name })),
+          ambiguousSet.length,
+        );
+        const order = new Map(ranked.map((r, idx) => [r.id, idx]));
+        const options = [...ambiguousSet]
+          .sort(
+            (a, b) =>
+              (order.has(a.id) ? order.get(a.id)! : Number.MAX_SAFE_INTEGER) -
+              (order.has(b.id) ? order.get(b.id)! : Number.MAX_SAFE_INTEGER),
+          )
+          .slice(0, 6)
+          .map((p) => ({
+            id: p.id,
+            label: p.name,
+            secondary: p.kind === "dependent" ? (p.relationship ?? "family") : (p.title ?? "colleague"),
+          }));
+        return {
+          ok: true,
+          data: {
+            prompt: `Several people match "${q}" — who did you mean?`,
+            options,
+          },
+          disambiguation: { kind: "traveller", options },
+        };
+      }
+      items = ambiguousSet;
+    } else {
+      items = [...dependents, ...colleaguePool.slice(0, 30)];
+    }
     return {
       ok: true,
       data: {

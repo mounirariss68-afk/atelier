@@ -107,6 +107,28 @@ const ignavStub = createServer((req, res) => {
         res.end(JSON.stringify([]));
         return;
       }
+      if (q.includes("london")) {
+        // Multi-airport city (#786) — materially different airports.
+        res.end(
+          JSON.stringify([
+            { code: "LHR", name: "Heathrow Airport", city: "London", country: "GB" },
+            { code: "LGW", name: "Gatwick Airport", city: "London", country: "GB" },
+            { code: "STN", name: "Stansted Airport", city: "London", country: "GB" },
+          ]),
+        );
+        return;
+      }
+      if (q.includes("heathrow")) {
+        // Specific airport name — the same city rows come back, but the
+        // query names ONE of them; must resolve silently (#786).
+        res.end(
+          JSON.stringify([
+            { code: "LHR", name: "Heathrow Airport", city: "London", country: "GB" },
+            { code: "LGW", name: "Gatwick Airport", city: "London", country: "GB" },
+          ]),
+        );
+        return;
+      }
       if (q.includes("dubai")) {
         res.end(
           JSON.stringify([
@@ -597,6 +619,53 @@ const ok = (name: string) => {
   assert.equal(r.errorCode, "unknown_place");
   assert.ok(r.clarification);
   ok("unknown place → clarification");
+}
+
+// 5b. Multi-airport city (#786) → ranked candidate clarification with no
+// fares call; the answered option string then resolves to its code.
+{
+  requests.length = 0;
+  const r = await flights.run(
+    { segments: [{ origin: "DXB", destination: "London", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.equal(r.errorCode, "ambiguous_place");
+  assert.ok(r.clarification, "clarification present");
+  const cf = (r.clarification as Record<string, unknown>).fields as Array<Record<string, unknown>>;
+  const opts = cf?.[0]?.options as string[];
+  assert.ok(Array.isArray(opts) && opts.length === 3, JSON.stringify(cf));
+  // Ranked: provider relevance order preserved, code-first labels.
+  assert.ok(opts[0].startsWith("LHR — Heathrow"), opts[0]);
+  assert.ok(opts[1].startsWith("LGW — "), opts[1]);
+  assert.ok(opts[2].startsWith("STN — "), opts[2]);
+  assert.equal((r.clarification as Record<string, unknown>).field, "segments.0.destination");
+  assert.ok(!requests.some((q) => q.url.startsWith("/api/fares/")), "no fares call before the ask");
+
+  // Resume: the picked option string resolves straight to the code.
+  requests.length = 0;
+  const r2 = await flights.run(
+    { segments: [{ origin: "DXB", destination: opts[0], date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(r2.ok, true, JSON.stringify(r2));
+  const ow = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+  assert.ok(ow, "one-way endpoint hit after the answer");
+  assert.equal((ow!.body as { destination: string }).destination, "LHR");
+  ok("multi-airport city → ranked airport clarification, answer resolves (#786)");
+}
+
+// 5c. Specific airport name in a multi-airport city → still one step.
+{
+  requests.length = 0;
+  const r = await flights.run(
+    { segments: [{ origin: "DXB", destination: "Heathrow", date: "2027-03-02" }] },
+    ctx,
+  );
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const ow = requests.find((q) => q.url.startsWith("/api/fares/one-way"));
+  assert.equal((ow!.body as { destination: string }).destination, "LHR");
+  ok("specific airport name resolves silently despite sibling airports (#786)");
 }
 
 // 6. Rich card payload + AED conversion (#715).
@@ -1483,4 +1552,4 @@ assert.ok(planTrip, "travel_plan_trip registered");
 
 ignavStub.close();
 stayingStub.close();
-console.log(`\ntravel-probe: ${passed}/26 groups passed`);
+console.log(`\ntravel-probe: ${passed}/33 groups passed`);

@@ -83,8 +83,65 @@ function travelError(err: unknown): ToolResult {
  * without a lookup. Returns null when nothing matched.
  */
 async function resolveAirport(query: string): Promise<AirportPlace | null> {
+  const r = await resolveAirportScoped(query);
+  return r.kind === "none" ? null : r.kind === "match" ? r.place : r.options[0] ?? null;
+}
+
+/** Task #786 — airport resolution with honest ambiguity. */
+type AirportResolution =
+  | { kind: "match"; place: AirportPlace }
+  | { kind: "ambiguous"; options: AirportPlace[] }
+  | { kind: "none" };
+
+const foldPlace = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .trim();
+
+/**
+ * Resolve a free-text place to an airport, surfacing material ambiguity
+ * instead of silently taking the provider's first suggestion. A place
+ * that clearly names ONE airport ("Heathrow", "Dubai") still resolves
+ * in one step; a multi-airport city ("London", "Tokyo", "New York")
+ * comes back `ambiguous` with the provider-ranked candidates so the
+ * caller can ask which airport the user means.
+ */
+async function resolveAirportScoped(query: string): Promise<AirportResolution> {
   const suggestions = await ignavAirportSuggestions(query);
-  return suggestions[0] ?? null;
+  if (suggestions.length === 0) return { kind: "none" };
+  if (suggestions.length === 1) return { kind: "match", place: suggestions[0]! };
+  const nq = foldPlace(query);
+  // Exact code or exact airport-name mention → unambiguous.
+  const exact = suggestions.find(
+    (s) => foldPlace(s.code) === nq || foldPlace(s.name ?? "") === nq,
+  );
+  if (exact) return { kind: "match", place: exact };
+  // Relevant = suggestions the query plausibly refers to (city match or
+  // name containing the query). Provider order is its relevance ranking.
+  const relevant = suggestions.filter((s) => {
+    const city = foldPlace(s.city ?? "");
+    const name = foldPlace(s.name ?? "");
+    return (city && (city === nq || nq.includes(city) || city.includes(nq))) || name.includes(nq);
+  });
+  const pool = relevant.length > 0 ? relevant : suggestions;
+  // Materially different = distinct airport codes.
+  const seen = new Set<string>();
+  const distinct = pool.filter((s) => {
+    if (seen.has(s.code)) return false;
+    seen.add(s.code);
+    return true;
+  });
+  if (distinct.length <= 1) return { kind: "match", place: distinct[0] ?? pool[0]! };
+  return { kind: "ambiguous", options: distinct.slice(0, 5) };
+}
+
+/** Option string shown on airport-clarification chips. Keep the IATA
+ * code first — the resume path parses it back out of the answer. */
+function airportOptionLabel(p: AirportPlace): string {
+  const where = [p.city, p.country].filter(Boolean).join(", ");
+  return `${p.code} — ${p.name}${where ? ` (${where})` : ""}`;
 }
 
 // ---------------------------------------------------------------------
@@ -693,8 +750,15 @@ defineCapability({
             resolved[role] = text.toUpperCase();
             continue;
           }
-          const place = await resolveAirport(text);
-          if (!place?.code) {
+          // Task #786 — an airport-clarification answer comes back as
+          // "LHR — Heathrow Airport (London, GB)"; take the code.
+          const answered = /^([A-Za-z]{3}) — /.exec(text);
+          if (answered) {
+            resolved[role] = answered[1]!.toUpperCase();
+            continue;
+          }
+          const res = await resolveAirportScoped(text);
+          if (res.kind === "none") {
             return {
               ok: false,
               errorCode: "unknown_place",
@@ -707,7 +771,30 @@ defineCapability({
               },
             };
           }
-          resolved[role] = place.code;
+          if (res.kind === "ambiguous") {
+            // Task #786 — "fly to London" must not silently become one
+            // airport. Ranked candidates (provider relevance order).
+            const options = res.options.map(airportOptionLabel);
+            return {
+              ok: false,
+              errorCode: "ambiguous_place",
+              errorMessage: `"${text}" has several airports — ask which one to use.`,
+              clarification: {
+                field: `segments.${i}.${role}`,
+                question: `"${text}" has more than one airport — which should I use?`,
+                fields: [
+                  {
+                    field: `segments.${i}.${role}`,
+                    label: `${role === "origin" ? "Departure" : "Arrival"} airport for leg ${i + 1}`,
+                    options,
+                  },
+                ],
+                tool: "travel_search_flights",
+                partial: { ...input },
+              },
+            };
+          }
+          resolved[role] = res.place.code;
         }
         slices.push({
           origin: resolved.origin,
