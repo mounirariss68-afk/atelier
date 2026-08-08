@@ -74,17 +74,9 @@ const SKIP_KEYS = new Set([
   "outlookDraftLink",
 ]);
 
-/** Task #785 — map internal web hrefs from write-success cards to the
- * mobile route that shows the same content. Only self-scoped Me
- * destinations are mapped (that is where self-document writes land);
- * unmapped internal paths stay non-pressable as before. */
-function internalRouteFor(href: string): { route: string; label: string } | null {
-  if (!href.startsWith("/")) return null;
-  if (href === "/me/profile" || href === "/me" || href.startsWith("/me?") || href.startsWith("/me/")) {
-    return { route: "/(tabs)/me", label: "View in Me" };
-  }
-  return null;
-}
+// Task #794 — internal href → expo-router mapping lives in a pure
+// module so a Node-side probe can pin it without pulling in RN deps.
+import { internalRouteFor } from "@/lib/internalRoute";
 
 /** Task #785 — tappable row that routes to an in-app screen. */
 function InternalLinkRow({ route, label }: { route: string; label: string }) {
