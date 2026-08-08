@@ -203,6 +203,24 @@ app.listen(port, (err) => {
             "Atelier RAG chunk-embedding backfill complete",
           );
         }
+        // Task #779 — semantic entity index gap-fill. Dev was backfilled by
+        // script, but the workspace has no prod write credentials, so the
+        // deployed server must self-heal atelier_entity_embeddings at boot
+        // (go-live included) or "opportunity at X"-style lookups lose their
+        // vector tier on live data. Idempotent: only rows missing or with a
+        // stale label are (re)embedded; orphan rows for deleted entities are
+        // deliberately left alone. Runs under the same advisory lock as the
+        // chunk backfill so one instance does the work per deploy.
+        const { backfillEntityEmbeddings } = await import(
+          "./lib/atelier-cli/entity-embedding-backfill"
+        );
+        const ent = await backfillEntityEmbeddings();
+        if (ent.processed > 0) {
+          logger.info(
+            { ...ent },
+            "Entity-embedding backfill complete",
+          );
+        }
       } finally {
         await db.execute(sql`SELECT pg_advisory_unlock(${LOCK_KEY})`);
       }

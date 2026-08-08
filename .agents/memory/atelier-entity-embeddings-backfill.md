@@ -1,8 +1,9 @@
 ---
 name: Entity embeddings backfill
-description: Semantic entity index (atelier_entity_embeddings) backfill script — prod rerun needed at go-live; idempotent, no cleanup of deleted-entity rows.
+description: Semantic entity index (atelier_entity_embeddings) gap-fill — now a boot chore; prod self-heals on deploy; idempotent, no cleanup of deleted-entity rows.
 ---
-- `artifacts/api-server/scripts/backfill-entity-embeddings.ts --apply` is dry-run by default, idempotent; run on dev (done 2026-08-07) and MUST re-run on production at go-live (task-branch/dev DB data never merges).
-- Table column is `target_id` (not entityId); script imports db via `@workspace/db`.
-- **Why:** backfill only fills gaps; it deliberately leaves embedding rows for deleted entities (resolver tolerates missing targets), so row counts can exceed live source rows.
-- **How to apply:** at go-live, run the script against prod; extra/orphan rows in spot-checks are expected, gaps are not.
+- The gap-fill is a boot chore in api-server startup (shared lib `entity-embedding-backfill`, runs under the same advisory lock as the RAG chunk backfill), so production self-heals on every deploy — including go-live. No manual prod step remains.
+- `artifacts/api-server/scripts/backfill-entity-embeddings.ts` is a thin wrapper for manual dry-run/apply on dev (run from artifacts/api-server: `pnpm exec tsx scripts/...`); dev re-applied clean 2026-08-08.
+- **Why:** the workspace has no prod write credentials (read-only replica), so a "run script on prod" step could never be executed by the agent; boot-time self-heal is the only reliable path. Embeddings come from the vendored local MiniLM model — no external API, cheap at this scale.
+- Backfill only fills gaps (missing row or stale label); it deliberately leaves embedding rows for deleted entities, so row counts can exceed live source rows — orphans in spot-checks are expected, gaps are not.
+- mirrorEntityEmbedding swallows per-row errors; verify success by re-collecting gaps, not by return codes.
