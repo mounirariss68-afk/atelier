@@ -1,11 +1,14 @@
 import { Feather } from "@expo/vector-icons";
 import {
   getAtelierDownloadMyDocumentUrl,
+  useAtelierCreateMyDocument,
   useAtelierGetMyProfile,
   useAtelierListMyDocuments,
+  useAtelierReplaceMyDocumentScan,
   useAtelierUploadMyPhoto,
 } from "@workspace/api-client-react";
 import type { AtelierSelfDocument } from "@workspace/api-client-react";
+import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useMemo, useState } from "react";
 import {
@@ -32,6 +35,7 @@ import {
   FadeInView,
   IconButton,
   PressScale,
+  Sheet,
   Skeleton,
   WEB_TAB_BAR,
   WEB_TOP_INSET,
@@ -44,6 +48,7 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
+import { runExclusivePick } from "@/lib/pickerGuard";
 import { TextInput } from "react-native";
 
 // ============================================================
@@ -243,6 +248,28 @@ function SelfBillingSection() {
   );
 }
 
+// ============================================================
+// Task #797 — native upload of ID scans from the Me tab.
+// Mirrors the server contract in meProfileRoutes.ts: PDF/JPEG/PNG/WebP,
+// ≤15 MB, and a national ID needs front+back scans or one combined PDF.
+// ============================================================
+type PickedScan = { uri: string; name: string; mime: string; size: number | null };
+
+const SCAN_MIMES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const SCAN_MAX_BYTES = 15 * 1024 * 1024;
+
+const DOC_KINDS = ["passport", "national_id", "residency", "visa", "other"] as const;
+
+/** React Native fetch/FormData file descriptor (same trick as the photo upload). */
+function toRnFile(f: PickedScan): Blob {
+  return { uri: f.uri, name: f.name, type: f.mime } as unknown as Blob;
+}
+
 function docIcon(kind: string): React.ComponentProps<typeof Feather>["name"] {
   const k = kind.toLowerCase();
   if (k.includes("passport")) return "book";
@@ -364,6 +391,221 @@ export default function MeScreen() {
     },
     [t, feedback],
   );
+
+  // ------------------------------------------------------------------
+  // Task #797 — add / replace ID document scans natively.
+  // ------------------------------------------------------------------
+  const createDoc = useAtelierCreateMyDocument();
+  const replaceScan = useAtelierReplaceMyDocumentScan();
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addKind, setAddKind] = useState<(typeof DOC_KINDS)[number]>("passport");
+  const [addTitle, setAddTitle] = useState("");
+  const [addExpires, setAddExpires] = useState("");
+  const [addFront, setAddFront] = useState<PickedScan | null>(null);
+  const [addBack, setAddBack] = useState<PickedScan | null>(null);
+  const [docActionsFor, setDocActionsFor] = useState<AtelierSelfDocument | null>(null);
+  // Which scan slot the source sheet is picking for. Kept in a ref because
+  // the Sheet closes (and clears its own visibility) BEFORE the deferred
+  // picker action runs — the target must survive that dismissal.
+  type ScanTarget =
+    | { kind: "add"; slot: "front" | "back" }
+    | { kind: "replace"; docId: string; side: "front" | "back" };
+  const scanTargetRef = React.useRef<ScanTarget | null>(null);
+  const [scanSheetOpen, setScanSheetOpen] = useState(false);
+  // iOS shows only the top-most modal: the add-document Modal must stay
+  // hidden while the source sheet or a native picker is presenting.
+  const [pickerActive, setPickerActive] = useState(false);
+  const [replacingId, setReplacingId] = useState<string | null>(null);
+
+  const openScanSheet = useCallback((target: ScanTarget) => {
+    scanTargetRef.current = target;
+    setScanSheetOpen(true);
+  }, []);
+
+  const validateScan = useCallback(
+    (f: PickedScan): boolean => {
+      if (!SCAN_MIMES.has(f.mime)) {
+        hapticError();
+        feedback.toast(t("me.docBadType"), "error");
+        return false;
+      }
+      if (f.size != null && f.size > SCAN_MAX_BYTES) {
+        hapticError();
+        feedback.toast(t("me.docTooLarge"), "error");
+        return false;
+      }
+      return true;
+    },
+    [t, feedback],
+  );
+
+  const applyScanError = useCallback(
+    (e: unknown) => {
+      hapticError();
+      const data = (e as { data?: { message?: string; error?: string } } | null)?.data;
+      const msg =
+        (typeof data?.message === "string" && data.message) ||
+        (data?.error === "back-side-required" ? t("me.docBackRequired") : null) ||
+        (data?.error === "unsupported-file-type" ? t("me.docBadType") : null) ||
+        t("common.error");
+      feedback.toast(msg, "error");
+    },
+    [t, feedback],
+  );
+
+  const deliverPickedScan = useCallback(
+    async (f: PickedScan) => {
+      const target = scanTargetRef.current;
+      scanTargetRef.current = null;
+      if (!target || !validateScan(f)) return;
+      if (target.kind === "add") {
+        if (target.slot === "front") setAddFront(f);
+        else setAddBack(f);
+        return;
+      }
+      setReplacingId(target.docId);
+      try {
+        await replaceScan.mutateAsync({
+          id: target.docId,
+          data: { file: toRnFile(f), side: target.side },
+        });
+        await docs.refetch();
+        hapticSuccess();
+        feedback.toast(t("me.scanReplaced"), "success");
+      } catch (e) {
+        applyScanError(e);
+      } finally {
+        setReplacingId(null);
+      }
+    },
+    [validateScan, replaceScan, docs, t, feedback, applyScanError],
+  );
+
+  const pickScanFromInner = useCallback(
+    async (mode: "camera" | "library" | "file") => {
+      if (mode === "file") {
+        const out = await runExclusivePick(() =>
+          DocumentPicker.getDocumentAsync({
+            type: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+            copyToCacheDirectory: true,
+            multiple: false,
+          }),
+        );
+        if (!out.ok) {
+          if (out.reason === "failed") feedback.toast(t("picker.failed"), "error");
+          return;
+        }
+        const res = out.value;
+        if (res.canceled || !res.assets?.[0]) return;
+        const a = res.assets[0];
+        await deliverPickedScan({
+          uri: a.uri,
+          name: a.name ?? `scan_${Date.now()}.pdf`,
+          mime: a.mimeType ?? "application/pdf",
+          size: a.size ?? null,
+        });
+        return;
+      }
+      const perm =
+        mode === "camera"
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        feedback.toast(t(mode === "camera" ? "perm.camera" : "perm.photos"), "error");
+        return;
+      }
+      const out = await runExclusivePick(() =>
+        mode === "camera"
+          ? ImagePicker.launchCameraAsync({ quality: 0.8 })
+          : ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 }),
+      );
+      if (!out.ok) {
+        if (out.reason === "failed") feedback.toast(t("picker.failed"), "error");
+        return;
+      }
+      const res = out.value;
+      if (res.canceled || !res.assets[0]) return;
+      const a = res.assets[0];
+      await deliverPickedScan({
+        uri: a.uri,
+        name: a.fileName ?? `scan_${Date.now()}.jpg`,
+        mime: a.mimeType ?? "image/jpeg",
+        size: a.fileSize ?? null,
+      });
+    },
+    [deliverPickedScan, t, feedback],
+  );
+
+  const pickScanFrom = useCallback(
+    async (mode: "camera" | "library" | "file") => {
+      // pickerActive was already set at option-tap time (onOptionSelected)
+      // so the add modal stayed hidden across the sheet-dismiss → pick gap.
+      setPickerActive(true);
+      try {
+        await pickScanFromInner(mode);
+      } finally {
+        // Let the native picker finish dismissing before the add modal is
+        // allowed to re-present (iOS shows only the top-most modal).
+        if (Platform.OS === "web") setPickerActive(false);
+        else setTimeout(() => setPickerActive(false), 400);
+      }
+    },
+    [pickScanFromInner],
+  );
+
+  const resetAddForm = useCallback(() => {
+    setAddKind("passport");
+    setAddTitle("");
+    setAddExpires("");
+    setAddFront(null);
+    setAddBack(null);
+  }, []);
+
+  const submitAdd = useCallback(async () => {
+    const title = addTitle.trim();
+    if (!title) {
+      hapticError();
+      feedback.toast(t("me.docTitleRequired"), "error");
+      return;
+    }
+    const expires = addExpires.trim();
+    if (expires && !/^\d{4}-\d{2}-\d{2}$/.test(expires)) {
+      hapticError();
+      feedback.toast(t("me.docBadDate"), "error");
+      return;
+    }
+    // Same rule as the server: a national ID front image needs a back scan
+    // (a single combined PDF is fine on its own).
+    if (
+      addKind === "national_id" &&
+      addFront &&
+      addFront.mime !== "application/pdf" &&
+      !addBack
+    ) {
+      hapticError();
+      feedback.toast(t("me.docBackRequired"), "error");
+      return;
+    }
+    try {
+      await createDoc.mutateAsync({
+        data: {
+          kind: addKind,
+          title,
+          ...(expires ? { expiresAt: expires } : {}),
+          ...(addFront ? { file: toRnFile(addFront) } : {}),
+          ...(addKind === "national_id" && addBack ? { fileBack: toRnFile(addBack) } : {}),
+        },
+      });
+      await docs.refetch();
+      hapticSuccess();
+      feedback.toast(t("me.docSaved"), "success");
+      setAddOpen(false);
+      resetAddForm();
+    } catch (e) {
+      applyScanError(e);
+    }
+  }, [addTitle, addExpires, addKind, addFront, addBack, createDoc, docs, t, feedback, resetAddForm, applyScanError]);
 
   const topPad = Platform.OS === "web" ? WEB_TOP_INSET : insets.top + 8;
   const bottomPad = (Platform.OS === "web" ? WEB_TAB_BAR : insets.bottom + 90) + 24;
@@ -521,18 +763,46 @@ export default function MeScreen() {
           </FadeInView>
         )}
 
-        <Text
+        <View
           style={{
-            color: c.foreground,
-            fontFamily: "PlusJakartaSans_800ExtraBold",
-            fontSize: 17,
-            letterSpacing: -0.2,
-            textAlign: rtl.textAlign,
+            flexDirection: rtl.row,
+            alignItems: "center",
+            justifyContent: "space-between",
             marginTop: 4,
           }}
         >
-          {t("me.documents")}
-        </Text>
+          <Text
+            style={{
+              color: c.foreground,
+              fontFamily: "PlusJakartaSans_800ExtraBold",
+              fontSize: 17,
+              letterSpacing: -0.2,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {t("me.documents")}
+          </Text>
+          <PressScale onPress={() => setAddOpen(true)}>
+            <View
+              style={{
+                flexDirection: rtl.row,
+                alignItems: "center",
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 999,
+                backgroundColor: c.tint08,
+                borderWidth: 1,
+                borderColor: c.tint25,
+              }}
+            >
+              <Feather name="plus" size={14} color={c.primary} />
+              <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_700Bold", fontSize: 13 }}>
+                {t("me.addDocument")}
+              </Text>
+            </View>
+          </PressScale>
+        </View>
 
         {docs.isLoading ? (
           <View style={{ gap: 12 }}>
@@ -584,11 +854,21 @@ export default function MeScreen() {
                       />
                     ) : null}
                   </View>
-                  {downloadingId === `${doc.id}:front` ? (
+                  {downloadingId === `${doc.id}:front` || replacingId === doc.id ? (
                     <ActivityIndicator size="small" color={c.primary} />
                   ) : doc.hasFile ? (
                     <Feather name={Platform.OS === "web" ? "external-link" : "download"} size={18} color={c.mutedForeground} />
                   ) : null}
+                  <Pressable
+                    hitSlop={8}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      setDocActionsFor(doc);
+                    }}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 4 })}
+                  >
+                    <Feather name="more-vertical" size={18} color={c.mutedForeground} />
+                  </Pressable>
                 </Card>
                 {doc.kind === "national_id" && doc.hasBackFile ? (
                   <Pressable
@@ -680,6 +960,200 @@ export default function MeScreen() {
                 {t("me.qrHint")}
               </Text>
               <Button label={t("common.close")} variant="secondary" onPress={() => setQrOpen(false)} />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Task #797 — per-document actions (replace scan / back side). */}
+      <Sheet
+        visible={!!docActionsFor}
+        title={docActionsFor?.title ?? undefined}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setDocActionsFor(null)}
+        options={
+          docActionsFor
+            ? [
+                {
+                  label: docActionsFor.hasFile ? t("me.replaceScan") : t("me.attachScan"),
+                  icon: "upload" as const,
+                  defer: true,
+                  onPress: () => {
+                    openScanSheet({ kind: "replace", docId: docActionsFor.id, side: "front" });
+                  },
+                },
+                ...(docActionsFor.kind === "national_id"
+                  ? [
+                      {
+                        label: docActionsFor.hasBackFile ? t("me.replaceBack") : t("me.addBack"),
+                        icon: "rotate-cw" as const,
+                        defer: true,
+                        onPress: () => {
+                          openScanSheet({ kind: "replace", docId: docActionsFor.id, side: "back" });
+                        },
+                      },
+                    ]
+                  : []),
+              ]
+            : []
+        }
+      />
+
+      {/* Task #797 — scan source (camera / gallery / file). */}
+      <Sheet
+        visible={scanSheetOpen}
+        title={t("me.scanSource")}
+        cancelLabel={t("common.cancel")}
+        onClose={() => setScanSheetOpen(false)}
+        onOptionSelected={() => setPickerActive(true)}
+        options={[
+          { label: t("exp.takePhoto"), icon: "camera", defer: true, onPress: () => void pickScanFrom("camera") },
+          { label: t("exp.gallery"), icon: "image", defer: true, onPress: () => void pickScanFrom("library") },
+          { label: t("me.pickFile"), icon: "file", defer: true, onPress: () => void pickScanFrom("file") },
+        ]}
+      />
+
+      {/* Task #797 — add-document form. */}
+      <Modal
+        visible={addOpen && !scanSheetOpen && !pickerActive}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAddOpen(false)}
+      >
+        <Pressable
+          onPress={() => setAddOpen(false)}
+          style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "center", padding: 24 }}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={[{ backgroundColor: c.card, borderRadius: 24, padding: 20, gap: 12 }, softShadow(c.shadow)]}>
+              <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16, textAlign: rtl.textAlign }}>
+                {t("me.addDocument")}
+              </Text>
+              <View style={{ flexDirection: rtl.row, flexWrap: "wrap", gap: 8 }}>
+                {DOC_KINDS.map((k) => (
+                  <Pressable
+                    key={k}
+                    onPress={() => {
+                      setAddKind(k);
+                      if (k !== "national_id") setAddBack(null);
+                    }}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 999,
+                      backgroundColor: addKind === k ? c.primary : c.tint08,
+                      borderWidth: 1,
+                      borderColor: addKind === k ? c.primary : c.tint25,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: addKind === k ? "#FFFFFF" : c.foreground,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 12,
+                      }}
+                    >
+                      {t(`me.docKind.${k}`)}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+              <TextInput
+                value={addTitle}
+                onChangeText={setAddTitle}
+                placeholder={t("me.docTitle")}
+                placeholderTextColor={c.mutedForeground}
+                maxLength={200}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  borderRadius: 14,
+                  padding: 12,
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 14,
+                }}
+              />
+              <TextInput
+                value={addExpires}
+                onChangeText={setAddExpires}
+                placeholder={t("me.docExpires")}
+                placeholderTextColor={c.mutedForeground}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{
+                  borderWidth: 1,
+                  borderColor: c.tint25,
+                  borderRadius: 14,
+                  padding: 12,
+                  color: c.foreground,
+                  fontFamily: "PlusJakartaSans_400Regular",
+                  fontSize: 14,
+                }}
+              />
+              <Pressable
+                onPress={() => openScanSheet({ kind: "add", slot: "front" })}
+                style={({ pressed }) => ({
+                  opacity: pressed ? 0.7 : 1,
+                  flexDirection: rtl.row,
+                  alignItems: "center",
+                  gap: 8,
+                  borderWidth: 1,
+                  borderStyle: "dashed" as const,
+                  borderColor: c.tint25,
+                  borderRadius: 14,
+                  padding: 12,
+                })}
+              >
+                <Feather name={addFront ? "check-circle" : "upload"} size={16} color={addFront ? "#2E9E62" : c.primary} />
+                <Text
+                  numberOfLines={1}
+                  style={{ flex: 1, color: addFront ? c.foreground : c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
+                >
+                  {addFront ? addFront.name : t("me.docFront")}
+                </Text>
+              </Pressable>
+              {addKind === "national_id" ? (
+                <>
+                  <Pressable
+                    onPress={() => openScanSheet({ kind: "add", slot: "back" })}
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.7 : 1,
+                      flexDirection: rtl.row,
+                      alignItems: "center",
+                      gap: 8,
+                      borderWidth: 1,
+                      borderStyle: "dashed" as const,
+                      borderColor: c.tint25,
+                      borderRadius: 14,
+                      padding: 12,
+                    })}
+                  >
+                    <Feather name={addBack ? "check-circle" : "rotate-cw"} size={16} color={addBack ? "#2E9E62" : c.primary} />
+                    <Text
+                      numberOfLines={1}
+                      style={{ flex: 1, color: addBack ? c.foreground : c.mutedForeground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13, textAlign: rtl.textAlign }}
+                    >
+                      {addBack ? addBack.name : t("me.docBack")}
+                    </Text>
+                  </Pressable>
+                  <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12, textAlign: rtl.textAlign }}>
+                    {t("me.docCombinedHint")}
+                  </Text>
+                </>
+              ) : null}
+              <View style={{ flexDirection: rtl.row, gap: 10, justifyContent: "flex-end" }}>
+                <Button
+                  label={t("common.cancel")}
+                  variant="secondary"
+                  onPress={() => setAddOpen(false)}
+                />
+                <Button
+                  label={createDoc.isPending ? t("me.docSaving") : t("me.docSave")}
+                  onPress={() => void submitAdd()}
+                  disabled={createDoc.isPending}
+                />
+              </View>
             </View>
           </Pressable>
         </Pressable>

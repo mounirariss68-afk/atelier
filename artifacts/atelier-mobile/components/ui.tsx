@@ -643,12 +643,20 @@ export function Sheet({
   options,
   onClose,
   cancelLabel,
+  onOptionSelected,
 }: {
   visible: boolean;
   title?: string;
   options: SheetOption[];
   onClose: () => void;
   cancelLabel: string;
+  /**
+   * Task #797 — fires synchronously when an option is tapped, BEFORE the
+   * sheet closes and before any deferred action runs. Lets callers that
+   * chain into native pickers keep a sibling Modal hidden across the whole
+   * dismiss → pick window (cancel/scrim taps do NOT fire this).
+   */
+  onOptionSelected?: () => void;
 }) {
   const c = useColors();
   const rtl = useRTL();
@@ -664,6 +672,7 @@ export function Sheet({
   }, []);
   const handleOption = (o: SheetOption) => {
     hapticLight();
+    onOptionSelected?.();
     if (o.defer && Platform.OS !== "web") {
       pendingRef.current = o.onPress;
       onClose();
