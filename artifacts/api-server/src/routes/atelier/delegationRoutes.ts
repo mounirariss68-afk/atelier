@@ -69,21 +69,21 @@ import { sendReceiptForDisplay } from "../../lib/atelier-heic.js";
 
 const router: IRouter = Router();
 
-const EA_SCOPES = ["timesheets", "expenses", "meetings_tasks"] as const;
-type EaScope = (typeof EA_SCOPES)[number];
+export const EA_SCOPES = ["timesheets", "expenses", "meetings_tasks"] as const;
+export type EaScope = (typeof EA_SCOPES)[number];
 const EA_SCOPE_SET: ReadonlySet<string> = new Set(EA_SCOPES);
 
-const ITEM_KINDS = ["timesheet_entry", "expense", "meeting_task"] as const;
-type ItemKind = (typeof ITEM_KINDS)[number];
-const KIND_SCOPE: Record<ItemKind, EaScope> = {
+export const ITEM_KINDS = ["timesheet_entry", "expense", "meeting_task"] as const;
+export type ItemKind = (typeof ITEM_KINDS)[number];
+export const KIND_SCOPE: Record<ItemKind, EaScope> = {
   timesheet_entry: "timesheets",
   expense: "expenses",
   meeting_task: "meetings_tasks",
 };
 
 type PersonaRow = typeof atelierUsers.$inferSelect;
-type DelegationRow = typeof atelierEaDelegations.$inferSelect;
-type PendingItemRow = typeof atelierEaPendingItems.$inferSelect;
+export type DelegationRow = typeof atelierEaDelegations.$inferSelect;
+export type PendingItemRow = typeof atelierEaPendingItems.$inferSelect;
 
 function rid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -147,7 +147,7 @@ async function audit(args: {
   });
 }
 
-async function loadOrgUser(orgId: string, userId: string): Promise<PersonaRow | null> {
+export async function loadOrgUser(orgId: string, userId: string): Promise<PersonaRow | null> {
   const [u] = await db
     .select()
     .from(atelierUsers)
@@ -240,76 +240,257 @@ const isIsoDate = (v: unknown): v is string =>
 /**
  * Validate + normalize a proposed payload per kind. Whitelist-only: the
  * EA cannot smuggle monetary/HR fields (rates, approvals) into a payload —
- * only the data-entry fields below survive.
+ * only the data-entry fields below survive. Pure + exported so the chat
+ * EA-assist capabilities (Task #800) share the exact same whitelist.
  */
-function normalizePayload(
-  res: Response,
+export function normalizeEaItemPayload(
   kind: ItemKind,
   raw: Record<string, unknown>,
-): Record<string, unknown> | null {
+): { payload: Record<string, unknown> } | { error: string } {
   if (kind === "timesheet_entry") {
     const workDate = raw.workDate;
     const hours = Number(raw.hours);
-    if (!isIsoDate(workDate)) {
-      res.status(400).json({ error: "invalid-work-date" });
-      return null;
-    }
-    if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
-      res.status(400).json({ error: "invalid-hours" });
-      return null;
-    }
+    if (!isIsoDate(workDate)) return { error: "invalid-work-date" };
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 24) return { error: "invalid-hours" };
     return {
-      workDate,
-      hours,
-      engagementId:
-        typeof raw.engagementId === "string" && raw.engagementId ? raw.engagementId : null,
-      activityCode:
-        typeof raw.activityCode === "string" && raw.activityCode
-          ? String(raw.activityCode).slice(0, 60)
-          : null,
-      billable: raw.billable === true,
-      narrative:
-        typeof raw.narrative === "string" ? raw.narrative.slice(0, 2000) : null,
+      payload: {
+        workDate,
+        hours,
+        engagementId:
+          typeof raw.engagementId === "string" && raw.engagementId ? raw.engagementId : null,
+        activityCode:
+          typeof raw.activityCode === "string" && raw.activityCode
+            ? String(raw.activityCode).slice(0, 60)
+            : null,
+        billable: raw.billable === true,
+        narrative:
+          typeof raw.narrative === "string" ? raw.narrative.slice(0, 2000) : null,
+      },
     };
   }
   if (kind === "expense") {
     const amount = Number(raw.amount);
     const merchant = String(raw.merchant ?? "").trim().slice(0, 200);
-    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) {
-      res.status(400).json({ error: "invalid-amount" });
-      return null;
-    }
-    if (!merchant) {
-      res.status(400).json({ error: "merchant-required" });
-      return null;
-    }
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000)
+      return { error: "invalid-amount" };
+    if (!merchant) return { error: "merchant-required" };
     return {
-      expenseDate: isIsoDate(raw.expenseDate)
-        ? raw.expenseDate
-        : new Date().toISOString().slice(0, 10),
-      merchant,
-      amount,
-      currency: String(raw.currency ?? "USD").toUpperCase().slice(0, 3),
-      category:
-        typeof raw.category === "string" && raw.category ? String(raw.category).slice(0, 60) : "other",
-      description:
-        typeof raw.description === "string" ? raw.description.slice(0, 2000) : null,
+      payload: {
+        expenseDate: isIsoDate(raw.expenseDate)
+          ? raw.expenseDate
+          : new Date().toISOString().slice(0, 10),
+        merchant,
+        amount,
+        currency: String(raw.currency ?? "USD").toUpperCase().slice(0, 3),
+        category:
+          typeof raw.category === "string" && raw.category
+            ? String(raw.category).slice(0, 60)
+            : "other",
+        description:
+          typeof raw.description === "string" ? raw.description.slice(0, 2000) : null,
+      },
     };
   }
   // meeting_task
   const title = String(raw.title ?? "").trim().slice(0, 300);
-  if (!title) {
-    res.status(400).json({ error: "title-required" });
+  if (!title) return { error: "title-required" };
+  return {
+    payload: {
+      title,
+      date: isIsoDate(raw.date) ? raw.date : null,
+      time:
+        typeof raw.time === "string" && /^\d{2}:\d{2}$/.test(raw.time) ? raw.time : null,
+      notes: typeof raw.notes === "string" ? raw.notes.slice(0, 2000) : null,
+      attendees: typeof raw.attendees === "string" ? raw.attendees.slice(0, 500) : null,
+    },
+  };
+}
+
+/** REST wrapper over the pure normalizer — writes the 400 on failure. */
+function normalizePayload(
+  res: Response,
+  kind: ItemKind,
+  raw: Record<string, unknown>,
+): Record<string, unknown> | null {
+  const r = normalizeEaItemPayload(kind, raw);
+  if ("error" in r) {
+    res.status(400).json({ error: r.error });
     return null;
   }
-  return {
-    title,
-    date: isIsoDate(raw.date) ? raw.date : null,
-    time:
-      typeof raw.time === "string" && /^\d{2}:\d{2}$/.test(raw.time) ? raw.time : null,
-    notes: typeof raw.notes === "string" ? raw.notes.slice(0, 2000) : null,
-    attendees: typeof raw.attendees === "string" ? raw.attendees.slice(0, 500) : null,
-  };
+  return r.payload;
+}
+
+/**
+ * Task #800 — shared EA-assist mutation helpers. Both the /me/assist
+ * REST routes and the chat EA-assist capabilities go through these, so
+ * dual attribution (audit actorLabel "by EA X on behalf of Partner Y")
+ * and the partner notification can never diverge between surfaces.
+ */
+export async function submitEaPendingItem(args: {
+  actor: PersonaRow;
+  delegation: DelegationRow;
+  partner: PersonaRow;
+  kind: ItemKind;
+  payload: Record<string, unknown>;
+  receiptFileRef?: string | null;
+  via?: "web" | "chat";
+}): Promise<PendingItemRow> {
+  const id = rid("eaitem");
+  await db.insert(atelierEaPendingItems).values({
+    id,
+    orgId: args.actor.orgId,
+    delegationId: args.delegation.id,
+    partnerUserId: args.partner.id,
+    eaUserId: args.actor.id,
+    kind: args.kind,
+    payload: args.payload,
+    receiptFileRef: args.receiptFileRef ?? null,
+    status: "pending",
+  });
+  await audit({
+    entityType: "ea_pending_item",
+    entityId: id,
+    actor: args.actor,
+    onBehalfOf: { userId: args.partner.id, name: args.partner.name },
+    action: "ea.item.submitted",
+    payload: {
+      kind: args.kind,
+      itemPayload: args.payload,
+      hasReceipt: !!args.receiptFileRef,
+      ...(args.via === "chat" ? { via: "chat" } : {}),
+    },
+    summary: `${args.actor.name} (EA) proposed a ${args.kind.replace(/_/g, " ")} on behalf of ${args.partner.name}`,
+  });
+  await emitSelfNotification({
+    orgId: args.actor.orgId,
+    userId: args.partner.id,
+    kind: "ea_item_pending",
+    title: `${args.actor.name} entered a ${args.kind.replace(/_/g, " ")} for you`,
+    body: "Review and approve or send it back.",
+    href: "/me/delegates",
+  });
+  const [row] = await db
+    .select()
+    .from(atelierEaPendingItems)
+    .where(eq(atelierEaPendingItems.id, id));
+  return row;
+}
+
+export type EditableEaItemResult =
+  | { item: PendingItemRow }
+  | { error: "not-found" }
+  | { error: "not-editable"; status: string }
+  | { error: "delegation-revoked-or-scope-removed" };
+
+/**
+ * Own-item editability check with the live-grant re-check: a revoke (or
+ * scope removal) cuts off edits/resubmits immediately, not just new items.
+ */
+export async function getEditableEaItem(
+  me: { id: string; orgId: string },
+  itemId: string,
+): Promise<EditableEaItemResult> {
+  const [item] = await db
+    .select()
+    .from(atelierEaPendingItems)
+    .where(
+      and(
+        eq(atelierEaPendingItems.id, itemId),
+        eq(atelierEaPendingItems.orgId, me.orgId),
+        eq(atelierEaPendingItems.eaUserId, me.id),
+        isNull(atelierEaPendingItems.deletedAt),
+      ),
+    );
+  if (!item) return { error: "not-found" };
+  if (item.status !== "pending" && item.status !== "rejected") {
+    return { error: "not-editable", status: item.status };
+  }
+  const [d] = await db
+    .select()
+    .from(atelierEaDelegations)
+    .where(eq(atelierEaDelegations.id, item.delegationId));
+  if (!d || d.status !== "active" || !(d.scopes ?? []).includes(KIND_SCOPE[item.kind as ItemKind])) {
+    return { error: "delegation-revoked-or-scope-removed" };
+  }
+  return { item };
+}
+
+export async function updateEaPendingItem(args: {
+  actor: PersonaRow;
+  item: PendingItemRow;
+  payload?: Record<string, unknown>;
+  /** undefined = leave the receipt unchanged. */
+  receiptFileRef?: string | null;
+  via?: "web" | "chat";
+}): Promise<PendingItemRow> {
+  const patch: Record<string, unknown> = { updatedAt: new Date() };
+  if (args.payload !== undefined) patch.payload = args.payload;
+  if (args.receiptFileRef !== undefined) patch.receiptFileRef = args.receiptFileRef;
+  await db
+    .update(atelierEaPendingItems)
+    .set(patch)
+    .where(eq(atelierEaPendingItems.id, args.item.id));
+  const partner = await loadOrgUser(args.actor.orgId, args.item.partnerUserId);
+  await audit({
+    entityType: "ea_pending_item",
+    entityId: args.item.id,
+    actor: args.actor,
+    onBehalfOf: partner ? { userId: partner.id, name: partner.name } : null,
+    action: "ea.item.updated",
+    payload: {
+      kind: args.item.kind,
+      patched: Object.keys(patch),
+      ...(args.via === "chat" ? { via: "chat" } : {}),
+    },
+    summary: `${args.actor.name} (EA) edited a ${args.item.kind.replace(/_/g, " ")}${partner ? ` on behalf of ${partner.name}` : ""}`,
+  });
+  const [row] = await db
+    .select()
+    .from(atelierEaPendingItems)
+    .where(eq(atelierEaPendingItems.id, args.item.id));
+  return row;
+}
+
+export async function resubmitEaPendingItem(args: {
+  actor: PersonaRow;
+  item: PendingItemRow;
+  via?: "web" | "chat";
+}): Promise<void> {
+  await db
+    .update(atelierEaPendingItems)
+    .set({
+      status: "pending",
+      rejectionReason: null,
+      decidedAt: null,
+      decidedByUserId: null,
+      resubmittedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(atelierEaPendingItems.id, args.item.id));
+  const partner = await loadOrgUser(args.actor.orgId, args.item.partnerUserId);
+  await audit({
+    entityType: "ea_pending_item",
+    entityId: args.item.id,
+    actor: args.actor,
+    onBehalfOf: partner ? { userId: partner.id, name: partner.name } : null,
+    action: "ea.item.resubmitted",
+    payload: {
+      kind: args.item.kind,
+      priorReason: args.item.rejectionReason,
+      ...(args.via === "chat" ? { via: "chat" } : {}),
+    },
+    summary: `${args.actor.name} (EA) resubmitted a ${args.item.kind.replace(/_/g, " ")}${partner ? ` on behalf of ${partner.name}` : ""}`,
+  });
+  if (partner) {
+    await emitSelfNotification({
+      orgId: args.actor.orgId,
+      userId: partner.id,
+      kind: "ea_item_pending",
+      title: `${args.actor.name} resubmitted a ${args.item.kind.replace(/_/g, " ")}`,
+      body: "The item was revised and awaits your review again.",
+      href: "/me/delegates",
+    });
+  }
 }
 
 /**
@@ -975,7 +1156,7 @@ router.post("/me/delegates/review/:id/reject", async (req, res, next) => {
 // EA SIDE — act for a partner
 // =====================================================================
 
-async function activeDelegationsForEa(orgId: string, eaUserId: string): Promise<DelegationRow[]> {
+export async function activeDelegationsForEa(orgId: string, eaUserId: string): Promise<DelegationRow[]> {
   return db
     .select()
     .from(atelierEaDelegations)
@@ -1104,7 +1285,7 @@ router.get("/me/assist/:delegationId/timesheet", async (req, res, next) => {
   }
 });
 
-// @cli-skip: EA assist mutation; no CLI shape (Task #386)
+// @cli-skip: chat parity via me.ea_item_submit (Task #800); REST shape stays bespoke
 router.post("/me/assist/:delegationId/items", async (req, res, next) => {
   try {
     const b = (req.body ?? {}) as Record<string, unknown>;
@@ -1129,39 +1310,14 @@ router.post("/me/assist/:delegationId/items", async (req, res, next) => {
       if (normalized === undefined) return;
       receiptFileRef = normalized;
     }
-    const id = rid("eaitem");
-    await db.insert(atelierEaPendingItems).values({
-      id,
-      orgId: me.orgId,
-      delegationId: delegation.id,
-      partnerUserId: partner.id,
-      eaUserId: me.id,
+    const row = await submitEaPendingItem({
+      actor: me,
+      delegation,
+      partner,
       kind,
       payload,
       receiptFileRef,
-      status: "pending",
     });
-    await audit({
-      entityType: "ea_pending_item",
-      entityId: id,
-      actor: me,
-      onBehalfOf: { userId: partner.id, name: partner.name },
-      action: "ea.item.submitted",
-      payload: { kind, itemPayload: payload, hasReceipt: !!receiptFileRef },
-      summary: `${me.name} (EA) proposed a ${kind.replace(/_/g, " ")} on behalf of ${partner.name}`,
-    });
-    await emitSelfNotification({
-      orgId: me.orgId,
-      userId: partner.id,
-      kind: "ea_item_pending",
-      title: `${me.name} entered a ${kind.replace(/_/g, " ")} for you`,
-      body: "Review and approve or send it back.",
-      href: "/me/delegates",
-    });
-    const [row] = await db
-      .select()
-      .from(atelierEaPendingItems)
-      .where(eq(atelierEaPendingItems.id, id));
     const names = await nameMap(me.orgId, [partner.id, me.id]);
     res.status(201).json({ item: itemWire(row, names) });
   } catch (err) {
@@ -1209,39 +1365,18 @@ async function requireOwnEditableItem(
 ): Promise<{ me: PersonaRow; item: PendingItemRow } | null> {
   const me = ensurePersona(req, res);
   if (!me) return null;
-  const [item] = await db
-    .select()
-    .from(atelierEaPendingItems)
-    .where(
-      and(
-        eq(atelierEaPendingItems.id, String(req.params.id)),
-        eq(atelierEaPendingItems.orgId, me.orgId),
-        eq(atelierEaPendingItems.eaUserId, me.id),
-        isNull(atelierEaPendingItems.deletedAt),
-      ),
-    );
-  if (!item) {
-    res.status(404).json({ error: "item-not-found" });
+  const r = await getEditableEaItem(me, String(req.params.id));
+  if ("error" in r) {
+    if (r.error === "not-found") res.status(404).json({ error: "item-not-found" });
+    else if (r.error === "not-editable")
+      res.status(409).json({ error: "not-editable", status: r.status });
+    else res.status(403).json({ error: "delegation-revoked-or-scope-removed" });
     return null;
   }
-  if (item.status !== "pending" && item.status !== "rejected") {
-    res.status(409).json({ error: "not-editable", status: item.status });
-    return null;
-  }
-  // The grant must still be live and still carry the scope — a revoke cuts
-  // off edits/resubmits immediately, not just new items.
-  const [d] = await db
-    .select()
-    .from(atelierEaDelegations)
-    .where(eq(atelierEaDelegations.id, item.delegationId));
-  if (!d || d.status !== "active" || !(d.scopes ?? []).includes(KIND_SCOPE[item.kind as ItemKind])) {
-    res.status(403).json({ error: "delegation-revoked-or-scope-removed" });
-    return null;
-  }
-  return { me, item };
+  return { me, item: r.item };
 }
 
-// @cli-skip: EA assist mutation; no CLI shape (Task #386)
+// @cli-skip: chat parity via me.ea_item_update (Task #800); REST shape stays bespoke
 router.patch("/me/assist/items/:id", async (req, res, next) => {
   try {
     const ctx = await requireOwnEditableItem(req, res);
@@ -1258,29 +1393,18 @@ router.patch("/me/assist/items/:id", async (req, res, next) => {
       if (!payload) return;
       patch.payload = payload;
     }
+    let receiptFileRef: string | null | undefined = undefined;
     if (b.receiptPath !== undefined && item.kind === "expense") {
       const normalized = await normalizeEaReceipt(res, me, b.receiptPath);
       if (normalized === undefined) return;
-      patch.receiptFileRef = normalized;
+      receiptFileRef = normalized;
     }
-    await db
-      .update(atelierEaPendingItems)
-      .set(patch)
-      .where(eq(atelierEaPendingItems.id, item.id));
-    const partner = await loadOrgUser(me.orgId, item.partnerUserId);
-    await audit({
-      entityType: "ea_pending_item",
-      entityId: item.id,
+    const row = await updateEaPendingItem({
       actor: me,
-      onBehalfOf: partner ? { userId: partner.id, name: partner.name } : null,
-      action: "ea.item.updated",
-      payload: { kind: item.kind, patched: Object.keys(patch) },
-      summary: `${me.name} (EA) edited a ${item.kind.replace(/_/g, " ")}${partner ? ` on behalf of ${partner.name}` : ""}`,
+      item,
+      payload: patch.payload as Record<string, unknown> | undefined,
+      receiptFileRef,
     });
-    const [row] = await db
-      .select()
-      .from(atelierEaPendingItems)
-      .where(eq(atelierEaPendingItems.id, item.id));
     const names = await nameMap(me.orgId, [row.partnerUserId, row.eaUserId]);
     res.json({ item: itemWire(row, names) });
   } catch (err) {
@@ -1288,7 +1412,7 @@ router.patch("/me/assist/items/:id", async (req, res, next) => {
   }
 });
 
-// @cli-skip: EA assist mutation; no CLI shape (Task #386)
+// @cli-skip: chat parity via me.ea_item_resubmit (Task #800); REST shape stays bespoke
 router.post("/me/assist/items/:id/resubmit", async (req, res, next) => {
   try {
     const ctx = await requireOwnEditableItem(req, res);
@@ -1298,37 +1422,7 @@ router.post("/me/assist/items/:id/resubmit", async (req, res, next) => {
       res.status(409).json({ error: "not-rejected", status: item.status });
       return;
     }
-    await db
-      .update(atelierEaPendingItems)
-      .set({
-        status: "pending",
-        rejectionReason: null,
-        decidedAt: null,
-        decidedByUserId: null,
-        resubmittedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(atelierEaPendingItems.id, item.id));
-    const partner = await loadOrgUser(me.orgId, item.partnerUserId);
-    await audit({
-      entityType: "ea_pending_item",
-      entityId: item.id,
-      actor: me,
-      onBehalfOf: partner ? { userId: partner.id, name: partner.name } : null,
-      action: "ea.item.resubmitted",
-      payload: { kind: item.kind, priorReason: item.rejectionReason },
-      summary: `${me.name} (EA) resubmitted a ${item.kind.replace(/_/g, " ")}${partner ? ` on behalf of ${partner.name}` : ""}`,
-    });
-    if (partner) {
-      await emitSelfNotification({
-        orgId: me.orgId,
-        userId: partner.id,
-        kind: "ea_item_pending",
-        title: `${me.name} resubmitted a ${item.kind.replace(/_/g, " ")}`,
-        body: "The item was revised and awaits your review again.",
-        href: "/me/delegates",
-      });
-    }
+    await resubmitEaPendingItem({ actor: me, item });
     res.json({ ok: true });
   } catch (err) {
     next(err);

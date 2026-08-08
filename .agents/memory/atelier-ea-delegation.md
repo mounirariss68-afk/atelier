@@ -12,3 +12,5 @@ description: Executive Assistant acting-for design — grant scoping, apply attr
 
 **Why:** delegation without server-side attribution or with client-trusted scopes was the failure mode the task explicitly forbade.
 **How to apply:** extend scopes via the EaScope/KIND_SCOPE maps + normalizePayload whitelist; test via tests/ea-delegation/run.ts (ephemeral p_test_* personas, no seeding).
+
+**Chat surface (added 2026-08-08):** EA assist prepare/edit/resubmit have chat parity via `me.ea_item_*` capabilities that call the SAME exported route helpers (submit/update/resubmit + normalizeEaItemPayload + getEditableEaItem) — never duplicate the insert/audit path. Acting-for context resolves only from the caller's own active grants (partnerName filters grants, disambiguation keyed on delegationId — never a person lookup). Grant management and partner approve/reject stay web-only on purpose. With an explicit itemId, skip the global "any active grant" pre-check so a revoked grant yields the precise revoked-refusal, not a generic one.

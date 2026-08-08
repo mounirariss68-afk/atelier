@@ -179,10 +179,13 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
   "patch /me/calendar/internal/:id": cap("meeting.reschedule_internal"),
   "delete /me/calendar/internal/:id": cap("meeting.cancel_internal"),
 
-  // ---- EA delegation suite (Task #386) — deliberately excluded --------
-  // Dual-attribution semantics (acting-for, partner approval, revoke
-  // re-checks) are too easy to misfire from a chat turn; separate future
-  // work if wanted (see Task #795 out-of-scope note).
+  // ---- EA delegation suite (Task #386) ---------------------------------
+  // Grant management + partner approve/reject stay web-only (setup and
+  // review need the Delegates UI with overlap hints). The EA ASSIST
+  // surface (prepare/edit/resubmit items on behalf of a partner) gained
+  // chat parity in Task #800 — acting-for context comes only from the
+  // caller's own grants, every write carries dual attribution, and the
+  // live grant is re-checked per edit.
   "post /me/delegates": excluded({
     reason: "EA delegation grants have dual-attribution + approval semantics unsuited to a chat write",
     userLabel: "set up or manage an assistant (EA) delegation",
@@ -213,28 +216,14 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
     web: "Me → Delegates (review queue)",
     mobile: null,
   }),
-  "post /me/assist/:delegationId/items": excluded({
-    reason: "EA assist submissions carry acting-for attribution; excluded with the delegation suite",
-    userLabel: "submit items on behalf of a partner (EA assist)",
-    web: "Me → Assist",
-    mobile: null,
-  }),
-  "patch /me/assist/items/:id": excluded({
-    reason: "EA assist edit; see post /me/assist/:delegationId/items",
-    userLabel: "submit items on behalf of a partner (EA assist)",
-    web: "Me → Assist",
-    mobile: null,
-  }),
-  "post /me/assist/items/:id/resubmit": excluded({
-    reason: "EA assist resubmit; see post /me/assist/:delegationId/items",
-    userLabel: "submit items on behalf of a partner (EA assist)",
-    web: "Me → Assist",
-    mobile: null,
-  }),
+  // Task #800 — EA assist prepare/edit/resubmit have chat parity.
+  "post /me/assist/:delegationId/items": cap("me.ea_item_submit"),
+  "patch /me/assist/items/:id": cap("me.ea_item_update"),
+  "post /me/assist/items/:id/resubmit": cap("me.ea_item_resubmit"),
   "post /me/assist/receipt-upload": excluded({
-    reason: "EA assist upload plumbing; excluded with the delegation suite",
-    userLabel: "submit items on behalf of a partner (EA assist)",
-    web: "Me → Assist",
+    reason: "signed-URL upload plumbing behind the Assist form; chat-prepared items get receipts attached there",
+    userLabel: "attach a receipt file to an assist item prepared for a partner",
+    web: "Me → Assist (open the item and attach the receipt)",
     mobile: null,
   }),
 

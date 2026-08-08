@@ -67,6 +67,11 @@ import "./me-write-capabilities.js";
 // contacts, travel profile, learning complete, timesheet entry delete).
 // The route ↔ capability mapping lives in me-chat-parity.ts.
 import "./me-write-capabilities-parity.js";
+// Task #800 — EA-assist chat capabilities (prepare/edit/resubmit items
+// on behalf of a partner). Acting-for context comes only from the
+// caller's own delegation grants; every write is dual-attributed and
+// re-checks the live grant.
+import "./me-ea-assist-capabilities.js";
 // Task #406 — read-only finance reports (P&L/BS/CF/profitability),
 // entity expiries, win/loss knowledge, manager-scoped leave queues, and
 // contract/template browsing. Mirrors REST ACLs with explicit refusals.

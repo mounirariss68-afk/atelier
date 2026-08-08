@@ -441,6 +441,161 @@ async function main(): Promise<void> {
     }
 
     // =====================================================================
+    group("chat capabilities \u00b7 Task #800 acting-for via chat tools");
+    // =====================================================================
+    await import("../../src/lib/atelier-cli/bootstrap-capabilities.js");
+    const { findByToolName } = await import("../../src/lib/atelier-cli/capability-catalog.js");
+    const eaCtx = { persona: { id: EA_ID, name: "Test EA", role: "employee", orgId: ORG } } as any;
+    const empCtx = { persona: { id: EMP_ID, name: "Plain Employee", role: "employee", orgId: ORG } } as any;
+    const prepTool = findByToolName("prepare_assist_item")!;
+    const updTool = findByToolName("update_assist_item")!;
+    const resubTool = findByToolName("resubmit_assist_item")!;
+    const overviewTool = findByToolName("my_assist_items")!;
+    check(
+      "chat EA-assist capabilities registered under me.*",
+      !!prepTool && !!updTool && !!resubTool && !!overviewTool &&
+        [prepTool, updTool, resubTool, overviewTool].every((t) => t.id.startsWith("me.")),
+      [prepTool?.id, updTool?.id, resubTool?.id, overviewTool?.id].join(","),
+    );
+
+    const noGrant = await prepTool.run(
+      { kind: "expense", merchant: "Cab", amount: 10 },
+      empCtx,
+    );
+    check(
+      "non-EA gets honest no_active_delegation refusal",
+      noGrant.ok === false && noGrant.errorCode === "no_active_delegation",
+      JSON.stringify(noGrant)?.slice(0, 200),
+    );
+
+    const wrongPartner = await prepTool.run(
+      { kind: "expense", merchant: "Cab", amount: 10, partnerName: "Other Partner" },
+      eaCtx,
+    );
+    check(
+      "partnerName outside own grants \u2192 not_found (no person lookup)",
+      wrongPartner.ok === false && wrongPartner.errorCode === "not_found",
+      JSON.stringify(wrongPartner)?.slice(0, 200),
+    );
+
+    const chatOutOfScope = await prepTool.run({ kind: "meeting_task", title: "Board prep" }, eaCtx);
+    check(
+      "chat kind outside granted scopes \u2192 scope_not_delegated",
+      chatOutOfScope.ok === false && chatOutOfScope.errorCode === "scope_not_delegated",
+      JSON.stringify(chatOutOfScope)?.slice(0, 200),
+    );
+
+    const chatPreview = await prepTool.run(
+      { kind: "expense", merchant: "Chat Cab Co", amount: 45, currency: "usd", partnerName: "Test Partner" },
+      eaCtx,
+    );
+    const itemsBeforeConfirm = await db
+      .select()
+      .from(atelierEaPendingItems)
+      .where(eq(atelierEaPendingItems.eaUserId, EA_ID));
+    check(
+      "chat submit is two-phase: confirmation frame, no row yet",
+      chatPreview.ok === true &&
+        !!(chatPreview as any).confirmation?.pending?.input?.confirm &&
+        String((chatPreview as any).confirmation.summary).includes("on behalf of Test Partner") &&
+        itemsBeforeConfirm.every((i: any) => (i.payload as any)?.merchant !== "Chat Cab Co"),
+      JSON.stringify(chatPreview)?.slice(0, 300),
+    );
+
+    const chatCommit = await prepTool.run((chatPreview as any).confirmation.pending.input, eaCtx);
+    const chatItemId = (chatCommit as any).data?.id as string;
+    if (chatItemId) itemIds.push(chatItemId);
+    check(
+      "chat confirm commits a pending item with navigateTo",
+      chatCommit.ok === true &&
+        !!chatItemId &&
+        (chatCommit as any).data?.status === "pending" &&
+        (chatCommit as any).data?.navigateTo?.path === "/me/assist",
+      JSON.stringify(chatCommit)?.slice(0, 300),
+    );
+    const chatAudit = chatItemId
+      ? await db
+          .select()
+          .from(atelierAuditEvents)
+          .where(
+            and(
+              eq(atelierAuditEvents.entityType, "ea_pending_item"),
+              eq(atelierAuditEvents.entityId, chatItemId),
+              eq(atelierAuditEvents.action, "ea.item.submitted"),
+            ),
+          )
+      : [];
+    check(
+      "chat submit audited with dual attribution + via:chat",
+      chatAudit.length === 1 &&
+        String(chatAudit[0].actorLabel).includes("(EA) on behalf of Test Partner") &&
+        (chatAudit[0].payload as any)?.onBehalfOf?.userId === PTR_ID &&
+        (chatAudit[0].payload as any)?.actedByEa?.userId === EA_ID &&
+        (chatAudit[0].payload as any)?.via === "chat",
+      JSON.stringify(chatAudit[0] ?? null)?.slice(0, 300),
+    );
+
+    const chatUpdPreview = await updTool.run({ itemId: chatItemId, amount: 60 }, eaCtx);
+    check(
+      "chat edit previews the delta (prior fields preserved)",
+      chatUpdPreview.ok === true &&
+        (chatUpdPreview as any).confirmation?.pending?.input?.confirm === true &&
+        (chatUpdPreview as any).data?.preview?.changes?.amount?.to === 60,
+      JSON.stringify(chatUpdPreview)?.slice(0, 300),
+    );
+    const chatUpdCommit = await updTool.run(
+      (chatUpdPreview as any).confirmation.pending.input,
+      eaCtx,
+    );
+    const [chatRowAfterUpd] = chatItemId
+      ? await db.select().from(atelierEaPendingItems).where(eq(atelierEaPendingItems.id, chatItemId))
+      : [];
+    check(
+      "chat edit commits; merchant kept, amount replaced",
+      chatUpdCommit.ok === true &&
+        (chatRowAfterUpd?.payload as any)?.amount === 60 &&
+        (chatRowAfterUpd?.payload as any)?.merchant === "Chat Cab Co",
+      JSON.stringify(chatRowAfterUpd?.payload ?? null)?.slice(0, 200),
+    );
+
+    const overview = await overviewTool.run({}, eaCtx);
+    check(
+      "chat assist overview lists the grant and the chat item",
+      overview.ok === true &&
+        (overview as any).data?.delegations?.some((d: any) => d.id === delId) &&
+        (overview as any).data?.items?.some((i: any) => i.id === chatItemId),
+      JSON.stringify((overview as any).data)?.slice(0, 300),
+    );
+
+    // Reject the chat item so the chat resubmit path is exercised.
+    await call("POST", `/me/delegates/review/${chatItemId}/reject`, PTR_ID, {
+      reason: "Chat test rejection",
+    });
+    const resubPreview = await resubTool.run({ itemId: chatItemId }, eaCtx);
+    check(
+      "chat resubmit previews with the rejection reason",
+      resubPreview.ok === true &&
+        String((resubPreview as any).confirmation?.summary).includes("Chat test rejection"),
+      JSON.stringify(resubPreview)?.slice(0, 300),
+    );
+    const resubCommit = await resubTool.run(
+      (resubPreview as any).confirmation.pending.input,
+      eaCtx,
+    );
+    const [chatRowAfterResub] = chatItemId
+      ? await db.select().from(atelierEaPendingItems).where(eq(atelierEaPendingItems.id, chatItemId))
+      : [];
+    check(
+      "chat resubmit \u2192 pending again with reason cleared",
+      resubCommit.ok === true &&
+        chatRowAfterResub?.status === "pending" &&
+        chatRowAfterResub?.rejectionReason === null,
+      JSON.stringify(chatRowAfterResub ?? null)?.slice(0, 200),
+    );
+    // Approve it so it doesn't linger pending before the revoke group.
+    await call("POST", `/me/delegates/review/${chatItemId}/approve`, PTR_ID);
+
+    // =====================================================================
     group("revoke \u00b7 cuts off the EA immediately");
     // =====================================================================
     const revoke = await call("POST", `/me/delegates/${delId}/revoke`, PTR_ID);
@@ -477,6 +632,27 @@ async function main(): Promise<void> {
       "edit + resubmit blocked after revoke \u2192 403",
       editAfterRevoke.status === 403 && resubAfterRevoke.status === 403,
       `edit=${editAfterRevoke.status} resubmit=${resubAfterRevoke.status}`,
+    );
+
+    // Chat surfaces obey the same live-grant re-check.
+    const chatEditAfterRevoke = await updTool.run({ itemId: item2Id, amount: 11 }, eaCtx);
+    const chatResubAfterRevoke = await resubTool.run({ itemId: item2Id }, eaCtx);
+    check(
+      "chat edit + resubmit blocked after revoke",
+      chatEditAfterRevoke.ok === false &&
+        chatEditAfterRevoke.errorCode === "delegation_revoked_or_scope_removed" &&
+        chatResubAfterRevoke.ok === false &&
+        chatResubAfterRevoke.errorCode === "delegation_revoked_or_scope_removed",
+      JSON.stringify({ e: chatEditAfterRevoke.errorCode, r: chatResubAfterRevoke.errorCode }),
+    );
+    const chatSubmitNoGrant = await prepTool.run(
+      { kind: "expense", merchant: "Cab", amount: 5 },
+      eaCtx,
+    );
+    check(
+      "chat submit after all grants revoked \u2192 no_active_delegation",
+      chatSubmitNoGrant.ok === false && chatSubmitNoGrant.errorCode === "no_active_delegation",
+      JSON.stringify(chatSubmitNoGrant)?.slice(0, 200),
     );
 
     // =====================================================================
