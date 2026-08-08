@@ -222,6 +222,27 @@ async function main() {
         return;
       }
 
+      // ---- Task #798 scenario F: write promise precedes a READ tool call
+      // and the turn ends WITHOUT any write. The promise flushed after the
+      // read result must be scrubbed (no write committed this turn). ----
+      if (/promise before read only test/i.test(allText)) {
+        if (!hasToolResult) {
+          send(
+            [
+              { type: "text", text: "I'll record the document in your file now." },
+              { type: "tool_use", id: `tu_${TAG}_f_list`, name: "my_documents", input: {} },
+            ],
+            "tool_use",
+          );
+          return;
+        }
+        send(
+          [{ type: "text", text: "Here is what is currently on file for you." }],
+          "end_turn",
+        );
+        return;
+      }
+
       if (hasToolResult) {
         send([{ type: "text", text: "Done." }], "end_turn");
         return;
@@ -613,6 +634,27 @@ async function main() {
       e1.raw.slice(0, 1500),
     );
     check("E: no profile-page upload deflection emitted", !/profile page/i.test(e1.raw), e1.raw.slice(0, 1500));
+
+    // ---------- Task #798 Scenario F: promise → READ → end_turn, no write ----------
+    const f1 = await postTurn(FP, { prompt: "promise before read only test please" });
+    const f1Session = String(f1.frames.find((f) => f.data?.sessionId)?.data?.sessionId ?? "");
+    if (f1Session) cleanupIds.sessions.add(f1Session);
+    check("F: turn completes", f1.status === 200 && f1.frames.some((f) => f.event === "final"), f1.raw.slice(0, 800));
+    check(
+      "F: read tool ran (my_documents result frame present)",
+      f1.frames.some((f) => f.event === "tool_result" && f.data?.tool === "my_documents"),
+      f1.raw.slice(0, 1500),
+    );
+    check(
+      "F: promise before READ never survives (no write committed)",
+      !/I'll record the document/i.test(f1.raw),
+      f1.raw.slice(0, 2000),
+    );
+    check(
+      "F: closing factual prose still emitted",
+      /currently on file for you/i.test(f1.raw),
+      f1.raw.slice(0, 2000),
+    );
   } finally {
     // ---------- cleanup (tag sweep per crm-harness memory) ----------
     try {

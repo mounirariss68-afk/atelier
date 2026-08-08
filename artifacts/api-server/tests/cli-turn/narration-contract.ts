@@ -11,6 +11,9 @@ import {
   firstSentence,
   trimNarrationForCard,
   toolResultFrameKey,
+  looksLikeWritePromise,
+  stripUnfulfilledWritePromises,
+  stripDeadEndDocumentAdvice,
 } from "../../src/lib/atelier-cli/narration-contract.js";
 
 let pass = 0;
@@ -80,6 +83,101 @@ test("toolResultFrameKey is identical for identical frames, distinct otherwise",
   const c = { step: 2, tool: "meeting_reschedule", ok: true, data: { id: "mtg_2" } };
   assert.equal(toolResultFrameKey(a), toolResultFrameKey(b));
   assert.notEqual(toolResultFrameKey(a), toolResultFrameKey(c));
+});
+
+// ---------------------------------------------------------------------
+// Task #798 — write-promise guard edge cases (Task #792 helpers).
+// ---------------------------------------------------------------------
+
+test("looksLikeWritePromise: straight and curly apostrophes", () => {
+  assert.equal(looksLikeWritePromise("I'll save the back side now."), true);
+  assert.equal(looksLikeWritePromise("I’ll attach it to your ID."), true);
+  assert.equal(looksLikeWritePromise("Ill save it"), true, "bare 'Ill' contraction");
+});
+
+test("looksLikeWritePromise: longer commitment forms", () => {
+  assert.equal(looksLikeWritePromise("I am going to update your profile."), true);
+  assert.equal(looksLikeWritePromise("I'm going to record that expense."), true);
+  assert.equal(looksLikeWritePromise("Let me now attach the file."), true);
+  assert.equal(looksLikeWritePromise("I will now submit the claim."), true);
+});
+
+test("looksLikeWritePromise: plain statements are NOT promises", () => {
+  assert.equal(looksLikeWritePromise("Your passport is already saved."), false);
+  assert.equal(looksLikeWritePromise("The upload completed earlier today."), false);
+  assert.equal(looksLikeWritePromise(""), false);
+  assert.equal(looksLikeWritePromise(null), false);
+  assert.equal(looksLikeWritePromise(undefined), false);
+});
+
+test("stripUnfulfilledWritePromises: multi-sentence keeps the factual rest", () => {
+  const text =
+    "Your Emirates ID has a front side on file. I'll attach the back side now. Let me know if you need anything else.";
+  assert.equal(
+    stripUnfulfilledWritePromises(text),
+    "Your Emirates ID has a front side on file. Let me know if you need anything else.",
+  );
+});
+
+test("stripUnfulfilledWritePromises: all-promise prose collapses to empty", () => {
+  assert.equal(stripUnfulfilledWritePromises("I'll save it as the back side now."), "");
+  assert.equal(
+    stripUnfulfilledWritePromises("I’ll upload the scan.\nI'm going to file it under your documents."),
+    "",
+  );
+});
+
+test("stripUnfulfilledWritePromises: newline-delimited sentences handled", () => {
+  const text = "Here is what I found.\nI'll log the expense now.";
+  assert.equal(stripUnfulfilledWritePromises(text), "Here is what I found.");
+});
+
+test("stripUnfulfilledWritePromises: non-promise prose passes through untouched", () => {
+  const text = "The document was saved yesterday. Nothing else is pending.";
+  assert.equal(stripUnfulfilledWritePromises(text), text);
+});
+
+test("French prose passes through both scrubbers unchanged", () => {
+  const fr =
+    "Je vais enregistrer le verso de votre pièce d'identité maintenant. Dites-moi si vous avez besoin d'autre chose.";
+  assert.equal(looksLikeWritePromise(fr), false);
+  assert.equal(stripUnfulfilledWritePromises(fr), fr);
+  assert.equal(stripDeadEndDocumentAdvice(fr), fr);
+});
+
+test("Arabic prose passes through both scrubbers unchanged", () => {
+  const ar = "سأحفظ الجانب الخلفي من بطاقتك الآن. أخبرني إذا احتجت أي شيء آخر.";
+  assert.equal(looksLikeWritePromise(ar), false);
+  assert.equal(stripUnfulfilledWritePromises(ar), ar);
+  assert.equal(stripDeadEndDocumentAdvice(ar), ar);
+});
+
+test("stripDeadEndDocumentAdvice: removes interface-unavailable claims, keeps the rest", () => {
+  const text =
+    "Your ID is on file. Unfortunately that isn't available in this interface. Anything else?";
+  assert.equal(stripDeadEndDocumentAdvice(text), "Your ID is on file. Anything else?");
+});
+
+test("stripDeadEndDocumentAdvice: removes profile-page upload deflection", () => {
+  const text = "Please upload the back side from the profile page instead.";
+  assert.equal(stripDeadEndDocumentAdvice(text), "");
+  const text2 = "Go to your profile page to upload the document.";
+  assert.equal(stripDeadEndDocumentAdvice(text2), "");
+});
+
+test("stripDeadEndDocumentAdvice: benign profile mentions survive", () => {
+  const text = "Your profile page shows your saved documents.";
+  assert.equal(stripDeadEndDocumentAdvice(text), text);
+});
+
+test("combined guard order: dead-end scrub then promise scrub empties the 792 reply", () => {
+  const text =
+    "I'll save the back side of your ID now. Unfortunately, that isn't available in this interface — please upload it from the profile page instead.";
+  const afterDeadEnd = stripDeadEndDocumentAdvice(text);
+  const final = looksLikeWritePromise(afterDeadEnd)
+    ? stripUnfulfilledWritePromises(afterDeadEnd)
+    : afterDeadEnd;
+  assert.equal(final, "");
 });
 
 console.log(`\n${pass} passed, ${fail} failed`);
