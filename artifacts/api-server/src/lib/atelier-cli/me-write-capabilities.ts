@@ -90,6 +90,7 @@ import { notifyFoundersOfSubmittedExpense } from "../../routes/atelier/walletRou
 import { writePersonAndSync } from "../atelier-person-sync";
 import type { ToolContext, ToolResult } from "./index.js";
 import { resolveEmailRecipients, recipientLabel } from "./email-recipient-resolver.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 
 function rid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -589,6 +590,103 @@ defineSelfWriteCapability({
 });
 
 // ---------------------------------------------------------------------
+// Task #787 — shared resolver: pick ONE of the caller's own draft
+// expenses from an explicit id, merchant/description text (q), or
+// implicitly (single draft). Never enumerates anyone else's rows — the
+// pool passed in is already self-scoped.
+// ---------------------------------------------------------------------
+type ExpenseDraftRow = {
+  id: string;
+  merchant: string | null;
+  description: string | null;
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  status: string;
+};
+
+function expenseOption(d: ExpenseDraftRow) {
+  return {
+    id: d.id,
+    label: `${d.merchant ?? d.description ?? "Expense"} — ${d.currency} ${d.amount.toFixed(2)}`,
+    secondary: `${d.expenseDate}${d.status === "rejected" ? " · rejected (resubmittable)" : ""}`,
+  };
+}
+
+const foldExpenseText = (s: string) =>
+  s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").trim();
+
+export function resolveOwnExpenseDraft<T extends ExpenseDraftRow>(
+  drafts: T[],
+  input: Record<string, unknown>,
+):
+  | { outcome: "match"; row: T }
+  | { outcome: "no_drafts" }
+  | { outcome: "not_found"; prompt: string; options: ReturnType<typeof expenseOption>[] }
+  | { outcome: "ambiguous"; prompt: string; options: ReturnType<typeof expenseOption>[] } {
+  const expenseId = typeof input.expenseId === "string" ? input.expenseId.trim() : "";
+  const q = typeof input.q === "string" ? input.q.trim() : "";
+  if (expenseId) {
+    const row = drafts.find((d) => d.id === expenseId);
+    if (row) return { outcome: "match", row };
+    // Unknown id — offer the caller's own drafts (recency-ordered).
+    return {
+      outcome: "not_found",
+      prompt:
+        "I couldn't find that draft among your own expense claims — did you mean one of these?",
+      options: drafts.slice(0, 6).map(expenseOption),
+    };
+  }
+  if (drafts.length === 0) return { outcome: "no_drafts" };
+  if (q) {
+    const nq = foldExpenseText(q);
+    const matches = drafts.filter((d) =>
+      foldExpenseText(`${d.merchant ?? ""} ${d.description ?? ""}`).includes(nq),
+    );
+    if (matches.length === 1) return { outcome: "match", row: matches[0]! };
+    if (matches.length > 1) {
+      // Rank closest merchant text first; drafts are already newest-first,
+      // so equal-distance candidates keep recency order (stable sort).
+      const ranked = rankNearestNames(
+        q,
+        matches.map((d) => ({ id: d.id, label: d.merchant ?? d.description ?? d.id })),
+        matches.length,
+      );
+      const order = new Map(ranked.map((r, idx) => [r.id, idx]));
+      const sorted = [...matches].sort(
+        (a, b) =>
+          (order.has(a.id) ? order.get(a.id)! : Number.MAX_SAFE_INTEGER) -
+          (order.has(b.id) ? order.get(b.id)! : Number.MAX_SAFE_INTEGER),
+      );
+      return {
+        outcome: "ambiguous",
+        prompt: `You have ${matches.length} drafts matching "${q}" — which one?`,
+        options: sorted.slice(0, 6).map(expenseOption),
+      };
+    }
+    // No text match — nearest-merchant candidates from the own-draft pool.
+    const near = rankNearestNames(
+      q,
+      drafts.map((d) => ({ id: d.id, label: d.merchant ?? d.description ?? d.id })),
+      6,
+    );
+    const nearIds = new Set(near.map((r) => r.id));
+    const options = drafts.filter((d) => nearIds.has(d.id)).map(expenseOption);
+    return {
+      outcome: "not_found",
+      prompt: `None of your drafts mention "${q}" — did you mean one of these?`,
+      options,
+    };
+  }
+  if (drafts.length === 1) return { outcome: "match", row: drafts[0]! };
+  return {
+    outcome: "ambiguous",
+    prompt: `You have ${drafts.length} draft claims — which one should I submit?`,
+    options: drafts.slice(0, 6).map(expenseOption),
+  };
+}
+
+// ---------------------------------------------------------------------
 // me.expense_submit — submit own draft expense for approval
 // (mirrors POST /me/expenses/:id/submit — Task #595). Same gates as the
 // REST route: attribution completeness for internal spend, deterministic
@@ -601,7 +699,7 @@ defineSelfWriteCapability({
   module: "roster",
   toolName: "submit_my_expense",
   description:
-    "Submit one of the signed-in user's own draft expense claims for approval. Runs the same policy checks as the Me page: internal spend needs entity + cost center, policy RED blocks, and AMBER warnings need an override rationale. If no expense id is given and exactly one draft exists, that draft is submitted.",
+    "Submit one of the signed-in user's own draft expense claims for approval. Accepts an expense id OR merchant/description text via q (\"submit my Uber expense\"); with neither, a single existing draft is submitted and several drafts come back as choices. Runs the same policy checks as the Me page: internal spend needs entity + cost center, policy RED blocks, and AMBER warnings need an override rationale.",
   slashAliases: { en: ["/submit-expense"], fr: ["/soumettre-depense"] },
   representativePrompts: {
     en: ["Submit my expense claim", "Send my taxi expense for approval"],
@@ -622,6 +720,11 @@ defineSelfWriteCapability({
         type: "string",
         description:
           "Id of the caller's own draft expense (optional when they have exactly one draft).",
+      },
+      q: {
+        type: "string",
+        description:
+          'Merchant or description text to pick the draft ("my Uber expense") when the id is unknown.',
       },
       overrideRationale: {
         type: "string",
@@ -647,34 +750,50 @@ defineSelfWriteCapability({
         ),
       )
       .orderBy(desc(atelierExpenses.createdAt));
-    let row: (typeof drafts)[number] | undefined;
-    if (typeof input.expenseId === "string" && input.expenseId) {
-      row = drafts.find((d) => d.id === input.expenseId);
-      if (!row) {
-        return {
-          ok: false,
-          errorCode: "expense_not_found",
-          errorMessage:
-            "That expense was not found among your own draft claims (it may already be submitted).",
-        };
-      }
-    } else if (drafts.length === 1) {
-      row = drafts[0];
-    } else if (drafts.length === 0) {
+    // Task #787 — resolve the target draft by id, by merchant/description
+    // text (q), or implicitly. Ambiguity and misses come back as ranked
+    // candidates / friendly copy, never raw error codes. Pool is strictly
+    // the caller's own drafts, so candidates cannot leak anything.
+    const resolved = resolveOwnExpenseDraft(drafts, input);
+    if (resolved.outcome === "no_drafts") {
       return {
         ok: false,
         errorCode: "no_draft_expense",
-        errorMessage: "You have no draft expense claims to submit.",
-      };
-    } else {
-      return {
-        ok: false,
-        errorCode: "multiple_drafts",
-        errorMessage: `You have ${drafts.length} draft claims — say which one to submit: ${drafts
-          .map((d) => `${d.merchant ?? d.id} (${d.currency} ${d.amount.toFixed(2)}, id ${d.id})`)
-          .join("; ")}.`,
+        errorMessage:
+          'You have no draft expense claims to submit right now. To start one, tell me the amount and merchant — e.g. "log a 45 AED taxi expense from yesterday" — then I can submit it.',
       };
     }
+    if (resolved.outcome === "not_found") {
+      if (resolved.options.length > 0) {
+        return {
+          ok: true,
+          data: {
+            prompt: resolved.prompt,
+            options: resolved.options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "expense", field: "expenseId", options: resolved.options },
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "expense_not_found",
+        errorMessage:
+          "I couldn't find that draft among your own expense claims — it may already be submitted. Say \"show my expenses\" to check its status.",
+      };
+    }
+    if (resolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: {
+          prompt: resolved.prompt,
+          options: resolved.options,
+          navigateTo: null,
+        },
+        disambiguation: { kind: "expense", field: "expenseId", options: resolved.options },
+      };
+    }
+    const row = resolved.row;
 
     // Attribution completeness — internal spend must carry entity + cost
     // center before entering the approval flow (mirrors the REST 409).

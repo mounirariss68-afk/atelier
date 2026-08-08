@@ -1984,7 +1984,7 @@ defineCapability({
   module: "wallet",
   toolName: "expense_list",
   description:
-    "List the caller's OWN expenses (self-scoped), optionally filtered by month (YYYY-MM), status, or category. Returns date, merchant, category, USD amount, and status per expense.",
+    "List the caller's OWN expenses (self-scoped), optionally filtered by month (YYYY-MM), status, category, or free-text q matching the merchant/description (\"my Uber expense\"). Returns date, merchant, category, USD amount, and status per expense.",
   slashAliases: { en: ["/my-expenses", "/expenses"], fr: ["/mes-depenses"] },
   inputSchema: {
     type: "object",
@@ -1992,6 +1992,10 @@ defineCapability({
       month: { type: "string", description: "YYYY-MM filter on expense date." },
       status: { type: "string", description: "draft | submitted | approved | rejected | reimbursed" },
       category: { type: "string" },
+      q: {
+        type: "string",
+        description: "Free-text merchant or description match (e.g. a merchant name).",
+      },
       limit: { type: "integer", minimum: 1, maximum: 100 },
     },
     additionalProperties: false,
@@ -2025,12 +2029,70 @@ defineCapability({
     const month = typeof input.month === "string" ? input.month.trim() : "";
     const status = typeof input.status === "string" ? input.status.trim().toLowerCase() : "";
     const category = typeof input.category === "string" ? input.category.trim().toLowerCase() : "";
+    const q = typeof input.q === "string" ? input.q.trim() : "";
+    const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").trim();
+    const nq = fold(q);
+
+    // Task #787 — a category filter that matches nothing the caller has
+    // is almost always a wording mismatch; answer with the categories
+    // that DO exist instead of a silent empty list.
+    const ownCategories = [...new Set(rows.map((e) => e.category))].sort();
+    if (category && !ownCategories.some((c) => c.toLowerCase() === category)) {
+      return {
+        ok: true,
+        data: {
+          items: [],
+          total: 0,
+          totalUsd: 0,
+          note: `You have no expenses in a "${category}" category. Your expenses use: ${
+            ownCategories.length > 0 ? ownCategories.join(", ") : "(none yet)"
+          }. Try one of those, or drop the category filter.`,
+        },
+      };
+    }
+
     const filtered = rows.filter((e) => {
       if (month && !e.expenseDate.startsWith(month)) return false;
       if (status && e.status !== status) return false;
       if (category && e.category.toLowerCase() !== category) return false;
+      if (nq && !fold(`${e.merchant ?? ""} ${e.description ?? ""}`).includes(nq)) return false;
       return true;
     });
+
+    // Task #787 — free-text miss: suggest the caller's nearest own
+    // merchants (recency kept by stable order) instead of a bare empty.
+    if (nq && filtered.length === 0 && rows.length > 0) {
+      const pool = rows.filter((e) => e.merchant ?? e.description);
+      const near = rankNearestNames(
+        q,
+        pool.map((e) => ({ id: e.id, label: e.merchant ?? e.description ?? e.id })),
+        6,
+      );
+      const nearIds = new Set(near.map((r) => r.id));
+      const suggestions = pool
+        .filter((e) => nearIds.has(e.id))
+        .map((e) => ({
+          id: e.id,
+          label: e.merchant ?? e.description ?? "Expense",
+          date: e.expenseDate,
+          amount: e.amount,
+          currency: e.currency,
+          status: e.status,
+        }));
+      return {
+        ok: true,
+        data: {
+          items: [],
+          total: 0,
+          totalUsd: 0,
+          suggestions,
+          note:
+            suggestions.length > 0
+              ? `None of your expenses mention "${q}" — closest matches on your own claims are listed under suggestions; offer them to the user.`
+              : `None of your expenses mention "${q}". Say "show my expenses" to browse everything you have claimed.`,
+        },
+      };
+    }
     const items = filtered.slice(0, limit).map((e) => ({
       id: e.id,
       label: e.merchant ?? e.description ?? e.category,
