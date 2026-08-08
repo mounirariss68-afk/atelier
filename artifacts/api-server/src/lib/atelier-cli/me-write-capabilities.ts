@@ -24,12 +24,14 @@
  *     CALLER and org-scoped before any bytes move.
  */
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import {
   db,
   atelierUsers,
   atelierEmployees,
   atelierPersons,
+  atelierAccounts,
+  atelierEngagements,
   atelierLeaveRequests,
   atelierExpenses,
   atelierTimesheetWeeks,
@@ -936,6 +938,135 @@ defineSelfWriteCapability({
 });
 
 // ---------------------------------------------------------------------
+// Task #788 — resolve an engagement/account NAME for time logging.
+// Matching happens server-side (fold-based) against org-scoped live
+// engagements + their account names; ambiguity comes back ranked.
+// ---------------------------------------------------------------------
+type EngagementCandidate = { id: string; label: string; accountName: string | null };
+
+export async function resolveEngagementForTimeLog(
+  input: Record<string, unknown>,
+  orgId: string,
+): Promise<
+  | { outcome: "match"; engagement: EngagementCandidate | null }
+  | { outcome: "not_found"; message: string }
+  | {
+      outcome: "ambiguous";
+      prompt: string;
+      options: Array<{ id: string; label: string; secondary?: string }>;
+    }
+> {
+  const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").trim();
+  const engagementId =
+    typeof input.engagementId === "string" && input.engagementId.trim() !== ""
+      ? input.engagementId.trim()
+      : "";
+  const q = typeof input.engagement === "string" ? input.engagement.trim() : "";
+  if (!engagementId && !q) return { outcome: "match", engagement: null };
+
+  const rows = await db
+    .select({
+      id: atelierEngagements.id,
+      name: atelierEngagements.name,
+      accountName: atelierAccounts.name,
+    })
+    .from(atelierEngagements)
+    // Join constrained to the SAME org's live accounts — a malformed
+    // cross-tenant accountId must never surface a foreign account name.
+    .leftJoin(
+      atelierAccounts,
+      and(
+        eq(atelierEngagements.accountId, atelierAccounts.id),
+        eq(atelierAccounts.orgId, orgId),
+        isNull(atelierAccounts.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(atelierEngagements.orgId, orgId),
+        isNull(atelierEngagements.deletedAt),
+        // Live = not closed; closed work must never take new billable time.
+        ne(atelierEngagements.plmStage, "closed"),
+      ),
+    );
+  const pool: EngagementCandidate[] = rows.map((r) => ({
+    id: r.id,
+    label: r.name,
+    accountName: r.accountName ?? null,
+  }));
+
+  if (engagementId) {
+    const hit = pool.find((e) => e.id === engagementId);
+    if (hit) return { outcome: "match", engagement: hit };
+    return {
+      outcome: "not_found",
+      message: `That engagement id doesn't match any live engagement. Tell me the engagement or client name instead — e.g. "log 3h on the <client> engagement".`,
+    };
+  }
+
+  const nq = fold(q);
+  const matches = pool.filter(
+    (e) => fold(e.label).includes(nq) || (e.accountName ? fold(e.accountName).includes(nq) : false),
+  );
+  if (matches.length === 1) return { outcome: "match", engagement: matches[0] };
+
+  const toOptions = (list: EngagementCandidate[]) => {
+    // Rank against BOTH the engagement name and its client/account name —
+    // "the Tasama work" must surface an engagement whose title never
+    // mentions Tasama. Each engagement contributes one entry per name;
+    // dedupe keeps the best-ranked position.
+    const ranked = rankNearestNames(
+      q,
+      list.flatMap((e) => [
+        { id: e.id, label: e.label },
+        ...(e.accountName ? [{ id: e.id, label: e.accountName }] : []),
+      ]),
+      10,
+    );
+    const byId = new Map(list.map((e) => [e.id, e]));
+    const seen = new Set<string>();
+    const out: Array<{ id: string; label: string; secondary?: string }> = [];
+    for (const r of ranked) {
+      if (seen.has(r.id)) continue;
+      const e = byId.get(r.id);
+      if (!e) continue;
+      seen.add(r.id);
+      out.push({ id: e.id, label: e.label, secondary: e.accountName ?? undefined });
+      if (out.length >= 5) break;
+    }
+    return out;
+  };
+
+  if (matches.length > 1) {
+    return {
+      outcome: "ambiguous",
+      prompt: `Several engagements match "${q}" — which one should the time go against?`,
+      options: toOptions(matches),
+    };
+  }
+  if (pool.length > 0) {
+    const options = toOptions(pool);
+    if (options.length > 0) {
+      return {
+        outcome: "ambiguous",
+        prompt: `No engagement matches "${q}" exactly — did you mean one of these?`,
+        options,
+      };
+    }
+    // Nothing even close — name what actually exists instead of a bare miss.
+    const sample = pool.slice(0, 5).map((e) => e.label).join(", ");
+    return {
+      outcome: "not_found",
+      message: `No engagement or client matches "${q}". Live engagements include: ${sample}. Use one of those names, or leave the engagement off to log internal time.`,
+    };
+  }
+  return {
+    outcome: "not_found",
+    message: `No engagement matches "${q}" and there are no live engagements to pick from. Leave the engagement off to log internal time, e.g. "log 3h internal for today".`,
+  };
+}
+
+// ---------------------------------------------------------------------
 // me.timesheet_log — add a timesheet entry (mirrors POST week entries)
 // ---------------------------------------------------------------------
 defineSelfWriteCapability({
@@ -943,7 +1074,7 @@ defineSelfWriteCapability({
   module: "roster",
   toolName: "log_my_time",
   description:
-    "Log hours on the signed-in user's own timesheet for a given date. The ISO week is derived server-side from the date; locked (submitted/approved) weeks are refused.",
+    "Log hours on the signed-in user's own timesheet for a given date, optionally against an engagement or client name (\"log 3h on the Tasama engagement last Tuesday\") — the server resolves the name and asks when it's ambiguous. The ISO week is derived server-side from the date; locked (submitted/approved) weeks are refused.",
   slashAliases: { en: ["/log-time"], fr: ["/saisir-temps"] },
   representativePrompts: {
     en: ["Log 6 hours for yesterday", "Add 8h internal work for Monday"],
@@ -963,6 +1094,12 @@ defineSelfWriteCapability({
       workDate: { type: "string", description: "ISO date YYYY-MM-DD" },
       hours: { type: "number" },
       narrative: { type: "string" },
+      engagement: {
+        type: "string",
+        description:
+          "Optional engagement or client/account name to log against (e.g. \"the Tasama engagement\"). The server resolves it; ambiguous names come back as choices.",
+      },
+      engagementId: { type: "string", description: "Exact engagement id, if already known." },
       confirm: { type: "boolean" },
     },
     required: ["workDate", "hours"],
@@ -982,20 +1119,66 @@ defineSelfWriteCapability({
         errorMessage: "Provide a valid ISO date and hours between 0 and 24.",
       };
     }
+    // Task #788 — engagement/account name resolution, server-side.
+    const engagementResolved = await resolveEngagementForTimeLog(input, subject.user.orgId);
+    if (engagementResolved.outcome === "not_found") {
+      return {
+        ok: false,
+        errorCode: "engagement_not_found",
+        errorMessage: engagementResolved.message,
+      };
+    }
+    if (engagementResolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: {
+          navigateTo: null,
+          prompt: engagementResolved.prompt,
+        },
+        disambiguation: {
+          kind: "engagement",
+          field: "engagementId",
+          options: engagementResolved.options,
+        },
+      };
+    }
+    const engagement = engagementResolved.engagement; // null = internal time
     const { weekIso } = isoWeekOf(new Date(`${workDate}T00:00:00Z`));
     if (input.confirm !== true) {
       return {
         ok: true,
-        data: { preview: { workDate, hours, weekIso } },
+        data: {
+          preview: {
+            workDate,
+            hours,
+            weekIso,
+            engagementId: engagement?.id ?? null,
+            engagementName: engagement?.label ?? null,
+          },
+        },
         confirmation: {
-          summary: `Log ${hours}h on ${workDate} (week ${weekIso}) to your timesheet?`,
+          summary: engagement
+            ? `Log ${hours}h on ${workDate} (week ${weekIso}) against ${engagement.label}?`
+            : `Log ${hours}h on ${workDate} (week ${weekIso}) to your timesheet?`,
           diff: {
             create: {
               table: "atelier_timesheet_entries",
-              values: { workDate, hours, weekIso },
+              values: {
+                workDate,
+                hours,
+                weekIso,
+                ...(engagement ? { engagementId: engagement.id } : {}),
+              },
             },
           },
-          pending: { tool: "log_my_time", input: { ...input, confirm: true } },
+          pending: {
+            tool: "log_my_time",
+            input: {
+              ...input,
+              ...(engagement ? { engagementId: engagement.id, engagement: undefined } : {}),
+              confirm: true,
+            },
+          },
         },
       };
     }
@@ -1014,10 +1197,10 @@ defineSelfWriteCapability({
       personId: week.personId,
       personType: week.personType,
       workDate,
-      engagementId: null,
-      activityCode: "internal",
+      engagementId: engagement?.id ?? null,
+      activityCode: engagement ? "billable" : "internal",
       hours,
-      billable: false,
+      billable: !!engagement,
       narrative:
         typeof input.narrative === "string" ? input.narrative.slice(0, 2000) : null,
       source: "human",
@@ -1029,7 +1212,9 @@ defineSelfWriteCapability({
       ok: true,
       data: {
         id,
-        label: `${hours}h on ${workDate}`,
+        label: engagement
+          ? `${hours}h on ${workDate} — ${engagement.label}`
+          : `${hours}h on ${workDate}`,
         weekIso,
         weekTotalHours: totals?.totalHours ?? null,
         href: "/me/timesheets",

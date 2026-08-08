@@ -30,6 +30,12 @@
 
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import {
+  isoWeekOf,
+  isValidIsoDateStrict,
+  isValidIsoMonth,
+  isValidIsoWeek,
+} from "../../routes/atelier/ledgerRoutes.js";
+import {
   db,
   atelierUsers,
   atelierEmployees,
@@ -43,6 +49,7 @@ import {
   atelierTrainingCompletions,
   atelierExpenses,
   atelierTimesheetWeeks,
+  atelierTimesheetEntries,
 } from "@workspace/db";
 import {
   CATALOG_SCHEMA_VERSION,
@@ -99,7 +106,18 @@ type SelfCapabilityInput = Omit<
   | "run"
   | "schemaVersion"
 > & {
-  runSelf: (subject: SelfSubject, ctx: ToolContext) => Promise<ToolResult>;
+  runSelf: (
+    subject: SelfSubject,
+    ctx: ToolContext,
+    input: Record<string, unknown>,
+  ) => Promise<ToolResult>;
+  /**
+   * Task #788 — optional SELECTOR-FREE filter properties (periods,
+   * status filters…). These must never allow naming a subject; the
+   * subject stays the session identity. `additionalProperties: false`
+   * is preserved.
+   */
+  filterSchema?: Record<string, unknown>;
 };
 
 /**
@@ -108,17 +126,20 @@ type SelfCapabilityInput = Omit<
  * one that accepts a person-selection input by accident.
  */
 function defineSelfCapability(entry: SelfCapabilityInput): void {
-  const { runSelf, ...rest } = entry;
+  const { runSelf, filterSchema, ...rest } = entry;
   defineCapability({
     ...rest,
     schemaVersion: CATALOG_SCHEMA_VERSION,
-    inputSchema: SELF_INPUT_SCHEMA,
+    inputSchema: filterSchema
+      ? { type: "object", properties: filterSchema, additionalProperties: false }
+      : SELF_INPUT_SCHEMA,
     isWrite: false,
     twoPhaseConfirm: false,
     outboundChannel: null,
     irreversible: false,
-    async run(_input, ctx) {
-      // Never reads `_input` — the subject is the session identity.
+    async run(input, ctx) {
+      // The subject is ALWAYS the session identity; `input` carries only
+      // declared selector-free filters (empty schema otherwise).
       const subject = await resolveSelfSubject(ctx);
       if (!subject) {
         return {
@@ -127,7 +148,7 @@ function defineSelfCapability(entry: SelfCapabilityInput): void {
           errorMessage: "Your login could not be resolved to a user record.",
         };
       }
-      return runSelf(subject, ctx);
+      return runSelf(subject, ctx, (input ?? {}) as Record<string, unknown>);
     },
   });
 }
@@ -681,7 +702,15 @@ defineSelfCapability({
   module: "roster",
   toolName: "my_timesheets",
   description:
-    "The caller's own recent timesheet weeks (current + past): week, status, total and billable hours, rejection reason if any. Answers questions like 'what did I book last week?'. Always self-scoped.",
+    "The caller's own timesheet weeks (current + past): week, status, total and billable hours, rejection reason if any. Optionally filtered to a period — pass date (any YYYY-MM-DD inside the week you want, the server derives the ISO week), month (YYYY-MM), or weekIso (YYYY-Www). Answers 'what did I book last week?' and 'show my hours for March'. Always self-scoped.",
+  filterSchema: {
+    date: {
+      type: "string",
+      description: "Any ISO date (YYYY-MM-DD) inside the week to show — the server derives the ISO week.",
+    },
+    month: { type: "string", description: "Calendar month filter, YYYY-MM." },
+    weekIso: { type: "string", description: "Exact ISO week, e.g. 2026-W12." },
+  },
   slashAliases: { en: ["/my-timesheets", "/my-timesheet"], fr: ["/mes-feuilles-de-temps"] },
   representativePrompts: {
     en: ["What did I book last week?", "Show my recent timesheets", "What's the status of my timesheet?"],
@@ -696,7 +725,7 @@ defineSelfCapability({
     ar: ["ماذا سجلت الأسبوع الماضي؟"],
     fr: ["Qu'ai-je saisi la semaine dernière ?"],
   },
-  async runSelf({ person }) {
+  async runSelf({ person }, _ctx, input) {
     if (!person) {
       return {
         ok: true,
@@ -707,7 +736,41 @@ defineSelfCapability({
         },
       };
     }
-    const rows = await db
+    // Task #788 — server-side period resolution. The model passes a raw
+    // date / month / weekIso; ISO-week math happens HERE, never in the
+    // model.
+    const dateRaw = typeof input.date === "string" ? input.date.trim() : "";
+    const monthRaw = typeof input.month === "string" ? input.month.trim() : "";
+    const weekIsoRaw = typeof input.weekIso === "string" ? input.weekIso.trim().toUpperCase() : "";
+    let wantWeekIso: string | null = null;
+    if (weekIsoRaw) {
+      if (!isValidIsoWeek(weekIsoRaw)) {
+        return {
+          ok: false,
+          errorCode: "invalid_body",
+          errorMessage: `weekIso must be a real ISO week like 2026-W12 (got "${weekIsoRaw}"). You can also pass any date inside the week instead.`,
+        };
+      }
+      wantWeekIso = weekIsoRaw;
+    } else if (dateRaw) {
+      if (!isValidIsoDateStrict(dateRaw)) {
+        return {
+          ok: false,
+          errorCode: "invalid_body",
+          errorMessage: `date must be a real calendar date (YYYY-MM-DD); got "${dateRaw}".`,
+        };
+      }
+      wantWeekIso = isoWeekOf(new Date(`${dateRaw}T00:00:00Z`)).weekIso;
+    }
+    if (monthRaw && !isValidIsoMonth(monthRaw)) {
+      return {
+        ok: false,
+        errorCode: "invalid_body",
+        errorMessage: `month must be a real month like 2026-03 (YYYY-MM); got "${monthRaw}".`,
+      };
+    }
+
+    const allRows = await db
       .select()
       .from(atelierTimesheetWeeks)
       .where(
@@ -716,11 +779,74 @@ defineSelfCapability({
           isNull(atelierTimesheetWeeks.deletedAt),
         ),
       )
-      .orderBy(desc(atelierTimesheetWeeks.weekIso))
-      .limit(12);
+      .orderBy(desc(atelierTimesheetWeeks.weekIso));
+    let rows = allRows;
+    let periodLabel: string | null = null;
+    if (wantWeekIso) {
+      rows = allRows.filter((w) => w.weekIso === wantWeekIso);
+      periodLabel = `week ${wantWeekIso}`;
+    } else if (monthRaw) {
+      // A week belongs to the month if any of its 7 days fall inside it.
+      rows = allRows.filter((w) => {
+        const start = new Date(`${w.weekStartDate}T00:00:00Z`);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start.getTime() + i * 86400000).toISOString().slice(0, 7);
+          if (d === monthRaw) return true;
+        }
+        return false;
+      });
+      periodLabel = monthRaw;
+    } else {
+      rows = allRows.slice(0, 12);
+    }
+
+    if (periodLabel && rows.length === 0) {
+      const nearest = allRows.slice(0, 5).map((w) => w.weekIso);
+      return {
+        ok: true,
+        data: {
+          items: [],
+          total: 0,
+          href: "/me/time",
+          note:
+            allRows.length === 0
+              ? `You have no timesheet weeks yet for ${periodLabel} or any other period. Say "log 6 hours for today" to start one.`
+              : `No hours were logged for ${periodLabel}. Your most recent timesheet weeks are: ${nearest.join(", ")} — ask for one of those, or a different month.`,
+        },
+      };
+    }
+
+    // For a specific week, include the day-level entries so "what did I
+    // book that week?" is answerable without another tool call.
+    let weekEntries: Array<Record<string, unknown>> | undefined;
+    if (wantWeekIso && rows.length === 1) {
+      const entryRows = await db
+        .select()
+        .from(atelierTimesheetEntries)
+        .where(
+          and(
+            eq(atelierTimesheetEntries.weekId, rows[0].id),
+            isNull(atelierTimesheetEntries.deletedAt),
+          ),
+        );
+      weekEntries = entryRows
+        .sort((a, b) => a.workDate.localeCompare(b.workDate))
+        .map((e) => ({
+          id: e.id,
+          workDate: e.workDate,
+          hours: e.hours,
+          activityCode: e.activityCode,
+          engagementId: e.engagementId ?? null,
+          billable: e.billable,
+          narrative: e.narrative ?? null,
+        }));
+    }
+
     return {
       ok: true,
       data: {
+        ...(periodLabel ? { period: periodLabel } : {}),
+        ...(weekEntries ? { entries: weekEntries } : {}),
         items: rows.map((w) => ({
           id: w.id,
           label: `Timesheet · ${w.weekIso}`,

@@ -51,7 +51,11 @@ import {
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
 import { resolveSelfPerson } from "../../routes/atelier/meRoutes.js";
-import { isoWeekOf } from "../../routes/atelier/ledgerRoutes.js";
+import {
+  isoWeekOf,
+  isValidIsoDateStrict,
+  isValidIsoWeek,
+} from "../../routes/atelier/ledgerRoutes.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -1745,9 +1749,19 @@ defineCapability({
   module: "ledger",
   toolName: "timesheet_current",
   description:
-    "Current-week timesheet for the calling persona: status, total hours, billable hours, and any suspicious-flag signals.",
+    "Timesheet week for the calling persona — the current week by default, or a past week via date (any YYYY-MM-DD inside it; the server derives the ISO week) or weekIso (YYYY-Www). Returns status, total hours, billable hours, entries and any suspicious-flag signals.",
   slashAliases: { en: ["/my-timesheet", "/timesheet"] },
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: {
+    type: "object",
+    properties: {
+      date: {
+        type: "string",
+        description: "Any ISO date (YYYY-MM-DD) inside the week to show; server derives the ISO week.",
+      },
+      weekIso: { type: "string", description: "Exact ISO week like 2026-W12 (default: current week)." },
+    },
+    additionalProperties: false,
+  },
   isWrite: false,
   irreversible: false,
   surfaceOn: ["ledger"],
@@ -1760,7 +1774,7 @@ defineCapability({
     ar: ["اعرض جدول زمني لهذا الأسبوع"],
     fr: ["Mon timesheet de cette semaine"],
   },
-  async run(_input, ctx) {
+  async run(input, ctx) {
     // Task #421 fix: timesheet weeks key on the ROSTER person id, not
     // ctx.persona.id (the atelier_users id — the legacy keying matched
     // nothing). Resolve the caller's own roster row first.
@@ -1786,8 +1800,33 @@ defineCapability({
     // Task #415 fix: target the ACTUAL current ISO week (the previous
     // "latest row" query could surface an old or future week) and
     // include the week's entries so "show my timesheet for today" is
-    // answerable.
-    const { weekIso: currentWeekIso } = isoWeekOf(new Date());
+    // answerable. Task #788: optional date/weekIso resolve a PAST week
+    // server-side — the model never computes ISO weeks itself.
+    const dateRaw = typeof (input as any)?.date === "string" ? String((input as any).date).trim() : "";
+    const weekIsoRaw =
+      typeof (input as any)?.weekIso === "string" ? String((input as any).weekIso).trim().toUpperCase() : "";
+    let currentWeekIso: string;
+    if (weekIsoRaw) {
+      if (!isValidIsoWeek(weekIsoRaw)) {
+        return {
+          ok: false,
+          errorCode: "invalid_body",
+          errorMessage: `weekIso must be a real ISO week like 2026-W12 (got "${weekIsoRaw}"). You can also pass any date inside the week instead.`,
+        };
+      }
+      currentWeekIso = weekIsoRaw;
+    } else if (dateRaw) {
+      if (!isValidIsoDateStrict(dateRaw)) {
+        return {
+          ok: false,
+          errorCode: "invalid_body",
+          errorMessage: `date must be a real calendar date (YYYY-MM-DD); got "${dateRaw}".`,
+        };
+      }
+      currentWeekIso = isoWeekOf(new Date(`${dateRaw}T00:00:00Z`)).weekIso;
+    } else {
+      currentWeekIso = isoWeekOf(new Date()).weekIso;
+    }
     const rows = await db
       .select({
         id: atelierTimesheetWeeks.id,

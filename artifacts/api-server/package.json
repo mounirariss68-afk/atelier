@@ -24,6 +24,7 @@
     "test:document-chat-miss": "tsx ./tests/crm/document-chat-miss-probe.ts",
     "test:travel-companion": "tsx ./tests/travel/travel-companion-probe.ts",
     "test:expense-chat-lookup": "tsx ./tests/crm/expense-chat-lookup-probe.ts",
+    "test:timesheet-chat-period": "tsx ./tests/crm/timesheet-chat-period-probe.ts",
     "test:board-pack-logo": "tsx ./tests/board-pack-logo/run.ts",
     "test:research-brief-pdf": "tsx ./tests/crm/research-brief-pdf-probe.ts",
     "test:cli": "tsx ./tests/cli-turn/run.ts",

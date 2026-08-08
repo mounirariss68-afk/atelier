@@ -181,6 +181,32 @@ export function isoWeekOf(d: Date): { weekIso: string; weekStart: Date } {
   return { weekIso: `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`, weekStart: monday };
 }
 
+// Task #788 — semantic period validators (regexes alone accept 2026-02-30,
+// 2026-W00, month 19, …). Shared by the chat timesheet read/write tools.
+export function isValidIsoDateStrict(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+export function isValidIsoMonth(s: string): boolean {
+  if (!/^\d{4}-\d{2}$/.test(s)) return false;
+  const m = Number(s.slice(5, 7));
+  return m >= 1 && m <= 12;
+}
+
+export function isoWeeksInYear(year: number): number {
+  // ISO: the year's week count is the week number of Dec 28.
+  return Number(isoWeekOf(new Date(Date.UTC(year, 11, 28))).weekIso.slice(6));
+}
+
+export function isValidIsoWeek(s: string): boolean {
+  if (!/^\d{4}-W\d{2}$/.test(s)) return false;
+  const year = Number(s.slice(0, 4));
+  const week = Number(s.slice(6));
+  return week >= 1 && week <= isoWeeksInYear(year);
+}
+
 export function parseWeekIso(weekIso: string): Date {
   // Returns the Monday of the given ISO week.
   const m = /^(\d{4})-W(\d{2})$/.exec(weekIso);
