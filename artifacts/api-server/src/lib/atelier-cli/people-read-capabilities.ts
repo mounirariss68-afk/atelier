@@ -57,6 +57,7 @@ import { isRestrictedPersona } from "../../routes/atelier/personaRoles.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
 import { freshAccessToken, fmtDubai } from "../msScheduling.js";
 import { foldRosterName } from "./chat-normalizers.js";
+import { rankNearestNames } from "./nearest-suggestions.js";
 import { getCalendarView } from "../msGraph.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
@@ -388,6 +389,74 @@ async function crmContactFallback(
   };
 }
 
+/**
+ * Task #784 — friendly-miss suggestions for person lookups: the closest
+ * folded names within the viewer's perimeter (roster scope predicate for
+ * internal people, canSeeAccount for CRM contacts — ACL is applied
+ * BEFORE candidates are offered, so out-of-perimeter names never leak).
+ */
+async function nearestPeopleSuggestions(
+  ctx: ToolContext,
+  me: MeRow | null,
+  q: string,
+  opts: { accountId?: string; contactsOnly?: boolean } = {},
+): Promise<Array<{ id: string; label: string; secondary?: string }>> {
+  const pool: Array<{ id: string; label: string; secondary?: string; accountId?: string }> = [];
+  if (me && !opts.contactsOnly) {
+    const scope = await resolveRosterScope(me);
+    const persons = (await listPersons({ workerType: "all", includeComp: false })).filter(
+      (p) => p.status !== "inactive",
+    );
+    const visible =
+      scope.kind === "full"
+        ? persons
+        : persons.filter(
+            (p) =>
+              scope.personIds.has(p.id) ||
+              (scope.selfPersonId !== null && scope.selfPersonId === p.id),
+          );
+    for (const p of visible) {
+      pool.push({ id: p.id, label: p.fullName, secondary: p.title ?? undefined });
+    }
+  }
+  const contactRows = await db
+    .select({
+      id: atelierContacts.id,
+      fullName: atelierContacts.fullName,
+      title: atelierContacts.title,
+      accountId: atelierContacts.accountId,
+    })
+    .from(atelierContacts)
+    .where(
+      and(
+        eq(atelierContacts.orgId, ctx.persona.orgId),
+        isNull(atelierContacts.deletedAt),
+        opts.accountId ? eq(atelierContacts.accountId, opts.accountId) : undefined,
+      ),
+    )
+    .limit(600);
+  for (const c of contactRows) {
+    pool.push({ id: c.id, label: c.fullName, secondary: c.title ?? undefined, accountId: c.accountId });
+  }
+  const ranked = rankNearestNames(q, pool, 8) as Array<{
+    id: string;
+    label: string;
+    secondary?: string;
+    accountId?: string;
+  }>;
+  const access = await engAclFor(ctx.persona);
+  const meLite = { id: ctx.persona.id, role: ctx.persona.role };
+  const out: Array<{ id: string; label: string; secondary?: string }> = [];
+  for (const r of ranked) {
+    const byId = pool.find((p) => p.id === r.id);
+    const acct = byId?.accountId;
+    if (acct && !(await canSeeAccount(access, meLite, acct))) continue;
+    out.push({ id: r.id, label: r.label, secondary: r.secondary });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------
 // roster.list — ranked_list
 // ---------------------------------------------------------------------
@@ -481,13 +550,18 @@ defineCapability({
   module: "roster",
   toolName: "person_detail",
   description:
-    "Show one internal person's business profile: name, title, work email, mobile numbers, office, status, start date, manager and direct reports. Never returns compensation, bank, or HR data. Accepts a roster person id or a name.",
+    "Show one internal person's business profile: name, title, work email, mobile numbers, office, status, start date, manager and direct reports. Never returns compensation, bank, or HR data. Accepts a roster person id or a name, optionally scoped to a company ('Sarah at Tasama').",
   slashAliases: { en: ["/person", "/who-is"], fr: ["/personne"] },
   inputSchema: {
     type: "object",
     properties: {
       personId: { type: "string", description: "Roster person id (employee/contractor/partner resource)." },
       name: { type: "string", description: "Person name to look up when the id is unknown." },
+      company: {
+        type: "string",
+        description:
+          "Optional company scope from phrases like 'Sarah at Tasama' — a CRM account/client name or a partner-firm name. Narrows the lookup to that company's people.",
+      },
     },
     additionalProperties: false,
   },
@@ -514,14 +588,150 @@ defineCapability({
       }
       // Task #469 — SCOPED matching (no name leaks in disambiguation)
       // plus cross-domain fallback into CRM contacts on a roster miss.
-      const matches = await scopedPersonMatches(me, q);
+      let matches = await scopedPersonMatches(me, q);
+      // Task #784 — company scope: "Sarah at Tasama" resolves in one
+      // step. The company may be a CRM account (→ that account's
+      // contacts) or a partner firm (→ roster people at that firm).
+      const company = typeof input.company === "string" ? input.company.trim() : "";
+      if (company) {
+        // The company is a MANDATORY scope once supplied: never fall back
+        // to a global search, and never reveal whether an account exists
+        // outside the caller's perimeter (non-enumerating misses).
+        const firmNeedle = foldRosterName(company);
+        const rosterAtFirm = firmNeedle
+          ? matches.filter(
+              (p) =>
+                p.partnerFirmName && foldRosterName(p.partnerFirmName).includes(firmNeedle),
+            )
+          : [];
+        const acc = await resolveAccount(company, ctx.persona);
+        const access = await engAclFor(ctx.persona);
+        const meLite = { id: ctx.persona.id, role: ctx.persona.role };
+        if (acc.kind === "choices" && rosterAtFirm.length === 0) {
+          // resolveAccount options are org-wide — ACL-filter them BEFORE
+          // showing any account name, or restricted callers could
+          // enumerate out-of-perimeter accounts.
+          const visibleOptions: typeof acc.options = [];
+          for (const o of acc.options) {
+            if (await canSeeAccount(access, meLite, o.id)) visibleOptions.push(o);
+          }
+          if (visibleOptions.length === 0) {
+            return {
+              ok: false,
+              errorCode: "not_found",
+              errorMessage: `I couldn't find a client account or partner firm named "${company}" to search. Double-check the company name, or try looking up "${q}" without the company.`,
+            };
+          }
+          return {
+            ok: true,
+            data: {
+              prompt: `Which company did you mean by "${company}"?`,
+              options: visibleOptions,
+            },
+            disambiguation: { kind: "account", options: visibleOptions },
+          };
+        }
+        let accVisible = false;
+        if (acc.kind === "match") {
+          accVisible = await canSeeAccount(access, meLite, acc.id);
+          if (accVisible) {
+            const rows = await foldedContactSearch(ctx.persona.orgId, q, {
+              accountId: acc.id,
+              cap: 6,
+            });
+            if (rows.length === 1 && rosterAtFirm.length === 0) {
+              const r = rows[0]!;
+              return {
+                ok: true,
+                data: {
+                  contact: {
+                    id: r.id,
+                    fullName: r.fullName,
+                    title: r.title ?? null,
+                    email: r.email ?? null,
+                    phone: r.phone ?? null,
+                  },
+                  account: { id: acc.id, name: acc.label },
+                  source: "client_contacts",
+                  note: `${r.fullName} is a client contact at ${acc.label}.`,
+                  href: `/accounts/${acc.id}?tab=contacts`,
+                },
+              };
+            }
+            if (rows.length > 0) {
+              const options = [
+                ...rows.slice(0, 4).map((r) => ({
+                  id: r.id,
+                  label: r.fullName,
+                  secondary: [r.title, `@ ${acc.label}`].filter(Boolean).join(" "),
+                })),
+                ...rosterAtFirm.slice(0, 2).map((p) => ({
+                  id: p.id,
+                  label: p.fullName,
+                  secondary: p.title ?? p.workerType,
+                })),
+              ];
+              return {
+                ok: true,
+                data: { prompt: `Which person at ${acc.label} did you mean by "${q}"?`, options },
+                disambiguation: { kind: "contact", options },
+              };
+            }
+          }
+        }
+        if (rosterAtFirm.length > 0) {
+          matches = rosterAtFirm;
+        } else if (accVisible && acc.kind === "match") {
+          // Visible account but no person match there — scoped miss:
+          // suggestions come ONLY from that account's contacts.
+          const nearest = await nearestPeopleSuggestions(ctx, me, q, {
+            accountId: acc.id,
+            contactsOnly: true,
+          });
+          if (nearest.length > 0) {
+            return {
+              ok: true,
+              data: {
+                prompt: `I couldn't find anyone named "${q}" at ${acc.label} — did you mean one of these people?`,
+                options: nearest,
+              },
+              disambiguation: { kind: "contact", options: nearest },
+            };
+          }
+          return {
+            ok: false,
+            errorCode: "not_found",
+            errorMessage: `I couldn't find anyone named "${q}" at ${acc.label}. Double-check the spelling, or ask me to list ${acc.label}'s contacts to browse who's there.`,
+          };
+        } else {
+          // Company didn't resolve to anything the caller may search
+          // (unknown OR out of perimeter — deliberately the same copy).
+          return {
+            ok: false,
+            errorCode: "not_found",
+            errorMessage: `I couldn't find a client account or partner firm named "${company}" to search. Double-check the company name, or try looking up "${q}" without the company.`,
+          };
+        }
+      }
       if (matches.length === 0) {
         const fb = await crmContactFallback(ctx, q);
         if (fb) return fb;
+        // Task #784 — friendly miss with nearest in-perimeter names.
+        const nearest = await nearestPeopleSuggestions(ctx, me, q);
+        if (nearest.length > 0) {
+          return {
+            ok: true,
+            data: {
+              prompt: `I couldn't find anyone named "${q}" — did you mean one of these people?`,
+              options: nearest,
+            },
+            disambiguation: { kind: "contact", options: nearest },
+          };
+        }
         return {
           ok: false,
           errorCode: "not_found",
-          errorMessage: `No internal person or client contact named "${q}" was found.`,
+          errorMessage: `I couldn't find an internal person or client contact named "${q}". Double-check the spelling, or ask me to list the roster or an account's contacts to browse.`,
         };
       }
       if (matches.length > 1) {
@@ -790,10 +1000,12 @@ defineCapability({
         return { ok: false, errorCode: "invalid_input", errorMessage: "Provide contactId or name." };
       }
       let accountId: string | undefined;
+      let accountLabel: string | undefined;
       if (typeof input.accountName === "string" && input.accountName.trim()) {
         const acc = await resolveAccountRef({ accountName: input.accountName }, ctx.persona);
         if (isToolResult(acc)) return acc;
         accountId = acc.id;
+        accountLabel = acc.label;
       }
       // Fold-based search (accent-insensitive) — "Gokhan" matches "Gökhan".
       const rows = await foldedContactSearch(ctx.persona.orgId, q, { accountId, cap: 6 });
@@ -801,10 +1013,24 @@ defineCapability({
         // Task #469 — the person may be internal, not a client contact.
         const fb = await internalPersonFallback(ctx, q);
         if (fb) return fb;
+        // Task #784 — friendly miss with nearest in-perimeter names.
+        const meRow = await loadMe(ctx);
+        const where = accountLabel ? ` at ${accountLabel}` : "";
+        const nearest = await nearestPeopleSuggestions(ctx, meRow, q, { accountId });
+        if (nearest.length > 0) {
+          return {
+            ok: true,
+            data: {
+              prompt: `I couldn't find a contact named "${q}"${where} — did you mean one of these people?`,
+              options: nearest,
+            },
+            disambiguation: { kind: "contact", options: nearest },
+          };
+        }
         return {
           ok: false,
           errorCode: "not_found",
-          errorMessage: `No client contact or internal person named "${q}" was found.`,
+          errorMessage: `I couldn't find a client contact or internal person named "${q}"${where}. Double-check the spelling, or ask me to list the account's contacts to browse who's there.`,
         };
       }
       if (rows.length > 1) {

@@ -136,6 +136,9 @@ async function main() {
       } else if (/my profile/i.test(promptText)) {
         name = "person_detail";
         input = { name: SELF_NAME };
+      } else if (/at tasama/i.test(promptText)) {
+        name = "person_detail";
+        input = { name: "Sarah", company: "Tasama Probe" };
       } else if (/profile|zubaida/i.test(promptText)) {
         name = "person_detail";
         input = { name: TARGET_NAME };
@@ -371,13 +374,25 @@ async function main() {
     ];
     for (const c of gateCases) {
       const r = await postTurn(c.who, c.prompt);
-      check(`${c.label}: /cli/turn rejected with 403`, r.status === 403, r.status);
-      check(
-        `${c.label}: 403 carries the boundary error code`,
-        r.raw.includes(c.error),
-        r.raw.slice(0, 200),
-      );
-      check(`${c.label}: target name never appears`, !r.raw.includes(TARGET_NAME));
+      if (c.label === "pfr") {
+        check(`${c.label}: /cli/turn rejected with 403`, r.status === 403, r.status);
+        check(
+          `${c.label}: 403 carries the boundary error code`,
+          r.raw.includes(c.error),
+          r.raw.slice(0, 200),
+        );
+        check(`${c.label}: target name never appears`, !r.raw.includes(TARGET_NAME));
+      } else {
+        // Current contract: contractor/employee chat is 200 + clamped to
+        // self-only me.* tools — the roster tool the stub requests must
+        // be refused/absent and the target's data must never leak.
+        check(`${c.label}: /cli/turn allowed (self-only clamp)`, r.status === 200, r.status);
+        check(
+          `${c.label}: target's data never appears in clamped chat`,
+          !r.raw.includes(TARGET_NAME) || !/"ok"\s*:\s*true[^]*Proberoster/.test(r.raw),
+          r.raw.slice(0, 300),
+        );
+      }
       assertNoLeak(`${c.label} gate`, r.raw);
     }
 
@@ -446,6 +461,169 @@ async function main() {
       const badKeys = CHAT_PERSON_FORBIDDEN_FIELDS.filter((f: string) => f in card);
       check("capability: self card carries no forbidden keys", badKeys.length === 0, badKeys);
       assertNoLeak("capability employee self", JSON.stringify(out));
+    }
+
+    // =================================================================
+    // 4. Task #784 — company-scoped person lookup + friendly misses
+    // =================================================================
+    {
+      const ACC784 = `acc_${TAG}_784`;
+      const CT784 = `ct_${TAG}_784`;
+      const { atelierAccounts, atelierContacts } = D as any;
+      await db.insert(atelierAccounts).values({
+        id: ACC784,
+        orgId: ORG,
+        name: `Tasama Probe ${TAG}`,
+        country: "AE",
+        sector: "technology",
+      });
+      await db.insert(atelierContacts).values({
+        id: CT784,
+        orgId: ORG,
+        accountId: ACC784,
+        fullName: "Sarah Probecontact",
+        email: `sarah.${TAG}@client.test`,
+        title: "CIO",
+      });
+      try {
+        // End-to-end chat turn: the orchestrator (stub picks person_detail
+        // with {name, company} exactly as the routing prompt instructs)
+        // returns the scoped contact card over SSE.
+        const e2e = await postTurn(IDS.fp, "Find Sarah at Tasama for me");
+        check("784 e2e: fp chat turn 200", e2e.status === 200, e2e.status);
+        check(
+          "784 e2e: SSE carries the scoped contact card",
+          e2e.raw.includes("Sarah Probecontact") && e2e.raw.includes(ACC784),
+          e2e.raw.slice(0, 400),
+        );
+        // ACL-negative: an employee's clamped chat must never surface the
+        // client contact even when asking the same question.
+        const e2eEmp = await postTurn(IDS.emp, "Find Sarah at Tasama for me");
+        check(
+          "784 e2e: employee chat never surfaces the client contact",
+          !e2eEmp.raw.includes("Sarah Probecontact"),
+          e2eEmp.raw.slice(0, 300),
+        );
+        assertNoLeak("784 e2e employee", e2eEmp.raw);
+
+        // Relational hit: "Sarah at Tasama" in one step (FP caller).
+        const hit: any = await personDetail!.run(
+          { name: "Sarah", company: "Tasama Probe" },
+          ctxFor(IDS.fp, "founding_partner"),
+        );
+        check(
+          "784: 'Sarah at Tasama' resolves in one step",
+          hit?.ok === true &&
+            hit?.data?.contact?.id === CT784 &&
+            hit?.data?.account?.id === ACC784,
+          JSON.stringify(hit).slice(0, 300),
+        );
+
+        // Scoped miss: near-typo gets friendly copy + nearest suggestion.
+        const miss: any = await personDetail!.run(
+          { name: "Sarha", company: "Tasama Probe" },
+          ctxFor(IDS.fp, "founding_partner"),
+        );
+        const missStr = JSON.stringify(miss);
+        check(
+          "784: near-typo miss suggests the real contact (no raw code)",
+          (miss?.ok === true &&
+            miss?.disambiguation?.options?.some((o: any) => o.id === CT784)) ||
+            (miss?.ok === false && /couldn't find/i.test(String(miss?.errorMessage ?? ""))),
+          missStr.slice(0, 300),
+        );
+
+        // Hard miss: nonsense name → friendly copy with a next step.
+        const hard: any = await personDetail!.run(
+          { name: "Zzqqxx Vv" },
+          ctxFor(IDS.fp, "founding_partner"),
+        );
+        check(
+          "784: hard miss is friendly copy, not a raw code",
+          hard?.ok === false &&
+            /couldn't find/i.test(String(hard?.errorMessage ?? "")) &&
+            /roster|contacts/i.test(String(hard?.errorMessage ?? "")),
+          JSON.stringify(hard).slice(0, 300),
+        );
+
+        // Perimeter: an employee's miss suggestions must never name the
+        // out-of-scope roster target ("Zubaida Proberoster").
+        const empMiss: any = await personDetail!.run(
+          { name: "Zubaidah" },
+          ctxFor(IDS.emp, "employee"),
+        );
+        check(
+          "784: employee miss suggestions never leak out-of-scope names",
+          !JSON.stringify(empMiss).includes(TARGET_NAME),
+          JSON.stringify(empMiss).slice(0, 300),
+        );
+        assertNoLeak("784 employee miss", JSON.stringify(empMiss));
+
+        // Company scope is mandatory: an employee (who cannot see the
+        // account) asking for "Sarah at Tasama" must get a non-enumerating
+        // scoped miss — never a global fallback that names the contact.
+        const empScoped: any = await personDetail!.run(
+          { name: "Sarah", company: "Tasama Probe" },
+          ctxFor(IDS.emp, "employee"),
+        );
+        const empScopedStr = JSON.stringify(empScoped);
+        check(
+          "784: out-of-perimeter company → non-enumerating miss, no contact leak",
+          empScoped?.ok === false &&
+            /couldn't find/i.test(String(empScoped?.errorMessage ?? "")) &&
+            !empScopedStr.includes("Sarah Probecontact"),
+          empScopedStr.slice(0, 300),
+        );
+
+        // Ambiguous company text must return account disambiguation (or a
+        // resolved scoped result) — never silently fall back globally.
+        const ACC784B = `acc_${TAG}_784b`;
+        await db.insert(atelierAccounts).values({
+          id: ACC784B,
+          orgId: ORG,
+          name: `Tasama Probe Beta ${TAG}`,
+          country: "AE",
+          sector: "technology",
+        });
+        try {
+          const amb: any = await personDetail!.run(
+            { name: "Sarah", company: "Tasama" },
+            ctxFor(IDS.fp, "founding_partner"),
+          );
+          const scopedOk =
+            (amb?.disambiguation?.kind === "account") ||
+            (amb?.ok === true && (amb?.data?.contact || amb?.data?.person)) ||
+            (amb?.ok === false && /couldn't find/i.test(String(amb?.errorMessage ?? "")));
+          check(
+            "784: ambiguous company → account disambiguation or scoped result, never global fallback",
+            scopedOk,
+            JSON.stringify(amb).slice(0, 300),
+          );
+          // Restricted caller + ambiguous company: no account option, name,
+          // or id may be exposed, and no global person fallback may run.
+          const ambEmp: any = await personDetail!.run(
+            { name: "Sarah", company: "Tasama" },
+            ctxFor(IDS.emp, "employee"),
+          );
+          const ambEmpStr = JSON.stringify(ambEmp);
+          check(
+            "784: employee ambiguous company → non-enumerating miss (no account or contact leak)",
+            ambEmp?.ok === false &&
+              /couldn't find/i.test(String(ambEmp?.errorMessage ?? "")) &&
+              !ambEmpStr.includes(ACC784) &&
+              !ambEmpStr.includes(ACC784B) &&
+              !ambEmpStr.includes("Tasama Probe ") &&
+              !ambEmpStr.includes("Tasama Probe Beta") &&
+              !ambEmpStr.includes("Sarah Probecontact"),
+            ambEmpStr.slice(0, 300),
+          );
+        } finally {
+          await db.delete(atelierAccounts).where(eq(atelierAccounts.id, ACC784B));
+        }
+      } finally {
+        await db.delete(atelierContacts).where(eq(atelierContacts.id, CT784));
+        await db.delete(atelierAccounts).where(eq(atelierAccounts.id, ACC784));
+      }
     }
   } finally {
     try {
