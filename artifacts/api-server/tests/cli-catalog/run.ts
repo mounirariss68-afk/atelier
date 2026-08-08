@@ -47,6 +47,12 @@ import {
 } from "../../src/lib/atelier-cli/me-chat-parity.js";
 import { lintOpportunityDeletes } from "../../src/scripts/atelier-lint-opportunity-deletes.js";
 import {
+  currentMeSectionLabels,
+  currentMobileTabTitles,
+  parseWebLocation,
+  parseMobileLocation,
+} from "./parity-locations.js";
+import {
   wrapAttachment,
   attachmentMentionsDestructive,
   shouldRequireTypedNameForAttachmentTurn,
@@ -490,6 +496,74 @@ async function main() {
     // Never leaks internal tool/capability identifiers.
     assert.ok(!/me\.[a-z_]+/.test(guidance), "guidance leaked a capability id");
     assert.ok(!/_my_|my_[a-z]+_/.test(guidance), "guidance leaked a tool name");
+  });
+
+  console.log("\n[7c] Task #801 — exclusion UI locations must exist (no stale directions)");
+  await test("every excluded web location points at a live Me-lens section", () => {
+    const labels = currentMeSectionLabels();
+    const problems: string[] = [];
+    for (const [key, entry] of Object.entries(ME_CHAT_PARITY)) {
+      if (entry.kind !== "excluded" || !entry.web) continue;
+      const parsed = parseWebLocation(entry.web);
+      if (!parsed) {
+        problems.push(
+          `"${key}" web location "${entry.web}" does not follow the "Me → Section (detail)" convention`,
+        );
+        continue;
+      }
+      if (parsed.lens !== "Me") {
+        problems.push(
+          `"${key}" web location "${entry.web}" references lens "${parsed.lens}" — /me exclusions must live under the Me lens`,
+        );
+        continue;
+      }
+      if (!labels.has(parsed.section)) {
+        problems.push(
+          `"${key}" web location "${entry.web}" references Me section "${parsed.section}" which no longer exists in artifacts/atelier/src/lib/lens.ts ` +
+            `(current sections: ${[...labels].join(", ")}). The section was renamed/moved — update me-chat-parity.ts or chat will direct users to a dead place.`,
+        );
+      }
+    }
+    assert.equal(problems.length, 0, `stale web directions:\n  ${problems.join("\n  ")}`);
+  });
+  await test("every excluded mobile location points at a live mobile tab", () => {
+    const tabs = currentMobileTabTitles();
+    const problems: string[] = [];
+    for (const [key, entry] of Object.entries(ME_CHAT_PARITY)) {
+      if (entry.kind !== "excluded" || !entry.mobile) continue;
+      const parsed = parseMobileLocation(entry.mobile);
+      if (!parsed) {
+        problems.push(
+          `"${key}" mobile location "${entry.mobile}" does not follow the "<Tab> tab …" convention`,
+        );
+        continue;
+      }
+      if (!tabs.has(parsed.tab)) {
+        problems.push(
+          `"${key}" mobile location "${entry.mobile}" references tab "${parsed.tab}" which no longer exists in atelier-mobile app/(tabs) ` +
+            `(current tabs: ${[...tabs].join(", ")}). The tab was renamed — update me-chat-parity.ts or chat will direct users to a dead place.`,
+        );
+      }
+    }
+    assert.equal(problems.length, 0, `stale mobile directions:\n  ${problems.join("\n  ")}`);
+  });
+  await test("a renamed section/tab WOULD fail the cross-check (assertions have teeth)", () => {
+    const labels = currentMeSectionLabels();
+    // Sanity: the extractor found the real sections the registry relies on.
+    for (const expected of ["Expenses", "Time", "Profile", "Pay & Benefits", "Delegates", "Assist"]) {
+      assert.ok(labels.has(expected), `lens extraction lost Me section "${expected}"`);
+    }
+    // A rename (e.g. "Pay & Benefits" → "Compensation") drops the old label…
+    assert.ok(!labels.has("Compensation"), "unexpected section in lens registry");
+    // …and a registry string still saying the old thing would then fail:
+    const parsed = parseWebLocation("Me → Old Renamed Section (whatever)");
+    assert.ok(parsed && !labels.has(parsed.section));
+    const tabs = currentMobileTabTitles();
+    for (const expected of ["Expenses", "Me", "Settings"]) {
+      assert.ok(tabs.has(expected), `mobile tab extraction lost tab "${expected}"`);
+    }
+    const mParsed = parseMobileLocation("Old Tab Name tab → somewhere");
+    assert.ok(mParsed && !tabs.has(mParsed.tab));
   });
 
   console.log("\n[8] Task #404 — read-capability coverage for resolvable entity kinds");
