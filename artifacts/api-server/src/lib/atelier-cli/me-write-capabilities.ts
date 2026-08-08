@@ -1232,6 +1232,481 @@ defineSelfWriteCapability({
 });
 
 // ---------------------------------------------------------------------
+// Task #802 — shared resolver: pick ONE of the caller's own DRAFT
+// timesheet entries (in a draft/rejected week) from an explicit id, or
+// from a description: work date + optional engagement/client name,
+// activity code, and/or the hours currently on the entry ("the 3h I
+// logged on Tasama yesterday"). The pool is strictly self-scoped —
+// candidates can never leak anyone else's time.
+// ---------------------------------------------------------------------
+export type OwnTimesheetEntryRow = {
+  id: string;
+  workDate: string;
+  hours: number;
+  activityCode: string;
+  narrative: string | null;
+  engagementId: string | null;
+  weekId: string;
+  weekIso: string;
+  engagementLabel: string | null;
+  accountName: string | null;
+};
+
+function timesheetEntryOption(e: OwnTimesheetEntryRow) {
+  return {
+    id: e.id,
+    label: `${e.hours}h ${e.activityCode}${e.engagementLabel ? ` — ${e.engagementLabel}` : ""}`,
+    secondary: `${e.workDate}${e.accountName ? ` · ${e.accountName}` : ""}${e.narrative ? ` · ${e.narrative.slice(0, 60)}` : ""}`,
+  };
+}
+
+function describeDayEntries(entries: OwnTimesheetEntryRow[]): string {
+  return entries
+    .slice(0, 6)
+    .map((e) => `${e.hours}h ${e.activityCode}${e.engagementLabel ? ` on ${e.engagementLabel}` : ""}`)
+    .join(", ");
+}
+
+export async function resolveOwnTimesheetEntry(
+  input: Record<string, unknown>,
+  personId: string,
+  orgId: string,
+): Promise<
+  | { outcome: "match"; entry: OwnTimesheetEntryRow }
+  | { outcome: "not_found"; message: string }
+  | {
+      outcome: "ambiguous";
+      prompt: string;
+      options: Array<{ id: string; label: string; secondary?: string }>;
+    }
+> {
+  const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "").trim();
+  const entryId = typeof input.entryId === "string" && input.entryId.trim() !== "" ? input.entryId.trim() : "";
+  const workDate = typeof input.workDate === "string" ? input.workDate.trim() : "";
+  const engQ = typeof input.engagement === "string" ? input.engagement.trim() : "";
+  const actQ = typeof input.activity === "string" ? input.activity.trim() : "";
+  const hoursWas =
+    input.hoursWas !== undefined && input.hoursWas !== null && String(input.hoursWas).trim() !== ""
+      ? Number(input.hoursWas)
+      : null;
+
+  if (!entryId && !isIsoDate(workDate)) {
+    return {
+      outcome: "not_found",
+      message:
+        'Tell me which day the entry is on (ISO date, e.g. "2026-08-04") — I resolve the entry from the date plus an optional engagement or activity description.',
+    };
+  }
+
+  // Pool: the caller's own DRAFT entries inside draft/rejected weeks only.
+  const rows = await db
+    .select({
+      id: atelierTimesheetEntries.id,
+      workDate: atelierTimesheetEntries.workDate,
+      hours: atelierTimesheetEntries.hours,
+      activityCode: atelierTimesheetEntries.activityCode,
+      narrative: atelierTimesheetEntries.narrative,
+      engagementId: atelierTimesheetEntries.engagementId,
+      weekId: atelierTimesheetEntries.weekId,
+      weekIso: atelierTimesheetWeeks.weekIso,
+    })
+    .from(atelierTimesheetEntries)
+    .innerJoin(atelierTimesheetWeeks, eq(atelierTimesheetEntries.weekId, atelierTimesheetWeeks.id))
+    .where(
+      and(
+        eq(atelierTimesheetEntries.personId, personId),
+        eq(atelierTimesheetEntries.status, "draft"),
+        isNull(atelierTimesheetEntries.deletedAt),
+        inArray(atelierTimesheetWeeks.status, ["draft", "rejected"]),
+        ...(entryId
+          ? [eq(atelierTimesheetEntries.id, entryId)]
+          : [eq(atelierTimesheetEntries.workDate, workDate)]),
+      ),
+    );
+
+  // Attach engagement/account labels (org-scoped join — a malformed
+  // cross-tenant accountId must never surface a foreign account name).
+  const engIds = [...new Set(rows.map((r) => r.engagementId).filter((x): x is string => !!x))];
+  const engLabels = new Map<string, { name: string; accountName: string | null }>();
+  if (engIds.length > 0) {
+    const engs = await db
+      .select({
+        id: atelierEngagements.id,
+        name: atelierEngagements.name,
+        accountName: atelierAccounts.name,
+      })
+      .from(atelierEngagements)
+      .leftJoin(
+        atelierAccounts,
+        and(
+          eq(atelierEngagements.accountId, atelierAccounts.id),
+          eq(atelierAccounts.orgId, orgId),
+          isNull(atelierAccounts.deletedAt),
+        ),
+      )
+      .where(and(inArray(atelierEngagements.id, engIds), eq(atelierEngagements.orgId, orgId)));
+    for (const e of engs) engLabels.set(e.id, { name: e.name, accountName: e.accountName ?? null });
+  }
+  const pool: OwnTimesheetEntryRow[] = rows.map((r) => ({
+    id: r.id,
+    workDate: r.workDate,
+    hours: Number(r.hours),
+    activityCode: r.activityCode ?? "internal",
+    narrative: r.narrative ?? null,
+    engagementId: r.engagementId ?? null,
+    weekId: r.weekId,
+    weekIso: r.weekIso,
+    engagementLabel: r.engagementId ? (engLabels.get(r.engagementId)?.name ?? null) : null,
+    accountName: r.engagementId ? (engLabels.get(r.engagementId)?.accountName ?? null) : null,
+  }));
+
+  if (entryId) {
+    const hit = pool.find((e) => e.id === entryId);
+    if (hit) return { outcome: "match", entry: hit };
+    return {
+      outcome: "not_found",
+      message:
+        "That entry isn't among your own editable (draft-week) timesheet entries — it may be submitted, approved, or someone else's. Say \"show my timesheet\" to check.",
+    };
+  }
+
+  if (pool.length === 0) {
+    return {
+      outcome: "not_found",
+      message: `You have no editable draft entries on ${workDate}. Entries in submitted or approved weeks can't be changed from chat — say "show my timesheet" to check that week's status.`,
+    };
+  }
+
+  // Narrow by the optional descriptors.
+  let matches = pool;
+  if (engQ) {
+    const nq = fold(engQ);
+    matches = matches.filter(
+      (e) =>
+        (e.engagementLabel && fold(e.engagementLabel).includes(nq)) ||
+        (e.accountName && fold(e.accountName).includes(nq)) ||
+        (e.narrative && fold(e.narrative).includes(nq)),
+    );
+  }
+  if (actQ) {
+    const na = fold(actQ);
+    matches = matches.filter((e) => fold(e.activityCode).includes(na));
+  }
+  if (hoursWas != null && Number.isFinite(hoursWas)) {
+    matches = matches.filter((e) => Math.abs(e.hours - hoursWas) < 0.001);
+  }
+
+  if (matches.length === 1) return { outcome: "match", entry: matches[0]! };
+  if (matches.length > 1) {
+    // Rank closest to the engagement text when one was given; otherwise
+    // keep the day's natural order.
+    let sorted = matches;
+    if (engQ) {
+      const ranked = rankNearestNames(
+        engQ,
+        matches.map((e) => ({ id: e.id, label: e.engagementLabel ?? e.accountName ?? e.activityCode })),
+        matches.length,
+      );
+      const order = new Map(ranked.map((r, idx) => [r.id, idx]));
+      sorted = [...matches].sort(
+        (a, b) =>
+          (order.has(a.id) ? order.get(a.id)! : Number.MAX_SAFE_INTEGER) -
+          (order.has(b.id) ? order.get(b.id)! : Number.MAX_SAFE_INTEGER),
+      );
+    }
+    return {
+      outcome: "ambiguous",
+      prompt: `You have ${matches.length} entries on ${workDate} matching that — which one?`,
+      options: sorted.slice(0, 6).map(timesheetEntryOption),
+    };
+  }
+  // Zero after narrowing — friendly miss naming that day's actual entries.
+  return {
+    outcome: "ambiguous",
+    prompt: `None of your ${workDate} entries match that description. That day has: ${describeDayEntries(pool)} — which one did you mean?`,
+    options: pool.slice(0, 6).map(timesheetEntryOption),
+  };
+}
+
+// ---------------------------------------------------------------------
+// me.timesheet_update — fix one of the caller's own entries by
+// describing it (Task #802). Mirrors PATCH entry: draft entry in a
+// draft/rejected week only; week totals recomputed after the change.
+// ---------------------------------------------------------------------
+defineSelfWriteCapability({
+  id: "me.timesheet_update",
+  module: "roster",
+  toolName: "update_my_time",
+  description:
+    "Fix one of the signed-in user's own logged time entries by describing it — a work date plus an optional engagement/client name, activity, or the hours currently on it (\"change my Tuesday hours from 4 to 6\"). The server resolves the entry; several matches come back as choices. Only draft entries in draft/rejected weeks can change.",
+  slashAliases: { en: ["/fix-time"], fr: ["/corriger-temps"] },
+  representativePrompts: {
+    en: ["Change my Tuesday hours from 4 to 6", "Fix yesterday's Tasama entry to 5 hours"],
+    ar: ["عدل ساعات يوم الثلاثاء"],
+    fr: ["Corriger mes heures de mardi"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "entity_card",
+  examplePhrases: {
+    en: ["Change my 2026-08-04 hours from 4 to 6"],
+    ar: ["عدل ساعات يوم الثلاثاء"],
+    fr: ["Corriger mes heures de mardi"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      workDate: { type: "string", description: "ISO date YYYY-MM-DD of the entry to fix." },
+      engagement: {
+        type: "string",
+        description: "Optional engagement or client name that identifies the entry.",
+      },
+      activity: {
+        type: "string",
+        description: "Optional activity descriptor (billable, internal, training, bench, leave).",
+      },
+      hoursWas: { type: "number", description: "Hours currently on the entry, if the user said them." },
+      entryId: { type: "string", description: "Exact entry id, if already known." },
+      hours: { type: "number", description: "New hours value." },
+      narrative: { type: "string", description: "New narrative text." },
+      confirm: { type: "boolean" },
+    },
+    additionalProperties: false,
+  },
+  twoPhaseConfirm: true,
+  irreversible: false,
+  async runSelf(input, subject) {
+    const person = personRowOf(subject);
+    if (!person) return NO_ROSTER;
+    const hasHours = input.hours !== undefined && input.hours !== null;
+    const hasNarrative = typeof input.narrative === "string";
+    if (!hasHours && !hasNarrative) {
+      return {
+        ok: false,
+        errorCode: "nothing_to_change",
+        errorMessage: 'Tell me what to change — the new hours ("make it 6 hours") or the new note.',
+      };
+    }
+    let hours: number | null = null;
+    if (hasHours) {
+      hours = Number(input.hours);
+      if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+        return {
+          ok: false,
+          errorCode: "invalid_hours",
+          errorMessage: "New hours must be a number between 0 and 24 — nothing was changed.",
+        };
+      }
+    }
+    const resolved = await resolveOwnTimesheetEntry(input, person.id, subject.user.orgId);
+    if (resolved.outcome === "not_found") {
+      return { ok: false, errorCode: "entry_not_found", errorMessage: resolved.message };
+    }
+    if (resolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+        disambiguation: { kind: "timesheet_entry", field: "entryId", options: resolved.options },
+      };
+    }
+    const entry = resolved.entry;
+    const label = `${entry.hours}h ${entry.activityCode}${entry.engagementLabel ? ` on ${entry.engagementLabel}` : ""} (${entry.workDate})`;
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            entryId: entry.id,
+            workDate: entry.workDate,
+            currentHours: entry.hours,
+            ...(hours != null ? { newHours: hours } : {}),
+            ...(hasNarrative ? { newNarrative: String(input.narrative).slice(0, 200) } : {}),
+          },
+        },
+        confirmation: {
+          summary:
+            hours != null
+              ? `Change ${label} to ${hours}h?`
+              : `Update the note on ${label}?`,
+          diff: {
+            update: {
+              table: "atelier_timesheet_entries",
+              values: {
+                ...(hours != null ? { hours } : {}),
+                ...(hasNarrative ? { narrative: String(input.narrative).slice(0, 2000) } : {}),
+              },
+            },
+          },
+          pending: {
+            tool: "update_my_time",
+            input: { ...input, entryId: entry.id, confirm: true },
+          },
+        },
+      };
+    }
+    const patch: Record<string, unknown> = { updatedAt: new Date() };
+    if (hours != null) patch.hours = hours;
+    if (hasNarrative) patch.narrative = String(input.narrative).slice(0, 2000);
+    await db
+      .update(atelierTimesheetEntries)
+      .set(patch)
+      .where(and(eq(atelierTimesheetEntries.id, entry.id), isNull(atelierTimesheetEntries.deletedAt)));
+    const totals = await recomputeWeekTotals(entry.weekId);
+    await audit({
+      subject,
+      entityType: "timesheet_entry",
+      entityId: entry.id,
+      action: "timesheet.entry_update",
+      payload: {
+        workDate: entry.workDate,
+        hoursBefore: entry.hours,
+        ...(hours != null ? { hoursAfter: hours } : {}),
+        via: "chat",
+      },
+      summary: `${subject.user.name} updated a ${entry.workDate} timesheet entry from chat`,
+    });
+    return {
+      ok: true,
+      data: {
+        id: entry.id,
+        label:
+          hours != null
+            ? `${entry.workDate}: ${entry.hours}h → ${hours}h${entry.engagementLabel ? ` — ${entry.engagementLabel}` : ""}`
+            : `${entry.workDate}: note updated${entry.engagementLabel ? ` — ${entry.engagementLabel}` : ""}`,
+        weekIso: entry.weekIso,
+        weekTotalHours: totals?.totalHours ?? null,
+        weekBillableHours: totals?.billableHours ?? null,
+        href: "/me/timesheets",
+        navigateTo: { path: "/me/timesheets", when: "on_commit" as const },
+        note: "Week totals were recalculated.",
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
+// me.timesheet_remove — remove one of the caller's own entries by
+// describing it (Task #802). Destructive → two-phase confirm; mirrors
+// DELETE entry (soft delete + week totals recompute).
+// ---------------------------------------------------------------------
+defineSelfWriteCapability({
+  id: "me.timesheet_remove",
+  module: "roster",
+  toolName: "remove_my_time",
+  description:
+    "Remove one of the signed-in user's own logged time entries by describing it — a work date plus an optional engagement/client name, activity, or the hours on it (\"remove the 3h I logged on Tasama yesterday\"). The server resolves the entry; several matches come back as choices. Only draft entries in draft/rejected weeks can be removed.",
+  slashAliases: { en: ["/remove-time"], fr: ["/supprimer-temps"] },
+  representativePrompts: {
+    en: ["Remove the 3h I logged on Tasama yesterday", "Delete my Monday internal entry"],
+    ar: ["احذف ساعات يوم الاثنين"],
+    fr: ["Supprimer mes heures de lundi"],
+  },
+  surfaceOn: ["home", "global"],
+  resultCard: "entity_card",
+  examplePhrases: {
+    en: ["Remove the 3 hours I logged yesterday"],
+    ar: ["احذف ساعات يوم الاثنين"],
+    fr: ["Supprimer mes heures de lundi"],
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      workDate: { type: "string", description: "ISO date YYYY-MM-DD of the entry to remove." },
+      engagement: {
+        type: "string",
+        description: "Optional engagement or client name that identifies the entry.",
+      },
+      activity: {
+        type: "string",
+        description: "Optional activity descriptor (billable, internal, training, bench, leave).",
+      },
+      hoursWas: { type: "number", description: "Hours on the entry, if the user said them." },
+      entryId: { type: "string", description: "Exact entry id, if already known." },
+      confirm: { type: "boolean" },
+    },
+    additionalProperties: false,
+  },
+  twoPhaseConfirm: true,
+  irreversible: false,
+  async runSelf(input, subject) {
+    const person = personRowOf(subject);
+    if (!person) return NO_ROSTER;
+    const resolved = await resolveOwnTimesheetEntry(input, person.id, subject.user.orgId);
+    if (resolved.outcome === "not_found") {
+      return { ok: false, errorCode: "entry_not_found", errorMessage: resolved.message };
+    }
+    if (resolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+        disambiguation: { kind: "timesheet_entry", field: "entryId", options: resolved.options },
+      };
+    }
+    const entry = resolved.entry;
+    const label = `${entry.hours}h ${entry.activityCode}${entry.engagementLabel ? ` on ${entry.engagementLabel}` : ""} (${entry.workDate})`;
+    if (input.confirm !== true) {
+      return {
+        ok: true,
+        data: {
+          preview: {
+            entryId: entry.id,
+            workDate: entry.workDate,
+            hours: entry.hours,
+            activityCode: entry.activityCode,
+            engagementName: entry.engagementLabel,
+          },
+        },
+        confirmation: {
+          summary: `Remove ${label} from your timesheet? Week totals will be recalculated.`,
+          diff: {
+            delete: {
+              table: "atelier_timesheet_entries",
+              values: { id: entry.id, workDate: entry.workDate, hours: entry.hours },
+            },
+            impact: `Week ${entry.weekIso} loses ${entry.hours}h.`,
+          },
+          pending: {
+            tool: "remove_my_time",
+            input: { ...input, entryId: entry.id, confirm: true },
+          },
+        },
+      };
+    }
+    await db
+      .update(atelierTimesheetEntries)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(atelierTimesheetEntries.id, entry.id), isNull(atelierTimesheetEntries.deletedAt)));
+    const totals = await recomputeWeekTotals(entry.weekId);
+    await audit({
+      subject,
+      entityType: "timesheet_entry",
+      entityId: entry.id,
+      action: "timesheet.entry_remove",
+      payload: {
+        workDate: entry.workDate,
+        hours: entry.hours,
+        activityCode: entry.activityCode,
+        engagementId: entry.engagementId,
+        via: "chat",
+      },
+      summary: `${subject.user.name} removed a ${entry.workDate} timesheet entry from chat`,
+    });
+    return {
+      ok: true,
+      data: {
+        id: entry.id,
+        label: `Removed ${label}`,
+        weekIso: entry.weekIso,
+        weekTotalHours: totals?.totalHours ?? null,
+        weekBillableHours: totals?.billableHours ?? null,
+        href: "/me/timesheets",
+        navigateTo: { path: "/me/timesheets", when: "on_commit" as const },
+        note: "Week totals were recalculated.",
+      },
+    };
+  },
+});
+
+// ---------------------------------------------------------------------
 // me.timesheet_submit — submit the week (mirrors POST week submit)
 // ---------------------------------------------------------------------
 defineSelfWriteCapability({

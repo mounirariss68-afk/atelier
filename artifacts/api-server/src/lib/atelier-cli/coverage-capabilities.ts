@@ -68,6 +68,9 @@ import {
   recomputeWeekTotals,
   type PersonRow,
 } from "../../routes/atelier/ledgerRoutes.js";
+// Task #802 — shared self-scoped entry resolver (date + description →
+// one of the caller's own draft-week entries).
+import { resolveOwnTimesheetEntry } from "./me-write-capabilities.js";
 
 /**
  * Task — chat person writes must land on the right roster. Maps an
@@ -501,19 +504,23 @@ defineCapability({
   schemaVersion: CATALOG_SCHEMA_VERSION,
   module: "ledger",
   toolName: "timesheet_entry_update",
-  description: "Update narrative or hours on a draft timesheet entry.",
+  description:
+    "Update narrative or hours on one of the CALLER's own draft timesheet entries. The entry can be picked by id, or described server-side by workDate plus an optional engagement/client name, activity, or current hours (Task #802).",
   slashAliases: { en: ["/log-time-edit"] },
   representativePrompts: { en: ["Change my Tuesday hours from 4 to 6."] },
   inputSchema: {
     type: "object",
     properties: {
       ...COMMON_INPUT_PROPS,
-      id: { type: "string", minLength: 3 },
+      id: { type: "string", minLength: 3, description: "Entry id, if already known." },
+      workDate: { type: "string", description: "ISO date of the entry when the id is unknown." },
+      engagement: { type: "string", description: "Optional engagement/client name identifying the entry." },
+      activity: { type: "string", description: "Optional activity descriptor (billable, internal, …)." },
+      hoursWas: { type: "number", description: "Hours currently on the entry, if the user said them." },
       hours: { type: "number" },
       narrative: { type: "string" },
       activityCode: { type: "string" },
     },
-    required: ["id"],
     additionalProperties: false,
   },
   isWrite: true,
@@ -524,26 +531,45 @@ defineCapability({
   surfaceOn: ["global"],
   source: "cli-only",
   async run(input, ctx) {
-    if (input.confirm !== true) {
-      return { ok: false, errorCode: "needs_confirm", errorMessage: "timesheet_entry_update requires confirm:true." };
-    }
     const caller = await resolveTimesheetCaller(ctx);
     if (!caller.ok) return { ok: false, errorCode: caller.errorCode, errorMessage: caller.errorMessage };
     const person = caller.person;
 
-    const id = String(input.id);
+    // Task #802 — resolve the entry server-side. `id` (or a described
+    // workDate + engagement/activity/hoursWas) goes through the shared
+    // self-scoped resolver, so ambiguity comes back as ranked options
+    // and a miss names that day's actual entries.
+    const resolved = await resolveOwnTimesheetEntry(
+      {
+        entryId: typeof input.id === "string" ? input.id : undefined,
+        workDate: input.workDate,
+        engagement: input.engagement,
+        activity: input.activity,
+        hoursWas: input.hoursWas,
+      },
+      person.id,
+      ctx.persona.orgId,
+    );
+    if (resolved.outcome === "not_found") {
+      return { ok: false, errorCode: "not_found", errorMessage: `${resolved.message} Nothing was updated.` };
+    }
+    if (resolved.outcome === "ambiguous") {
+      return {
+        ok: true,
+        data: { prompt: resolved.prompt, options: resolved.options, navigateTo: null },
+        disambiguation: { kind: "timesheet_entry", field: "id", options: resolved.options },
+      };
+    }
+    if (input.confirm !== true) {
+      return { ok: false, errorCode: "needs_confirm", errorMessage: "timesheet_entry_update requires confirm:true." };
+    }
+    const id = resolved.entry.id;
     const [entry] = await db
       .select()
       .from(atelierTimesheetEntries)
-      .where(and(eq(atelierTimesheetEntries.id, id), eq(atelierTimesheetEntries.orgId, ctx.persona.orgId), isNull(atelierTimesheetEntries.deletedAt)));
+      .where(and(eq(atelierTimesheetEntries.id, id), isNull(atelierTimesheetEntries.deletedAt)));
     if (!entry) {
       return { ok: false, errorCode: "not_found", errorMessage: `Timesheet entry ${id} not found — nothing was updated.` };
-    }
-    if (entry.personId !== person.id) {
-      return { ok: false, errorCode: "forbidden", errorMessage: "You can only edit your own timesheet entries from chat." };
-    }
-    if (entry.status !== "draft") {
-      return { ok: false, errorCode: "entry_locked", errorMessage: `Entry is ${entry.status} and can no longer be edited from chat.` };
     }
     const patch: Partial<typeof atelierTimesheetEntries.$inferInsert> = { updatedAt: new Date() };
     if (input.hours !== undefined) {
@@ -569,7 +595,7 @@ defineCapability({
     await db
       .update(atelierTimesheetEntries)
       .set(patch)
-      .where(and(eq(atelierTimesheetEntries.id, id), eq(atelierTimesheetEntries.orgId, ctx.persona.orgId), isNull(atelierTimesheetEntries.deletedAt)));
+      .where(and(eq(atelierTimesheetEntries.id, id), isNull(atelierTimesheetEntries.deletedAt)));
     const updatedWeek = await recomputeWeekTotals(entry.weekId);
     await audit(ctx.persona.orgId, ctx.persona.id, "timesheet_entry", id, "update", input);
     return {
