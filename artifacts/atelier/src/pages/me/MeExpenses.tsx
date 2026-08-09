@@ -41,6 +41,13 @@ interface Claim {
   engagementId: string | null;
   internalProjectLabel: string | null;
   hasReceipt: boolean;
+  // Task #815 — server-provided USD conversion (never invented client-side).
+  usdDisplay?: {
+    usdAmount: number;
+    rate: number;
+    rateDate: string | null;
+    source: string;
+  } | null;
   merchantNormalized?: string | null;
   merchantResolution?: string | null;
   rejectedReason: string | null;
@@ -128,8 +135,8 @@ function monthLabel(key: string): string {
 }
 
 /**
- * Per-currency totals, matching the way rows print amounts (no FX
- * conversion is invented — each currency sums separately).
+ * Per-currency totals in original currencies (each currency sums
+ * separately — shown as the breakdown beside the converted total).
  */
 function currencyTotals(rows: Claim[]): string {
   const m = new Map<string, number>();
@@ -138,6 +145,28 @@ function currencyTotals(rows: Claim[]): string {
     .sort((a, b) => b[1] - a[1])
     .map(([cur, amt]) => `${cur} ${amt.toFixed(2)}`)
     .join(" · ");
+}
+
+// Task #815 — server-converted USD amount for a claim, or null when the
+// server didn't provide one (never invented client-side).
+function usdOf(c: Claim): number | null {
+  const v = c.usdDisplay?.usdAmount;
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * Task #815 — one comparable USD total for a month, using ONLY the
+ * server's conversion. Returns null when any claim lacks a converted
+ * amount so we fall back to the honest per-currency breakdown.
+ */
+function usdTotalOf(rows: Claim[]): number | null {
+  let sum = 0;
+  for (const c of rows) {
+    const v = usdOf(c);
+    if (v === null) return null;
+    sum += v;
+  }
+  return sum;
 }
 
 const CHART_PALETTE = [
@@ -154,26 +183,22 @@ const EMPTY_CHART_CONFIG: ChartConfig = {};
 
 /**
  * Charts band under the banner — pie of category distribution and bar of
- * monthly totals, both for the CURRENT YEAR. Amounts stay per-currency
- * (no FX): the charts show the dominant currency and say so when other
- * currencies were left out, keeping numbers consistent with the rows.
+ * monthly totals, both for the CURRENT YEAR. Task #815: all claims chart
+ * in USD using the server's conversion (expense-date rates); claims the
+ * server couldn't convert are excluded and the note says so honestly.
  */
 function ExpenseCharts({ claims }: { claims: Claim[] }) {
   const year = new Date().getFullYear();
   const yearClaims = claims.filter((c) => monthKeyOf(c).startsWith(String(year)));
 
-  // Dominant currency = the one with the largest number of claims this year.
-  const byCurrency = new Map<string, number>();
-  for (const c of yearClaims) byCurrency.set(c.currency, (byCurrency.get(c.currency) ?? 0) + 1);
-  const dominant =
-    Array.from(byCurrency.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "USD";
-  const charted = yearClaims.filter((c) => c.currency === dominant);
+  // Chart every claim the server converted to USD; never invent a rate.
+  const charted = yearClaims.filter((c) => usdOf(c) !== null);
   const excluded = yearClaims.length - charted.length;
 
   const catTotals = new Map<string, number>();
   for (const c of charted) {
     const label = (c.category || "other").replace(/_/g, " ");
-    catTotals.set(label, (catTotals.get(label) ?? 0) + c.amount);
+    catTotals.set(label, (catTotals.get(label) ?? 0) + (usdOf(c) ?? 0));
   }
   const pieData = Array.from(catTotals.entries())
     .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
@@ -182,7 +207,7 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
   const monthTotals = new Array(12).fill(0) as number[];
   for (const c of charted) {
     const m = Number(monthKeyOf(c).slice(5, 7));
-    if (m >= 1 && m <= 12) monthTotals[m - 1] += c.amount;
+    if (m >= 1 && m <= 12) monthTotals[m - 1] += usdOf(c) ?? 0;
   }
   const barData = monthTotals.map((v, i) => ({
     name: MONTH_SHORT[i],
@@ -190,7 +215,7 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
   }));
   const hasData = charted.length > 0;
 
-  const fmt = (v: number) => `${dominant} ${v.toFixed(2)}`;
+  const fmt = (v: number) => `USD ${v.toFixed(2)}`;
 
   const frame = (label: string, note: string | null, chart: React.ReactElement) => (
     <Card className="p-4 space-y-2">
@@ -216,9 +241,9 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
 
   const note =
     excluded > 0
-      ? `${dominant} only — ${excluded} claim${excluded === 1 ? "" : "s"} in other currencies not charted`
+      ? `USD (expense-date rates) — ${excluded} claim${excluded === 1 ? "" : "s"} without a conversion not charted`
       : hasData
-        ? `amounts in ${dominant}`
+        ? "all amounts converted to USD (expense-date rates)"
         : null;
 
   return (
@@ -1244,9 +1269,31 @@ export default function MeExpenses() {
                       {rows.length} claim{rows.length === 1 ? "" : "s"}
                     </span>
                   </span>
-                  <span className="font-mono text-xs text-text-mute" data-testid={`exp-month-total-${mk}`}>
-                    {currencyTotals(rows)}
-                  </span>
+                  {(() => {
+                    const usdTotal = usdTotalOf(rows);
+                    const breakdown = currencyTotals(rows);
+                    const singleUsd = usdTotal !== null && breakdown === `USD ${usdTotal.toFixed(2)}`;
+                    return (
+                      <span
+                        className="flex items-baseline gap-2 font-mono text-xs text-text-mute"
+                        data-testid={`exp-month-total-${mk}`}
+                        title={usdTotal !== null && !singleUsd ? `Original currencies: ${breakdown}` : undefined}
+                      >
+                        {usdTotal !== null ? (
+                          <>
+                            <span className="text-text">USD {usdTotal.toFixed(2)}</span>
+                            {!singleUsd && (
+                              <span className="hidden sm:inline text-[10px] text-text-faint">
+                                {breakdown}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          breakdown
+                        )}
+                      </span>
+                    );
+                  })()}
                 </button>
                 {open && (
                   <ul className="divide-y divide-border-soft border-t border-border-soft">

@@ -2013,6 +2013,35 @@ async function resolveContext(
   return { contextType, accountId, engagementId, internalProjectLabel };
 }
 
+// Task #815 — honest USD display conversion for charts / month totals.
+// Prefers the FX numbers stamped on the row at write time; rows that
+// predate FX stamping (usdAmount 0 while amount > 0 in a non-USD
+// currency) are converted on read via the same shared helper, and the
+// source is reported so the client never has to invent a rate.
+async function usdDisplayFor(e: typeof atelierExpenses.$inferSelect): Promise<{
+  usdAmount: number;
+  rate: number;
+  rateDate: string | null;
+  source: string;
+}> {
+  const stored = e.usdAmount;
+  if (stored > 0 || e.amount === 0 || e.currency === "USD") {
+    return {
+      usdAmount: +(e.currency === "USD" ? e.amount : stored).toFixed(2),
+      rate: e.currency === "USD" ? 1 : e.fxRate,
+      rateDate: e.fxRateDate,
+      source: e.currency === "USD" ? "identity" : "stored",
+    };
+  }
+  const fx = await convertToUsd(e.amount, e.currency, e.expenseDate);
+  return {
+    usdAmount: +fx.usdAmount.toFixed(2),
+    rate: fx.rate,
+    rateDate: fx.rateDate,
+    source: fx.source,
+  };
+}
+
 // @cli-skip: self-scope expense list; no CLI shape (Task #53)
 router.get("/me/expenses", async (req, res, next) => {
   try {
@@ -2023,7 +2052,10 @@ router.get("/me/expenses", async (req, res, next) => {
       .from(atelierExpenses)
       .where(and(eq(atelierExpenses.personId, me.id), isNull(atelierExpenses.deletedAt)))
       .orderBy(desc(atelierExpenses.createdAt));
-    res.json({ expenses: rows.map(claimToWire) });
+    const expenses = await Promise.all(
+      rows.map(async (e) => ({ ...claimToWire(e), usdDisplay: await usdDisplayFor(e) })),
+    );
+    res.json({ expenses });
   } catch (err) {
     next(err);
   }
