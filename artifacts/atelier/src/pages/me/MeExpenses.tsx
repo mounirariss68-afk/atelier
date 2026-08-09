@@ -48,6 +48,13 @@ interface Claim {
     rateDate: string | null;
     source: string;
   } | null;
+  // Task #829 — server-converted amount in the caller's chosen display
+  // currency (Task #827). `converted: true` means an FX conversion happened.
+  display?: {
+    amount: number;
+    currency: string;
+    converted: boolean;
+  } | null;
   merchantNormalized?: string | null;
   merchantResolution?: string | null;
   rejectedReason: string | null;
@@ -147,26 +154,29 @@ function currencyTotals(rows: Claim[]): string {
     .join(" · ");
 }
 
-// Task #815 — server-converted USD amount for a claim, or null when the
-// server didn't provide one (never invented client-side).
-function usdOf(c: Claim): number | null {
-  const v = c.usdDisplay?.usdAmount;
+// Task #829 — server-converted amount in the user's display currency, or
+// null when the server didn't provide one (never invented client-side).
+function displayOf(c: Claim): number | null {
+  const v = c.display?.amount;
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
 /**
- * Task #815 — one comparable USD total for a month, using ONLY the
- * server's conversion. Returns null when any claim lacks a converted
- * amount so we fall back to the honest per-currency breakdown.
+ * Task #829 — one comparable display-currency total for a month, using
+ * ONLY the server's conversion. Returns null when any claim lacks a
+ * converted amount so we fall back to the honest per-currency breakdown.
+ * `approx` is true when any summed claim was actually FX-converted.
  */
-function usdTotalOf(rows: Claim[]): number | null {
+function displayTotalOf(rows: Claim[]): { sum: number; approx: boolean } | null {
   let sum = 0;
+  let approx = false;
   for (const c of rows) {
-    const v = usdOf(c);
+    const v = displayOf(c);
     if (v === null) return null;
     sum += v;
+    if (c.display?.converted) approx = true;
   }
-  return sum;
+  return { sum, approx };
 }
 
 const CHART_PALETTE = [
@@ -183,22 +193,24 @@ const EMPTY_CHART_CONFIG: ChartConfig = {};
 
 /**
  * Charts band under the banner — pie of category distribution and bar of
- * monthly totals, both for the CURRENT YEAR. Task #815: all claims chart
- * in USD using the server's conversion (expense-date rates); claims the
- * server couldn't convert are excluded and the note says so honestly.
+ * monthly totals, both for the CURRENT YEAR. Task #829: all claims chart
+ * in the user's chosen display currency using the server's conversion
+ * (never client-side); claims the server couldn't convert are excluded
+ * and the note says so honestly. "≈" marks FX-converted figures.
  */
-function ExpenseCharts({ claims }: { claims: Claim[] }) {
+function ExpenseCharts({ claims, displayCurrency }: { claims: Claim[]; displayCurrency: string }) {
   const year = new Date().getFullYear();
   const yearClaims = claims.filter((c) => monthKeyOf(c).startsWith(String(year)));
 
-  // Chart every claim the server converted to USD; never invent a rate.
-  const charted = yearClaims.filter((c) => usdOf(c) !== null);
+  // Chart every claim the server converted; never invent a rate.
+  const charted = yearClaims.filter((c) => displayOf(c) !== null);
   const excluded = yearClaims.length - charted.length;
+  const anyConverted = charted.some((c) => c.display?.converted);
 
   const catTotals = new Map<string, number>();
   for (const c of charted) {
     const label = (c.category || "other").replace(/_/g, " ");
-    catTotals.set(label, (catTotals.get(label) ?? 0) + (usdOf(c) ?? 0));
+    catTotals.set(label, (catTotals.get(label) ?? 0) + (displayOf(c) ?? 0));
   }
   const pieData = Array.from(catTotals.entries())
     .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }))
@@ -207,7 +219,7 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
   const monthTotals = new Array(12).fill(0) as number[];
   for (const c of charted) {
     const m = Number(monthKeyOf(c).slice(5, 7));
-    if (m >= 1 && m <= 12) monthTotals[m - 1] += usdOf(c) ?? 0;
+    if (m >= 1 && m <= 12) monthTotals[m - 1] += displayOf(c) ?? 0;
   }
   const barData = monthTotals.map((v, i) => ({
     name: MONTH_SHORT[i],
@@ -215,7 +227,7 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
   }));
   const hasData = charted.length > 0;
 
-  const fmt = (v: number) => `USD ${v.toFixed(2)}`;
+  const fmt = (v: number) => `${anyConverted ? "≈ " : ""}${displayCurrency} ${v.toFixed(2)}`;
 
   const frame = (label: string, note: string | null, chart: React.ReactElement) => (
     <Card className="p-4 space-y-2">
@@ -241,9 +253,11 @@ function ExpenseCharts({ claims }: { claims: Claim[] }) {
 
   const note =
     excluded > 0
-      ? `USD (expense-date rates) — ${excluded} claim${excluded === 1 ? "" : "s"} without a conversion not charted`
+      ? `${anyConverted ? "≈ " : ""}${displayCurrency} (expense-date rates) — ${excluded} claim${excluded === 1 ? "" : "s"} without a conversion not charted`
       : hasData
-        ? "all amounts converted to USD (expense-date rates)"
+        ? anyConverted
+          ? `≈ all amounts converted to ${displayCurrency} (expense-date rates)`
+          : `all amounts in ${displayCurrency}`
         : null;
 
   return (
@@ -345,6 +359,11 @@ const emptyForm = {
 
 export default function MeExpenses() {
   const [claims, setClaims] = React.useState<Claim[]>([]);
+  // Task #829 — the user's chosen display currency (server-driven; every
+  // total/chart uses the server-converted `display` block, never client FX).
+  const [displayCurrency, setDisplayCurrency] = React.useState("USD");
+  const [supportedCurrencies, setSupportedCurrencies] = React.useState<string[]>([]);
+  const [currencyBusy, setCurrencyBusy] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [showForm, setShowForm] = React.useState(false);
@@ -392,6 +411,9 @@ export default function MeExpenses() {
       }
       const j = await r.json();
       setClaims(j.expenses ?? []);
+      if (typeof j.displayCurrency === "string" && j.displayCurrency) {
+        setDisplayCurrency(j.displayCurrency);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -412,7 +434,42 @@ export default function MeExpenses() {
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => setTaxonomy(j))
       .catch(() => setTaxonomy(null));
+    // Task #829 — supported display currencies for the picker.
+    void fetch(`${API}/preferences`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j) return;
+        if (Array.isArray(j.supportedCurrencies)) setSupportedCurrencies(j.supportedCurrencies);
+        if (typeof j.displayCurrency === "string" && j.displayCurrency) {
+          setDisplayCurrency(j.displayCurrency);
+        }
+      })
+      .catch(() => undefined);
   }, [load]);
+
+  // Task #829 — persist the display-currency choice, then refetch the
+  // expense list so all `display` blocks arrive re-converted server-side.
+  const changeDisplayCurrency = async (cur: string) => {
+    if (!cur || cur === displayCurrency) return;
+    setCurrencyBusy(true);
+    setError(null);
+    try {
+      const r = await fetch(`${API}/preferences`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayCurrency: cur }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      setDisplayCurrency(j.displayCurrency ?? cur);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCurrencyBusy(false);
+    }
+  };
 
   // Task #383 — merchant-memory → AI category suggestion. Fail-loud: an AI
   // error is shown, never silently guessed around.
@@ -751,7 +808,29 @@ export default function MeExpenses() {
     <div className="space-y-4" data-testid="me-expenses">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-text">Expense claims</h3>
-        <PillButton
+        <div className="flex items-center gap-2">
+          {/* Task #829 — display-currency picker; server re-converts on refetch. */}
+          <label className="flex items-center gap-1.5 text-xs text-text-mute">
+            <span className="font-mono uppercase tracking-wider text-[10px] text-text-faint">
+              Display in
+            </span>
+            <select
+              className="rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text min-h-[36px] focus:outline-none focus:ring-1 focus:ring-gold/50"
+              value={displayCurrency}
+              disabled={currencyBusy}
+              onChange={(e) => void changeDisplayCurrency(e.target.value)}
+              data-testid="exp-display-currency"
+            >
+              {(supportedCurrencies.length > 0 ? supportedCurrencies : [displayCurrency]).map(
+                (c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+          <PillButton
           onClick={() => {
             setShowForm((v) => {
               if (v) {
@@ -769,7 +848,8 @@ export default function MeExpenses() {
           className="min-h-[44px]"
         >
           {showForm ? "Close" : "New claim"}
-        </PillButton>
+          </PillButton>
+        </div>
       </div>
 
       {/* Task #814 — charts band: category pie + monthly trend, current year. */}
@@ -779,7 +859,7 @@ export default function MeExpenses() {
           <Card className="p-4 h-[248px] animate-pulse" />
         </div>
       ) : (
-        <ExpenseCharts claims={claims} />
+        <ExpenseCharts claims={claims} displayCurrency={displayCurrency} />
       )}
 
       {error && (
@@ -1270,19 +1350,27 @@ export default function MeExpenses() {
                     </span>
                   </span>
                   {(() => {
-                    const usdTotal = usdTotalOf(rows);
+                    // Task #829 — month total in the chosen display currency
+                    // (server-converted); "≈" marks totals with FX conversion.
+                    const total = displayTotalOf(rows);
                     const breakdown = currencyTotals(rows);
-                    const singleUsd = usdTotal !== null && breakdown === `USD ${usdTotal.toFixed(2)}`;
+                    const singleNative =
+                      total !== null &&
+                      !total.approx &&
+                      breakdown === `${displayCurrency} ${total.sum.toFixed(2)}`;
                     return (
                       <span
                         className="flex items-baseline gap-2 font-mono text-xs text-text-mute"
                         data-testid={`exp-month-total-${mk}`}
-                        title={usdTotal !== null && !singleUsd ? `Original currencies: ${breakdown}` : undefined}
+                        title={total !== null && !singleNative ? `Original currencies: ${breakdown}` : undefined}
                       >
-                        {usdTotal !== null ? (
+                        {total !== null ? (
                           <>
-                            <span className="text-text">USD {usdTotal.toFixed(2)}</span>
-                            {!singleUsd && (
+                            <span className="text-text">
+                              {total.approx ? "≈ " : ""}
+                              {displayCurrency} {total.sum.toFixed(2)}
+                            </span>
+                            {!singleNative && (
                               <span className="hidden sm:inline text-[10px] text-text-faint">
                                 {breakdown}
                               </span>
