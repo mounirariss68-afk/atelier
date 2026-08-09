@@ -44,6 +44,8 @@ import { MyMeetingsCard } from "@/components/ms/MsMeetings";
 // Task #386 — EA delegation: partner "My delegates" + EA "Assist" tabs.
 import MeDelegates from "./MeDelegates";
 import MeAssist from "./MeAssist";
+// Task #850 — self-service official letters (list + request + re-download).
+import MeLetters from "./MeLetters";
 
 const SECTIONS = [
   { id: "overview", label: "Overview", href: "/me" },
@@ -51,6 +53,7 @@ const SECTIONS = [
   { id: "time", label: "Time", href: "/me/time" },
   { id: "expenses", label: "Expenses", href: "/me/expenses" },
   { id: "pay", label: "Pay & Benefits", href: "/me/pay" },
+  { id: "letters", label: "Letters", href: "/me/letters" },
   { id: "performance", label: "Performance", href: "/me/performance" },
   { id: "learning", label: "Learning", href: "/me/learning" },
   { id: "delegates", label: "Delegates", href: "/me/delegates" },
@@ -83,6 +86,9 @@ export default function MeHome() {
   const isSelfOnlyRole = role === "employee" || role === "contractor";
   const sections = SECTIONS.filter((s) => {
     if (isContractor && s.id === "performance") return false;
+    // Task #850 — official letters are an employee-only surface (the
+    // server 403s contractors and non-roster personas too).
+    if (isContractor && s.id === "letters") return false;
     if (s.id === "delegates") return isPartnerRole;
     if (s.id === "assist") return isSelfOnlyRole;
     return true;
@@ -121,6 +127,11 @@ export default function MeHome() {
         return {
           headline: "Pay & Benefits",
           lede: "Your compensation, payslips and benefits at the firm.",
+        };
+      case "letters":
+        return {
+          headline: "Official letters",
+          lede: "Request salary certificates, employment verification and visa letters — and re-download issued ones.",
         };
       case "performance":
         return {
@@ -172,6 +183,14 @@ export default function MeHome() {
           {section === "time" && <MeTime onWeekMeta={onWeekMeta} />}
           {section === "expenses" && <MeExpenses />}
           {section === "pay" && <MePay />}
+          {section === "letters" &&
+            (isContractor ? (
+              <Card className="p-6 text-sm text-text-mute" data-testid="me-letters-restricted">
+                Official letters are an employee-only section.
+              </Card>
+            ) : (
+              <MeLetters />
+            ))}
           {section === "performance" &&
             (isContractor ? (
               <Card className="p-6 text-sm text-text-mute" data-testid="me-performance-restricted">

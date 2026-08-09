@@ -251,6 +251,375 @@ function SelfBillingSection() {
 }
 
 // ============================================================
+// Task #850 — official employment & salary letters (Task #845 API).
+// Bespoke /me/letters routes are not in the openapi spec: raw fetch.
+// Employees only — the server 403s contractors, so the section simply
+// hides itself when the list can't load.
+// ============================================================
+interface MyLetterType {
+  id: string;
+  label: string;
+  hint: string;
+  travelDates: boolean;
+}
+
+interface MyLetter {
+  id: string;
+  letterLabel: string;
+  language: "en" | "ar" | "tr";
+  deliveryMode: "digital" | "wet_signature";
+  refNumber: string;
+  entityName: string;
+  signatoryName: string | null;
+  status: string;
+  emailTo: string | null;
+  delivered: boolean;
+  documentId: string | null;
+  fileName: string | null;
+  createdAt: string;
+}
+
+interface MyLettersPayload {
+  letters: MyLetter[];
+  catalog: MyLetterType[];
+  entity: { wetSignatureAvailable: boolean; signatoryName: string | null } | null;
+}
+
+function useMyLetters() {
+  const [data, setData] = useState<MyLettersPayload | null>(null);
+  const [allowed, setAllowed] = useState(true);
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/atelier/me/letters`, {
+        headers: { ...authHeader(), Accept: "application/json" },
+        credentials: "include",
+      });
+      if (res.status === 403) {
+        setAllowed(false);
+        return;
+      }
+      if (!res.ok) throw new Error(`${res.status}`);
+      setData((await res.json()) as MyLettersPayload);
+    } catch {
+      // Leave whatever we had; a transient failure shouldn't hide history.
+    }
+  }, []);
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+  return { data, allowed, reload: load };
+}
+
+function letterStatusText(l: MyLetter): { label: string; pending: boolean } {
+  if (l.deliveryMode === "wet_signature") {
+    if (l.status === "sent_to_signatory")
+      return {
+        label: `Sent to ${l.signatoryName ?? "signatory"} — awaiting hand-over`,
+        pending: true,
+      };
+    return { label: l.status.replace(/_/g, " "), pending: false };
+  }
+  if (l.delivered) return { label: `Emailed to ${l.emailTo ?? "you"}`, pending: false };
+  return { label: "Issued — download below", pending: false };
+}
+
+function LettersSection() {
+  const c = useColors();
+  const rtl = useRTL();
+  const feedback = useFeedback();
+  const { data, allowed, reload } = useMyLetters();
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [letterType, setLetterType] = useState<string | null>(null);
+  const [language, setLanguage] = useState<"en" | "ar" | "tr">("en");
+  const [wet, setWet] = useState(false);
+  const [purpose, setPurpose] = useState("");
+  const [travelStart, setTravelStart] = useState("");
+  const [travelEnd, setTravelEnd] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const downloadPdf = useCallback(
+    async (l: MyLetter) => {
+      if (!l.documentId) return;
+      const url = `${API_BASE}/api/atelier/me/documents/${l.documentId}/download`;
+      if (Platform.OS === "web") {
+        Linking.openURL(url);
+        return;
+      }
+      setDownloading(l.id);
+      try {
+        const FileSystem = getFileSystem();
+        const Sharing = getSharing();
+        if (!FileSystem || !Sharing) throw new Error("Native file modules unavailable");
+        const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
+        const safe = (l.fileName || `${l.refNumber}.pdf`).replace(/[^\w.\-]+/g, "_");
+        const dest = `${dir}${Date.now()}_${safe}`;
+        const result = await FileSystem.downloadAsync(url, dest, { headers: authHeader() });
+        if (result.status && result.status >= 400) throw new Error(`${result.status}`);
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(result.uri);
+        hapticSuccess();
+      } catch {
+        hapticError();
+        feedback.toast("Download failed", "error");
+      } finally {
+        setDownloading(null);
+      }
+    },
+    [feedback],
+  );
+
+  const catalog = data?.catalog ?? [];
+  const def = catalog.find((t) => t.id === letterType) ?? null;
+  const needsTravel = !!def?.travelDates;
+  const dateOk = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const travelMissing = needsTravel && (!dateOk(travelStart) || !dateOk(travelEnd));
+
+  const submit = useCallback(async () => {
+    if (!letterType || busy || travelMissing) return;
+    setBusy(true);
+    try {
+      const body: Record<string, string> = {
+        letterType,
+        language,
+        deliveryMode: wet ? "wet_signature" : "digital",
+      };
+      if (purpose.trim()) body.purpose = purpose.trim();
+      if (needsTravel) {
+        body.travelStart = travelStart;
+        body.travelEnd = travelEnd;
+      }
+      const res = await fetch(`${API_BASE}/api/atelier/me/letters`, {
+        method: "POST",
+        headers: { ...authHeader(), "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as
+          | { message?: string; error?: string }
+          | null;
+        throw new Error(j?.message ?? j?.error ?? `${res.status}`);
+      }
+      hapticSuccess();
+      feedback.toast("Letter issued", "success");
+      setFormOpen(false);
+      setLetterType(null);
+      setPurpose("");
+      setTravelStart("");
+      setTravelEnd("");
+      setWet(false);
+      await reload();
+    } catch (e) {
+      hapticError();
+      feedback.toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }, [letterType, language, wet, purpose, needsTravel, travelStart, travelEnd, busy, travelMissing, reload, feedback]);
+
+  if (!allowed || !data) return null;
+
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: c.tint25,
+    borderRadius: 14,
+    padding: 12,
+    color: c.foreground,
+    fontFamily: "PlusJakartaSans_400Regular",
+    fontSize: 14,
+  } as const;
+
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+        <Text
+          style={{
+            color: c.foreground,
+            fontFamily: "PlusJakartaSans_800ExtraBold",
+            fontSize: 17,
+            letterSpacing: -0.2,
+            textAlign: rtl.textAlign,
+          }}
+        >
+          Official letters
+        </Text>
+        <PressScale onPress={() => setFormOpen(true)}>
+          <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
+            <Feather name="plus" size={15} color={c.primary} />
+            <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+              Request
+            </Text>
+          </View>
+        </PressScale>
+      </View>
+      {data.letters.length === 0 ? (
+        <Card>
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_400Regular",
+              fontSize: 13,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            No letters yet. Request a salary certificate, employment verification or visa
+            letter and it will appear here for re-download.
+          </Text>
+        </Card>
+      ) : (
+        data.letters.map((l) => {
+          const st = letterStatusText(l);
+          return (
+            <Card key={l.id} style={{ gap: 8 }}>
+              <View style={{ flexDirection: rtl.row, alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <Text
+                  style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 14, flexShrink: 1, textAlign: rtl.textAlign }}
+                >
+                  {l.letterLabel}
+                </Text>
+                <Chip label={l.refNumber} color={c.mutedForeground} />
+              </View>
+              <Text
+                style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 13, textAlign: rtl.textAlign }}
+              >
+                {new Date(l.createdAt).toLocaleDateString()} ·{" "}
+                {l.language === "en" ? "English" : l.language === "ar" ? "Arabic" : "Turkish"} ·{" "}
+                {l.deliveryMode === "wet_signature" ? "Wet signature" : "Digital"} · {l.entityName}
+              </Text>
+              <Text
+                style={{
+                  color: st.pending ? "#B8860B" : c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_500Medium",
+                  fontSize: 12,
+                  textAlign: rtl.textAlign,
+                }}
+              >
+                {st.label}
+              </Text>
+              {l.documentId ? (
+                <PressScale onPress={() => downloadPdf(l)}>
+                  <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6, paddingVertical: 6 }}>
+                    {downloading === l.id ? (
+                      <ActivityIndicator size="small" color={c.primary} />
+                    ) : (
+                      <Feather name="download" size={15} color={c.primary} />
+                    )}
+                    <Text style={{ color: c.primary, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                      PDF
+                    </Text>
+                  </View>
+                </PressScale>
+              ) : null}
+            </Card>
+          );
+        })
+      )}
+
+      <Modal visible={formOpen} animationType="slide" transparent onRequestClose={() => setFormOpen(false)}>
+        <Pressable
+          onPress={() => setFormOpen(false)}
+          style={{ flex: 1, backgroundColor: c.scrim, justifyContent: "flex-end" }}
+        >
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            <View style={[{ backgroundColor: c.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12, maxHeight: "88%" }, softShadow(c.shadow)]}>
+              <ScrollView contentContainerStyle={{ gap: 12 }}>
+                <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_700Bold", fontSize: 16 }}>
+                  Request a letter
+                </Text>
+                {catalog.map((t) => (
+                  <PressScale key={t.id} onPress={() => setLetterType(t.id)}>
+                    <View
+                      style={{
+                        borderWidth: 1.5,
+                        borderColor: letterType === t.id ? c.primary : c.tint25,
+                        borderRadius: 14,
+                        padding: 12,
+                        gap: 2,
+                      }}
+                    >
+                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 13 }}>
+                        {t.label}
+                      </Text>
+                      <Text style={{ color: c.mutedForeground, fontFamily: "PlusJakartaSans_400Regular", fontSize: 12 }}>
+                        Use {t.hint}.
+                      </Text>
+                    </View>
+                  </PressScale>
+                ))}
+                <View style={{ flexDirection: rtl.row, gap: 8 }}>
+                  {(["en", "ar", "tr"] as const).map((lng) => (
+                    <PressScale key={lng} onPress={() => setLanguage(lng)}>
+                      <View
+                        style={{
+                          borderWidth: 1.5,
+                          borderColor: language === lng ? c.primary : c.tint25,
+                          borderRadius: 999,
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                        }}
+                      >
+                        <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_600SemiBold", fontSize: 12 }}>
+                          {lng === "en" ? "English" : lng === "ar" ? "Arabic" : "Turkish"}
+                        </Text>
+                      </View>
+                    </PressScale>
+                  ))}
+                </View>
+                {data.entity?.wetSignatureAvailable ? (
+                  <PressScale onPress={() => setWet((v) => !v)}>
+                    <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 8 }}>
+                      <Feather name={wet ? "check-square" : "square"} size={17} color={c.primary} />
+                      <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_500Medium", fontSize: 13, flexShrink: 1 }}>
+                        Wet signature — printed &amp; signed
+                        {data.entity.signatoryName ? ` by ${data.entity.signatoryName}` : ""}
+                      </Text>
+                    </View>
+                  </PressScale>
+                ) : null}
+                <TextInput
+                  value={purpose}
+                  onChangeText={setPurpose}
+                  placeholder="Purpose (optional), e.g. home loan application"
+                  placeholderTextColor={c.mutedForeground}
+                  style={inputStyle}
+                  maxLength={500}
+                />
+                {needsTravel ? (
+                  <View style={{ flexDirection: rtl.row, gap: 8 }}>
+                    <TextInput
+                      value={travelStart}
+                      onChangeText={setTravelStart}
+                      placeholder="Travel start YYYY-MM-DD"
+                      placeholderTextColor={c.mutedForeground}
+                      style={[inputStyle, { flex: 1 }]}
+                    />
+                    <TextInput
+                      value={travelEnd}
+                      onChangeText={setTravelEnd}
+                      placeholder="Travel end YYYY-MM-DD"
+                      placeholderTextColor={c.mutedForeground}
+                      style={[inputStyle, { flex: 1 }]}
+                    />
+                  </View>
+                ) : null}
+                <View style={{ flexDirection: rtl.row, gap: 10, justifyContent: "flex-end" }}>
+                  <Button label="Cancel" variant="secondary" onPress={() => setFormOpen(false)} />
+                  <Button
+                    label={busy ? "Issuing…" : "Issue letter"}
+                    onPress={submit}
+                    disabled={busy || !letterType || travelMissing}
+                  />
+                </View>
+              </ScrollView>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+// ============================================================
 // Task #797 — native upload of ID scans from the Me tab.
 // Mirrors the server contract in meProfileRoutes.ts: PDF/JPEG/PNG/WebP,
 // ≤15 MB, and a national ID needs front+back scans or one combined PDF.
@@ -895,6 +1264,9 @@ export default function MeScreen() {
             ))}
           </View>
         )}
+
+        {/* Task #850 — official letters: history + re-download + request. */}
+        <LettersSection />
 
         <SelfBillingSection />
       </ScrollView>
