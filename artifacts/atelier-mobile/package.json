@@ -12,7 +12,8 @@
     "test:doc-open": "tsx ./tests/doc-open-probe.ts",
     "test:share-intent": "tsx ./tests/share-intent-probe.ts",
     "test:internal-route": "tsx ./tests/internal-route-probe.ts",
-    "test:doc-refresh": "tsx ./tests/doc-refresh-probe.ts"
+    "test:doc-refresh": "tsx ./tests/doc-refresh-probe.ts",
+    "test:display-currency-client": "tsx ./tests/display-currency-probe.ts"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

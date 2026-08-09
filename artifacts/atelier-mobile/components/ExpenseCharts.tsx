@@ -18,6 +18,7 @@ import Svg, { Circle, G, Path } from "react-native-svg";
 import { Card } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
+import { displayAmountOf } from "@/lib/expenseTotals";
 import { formatMoney } from "@/lib/format";
 
 const CHART_COLORS = [
@@ -28,10 +29,6 @@ const CHART_COLORS = [
   "#9B6DF5",
   "#64748B",
 ];
-
-function displayAmountOf(e: AtelierSelfExpense): number {
-  return e.display?.amount ?? (e.currency === "USD" ? e.amount : (e.usdAmount ?? 0));
-}
 
 function categoryLabel(cat: string | null | undefined): string {
   const k = (cat ?? "other").replace(/[_-]+/g, " ").trim();

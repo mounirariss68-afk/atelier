@@ -17,10 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFeedback } from "@/components/feedback";
 import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQueryClient } from "@tanstack/react-query";
-import { getAtelierListMyExpensesQueryKey } from "@workspace/api-client-react";
-
-import { apiJson } from "@/lib/api";
+import { useDisplayCurrency } from "@/lib/displayCurrency";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
@@ -130,47 +127,6 @@ function OptionRow({
       </View>
     </Pressable>
   );
-}
-
-// Task #827 — display currency preference, persisted server-side so it
-// follows the user across devices. Falls back to USD until loaded.
-function useDisplayCurrency() {
-  const queryClient = useQueryClient();
-  const [currency, setCurrency] = useState("USD");
-  const [supported, setSupported] = useState<string[]>(["USD"]);
-  useEffect(() => {
-    let alive = true;
-    apiJson<{ displayCurrency: string; supportedCurrencies: string[] }>(
-      "/api/atelier/me/preferences",
-    )
-      .then((r) => {
-        if (!alive) return;
-        setCurrency(r.displayCurrency);
-        setSupported(r.supportedCurrencies);
-      })
-      .catch(() => {
-        // best effort — picker just shows USD until reachable
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const update = async (next: string) => {
-    const prev = currency;
-    setCurrency(next);
-    try {
-      await apiJson("/api/atelier/me/preferences", {
-        method: "PATCH",
-        body: { displayCurrency: next },
-      });
-      // Expenses totals/charts are derived from the cached expense list —
-      // refetch it so the new currency applies immediately.
-      queryClient.invalidateQueries({ queryKey: getAtelierListMyExpensesQueryKey() });
-    } catch {
-      setCurrency(prev);
-    }
-  };
-  return { currency, supported, update };
 }
 
 export default function SettingsScreen() {

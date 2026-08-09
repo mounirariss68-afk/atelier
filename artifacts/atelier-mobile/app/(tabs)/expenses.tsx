@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useAtelierListMyExpenses } from "@workspace/api-client-react";
+import { computeMonthTotal } from "@/lib/expenseTotals";
 import type { AtelierSelfExpense } from "@workspace/api-client-react";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -420,26 +421,12 @@ export default function ExpensesScreen() {
       // currency: server rows carry a converted `display` amount; queued
       // offline drafts (no server FX yet) are included only when already
       // in the display currency, and mark the total as approximate
-      // otherwise.
-      let sum = 0;
-      let approx = false;
-      for (const e of g.expenses) {
-        if (e.display) {
-          sum += e.display.amount;
-          if (e.display.converted) approx = true;
-        } else if (e.currency === displayCurrency) {
-          sum += e.amount;
-        } else {
-          approx = true;
-        }
-      }
-      for (const q of g.queued) {
-        if ((q.fields.currency ?? "USD") === displayCurrency) {
-          sum += q.fields.amount;
-        } else {
-          approx = true;
-        }
-      }
+      // otherwise. Shared with tests/display-currency-probe.ts.
+      const { sum, approx } = computeMonthTotal(
+        g.expenses,
+        g.queued.map((q) => ({ amount: q.fields.amount, currency: q.fields.currency })),
+        displayCurrency,
+      );
       const total = count > 0 ? formatMoney(sum, displayCurrency, lang) : "";
       const expanded = isExpanded(key);
       out.push({
