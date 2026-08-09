@@ -261,7 +261,7 @@ export default function SignIn() {
         </form>
 
         <p className="text-center text-xs text-text-faint">
-          Access is restricted to Cognirise partners.
+          Access is restricted to Cognirise employees, contractors and alliance partners.
         </p>
       </div>
     </div>
