@@ -9,6 +9,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * THE ATELIER — Drizzle schema (MVP foundation, spec §10)
@@ -1292,7 +1293,12 @@ export const atelierAuditEvents = pgTable(
   "atelier_audit_events",
   {
     id: text("id").primaryKey(),
-    orgId: ORG("org_id"),
+    // Tenancy: defaults to the request's RLS org (app.org_id GUC, set by the
+    // api-server connection defaults / withRls) so audit writers that do not
+    // stamp orgId explicitly still attribute the event to the right tenant.
+    orgId: text("org_id")
+      .notNull()
+      .default(sql`coalesce(nullif(current_setting('app.org_id'::text, true), ''::text), 'aico'::text)`),
     entityType: text("entity_type").notNull(),
     entityId: text("entity_id").notNull(),
     actorType: text("actor_type").notNull(), // human | agent | system

@@ -436,6 +436,9 @@ export default function Admin() {
 
         {/* Task #821 — org-wide / per-role two-factor requirement. */}
         {me.role === "founding_partner" && <TwoFactorPolicyCard />}
+
+        {/* Task #822 — security audit console: org-wide auth trail + action trail. */}
+        {me.role === "founding_partner" && <SecurityConsole />}
       </div>
     </div>
   );
@@ -885,6 +888,234 @@ function TwoFactorPolicyCard() {
           )}
         </div>
       )}
+    </Card>
+  );
+}
+
+
+/**
+ * Task #822 — Security audit console. Founding-partner-only, read-only view
+ * over the immutable audit trail: a "Sign-in Activity" tab (logins, failures,
+ * lockouts, password + 2FA events, with IP) and an "Action Trail" tab (who
+ * did what to which record, with deep links). Filterable by person, event
+ * type and date range; paginated; CSV export of the filtered view. The
+ * server audits console access itself.
+ */
+function SecurityConsole() {
+  type Tab = "auth" | "actions";
+  type SecurityEvent = {
+    id: string;
+    ts: string;
+    action: string;
+    actorType: string;
+    actorId: string | null;
+    actorLabel: string;
+    entityType: string;
+    entityId: string;
+    summary: string | null;
+    ip: string | null;
+    targetEmail: string | null;
+  };
+  const PAGE = 50;
+  const [tab, setTab] = React.useState<Tab>("auth");
+  const [actor, setActor] = React.useState("");
+  const [action, setAction] = React.useState("");
+  const [from, setFrom] = React.useState("");
+  const [to, setTo] = React.useState("");
+  const [events, setEvents] = React.useState<SecurityEvent[]>([]);
+  const [actions, setActions] = React.useState<string[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const queryString = React.useCallback(
+    (offset: number) => {
+      const p = new URLSearchParams({ tab, limit: String(PAGE), offset: String(offset) });
+      if (actor.trim()) p.set("actor", actor.trim());
+      if (action) p.set("action", action);
+      if (from) p.set("from", from);
+      if (to) p.set("to", to);
+      return p.toString();
+    },
+    [tab, actor, action, from, to],
+  );
+
+  const load = React.useCallback(
+    (offset: number) => {
+      setLoading(true);
+      setError(null);
+      void fetch(`/api/auth/security-log?${queryString(offset)}`, { credentials: "include" })
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return (await r.json()) as {
+            events: SecurityEvent[];
+            total: number;
+            actions?: string[];
+          };
+        })
+        .then((j) => {
+          setEvents((prev) => (offset === 0 ? j.events : [...prev, ...j.events]));
+          setTotal(j.total);
+          if (j.actions) setActions(j.actions);
+        })
+        .catch(() => setError("Failed to load the security log."))
+        .finally(() => setLoading(false));
+    },
+    [queryString],
+  );
+
+  // Reload from the top whenever the tab or a filter changes (debounced for
+  // the free-text person filter).
+  React.useEffect(() => {
+    const t = setTimeout(() => load(0), actor ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [load, actor]);
+
+  // Reset the event-type filter when it no longer exists on the new tab.
+  React.useEffect(() => {
+    setAction("");
+  }, [tab]);
+
+  const recordHref = (e: SecurityEvent): string | null => {
+    switch (e.entityType) {
+      case "account":
+        return `/accounts/${e.entityId}`;
+      case "opportunity":
+        return `/opportunities/${e.entityId}`;
+      case "engagement":
+        return `/engagements/${e.entityId}`;
+      case "contract":
+        return `/contracts/${e.entityId}`;
+      default:
+        return null;
+    }
+  };
+
+  const inputCls =
+    "bg-bg-elevate border border-border rounded-md px-2.5 py-1.5 text-sm text-text";
+
+  return (
+    <Card className="p-6 space-y-4 border-gold/30" data-testid="card-security-console">
+      <h3 className="font-mono text-sm tracking-widest uppercase text-gold flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4" /> Security Log
+      </h3>
+      <div className="flex gap-2">
+        {(
+          [
+            { key: "auth", label: "Sign-in Activity" },
+            { key: "actions", label: "Action Trail" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-3 py-1.5 rounded-md text-xs font-mono uppercase tracking-wider border transition ${
+              tab === t.key
+                ? "border-gold/50 text-gold bg-gold/5"
+                : "border-border-soft text-text-mute hover:text-text"
+            }`}
+            data-testid={`tab-security-${t.key}`}
+          >
+            {t.label}
+          </button>
+        ))}
+        <a
+          href={`/api/auth/security-log/export.csv?${queryString(0)}`}
+          className="ml-auto inline-flex items-center gap-2 px-3 py-1.5 text-xs font-mono uppercase tracking-wider border border-gold/40 text-gold hover:bg-gold/10 transition-colors rounded"
+          data-testid="link-security-export-csv"
+        >
+          <Download className="w-3.5 h-3.5" /> Export CSV
+        </a>
+      </div>
+      <div className="flex flex-wrap gap-2 items-center">
+        <Input
+          placeholder="Filter by person (name or email)…"
+          value={actor}
+          onChange={(e) => setActor(e.target.value)}
+          className="bg-bg-elevate border-border text-text max-w-[240px]"
+          data-testid="input-security-actor"
+        />
+        <select
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          className={inputCls}
+          data-testid="select-security-action"
+        >
+          <option value="">All event types</option>
+          {actions.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
+        </select>
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} data-testid="input-security-from" />
+        <span className="text-text-mute text-xs">to</span>
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} data-testid="input-security-to" />
+      </div>
+
+      {error && <div className="text-danger text-sm">{error}</div>}
+      {!error && events.length === 0 && !loading && (
+        <div className="py-6 text-center text-text-mute italic text-sm">No events match these filters.</div>
+      )}
+
+      <div className="border border-border-soft rounded-md divide-y divide-border-soft max-h-[480px] overflow-y-auto">
+        {events.map((e) => {
+          const href = tab === "actions" ? recordHref(e) : null;
+          return (
+            <div key={e.id} className="px-4 py-2.5 text-sm" data-testid={`row-security-${e.id}`}>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <span className="font-mono text-xs text-text-mute min-w-[150px]">
+                  {new Date(e.ts).toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}
+                </span>
+                <MonoChip
+                  tone={
+                    /failed|denied|locked/.test(e.action)
+                      ? "default"
+                      : e.actorType === "agent"
+                        ? "gold"
+                        : "green"
+                  }
+                >
+                  {e.action}
+                </MonoChip>
+                <span className="text-text font-medium">{e.actorLabel}</span>
+                {e.targetEmail && <span className="text-text-mute text-xs">→ {e.targetEmail}</span>}
+                {tab === "auth" && e.ip && (
+                  <span className="font-mono text-xs text-text-faint ml-auto">{e.ip}</span>
+                )}
+                {href && (
+                  <a href={href} className="text-gold text-xs font-mono hover:underline ml-auto">
+                    {e.entityType} ↗
+                  </a>
+                )}
+                {tab === "actions" && !href && (
+                  <span className="font-mono text-xs text-text-faint ml-auto">
+                    {e.entityType}/{e.entityId.slice(0, 18)}
+                  </span>
+                )}
+              </div>
+              {e.summary && <div className="text-xs text-text-mute mt-1 pl-[162px]">{e.summary}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-text-mute font-mono">
+          {events.length} of {total} events
+        </span>
+        {events.length < total && (
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => load(events.length)} data-testid="button-security-more">
+            {loading ? "Loading…" : "Load more"}
+          </Button>
+        )}
+      </div>
     </Card>
   );
 }

@@ -7,7 +7,7 @@ import {
   atelierLoginActivationTokens,
   atelierAdminSettings,
 } from "@workspace/db";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, ne, and, isNull, gte, lte, desc, sql } from "drizzle-orm";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { verifyPassword, hashPassword } from "../../lib/auth/passwords";
 import {
@@ -38,6 +38,7 @@ import {
 } from "../../lib/auth/totp";
 import { requireFreshTotp, verifyCredentialCode } from "../../lib/auth/step-up";
 import { sendPasswordResetEmail } from "../../lib/atelier-reset-email";
+import { contentDispositionFilename } from "../../lib/httpFilename";
 import { logger } from "../../lib/logger";
 
 /**
@@ -106,18 +107,48 @@ async function audit(
     | "twofa_challenge_failed"
     | "twofa_backup_code_used"
     | "twofa_reset_by_partner"
-    | "twofa_policy_updated",
+    | "twofa_policy_updated"
+    | "security_log_viewed",
   opts: {
     actorId?: string | null;
     actorLabel: string;
     ip: string;
     targetEmail?: string;
     targetUserId?: string;
+    orgId?: string;
   },
 ): Promise<void> {
   try {
+    // Tenancy: stamp the event with the org of the target (or actor) persona
+    // so the security console can scope the auth trail per organization.
+    // Unknown-account failures fall back to the schema default.
+    let orgId = opts.orgId;
+    if (!orgId) {
+      const personaId = opts.targetUserId ?? opts.actorId;
+      if (personaId) {
+        const [p] = await db
+          .select({ orgId: atelierUsers.orgId })
+          .from(atelierUsers)
+          .where(eq(atelierUsers.id, personaId));
+        orgId = p?.orgId;
+      }
+      if (!orgId && opts.targetEmail) {
+        const [c] = await db
+          .select({ userId: atelierAuthCredentials.userId })
+          .from(atelierAuthCredentials)
+          .where(eq(atelierAuthCredentials.email, opts.targetEmail));
+        if (c) {
+          const [p] = await db
+            .select({ orgId: atelierUsers.orgId })
+            .from(atelierUsers)
+            .where(eq(atelierUsers.id, c.userId));
+          orgId = p?.orgId;
+        }
+      }
+    }
     await db.insert(atelierAuditEvents).values({
       id: `audit_${randomUUID()}`,
+      ...(orgId ? { orgId } : {}),
       entityType: "auth",
       entityId: opts.targetUserId ?? opts.actorId ?? "unknown",
       actorType: opts.actorId ? "human" : "system",
@@ -170,7 +201,9 @@ async function audit(
                                               ? `${opts.actorLabel} reset two-factor authentication for ${opts.targetEmail ?? "a colleague"}`
                                               : action === "twofa_policy_updated"
                                                 ? `${opts.actorLabel} updated the two-factor requirement policy`
-                                                : `Failed sign-in attempt`,
+                                                : action === "security_log_viewed"
+                                                  ? `${opts.actorLabel} viewed the security audit console`
+                                                  : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -212,7 +245,7 @@ router.post("/login", async (req: Request, res: Response) => {
   // Task #820 — locked account: even a CORRECT password is rejected with
   // the same generic 401 until the lock expires (no lockout enumeration).
   if (cred && isLockedOut(cred)) {
-    await audit("login_failed", { actorLabel: email, ip });
+    await audit("login_failed", { actorLabel: email, ip, targetEmail: email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -250,7 +283,7 @@ router.post("/login", async (req: Request, res: Response) => {
         });
       }
     }
-    await audit("login_failed", { actorLabel: email || "unknown", ip });
+    await audit("login_failed", { actorLabel: email || "unknown", ip, targetEmail: email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -264,7 +297,7 @@ router.post("/login", async (req: Request, res: Response) => {
   // Task #50 — deactivated leaver. Same generic error as a bad password so
   // a former colleague cannot distinguish "wrong password" from "disabled".
   if (cred.disabled) {
-    await audit("login_failed", { actorLabel: email, ip });
+    await audit("login_failed", { actorLabel: email, ip, targetEmail: email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -274,7 +307,7 @@ router.post("/login", async (req: Request, res: Response) => {
     .where(and(eq(atelierUsers.id, cred.userId), isNull(atelierUsers.deletedAt)));
   if (!persona) {
     // Credential points at a missing/deleted employee — treat as invalid.
-    await audit("login_failed", { actorLabel: email, ip });
+    await audit("login_failed", { actorLabel: email, ip, targetEmail: email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -542,7 +575,7 @@ router.post("/activate", async (req: Request, res: Response) => {
     .from(atelierAuthCredentials)
     .where(eq(atelierAuthCredentials.email, row.email));
   if (!cred || cred.userId !== row.userId || cred.disabled) {
-    await audit("account_activation_failed", { actorLabel: row.email, ip });
+    await audit("account_activation_failed", { actorLabel: row.email, ip, targetEmail: row.email });
     res.status(404).json({
       error: "invalid-or-expired",
       message: "This activation link is no longer valid. Ask your onboarding contact for a new one.",
@@ -582,7 +615,7 @@ router.post("/activate", async (req: Request, res: Response) => {
       .where(eq(atelierAuthCredentials.email, row.email));
   }).catch(async (err: unknown) => {
     if ((err as { activationRace?: boolean }).activationRace) {
-      await audit("account_activation_failed", { actorLabel: row.email, ip });
+      await audit("account_activation_failed", { actorLabel: row.email, ip, targetEmail: row.email });
       res.status(404).json({ error: "invalid-or-expired", message: "This activation link was already used." });
       return;
     }
@@ -707,7 +740,7 @@ router.post("/reset-password", async (req: Request, res: Response) => {
     .from(atelierAuthCredentials)
     .where(eq(atelierAuthCredentials.email, row.email));
   if (!cred || cred.userId !== row.userId || cred.disabled) {
-    await audit("password_reset_failed", { actorLabel: row.email, ip });
+    await audit("password_reset_failed", { actorLabel: row.email, ip, targetEmail: row.email });
     res.status(404).json({
       error: "invalid-or-expired",
       message: "This reset link is no longer valid. Request a new one from the sign-in page.",
@@ -745,7 +778,7 @@ router.post("/reset-password", async (req: Request, res: Response) => {
       .where(eq(atelierAuthCredentials.email, row.email));
   }).catch(async (err: unknown) => {
     if ((err as { activationRace?: boolean }).activationRace) {
-      await audit("password_reset_failed", { actorLabel: row.email, ip });
+      await audit("password_reset_failed", { actorLabel: row.email, ip, targetEmail: row.email });
       res.status(404).json({ error: "invalid-or-expired", message: "This reset link was already used." });
       return;
     }
@@ -808,7 +841,7 @@ router.get("/session", async (req: Request, res: Response) => {
 async function requireFoundingPartner(
   req: Request,
   res: Response,
-): Promise<{ userId: string; email: string; name: string } | null> {
+): Promise<{ userId: string; email: string; name: string; orgId: string } | null> {
   const token = sessionTokenFromRequest(req);
   const session = token ? await lookupSession(token) : null;
   if (!session) {
@@ -840,7 +873,7 @@ async function requireFoundingPartner(
     });
     return null;
   }
-  return { userId: session.userId, email: session.email, name: persona.name };
+  return { userId: session.userId, email: session.email, name: persona.name, orgId: persona.orgId };
 }
 
 // Who can I reset? Every credential except my own, with the person's name.
@@ -1241,7 +1274,7 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
     .from(atelierAuthCredentials)
     .where(eq(atelierAuthCredentials.email, row.email));
   if (!cred || cred.disabled || !cred.totpEnabled || isLockedOut(cred)) {
-    await audit("login_failed", { actorLabel: row.email, ip });
+    await audit("login_failed", { actorLabel: row.email, ip, targetEmail: row.email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -1263,7 +1296,7 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
         .where(eq(atelierAuthCredentials.email, cred.email));
       await audit("account_locked", { actorLabel: row.email, ip, targetEmail: cred.email, targetUserId: cred.userId });
     }
-    await audit("twofa_challenge_failed", { actorLabel: row.email, ip });
+    await audit("twofa_challenge_failed", { actorLabel: row.email, ip, targetEmail: row.email });
     res.status(401).json({ error: "invalid-code", message: "That code is incorrect or already used." });
     return;
   }
@@ -1289,7 +1322,7 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
     .from(atelierUsers)
     .where(and(eq(atelierUsers.id, cred.userId), isNull(atelierUsers.deletedAt)));
   if (!persona) {
-    await audit("login_failed", { actorLabel: row.email, ip });
+    await audit("login_failed", { actorLabel: row.email, ip, targetEmail: row.email });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -1424,6 +1457,175 @@ router.post("/2fa/policy", async (req: Request, res: Response) => {
   }
   await audit("twofa_policy_updated", { actorId: actor.userId, actorLabel: actor.name, ip });
   res.json({ require2faRoles: roles });
+});
+
+
+// ---------------------------------------------------------------------------
+// Task #822 — Security audit console (founding partner only, READ-ONLY).
+// Two views over atelier_audit_events: the auth trail (entityType="auth")
+// and the org-wide business action trail (everything else). Filterable by
+// person, event type and date range; paginated; CSV export of the filtered
+// view. Access to the console is itself audited (debounced per actor).
+// ---------------------------------------------------------------------------
+
+const SECURITY_LOG_MAX_LIMIT = 100;
+const SECURITY_LOG_EXPORT_CAP = 5000;
+const SECURITY_LOG_VIEW_AUDIT_DEBOUNCE_MS = 10 * 60 * 1000;
+
+type SecurityLogFilters = {
+  tab: "auth" | "actions";
+  actor: string;
+  action: string;
+  from: Date | null;
+  to: Date | null;
+};
+
+function parseSecurityLogFilters(req: Request): SecurityLogFilters | null {
+  const tab = String(req.query?.tab ?? "auth");
+  if (tab !== "auth" && tab !== "actions") return null;
+  const parseDate = (v: unknown): Date | null | undefined => {
+    if (v == null || v === "") return null;
+    const d = new Date(String(v));
+    return Number.isNaN(d.getTime()) ? undefined : d;
+  };
+  const from = parseDate(req.query?.from);
+  const to = parseDate(req.query?.to);
+  if (from === undefined || to === undefined) return null;
+  return {
+    tab,
+    actor: String(req.query?.actor ?? "").trim(),
+    action: String(req.query?.action ?? "").trim(),
+    from,
+    to: to ? new Date(to.getTime() + (String(req.query?.to).length <= 10 ? 24 * 60 * 60 * 1000 - 1 : 0)) : null,
+  };
+}
+
+function securityLogConditions(f: SecurityLogFilters, orgId: string) {
+  const conds = [isNull(atelierAuditEvents.deletedAt)];
+  if (f.tab === "auth") {
+    conds.push(eq(atelierAuditEvents.entityType, "auth"));
+    conds.push(eq(atelierAuditEvents.orgId, orgId));
+  } else {
+    conds.push(ne(atelierAuditEvents.entityType, "auth"));
+    conds.push(eq(atelierAuditEvents.orgId, orgId));
+  }
+  if (f.action) conds.push(eq(atelierAuditEvents.action, f.action));
+  if (f.from) conds.push(gte(atelierAuditEvents.ts, f.from));
+  if (f.to) conds.push(lte(atelierAuditEvents.ts, f.to));
+  if (f.actor) {
+    const like = `%${f.actor.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    conds.push(
+      sql`(${atelierAuditEvents.actorLabel} ILIKE ${like} OR ${atelierAuditEvents.actorId} = ${f.actor} OR ${atelierAuditEvents.payload}->>'targetEmail' ILIKE ${like})`,
+    );
+  }
+  return and(...conds);
+}
+
+function securityLogRowToWire(row: typeof atelierAuditEvents.$inferSelect) {
+  const payload = (row.payload ?? {}) as Record<string, unknown>;
+  return {
+    id: row.id,
+    ts: row.ts.toISOString(),
+    action: row.action,
+    actorType: row.actorType,
+    actorId: row.actorId,
+    actorLabel: row.actorLabel,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    summary: row.payloadSummary,
+    ip: typeof payload.ip === "string" ? payload.ip : null,
+    targetEmail: typeof payload.targetEmail === "string" ? payload.targetEmail : null,
+  };
+}
+
+/** Audit console access, debounced so pagination doesn't flood the trail. */
+async function auditSecurityLogView(actor: { userId: string; name: string }, ip: string, tab: string): Promise<void> {
+  const [recent] = await db
+    .select({ ts: atelierAuditEvents.ts })
+    .from(atelierAuditEvents)
+    .where(
+      and(
+        eq(atelierAuditEvents.action, "security_log_viewed"),
+        eq(atelierAuditEvents.actorId, actor.userId),
+        gte(atelierAuditEvents.ts, new Date(Date.now() - SECURITY_LOG_VIEW_AUDIT_DEBOUNCE_MS)),
+      ),
+    )
+    .limit(1);
+  if (recent) return;
+  await audit("security_log_viewed", { actorId: actor.userId, actorLabel: actor.name, ip });
+  void tab;
+}
+
+router.get("/security-log", async (req: Request, res: Response) => {
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const filters = parseSecurityLogFilters(req);
+  if (!filters) {
+    res.status(400).json({ error: "invalid-query", message: "Invalid tab or date filter." });
+    return;
+  }
+  const limit = Math.min(Math.max(parseInt(String(req.query?.limit ?? "50"), 10) || 50, 1), SECURITY_LOG_MAX_LIMIT);
+  const offset = Math.max(parseInt(String(req.query?.offset ?? "0"), 10) || 0, 0);
+  const where = securityLogConditions(filters, actor.orgId);
+
+  const [rows, [{ total }]] = await Promise.all([
+    db.select().from(atelierAuditEvents).where(where).orderBy(desc(atelierAuditEvents.ts)).limit(limit).offset(offset),
+    db.select({ total: sql<number>`count(*)::int` }).from(atelierAuditEvents).where(where),
+  ]);
+
+  // Distinct action values (for the filter dropdown) — only on the first page
+  // and without the action filter applied, so the list stays complete.
+  let actions: string[] | undefined;
+  if (offset === 0) {
+    const base = securityLogConditions({ ...filters, action: "" }, actor.orgId);
+    const rowsA = await db
+      .selectDistinct({ action: atelierAuditEvents.action })
+      .from(atelierAuditEvents)
+      .where(base)
+      .orderBy(atelierAuditEvents.action)
+      .limit(200);
+    actions = rowsA.map((r) => r.action);
+    await auditSecurityLogView(actor, req.ip ?? "unknown", filters.tab);
+  }
+
+  res.json({ events: rows.map(securityLogRowToWire), total, limit, offset, ...(actions ? { actions } : {}) });
+});
+
+router.get("/security-log/export.csv", async (req: Request, res: Response) => {
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const filters = parseSecurityLogFilters(req);
+  if (!filters) {
+    res.status(400).json({ error: "invalid-query", message: "Invalid tab or date filter." });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(atelierAuditEvents)
+    .where(securityLogConditions(filters, actor.orgId))
+    .orderBy(desc(atelierAuditEvents.ts))
+    .limit(SECURITY_LOG_EXPORT_CAP);
+
+  const esc = (v: unknown): string => {
+    const t = v == null ? "" : String(v);
+    return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  const header = "timestamp,action,actor_type,actor,actor_id,ip,target_email,entity_type,entity_id,summary";
+  const lines = rows.map((r) => {
+    const w = securityLogRowToWire(r);
+    return [w.ts, w.action, w.actorType, w.actorLabel, w.actorId ?? "", w.ip ?? "", w.targetEmail ?? "", w.entityType, w.entityId, w.summary ?? ""].map(esc).join(",");
+  });
+  await audit("security_log_viewed", {
+    actorId: actor.userId,
+    actorLabel: actor.name,
+    ip: req.ip ?? "unknown",
+  });
+  res.setHeader("content-type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "content-disposition",
+    contentDispositionFilename("attachment", `security-log-${filters.tab}-${new Date().toISOString().slice(0, 10)}.csv`),
+  );
+  res.send([header, ...lines].join("\n") + "\n");
 });
 
 export default router;
