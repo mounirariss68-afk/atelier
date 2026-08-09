@@ -807,7 +807,7 @@ function HolidayBanner({ startDate, endDate }: { startDate: string; endDate: str
 // ------------------------------------------------------------------
 
 const HOUR_H = 56;
-const GUTTER = 52;
+const GUTTER = 64;
 /** Default scroll position when opening the day view: the 9:00 AM slot. */
 const DAY_DEFAULT_HOUR = 9;
 
@@ -1014,6 +1014,7 @@ function DayTimeline({
           }}
         >
           <Text
+            numberOfLines={1}
             style={{
               width: GUTTER - 8,
               color: c.mutedForeground,
