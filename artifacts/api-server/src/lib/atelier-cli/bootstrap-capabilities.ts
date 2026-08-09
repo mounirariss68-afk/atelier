@@ -106,6 +106,10 @@ import "./travel-companion-capabilities.js";
 // Task #744 — DB-backed requester travel-preferences resolver (kept out of
 // travel-capabilities.ts so the offline probe stays DB-free).
 import "./travel-preferences-db.js";
+// Task #853 — universal entity lookups (detail-provider registry behind
+// one generic `entity.detail` tool) + AR rollups (statement of account,
+// pending invoices by fuzzy project/account).
+import "./entity-detail-capabilities.js";
 import { registerAgentCapabilities } from "./agent-capabilities.js";
 
 let bootstrapped = false;

@@ -152,7 +152,10 @@ export type ResultCard =
   | "renewal_card"
   // Task #406 — Chat Orchestrator coordinator cards.
   | "gate_report"
-  | "entity_resolution";
+  | "entity_resolution"
+  // Task #853 — universal entity lookups + AR rollups.
+  | "statement_of_account"
+  | "pending_invoices";
 
 export type SurfaceContext =
   | "engagement_dashboard"
@@ -565,7 +568,12 @@ export function capabilitiesForPersona(persona: CliPersona): CapabilityEntry[] {
     // dismiss). Every me.* write resolves its subject from the session
     // persona, mirrors the /me/* REST ACLs, and is confirm-gated —
     // still strictly the /me lens, never an org-wide tool.
-    return REGISTRY.filter((e) => e.id.startsWith("me."));
+    // Task #853 — deliberate, narrowly-scoped widening: the generic
+    // `entity.detail` lookup is allowed, and inside its run() self-only
+    // personas are clamped to accounts / engagements / deliverables they
+    // are staffed on (engagement grant or account-team membership).
+    // Nothing else widens.
+    return REGISTRY.filter((e) => e.id.startsWith("me.") || e.id === "entity.detail");
   }
   const restrictedSet: ReadonlySet<AtelierRole> = new Set([
     "contractor",

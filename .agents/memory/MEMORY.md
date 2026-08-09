@@ -1,3 +1,4 @@
+// hint: Logic changed on both sides. Requires understanding intent of each change.
 - [Production deploy runtime deps](production-deploy-runtime-deps.md) — esbuild-external pkgs need npm reinstall after cleanup; strip onnxruntime CUDA/non-Linux bins to fit the 8 GiB image limit.
 - [Logo-on-navy background removal](logo-bg-removal.md) — AI bg-removal fails on logo-on-dark-card art (keeps whole card); color-key the near-uniform navy with ImageMagick instead.
 - [api-server sibling assets](api-server-sibling-assets.md) — read static files in bundled api-server via `new URL("../../<artifact>/public/x", import.meta.url)`; navy logo only fits server PDFs.
@@ -157,3 +158,4 @@
 - [Employment/salary letters stack](atelier-letters.md) — letterSigning overlay on firm profile; RTL pdfkit quirks (hasArabic guard, no parens, footer margin); prod re-run: seed-letter-signing-assets.
 - [Display currency preference](atelier-display-currency.md) — rollups over mixed-currency money must use the server-converted `display` block (never client-side FX); settings PATCH must invalidate the expenses query.
 - [Doc-email cross-domain routing](atelier-doc-email-crossdomain.md) — both email tools share split/match helpers; handoff only on unambiguous full resolve; self-only roles never probe the library; Arabic و needs whitespace match, not \b.
+- [Universal entity.detail registry](atelier-entity-detail.md) — untyped id probes defer provider "forbidden" until all providers tried (visibility runs before existence); self-only widening = me.* + entity.detail only.

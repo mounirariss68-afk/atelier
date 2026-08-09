@@ -743,6 +743,11 @@ function ShapeBody({
       return <ArAgingGrid data={data} locale={locale} />;
     case "dunning_card":
       return <DunningCard data={data} locale={locale} />;
+    // Task #853 — universal lookups + AR rollups.
+    case "statement_of_account":
+      return <StatementOfAccountCard data={data} locale={locale} />;
+    case "pending_invoices":
+      return <PendingInvoicesCard data={data} locale={locale} />;
     case "cash_receipt_card":
       return <CashReceiptCard data={data} locale={locale} />;
     case "bank_recon_card":
@@ -2016,6 +2021,113 @@ function DunningCard({ data, locale: _locale }: { data: Json; locale: CliLocale 
         outstanding {asStr(inv.currency)} {fmtNum((asNum(inv.total) ?? 0) - (asNum(inv.amountPaid) ?? 0))}
         {promises.length > 0 && ` · ${promises.length} promise${promises.length === 1 ? "" : "s"}`}
       </div>
+    </div>
+  );
+}
+
+/* ─────────── Task #853 — statement of account / pending invoices ─────────── */
+
+function StatementOfAccountCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const account = asObj(data.account);
+  const currencies = asArr(data.currencies) as Json[];
+  const payments = asArr(data.payments) as Json[];
+  return (
+    <div className="space-y-2" data-testid="cli-statement-of-account">
+      <div className="font-mono text-sm">
+        {asStr(account.name) || "Account"} <span className="text-text-mute">· statement of account</span>
+      </div>
+      {currencies.length === 0 && (
+        <div className="text-[11px] font-mono text-text-mute">No issued invoices on record.</div>
+      )}
+      {currencies.map((c, ci) => {
+        const totals = asObj(c.totals);
+        const aging = asObj(c.aging);
+        const invoices = asArr(c.invoices) as Json[];
+        const ccy = asStr(c.currency);
+        return (
+          <div key={ci} className="space-y-1.5">
+            <div className="text-[11px] font-mono text-text-mute" data-testid="soa-totals">
+              {ccy} · issued {fmtNum(asNum(totals.issued) ?? 0)} · paid {fmtNum(asNum(totals.paid) ?? 0)} ·{" "}
+              <span className="text-text-base">outstanding {fmtNum(asNum(totals.outstanding) ?? 0)}</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5 text-[10px] font-mono" data-testid="soa-aging">
+              {(["current", "d1_30", "d31_60", "d61_90", "d90_plus"] as const).map((b) => (
+                <span key={b} className="px-1.5 py-0.5 rounded border border-border-soft bg-bg-deep">
+                  {b === "current" ? "current" : b.replace("d", "").replace("_", "–").replace("–plus", "+")}:{" "}
+                  {fmtNum(asNum(aging[b]) ?? 0)}
+                </span>
+              ))}
+            </div>
+            <div className="space-y-0.5">
+              {invoices.slice(0, 8).map((inv, ii) => (
+                <div key={ii} className="text-[11px] font-mono flex justify-between gap-2" data-testid="soa-invoice-row">
+                  <span className="truncate">
+                    {asStr(inv.invoiceNumber) || "(no number)"} · {asStr(inv.status)}
+                    {(asNum(inv.daysOverdue) ?? 0) > 0 && (
+                      <span className="text-status-red"> · {asNum(inv.daysOverdue)}d overdue</span>
+                    )}
+                  </span>
+                  <span className="shrink-0">
+                    {fmtNum(asNum(inv.outstanding) ?? 0)} <span className="text-text-faint">/ {fmtNum(asNum(inv.total) ?? 0)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {payments.length > 0 && (
+        <div className="text-[10px] font-mono text-text-mute" data-testid="soa-payments">
+          Recent payments:{" "}
+          {payments
+            .slice(0, 4)
+            .map((p) => `${asStr(p.currency)} ${fmtNum(asNum(p.amount) ?? 0)} (${asStr(p.at)})`)
+            .join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PendingInvoicesCard({ data, locale: _locale }: { data: Json; locale: CliLocale }) {
+  const scope = asObj(data.scope);
+  const invoices = asArr(data.invoices) as Json[];
+  const totals = asArr(data.totalsByCurrency) as Json[];
+  return (
+    <div className="space-y-1.5" data-testid="cli-pending-invoices">
+      <div className="font-mono text-sm">
+        Pending invoices <span className="text-text-mute">· {asStr(scope.label) || "—"}</span>
+      </div>
+      {invoices.length === 0 ? (
+        <div className="text-[11px] font-mono text-text-mute">No outstanding invoices — all settled.</div>
+      ) : (
+        <>
+          <div className="text-[11px] font-mono text-text-mute" data-testid="pending-totals">
+            {invoices.length} outstanding ·{" "}
+            {totals.map((t) => `${asStr(t.currency)} ${fmtNum(asNum(t.amount) ?? 0)}`).join(" · ")}
+          </div>
+          <div className="space-y-0.5">
+            {invoices.slice(0, 10).map((inv, i) => (
+              <div key={i} className="text-[11px] font-mono flex justify-between gap-2" data-testid="pending-invoice-row">
+                <span className="truncate">
+                  {asStr(inv.invoiceNumber) || "(no number)"}
+                  {(asNum(inv.daysOverdue) ?? 0) > 0 ? (
+                    <span className="text-status-red"> · {asNum(inv.daysOverdue)}d overdue</span>
+                  ) : (
+                    <span className="text-text-faint"> · due {asStr(inv.dueDate) || "—"}</span>
+                  )}
+                  {asObj(inv.dunning).step != null && (
+                    <span className="text-text-faint"> · dunning step {(asNum(asObj(inv.dunning).step) ?? 0) + 1}</span>
+                  )}
+                </span>
+                <span className="shrink-0">
+                  {asStr(inv.currency)} {fmtNum(asNum(inv.amountDue) ?? 0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

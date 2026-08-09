@@ -122,15 +122,18 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
     "email_company_documents",
     "email_my_documents",
   ],
-  account: ["account_lookup", "account_list", "account_dossier"],
+  account: ["account_lookup", "account_list", "account_dossier", "entity_detail", "statement_of_account", "pending_invoices"],
+  // Task #853 — AR / invoice asks route to the universal detail tool +
+  // the two rollup capabilities (statement of account, pending invoices).
+  invoice: ["entity_detail", "statement_of_account", "pending_invoices"],
   // Task #769 — opportunity_search replaces opportunity_list_by_stage in the
   // floor. The search tool spans all stages and accepts an accountName input,
   // eliminating the silent stage="convert" default that drove the model to
   // brute-force iterate stage-by-stage. opportunity_list_by_stage stays
   // registered (slash command, explicit stage) but exits the floor.
-  opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage"],
-  contact: ["contact_detail", "contact_list"],
-  engagement: ["engagement_detail", "engagement_list_active"],
+  opportunity: ["opportunity_detail", "opportunity_search", "pipeline_by_stage", "entity_detail"],
+  contact: ["contact_detail", "contact_list", "entity_detail"],
+  engagement: ["engagement_detail", "engagement_list_active", "entity_detail", "pending_invoices"],
 };
 
 /**

@@ -1584,7 +1584,111 @@ const SHAPE_ICON: Record<string, React.ComponentProps<typeof Feather>["name"]> =
   timesheet_card: "clock",
   invoice_card: "file-text",
   gate_report: "shield",
+  // Task #853 — AR rollup cards.
+  statement_of_account: "book-open",
+  pending_invoices: "alert-circle",
+  pov_card: "feather",
+  ar_aging_grid: "grid",
 };
+
+/* ────────── Task #853 — statement of account / pending invoices ────────── */
+
+function StatementOfAccountBody({ data }: { data: Json; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const account = asObj(data.account);
+  const currencies = asArr(data.currencies) as Json[];
+  const rowText = {
+    color: c.foreground,
+    fontFamily: "PlusJakartaSans_500Medium",
+    fontSize: 12,
+    textAlign: rtl.textAlign,
+  } as const;
+  const muteText = { ...rowText, color: c.mutedForeground, fontSize: 11 } as const;
+  return (
+    <View style={{ gap: 8 }}>
+      <Text style={{ ...rowText, fontSize: 14, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+        {asStr(account.name) || "Account"} — statement of account
+      </Text>
+      {currencies.length === 0 && <Text style={muteText}>No issued invoices on record.</Text>}
+      {currencies.map((cur, ci) => {
+        const totals = asObj(cur.totals);
+        const aging = asObj(cur.aging);
+        const invoices = asArr(cur.invoices) as Json[];
+        return (
+          <View key={ci} style={{ gap: 4 }}>
+            <Text style={muteText}>
+              {asStr(cur.currency)} · issued {formatCompact(asNum(totals.issued) ?? 0)} · paid{" "}
+              {formatCompact(asNum(totals.paid) ?? 0)}
+            </Text>
+            <Text style={{ ...rowText, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+              Outstanding {asStr(cur.currency)} {formatCompact(asNum(totals.outstanding) ?? 0)}
+            </Text>
+            <Text style={muteText}>
+              Aging — current {formatCompact(asNum(aging.current) ?? 0)} · 1–30 {formatCompact(asNum(aging.d1_30) ?? 0)} · 31–60{" "}
+              {formatCompact(asNum(aging.d31_60) ?? 0)} · 61–90 {formatCompact(asNum(aging.d61_90) ?? 0)} · 90+{" "}
+              {formatCompact(asNum(aging.d90_plus) ?? 0)}
+            </Text>
+            {invoices.slice(0, 6).map((inv, ii) => (
+              <View key={ii} style={{ flexDirection: rtl.row, justifyContent: "space-between", gap: 8 }}>
+                <Text style={{ ...muteText, flexShrink: 1 }} numberOfLines={1}>
+                  {asStr(inv.invoiceNumber) || "(no number)"} · {asStr(inv.status)}
+                  {(asNum(inv.daysOverdue) ?? 0) > 0 ? ` · ${asNum(inv.daysOverdue)}d overdue` : ""}
+                </Text>
+                <Text style={rowText}>{formatCompact(asNum(inv.outstanding) ?? 0)}</Text>
+              </View>
+            ))}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function PendingInvoicesBody({ data }: { data: Json; lang: string }) {
+  const c = useColors();
+  const rtl = useRTL();
+  const scope = asObj(data.scope);
+  const invoices = asArr(data.invoices) as Json[];
+  const totals = asArr(data.totalsByCurrency) as Json[];
+  const rowText = {
+    color: c.foreground,
+    fontFamily: "PlusJakartaSans_500Medium",
+    fontSize: 12,
+    textAlign: rtl.textAlign,
+  } as const;
+  const muteText = { ...rowText, color: c.mutedForeground, fontSize: 11 } as const;
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ ...rowText, fontSize: 14, fontFamily: "PlusJakartaSans_600SemiBold" }}>
+        Pending invoices — {asStr(scope.label) || "—"}
+      </Text>
+      {invoices.length === 0 ? (
+        <Text style={muteText}>No outstanding invoices — all settled.</Text>
+      ) : (
+        <>
+          <Text style={muteText}>
+            {invoices.length} outstanding ·{" "}
+            {totals.map((t) => `${asStr(t.currency)} ${formatCompact(asNum(t.amount) ?? 0)}`).join(" · ")}
+          </Text>
+          {invoices.slice(0, 8).map((inv, i) => (
+            <View key={i} style={{ flexDirection: rtl.row, justifyContent: "space-between", gap: 8 }}>
+              <Text style={{ ...muteText, flexShrink: 1 }} numberOfLines={1}>
+                {asStr(inv.invoiceNumber) || "(no number)"}
+                {(asNum(inv.daysOverdue) ?? 0) > 0
+                  ? ` · ${asNum(inv.daysOverdue)}d overdue`
+                  : ` · due ${asStr(inv.dueDate) || "—"}`}
+              </Text>
+              <Text style={rowText}>
+                {asStr(inv.currency)} {formatCompact(asNum(inv.amountDue) ?? 0)}
+              </Text>
+            </View>
+          ))}
+        </>
+      )}
+    </View>
+  );
+}
 
 /**
  * Rich result cards for the chat transcript — the mobile port of the
@@ -1694,6 +1798,13 @@ export function ToolResultCards({
             case "renewal_card":
             case "change_order_card":
               body = <EntityBody data={dataObj} lang={lang} />;
+              break;
+            // Task #853 — AR rollup cards (universal chat lookups).
+            case "statement_of_account":
+              body = <StatementOfAccountBody data={dataObj} lang={lang} />;
+              break;
+            case "pending_invoices":
+              body = <PendingInvoicesBody data={dataObj} lang={lang} />;
               break;
             default:
               body = <FallbackGrid data={dataObj} lang={lang} />;
