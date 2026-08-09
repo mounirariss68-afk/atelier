@@ -19,16 +19,29 @@ import { Card } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { displayAmountOf } from "@/lib/expenseTotals";
-import { formatMoney } from "@/lib/format";
 
+// Task #835 — Cognirise brand palette, sampled from the logo mark's
+// purple→magenta→pink→coral gradient (assets/images/cognirise-mark.png),
+// ordered so adjacent donut segments stay distinguishable on light and
+// dark cards.
 const CHART_COLORS = [
-  "#4F6DF5",
-  "#22B8A6",
-  "#F5A524",
-  "#E5484D",
-  "#9B6DF5",
-  "#64748B",
+  "#CD41B2", // magenta (brand core)
+  "#7C3BE0", // deep purple
+  "#F25081", // pink
+  "#B345F0", // violet
+  "#FF7B5A", // coral
+  "#8A2C77", // dark magenta (overflow/"Other")
 ];
+
+/** Locale-formatted number without the currency code (code renders on its own line). */
+function formatAmountOnly(amount: number, lang: string): string {
+  try {
+    const locale = lang === "ar" ? "ar" : lang === "tr" ? "tr" : "en";
+    return amount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  } catch {
+    return amount.toFixed(2);
+  }
+}
 
 function categoryLabel(cat: string | null | undefined): string {
   const k = (cat ?? "other").replace(/[_-]+/g, " ").trim();
@@ -102,6 +115,8 @@ export function ExpenseCharts({
   const SIZE = 132;
   const R = 52;
   const STROKE = 20;
+  // Usable width of the donut hole (inner diameter minus breathing room).
+  const HOLE = (R - STROKE / 2) * 2 - 8;
   let angle = -Math.PI / 2;
 
   const monthShort = (i: number): string => {
@@ -153,17 +168,31 @@ export function ExpenseCharts({
                 })}
               </G>
             </Svg>
-            <View style={{ position: "absolute", alignItems: "center" }}>
+            {/* Task #835 — two stacked lines (currency, then amount), kept
+                inside the donut hole so text never overlaps the ring. */}
+            <View style={{ position: "absolute", alignItems: "center", maxWidth: HOLE }}>
+              <Text
+                style={{
+                  color: c.mutedForeground,
+                  fontFamily: "PlusJakartaSans_700Bold",
+                  fontSize: 10.5,
+                  letterSpacing: 0.6,
+                }}
+                numberOfLines={1}
+              >
+                {displayCurrency}
+              </Text>
               <Text
                 style={{
                   color: c.foreground,
                   fontFamily: "PlusJakartaSans_800ExtraBold",
-                  fontSize: 13.5,
+                  fontSize: 14,
                   fontVariant: ["tabular-nums"],
                 }}
                 numberOfLines={1}
+                adjustsFontSizeToFit
               >
-                {formatMoney(categoryTotal, displayCurrency, lang)}
+                {formatAmountOnly(categoryTotal, lang)}
               </Text>
             </View>
           </View>
@@ -240,7 +269,7 @@ export function ExpenseCharts({
                     maxWidth: 18,
                     height: h,
                     borderRadius: 4,
-                    backgroundColor: v > 0 ? c.primary : c.tint08,
+                    backgroundColor: v > 0 ? CHART_COLORS[0] : c.tint08,
                     opacity: active ? 1 : 0.35,
                   }}
                 />
