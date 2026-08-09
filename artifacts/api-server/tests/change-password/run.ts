@@ -271,10 +271,12 @@ async function main(): Promise<void> {
         afterSkip?.passwordHash === sentinelHash && afterSkip?.userManaged === true,
       );
 
-      // 2. user_managed=false with a drifted hash → the seed repairs it.
+      // 2. Task #820 — there is no boot password anymore: the seed keeps ANY
+      // existing hash (user-managed or not) and only repairs a drifted
+      // userId link.
       await db
         .update(atelierAuthCredentials)
-        .set({ passwordHash: sentinelHash, userManaged: false })
+        .set({ passwordHash: sentinelHash, userManaged: false, userId: `drifted_${STAMP}` })
         .where(eq(atelierAuthCredentials.email, SEED_EMAIL));
       await ensureAtelierAuthSeed();
       const [afterRepair] = await db
@@ -282,8 +284,11 @@ async function main(): Promise<void> {
         .from(atelierAuthCredentials)
         .where(eq(atelierAuthCredentials.email, SEED_EMAIL));
       check(
-        "seed repairs non-user-managed drifted hash",
-        !!afterRepair && afterRepair.passwordHash !== sentinelHash,
+        "seed keeps non-user-managed hash and repairs only the userId link",
+        !!afterRepair &&
+          afterRepair.passwordHash === sentinelHash &&
+          afterRepair.userId === seedRowBackup.userId,
+        `userId=${afterRepair?.userId} hashKept=${afterRepair?.passwordHash === sentinelHash}`,
       );
     }
   } finally {

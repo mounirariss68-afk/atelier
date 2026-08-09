@@ -453,10 +453,10 @@ async function main(): Promise<void> {
       startDate: "2026-08-01",
     });
     joinerUserId = add.body?.user?.id ?? null;
-    const tempPw: string | undefined = add.body?.tempPassword;
+    const activationUrl: string | undefined = add.body?.activationUrl;
     check(
-      "HR add-joiner \u2192 201 with user + one-time temp password",
-      add.status === 201 && !!joinerUserId && typeof tempPw === "string" && tempPw.startsWith("Join-"),
+      "HR add-joiner \u2192 201 with user + one-time activation link",
+      add.status === 201 && !!joinerUserId && typeof activationUrl === "string" && activationUrl.includes("/activate?token="),
       `status=${add.status} body=${JSON.stringify(add.body)?.slice(0, 200)}`,
     );
 
@@ -504,76 +504,63 @@ async function main(): Promise<void> {
     });
     check("duplicate email \u2192 409", dupAdd.status === 409, `status=${dupAdd.status}`);
 
-    // Temp password actually logs in.
+    // =====================================================================
+    group("joiners \u00b7 activation link sets the first password (Task #820)");
+    // =====================================================================
+    // Before activation the credential hash is unusable — no password works.
+    const preActivate = await fetch(`${AUTH}/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: JOINER_EMAIL, password: "Anything-Guessed-1" }),
+    });
+    check("login before activation \u2192 401", preActivate.status === 401, `status=${preActivate.status}`);
+
+    const activationToken = /token=([0-9a-f]{64})/.exec(activationUrl ?? "")?.[1] ?? "";
+    check("activation URL carries a 256-bit token", !!activationToken);
+
+    const NEW_JOINER_PW = `Chosen-By-Joiner-${STAMP}1!`;
+    const activate = await fetch(`${AUTH}/activate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: activationToken, newPassword: NEW_JOINER_PW }),
+    });
+    check("activate with chosen password \u2192 200", activate.status === 200, `status=${activate.status}`);
+
+    const [credAfter] = await db
+      .select()
+      .from(atelierAuthCredentials)
+      .where(eq(atelierAuthCredentials.email, JOINER_EMAIL));
+    check(
+      "credential cleared: must_change_password=false, reason=null",
+      credAfter?.mustChangePassword === false && credAfter?.mustChangeReason === null,
+      JSON.stringify({ mcp: credAfter?.mustChangePassword, reason: credAfter?.mustChangeReason }),
+    );
+
     const loginRes = await fetch(`${AUTH}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: JOINER_EMAIL, password: tempPw }),
+      body: JSON.stringify({ email: JOINER_EMAIL, password: NEW_JOINER_PW }),
     });
-    check("temp password login \u2192 200", loginRes.status === 200, `status=${loginRes.status}`);
+    check("login with chosen password \u2192 200", loginRes.status === 200, `status=${loginRes.status}`);
     const loginBody: any = await loginRes.json().catch(() => null);
     check(
-      "login response flags mustChangePassword",
-      loginBody?.mustChangePassword === true,
+      "login response does NOT force another change",
+      loginBody?.mustChangePassword !== true,
       JSON.stringify(loginBody)?.slice(0, 200),
     );
-    check(
-      "login response carries mustChangeReason=joiner",
-      loginBody?.mustChangeReason === "joiner",
-      `reason=${loginBody?.mustChangeReason}`,
-    );
 
-    // =====================================================================
-    group("joiners \u00b7 forced first-login password change (Task #59)");
-    // =====================================================================
     // The joiner's REAL session cookie (not the persona bypass).
     const setCookie = loginRes.headers.get("set-cookie") ?? "";
     const m = /atelier_auth_session=([^;]+)/.exec(setCookie);
     const joinerCookie = m ? `atelier_auth_session=${m[1]}` : "";
-    check("temp-password login sets a session cookie", !!joinerCookie);
+    check("login sets a session cookie", !!joinerCookie);
 
     // isTestAuthBypass() reads NODE_ENV per-request; flip it off so the
     // global auth gate actually runs for these real-session requests.
-    const NEW_JOINER_PW = `Chosen-By-Joiner-${STAMP}!`;
     process.env.NODE_ENV = "development";
     try {
-      const sess = await fetch(`${AUTH}/session`, { headers: { cookie: joinerCookie } });
-      const sessBody: any = await sess.json().catch(() => null);
-      check(
-        "/auth/session flags mustChangePassword + reason=joiner",
-        sess.status === 200 &&
-          sessBody?.mustChangePassword === true &&
-          sessBody?.mustChangeReason === "joiner",
-        `status=${sess.status} body=${JSON.stringify(sessBody)?.slice(0, 200)}`,
-      );
-
-      const blocked = await fetch(`${API}/me`, { headers: { cookie: joinerCookie } });
-      const blockedBody: any = await blocked.json().catch(() => null);
-      check(
-        "data route blocked until change \u2192 403 password-change-required",
-        blocked.status === 403 && blockedBody?.error === "password-change-required",
-        `status=${blocked.status} error=${blockedBody?.error}`,
-      );
-
-      const change = await fetch(`${AUTH}/change-password`, {
-        method: "POST",
-        headers: { "content-type": "application/json", cookie: joinerCookie },
-        body: JSON.stringify({ currentPassword: tempPw, newPassword: NEW_JOINER_PW }),
-      });
-      check("forced change with temp password \u2192 200", change.status === 200, `status=${change.status}`);
-
-      const [credAfter] = await db
-        .select()
-        .from(atelierAuthCredentials)
-        .where(eq(atelierAuthCredentials.email, JOINER_EMAIL));
-      check(
-        "credential cleared: must_change_password=false, reason=null",
-        credAfter?.mustChangePassword === false && credAfter?.mustChangeReason === null,
-        JSON.stringify({ mcp: credAfter?.mustChangePassword, reason: credAfter?.mustChangeReason }),
-      );
-
       const unblocked = await fetch(`${API}/me`, { headers: { cookie: joinerCookie } });
-      check("data route unblocked after change \u2192 200", unblocked.status === 200, `status=${unblocked.status}`);
+      check("data route accessible after activation \u2192 200", unblocked.status === 200, `status=${unblocked.status}`);
 
       // The landing surface: /me/notifications via the REAL session still
       // shows the welcome card the joiner sees on /me.
@@ -612,7 +599,7 @@ async function main(): Promise<void> {
     const deadLogin = await fetch(`${AUTH}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: JOINER_EMAIL, password: tempPw }),
+      body: JSON.stringify({ email: JOINER_EMAIL, password: NEW_JOINER_PW }),
     });
     const deadBody: any = await deadLogin.json().catch(() => null);
     check(

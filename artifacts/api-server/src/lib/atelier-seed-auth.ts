@@ -8,6 +8,7 @@ import {
   atelierMeetings,
 } from "@workspace/db";
 import { and, eq, lt, ne } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { hashPassword, verifyPassword } from "./auth/passwords";
 import { logger } from "./logger";
 
@@ -25,7 +26,10 @@ const USERS: Array<{ email: string; userId: string }> = [
   { email: "gokhan@cognirise.ai", userId: "p_gokhan_guney" },
 ];
 
-const PASSWORD = "SeptemberEylul2026!";
+// Task #820 — no plaintext password lives in code anymore. Fresh databases
+// get an UNUSABLE random credential hash for the founders; they set their
+// own password via the self-service reset link ("Forgot password?" on the
+// sign-in page). Existing databases keep whatever hash they already have.
 
 // Task #186 — official founder titles. The founders' job titles are data in
 // atelier_users.title / atelier_employees.title (role_label stays
@@ -411,33 +415,35 @@ export async function ensureAtelierAuthSeed(): Promise<void> {
       .select()
       .from(atelierAuthCredentials)
       .where(eq(atelierAuthCredentials.email, u.email));
-    // Task #2 — once a user has changed their own password, the seed must
-    // never overwrite it. Only repair the userId link if it drifted.
-    if (existing && existing.userManaged) {
+    if (existing) {
+      // Task #820 — the seed NEVER rewrites an existing hash (user-managed
+      // or not; there is no known boot password anymore). It only repairs
+      // the userId link if it drifted.
       if (existing.userId !== u.userId) {
         await db
           .update(atelierAuthCredentials)
           .set({ userId: u.userId, updatedAt: new Date() })
           .where(eq(atelierAuthCredentials.email, u.email));
-        logger.info({ email: u.email }, "auth credential userId repaired (user-managed hash kept)");
+        logger.info({ email: u.email }, "auth credential userId repaired (hash kept)");
       }
       continue;
     }
-    if (
-      existing &&
-      existing.userId === u.userId &&
-      verifyPassword(PASSWORD, existing.passwordHash)
-    ) {
-      continue;
-    }
-    const passwordHash = hashPassword(PASSWORD);
+    // Fresh database: create the credential with an unusable random hash.
+    // Sign-in is impossible until the founder uses "Forgot password?" on the
+    // sign-in page to set their own password via an emailed reset link.
     await db
       .insert(atelierAuthCredentials)
-      .values({ email: u.email, userId: u.userId, passwordHash })
-      .onConflictDoUpdate({
-        target: atelierAuthCredentials.email,
-        set: { userId: u.userId, passwordHash, updatedAt: new Date() },
-      });
-    logger.info({ email: u.email }, "auth credential seeded/updated");
+      .values({
+        email: u.email,
+        userId: u.userId,
+        passwordHash: hashPassword(randomBytes(32).toString("hex")),
+        userManaged: false,
+        mustChangePassword: false,
+      })
+      .onConflictDoNothing();
+    logger.info(
+      { email: u.email },
+      "auth credential created without a usable password — use the sign-in page's Forgot password link to set one",
+    );
   }
 }

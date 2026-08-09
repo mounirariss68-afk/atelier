@@ -113,6 +113,16 @@ export default function SignIn() {
             </p>
           )}
 
+          <p className="text-right">
+            <a
+              href="/reset-password"
+              className="text-xs text-text-faint underline underline-offset-4 hover:text-gold"
+              data-testid="link-forgot-password"
+            >
+              Forgot password?
+            </a>
+          </p>
+
           <button
             type="submit"
             data-testid="button-signin"

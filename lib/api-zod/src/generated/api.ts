@@ -6569,7 +6569,7 @@ export const AtelierListJoinersResponse = zod.array(
 );
 
 /**
- * @summary HR — add a joiner (roster record + user + one-time temp password)
+ * @summary HR — add a joiner (roster record + user + one-time activation link)
  */
 export const atelierAddJoinerBodyFullNameMax = 200;
 

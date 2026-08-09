@@ -5,6 +5,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -52,6 +53,30 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [updateRequired, setUpdateRequired] = useState(false);
+  // Task #820 — self-service forgot-password (request-only; the reset link
+  // itself opens in the browser).
+  const [forgotMode, setForgotMode] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotBusy, setForgotBusy] = useState(false);
+
+  const onForgotSend = async () => {
+    if (!email.trim() || forgotBusy) return;
+    setForgotBusy(true);
+    setError(null);
+    try {
+      await apiJson("/api/auth/forgot-password", {
+        method: "POST",
+        auth: false,
+        body: { email: email.trim() },
+      });
+      setForgotSent(true);
+    } catch {
+      hapticError();
+      setError(t("login.failed"));
+    } finally {
+      setForgotBusy(false);
+    }
+  };
 
   useEffect(() => {
     apiJson<{ minSupportedAppVersion: string }>("/api/auth/app-meta", {
@@ -208,35 +233,129 @@ export default function LoginScreen() {
             }}
           >
             <FadeInView delay={120}>
-              <Card style={{ gap: 16, padding: 20 }}>
-                <Field
-                  label={t("login.email")}
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  placeholder="you@cognirise.com"
-                />
-                <Field
-                  label={t("login.password")}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  autoComplete="password"
-                  textContentType="password"
-                  onSubmitEditing={onSubmit}
-                  error={error}
-                />
-                <Button
-                  label={t("login.signIn")}
-                  onPress={onSubmit}
-                  loading={loading}
-                  disabled={!email || !password}
-                  icon="log-in"
-                />
-              </Card>
+              {forgotMode ? (
+                <Card style={{ gap: 16, padding: 20 }}>
+                  <Text
+                    style={{
+                      color: c.text,
+                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontSize: 17,
+                    }}
+                  >
+                    {t("login.forgotTitle")}
+                  </Text>
+                  {forgotSent ? (
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_400Regular",
+                        fontSize: 14,
+                        lineHeight: 21,
+                      }}
+                    >
+                      {t("login.forgotSent")}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text
+                        style={{
+                          color: c.mutedForeground,
+                          fontFamily: "PlusJakartaSans_400Regular",
+                          fontSize: 14,
+                          lineHeight: 21,
+                        }}
+                      >
+                        {t("login.forgotBody")}
+                      </Text>
+                      <Field
+                        label={t("login.email")}
+                        value={email}
+                        onChangeText={setEmail}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                        autoComplete="email"
+                        textContentType="emailAddress"
+                        placeholder="you@cognirise.com"
+                        error={error}
+                      />
+                      <Button
+                        label={t("login.forgotSend")}
+                        onPress={onForgotSend}
+                        loading={forgotBusy}
+                        disabled={!email}
+                        icon="mail"
+                      />
+                    </>
+                  )}
+                  <Pressable
+                    onPress={() => {
+                      setForgotMode(false);
+                      setForgotSent(false);
+                      setError(null);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text
+                      style={{
+                        color: c.primary,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 14,
+                        textAlign: "center",
+                      }}
+                    >
+                      {t("login.forgotBack")}
+                    </Text>
+                  </Pressable>
+                </Card>
+              ) : (
+                <Card style={{ gap: 16, padding: 20 }}>
+                  <Field
+                    label={t("login.email")}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    autoComplete="email"
+                    textContentType="emailAddress"
+                    placeholder="you@cognirise.com"
+                  />
+                  <Field
+                    label={t("login.password")}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                    autoComplete="password"
+                    textContentType="password"
+                    onSubmitEditing={onSubmit}
+                    error={error}
+                  />
+                  <Button
+                    label={t("login.signIn")}
+                    onPress={onSubmit}
+                    loading={loading}
+                    disabled={!email || !password}
+                    icon="log-in"
+                  />
+                  <Pressable
+                    onPress={() => {
+                      setForgotMode(true);
+                      setError(null);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 13,
+                        textAlign: "center",
+                      }}
+                    >
+                      {t("login.forgot")}
+                    </Text>
+                  </Pressable>
+                </Card>
+              )}
             </FadeInView>
           </View>
         </ScrollView>

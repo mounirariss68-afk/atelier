@@ -10548,7 +10548,7 @@ export function useAtelierListJoiners<
 }
 
 /**
- * @summary HR — add a joiner (roster record + user + one-time temp password)
+ * @summary HR — add a joiner (roster record + user + one-time activation link)
  */
 export const getAtelierAddJoinerUrl = () => {
   return `/api/atelier/roster/joiners`;
@@ -10611,7 +10611,7 @@ export type AtelierAddJoinerMutationBody = BodyType<AtelierAddJoinerInput>;
 export type AtelierAddJoinerMutationError = ErrorType<unknown>;
 
 /**
- * @summary HR — add a joiner (roster record + user + one-time temp password)
+ * @summary HR — add a joiner (roster record + user + one-time activation link)
  */
 export const useAtelierAddJoiner = <
   TError = ErrorType<unknown>,

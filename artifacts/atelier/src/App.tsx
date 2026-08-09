@@ -19,6 +19,7 @@ import NotFound from "@/pages/not-found";
 // Pages
 import SignIn from "@/pages/SignIn";
 import Activate from "@/pages/Activate";
+import ResetPassword from "@/pages/ResetPassword";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import SupportPage from "@/pages/Support";
 import ForcePasswordChange from "@/pages/ForcePasswordChange";
@@ -251,6 +252,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // joiner has no session yet). The page itself validates the token.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/activate")) {
     return <Activate />;
+  }
+  // Task #820 — self-service password reset (request form + tokened set
+  // form). Must render pre-auth; the page itself validates the token.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/reset-password")) {
+    return <ResetPassword />;
   }
   // Task #621 — App Store compliance pages: publicly readable, no session
   // required. Static informational content only; every data route stays

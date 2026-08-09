@@ -4553,6 +4553,12 @@ export const atelierAuthCredentials = pgTable(
     // (login returns the generic invalid-credentials error) and all sessions
     // are revoked at deactivation time. Reversible by HR / founding partner.
     disabled: boolean("disabled").notNull().default(false),
+    // Task #820 — persisted per-account lockout. Consecutive failed logins
+    // increment failedLoginCount; at the threshold the account locks until
+    // lockedUntil (generic 401 preserved — no lockout enumeration). Reset on
+    // successful login, partner reset/unlock, or self-service reset.
+    failedLoginCount: integer("failed_login_count").notNull().default(0),
+    lockedUntil: timestamp("locked_until"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -4573,6 +4579,9 @@ export const atelierLoginActivationTokens = pgTable(
     email: text("email").notNull(),
     userId: text("user_id").notNull(),
     createdByUserId: text("created_by_user_id"),
+    // Task #820 — what the link does: "activation" (joiner chooses first
+    // password) or "reset" (self-service forgot-password / partner reset).
+    purpose: text("purpose").notNull().default("activation"),
     expiresAt: timestamp("expires_at").notNull(),
     usedAt: timestamp("used_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

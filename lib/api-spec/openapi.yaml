@@ -2549,7 +2549,7 @@ paths:
     post:
       operationId: atelierAddJoiner
       tags: [atelier]
-      summary: HR — add a joiner (roster record + user + one-time temp password)
+      summary: HR — add a joiner (roster record + user + one-time activation link)
       requestBody:
         required: true
         content:
@@ -2558,7 +2558,7 @@ paths:
               $ref: "#/components/schemas/AtelierAddJoinerInput"
       responses:
         "201":
-          description: Created joiner; tempPassword is shown exactly once
+          description: Created joiner; activationUrl is shown exactly once
           content:
             application/json:
               schema:
@@ -9568,13 +9568,14 @@ components:
 
     AtelierAddJoinerResponse:
       type: object
-      required: [user, personId, tempPassword, welcomeEmail]
+      required: [user, personId, activationUrl, activationExpiresAt, welcomeEmail]
       properties:
         user: { $ref: "#/components/schemas/AtelierPersona" }
         personId: { type: string }
-        tempPassword:
+        activationUrl:
           type: string
-          description: Shown exactly once — never persisted in plaintext.
+          description: Single-use, 72-hour activation link — shown exactly once; only the token hash is persisted.
+        activationExpiresAt: { type: string }
         welcomeEmail:
           type: string
           enum: [sent, failed, not_configured]

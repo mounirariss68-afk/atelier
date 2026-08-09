@@ -6,7 +6,7 @@ import {
   atelierAuditEvents,
   atelierLoginActivationTokens,
 } from "@workspace/db";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { verifyPassword, hashPassword } from "../../lib/auth/passwords";
 import {
@@ -23,6 +23,9 @@ import {
 } from "../../lib/auth/session";
 import { personaToWire } from "../atelier/personaCookie";
 import { isDemoUser } from "../../lib/auth/demoReadOnly";
+import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
+import { validateNewPassword } from "../../lib/auth/password-policy";
+import { sendPasswordResetEmail } from "../../lib/atelier-reset-email";
 import { logger } from "../../lib/logger";
 
 /**
@@ -51,6 +54,24 @@ function rateLimitOk(ip: string): boolean {
   return true;
 }
 
+/** Test-only: probes that intentionally exhaust the window call this. */
+export function __resetAuthRateLimitForTests(): void {
+  if (process.env.NODE_ENV !== "test") return;
+  rateBuckets.clear();
+}
+
+// ---- persisted per-account lockout (Task #820) --------------------------
+// Independent from the per-IP rate limit: consecutive wrong-password
+// attempts against ONE account lock it for a cooling-off period even when
+// the attacker rotates IPs. The response stays the generic 401 so lockout
+// state is not enumerable.
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_MS = 15 * 60 * 1000;
+
+function isLockedOut(cred: { lockedUntil: Date | null }): boolean {
+  return !!cred.lockedUntil && cred.lockedUntil.getTime() > Date.now();
+}
+
 async function audit(
   action:
     | "login_success"
@@ -61,7 +82,12 @@ async function audit(
     | "password_reset_by_partner"
     | "password_reset_denied"
     | "account_activated"
-    | "account_activation_failed",
+    | "account_activation_failed"
+    | "password_reset_requested"
+    | "password_reset_completed"
+    | "password_reset_failed"
+    | "account_locked"
+    | "account_unlocked",
   opts: {
     actorId?: string | null;
     actorLabel: string;
@@ -101,7 +127,17 @@ async function audit(
                       ? `${opts.actorLabel} activated their account`
                       : action === "account_activation_failed"
                         ? `Failed account activation attempt`
-                        : `Failed sign-in attempt`,
+                        : action === "password_reset_requested"
+                          ? `Password reset link requested for ${opts.targetEmail ?? opts.actorLabel}`
+                          : action === "password_reset_completed"
+                            ? `${opts.actorLabel} set a new password via reset link`
+                            : action === "password_reset_failed"
+                              ? `Failed password reset attempt`
+                              : action === "account_locked"
+                                ? `Account ${opts.targetEmail ?? opts.actorLabel} locked after repeated failed sign-ins`
+                                : action === "account_unlocked"
+                                  ? `${opts.actorLabel} unlocked account ${opts.targetEmail ?? ""}`.trim()
+                                  : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -140,10 +176,57 @@ router.post("/login", async (req: Request, res: Response) => {
   const passwordOk = cred
     ? verifyPassword(password, cred.passwordHash)
     : (verifyPassword(password, DUMMY_HASH), false);
+  // Task #820 — locked account: even a CORRECT password is rejected with
+  // the same generic 401 until the lock expires (no lockout enumeration).
+  if (cred && isLockedOut(cred)) {
+    await audit("login_failed", { actorLabel: email, ip });
+    res.status(401).json(GENERIC_FAIL);
+    return;
+  }
   if (!cred || !passwordOk) {
+    if (cred) {
+      // Persisted per-account failure counter → lockout at the threshold.
+      // Atomic DB-side increment: concurrent bad guesses must each advance
+      // the counter (a read-then-write here could be raced past the
+      // threshold).
+      const [bumped] = await db
+        .update(atelierAuthCredentials)
+        .set({
+          failedLoginCount: sql`${atelierAuthCredentials.failedLoginCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierAuthCredentials.email, cred.email))
+        .returning({ failedLoginCount: atelierAuthCredentials.failedLoginCount });
+      const lock = (bumped?.failedLoginCount ?? 0) >= LOCKOUT_THRESHOLD;
+      if (lock) {
+        await db
+          .update(atelierAuthCredentials)
+          .set({
+            failedLoginCount: 0,
+            lockedUntil: new Date(Date.now() + LOCKOUT_MS),
+            updatedAt: new Date(),
+          })
+          .where(eq(atelierAuthCredentials.email, cred.email));
+      }
+      if (lock) {
+        await audit("account_locked", {
+          actorLabel: email,
+          ip,
+          targetEmail: cred.email,
+          targetUserId: cred.userId,
+        });
+      }
+    }
     await audit("login_failed", { actorLabel: email || "unknown", ip });
     res.status(401).json(GENERIC_FAIL);
     return;
+  }
+  // Successful verification — clear any stale failure counter.
+  if (cred.failedLoginCount > 0 || cred.lockedUntil) {
+    await db
+      .update(atelierAuthCredentials)
+      .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
+      .where(eq(atelierAuthCredentials.email, cred.email));
   }
   // Task #50 — deactivated leaver. Same generic error as a bad password so
   // a former colleague cannot distinguish "wrong password" from "disabled".
@@ -248,11 +331,9 @@ router.post("/change-password", async (req: Request, res: Response) => {
     });
     return;
   }
-  if (newPassword.length < 10 || newPassword.length > 200) {
-    res.status(400).json({
-      error: "weak-password",
-      message: "New password must be at least 10 characters.",
-    });
+  const policy = validateNewPassword(newPassword, { email: session.email });
+  if (!policy.ok) {
+    res.status(400).json({ error: policy.error, message: policy.message });
     return;
   }
   if (newPassword === currentPassword) {
@@ -308,7 +389,10 @@ router.post("/change-password", async (req: Request, res: Response) => {
 // (SHA-256 hash stored server-side). The joiner opens the activation link
 // and chooses their own password here — no temporary password ever exists.
 
-async function lookupActivationToken(rawToken: string) {
+async function lookupActivationToken(
+  rawToken: string,
+  purpose: "activation" | "reset",
+) {
   if (!/^[0-9a-f]{64}$/.test(rawToken)) return null;
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
   const [row] = await db
@@ -316,9 +400,48 @@ async function lookupActivationToken(rawToken: string) {
     .from(atelierLoginActivationTokens)
     .where(eq(atelierLoginActivationTokens.tokenHash, tokenHash));
   if (!row || row.usedAt || row.expiresAt.getTime() < Date.now()) return null;
+  if (row.purpose !== purpose) return null;
   return row;
 }
 
+/**
+ * Mint a single-use login token (Task #820). Invalidates any earlier unused
+ * token of the same purpose for the same email, so only the newest link works.
+ */
+async function mintLoginToken(args: {
+  email: string;
+  userId: string;
+  purpose: "activation" | "reset";
+  ttlMs: number;
+  createdByUserId?: string | null;
+}): Promise<{ rawToken: string; expiresAt: Date }> {
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + args.ttlMs);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(atelierLoginActivationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(atelierLoginActivationTokens.email, args.email),
+          eq(atelierLoginActivationTokens.purpose, args.purpose),
+          isNull(atelierLoginActivationTokens.usedAt),
+        ),
+      );
+    await tx.insert(atelierLoginActivationTokens).values({
+      tokenHash,
+      email: args.email,
+      userId: args.userId,
+      purpose: args.purpose,
+      createdByUserId: args.createdByUserId ?? null,
+      expiresAt,
+    });
+  });
+  return { rawToken, expiresAt };
+}
+
+/** Best-effort absolute origin from the request (for building links). */
 // Pre-auth: lets the activation page show which account is being activated.
 // Tokens are 256-bit random values, so this is not enumerable.
 router.get("/activate-info", async (req: Request, res: Response) => {
@@ -327,7 +450,7 @@ router.get("/activate-info", async (req: Request, res: Response) => {
     res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
     return;
   }
-  const row = await lookupActivationToken(String(req.query?.token ?? ""));
+  const row = await lookupActivationToken(String(req.query?.token ?? ""), "activation");
   if (!row) {
     res.status(404).json({
       error: "invalid-or-expired",
@@ -346,11 +469,7 @@ router.post("/activate", async (req: Request, res: Response) => {
   }
   const rawToken = String(req.body?.token ?? "");
   const newPassword = String(req.body?.newPassword ?? "");
-  if (newPassword.length < 10 || newPassword.length > 200) {
-    res.status(400).json({ error: "weak-password", message: "Password must be at least 10 characters." });
-    return;
-  }
-  const row = await lookupActivationToken(rawToken);
+  const row = await lookupActivationToken(rawToken, "activation");
   if (!row) {
     await audit("account_activation_failed", { actorLabel: "unknown", ip });
     res.status(404).json({
@@ -369,6 +488,11 @@ router.post("/activate", async (req: Request, res: Response) => {
       error: "invalid-or-expired",
       message: "This activation link is no longer valid. Ask your onboarding contact for a new one.",
     });
+    return;
+  }
+  const policy = validateNewPassword(newPassword, { email: row.email });
+  if (!policy.ok) {
+    res.status(400).json({ error: policy.error, message: policy.message });
     return;
   }
   await db.transaction(async (tx) => {
@@ -392,6 +516,8 @@ router.post("/activate", async (req: Request, res: Response) => {
         userManaged: true,
         mustChangePassword: false,
         mustChangeReason: null,
+        failedLoginCount: 0,
+        lockedUntil: null,
         updatedAt: new Date(),
       })
       .where(eq(atelierAuthCredentials.email, row.email));
@@ -405,6 +531,171 @@ router.post("/activate", async (req: Request, res: Response) => {
   });
   if (res.headersSent) return;
   await audit("account_activated", {
+    actorId: row.userId,
+    actorLabel: row.email,
+    ip,
+    targetEmail: row.email,
+    targetUserId: row.userId,
+  });
+  res.json({ ok: true, email: row.email });
+});
+
+// ---- self-service forgot-password (Task #820) ---------------------------
+// Public, rate-limited, non-enumerating: the response is always {ok:true}
+// regardless of whether the email has a login. When it does, a single-use
+// 60-minute reset link is emailed (system sender).
+
+const RESET_TTL_SELF_MS = 60 * 60 * 1000;
+const RESET_TTL_PARTNER_MS = 24 * 60 * 60 * 1000;
+
+router.post("/forgot-password", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    res.status(400).json({ error: "invalid-body", message: "Email is required." });
+    return;
+  }
+  // The uniform response goes out no matter what happens below.
+  const respond = () =>
+    res.json({
+      ok: true,
+      message: "If an account exists for that email, a reset link has been sent.",
+    });
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, email));
+  // Demo account is read-only — its password can never be reset.
+  if (!cred || cred.disabled || isDemoUser({ userId: cred.userId, email })) {
+    respond();
+    return;
+  }
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, cred.userId), isNull(atelierUsers.deletedAt)));
+  if (!persona) {
+    respond();
+    return;
+  }
+  const { rawToken } = await mintLoginToken({
+    email,
+    userId: cred.userId,
+    purpose: "reset",
+    ttlMs: RESET_TTL_SELF_MS,
+  });
+  const origin = trustedRequestOrigin(req);
+  const resetUrl = `${origin ?? ""}/reset-password?token=${rawToken}`;
+  await audit("password_reset_requested", {
+    actorLabel: email,
+    ip,
+    targetEmail: email,
+    targetUserId: cred.userId,
+  });
+  // Best-effort email; never leaks delivery status to the caller.
+  await sendPasswordResetEmail({
+    to: email,
+    firstName: persona.name?.trim().split(/\s+/)[0] ?? null,
+    resetUrl,
+    validity: "60 minutes",
+    initiatedBy: "self",
+    sender: "system",
+  });
+  respond();
+});
+
+// Pre-auth: lets the reset page show which account the link belongs to.
+router.get("/reset-info", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const row = await lookupActivationToken(String(req.query?.token ?? ""), "reset");
+  if (!row) {
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This reset link is invalid, expired, or already used. Request a new one from the sign-in page.",
+    });
+    return;
+  }
+  res.json({ ok: true, email: row.email, expiresAt: row.expiresAt.toISOString() });
+});
+
+router.post("/reset-password", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const rawToken = String(req.body?.token ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+  const row = await lookupActivationToken(rawToken, "reset");
+  if (!row) {
+    await audit("password_reset_failed", { actorLabel: "unknown", ip });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This reset link is invalid, expired, or already used. Request a new one from the sign-in page.",
+    });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, row.email));
+  if (!cred || cred.userId !== row.userId || cred.disabled) {
+    await audit("password_reset_failed", { actorLabel: row.email, ip });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This reset link is no longer valid. Request a new one from the sign-in page.",
+    });
+    return;
+  }
+  const policy = validateNewPassword(newPassword, { email: row.email });
+  if (!policy.ok) {
+    res.status(400).json({ error: policy.error, message: policy.message });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    const consumed = await tx
+      .update(atelierLoginActivationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(atelierLoginActivationTokens.tokenHash, row.tokenHash),
+          isNull(atelierLoginActivationTokens.usedAt),
+        ),
+      )
+      .returning({ tokenHash: atelierLoginActivationTokens.tokenHash });
+    if (consumed.length === 0) throw Object.assign(new Error("token-already-used"), { activationRace: true });
+    await tx
+      .update(atelierAuthCredentials)
+      .set({
+        passwordHash: hashPassword(newPassword),
+        userManaged: true,
+        mustChangePassword: false,
+        mustChangeReason: null,
+        failedLoginCount: 0,
+        lockedUntil: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAuthCredentials.email, row.email));
+  }).catch(async (err: unknown) => {
+    if ((err as { activationRace?: boolean }).activationRace) {
+      await audit("password_reset_failed", { actorLabel: row.email, ip });
+      res.status(404).json({ error: "invalid-or-expired", message: "This reset link was already used." });
+      return;
+    }
+    throw err;
+  });
+  if (res.headersSent) return;
+  // A completed reset invalidates every existing session for the account.
+  await revokeAllSessions(row.userId);
+  await audit("password_reset_completed", {
     actorId: row.userId,
     actorLabel: row.email,
     ip,
@@ -493,36 +784,42 @@ async function requireFoundingPartner(
   return { userId: session.userId, email: session.email, name: persona.name };
 }
 
-/** Human-friendly temporary password, e.g. "Reset-KJH3-TM8Q-9XWC". */
-function generateTempPassword(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
-  const bytes = randomBytes(12);
-  let out = "";
-  for (let i = 0; i < 12; i++) {
-    if (i > 0 && i % 4 === 0) out += "-";
-    out += alphabet[bytes[i] % alphabet.length];
-  }
-  return `Reset-${out}`;
-}
-
 // Who can I reset? Every credential except my own, with the person's name.
 router.get("/reset-targets", async (req: Request, res: Response) => {
   const actor = await requireFoundingPartner(req, res);
   if (!actor) return;
   const creds = await db.select().from(atelierAuthCredentials);
+  const now = Date.now();
   const targets = [];
   for (const c of creds) {
     if (c.email === actor.email) continue;
+    // Demo account is read-only and never a reset/unlock target.
+    if (isDemoUser({ userId: c.userId, email: c.email })) continue;
     const [persona] = await db
       .select()
       .from(atelierUsers)
       .where(and(eq(atelierUsers.id, c.userId), isNull(atelierUsers.deletedAt)));
     if (!persona) continue;
+    // Pending = an unused, unexpired reset link exists for this email.
+    const tokenRows = await db
+      .select()
+      .from(atelierLoginActivationTokens)
+      .where(
+        and(
+          eq(atelierLoginActivationTokens.email, c.email),
+          eq(atelierLoginActivationTokens.purpose, "reset"),
+          isNull(atelierLoginActivationTokens.usedAt),
+        ),
+      );
+    const pendingReset =
+      c.mustChangePassword || tokenRows.some((t) => t.expiresAt.getTime() > now);
     targets.push({
       email: c.email,
       name: persona.name,
       title: persona.title,
-      pendingReset: c.mustChangePassword,
+      pendingReset,
+      locked: isLockedOut(c),
+      lockedUntil: isLockedOut(c) ? c.lockedUntil?.toISOString() : null,
     });
   }
   res.json({ targets });
@@ -559,23 +856,51 @@ router.post("/reset-colleague-password", async (req: Request, res: Response) => 
     res.status(404).json({ error: "not-found", message: "No login exists for that email." });
     return;
   }
-  const tempPassword = generateTempPassword();
+  // The published demo credential is force-repaired read-only — a partner
+  // reset would brick the App Store review login until the next boot.
+  if (isDemoUser({ userId: cred.userId, email: targetEmail })) {
+    res.status(403).json({ error: "demo-account", message: "The demo account's password cannot be reset." });
+    return;
+  }
+  // Task #820 — no more on-screen temporary passwords. The old password is
+  // invalidated (unusable random hash), every session dies, and the target
+  // gets a single-use 24-hour reset link (emailed when delivery works; the
+  // link is also returned once so the partner can share it securely).
   await db
     .update(atelierAuthCredentials)
     .set({
-      passwordHash: hashPassword(tempPassword),
+      passwordHash: hashPassword(randomBytes(32).toString("hex")),
       // user_managed=true: the boot seed must never overwrite this hash.
       userManaged: true,
-      mustChangePassword: true,
-      // Task #59 — even if the target never logged in yet, a partner reset
-      // shows the reset copy (the temp password now comes from a partner).
-      mustChangeReason: "reset",
+      mustChangePassword: false,
+      mustChangeReason: null,
+      failedLoginCount: 0,
+      lockedUntil: null,
       updatedAt: new Date(),
     })
     .where(eq(atelierAuthCredentials.email, targetEmail));
-  // Kill every session of the reset user — they must log back in with the
-  // temporary password and immediately change it.
   await revokeAllSessions(cred.userId);
+  const { rawToken, expiresAt } = await mintLoginToken({
+    email: targetEmail,
+    userId: cred.userId,
+    purpose: "reset",
+    ttlMs: RESET_TTL_PARTNER_MS,
+    createdByUserId: actor.userId,
+  });
+  const origin = trustedRequestOrigin(req);
+  const resetUrl = `${origin ?? ""}/reset-password?token=${rawToken}`;
+  const [targetPersona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, cred.userId));
+  const emailResult = await sendPasswordResetEmail({
+    to: targetEmail,
+    firstName: targetPersona?.name?.trim().split(/\s+/)[0] ?? null,
+    resetUrl,
+    validity: "24 hours",
+    initiatedBy: "partner",
+    sender: { actor: { name: actor.name, email: actor.email } },
+  });
   await audit("password_reset_by_partner", {
     actorId: actor.userId,
     actorLabel: actor.name,
@@ -583,7 +908,50 @@ router.post("/reset-colleague-password", async (req: Request, res: Response) => 
     targetEmail,
     targetUserId: cred.userId,
   });
-  res.json({ ok: true, tempPassword });
+  res.json({
+    ok: true,
+    resetUrl,
+    expiresAt: expiresAt.toISOString(),
+    resetValidity: "24 hours",
+    email: { status: emailResult.status, note: emailResult.note },
+  });
+});
+
+// Task #820 — partner unlock: clears a lockout without touching the password.
+router.post("/unlock-account", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const targetEmail = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!targetEmail) {
+    res.status(400).json({ error: "invalid-body", message: "Target email is required." });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  if (!cred) {
+    res.status(404).json({ error: "not-found", message: "No login exists for that email." });
+    return;
+  }
+  // The demo credential is managed exclusively by the boot repair.
+  if (isDemoUser({ userId: cred.userId, email: targetEmail })) {
+    res.status(403).json({ error: "demo-account", message: "The demo account cannot be managed here." });
+    return;
+  }
+  await db
+    .update(atelierAuthCredentials)
+    .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  await audit("account_unlocked", {
+    actorId: actor.userId,
+    actorLabel: actor.name,
+    ip,
+    targetEmail,
+    targetUserId: cred.userId,
+  });
+  res.json({ ok: true });
 });
 
 export default router;

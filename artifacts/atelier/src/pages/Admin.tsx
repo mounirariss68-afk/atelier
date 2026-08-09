@@ -439,18 +439,31 @@ export default function Admin() {
 }
 
 /**
- * Task #5 — "colleague locked out" recovery. Founding partners can reset
- * the other partner's password: the server sets a temporary password,
- * revokes all their sessions, and forces a change on next login. The temp
- * password is shown ONCE here so it can be shared out-of-band.
+ * Task #5 / #820 — "colleague locked out" recovery. Founding partners can
+ * reset a colleague's access: the server invalidates the old password,
+ * revokes all their sessions, and issues a single-use 24-hour reset link.
+ * The link is emailed to them when delivery is configured, and shown once
+ * here so it can also be shared through a secure channel.
  */
 function PartnerAccessRecovery() {
   const { toast } = useToast();
-  type Target = { email: string; name: string; title: string; pendingReset: boolean };
+  type Target = {
+    email: string;
+    name: string;
+    title: string;
+    pendingReset: boolean;
+    locked?: boolean;
+    lockedUntil?: string | null;
+  };
   const [targets, setTargets] = React.useState<Target[] | null>(null);
   const [busyEmail, setBusyEmail] = React.useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<{ email: string; tempPassword: string } | null>(null);
+  const [result, setResult] = React.useState<{
+    email: string;
+    resetUrl: string;
+    emailNote: string;
+    emailStatus: string;
+  } | null>(null);
 
   const loadTargets = React.useCallback(() => {
     void fetch("/api/auth/reset-targets", { credentials: "include" })
@@ -473,22 +486,28 @@ function PartnerAccessRecovery() {
         body: JSON.stringify({ email }),
       });
       const j = (await r.json().catch(() => ({}))) as {
-        tempPassword?: string;
+        resetUrl?: string;
+        email?: { status?: string; note?: string };
         message?: string;
       };
-      if (!r.ok || !j.tempPassword) {
+      if (!r.ok || !j.resetUrl) {
         toast({
           title: "Reset failed",
-          description: j.message ?? "Could not reset the password. Try again.",
+          description: j.message ?? "Could not reset access. Try again.",
           variant: "destructive",
         });
         return;
       }
-      setResult({ email, tempPassword: j.tempPassword });
+      setResult({
+        email,
+        resetUrl: j.resetUrl,
+        emailStatus: j.email?.status ?? "not_configured",
+        emailNote: j.email?.note ?? "",
+      });
       loadTargets();
       toast({
-        title: "Password reset",
-        description: `${email} was signed out everywhere and must set a new password at next sign-in.`,
+        title: "Access reset",
+        description: `${email} was signed out everywhere. They set a new password via the reset link.`,
       });
     } catch {
       toast({
@@ -507,10 +526,10 @@ function PartnerAccessRecovery() {
         <KeyRound className="w-4 h-4" /> Partner Access Recovery
       </h3>
       <p className="text-xs text-text-mute">
-        If a partner is locked out, reset their password here. This signs them out everywhere,
-        issues a one-time temporary password (shown once, share it in person or over a call), and
-        forces them to choose a new password at next sign-in. Every reset is recorded in the audit
-        trail.
+        If a colleague is locked out, reset their access here. This signs them out everywhere and
+        issues a single-use reset link (valid 24 hours) — emailed to them, and shown once below so
+        you can also share it through a secure channel. No temporary passwords. Every reset is
+        recorded in the audit trail.
       </p>
       {targets === null ? (
         <Skeleton className="h-14 bg-bg-elevate" />
@@ -530,6 +549,34 @@ function PartnerAccessRecovery() {
                 {t.pendingReset && (
                   <div className="text-[11px] text-amber-300 mt-0.5">
                     Reset pending — they haven't set a new password yet.
+                  </div>
+                )}
+                {t.locked && (
+                  <div className="text-[11px] text-danger mt-0.5" data-testid={`text-locked-${t.email}`}>
+                    Temporarily locked after repeated failed sign-ins
+                    {t.lockedUntil ? ` (until ${new Date(t.lockedUntil).toLocaleTimeString()})` : ""}.
+                    <button
+                      type="button"
+                      className="ml-2 underline underline-offset-2 text-gold"
+                      data-testid={`button-unlock-${t.email}`}
+                      onClick={() => {
+                        void fetch("/api/auth/unlock-account", {
+                          method: "POST",
+                          credentials: "include",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ email: t.email }),
+                        }).then((r) => {
+                          if (r.ok) {
+                            toast({ title: "Account unlocked" });
+                            loadTargets();
+                          } else {
+                            toast({ title: "Unlock failed", variant: "destructive" });
+                          }
+                        });
+                      }}
+                    >
+                      Unlock now
+                    </button>
                   </div>
                 )}
               </div>
@@ -573,28 +620,34 @@ function PartnerAccessRecovery() {
       {result && (
         <div
           className="rounded-md border border-gold/40 bg-gold/5 p-4 space-y-2"
-          data-testid="panel-temp-password"
+          data-testid="panel-reset-link"
         >
           <div className="text-sm text-text font-semibold">
-            Temporary password for {result.email}
+            Reset link for {result.email}
           </div>
-          <div className="flex items-center gap-2">
+          {result.emailStatus === "sent" ? (
+            <p className="text-xs text-emerald-300">The link was emailed to {result.email}.</p>
+          ) : (
+            <p className="text-xs text-amber-300">{result.emailNote || "Email delivery is not configured — share the link through a secure channel."}</p>
+          )}
+          <div className="flex items-center gap-2 min-w-0">
             <code
-              className="font-mono text-sm text-gold bg-bg-elevate border border-border rounded px-2 py-1"
-              data-testid="text-temp-password"
+              className="font-mono text-xs text-gold bg-bg-elevate border border-border rounded px-2 py-1 truncate max-w-full"
+              data-testid="text-reset-link"
+              title={result.resetUrl}
             >
-              {result.tempPassword}
+              {result.resetUrl}
             </code>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
-                void navigator.clipboard.writeText(result.tempPassword).then(
+                void navigator.clipboard.writeText(result.resetUrl).then(
                   () => toast({ title: "Copied to clipboard" }),
                   () => toast({ title: "Copy failed", variant: "destructive" }),
                 );
               }}
-              data-testid="button-copy-temp-password"
+              data-testid="button-copy-reset-link"
             >
               Copy
             </Button>
@@ -602,14 +655,14 @@ function PartnerAccessRecovery() {
               size="sm"
               variant="ghost"
               onClick={() => setResult(null)}
-              data-testid="button-dismiss-temp-password"
+              data-testid="button-dismiss-reset-link"
             >
               Dismiss
             </Button>
           </div>
           <p className="text-xs text-text-mute">
-            Shown only once. Share it directly with {result.email} — it stops working as soon as
-            they set their new password.
+            Shown only once. Single use, valid 24 hours — it stops working as soon as they set a
+            new password. Resetting again issues a fresh link and invalidates this one.
           </p>
         </div>
       )}

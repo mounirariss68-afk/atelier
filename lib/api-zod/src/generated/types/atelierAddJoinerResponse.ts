@@ -11,8 +11,9 @@ import type { AtelierPersona } from "./atelierPersona";
 export interface AtelierAddJoinerResponse {
   user: AtelierPersona;
   personId: string;
-  /** Shown exactly once — never persisted in plaintext. */
-  tempPassword: string;
+  /** Single-use, 72-hour activation link — shown exactly once; only the token hash is persisted. */
+  activationUrl: string;
+  activationExpiresAt: string;
   /** Outcome of the best-effort welcome email with login details. */
   welcomeEmail: AtelierAddJoinerResponseWelcomeEmail;
 }

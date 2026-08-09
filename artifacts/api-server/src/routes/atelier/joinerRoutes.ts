@@ -18,8 +18,9 @@
  * actor's org.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email";
+import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { and, desc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import {
   db,
@@ -31,6 +32,7 @@ import {
   atelierActivities,
   atelierAuthCredentials,
   atelierAuditEvents,
+  atelierLoginActivationTokens,
 } from "@workspace/db";
 import {
   AtelierAddJoinerBody,
@@ -110,18 +112,6 @@ function audit(args: {
     payload: args.payload,
     payloadSummary: args.summary,
   });
-}
-
-/** Same shape as the partner password-reset temp password (auth/index.ts). */
-function generateTempPassword(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I
-  const bytes = randomBytes(12);
-  let out = "";
-  for (let i = 0; i < 12; i++) {
-    if (i > 0 && i % 4 === 0) out += "-";
-    out += alphabet[bytes[i] % alphabet.length];
-  }
-  return `Join-${out}`;
 }
 
 function initialsOf(fullName: string): string {
@@ -272,7 +262,13 @@ router.post("/roster/joiners", async (req, res, next) => {
     const userId = rid("p_joiner");
     const role = workerType === "employee" ? "employee" : "contractor";
     const roleLabel = workerType === "employee" ? "Employee" : "Contractor";
-    const tempPassword = generateTempPassword();
+    // Task #820 — no temporary passwords. The joiner gets an unusable
+    // random credential hash + a single-use, 72-hour activation token so
+    // they choose their own password (same pattern as the onboarding
+    // create-login step).
+    const activationToken = randomBytes(32).toString("hex");
+    const activationTokenHash = createHash("sha256").update(activationToken).digest("hex");
+    const activationExpiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
     let personId = "";
 
     // Atomic onboarding: identity + roster record + credential + audit +
@@ -334,14 +330,24 @@ router.post("/roster/joiners", async (req, res, next) => {
       await tx.insert(atelierAuthCredentials).values({
         email,
         userId,
-        passwordHash: hashPassword(tempPassword),
+        // Unusable random hash — sign-in is impossible until the joiner
+        // activates their account and chooses a password.
+        passwordHash: hashPassword(randomBytes(32).toString("hex")),
         // user_managed=true: the boot seed must never overwrite this hash.
         userManaged: true,
-        // First login forces an immediate password rotation.
         mustChangePassword: true,
         // Task #59 — the forced-change screen shows first-time-welcome
         // copy (vs. partner-reset copy) based on this reason.
         mustChangeReason: "joiner",
+      });
+
+      await tx.insert(atelierLoginActivationTokens).values({
+        tokenHash: activationTokenHash,
+        email,
+        userId,
+        purpose: "activation",
+        createdByUserId: me.id,
+        expiresAt: activationExpiresAt,
       });
 
       await tx.insert(atelierAuditEvents).values({
@@ -353,7 +359,7 @@ router.post("/roster/joiners", async (req, res, next) => {
         actorLabel: me.name,
         action: "joiner_added",
         payload: { email, workerType, personId, title, isExecutiveAssistant },
-        payloadSummary: `${me.name} added ${workerType} ${fullName} (${email}) with a temporary login`,
+        payloadSummary: `${me.name} added ${workerType} ${fullName} (${email}) with a one-time activation link`,
       });
 
       // Welcome card on the new joiner's Me home.
@@ -411,23 +417,19 @@ router.post("/roster/joiners", async (req, res, next) => {
     // committed, and strictly best-effort: a delivery failure must never
     // fail or roll back the onboarding. The HR user sees the outcome so
     // they can share the temporary password manually when needed.
-    // The sign-in link comes from the request Origin header, but only after
-    // strict URL parsing: we re-serialize url.origin (which can never carry
-    // quotes, paths or injected markup), and accept http(s) only. Anything
-    // malformed just drops the link — the email still explains how to sign in.
-    let signInUrl: string | null = null;
-    try {
-      const parsedOrigin = new URL(req.get("origin")?.trim() ?? "");
-      if (parsedOrigin.protocol === "https:" || parsedOrigin.protocol === "http:") {
-        signInUrl = parsedOrigin.origin;
-      }
-    } catch {
-      // No/invalid Origin (e.g. non-browser client) — omit the link.
-    }
+    // Task #820 — the emailed activation link must never be built from an
+    // attacker-controllable Origin header: trustedRequestOrigin only honors
+    // the app's own domains and otherwise falls back to the configured
+    // canonical origin.
+    const signInUrl: string | null = trustedRequestOrigin(req);
+    const activationUrl = signInUrl
+      ? `${signInUrl}/activate?token=${activationToken}`
+      : `/activate?token=${activationToken}`;
     const welcomeEmail = await sendJoinerWelcomeEmail({
       fullName,
       email,
-      tempPassword,
+      activationUrl: signInUrl ? activationUrl : null,
+      activationValidity: "72 hours",
       workerType,
       signInUrl,
       sender: { actor: { name: me.name, email: me.email } },
@@ -461,10 +463,14 @@ router.post("/roster/joiners", async (req, res, next) => {
       .where(eq(atelierUsers.id, userId));
     // No generated zod const for this response (orval skips 201-with-secret
     // shapes); the OpenAPI schema still types the client.
+    // The activation URL is returned once so HR can share it through a
+    // secure channel when email delivery isn't configured. Single-use,
+    // 72-hour token — never a password.
     res.status(201).json({
       user: personaToWire(user!),
       personId,
-      tempPassword,
+      activationUrl,
+      activationExpiresAt: activationExpiresAt.toISOString(),
       welcomeEmail,
     });
   } catch (err) {
