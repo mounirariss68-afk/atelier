@@ -11,7 +11,8 @@
     "test:reminder-plan": "tsx ./tests/reminder-plan-probe.ts",
     "test:doc-open": "tsx ./tests/doc-open-probe.ts",
     "test:share-intent": "tsx ./tests/share-intent-probe.ts",
-    "test:internal-route": "tsx ./tests/internal-route-probe.ts"
+    "test:internal-route": "tsx ./tests/internal-route-probe.ts",
+    "test:doc-refresh": "tsx ./tests/doc-refresh-probe.ts"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { fetch as expoFetch } from "expo/fetch";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -13,6 +14,7 @@ import {
 } from "@/lib/api";
 import { triggerUnauthorized } from "@/lib/authEvents";
 import { applyFrame, resetForRestream, type ChatTurn, type ResultCard } from "@/lib/chatFrames";
+import { applyChatCommitInvalidations } from "@/lib/chatWriteInvalidation";
 import {
   deviceTimeZone,
   restoreClarificationTurn,
@@ -78,6 +80,7 @@ export function useCapabilityShapes(): CapabilityShapes {
 }
 
 export function useChat() {
+  const queryClient = useQueryClient();
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -216,6 +219,11 @@ export function useChat() {
               setSessionId(sid);
             }
             upsert(key, (t) => ({ ...applyFrame(t, frame), reconnecting: false }));
+            // Task #828 — a committed chat write must refresh the cached
+            // queries it touched (e.g. the Me tab's document list after
+            // attaching an ID back side), or the UI keeps serving stale
+            // data until app restart.
+            applyChatCommitInvalidations(queryClient, frame);
           },
         });
         switch (outcome.kind) {
@@ -254,7 +262,7 @@ export function useChat() {
         setBusy(false);
       }
     },
-    [upsert],
+    [upsert, queryClient],
   );
 
   const submit = useCallback(

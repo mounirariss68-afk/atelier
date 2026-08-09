@@ -10,6 +10,7 @@ import {
 import type { AtelierSelfDocument } from "@workspace/api-client-react";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -314,6 +315,22 @@ export default function MeScreen() {
   const profile = useAtelierGetMyProfile();
   const docs = useAtelierListMyDocuments();
   const uploadPhoto = useAtelierUploadMyPhoto();
+
+  // Task #828 — refetch the document list whenever the Me tab regains
+  // focus, so out-of-band changes (chat writes, another device) surface
+  // without restarting the app.
+  const refetchDocs = docs.refetch;
+  const focusedOnceRef = React.useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // Skip the very first focus — the initial query fetch already runs.
+      if (!focusedOnceRef.current) {
+        focusedOnceRef.current = true;
+        return;
+      }
+      void refetchDocs();
+    }, [refetchDocs]),
+  );
 
   const [qrOpen, setQrOpen] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
