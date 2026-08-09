@@ -1,11 +1,13 @@
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import React from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/ui";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useThemeScheme } from "@/contexts/ThemeContext";
 import { useColors } from "@/hooks/useColors";
+import { firstOutOfOrderLeg, reconcileLegDates } from "@/lib/plannerDates";
 import type {
   ChatFlightPlanner,
   ChatPlannerSegment,
@@ -18,9 +20,12 @@ import type {
  * clarification path: `onSubmit({ plan: JSON.stringify(plan), answer })`.
  * The parent maps `plan` onto the field name.
  *
- * RN quirks: dates stay plain TextInput (YYYY-MM-DD) — no native pickers
- * (timer-raced). IATA blocks use fixed widths, not maxWidth, to avoid
- * one-char-per-line shrink-wrap collapse inside alignItems parents. */
+ * Task #843 — dates open the native date picker (inline component, no
+ * Modal/sheet race — see rn-sheet-picker-defer for why timer-launched
+ * pickers are banned). Past dates and returns before departure can't be
+ * picked; the disabled Search button names the first missing field.
+ * IATA blocks use fixed widths, not maxWidth, to avoid one-char-per-line
+ * shrink-wrap collapse inside alignItems parents. */
 
 const CABIN_OPTIONS: { value: string; label: string }[] = [
   { value: "economy", label: "Economy" },
@@ -152,13 +157,124 @@ export function FlightPlannerCard({
     return segments;
   };
 
+  // Task #843 — native date pickers. `pickerFor` names the field the
+  // picker edits; the picker is rendered inline in the card tree (no
+  // Modal/sheet hand-off, so no deferral race — see rn-sheet-picker-defer).
+  const [pickerFor, setPickerFor] = React.useState<
+    { kind: "depart" } | { kind: "return" } | { kind: "leg"; idx: number } | null
+  >(null);
+
+  const todayStart = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const ymdToDate = (s: string, fallback: Date): Date => {
+    if (!DATE_RE.test(s.trim())) return fallback;
+    const [y, m, d] = s.trim().split("-").map(Number);
+    const out = new Date(y, m - 1, d);
+    return isNaN(out.getTime()) ? fallback : out;
+  };
+  const dateToYmd = (d: Date): string => {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+
+  const pickerValue = (): Date => {
+    if (!pickerFor) return todayStart;
+    if (pickerFor.kind === "depart") return ymdToDate(primary.date, todayStart);
+    if (pickerFor.kind === "return")
+      return ymdToDate(returnDate, ymdToDate(primary.date, todayStart));
+    const prevDate =
+      pickerFor.idx > 0
+        ? ymdToDate(segments[pickerFor.idx - 1]?.date ?? "", todayStart)
+        : todayStart;
+    return ymdToDate(segments[pickerFor.idx]?.date ?? "", prevDate);
+  };
+  const pickerMin = (): Date => {
+    if (!pickerFor) return todayStart;
+    if (pickerFor.kind === "return") return ymdToDate(primary.date, todayStart);
+    if (pickerFor.kind === "leg" && pickerFor.idx > 0) {
+      const prev = ymdToDate(segments[pickerFor.idx - 1]?.date ?? "", todayStart);
+      return prev < todayStart ? todayStart : prev;
+    }
+    return todayStart;
+  };
+  const applyPicked = (d: Date) => {
+    if (!pickerFor) return;
+    const ymd = dateToYmd(d);
+    if (pickerFor.kind === "depart") {
+      updateSegment(0, { date: ymd });
+      // A return before the new departure is no longer pickable — clear
+      // it so the user re-picks instead of submitting a bad plan.
+      if (returnDate && returnDate < ymd) setReturnDate("");
+    } else if (pickerFor.kind === "return") {
+      setReturnDate(ymd);
+    } else {
+      // Moving an earlier leg later must not strand a downstream leg on a
+      // now-earlier date — clear such dates so the user re-picks them
+      // (their picker minimum then enforces the new floor).
+      const idx = pickerFor.idx;
+      setSegments((prev) => {
+        const reconciled = reconcileLegDates(
+          prev.map((s) => s.date),
+          idx,
+          ymd,
+        );
+        return prev.map((s, i) => (s.date === reconciled[i] ? s : { ...s, date: reconciled[i] }));
+      });
+    }
+  };
+
   const eff = effectiveSegments();
-  const valid = eff.every(
-    (s) =>
-      s.origin.text.trim().length > 0 &&
-      s.destination.text.trim().length > 0 &&
-      DATE_RE.test(s.date.trim()),
-  );
+  // Multi-city legs must stay chronological even when an earlier leg was
+  // edited after later legs were filled (prefill or state edge cases).
+  const outOfOrderLeg =
+    tripType === "multi_city" ? firstOutOfOrderLeg(eff.map((s) => s.date)) : null;
+  const returnBeforeDepart =
+    tripType === "return" &&
+    DATE_RE.test(primary.date.trim()) &&
+    DATE_RE.test(returnDate.trim()) &&
+    returnDate.trim() < primary.date.trim();
+  const valid =
+    !returnBeforeDepart &&
+    outOfOrderLeg === null &&
+    eff.every(
+      (s) =>
+        s.origin.text.trim().length > 0 &&
+        s.destination.text.trim().length > 0 &&
+        DATE_RE.test(s.date.trim()),
+    );
+
+  // First missing/invalid field, named — shown under the disabled button.
+  const firstProblem = (): string | null => {
+    for (let i = 0; i < eff.length; i++) {
+      const s = eff[i];
+      const legTag =
+        tripType === "multi_city" ? (ar ? ` (الرحلة ${i + 1})` : ` (leg ${i + 1})`) : "";
+      if (!s.origin.text.trim())
+        return (ar ? "أدخل مدينة المغادرة" : "Enter a departure city") + legTag;
+      if (!s.destination.text.trim())
+        return (ar ? "أدخل الوجهة" : "Enter a destination") + legTag;
+      if (!DATE_RE.test(s.date.trim())) {
+        if (tripType === "return" && i === 1)
+          return ar ? "اختر تاريخ العودة" : "Pick a return date";
+        if (tripType === "multi_city")
+          return (ar ? "اختر التاريخ" : "Pick a date") + legTag;
+        return ar ? "اختر تاريخ المغادرة" : "Pick a departure date";
+      }
+    }
+    if (returnBeforeDepart)
+      return ar
+        ? "تاريخ العودة قبل تاريخ المغادرة"
+        : "Return date can't be before departure";
+    if (outOfOrderLeg !== null)
+      return ar
+        ? `تاريخ الرحلة ${outOfOrderLeg + 1} قبل الرحلة السابقة`
+        : `Leg ${outOfOrderLeg + 1} date is before the previous leg`;
+    return null;
+  };
 
   const humanAnswer = (): string => {
     const tripLabel =
@@ -207,39 +323,72 @@ export function FlightPlannerCard({
     textAlign: rtl.textAlign,
   };
 
-  const dateBox = (value: string, onChange: (t: string) => void, placeholder: string) => (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: c.secondary,
-        borderRadius: 10,
-        borderWidth: 1,
-        borderColor: c.borderSoft,
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        gap: 2,
-      }}
-    >
-      <Text style={labelStyle}>{placeholder}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor={c.faint}
-        keyboardAppearance={scheme}
-        autoCapitalize="none"
-        autoCorrect={false}
+  // Task #843 — tappable date field: opens the native date picker
+  // instead of a keyboard. `target` identifies which date the picker
+  // edits; tapping the active field again closes it (iOS inline).
+  const dateBox = (
+    value: string,
+    target: { kind: "depart" } | { kind: "return" } | { kind: "leg"; idx: number },
+    placeholder: string,
+  ) => {
+    const active =
+      !!pickerFor &&
+      pickerFor.kind === target.kind &&
+      (pickerFor.kind !== "leg" ||
+        (pickerFor as { idx: number }).idx === (target as { idx: number }).idx);
+    return (
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => setPickerFor(active ? null : target)}
         style={{
-          color: c.foreground,
-          fontFamily: "PlusJakartaSans_600SemiBold",
-          fontSize: 14,
-          fontVariant: ["tabular-nums"],
-          padding: 0,
-          textAlign: rtl.textAlign,
+          flex: 1,
+          backgroundColor: c.secondary,
+          borderRadius: 10,
+          borderWidth: 1,
+          borderColor: active ? c.primary : c.borderSoft,
+          paddingHorizontal: 10,
+          paddingVertical: 8,
+          gap: 2,
         }}
-      />
-    </View>
-  );
+      >
+        <Text style={labelStyle}>{placeholder}</Text>
+        <View style={{ flexDirection: rtl.row, alignItems: "center", gap: 6 }}>
+          <Feather name="calendar" size={13} color={value ? c.primary : c.faint} />
+          <Text
+            style={{
+              color: value ? c.foreground : c.faint,
+              fontFamily: "PlusJakartaSans_600SemiBold",
+              fontSize: 14,
+              fontVariant: ["tabular-nums"],
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {value || (ar ? "اختر التاريخ" : "Select date")}
+          </Text>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const datePicker = pickerFor ? (
+    <DateTimePicker
+      value={pickerValue()}
+      mode="date"
+      display={Platform.OS === "ios" ? "inline" : "default"}
+      minimumDate={pickerMin()}
+      themeVariant={scheme}
+      onChange={(event, selected) => {
+        // Android's dialog closes itself; iOS inline stays until the
+        // user taps elsewhere — close on selection for both.
+        if (event.type === "dismissed") {
+          setPickerFor(null);
+          return;
+        }
+        if (selected) applyPicked(selected);
+        setPickerFor(null);
+      }}
+    />
+  ) : null;
 
   const airportBlock = (
     seg: ChatPlannerSegment,
@@ -403,12 +552,9 @@ export function FlightPlannerCard({
                 )}
               </View>
               <View style={{ flexDirection: rtl.row, gap: 8 }}>
-                {dateBox(
-                  seg.date,
-                  (t) => updateSegment(idx, { date: t }),
-                  ar ? "التاريخ" : "Date",
-                )}
+                {dateBox(seg.date, { kind: "leg", idx }, ar ? "التاريخ" : "Date")}
               </View>
+              {pickerFor?.kind === "leg" && pickerFor.idx === idx ? datePicker : null}
             </View>
           ))}
           {segments.length < 8 ? (
@@ -449,15 +595,12 @@ export function FlightPlannerCard({
             )}
           </View>
           <View style={{ flexDirection: rtl.row, gap: 8 }}>
-            {dateBox(
-              primary.date,
-              (t) => updateSegment(0, { date: t }),
-              ar ? "الذهاب" : "Departure",
-            )}
+            {dateBox(primary.date, { kind: "depart" }, ar ? "الذهاب" : "Departure")}
             {tripType === "return"
-              ? dateBox(returnDate, setReturnDate, ar ? "العودة" : "Return")
+              ? dateBox(returnDate, { kind: "return" }, ar ? "العودة" : "Return")
               : null}
           </View>
+          {pickerFor && pickerFor.kind !== "leg" ? datePicker : null}
         </>
       )}
 
@@ -557,6 +700,29 @@ export function FlightPlannerCard({
         disabled={!valid}
         icon="search"
       />
+      {!valid ? (
+        <View
+          style={{
+            flexDirection: rtl.row,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 5,
+            marginTop: -4,
+          }}
+        >
+          <Feather name="info" size={12} color={c.faint} />
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "PlusJakartaSans_500Medium",
+              fontSize: 12,
+              textAlign: "center",
+            }}
+          >
+            {firstProblem() ?? (ar ? "أكمل تفاصيل الرحلة" : "Complete the trip details")}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

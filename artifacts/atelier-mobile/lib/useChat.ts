@@ -321,7 +321,13 @@ export function useChat() {
           prompt: prompt || "(answer)",
           continuesTurnId: turn?.serverTurnId ?? null,
           clarificationValues: values,
-          clientTurnKey: key,
+          // Task #843 — the answer POST must carry a FRESH idempotency
+          // key. Reusing the asked turn's key made the server dedupe
+          // the answer against the terminal awaiting_clarification turn
+          // and replay the question — a silent no-op (the flight
+          // planner's dead Search button). The UI still streams into
+          // the same turn key (`key` below).
+          clientTurnKey: uuid(),
           timezone: deviceTimeZone(),
         },
         key,

@@ -3138,7 +3138,38 @@ export async function runTurn(
         });
         return { turnId: prev.id, sessionId: session.id, status: "error" };
       }
-      if (prev) {
+      // Task #843 — a clarification ANSWER may (legacy mobile clients)
+      // reuse the asked turn's clientTurnKey because the answer streams
+      // back into the same UI turn. Replaying the paused turn's
+      // awaiting_clarification frames here swallowed the answer as a
+      // silent no-op (Search button "did nothing"). An answer-shaped
+      // request — explicit continuesTurnId or non-empty
+      // clarificationValues — against a paused prev turn must RUN the
+      // continuation, never dedupe-replay the question.
+      const answerShaped =
+        (typeof input.continuesTurnId === "string" &&
+          input.continuesTurnId.length > 0) ||
+        (!!input.clarificationValues &&
+          typeof input.clarificationValues === "object" &&
+          Object.keys(input.clarificationValues).length > 0);
+      const prevPaused =
+        prev &&
+        (prev.status === "awaiting_clarification" ||
+          prev.status === "partial" ||
+          prev.status === "error");
+      if (prev && answerShaped && prevPaused) {
+        // (session_id, client_turn_key) is UNIQUE — the answer turn must
+        // insert under a derived key, keeping the paused turn's row (and
+        // future genuine retries of it) intact.
+        input = { ...input, clientTurnKey: `${input.clientTurnKey}::ans-${rid("a")}` };
+        console.log(
+          `[cli-telemetry] ${JSON.stringify({
+            evt: "clarification_answer_key_reuse",
+            prevTurnId: prev.id,
+            prevStatus: prev.status,
+          })}`,
+        );
+      } else if (prev) {
         // Replay all prev frames except its own `final` (which would
         // mask the replay marker). Then emit a fresh final tagged
         // replay:true so the client knows this was a dedupe.
