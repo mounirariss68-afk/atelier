@@ -28,12 +28,18 @@ export interface DocumentOpenDeps {
   platformOS: string;
   /** Web fallback (Linking.openURL) */
   openWebUrl: (url: string) => void | Promise<void>;
-  /** Native download (expo-file-system downloadAsync) */
+  /** Native download (expo-file-system downloadAsync). `status` (when
+   * reported) lets a 404 no-file response surface as `missing_file`
+   * instead of sharing a JSON error body. */
   downloadAsync: (
     url: string,
     dest: string,
     options: { headers: Record<string, string> },
-  ) => Promise<{ uri: string }>;
+  ) => Promise<{ uri: string; status?: number }>;
+  /** Optional pre-open probe for the web platform (e.g. a HEAD fetch
+   * returning the HTTP status). Without it, web keeps the plain
+   * open-in-browser behavior. */
+  probeStatus?: (url: string, headers: Record<string, string>) => Promise<number>;
   cacheDirectory: string | null;
   isSharingAvailable: () => Promise<boolean>;
   shareAsync: (uri: string) => Promise<void>;
@@ -42,6 +48,7 @@ export interface DocumentOpenDeps {
 
 export type DocumentOpenResult =
   | { status: "skipped_no_file" }
+  | { status: "missing_file"; url: string }
   | { status: "opened_web"; url: string }
   | { status: "shared"; url: string; localUri: string }
   | { status: "downloaded_no_share"; url: string; localUri: string }
@@ -73,6 +80,17 @@ export async function openDocumentFile(
   }
   const url = buildDocumentDownloadUrl(doc, side, deps.apiBase, deps.buildDownloadPath);
   if (deps.platformOS === "web") {
+    // Task #838 — probe first (when wired) so a stale hasBackFile flag
+    // shows a friendly "back side missing" message, not a raw JSON page.
+    if (deps.probeStatus) {
+      try {
+        const code = await deps.probeStatus(url, deps.authHeader());
+        if (code === 404) return { status: "missing_file", url };
+        if (code >= 400) return { status: "error", url, error: new Error(`HTTP ${code}`) };
+      } catch (error) {
+        return { status: "error", url, error };
+      }
+    }
     await deps.openWebUrl(url);
     return { status: "opened_web", url };
   }
@@ -80,6 +98,12 @@ export async function openDocumentFile(
     const dir = deps.cacheDirectory ?? "";
     const dest = `${dir}${(deps.now ?? Date.now)()}_${documentDownloadFileName(doc, side)}`;
     const result = await deps.downloadAsync(url, dest, { headers: deps.authHeader() });
+    // Task #838 — expo downloadAsync writes error bodies too; treat a 404
+    // as "file missing" and any other 4xx/5xx as an error, never share it.
+    if (result.status === 404) return { status: "missing_file", url };
+    if (typeof result.status === "number" && result.status >= 400) {
+      return { status: "error", url, error: new Error(`HTTP ${result.status}`) };
+    }
     if (await deps.isSharingAvailable()) {
       await deps.shareAsync(result.uri);
       return { status: "shared", url, localUri: result.uri };

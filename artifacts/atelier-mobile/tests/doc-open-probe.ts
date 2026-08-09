@@ -165,6 +165,35 @@ async function main() {
     );
   }
 
+  // 4b. Task #838 — 404 responses surface as missing_file, never a share
+  // of the JSON error body (native) or a raw JSON page (web probe).
+  {
+    const log: CallLog = { downloads: [], shared: [], webOpens: [] };
+    const native404 = await openDocumentFile(
+      nationalId,
+      "back",
+      makeDeps(log, {
+        downloadAsync: async (url, dest, options) => {
+          log.downloads.push({ url, dest, headers: options.headers });
+          return { uri: `file://${dest}`, status: 404 };
+        },
+      }),
+    );
+    const web404 = await openDocumentFile(
+      nationalId,
+      "back",
+      makeDeps(log, { platformOS: "web", probeStatus: async () => 404 }),
+    );
+    check(
+      "404: missing_file result, no share and no browser open",
+      native404.status === "missing_file" &&
+        web404.status === "missing_file" &&
+        log.shared.length === 0 &&
+        log.webOpens.length === 0,
+      { native404, web404, log },
+    );
+  }
+
   // 5. Download failure → structured error, never a share attempt.
   {
     const log: CallLog = { downloads: [], shared: [], webOpens: [] };

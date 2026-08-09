@@ -390,12 +390,22 @@ export default function MeScreen() {
           authHeader,
           platformOS: Platform.OS,
           openWebUrl: (url) => Linking.openURL(url),
+          // Task #838 — web probes the route first so a missing back side
+          // shows a friendly message instead of a raw JSON error page.
+          probeStatus: async (url, headers) => {
+            const res = await fetch(url, { method: "HEAD", headers, credentials: "include" });
+            return res.status;
+          },
           downloadAsync: (url, dest, options) => FileSystem!.downloadAsync(url, dest, options),
           cacheDirectory: FileSystem ? (FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "") : "",
           isSharingAvailable: () => Sharing!.isAvailableAsync(),
           shareAsync: (uri) => Sharing!.shareAsync(uri),
         });
-        if (result.status === "error") {
+        if (result.status === "missing_file") {
+          hapticError();
+          feedback.toast(side === "back" ? t("me.idBackNotOnFile") : t("me.docNotOnFile"), "error");
+          void docs.refetch(); // clear stale hasFile/hasBackFile flags
+        } else if (result.status === "error") {
           hapticError();
           feedback.toast(t("me.downloadFailed"), "error");
         } else if (result.status !== "opened_web" && result.status !== "skipped_no_file") {
@@ -408,7 +418,7 @@ export default function MeScreen() {
         setDownloadingId(null);
       }
     },
-    [t, feedback],
+    [t, feedback, docs],
   );
 
   // ------------------------------------------------------------------

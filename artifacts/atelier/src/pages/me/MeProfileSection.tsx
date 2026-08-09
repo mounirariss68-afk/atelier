@@ -922,6 +922,46 @@ function DocumentRow({
     },
   });
 
+  // Task #838 — open scans via fetch instead of a bare <a href> so a
+  // missing file (404 no-file / file-missing) surfaces as a friendly
+  // message + refreshed flags, never a raw JSON error page.
+  const [opening, setOpening] = React.useState<"front" | "back" | null>(null);
+  async function openScan(side: "front" | "back") {
+    setOpening(side);
+    setErr(null);
+    try {
+      const resp = await fetch(
+        `${API_BASE}/me/documents/${d.id}/download${side === "back" ? "?side=back" : ""}`,
+        { credentials: "include" },
+      );
+      if (resp.status === 404) {
+        setErr(
+          side === "back"
+            ? 'The back side isn\'t on file yet — use "Attach back" to upload it.'
+            : 'No scan is on file yet — use "Attach scan" to upload it.',
+        );
+        onChanged(); // refresh stale hasFile/hasBackFile flags
+        return;
+      }
+      if (!resp.ok) throw new Error(`Download failed (${resp.status})`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        (side === "back" ? (d.backFileName ?? null) : (d.fileName ?? null)) ??
+        `${d.title}${side === "back" ? "-back" : ""}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) {
+      setErr(String((e as Error)?.message ?? e));
+    } finally {
+      setOpening(null);
+    }
+  }
+
   async function uploadScan(file: File, side: "front" | "back") {
     const setBusyFlag = side === "back" ? setAttachingBack : setReplacing;
     setBusyFlag(true);
@@ -979,22 +1019,28 @@ function DocumentRow({
         </div>
         <div className="flex shrink-0 items-center gap-3">
           {d.hasFile ? (
-            <a
-              className="text-xs text-gold hover:underline"
-              href={`${API_BASE}/me/documents/${d.id}/download`}
+            <button
+              className="text-xs text-gold hover:underline disabled:opacity-60"
+              onClick={() => void openScan("front")}
+              disabled={opening !== null}
               data-testid={`download-${d.id}`}
             >
-              {d.kind === "national_id" && d.hasBackFile ? "Front" : "Download"}
-            </a>
+              {opening === "front"
+                ? "Opening…"
+                : d.kind === "national_id" && d.hasBackFile
+                  ? "Front"
+                  : "Download"}
+            </button>
           ) : null}
           {d.kind === "national_id" && d.hasBackFile ? (
-            <a
-              className="text-xs text-gold hover:underline"
-              href={`${API_BASE}/me/documents/${d.id}/download?side=back`}
+            <button
+              className="text-xs text-gold hover:underline disabled:opacity-60"
+              onClick={() => void openScan("back")}
+              disabled={opening !== null}
               data-testid={`download-back-${d.id}`}
             >
-              Back
-            </a>
+              {opening === "back" ? "Opening…" : "Back"}
+            </button>
           ) : null}
           <button
             className="text-xs text-text-mute hover:text-gold"
