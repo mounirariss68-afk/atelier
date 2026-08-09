@@ -2222,6 +2222,30 @@ async function loadOwnAttachmentBytes(
   };
 }
 
+/**
+ * Task #844 — best-effort date/number auto-detect for chat document saves,
+ * mirroring the Me-tab upload route. Never blocks the save: any failure or
+ * empty result means "store exactly what the user typed". The shared helper's
+ * <4KB byte guard keeps offline stub probes (garbage bytes) from ever making
+ * a live model call.
+ */
+async function detectDocDatesBestEffort(
+  buf: Buffer,
+  mime: string,
+  hint: { kind: string; title: string },
+): Promise<import("../atelier-doc-dates.js").DocDateExtraction | null> {
+  try {
+    const { extractDocumentDates } = await import("../atelier-doc-dates.js");
+    return await extractDocumentDates(buf, mime, hint);
+  } catch (err) {
+    console.warn(
+      "[atelier-cli] person-doc date auto-detect failed",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
 defineSelfWriteCapability({
   id: "me.document_save",
   module: "roster",
@@ -2315,7 +2339,32 @@ defineSelfWriteCapability({
       if (!b.ok) return b.error;
       back = b;
     }
+    // Task #844 — auto-detect expiry/issue date/document number from the
+    // scan when the user didn't provide them (same helper as the Me-tab
+    // upload route). Fill blank fields only; never overwrite typed values.
+    let detected: import("../atelier-doc-dates.js").DocDateExtraction | null = null;
+    const wantsDetection =
+      !isIsoDate(input.expiresAt) || !isIsoDate(input.issuedAt) || !input.docNumber;
+    if (wantsDetection) {
+      detected = await detectDocDatesBestEffort(front.buf, front.mime, { kind, title });
+    }
+    const effExpiresAt = isIsoDate(input.expiresAt)
+      ? (input.expiresAt as string)
+      : (detected?.expiresAt ?? null);
+    const effIssuedAt = isIsoDate(input.issuedAt)
+      ? (input.issuedAt as string)
+      : (detected?.issuedAt ?? null);
+    const effDocNumber = input.docNumber
+      ? String(input.docNumber).slice(0, 100)
+      : (detected?.docNumber ?? null);
+    const detectedExpiry = !isIsoDate(input.expiresAt) && !!detected?.expiresAt;
     if (input.confirm !== true) {
+      // Carry the detected values in the pending input so the commit turn
+      // stores exactly what the confirmation card showed (no re-detection).
+      const pendingInput: Record<string, unknown> = { ...input, confirm: true };
+      if (effExpiresAt) pendingInput.expiresAt = effExpiresAt;
+      if (effIssuedAt) pendingInput.issuedAt = effIssuedAt;
+      if (effDocNumber) pendingInput.docNumber = effDocNumber;
       return {
         ok: true,
         data: {
@@ -2324,6 +2373,8 @@ defineSelfWriteCapability({
             title,
             fileName: front.fileName,
             backFileName: back?.fileName ?? null,
+            expiresAt: effExpiresAt,
+            detectedExpiry,
             sides:
               kind === "national_id"
                 ? back
@@ -2333,14 +2384,23 @@ defineSelfWriteCapability({
           },
         },
         confirmation: {
-          summary: `Save ${front.fileName}${back ? ` + ${back.fileName}` : ""} as your ${kind} document "${title}"?`,
+          summary: `Save ${front.fileName}${back ? ` + ${back.fileName}` : ""} as your ${kind} document "${title}"?${
+            detectedExpiry
+              ? ` I read an expiry date of ${effExpiresAt} from the scan — tell me if that's wrong.`
+              : ""
+          }`,
           diff: {
             create: {
               table: "atelier_person_documents",
-              values: { kind, title, fileName: front.fileName },
+              values: {
+                kind,
+                title,
+                fileName: front.fileName,
+                ...(effExpiresAt ? { expiresAt: effExpiresAt } : {}),
+              },
             },
           },
-          pending: { tool: "save_my_document", input: { ...input, confirm: true } },
+          pending: { tool: "save_my_document", input: pendingInput },
         },
       };
     }
@@ -2366,14 +2426,12 @@ defineSelfWriteCapability({
         personId: person.id,
         kind,
         title,
-        docNumber: input.docNumber ? String(input.docNumber).slice(0, 100) : null,
-        issuedAt: isIsoDate(input.issuedAt) ? input.issuedAt : null,
+        docNumber: effDocNumber,
+        issuedAt: effIssuedAt,
         issuingCountry: input.issuingCountry
           ? String(input.issuingCountry).slice(0, 100)
           : null,
-        expiresAt: isIsoDate(input.expiresAt)
-          ? new Date(`${input.expiresAt}T00:00:00Z`)
-          : null,
+        expiresAt: effExpiresAt ? new Date(`${effExpiresAt}T00:00:00Z`) : null,
         fileRef: storedFront.fileRef,
         fileName: front.fileName,
         mime: front.mime,
@@ -2392,14 +2450,21 @@ defineSelfWriteCapability({
       entityType: "person_document",
       entityId: id,
       action: "person_document.self_uploaded",
-      payload: { kind, title, hasBackFile: !!backFileRef, via: "chat" },
+      payload: {
+        kind,
+        title,
+        hasBackFile: !!backFileRef,
+        autoDetectedExpiry: detectedExpiry,
+        via: "chat",
+      },
       summary: `${subject.user.name} added their own ${kind} document "${title}"`,
     });
     return {
       ok: true,
       data: {
         ...chatDocWire(doc),
-        label: title,
+        detectedExpiry,
+        label: detectedExpiry && effExpiresAt ? `${title} — expiry ${effExpiresAt} read from the scan` : title,
         // Task #785 — personal documents live under Me → Profile; the old
         // /me/documents path 404-bounced on web and mobile.
         href: "/me/profile",
@@ -2454,6 +2519,12 @@ defineSelfWriteCapability({
         enum: ["front", "back"],
         description: "Which side to attach — back is national_id only. Default front.",
       },
+      // Internal (Task #844): auto-detected fields carried from the
+      // confirmation preview into the confirmed commit. Never set these
+      // yourself — they are filled by the server from the scan.
+      detectedExpiresAt: { type: "string", description: "Internal — do not set" },
+      detectedIssuedAt: { type: "string", description: "Internal — do not set" },
+      detectedDocNumber: { type: "string", description: "Internal — do not set" },
       confirm: { type: "boolean" },
     },
     required: ["documentId", "attachmentId"],
@@ -2528,7 +2599,52 @@ defineSelfWriteCapability({
     const file = await loadOwnAttachmentBytes(String(input.attachmentId ?? ""), ctx);
     if (!file.ok) return file.error;
     const replacing = side === "back" ? !!doc.backFileRef : !!(doc.fileRef || doc.fileUrl);
+    // Task #844 — when the document has no expiry/issue date/number on file,
+    // try to read them off the newly attached scan BEFORE asking to confirm,
+    // so the confirmation card shows the detected expiry and the user can
+    // correct it (best-effort, fill blank fields only — a replace never
+    // overwrites values already stored). The confirmed replay carries the
+    // reviewed values via the internal detected* input fields instead of
+    // re-running detection.
+    const detFromInput =
+      isIsoDate(input.detectedExpiresAt) ||
+      isIsoDate(input.detectedIssuedAt) ||
+      typeof input.detectedDocNumber === "string";
+    let attachDetected: import("../atelier-doc-dates.js").DocDateExtraction | null = null;
+    if (detFromInput) {
+      attachDetected = {
+        expiresAt: isIsoDate(input.detectedExpiresAt) ? (input.detectedExpiresAt as string) : null,
+        issuedAt: isIsoDate(input.detectedIssuedAt) ? (input.detectedIssuedAt as string) : null,
+        docNumber:
+          typeof input.detectedDocNumber === "string" && input.detectedDocNumber.trim()
+            ? String(input.detectedDocNumber).trim().slice(0, 100)
+            : null,
+      };
+    } else if (!doc.expiresAt || !doc.issuedAt || !doc.docNumber) {
+      attachDetected = await detectDocDatesBestEffort(file.buf, file.mime, {
+        kind: doc.kind,
+        title: doc.title,
+      });
+    }
+    const detectedExpiry = !doc.expiresAt && !!attachDetected?.expiresAt;
+    const detectFill = {
+      ...(detectedExpiry
+        ? { expiresAt: new Date(`${attachDetected!.expiresAt}T00:00:00Z`) }
+        : {}),
+      ...(!doc.issuedAt && attachDetected?.issuedAt
+        ? { issuedAt: attachDetected.issuedAt }
+        : {}),
+      ...(!doc.docNumber && attachDetected?.docNumber
+        ? { docNumber: attachDetected.docNumber }
+        : {}),
+    };
     if (input.confirm !== true) {
+      const pendingInput: Record<string, unknown> = { ...input, side, confirm: true };
+      if (detectedExpiry) pendingInput.detectedExpiresAt = attachDetected!.expiresAt;
+      if (!doc.issuedAt && attachDetected?.issuedAt)
+        pendingInput.detectedIssuedAt = attachDetected.issuedAt;
+      if (!doc.docNumber && attachDetected?.docNumber)
+        pendingInput.detectedDocNumber = attachDetected.docNumber;
       return {
         ok: true,
         data: {
@@ -2537,26 +2653,35 @@ defineSelfWriteCapability({
             newFileName: file.fileName,
             side,
             replacing,
+            detectedExpiry,
+            ...(detectedExpiry ? { expiresAt: attachDetected!.expiresAt } : {}),
           },
         },
         confirmation: {
-          summary:
+          summary: `${
             side === "back"
               ? `${replacing ? "Replace" : "Attach"} ${file.fileName} as the BACK side of your ${doc.kind} document "${doc.title}"?`
               : replacing
                 ? `Replace the scan on your ${doc.kind} document "${doc.title}" with ${file.fileName}?`
-                : `Attach ${file.fileName} to your ${doc.kind} document "${doc.title}"?`,
+                : `Attach ${file.fileName} to your ${doc.kind} document "${doc.title}"?`
+          }${
+            detectedExpiry
+              ? ` I read an expiry date of ${attachDetected!.expiresAt} from the scan — tell me if that's wrong.`
+              : ""
+          }`,
           diff: {
             update: {
               table: "atelier_person_documents",
               id: doc.id,
-              values:
-                side === "back"
+              values: {
+                ...(side === "back"
                   ? { backFileName: file.fileName }
-                  : { fileName: file.fileName },
+                  : { fileName: file.fileName }),
+                ...(detectedExpiry ? { expiresAt: attachDetected!.expiresAt } : {}),
+              },
             },
           },
-          pending: { tool: "attach_my_document_file", input: { ...input, side, confirm: true } },
+          pending: { tool: "attach_my_document_file", input: pendingInput },
         },
       };
     }
@@ -2580,6 +2705,7 @@ defineSelfWriteCapability({
       .update(atelierPersonDocuments)
       .set({
         ...upd,
+        ...detectFill,
         uploadedAt: new Date(),
         uploadedByUserId: subject.user.id,
         updatedAt: new Date(),
@@ -2602,17 +2728,30 @@ defineSelfWriteCapability({
       entityType: "person_document",
       entityId: doc.id,
       action: "person_document.self_scan_replaced",
-      payload: { kind: doc.kind, title: doc.title, replaced: !!oldRef, side, via: "chat" },
+      payload: {
+        kind: doc.kind,
+        title: doc.title,
+        replaced: !!oldRef,
+        side,
+        autoDetectedExpiry: detectedExpiry,
+        via: "chat",
+      },
       summary: `${subject.user.name} ${replacing ? "replaced" : "attached"} the ${side} scan on their ${doc.kind} document "${doc.title}"`,
     });
     return {
       ok: true,
       data: {
         ...chatDocWire(updated),
-        label:
+        detectedExpiry,
+        label: `${
           side === "back"
             ? `Back side added to "${doc.title}"`
-            : `Scan updated on "${doc.title}"`,
+            : `Scan updated on "${doc.title}"`
+        }${
+          detectedExpiry
+            ? ` — expiry ${attachDetected!.expiresAt} read from the scan, correct it if that's wrong`
+            : ""
+        }`,
         href: "/me/profile",
         navigateTo: { path: "/me/profile", when: "on_commit" as const },
       },
