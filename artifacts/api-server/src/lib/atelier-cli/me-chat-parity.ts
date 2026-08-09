@@ -71,6 +71,15 @@ export const ME_CHAT_PARITY: Record<string, MeParityEntry> = {
     mobile: "Expenses tab (open the claim)",
   }),
 
+  // ---- letters (Task #845) -------------------------------------------
+  "post /me/letters": cap("me.letter_request"),
+  "post /me/letters/preview": excluded({
+    reason: "internal confirm-step preview plumbing; chat surfaces the same summary via me.letter_request's two-phase confirm",
+    userLabel: "preview an employment/salary letter before issuing it",
+    web: null,
+    mobile: null,
+  }),
+
   // ---- timesheets ----------------------------------------------------
   "post /me/timesheets/:weekId/entries": cap("me.timesheet_log"),
   "post /me/timesheets/:weekId/submit": cap("me.timesheet_submit"),

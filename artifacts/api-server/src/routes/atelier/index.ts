@@ -73,6 +73,7 @@ import delegationRoutes from "./delegationRoutes";
 // Task #55 — performance reviews/goals + training library.
 import performanceRoutes from "./performanceRoutes";
 import meProfileRoutes from "./meProfileRoutes";
+import meLetterRoutes from "./meLetterRoutes";
 import msAuthRoutes from "./msAuthRoutes";
 import joinerRoutes from "./joinerRoutes";
 import msProvisioningRoutes from "./msProvisioningRoutes";
@@ -317,6 +318,8 @@ router.use(delegationRoutes);
 // Task #55 — performance reviews/goals + training library.
 router.use(performanceRoutes);
 router.use(meProfileRoutes);
+// Task #845 — self-service signed salary & employment letters (/me/letters).
+router.use(meLetterRoutes);
 // Task #327 — per-user Microsoft 365 connection + calendar (self-scope
 // /me/msauth/*, /me/msconnection, /me/calendar — safe for every persona).
 router.use(msAuthRoutes);

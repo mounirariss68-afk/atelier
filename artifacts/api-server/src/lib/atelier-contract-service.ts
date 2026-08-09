@@ -152,6 +152,16 @@ export type SigningEntity = {
   governingLaw: string;
   courts: string;
   isDefault: boolean;
+  // Task #845 — letter-signing assets. The signatory who signs official
+  // employment/salary letters for this entity, plus refs (person-doc
+  // storage keys) to the transparent signature + company-stamp PNGs.
+  // Empty strings mean "not configured" (letters fall back to a blank
+  // signature block with printed name only when the name exists).
+  signatoryName: string;
+  signatoryTitle: string;
+  signatoryEmail: string;
+  signatureFileRef: string;
+  stampFileRef: string;
 };
 
 type RawLegalEntity = {
@@ -164,6 +174,11 @@ type RawLegalEntity = {
   governingLaw?: string;
   courts?: string;
   isDefault?: boolean;
+  signatoryName?: string;
+  signatoryTitle?: string;
+  signatoryEmail?: string;
+  signatureFileRef?: string;
+  stampFileRef?: string;
 };
 
 function entitySlugId(name: string): string {
@@ -200,6 +215,11 @@ export function normalizeSigningEntities(raw: unknown): SigningEntity[] {
       governingLaw: String(e.governingLaw ?? "").trim(),
       courts: String(e.courts ?? "").trim(),
       isDefault: e.isDefault === true,
+      signatoryName: String(e.signatoryName ?? "").trim(),
+      signatoryTitle: String(e.signatoryTitle ?? "").trim(),
+      signatoryEmail: String(e.signatoryEmail ?? "").trim(),
+      signatureFileRef: String(e.signatureFileRef ?? "").trim(),
+      stampFileRef: String(e.stampFileRef ?? "").trim(),
     });
   }
   const firstDefault = out.findIndex((e) => e.isDefault);
@@ -250,10 +270,33 @@ export async function listSigningEntities(orgId: string): Promise<SigningEntity[
       governingLaw: r.governingLaw || "",
       courts: r.courts || "",
       isDefault: false,
+      signatoryName: "",
+      signatoryTitle: "",
+      signatoryEmail: "",
+      signatureFileRef: "",
+      stampFileRef: "",
     });
   }
   if (merged.length > 0 && !merged.some((e) => e.isDefault)) {
     merged[0].isDefault = true;
+  }
+  // Task #845 — apply the letter-signing overlay (payload.letterSigning,
+  // keyed by entity id). Stored as an overlay rather than inside the
+  // legalEntities array so (a) a registry-replace PUT can never wipe the
+  // uploaded assets and (b) registry entities (lent_ ids, not present in
+  // payload.legalEntities) can carry signing assets too.
+  const overlay = (profile?.payload as { letterSigning?: Record<string, unknown> } | undefined)
+    ?.letterSigning;
+  if (overlay && typeof overlay === "object") {
+    for (const e of merged) {
+      const o = overlay[e.id] as Partial<SigningEntity> | undefined;
+      if (!o || typeof o !== "object") continue;
+      e.signatoryName = String(o.signatoryName ?? "").trim();
+      e.signatoryTitle = String(o.signatoryTitle ?? "").trim();
+      e.signatoryEmail = String(o.signatoryEmail ?? "").trim();
+      e.signatureFileRef = String(o.signatureFileRef ?? "").trim();
+      e.stampFileRef = String(o.stampFileRef ?? "").trim();
+    }
   }
   return merged;
 }

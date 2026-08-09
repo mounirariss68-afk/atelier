@@ -67,6 +67,8 @@ import "./me-write-capabilities.js";
 // contacts, travel profile, learning complete, timesheet entry delete).
 // The route ↔ capability mapping lives in me-chat-parity.ts.
 import "./me-write-capabilities-parity.js";
+// Task #845 — self-service signed salary & employment letters.
+import "./me-letter-capabilities.js";
 // Task #800 — EA-assist chat capabilities (prepare/edit/resubmit items
 // on behalf of a partner). Acting-for context comes only from the
 // caller's own delegation grants; every write is dual-attributed and

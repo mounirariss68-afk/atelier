@@ -28,6 +28,11 @@ import {
   normalizeSigningEntities,
 } from "../../lib/atelier-contract-service.js";
 import { audit } from "./engagementRoutes.js";
+import {
+  storePersonDocBytes,
+  loadPersonDocBytes,
+  dropPersonDocBytes,
+} from "../../lib/personDocStorage.js";
 
 const router: IRouter = Router();
 
@@ -483,6 +488,281 @@ router.put("/firm-profile/legal-entities", async (req, res) => {
     entities,
     defaultEntityId: entities.find((e) => e.isDefault)?.id ?? null,
   });
+});
+
+// ---- Task #845 — letter-signing assets per signing entity ----
+//
+// Signatory identity (name / title / email) plus transparent signature +
+// company-stamp PNG refs live in the published firm-profile payload under
+// `letterSigning[entityId]` (an overlay, so a registry-replace PUT can
+// never wipe uploaded assets — see listSigningEntities). Bytes live in
+// private object storage via personDocStorage and stream ONLY through the
+// authenticated routes below.
+
+const LETTER_ASSET_KINDS = new Set(["signature", "stamp"]);
+// PNG/JPEG only — PDFKit's doc.image cannot embed WebP, so accepting it
+// would let an asset pass upload preflight and then break PDF generation.
+const LETTER_ASSET_MIMES = new Set(["image/png", "image/jpeg"]);
+const LETTER_ASSET_MAX_BYTES = 4 * 1024 * 1024;
+
+type LetterSigningEntry = {
+  signatoryName?: string;
+  signatoryTitle?: string;
+  signatoryEmail?: string;
+  signatureFileRef?: string;
+  stampFileRef?: string;
+};
+
+function ensureLetterManager(me: typeof atelierUsers.$inferSelect, res: Response): boolean {
+  if (!PUBLISH_ROLES.has(me.role) && !canApproveAsPartner(me.role)) {
+    res.status(403).json({
+      error: "forbidden",
+      message: "Only partners, founding partners or HR manage letter-signing assets.",
+    });
+    return false;
+  }
+  return true;
+}
+
+/** Load (or lazily create) the published profile row that carries overlays. */
+async function requireCarrierProfile(
+  me: typeof atelierUsers.$inferSelect,
+): Promise<typeof atelierFirmProfile.$inferSelect> {
+  const existing = await loadPublishedFirmProfile(me.orgId);
+  if (existing) return existing;
+  const [{ next }] = await db
+    .select({ next: max(atelierFirmProfile.version) })
+    .from(atelierFirmProfile)
+    .where(orgScope(me));
+  const id = rid("frm");
+  await db.insert(atelierFirmProfile).values({
+    id,
+    orgId: me.orgId,
+    version: (next ?? 0) + 1,
+    status: "published",
+    payload: {} as never,
+    notes: "Created to carry the letter-signing registry",
+    createdByUserId: me.id,
+    publishedAt: new Date(),
+    publishedByUserId: me.id,
+    publishedByName: me.name,
+  });
+  const [row] = await db
+    .select()
+    .from(atelierFirmProfile)
+    .where(and(eq(atelierFirmProfile.id, id), orgScope(me)));
+  return row;
+}
+
+async function patchLetterSigning(
+  me: typeof atelierUsers.$inferSelect,
+  entityId: string,
+  patch: Partial<LetterSigningEntry>,
+): Promise<LetterSigningEntry> {
+  const profile = await requireCarrierProfile(me);
+  const payload = { ...(profile.payload as Record<string, unknown>) };
+  const overlay = { ...((payload.letterSigning as Record<string, LetterSigningEntry>) ?? {}) };
+  const entry = { ...(overlay[entityId] ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null || v === "") delete (entry as Record<string, unknown>)[k];
+    else if (v !== undefined) (entry as Record<string, unknown>)[k] = v;
+  }
+  overlay[entityId] = entry;
+  payload.letterSigning = overlay;
+  await db
+    .update(atelierFirmProfile)
+    .set({ payload: payload as never, updatedAt: new Date() })
+    .where(and(eq(atelierFirmProfile.id, profile.id), eq(atelierFirmProfile.orgId, me.orgId)));
+  return entry;
+}
+
+const letterSignatoryBody = z.object({
+  signatoryName: z.string().trim().max(200).default(""),
+  signatoryTitle: z.string().trim().max(200).default(""),
+  signatoryEmail: z.string().trim().max(320).default(""),
+});
+
+/** Set the letter signatory identity of one signing entity. Audited. */
+// @cli-skip: firm-profile management is UI-driven (Task #845)
+router.put("/signing-entities/:entityId/letter-signatory", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureLetterManager(me, res)) return;
+  const parsed = letterSignatoryBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+    return;
+  }
+  const entityId = String(req.params.entityId);
+  const entities = await listSigningEntities(me.orgId);
+  const entity = entities.find((e) => e.id === entityId);
+  if (!entity) {
+    res.status(404).json({ error: "entity-not-found" });
+    return;
+  }
+  await patchLetterSigning(me, entityId, {
+    signatoryName: parsed.data.signatoryName,
+    signatoryTitle: parsed.data.signatoryTitle,
+    signatoryEmail: parsed.data.signatoryEmail,
+  });
+  await audit({
+    entityType: "signing_entity",
+    entityId,
+    actor: me,
+    action: "signing_entity.letter_signatory.updated",
+    payload: {
+      entityName: entity.name,
+      signatoryName: parsed.data.signatoryName,
+      signatoryTitle: parsed.data.signatoryTitle,
+    },
+    summary: `Set letter signatory for "${entity.name}"`,
+  });
+  const refreshed = (await listSigningEntities(me.orgId)).find((e) => e.id === entityId);
+  res.json({ entity: refreshed });
+});
+
+const letterAssetBody = z.object({
+  fileName: z.string().trim().min(1).max(300),
+  mime: z.string().trim().min(1).max(120),
+  dataBase64: z.string().min(1),
+});
+
+/** Upload/replace the signature or stamp image of one signing entity. */
+// @cli-skip: firm-profile management is UI-driven (Task #845)
+router.post("/signing-entities/:entityId/letter-assets/:kind", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureLetterManager(me, res)) return;
+  const kind = String(req.params.kind);
+  if (!LETTER_ASSET_KINDS.has(kind)) {
+    res.status(400).json({ error: "invalid-kind", allowed: [...LETTER_ASSET_KINDS] });
+    return;
+  }
+  const parsed = letterAssetBody.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body", detail: parsed.error.flatten() });
+    return;
+  }
+  if (!LETTER_ASSET_MIMES.has(parsed.data.mime)) {
+    res.status(400).json({ error: "invalid-mime", allowed: [...LETTER_ASSET_MIMES] });
+    return;
+  }
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(parsed.data.dataBase64, "base64");
+  } catch {
+    res.status(400).json({ error: "invalid-base64" });
+    return;
+  }
+  if (buf.byteLength === 0 || buf.byteLength > LETTER_ASSET_MAX_BYTES) {
+    res.status(400).json({ error: "invalid-size", maxBytes: LETTER_ASSET_MAX_BYTES });
+    return;
+  }
+  const entityId = String(req.params.entityId);
+  const entities = await listSigningEntities(me.orgId);
+  const entity = entities.find((e) => e.id === entityId);
+  if (!entity) {
+    res.status(404).json({ error: "entity-not-found" });
+    return;
+  }
+  const prevRef = kind === "signature" ? entity.signatureFileRef : entity.stampFileRef;
+  const { fileRef } = await storePersonDocBytes(buf, parsed.data.mime);
+  await patchLetterSigning(
+    me,
+    entityId,
+    kind === "signature" ? { signatureFileRef: fileRef } : { stampFileRef: fileRef },
+  );
+  if (prevRef) {
+    try {
+      await dropPersonDocBytes(prevRef);
+    } catch {
+      // best effort — the overlay no longer references the old blob
+    }
+  }
+  await audit({
+    entityType: "signing_entity",
+    entityId,
+    actor: me,
+    action: "signing_entity.letter_asset.uploaded",
+    payload: { entityName: entity.name, kind, fileName: parsed.data.fileName },
+    summary: `Uploaded letter ${kind} image for "${entity.name}"`,
+  });
+  const refreshed = (await listSigningEntities(me.orgId)).find((e) => e.id === entityId);
+  res.status(201).json({ entity: refreshed });
+});
+
+/** Stream the signature/stamp image (management preview; never public). */
+// @cli-skip: firm-profile management is UI-driven (Task #845)
+router.get("/signing-entities/:entityId/letter-assets/:kind", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureLetterManager(me, res)) return;
+  const kind = String(req.params.kind);
+  if (!LETTER_ASSET_KINDS.has(kind)) {
+    res.status(400).json({ error: "invalid-kind", allowed: [...LETTER_ASSET_KINDS] });
+    return;
+  }
+  const entity = (await listSigningEntities(me.orgId)).find(
+    (e) => e.id === String(req.params.entityId),
+  );
+  if (!entity) {
+    res.status(404).json({ error: "entity-not-found" });
+    return;
+  }
+  const ref = kind === "signature" ? entity.signatureFileRef : entity.stampFileRef;
+  if (!ref) {
+    res.status(404).json({ error: "no-asset" });
+    return;
+  }
+  const bytes = await loadPersonDocBytes(ref);
+  if (!bytes) {
+    res.status(404).json({ error: "asset-missing" });
+    return;
+  }
+  res.setHeader("Content-Type", "image/png");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(bytes);
+});
+
+/** Remove the signature/stamp image of one signing entity. Audited. */
+// @cli-skip: firm-profile management is UI-driven (Task #845)
+router.delete("/signing-entities/:entityId/letter-assets/:kind", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  if (!ensureLetterManager(me, res)) return;
+  const kind = String(req.params.kind);
+  if (!LETTER_ASSET_KINDS.has(kind)) {
+    res.status(400).json({ error: "invalid-kind", allowed: [...LETTER_ASSET_KINDS] });
+    return;
+  }
+  const entityId = String(req.params.entityId);
+  const entity = (await listSigningEntities(me.orgId)).find((e) => e.id === entityId);
+  if (!entity) {
+    res.status(404).json({ error: "entity-not-found" });
+    return;
+  }
+  const ref = kind === "signature" ? entity.signatureFileRef : entity.stampFileRef;
+  if (ref) {
+    await patchLetterSigning(
+      me,
+      entityId,
+      kind === "signature" ? { signatureFileRef: "" } : { stampFileRef: "" },
+    );
+    try {
+      await dropPersonDocBytes(ref);
+    } catch {
+      // best effort
+    }
+    await audit({
+      entityType: "signing_entity",
+      entityId,
+      actor: me,
+      action: "signing_entity.letter_asset.removed",
+      payload: { entityName: entity.name, kind },
+      summary: `Removed letter ${kind} image for "${entity.name}"`,
+    });
+  }
+  res.json({ ok: true });
 });
 
 export default router;

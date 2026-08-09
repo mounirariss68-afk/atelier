@@ -14,6 +14,12 @@ interface SigningEntity {
   isDefault: boolean;
   // Task #335 — users allowed to execute the firm-side "Sign & send".
   authorisedSignatories?: { userId: string; name: string; email: string }[];
+  // Task #845 — letter signing assets (employment/salary letters).
+  signatoryName?: string;
+  signatoryTitle?: string;
+  signatoryEmail?: string;
+  signatureFileRef?: string;
+  stampFileRef?: string;
 }
 
 interface OrgUser {
@@ -260,6 +266,158 @@ export default function FirmProfile() {
     );
   }
 
+  // Task #845 — per-entity letter signing: signatory identity + uploaded
+  // signature/stamp images used on generated employment/salary letters.
+  function LetterSigningBlock({
+    entity,
+    index,
+    onChanged,
+  }: {
+    entity: SigningEntity;
+    index: number;
+    onChanged: (patch: Partial<SigningEntity>) => void;
+  }) {
+    const [name, setName] = React.useState(entity.signatoryName ?? "");
+    const [title, setTitle] = React.useState(entity.signatoryTitle ?? "");
+    const [email, setEmail] = React.useState(entity.signatoryEmail ?? "");
+    const [busy, setBusy] = React.useState<string | null>(null);
+    const [lsErr, setLsErr] = React.useState<string | null>(null);
+    const [assetVer, setAssetVer] = React.useState(0);
+    const dirty =
+      name !== (entity.signatoryName ?? "") ||
+      title !== (entity.signatoryTitle ?? "") ||
+      email !== (entity.signatoryEmail ?? "");
+
+    async function saveSignatory() {
+      setBusy("signatory"); setLsErr(null);
+      try {
+        await api(`/signing-entities/${entity.id}/letter-signatory`, {
+          method: "PUT",
+          body: JSON.stringify({ signatoryName: name, signatoryTitle: title, signatoryEmail: email }),
+        });
+        onChanged({ signatoryName: name, signatoryTitle: title, signatoryEmail: email });
+      } catch (e) { setLsErr((e as Error).message); }
+      finally { setBusy(null); }
+    }
+
+    async function uploadAsset(kind: "signature" | "stamp", file: File) {
+      setBusy(kind); setLsErr(null);
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result));
+          r.onerror = () => reject(new Error("Could not read the file"));
+          r.readAsDataURL(file);
+        });
+        const base64 = dataUrl.split(",", 2)[1] ?? "";
+        const resp = await api<{ entity: SigningEntity }>(
+          `/signing-entities/${entity.id}/letter-assets/${kind}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              fileName: file.name || `${kind}.png`,
+              dataBase64: base64,
+              mime: file.type || "image/png",
+            }),
+          },
+        );
+        onChanged({
+          signatureFileRef: resp.entity.signatureFileRef,
+          stampFileRef: resp.entity.stampFileRef,
+        });
+        setAssetVer((v) => v + 1);
+      } catch (e) { setLsErr((e as Error).message); }
+      finally { setBusy(null); }
+    }
+
+    async function removeAsset(kind: "signature" | "stamp") {
+      setBusy(kind); setLsErr(null);
+      try {
+        await api(`/signing-entities/${entity.id}/letter-assets/${kind}`, { method: "DELETE" });
+        onChanged(kind === "signature" ? { signatureFileRef: "" } : { stampFileRef: "" });
+        setAssetVer((v) => v + 1);
+      } catch (e) { setLsErr((e as Error).message); }
+      finally { setBusy(null); }
+    }
+
+    function AssetRow({ kind, fileRef }: { kind: "signature" | "stamp"; fileRef?: string }) {
+      const inputRef = React.useRef<HTMLInputElement | null>(null);
+      return (
+        <div className="flex items-center gap-3" data-testid={`letter-asset-${kind}-${index}`}>
+          <div className="w-24 text-xs uppercase text-text-mute">{kind}</div>
+          {fileRef ? (
+            <img
+              src={`${API_BASE}/signing-entities/${entity.id}/letter-assets/${kind}?v=${assetVer}`}
+              alt={`${kind} preview`}
+              className="h-12 max-w-40 object-contain bg-white/90 rounded border border-border-soft px-1"
+              data-testid={`letter-asset-preview-${kind}-${index}`}
+            />
+          ) : (
+            <span className="text-xs text-text-mute">None uploaded</span>
+          )}
+          <input ref={inputRef} type="file" accept="image/png,image/jpeg" className="hidden"
+            onChange={(ev) => {
+              const f = ev.target.files?.[0];
+              if (f) void uploadAsset(kind, f);
+              ev.target.value = "";
+            }} />
+          <button className="text-xs underline text-text" disabled={busy === kind}
+            onClick={() => inputRef.current?.click()}
+            data-testid={`letter-asset-upload-${kind}-${index}`}>
+            {busy === kind ? "Working…" : fileRef ? "Replace" : "Upload"}
+          </button>
+          {fileRef ? (
+            <button className="text-xs underline text-red-400" disabled={busy === kind}
+              onClick={() => void removeAsset(kind)}
+              data-testid={`letter-asset-remove-${kind}-${index}`}>
+              Remove
+            </button>
+          ) : null}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2 pt-2 border-t border-border-soft" data-testid={`letter-signing-${index}`}>
+        <div className="text-xs uppercase text-text-mute">Letter signing (employment &amp; salary letters)</div>
+        <p className="text-xs text-text-mute">
+          This signatory's name, signature and company stamp appear on generated employment and
+          salary letters for employees of this entity. Wet-signature requests are emailed to the
+          signatory's address. Upload images with transparent backgrounds for best results.
+        </p>
+        {lsErr ? <div className="text-xs text-red-400" data-testid={`letter-signing-error-${index}`}>{lsErr}</div> : null}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Signatory name</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={name} onChange={(ev) => setName(ev.target.value)}
+              data-testid={`letter-signatory-name-${index}`} />
+          </label>
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Signatory title</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={title} onChange={(ev) => setTitle(ev.target.value)}
+              data-testid={`letter-signatory-title-${index}`} />
+          </label>
+          <label className="space-y-1">
+            <div className="text-xs uppercase text-text-mute">Signatory email</div>
+            <input className="w-full rounded border border-border-soft bg-bg-deep px-2 py-1 text-text"
+              value={email} onChange={(ev) => setEmail(ev.target.value)}
+              data-testid={`letter-signatory-email-${index}`} />
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <PillButton onClick={saveSignatory} disabled={busy === "signatory" || !dirty}
+            data-testid={`letter-signatory-save-${index}`}>
+            {busy === "signatory" ? "Saving…" : dirty ? "Save signatory" : "Saved"}
+          </PillButton>
+        </div>
+        <AssetRow kind="signature" fileRef={entity.signatureFileRef} />
+        <AssetRow kind="stamp" fileRef={entity.stampFileRef} />
+      </div>
+    );
+  }
+
   function SigningEntitiesCard() {
     const [entities, setEntities] = React.useState<SigningEntity[] | null>(null);
     const [saving, setSaving] = React.useState(false);
@@ -459,6 +617,18 @@ export default function FirmProfile() {
                     ) : null}
                   </div>
                 )}
+                {/* Task #845 — letter signing (employment/salary letters) */}
+                {!e.id.startsWith("new-") ? (
+                  <LetterSigningBlock
+                    entity={e}
+                    index={i}
+                    onChanged={(patch) =>
+                      setEntities((prev) =>
+                        prev?.map((x) => (x.id === e.id ? { ...x, ...patch } : x)) ?? prev,
+                      )
+                    }
+                  />
+                ) : null}
               </div>
             ))}
             <div className="flex items-center gap-2">

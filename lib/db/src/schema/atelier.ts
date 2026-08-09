@@ -4892,3 +4892,58 @@ export const atelierEaPendingItems = pgTable(
     index("idx_atelier_ea_pending_org").on(t.orgId),
   ],
 );
+
+// ============================================================
+// Task #845 — Employment & salary letter issuances (self-service)
+// ============================================================
+
+// Every letter/certificate issued through the self-service flow gets one
+// row: type + language + addressee + delivery mode + unique reference
+// number. Powers the employee's request history and the wet-signature
+// status trail. The generated PDF itself is stored as a person document
+// (kind "employment_letter"); `documentId` links to it.
+export const atelierLetterIssuances = pgTable(
+  "atelier_letter_issuances",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    // Requesting employee (self-service only: userId is the login row,
+    // personId the atelier_employees roster row).
+    userId: text("user_id").notNull(),
+    personId: text("person_id").notNull(),
+    // Catalog id, e.g. salary_cert_bank_loan | employment_verification | ...
+    letterType: text("letter_type").notNull(),
+    language: text("language").notNull(), // en | ar | tr
+    deliveryMode: text("delivery_mode").notNull(), // digital | wet_signature
+    addresseeName: text("addressee_name"), // null => "To Whom It May Concern"
+    addresseeInstitution: text("addressee_institution"),
+    purpose: text("purpose"),
+    travelStart: text("travel_start"), // ISO date, visa letters only
+    travelEnd: text("travel_end"), // ISO date, visa letters only
+    // Unique human-quotable reference printed on the letter.
+    refNumber: text("ref_number").notNull(),
+    // Signing entity snapshot at issue time.
+    entityId: text("entity_id"),
+    entityName: text("entity_name"),
+    signatoryName: text("signatory_name"),
+    signatoryTitle: text("signatory_title"),
+    // issued (digital, delivered/stored) | sent_to_signatory (wet, awaiting
+    // print+sign+hand-over) | handed_over (future manual close-out)
+    status: text("status").notNull().default("issued"),
+    // Honest delivery channel: "resend" (delivered) | "log-only" (not
+    // actually delivered — Resend testing mode) | null (no email attempted).
+    emailVia: text("email_via"),
+    emailTo: text("email_to"),
+    // Person-document row holding the generated PDF (self re-download).
+    documentId: text("document_id"),
+    fileName: text("file_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_letter_issuances_org").on(t.orgId),
+    index("idx_atelier_letter_issuances_person").on(t.personId),
+    uniqueIndex("uq_atelier_letter_issuances_ref").on(t.orgId, t.refNumber),
+  ],
+);
