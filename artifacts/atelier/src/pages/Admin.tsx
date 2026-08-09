@@ -917,11 +917,24 @@ function SecurityConsole() {
     targetEmail: string | null;
   };
   const PAGE = 50;
-  const [tab, setTab] = React.useState<Tab>("auth");
-  const [actor, setActor] = React.useState("");
+  // Task #824 — founder alert emails deep-link here with the console
+  // pre-filtered to the affected person and day, e.g.
+  // /admin?securityTab=auth&securityActor=jane@…&securityFrom=2026-08-09
+  const deepLink = React.useMemo(() => {
+    const p = new URLSearchParams(window.location.search);
+    const dateOk = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+    return {
+      tab: (p.get("securityTab") === "actions" ? "actions" : "auth") as Tab,
+      actor: p.get("securityActor") ?? "",
+      from: dateOk(p.get("securityFrom")),
+      to: dateOk(p.get("securityTo")),
+    };
+  }, []);
+  const [tab, setTab] = React.useState<Tab>(deepLink.tab);
+  const [actor, setActor] = React.useState(deepLink.actor);
   const [action, setAction] = React.useState("");
-  const [from, setFrom] = React.useState("");
-  const [to, setTo] = React.useState("");
+  const [from, setFrom] = React.useState(deepLink.from);
+  const [to, setTo] = React.useState(deepLink.to);
   const [events, setEvents] = React.useState<SecurityEvent[]>([]);
   const [actions, setActions] = React.useState<string[]>([]);
   const [total, setTotal] = React.useState(0);

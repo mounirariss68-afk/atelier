@@ -38,6 +38,10 @@ import {
 } from "../../lib/auth/totp";
 import { requireFreshTotp, verifyCredentialCode } from "../../lib/auth/step-up";
 import { sendPasswordResetEmail } from "../../lib/atelier-reset-email";
+import {
+  sendSecurityAlert,
+  noteFailedLoginForAlerts,
+} from "../../lib/atelier-security-alerts";
 import { contentDispositionFilename } from "../../lib/httpFilename";
 import { logger } from "../../lib/logger";
 
@@ -246,6 +250,9 @@ router.post("/login", async (req: Request, res: Response) => {
   // the same generic 401 until the lock expires (no lockout enumeration).
   if (cred && isLockedOut(cred)) {
     await audit("login_failed", { actorLabel: email, ip, targetEmail: email });
+    // Task #824 — keep counting attempts against a locked account so a
+    // sustained brute force still surfaces as a burst alert.
+    noteFailedLoginForAlerts({ email, ip, origin: trustedRequestOrigin(req) });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -281,9 +288,20 @@ router.post("/login", async (req: Request, res: Response) => {
           targetEmail: cred.email,
           targetUserId: cred.userId,
         });
+        // Task #824 — proactive founder alert. Fire-and-forget: alerting
+        // must never delay or fail the login response.
+        void sendSecurityAlert({
+          trigger: "account_locked",
+          targetEmail: cred.email,
+          targetUserId: cred.userId,
+          ip,
+          origin: trustedRequestOrigin(req),
+        }).catch((err) => logger.warn({ err }, "security alert (lockout) failed"));
       }
     }
     await audit("login_failed", { actorLabel: email || "unknown", ip, targetEmail: email });
+    // Task #824 — sliding-window burst detection per account and per IP.
+    noteFailedLoginForAlerts({ email, ip, origin: trustedRequestOrigin(req) });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -1275,6 +1293,9 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
     .where(eq(atelierAuthCredentials.email, row.email));
   if (!cred || cred.disabled || !cred.totpEnabled || isLockedOut(cred)) {
     await audit("login_failed", { actorLabel: row.email, ip, targetEmail: row.email });
+    // Task #824 — hammering a locked/disabled 2FA challenge still counts
+    // toward the failed-sign-in burst detector.
+    noteFailedLoginForAlerts({ email: row.email, ip, origin: trustedRequestOrigin(req) });
     res.status(401).json(GENERIC_FAIL);
     return;
   }
@@ -1295,8 +1316,20 @@ router.post("/login/2fa", async (req: Request, res: Response) => {
         .set({ failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MS), updatedAt: new Date() })
         .where(eq(atelierAuthCredentials.email, cred.email));
       await audit("account_locked", { actorLabel: row.email, ip, targetEmail: cred.email, targetUserId: cred.userId });
+      // Task #824 — a lockout via wrong 2FA codes is the same security event
+      // as a password lockout: alert founders (fire-and-forget, debounced).
+      void sendSecurityAlert({
+        trigger: "account_locked",
+        targetEmail: cred.email,
+        targetUserId: cred.userId,
+        ip,
+        origin: trustedRequestOrigin(req),
+        detail: "The lockout was triggered by repeated invalid two-factor codes.",
+      }).catch((err) => logger.warn({ err }, "security alert (2fa lockout) failed"));
     }
     await audit("twofa_challenge_failed", { actorLabel: row.email, ip, targetEmail: row.email });
+    // Task #824 — invalid 2FA submissions count toward burst detection too.
+    noteFailedLoginForAlerts({ email: row.email, ip, origin: trustedRequestOrigin(req) });
     res.status(401).json({ error: "invalid-code", message: "That code is incorrect or already used." });
     return;
   }
@@ -1403,6 +1436,16 @@ router.post("/reset-colleague-2fa", async (req: Request, res: Response) => {
     targetEmail,
     targetUserId: cred.userId,
   });
+  // Task #824 — 2FA resets are rare and high-signal: tell every founder
+  // (including ones who didn't perform it). Fire-and-forget.
+  void sendSecurityAlert({
+    trigger: "twofa_reset_by_partner",
+    targetEmail,
+    targetUserId: cred.userId,
+    ip,
+    origin: trustedRequestOrigin(req),
+    detail: `The reset was performed by ${actor.name}.`,
+  }).catch((err) => logger.warn({ err }, "security alert (2fa reset) failed"));
   res.json({ ok: true });
 });
 
