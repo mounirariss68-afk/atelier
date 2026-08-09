@@ -871,6 +871,197 @@ async function main() {
       byShort.ok === true && Array.isArray(byShort.data?.items),
       JSON.stringify(byShort).slice(0, 200),
     );
+    // ====================================================================
+    // 15. Task #846 — cross-domain routing (personal ↔ company),
+    //     multi-doc company queries, ownership-cue floor bias, and
+    //     self-only no-library-leak guarantees.
+    // ====================================================================
+    // FP gets a roster record + personal docs so both domains exist.
+    const FP_PERSON = `emp_test_fp_${TAG}`;
+    await db.insert(atelierEmployees).values({
+      id: FP_PERSON,
+      orgId: ORG,
+      userId: FP_UID,
+      fullName: `Founder Probe ${TAG}`,
+      email: `fp.${STAMP}@test.local`,
+      role: "partner",
+      status: "active",
+    });
+    const seedFpDoc = async (kind: string, title: string, fileName: string) => {
+      const stored = await storePersonDocBytes(Buffer.from(`%PDF-${fileName}-${TAG}`), "application/pdf");
+      const id = `pdoc_fp_${TAG}_${fileName.replace(/\W+/g, "")}`;
+      await db.insert(atelierPersonDocuments).values({
+        id,
+        orgId: ORG,
+        personType: "employee",
+        personId: FP_PERSON,
+        kind,
+        title,
+        fileRef: stored.fileRef,
+        fileName,
+        mime: "application/pdf",
+        sizeBytes: stored.sizeBytes,
+        uploadedByUserId: FP_UID,
+        createdByUserId: FP_UID,
+      });
+      return id;
+    };
+    const saudiVisaId = await seedFpDoc("visa", "Saudi Visa", "saudi-visa.pdf");
+    const emiratesIdId = await seedFpDoc("national_id", "Emirates ID", "emirates-id.pdf");
+    const myEntry = findByToolName("email_my_documents");
+    const runMyAsFp = async (input: Record<string, unknown>) =>
+      myEntry.run(input, { persona: fpPersona } as any);
+
+    // 15a. misrouted PERSONAL request via the COMPANY tool → one confirm
+    // card with BOTH personal documents, pending tool email_my_documents.
+    graphCalls.length = 0;
+    const xPersonal = await runCompany({
+      query: "my saudi visa and emirates id",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: company tool hands off personal multi-doc query",
+      xPersonal.ok === true &&
+        xPersonal.confirmation?.pending?.tool === "email_my_documents" &&
+        Array.isArray(xPersonal.confirmation?.pending?.input?.documentIds) &&
+        xPersonal.confirmation.pending.input.documentIds.length === 2 &&
+        xPersonal.confirmation.pending.input.documentIds.includes(saudiVisaId) &&
+        xPersonal.confirmation.pending.input.documentIds.includes(emiratesIdId),
+      JSON.stringify(xPersonal).slice(0, 500),
+    );
+    check(
+      "846: handoff summary names the personal domain",
+      String(xPersonal.confirmation?.summary ?? "").includes("PERSONAL documents"),
+    );
+    check("846: no Graph traffic before confirm", graphCalls.length === 0);
+
+    // Without an ownership cue the miss-fallback still self-corrects.
+    const xNoCue = await runCompany({
+      query: "saudi visa",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: cue-less personal query still hands off on library miss",
+      xNoCue.ok === true && xNoCue.confirmation?.pending?.tool === "email_my_documents",
+      JSON.stringify(xNoCue).slice(0, 400),
+    );
+
+    // Personal-doc IDS given to the company tool (e.g. picked off a
+    // cross-domain options card) route to the personal flow too.
+    const xIds = await runCompany({
+      documentIds: [saudiVisaId],
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: personal doc ids via company tool → personal flow",
+      xIds.ok === true && xIds.confirmation?.pending?.tool === "email_my_documents",
+      JSON.stringify(xIds).slice(0, 400),
+    );
+
+    // 15b. misrouted COMPANY request via the PERSONAL tool → company flow.
+    const xCompany = await runMyAsFp({
+      query: "registration certificate",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: personal tool hands off company query to library flow",
+      xCompany.ok === true &&
+        xCompany.confirmation?.pending?.tool === "email_company_documents" &&
+        String(xCompany.confirmation?.summary ?? "").includes("COMPANY documents"),
+      JSON.stringify(xCompany).slice(0, 500),
+    );
+
+    // 15c. multi-document COMPANY query splits like the personal tool.
+    const xMulti = await runCompany({
+      query: `registration certificate and quarterly report`,
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: company multi-doc query → both library docs on one card",
+      xMulti.ok === true &&
+        xMulti.confirmation?.pending?.tool === "email_company_documents" &&
+        xMulti.confirmation?.pending?.input?.documentIds?.length === 2,
+      JSON.stringify(xMulti).slice(0, 500),
+    );
+
+    // 15d. self-only role: NO library access through the personal tool.
+    const xSelfOnly = await runTool({
+      query: "registration certificate",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: self-only role gets no library handoff or leak",
+      xSelfOnly.ok === false &&
+        xSelfOnly.errorCode === "doc_not_found" &&
+        !JSON.stringify(xSelfOnly).includes("Commercial Registration") &&
+        !String(xSelfOnly.errorMessage ?? "").includes("Document Library"),
+      JSON.stringify(xSelfOnly).slice(0, 400),
+    );
+
+    // 15e. honest dual-domain miss names BOTH places checked.
+    const xDualMiss = await runMyAsFp({
+      query: "zzqq nonexistent thingy",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: dual-domain miss names both places (personal tool)",
+      xDualMiss.ok === false &&
+        String(xDualMiss.errorMessage ?? "").includes("Document Library") &&
+        String(xDualMiss.errorMessage ?? "").includes("personal documents"),
+      JSON.stringify(xDualMiss).slice(0, 400),
+    );
+    const xDualMissCo = await runCompany({
+      query: "zzqq flying carpet warranty",
+      to: [`zeynepx.${STAMP}@test.local`],
+    });
+    check(
+      "846: dual-domain miss names both places (company tool)",
+      (xDualMissCo.ok === false &&
+        String(xDualMissCo.errorMessage ?? "").includes("Document Library") &&
+        String(xDualMissCo.errorMessage ?? "").includes("personal documents")) ||
+        (xDualMissCo.ok === true &&
+          String((xDualMissCo.data as any)?.prompt ?? "").includes("personal documents")),
+      JSON.stringify(xDualMissCo).slice(0, 400),
+    );
+
+    // 15f. deterministic ownership-cue bias in the retriever floor.
+    const cue = (retriever as any).detectDocOwnershipCue;
+    check(
+      "846: cue detection personal/company/mixed",
+      cue("email my passport to jane") === "personal" &&
+        cue("send our trade license") === "company" &&
+        cue("my company's trade license") === null,
+    );
+    const eligibleSet = new Set([
+      "email_my_documents",
+      "email_company_documents",
+      "my_documents",
+      "document_list",
+      "search_documents",
+      "save_my_document",
+      "attach_my_document_file",
+    ]);
+    const floorFn = (retriever as any).floorToolsForKind;
+    check(
+      "846: personal cue puts email_my_documents first in the floor",
+      floorFn("document", eligibleSet, "email my passport")[0] === "email_my_documents",
+      JSON.stringify(floorFn("document", eligibleSet, "email my passport")),
+    );
+    check(
+      "846: company cue puts email_company_documents first in the floor",
+      floorFn("document", eligibleSet, "send our trade license")[0] === "email_company_documents",
+      JSON.stringify(floorFn("document", eligibleSet, "send our trade license")),
+    );
+
+    // 15g. shared splitter handles commas, "+", and Arabic و.
+    const sharedMod = await import("../../src/lib/atelier-cli/document-email-shared.js");
+    const split = (sharedMod as any).splitDocQueryTerms;
+    check(
+      "846: shared splitter delimiters",
+      JSON.stringify(split("passport, visa + id and permit")) ===
+        JSON.stringify(["passport", "visa", "id", "permit"]) &&
+        JSON.stringify(split("جواز و تأشيرة")) === JSON.stringify(["جواز", "تأشيرة"]),
+    );
   } finally {
     // ---- cleanup + tag sweep ------------------------------------------
     try {
@@ -879,6 +1070,7 @@ async function main() {
       await db.delete(atelierMsConnections).where(like(atelierMsConnections.id, `%${TAG}%`));
       await db.delete(atelierMsConnections).where(eq(atelierMsConnections.userId, UID));
       await db.delete(atelierEmployees).where(eq(atelierEmployees.id, PERSON));
+      await db.delete(atelierEmployees).where(like(atelierEmployees.id, `%${TAG}%`));
       await db.delete(D.atelierDocumentVersions).where(like(D.atelierDocumentVersions.fileName, `registration-cert.pdf`));
       await db.delete(D.atelierDocuments).where(like(D.atelierDocuments.title, `%${TAG}%`));
       await db.delete(D.atelierContacts).where(like(D.atelierContacts.id, `%${TAG}%`));

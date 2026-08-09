@@ -15,10 +15,9 @@
  *     return a pick-one options card;
  *   - attachments over ~3 MB are refused honestly.
  */
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   db,
-  atelierUsers,
   atelierDocuments,
   atelierDocumentVersions,
   atelierAuditEvents,
@@ -27,7 +26,19 @@ import {
 import {
   CATALOG_SCHEMA_VERSION,
   defineCapability,
+  findByToolName,
 } from "./capability-catalog.js";
+import {
+  splitDocQueryTerms,
+  matchLibraryDocuments as sharedMatchLibraryDocuments,
+  matchOwnDocuments,
+  loadOwnEmailableDocs,
+  loadVisibleLibraryPairs,
+  resolveTermsUnique,
+  handoffEmailInput,
+  type OwnDocRow,
+} from "./document-email-shared.js";
+import { hasPersonalDocCue, hasCompanyDocCue } from "./capability-retriever.js";
 import {
   MsAuthError,
   MsGraphError,
@@ -38,8 +49,6 @@ import {
   type MsMailAttachment,
 } from "../msGraph.js";
 import { loadDocBytes } from "../atelier-documents.js";
-import { canSeeDocument } from "../../routes/atelier/documentRoutes.js";
-import { accessibleEngagementIds } from "../../routes/atelier/engagementRoutes";
 import { resolveEmailRecipients, recipientLabel } from "./email-recipient-resolver.js";
 import { resolveAccount } from "./resolvers/index.js";
 import { rankNearestNames } from "./nearest-suggestions.js";
@@ -51,49 +60,23 @@ function rid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 }
 
-function norm(s: string): string {
-  return s.toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
 type DocRow = typeof atelierDocuments.$inferSelect;
 type VersionRow = typeof atelierDocumentVersions.$inferSelect;
 
-/** Fuzzy title/kind/file-name match, with a specificity pass so an
- *  exact-title query never fans out to same-kind siblings. Exported for
- *  the probe. */
-export function matchLibraryDocuments(
-  docs: Array<{ doc: DocRow; version: VersionRow | null }>,
-  term: string,
-): Array<{ doc: DocRow; version: VersionRow | null }> {
-  const q = norm(term);
-  if (!q) return [];
-  const qTokens = q.split(" ").filter((t) => t.length > 2);
-  const broad = docs.filter(({ doc, version }) => {
-    const title = norm(doc.title);
-    const kind = norm(doc.docKind ?? "");
-    const fileName = norm(version?.fileName ?? "");
-    if (title.includes(q) || q.includes(title)) return true;
-    if (kind && (kind === q || q.includes(kind) || kind.includes(q))) return true;
-    if (fileName && fileName.includes(q)) return true;
-    // Token overlap: "company registration certificate in Dubai" should
-    // hit "Commercial Registration Certificate" — require most query
-    // tokens to appear across title+kind+filename.
-    if (qTokens.length >= 2) {
-      const hay = `${title} ${kind} ${fileName}`;
-      const hits = qTokens.filter((t) => hay.includes(t)).length;
-      return hits >= Math.ceil(qTokens.length / 2) && hits >= 2;
-    }
-    return false;
-  });
-  if (broad.length <= 1) return broad;
-  const exact = broad.filter(({ doc }) => norm(doc.title) === q);
-  if (exact.length > 0) return exact;
-  const titleHit = broad.filter(({ doc }) => {
-    const t = norm(doc.title);
-    return t.includes(q) || q.includes(t);
-  });
-  if (titleHit.length > 0 && titleHit.length < broad.length) return titleHit;
-  return broad;
+/** Fuzzy title/kind/file-name match — moved to document-email-shared
+ *  for Task #846; re-exported here so the existing probe import keeps
+ *  working. */
+export const matchLibraryDocuments = sharedMatchLibraryDocuments;
+
+/** Option-card wire shape for one of the caller's OWN personal docs
+ *  (used when a company-tool query turns out to target the personal
+ *  domain and the match is ambiguous). */
+function ownDocOptionWire(d: OwnDocRow) {
+  return {
+    id: d.id,
+    label: d.title || d.kind,
+    secondary: [d.kind, d.fileName, "personal document"].filter(Boolean).join(" — "),
+  };
 }
 
 defineCapability({
@@ -217,42 +200,52 @@ defineCapability({
       return { ok: false, errorCode: "invalid_mode", errorMessage: "mode must be 'draft' or 'send'." };
     }
 
-    // ---- visible library documents -------------------------------------
-    const [meRow] = await db
-      .select()
-      .from(atelierUsers)
-      .where(and(eq(atelierUsers.id, ctx.persona.id), eq(atelierUsers.orgId, ctx.persona.orgId)))
-      .limit(1);
-    if (!meRow) {
+    // ---- visible library documents (ACL-filtered in the shared loader) --
+    const visibleOrNull = await loadVisibleLibraryPairs(ctx);
+    if (!visibleOrNull) {
       return { ok: false, errorCode: "not_found", errorMessage: "Your login could not be resolved to a user record." };
     }
-    const access = await accessibleEngagementIds(meRow);
-    const allDocs = await db
-      .select()
-      .from(atelierDocuments)
-      .where(
-        and(
-          eq(atelierDocuments.orgId, ctx.persona.orgId),
-          eq(atelierDocuments.status, "active"),
-          isNull(atelierDocuments.deletedAt),
-        ),
-      )
-      .orderBy(desc(atelierDocuments.updatedAt))
-      .limit(500);
-    const visible: Array<{ doc: DocRow; version: VersionRow | null }> = [];
-    for (const doc of allDocs) {
-      if (!(await canSeeDocument(meRow, access, doc))) continue;
-      let version: VersionRow | null = null;
-      if (doc.currentVersionId) {
-        const [v] = await db
-          .select()
-          .from(atelierDocumentVersions)
-          .where(eq(atelierDocumentVersions.id, doc.currentVersionId))
-          .limit(1);
-        version = v ?? null;
+    const visible = visibleOrNull;
+
+    // ---- Task #846: cross-domain handoff to the PERSONAL doc flow -------
+    // A request that reaches the company tool may really target the
+    // caller's own documents ("my saudi visa and emirates id"). When the
+    // caller's OWN docs resolve the whole query unambiguously, hand off
+    // to email_my_documents (strictly self-scoped) instead of dead-ending
+    // with "upload it to the Document Library".
+    const tryPersonalHandoff = async (
+      terms: string[],
+    ): Promise<ToolResult | null> => {
+      const own = await loadOwnEmailableDocs(ctx);
+      if (!own || own.length === 0) return null;
+      const res = resolveTermsUnique(terms, (t) => matchOwnDocuments(own, t), (d) => d.id);
+      if (res.kind === "all") {
+        const entry = findByToolName("email_my_documents");
+        if (!entry) return null;
+        const r = (await entry.run(
+          handoffEmailInput(input, res.hits.map((d) => d.id)),
+          ctx,
+        )) as ToolResult;
+        if (r && r.ok && (r as { confirmation?: { summary?: string } }).confirmation) {
+          const conf = (r as { confirmation: { summary?: string } }).confirmation;
+          conf.summary = `These matched your PERSONAL documents (Me → Documents), not the company library. ${conf.summary ?? ""}`.trim();
+        }
+        return r;
       }
-      visible.push({ doc, version });
-    }
+      if (res.kind === "ambiguous") {
+        const options = res.matches.slice(0, 6).map(ownDocOptionWire);
+        return {
+          ok: true,
+          data: {
+            prompt: `"${res.term}" matched several of YOUR personal documents (not company library files) — which one should I email? Re-run email_my_documents with the exact documentIds.`,
+            options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "document", options },
+        };
+      }
+      return null;
+    };
 
     let selected: Array<{ doc: DocRow; version: VersionRow }> = [];
     const ids = Array.isArray(input.documentIds)
@@ -272,6 +265,17 @@ defineCapability({
     };
     if (ids.length > 0) {
       const byId = new Map(visible.map((p) => [p.doc.id, p]));
+      // Task #846 — ids that aren't library docs may be the caller's OWN
+      // personal-document ids (e.g. picked from a cross-domain options
+      // card). When ALL ids resolve in the personal domain, hand off.
+      if (ids.some((id) => !byId.has(id))) {
+        const own = await loadOwnEmailableDocs(ctx);
+        const ownIds = new Set((own ?? []).map((d) => d.id));
+        if (ids.every((id) => ownIds.has(id))) {
+          const entry = findByToolName("email_my_documents");
+          if (entry) return (await entry.run(handoffEmailInput(input, ids), ctx)) as ToolResult;
+        }
+      }
       for (const id of ids) {
         const pair = byId.get(id);
         if (!pair) {
@@ -294,16 +298,91 @@ defineCapability({
           errorMessage: "Which company document should I email? Give me a title, e.g. 'registration certificate'.",
         };
       }
+      // Task #846 — multi-document queries split exactly like the
+      // personal tool ("X and Y", commas, "+", Arabic و); each term is
+      // matched independently and deduped.
+      const terms = splitDocQueryTerms(query);
+      // Deterministic ownership cue: "my/personal" (without a company
+      // cue) means the caller almost certainly wants their OWN docs —
+      // probe the personal domain FIRST.
+      if (hasPersonalDocCue(query) && !hasCompanyDocCue(query)) {
+        const handoff = await tryPersonalHandoff(terms);
+        if (handoff) return handoff;
+      }
       // Task #783 — account scope: match within the account's documents
       // first; on an in-scope miss fall back to the whole visible
       // library but say so honestly.
       const scoped = accountId ? visible.filter((p) => p.doc.accountId === accountId) : visible;
-      let matches = matchLibraryDocuments(scoped, query);
-      let scopeNote: string | null = null;
-      if (matches.length === 0 && accountId) {
-        matches = matchLibraryDocuments(visible, query);
-        if (matches.length > 0) {
-          scopeNote = `No document matching "${query}" is linked to ${accountLabel}, but the library has these elsewhere — pick one if it's what you meant.`;
+      const seenIds = new Set<string>();
+      for (const term of terms) {
+        let matches = matchLibraryDocuments(scoped, term);
+        if (matches.length === 0 && accountId) {
+          matches = matchLibraryDocuments(visible, term);
+          if (matches.length > 0) {
+            const options = matches.slice(0, 6).map(({ doc, version }) => ({
+              id: doc.id,
+              label: doc.title,
+              secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
+            }));
+            return {
+              ok: true,
+              data: {
+                prompt: `No document matching "${term}" is linked to ${accountLabel}, but the library has these elsewhere — pick one if it's what you meant.`,
+                options,
+                navigateTo: null,
+              },
+              disambiguation: { kind: "document", options },
+            };
+          }
+        }
+        if (matches.length === 0) {
+          // Task #846 — before dead-ending, probe the caller's OWN
+          // personal documents with the full query. On an unambiguous
+          // full hit the request is handed off to email_my_documents.
+          const handoff = await tryPersonalHandoff(terms);
+          if (handoff) return handoff;
+          // Honest dual-domain miss: name BOTH places checked and list
+          // the nearest matches from each the caller can access.
+          const where = accountId ? `linked to ${accountLabel}` : "in the Document Library";
+          const own = await loadOwnEmailableDocs(ctx);
+          const nearest = rankNearestNames(
+            term,
+            scoped.map(({ doc, version }) => ({
+              id: doc.id,
+              label: doc.title,
+              secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
+            })),
+          );
+          const nearestOwn = own
+            ? rankNearestNames(
+                term,
+                own.map((d) => ({
+                  id: d.id,
+                  label: d.title || d.kind,
+                  secondary: [d.kind, "personal document"].filter(Boolean).join(" — "),
+                })),
+              )
+            : [];
+          const combined = [...nearest, ...nearestOwn].slice(0, 6);
+          if (combined.length > 0) {
+            const checkedNote = own
+              ? `I checked both the company Document Library and your personal documents — nothing matches "${term}" exactly. Did you mean one of these?`
+              : `I couldn't find a document matching "${term}" ${where} — did you mean one of these?`;
+            return {
+              ok: true,
+              data: { prompt: checkedNote, options: combined, navigateTo: null },
+              disambiguation: { kind: "document", options: combined },
+            };
+          }
+          return {
+            ok: false,
+            errorCode: "doc_not_found",
+            errorMessage: own
+              ? `I couldn't find a document matching "${term}" — I checked both the company Document Library and your personal documents (Me → Documents). Ask me to list the documents in either place to see what's available.`
+              : `I couldn't find a company document matching "${term}" ${where}. Ask me to list the documents to see what's available, or upload it to the Document Library first.`,
+          };
+        }
+        if (matches.length > 1) {
           const options = matches.slice(0, 6).map(({ doc, version }) => ({
             id: doc.id,
             label: doc.title,
@@ -311,58 +390,21 @@ defineCapability({
           }));
           return {
             ok: true,
-            data: { prompt: scopeNote, options, navigateTo: null },
+            data: {
+              prompt: `I found ${matches.length} documents matching "${term}" — which one should I email? Re-run with the exact documentIds.`,
+              options,
+              navigateTo: null,
+            },
             disambiguation: { kind: "document", options },
           };
         }
-      }
-      if (matches.length === 0) {
-        // Friendly miss: suggest the closest titles the caller can see.
-        const where = accountId ? `linked to ${accountLabel}` : "in the library";
-        const nearest = rankNearestNames(
-          query,
-          scoped.map(({ doc, version }) => ({
-            id: doc.id,
-            label: doc.title,
-            secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
-          })),
-        );
-        if (nearest.length > 0) {
-          return {
-            ok: true,
-            data: {
-              prompt: `I couldn't find a document matching "${query}" ${where} — did you mean one of these?`,
-              options: nearest,
-              navigateTo: null,
-            },
-            disambiguation: { kind: "document", options: nearest },
-          };
+        const r = requireVersion(matches[0]!);
+        if ("ok" in r) return r;
+        if (!seenIds.has(r.doc.id)) {
+          seenIds.add(r.doc.id);
+          selected.push(r);
         }
-        return {
-          ok: false,
-          errorCode: "doc_not_found",
-          errorMessage: `I couldn't find a company document matching "${query}" ${where}. Ask me to list the documents to see what's available, or upload it to the Document Library first.`,
-        };
       }
-      if (matches.length > 1) {
-        const options = matches.slice(0, 6).map(({ doc, version }) => ({
-          id: doc.id,
-          label: doc.title,
-          secondary: [doc.docKind, version?.fileName].filter(Boolean).join(" — "),
-        }));
-        return {
-          ok: true,
-          data: {
-            prompt: `I found ${matches.length} documents matching "${query}" — which one should I email? Re-run with the exact documentIds.`,
-            options,
-            navigateTo: null,
-          },
-          disambiguation: { kind: "document", options },
-        };
-      }
-      const r = requireVersion(matches[0]!);
-      if ("ok" in r) return r;
-      selected = [r];
     }
     if (selected.length === 0) {
       return {

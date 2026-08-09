@@ -155,3 +155,4 @@
 - [Expense description/summary contract](atelier-expense-desc-contract.md) — blank description stores NULL everywhere so parse may prefill; parse NEVER overwrites user text; summary follows manual edits only when auditorRunId is null.
 - [Person-doc auto-detect & bundle](atelier-doc-autodetect-bundle.md) — upload-time expiry detection (<4KB guard keeps probes offline); side=all bundle needs its ZIP fallback; re-run expiry backfill on prod.
 - [Display currency preference](atelier-display-currency.md) — rollups over mixed-currency money must use the server-converted `display` block (never client-side FX); settings PATCH must invalidate the expenses query.
+- [Doc-email cross-domain routing](atelier-doc-email-crossdomain.md) — both email tools share split/match helpers; handoff only on unambiguous full resolve; self-only roles never probe the library; Arabic و needs whitespace match, not \b.

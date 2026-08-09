@@ -134,16 +134,54 @@ export const CORE_TOOLS_BY_KIND: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
+ * Task #846 — deterministic ownership-cue detection for document
+ * requests. "my/own/personal" biases toward the personal-document
+ * tools, "company/our/the library" toward the Document Library tools —
+ * independent of tool descriptions or embedding scores. When BOTH cue
+ * families appear ("my company's trade license") no bias is applied.
+ * Pure + exported so probes can pin it.
+ */
+const PERSONAL_DOC_CUE_RE = /\b(my|mine|own|personal|mon|ma|mes)\b|\bجوازي\b|\bهويتي\b/i;
+const COMPANY_DOC_CUE_RE =
+  /\b(company|compan(?:y'?s)|our|ours|corporate|firm|library|org|organisation|organization|notre|nos)\b/i;
+export function hasPersonalDocCue(text: string): boolean {
+  return PERSONAL_DOC_CUE_RE.test(text ?? "");
+}
+export function hasCompanyDocCue(text: string): boolean {
+  return COMPANY_DOC_CUE_RE.test(text ?? "");
+}
+export function detectDocOwnershipCue(text: string): "personal" | "company" | null {
+  const p = hasPersonalDocCue(text);
+  const c = hasCompanyDocCue(text);
+  if (p && !c) return "personal";
+  if (c && !p) return "company";
+  return null;
+}
+
+/**
  * Pure floor helper (probed offline): core tool names for `kind`
- * restricted to the eligible surface.
+ * restricted to the eligible surface. For document-kind intents an
+ * ownership cue in the query deterministically REORDERS the floor so
+ * the cued email tool leads (both stay surfaced — the bias is ordering
+ * under the tool cap plus a stable first-position nudge, never a
+ * removal, so mixed requests still see both tools).
  */
 export function floorToolsForKind(
   kind: string | undefined,
   eligibleNames: ReadonlySet<string>,
+  query?: string,
 ): string[] {
   const core = kind ? CORE_TOOLS_BY_KIND[kind] : undefined;
   if (!core) return [];
-  return core.filter((n) => eligibleNames.has(n));
+  let list = core.filter((n) => eligibleNames.has(n));
+  if (kind === "document" && query) {
+    const cue = detectDocOwnershipCue(query);
+    if (cue) {
+      const first = cue === "personal" ? "email_my_documents" : "email_company_documents";
+      list = [...list.filter((n) => n === first), ...list.filter((n) => n !== first)];
+    }
+  }
+  return list;
 }
 
 /**
@@ -361,7 +399,7 @@ export async function retrieveCapabilities(args: {
   // the typed intent kind are surfaced regardless of cosine rank
   // (still restricted to the eligible pool, so persona clamps and the
   // read-intent write hiding always win).
-  for (const n of floorToolsForKind(args.intentKind, eligibleNames)) {
+  for (const n of floorToolsForKind(args.intentKind, eligibleNames, args.query)) {
     if (selected.size >= cap) break;
     selected.add(n);
   }

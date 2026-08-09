@@ -45,9 +45,19 @@ import {
 import { z } from "zod";
 import {
   CATALOG_SCHEMA_VERSION,
+  SELF_ONLY_CHAT_ROLES,
   defineCapability,
+  findByToolName,
   type CapabilityInput,
 } from "./capability-catalog.js";
+import {
+  splitDocQueryTerms,
+  matchOwnDocuments as sharedMatchOwnDocuments,
+  loadVisibleLibraryPairs,
+  resolveTermsUnique,
+  handoffEmailInput,
+} from "./document-email-shared.js";
+import { hasPersonalDocCue, hasCompanyDocCue } from "./capability-retriever.js";
 import { resolveSelfSubject, type SelfSubject } from "./me-capabilities.js";
 // Task #589 — chat submits must fire the same notification rows as the
 // Me-lens REST submit paths so requests don't sit invisible.
@@ -2961,44 +2971,13 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type PersonDocRow = typeof atelierPersonDocuments.$inferSelect;
 
-/** Normalize free text for fuzzy doc matching (lowercase, collapse
- *  separators so "national id" matches kind "national_id"). */
-function docMatchNorm(s: string): string {
-  return s.toLowerCase().replace(/[_\-]+/g, " ").replace(/\s+/g, " ").trim();
-}
-
 /**
  * Fuzzy-match one query term against the caller's documents by kind,
- * title, or file name. Pure so the probe can pin it. Exported for tests.
+ * title, or file name. Moved to document-email-shared for Task #846
+ * (both document-email tools use it); re-exported here so existing
+ * probe imports keep working.
  */
-export function matchOwnDocuments(docs: PersonDocRow[], term: string): PersonDocRow[] {
-  const q = docMatchNorm(term);
-  if (!q) return [];
-  const broad = docs.filter((d) => {
-    const kind = docMatchNorm(d.kind);
-    const title = docMatchNorm(d.title ?? "");
-    const fileName = docMatchNorm(d.fileName ?? "");
-    return (
-      kind === q ||
-      q.includes(kind) ||
-      kind.includes(q) ||
-      (title !== "" && (title.includes(q) || q.includes(title))) ||
-      (fileName !== "" && fileName.includes(q))
-    );
-  });
-  if (broad.length <= 1) return broad;
-  // Specificity pass: a query that names a document's exact title (or is
-  // fully contained in it) should not fan out to every same-kind sibling
-  // ("UAE Visa 2025" must not also match "UAE Visa 2026").
-  const exactTitle = broad.filter((d) => docMatchNorm(d.title ?? "") === q);
-  if (exactTitle.length > 0) return exactTitle;
-  const titleHit = broad.filter((d) => {
-    const title = docMatchNorm(d.title ?? "");
-    return title !== "" && (title.includes(q) || q.includes(title));
-  });
-  if (titleHit.length > 0 && titleHit.length < broad.length) return titleHit;
-  return broad;
-}
+export const matchOwnDocuments = sharedMatchOwnDocuments;
 
 function docOptionWire(d: PersonDocRow) {
   return {
@@ -3129,10 +3108,70 @@ defineCapability({
     const ids = Array.isArray(input.documentIds)
       ? [...new Set(input.documentIds.map((v) => String(v)).filter(Boolean))]
       : [];
+    // Task #846 — cross-domain handoff to the COMPANY document flow.
+    // Self-only chat roles (employee/contractor) NEVER gain library
+    // access through this path; everyone else's library visibility is
+    // still ACL-filtered by canSeeDocument inside the shared loader
+    // and re-checked by the company tool itself.
+    const selfOnly = SELF_ONLY_CHAT_ROLES.has(ctx.persona.role);
+    const tryLibraryHandoff = async (terms: string[]): Promise<ToolResult | null> => {
+      if (selfOnly) return null;
+      const lib = await loadVisibleLibraryPairs(ctx);
+      if (!lib || lib.length === 0) return null;
+      const { matchLibraryDocuments } = await import("./document-email-shared.js");
+      const res = resolveTermsUnique(terms, (t) => matchLibraryDocuments(lib, t), (p) => p.doc.id);
+      if (res.kind === "all") {
+        const entry = findByToolName("email_company_documents");
+        if (!entry) return null;
+        const r = (await entry.run(
+          handoffEmailInput(input as Record<string, unknown>, res.hits.map((p) => p.doc.id)),
+          ctx,
+        )) as ToolResult;
+        if (r && r.ok && (r as { confirmation?: { summary?: string } }).confirmation) {
+          const conf = (r as { confirmation: { summary?: string } }).confirmation;
+          conf.summary = `These matched COMPANY documents in the Document Library, not your personal documents. ${conf.summary ?? ""}`.trim();
+        }
+        return r;
+      }
+      if (res.kind === "ambiguous") {
+        const options = res.matches.slice(0, 6).map(({ doc, version }) => ({
+          id: doc.id,
+          label: doc.title,
+          secondary: [doc.docKind, version?.fileName, "company document"].filter(Boolean).join(" — "),
+        }));
+        return {
+          ok: true,
+          data: {
+            prompt: `"${res.term}" matched several COMPANY documents in the Document Library (not your personal documents) — which one should I email? Re-run email_company_documents with the exact documentIds.`,
+            options,
+            navigateTo: null,
+          },
+          disambiguation: { kind: "document", options },
+        };
+      }
+      return null;
+    };
+
     if (ids.length > 0) {
       const byId = new Map(ownDocs.map((d) => [d.id, d]));
       const missing = ids.filter((id) => !byId.has(id));
       if (missing.length > 0) {
+        // Task #846 — the ids may be LIBRARY doc ids (picked off a
+        // cross-domain options card). If ALL of them are visible
+        // library docs, hand off to the company flow.
+        if (!selfOnly) {
+          const lib = await loadVisibleLibraryPairs(ctx);
+          const libIds = new Set((lib ?? []).map((p) => p.doc.id));
+          if (ids.every((id) => libIds.has(id))) {
+            const entry = findByToolName("email_company_documents");
+            if (entry) {
+              return (await entry.run(
+                handoffEmailInput(input as Record<string, unknown>, ids),
+                ctx,
+              )) as ToolResult;
+            }
+          }
+        }
         return {
           ok: false,
           errorCode: "doc_not_found",
@@ -3152,22 +3191,37 @@ defineCapability({
               : `Which document should I email? You have: ${ownDocs.map((d) => `"${d.title}" (${d.kind})`).join(", ")}.`,
         };
       }
-      // Multi-doc queries: split on "and", "+", ",".
-      const terms = query
-        .split(/\s*(?:,|\+|\band\b|\bet\b|\bو\b)\s*/i)
-        .map((t) => t.trim())
-        .filter(Boolean);
+      // Multi-doc queries: split on "and", "+", "," (shared with the
+      // company tool — Task #846).
+      const terms = splitDocQueryTerms(query);
+      // Deterministic ownership cue: "our/company/the library" (without
+      // a personal cue) means the caller almost certainly wants a
+      // COMPANY document — probe the library first (never for
+      // self-only roles).
+      if (hasCompanyDocCue(query) && !hasPersonalDocCue(query)) {
+        const handoff = await tryLibraryHandoff(terms);
+        if (handoff) return handoff;
+      }
       const seen = new Set<string>();
       for (const term of terms) {
         const matches = matchOwnDocuments(ownDocs, term);
         if (matches.length === 0) {
+          // Task #846 — before dead-ending, probe the Document Library
+          // (ACL-filtered; self-only roles skip this entirely).
+          const handoff = await tryLibraryHandoff(terms);
+          if (handoff) return handoff;
+          const ownList =
+            ownDocs.length === 0
+              ? "You have no personal documents on file yet — add them under Me → Documents first."
+              : `You have: ${ownDocs.map((d) => `"${d.title}" (${d.kind})`).join(", ")}.`;
           return {
             ok: false,
             errorCode: "doc_not_found",
-            errorMessage:
-              ownDocs.length === 0
-                ? "You have no personal documents on file yet — add them under Me → Documents first."
-                : `No document of yours matches "${term}". You have: ${ownDocs.map((d) => `"${d.title}" (${d.kind})`).join(", ")}.`,
+            errorMessage: selfOnly
+              ? ownDocs.length === 0
+                ? ownList
+                : `No document of yours matches "${term}". ${ownList}`
+              : `No document matching "${term}" was found — I checked both your personal documents and the company Document Library. ${ownList}`,
           };
         }
         if (matches.length > 1) {
