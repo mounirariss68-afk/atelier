@@ -439,8 +439,8 @@ paths:
         - name: side
           in: query
           required: false
-          description: Which side to stream (back is national_id only; default front)
-          schema: { type: string, enum: [front, back] }
+          description: Which side to stream (back is national_id only; default front; all bundles every stored side into one PDF/ZIP)
+          schema: { type: string, enum: [front, back, all] }
       responses:
         "200":
           description: The stored scan bytes

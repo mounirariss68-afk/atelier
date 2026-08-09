@@ -12,4 +12,5 @@ export type AtelierDownloadMyDocumentSide =
 export const AtelierDownloadMyDocumentSide = {
   front: "front",
   back: "back",
+  all: "all",
 } as const;

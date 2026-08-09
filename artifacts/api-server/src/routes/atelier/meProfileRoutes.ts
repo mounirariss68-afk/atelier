@@ -54,6 +54,7 @@ import {
   dropPersonDocBytes,
   PERSON_DOC_PREFIX,
 } from "../../lib/personDocStorage.js";
+import { bundleDocSides } from "../../lib/personDocBundle.js";
 import {
   loadBioTemplate,
   generateBusinessCardPdf,
@@ -603,6 +604,18 @@ router.post(
           return;
         }
       }
+      // Auto-detect expiry / issue date / document number from the scan when
+      // the user didn't type them. Best-effort — a failed or empty detection
+      // stores the document exactly as before.
+      let detected: import("../../lib/atelier-doc-dates.js").DocDateExtraction | null = null;
+      if (file && (!expiresAt || !issuedAt || !b.docNumber)) {
+        try {
+          const { extractDocumentDates } = await import("../../lib/atelier-doc-dates.js");
+          detected = await extractDocumentDates(file.buffer, file.mimetype, { kind, title });
+        } catch (err) {
+          req.log.warn({ err }, "person-doc date auto-detect failed");
+        }
+      }
       let fileRef: string | null = null;
       let fileName: string | null = null;
       let mime: string | null = null;
@@ -635,10 +648,16 @@ router.post(
           personId: ctx.person.row.id,
           kind,
           title,
-          docNumber: b.docNumber ? String(b.docNumber).slice(0, 100) : null,
-          issuedAt: issuedAt ?? null,
+          docNumber: b.docNumber
+            ? String(b.docNumber).slice(0, 100)
+            : (detected?.docNumber ?? null),
+          issuedAt: issuedAt ?? detected?.issuedAt ?? null,
           issuingCountry: b.issuingCountry ? String(b.issuingCountry).slice(0, 100) : null,
-          expiresAt: expiresAt ? new Date(`${expiresAt}T00:00:00Z`) : null,
+          expiresAt: expiresAt
+            ? new Date(`${expiresAt}T00:00:00Z`)
+            : detected?.expiresAt
+              ? new Date(`${detected.expiresAt}T00:00:00Z`)
+              : null,
           dependentId,
           fileRef,
           fileName,
@@ -658,7 +677,14 @@ router.post(
         entityType: "person_document",
         entityId: id,
         action: "person_document.self_uploaded",
-        payload: { kind, title, dependentId, hasFile: !!fileRef, hasBackFile: !!backFileRef },
+        payload: {
+          kind,
+          title,
+          dependentId,
+          hasFile: !!fileRef,
+          hasBackFile: !!backFileRef,
+          autoDetectedExpiry: !expiresAt && !!detected?.expiresAt,
+        },
         summary: `${ctx.me.name} added their own ${kind} document "${title}"`,
       });
       res.status(201).json({ document: docWire(doc) });
@@ -841,12 +867,45 @@ router.get("/me/documents/:id/download", async (req, res, next) => {
       return;
     }
     // Task #531 — `?side=back` streams the back of a national ID card.
+    // `?side=all` bundles every stored side/page into ONE download (PDF when
+    // both sides are plain images, ZIP otherwise) so sharing sends the whole
+    // document. Docs without a back side degrade to the plain front stream.
     const side = String(req.query.side ?? "front");
-    if (side !== "front" && side !== "back") {
-      res.status(400).json({ error: "invalid-side", allowed: ["front", "back"] });
+    if (side !== "front" && side !== "back" && side !== "all") {
+      res.status(400).json({ error: "invalid-side", allowed: ["front", "back", "all"] });
+      return;
+    }
+    if (side === "all" && doc.backFileRef?.startsWith(PERSON_DOC_PREFIX) && doc.fileRef) {
+      const front = await loadPersonDocBytes(doc.fileRef);
+      const back = await loadPersonDocBytes(doc.backFileRef);
+      if (!front || !back) {
+        res.status(404).json({ error: "file-missing" });
+        return;
+      }
+      const bundle = await bundleDocSides(
+        { bytes: front, mime: doc.mime, name: doc.fileName },
+        { bytes: back, mime: doc.backMime, name: doc.backFileName },
+        doc.title,
+      );
+      await audit({
+        me: ctx.me,
+        entityType: "person_document",
+        entityId: doc.id,
+        action: "document.downloaded",
+        payload: { personId: ctx.person.row.id, docId: doc.id, kind: doc.kind, self: true, side },
+        summary: `${ctx.me.name} downloaded their own ${doc.kind} document (all sides)`,
+      });
+      res.setHeader("Content-Type", bundle.mime);
+      res.setHeader(
+        "Content-Disposition",
+        contentDispositionFilename("attachment", bundle.fileName),
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(bundle.bytes);
       return;
     }
     if (side === "back") {
+      // (side === "all" without a stored back side falls through to front)
       if (!doc.backFileRef || !doc.backFileRef.startsWith(PERSON_DOC_PREFIX)) {
         res.status(404).json({ error: "no-file" });
         return;

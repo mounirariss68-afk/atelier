@@ -153,4 +153,5 @@
 - [/me chat-parity registry & ratchet](me-chat-parity.md) — every mutating /me route needs a registry entry (capability or reasoned exclusion); refusal copy is generated, never hand-written; `email` schema prop trips the selector lint.
 - [Founder security alerts](atelier-security-alerts.md) — fire-and-forget from auth routes, in-memory debounce/burst windows; email↔Admin deep-link params must stay in sync.
 - [Expense description/summary contract](atelier-expense-desc-contract.md) — blank description stores NULL everywhere so parse may prefill; parse NEVER overwrites user text; summary follows manual edits only when auditorRunId is null.
+- [Person-doc auto-detect & bundle](atelier-doc-autodetect-bundle.md) — upload-time expiry detection (<4KB guard keeps probes offline); side=all bundle needs its ZIP fallback; re-run expiry backfill on prod.
 - [Display currency preference](atelier-display-currency.md) — rollups over mixed-currency money must use the server-converted `display` block (never client-side FX); settings PATCH must invalidate the expenses query.

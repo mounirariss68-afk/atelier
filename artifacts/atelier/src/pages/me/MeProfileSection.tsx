@@ -925,13 +925,16 @@ function DocumentRow({
   // Task #838 — open scans via fetch instead of a bare <a href> so a
   // missing file (404 no-file / file-missing) surfaces as a friendly
   // message + refreshed flags, never a raw JSON error page.
-  const [opening, setOpening] = React.useState<"front" | "back" | null>(null);
-  async function openScan(side: "front" | "back") {
+  const [opening, setOpening] = React.useState<"front" | "back" | "all" | null>(null);
+  // "all" bundles every stored side into ONE file server-side (PDF when both
+  // sides are plain images, ZIP otherwise) so a download/share carries the
+  // whole document, not just one side.
+  async function openScan(side: "front" | "back" | "all") {
     setOpening(side);
     setErr(null);
     try {
       const resp = await fetch(
-        `${API_BASE}/me/documents/${d.id}/download${side === "back" ? "?side=back" : ""}`,
+        `${API_BASE}/me/documents/${d.id}/download${side === "front" ? "" : `?side=${side}`}`,
         { credentials: "include" },
       );
       if (resp.status === 404) {
@@ -949,8 +952,10 @@ function DocumentRow({
       const a = document.createElement("a");
       a.href = url;
       a.download =
-        (side === "back" ? (d.backFileName ?? null) : (d.fileName ?? null)) ??
-        `${d.title}${side === "back" ? "-back" : ""}`;
+        side === "all"
+          ? `${d.title}${d.mime === "image/jpeg" || d.mime === "image/png" ? (d.backMime === "image/jpeg" || d.backMime === "image/png" ? ".pdf" : ".zip") : ".zip"}`
+          : ((side === "back" ? (d.backFileName ?? null) : (d.fileName ?? null)) ??
+            `${d.title}${side === "back" ? "-back" : ""}`);
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1021,25 +1026,11 @@ function DocumentRow({
           {d.hasFile ? (
             <button
               className="text-xs text-gold hover:underline disabled:opacity-60"
-              onClick={() => void openScan("front")}
+              onClick={() => void openScan(d.hasBackFile ? "all" : "front")}
               disabled={opening !== null}
               data-testid={`download-${d.id}`}
             >
-              {opening === "front"
-                ? "Opening…"
-                : d.kind === "national_id" && d.hasBackFile
-                  ? "Front"
-                  : "Download"}
-            </button>
-          ) : null}
-          {d.kind === "national_id" && d.hasBackFile ? (
-            <button
-              className="text-xs text-gold hover:underline disabled:opacity-60"
-              onClick={() => void openScan("back")}
-              disabled={opening !== null}
-              data-testid={`download-back-${d.id}`}
-            >
-              {opening === "back" ? "Opening…" : "Back"}
+              {opening !== null ? "Opening…" : "Download"}
             </button>
           ) : null}
           <button

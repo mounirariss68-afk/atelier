@@ -9,7 +9,7 @@ import type { AtelierDownloadMyDocumentSide } from "./atelierDownloadMyDocumentS
 
 export type AtelierDownloadMyDocumentParams = {
   /**
-   * Which side to stream (back is national_id only; default front)
+   * Which side to stream (back is national_id only; default front; all bundles every stored side into one PDF/ZIP)
    */
   side?: AtelierDownloadMyDocumentSide;
 };

@@ -219,9 +219,12 @@ async function main() {
     const src = readFileSync(path.join(here, "../app/(tabs)/me.tsx"), "utf8");
     check(
       "me.tsx: row onPress calls openDocument and disables when hasFile is false",
-      /onPress=\{\(\) => openDocument\(doc\)\}/.test(src) && /disabled=\{!doc\.hasFile\}/.test(src),
+      /onPress=\{\(\) => openDocument\(doc, doc\.hasBackFile \? "all" : "front"\)\}/.test(src) &&
+        /disabled=\{!doc\.hasFile\}/.test(src),
     );
-    check('me.tsx: back affordance calls openDocument(doc, "back")', /openDocument\(doc, "back"\)/.test(src));
+    // Two-sided docs now open/share as ONE bundled file — there is no separate
+    // back-side row on the card anymore (back replace lives in the ⋮ sheet).
+    check('me.tsx: no separate back-side open affordance', !/openDocument\(doc, "back"\)/.test(src));
     check(
       "me.tsx: openDocument delegates to openDocumentFile with generated URL helper + authHeader",
       src.includes("openDocumentFile(doc, side,") &&

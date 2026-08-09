@@ -16,9 +16,13 @@ export interface OpenableDocument {
   hasBackFile?: boolean;
   fileName?: string | null;
   backFileName?: string | null;
+  mime?: string | null;
+  backMime?: string | null;
 }
 
-export type DocumentSide = "front" | "back";
+/** "all" bundles every stored side into one file server-side (PDF when both
+ * sides are plain images, ZIP otherwise) so sharing sends the whole document. */
+export type DocumentSide = "front" | "back" | "all";
 
 export interface DocumentOpenDeps {
   apiBase: string;
@@ -61,12 +65,23 @@ export function buildDocumentDownloadUrl(
   buildDownloadPath: (documentId: string) => string,
 ): string {
   const path = buildDownloadPath(doc.id);
-  return `${apiBase}${path}${side === "back" ? "?side=back" : ""}`;
+  return `${apiBase}${path}${side === "front" ? "" : `?side=${side}`}`;
+}
+
+/** Mirrors the server's bundle format: 2-page PDF when both sides are plain
+ * JPEG/PNG images, ZIP of the raw files otherwise. */
+export function combinedBundleExt(doc: Pick<OpenableDocument, "mime" | "backMime">): string {
+  const img = (m?: string | null) => m === "image/jpeg" || m === "image/png";
+  return img(doc.mime) && img(doc.backMime) ? ".pdf" : ".zip";
 }
 
 export function documentDownloadFileName(doc: OpenableDocument, side: DocumentSide): string {
   const raw =
-    side === "back" ? (doc.backFileName ?? `${doc.title}-back`) : (doc.fileName ?? `${doc.title}`);
+    side === "all"
+      ? `${doc.title}${combinedBundleExt(doc)}`
+      : side === "back"
+        ? (doc.backFileName ?? `${doc.title}-back`)
+        : (doc.fileName ?? `${doc.title}`);
   return raw.replace(/[^\w.\-]+/g, "_");
 }
 
@@ -78,6 +93,8 @@ export async function openDocumentFile(
   if (side === "back" ? !doc.hasBackFile : !doc.hasFile) {
     return { status: "skipped_no_file" };
   }
+  // "all" without a stored back side is just the front file.
+  if (side === "all" && !doc.hasBackFile) side = "front";
   const url = buildDocumentDownloadUrl(doc, side, deps.apiBase, deps.buildDownloadPath);
   if (deps.platformOS === "web") {
     // Task #838 — probe first (when wired) so a stale hasBackFile flag

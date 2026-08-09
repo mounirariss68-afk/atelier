@@ -1255,9 +1255,11 @@ export const AtelierDownloadMyDocumentParams = zod.object({
 
 export const AtelierDownloadMyDocumentQueryParams = zod.object({
   side: zod
-    .enum(["front", "back"])
+    .enum(["front", "back", "all"])
     .optional()
-    .describe("Which side to stream (back is national_id only; default front)"),
+    .describe(
+      "Which side to stream (back is national_id only; default front; all bundles every stored side into one PDF\/ZIP)",
+    ),
 });
 
 /**

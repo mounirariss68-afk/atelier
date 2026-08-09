@@ -34,7 +34,6 @@ import {
   EmptyState,
   ErrorState,
   FadeInView,
-  IconButton,
   PressScale,
   Sheet,
   Skeleton,
@@ -378,7 +377,7 @@ export default function MeScreen() {
   }, [uploadPhoto, profile, t, feedback]);
 
   const openDocument = useCallback(
-    async (doc: AtelierSelfDocument, side: "front" | "back" = "front") => {
+    async (doc: AtelierSelfDocument, side: "front" | "back" | "all" = "front") => {
       if (side === "back" ? !doc.hasBackFile : !doc.hasFile) return;
       if (Platform.OS !== "web") setDownloadingId(`${doc.id}:${side}`);
       try {
@@ -655,7 +654,6 @@ export default function MeScreen() {
         <Text style={{ color: c.foreground, fontFamily: "PlusJakartaSans_800ExtraBold", fontSize: 24, letterSpacing: -0.4 }}>
           {t("me.title")}
         </Text>
-        <IconButton icon="maximize" onPress={() => setQrOpen(true)} filled />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: bottomPad }}>
@@ -768,26 +766,6 @@ export default function MeScreen() {
                 />
               </View>
             </PressScale>
-            <PressScale onPress={() => setQrOpen(true)}>
-              <View
-                style={{
-                  flexDirection: rtl.row,
-                  alignItems: "center",
-                  gap: 8,
-                  paddingHorizontal: 18,
-                  paddingVertical: 11,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.25)",
-                  backgroundColor: "rgba(255,255,255,0.08)",
-                }}
-              >
-                <Feather name="maximize" size={15} color="#EEF1FA" />
-                <Text style={{ color: "#EEF1FA", fontFamily: "PlusJakartaSans_700Bold", fontSize: 14 }}>
-                  {t("me.shareCard")}
-                </Text>
-              </View>
-            </PressScale>
           </View>
           </FadeInView>
         )}
@@ -850,7 +828,7 @@ export default function MeScreen() {
             {documents.map((doc) => (
               <Pressable
                 key={doc.id}
-                onPress={() => openDocument(doc)}
+                onPress={() => openDocument(doc, doc.hasBackFile ? "all" : "front")}
                 disabled={!doc.hasFile}
                 style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
               >
@@ -899,43 +877,7 @@ export default function MeScreen() {
                     <Feather name="more-vertical" size={18} color={c.mutedForeground} />
                   </Pressable>
                 </Card>
-                {doc.kind === "national_id" && doc.hasBackFile ? (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      openDocument(doc, "back");
-                    }}
-                    style={({ pressed }) => ({
-                      opacity: pressed ? 0.7 : 1,
-                      flexDirection: rtl.row,
-                      alignItems: "center",
-                      gap: 8,
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                    })}
-                  >
-                    <Feather name="rotate-cw" size={14} color={c.mutedForeground} />
-                    <Text
-                      style={{
-                        color: c.mutedForeground,
-                        fontFamily: "PlusJakartaSans_600SemiBold",
-                        fontSize: 13,
-                        textAlign: rtl.textAlign,
-                      }}
-                    >
-                      {t("me.idBackSide")}
-                    </Text>
-                    {downloadingId === `${doc.id}:back` ? (
-                      <ActivityIndicator size="small" color={c.primary} />
-                    ) : (
-                      <Feather
-                        name={Platform.OS === "web" ? "external-link" : "download"}
-                        size={14}
-                        color={c.mutedForeground}
-                      />
-                    )}
-                  </Pressable>
-                ) : doc.kind === "national_id" && doc.sides === "front_only" ? (
+                {doc.kind === "national_id" && doc.sides === "front_only" ? (
                   <View style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
                     <Text
                       style={{
