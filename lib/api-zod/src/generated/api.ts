@@ -1277,6 +1277,13 @@ export const AtelierListMyExpensesResponse = zod.object({
       amount: zod.number(),
       currency: zod.string(),
       usdAmount: zod.number().nullish(),
+      display: zod
+        .object({
+          amount: zod.number(),
+          currency: zod.string(),
+          converted: zod.boolean(),
+        })
+        .nullish(),
       status: zod.string(),
       policyStatus: zod.string(),
       policyFindings: zod.unknown().optional(),
@@ -1309,6 +1316,7 @@ export const AtelierListMyExpensesResponse = zod.object({
       createdAt: zod.string(),
     }),
   ),
+  displayCurrency: zod.string().optional(),
 });
 
 /**
@@ -1420,6 +1428,13 @@ export const AtelierUpdateMyExpenseResponse = zod.object({
     amount: zod.number(),
     currency: zod.string(),
     usdAmount: zod.number().nullish(),
+    display: zod
+      .object({
+        amount: zod.number(),
+        currency: zod.string(),
+        converted: zod.boolean(),
+      })
+      .nullish(),
     status: zod.string(),
     policyStatus: zod.string(),
     policyFindings: zod.unknown().optional(),
@@ -1493,6 +1508,13 @@ export const AtelierSubmitMyExpenseResponse = zod.object({
     amount: zod.number(),
     currency: zod.string(),
     usdAmount: zod.number().nullish(),
+    display: zod
+      .object({
+        amount: zod.number(),
+        currency: zod.string(),
+        converted: zod.boolean(),
+      })
+      .nullish(),
     status: zod.string(),
     policyStatus: zod.string(),
     policyFindings: zod.unknown().optional(),
@@ -1546,6 +1568,13 @@ export const AtelierParseMyExpenseReceiptResponse = zod.object({
     amount: zod.number(),
     currency: zod.string(),
     usdAmount: zod.number().nullish(),
+    display: zod
+      .object({
+        amount: zod.number(),
+        currency: zod.string(),
+        converted: zod.boolean(),
+      })
+      .nullish(),
     status: zod.string(),
     policyStatus: zod.string(),
     policyFindings: zod.unknown().optional(),

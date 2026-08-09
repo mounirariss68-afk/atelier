@@ -11,6 +11,8 @@
  * write `policy.read.restricted`.
  */
 export const V3_AUDIT_ACTIONS = {
+  // Me lens preferences (Task #827) ---------------------------------------
+  ME_PREFERENCES_UPDATED: "me.preferences.updated",
   // Microsoft 365 connection (Task #327) ----------------------------------
   MS_CONNECTION_CONNECTED: "ms.connection.connected",
   MS_CONNECTION_DISCONNECTED: "ms.connection.disconnected",

@@ -3583,6 +3583,12 @@ export interface AtelierIdName {
   name: string;
 }
 
+export type AtelierSelfExpenseDisplay = {
+  amount: number;
+  currency: string;
+  converted: boolean;
+} | null;
+
 export interface AtelierSelfExpense {
   id: string;
   expenseDate: string;
@@ -3595,6 +3601,7 @@ export interface AtelierSelfExpense {
   amount: number;
   currency: string;
   usdAmount?: number | null;
+  display?: AtelierSelfExpenseDisplay;
   status: string;
   policyStatus: string;
   policyFindings?: unknown;
@@ -8843,6 +8850,7 @@ export const AtelierDownloadMyDocumentSide = {
 
 export type AtelierListMyExpenses200 = {
   expenses: AtelierSelfExpense[];
+  displayCurrency?: string;
 };
 
 export type AtelierSubmitMyExpenseBody = {

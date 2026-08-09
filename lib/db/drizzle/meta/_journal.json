@@ -106,6 +106,13 @@
       "when": 1778980102000,
       "tag": "0055_audit_org_default",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1778980103000,
+      "tag": "0056_user_display_currency",
+      "breakpoints": true
     }
   ]
 }

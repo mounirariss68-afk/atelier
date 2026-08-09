@@ -464,6 +464,9 @@ paths:
                   expenses:
                     type: array
                     items: { $ref: "#/components/schemas/AtelierSelfExpense" }
+                  # Task #827 — the caller's chosen display currency; every
+                  # row's `display` block is converted into this currency.
+                  displayCurrency: { type: string }
     post:
       operationId: atelierCreateMyExpense
       tags: [atelier]
@@ -9105,6 +9108,17 @@ components:
         usdAmount:
           type: number
           nullable: true
+        # Task #827 — amount converted into the caller's display currency
+        # (server-side, via the FX table); `converted` is false when the
+        # claim was already in the display currency.
+        display:
+          type: object
+          nullable: true
+          required: [amount, currency, converted]
+          properties:
+            amount: { type: number }
+            currency: { type: string }
+            converted: { type: boolean }
         status: { type: string }
         policyStatus: { type: string }
         policyFindings: {}

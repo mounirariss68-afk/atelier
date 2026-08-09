@@ -103,6 +103,10 @@ export const atelierUsers = pgTable(
     roleLabel: text("role_label").notNull(),
     title: text("title").notNull(),
     avatarUrl: text("avatar_url"),
+    // Task #827 — user-chosen display currency for money rollups (mobile
+    // expense charts / month totals). Original claim currencies stay the
+    // source of truth; this only affects display conversion.
+    displayCurrency: text("display_currency").notNull().default("USD"),
     permissions: jsonb("permissions").notNull().$type<string[]>().default([]),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

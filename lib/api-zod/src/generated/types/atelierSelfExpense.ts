@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { AtelierSelfExpenseDisplay } from "./atelierSelfExpenseDisplay";
 
 export interface AtelierSelfExpense {
   id: string;
@@ -18,6 +19,7 @@ export interface AtelierSelfExpense {
   amount: number;
   currency: string;
   usdAmount?: number | null;
+  display?: AtelierSelfExpenseDisplay;
   status: string;
   policyStatus: string;
   policyFindings?: unknown;

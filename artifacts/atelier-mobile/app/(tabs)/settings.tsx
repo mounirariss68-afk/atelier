@@ -17,6 +17,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFeedback } from "@/components/feedback";
 import { Card, FadeInView, WEB_TAB_BAR, WEB_TOP_INSET, hapticLight } from "@/components/ui";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { getAtelierListMyExpensesQueryKey } from "@workspace/api-client-react";
+
+import { apiJson } from "@/lib/api";
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { type ThemePref, useThemePref } from "@/contexts/ThemeContext";
 import { LANGS, type Lang } from "@/constants/i18n";
@@ -128,6 +132,47 @@ function OptionRow({
   );
 }
 
+// Task #827 — display currency preference, persisted server-side so it
+// follows the user across devices. Falls back to USD until loaded.
+function useDisplayCurrency() {
+  const queryClient = useQueryClient();
+  const [currency, setCurrency] = useState("USD");
+  const [supported, setSupported] = useState<string[]>(["USD"]);
+  useEffect(() => {
+    let alive = true;
+    apiJson<{ displayCurrency: string; supportedCurrencies: string[] }>(
+      "/api/atelier/me/preferences",
+    )
+      .then((r) => {
+        if (!alive) return;
+        setCurrency(r.displayCurrency);
+        setSupported(r.supportedCurrencies);
+      })
+      .catch(() => {
+        // best effort — picker just shows USD until reachable
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const update = async (next: string) => {
+    const prev = currency;
+    setCurrency(next);
+    try {
+      await apiJson("/api/atelier/me/preferences", {
+        method: "PATCH",
+        body: { displayCurrency: next },
+      });
+      // Expenses totals/charts are derived from the cached expense list —
+      // refetch it so the new currency applies immediately.
+      queryClient.invalidateQueries({ queryKey: getAtelierListMyExpensesQueryKey() });
+    } catch {
+      setCurrency(prev);
+    }
+  };
+  return { currency, supported, update };
+}
+
 export default function SettingsScreen() {
   const c = useColors();
   const { t } = useI18n();
@@ -151,6 +196,7 @@ export default function SettingsScreen() {
       ?.expoClient?.version ??
     "—";
 
+  const dc = useDisplayCurrency();
   const [reminders, setReminders] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -298,6 +344,34 @@ export default function SettingsScreen() {
             </Card>
           </>
         ) : null}
+
+        <SectionTitle>{t("set.displayCurrency")}</SectionTitle>
+        <Card style={{ paddingVertical: 4 }}>
+          {dc.supported.map((cur, i) => (
+            <View key={cur}>
+              <OptionRow
+                label={cur}
+                active={dc.currency === cur}
+                onPress={() => dc.update(cur)}
+              />
+              {i < dc.supported.length - 1 ? (
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.borderSoft }} />
+              ) : null}
+            </View>
+          ))}
+          <Text
+            style={{
+              color: c.mutedForeground,
+              fontFamily: "Inter_400Regular",
+              fontSize: 12.5,
+              paddingHorizontal: 4,
+              paddingBottom: 8,
+              textAlign: rtl.textAlign,
+            }}
+          >
+            {t("set.displayCurrencyBody")}
+          </Text>
+        </Card>
 
         <SectionTitle>{t("set.account")}</SectionTitle>
         <Card style={{ paddingVertical: 4 }}>

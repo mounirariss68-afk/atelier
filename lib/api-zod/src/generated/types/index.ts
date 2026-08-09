@@ -702,6 +702,7 @@ export * from "./atelierSelfExpense";
 export * from "./atelierSelfExpenseCreate";
 export * from "./atelierSelfExpenseCreateContextType";
 export * from "./atelierSelfExpenseCreateFundingSource";
+export * from "./atelierSelfExpenseDisplay";
 export * from "./atelierSelfExpenseParseResponse";
 export * from "./atelierSelfExpenseParseResponseProposal";
 export * from "./atelierSelfExpensePatch";

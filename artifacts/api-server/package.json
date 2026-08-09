@@ -30,6 +30,7 @@
     "test:cli": "tsx ./tests/cli-turn/run.ts",
     "test:twofactor": "tsx ./tests/twofactor/run.ts",
     "test:security-log": "tsx ./tests/security-log/run.ts",
+    "test:display-currency": "tsx ./tests/display-currency/run.ts",
     "test:chat-replay": "tsx ./tests/chat/replay-probe.ts",
     "test:chat-facts": "tsx ./tests/chat/session-facts-probe.ts",
     "test:chat-clarify": "tsx ./tests/chat/clarification-resolver-probe.ts",

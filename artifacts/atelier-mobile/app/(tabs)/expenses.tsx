@@ -30,6 +30,7 @@ import {
 import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { formatMoney } from "@/lib/format";
+import { ExpenseCharts } from "@/components/ExpenseCharts";
 import { flushQueue, listQueue, type QueuedExpense } from "@/lib/offlineQueue";
 
 function statusStyle(
@@ -294,7 +295,7 @@ function FilterChip({
 // current month is expanded by default, others toggle on tap.
 // ---------------------------------------------------------------------
 type ListRow =
-  | { kind: "header"; key: string; monthKey: string; label: string; count: number; total: string; expanded: boolean }
+  | { kind: "header"; key: string; monthKey: string; label: string; count: number; total: string; approx: boolean; expanded: boolean }
   | { kind: "expense"; key: string; item: AtelierSelfExpense; index: number }
   | { kind: "queued"; key: string; item: QueuedExpense };
 
@@ -375,6 +376,8 @@ export default function ExpensesScreen() {
   const fabBottom = (Platform.OS === "web" ? WEB_TAB_BAR + 12 : Math.max(insets.bottom, 10) + 80);
 
   const expenses = query.data?.expenses ?? [];
+  // Task #827 — server converts every row into the user's display currency.
+  const displayCurrency = query.data?.displayCurrency ?? "USD";
   const queued = queuedItems.length;
 
   // Queued drafts have no server status yet — they behave like drafts for
@@ -413,20 +416,31 @@ export default function ExpensesScreen() {
     for (const key of keys) {
       const g = groups.get(key)!;
       const count = g.expenses.length + g.queued.length;
-      // Per-currency totals collapse to the dominant currency for the
-      // header hint; mixed currencies show just the count.
-      const currencies = new Set([
-        ...g.expenses.map((e) => e.currency),
-        ...g.queued.map((q) => q.fields.currency ?? "USD"),
-      ]);
-      let total = "";
-      if (currencies.size === 1) {
-        const cur = Array.from(currencies)[0];
-        const sum =
-          g.expenses.reduce((s, e) => s + e.amount, 0) +
-          g.queued.reduce((s, q) => s + q.fields.amount, 0);
-        total = formatMoney(sum, cur, lang);
+      // Task #827 — month totals always render in the user's display
+      // currency: server rows carry a converted `display` amount; queued
+      // offline drafts (no server FX yet) are included only when already
+      // in the display currency, and mark the total as approximate
+      // otherwise.
+      let sum = 0;
+      let approx = false;
+      for (const e of g.expenses) {
+        if (e.display) {
+          sum += e.display.amount;
+          if (e.display.converted) approx = true;
+        } else if (e.currency === displayCurrency) {
+          sum += e.amount;
+        } else {
+          approx = true;
+        }
       }
+      for (const q of g.queued) {
+        if ((q.fields.currency ?? "USD") === displayCurrency) {
+          sum += q.fields.amount;
+        } else {
+          approx = true;
+        }
+      }
+      const total = count > 0 ? formatMoney(sum, displayCurrency, lang) : "";
       const expanded = isExpanded(key);
       out.push({
         kind: "header",
@@ -435,6 +449,7 @@ export default function ExpensesScreen() {
         label: monthLabel(key, lang),
         count,
         total,
+        approx,
         expanded,
       });
       if (expanded) {
@@ -450,7 +465,7 @@ export default function ExpensesScreen() {
       }
     }
     return out;
-  }, [expenses, queuedVisible, submission, approval, payment, isExpanded, lang]);
+  }, [expenses, queuedVisible, submission, approval, payment, isExpanded, lang, displayCurrency]);
 
   const clearFilters = useCallback(() => {
     setSubmission(null);
@@ -634,6 +649,9 @@ export default function ExpensesScreen() {
         <FlatList
           data={rows}
           keyExtractor={(row) => row.key}
+          ListHeaderComponent={
+            <ExpenseCharts expenses={expenses} displayCurrency={displayCurrency} />
+          }
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomPad }}
           refreshControl={
             <RefreshControl
@@ -698,7 +716,7 @@ export default function ExpensesScreen() {
                       fontVariant: ["tabular-nums"],
                     }}
                   >
-                    {row.total}
+                    {row.approx ? `≈ ${row.total}` : row.total}
                   </Text>
                 ) : null}
                 <Feather

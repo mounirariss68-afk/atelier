@@ -9,4 +9,5 @@ import type { AtelierSelfExpense } from "./atelierSelfExpense";
 
 export type AtelierListMyExpenses200 = {
   expenses: AtelierSelfExpense[];
+  displayCurrency?: string;
 };

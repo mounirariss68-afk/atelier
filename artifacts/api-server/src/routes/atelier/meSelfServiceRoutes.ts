@@ -82,7 +82,7 @@ import {
   type ExpenseAuditorProposal,
 } from "../../lib/atelier-agents/runner.js";
 import { buildContractDigest } from "../../lib/atelier-contract-digest.js";
-import { convertToUsd } from "../../lib/atelier-fx.js";
+import { convertToUsd, convertUsdTo, DISPLAY_CURRENCIES } from "../../lib/atelier-fx.js";
 import { evaluateExpense } from "../../lib/atelier-expense-policy.js";
 // Task #383 — taxonomy + attribution + funding + merchant-memory learning.
 import { resolveExpenseExtras } from "../../lib/atelier-expense-attribution.js";
@@ -2042,6 +2042,53 @@ async function usdDisplayFor(e: typeof atelierExpenses.$inferSelect): Promise<{
   };
 }
 
+// ---------------------------------------------------------------------
+// Task #827 — per-user display preferences (currently: display currency
+// for money rollups). Self-scope: everyone may read/write their own.
+// ---------------------------------------------------------------------
+// @cli-skip: self-scope preference read; trivial UI plumbing (Task #827)
+router.get("/me/preferences", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    res.json({
+      displayCurrency: me.displayCurrency ?? "USD",
+      supportedCurrencies: DISPLAY_CURRENCIES,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: self-scope preference write; trivial UI plumbing (Task #827)
+router.patch("/me/preferences", async (req, res, next) => {
+  try {
+    const me = ensurePersona(req, res);
+    if (!me) return;
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const cur = String(b.displayCurrency ?? "").toUpperCase();
+    if (!DISPLAY_CURRENCIES.includes(cur)) {
+      res.status(400).json({ error: "unsupported-currency", allowed: DISPLAY_CURRENCIES });
+      return;
+    }
+    await db
+      .update(atelierUsers)
+      .set({ displayCurrency: cur, updatedAt: new Date() })
+      .where(eq(atelierUsers.id, me.id));
+    await audit({
+      entityType: "user",
+      entityId: me.id,
+      actor: me,
+      action: "me.preferences.updated",
+      payload: { displayCurrency: cur, previous: me.displayCurrency },
+      summary: `${me.name} set display currency to ${cur}`,
+    });
+    res.json({ displayCurrency: cur, supportedCurrencies: DISPLAY_CURRENCIES });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // @cli-skip: self-scope expense list; no CLI shape (Task #53)
 router.get("/me/expenses", async (req, res, next) => {
   try {
@@ -2052,10 +2099,24 @@ router.get("/me/expenses", async (req, res, next) => {
       .from(atelierExpenses)
       .where(and(eq(atelierExpenses.personId, me.id), isNull(atelierExpenses.deletedAt)))
       .orderBy(desc(atelierExpenses.createdAt));
+    // Task #827 — every row also carries the amount converted into the
+    // caller's display currency (via USD), so clients can total mixed-
+    // currency months honestly without inventing rates.
+    const displayCurrency = (me.displayCurrency ?? "USD").toUpperCase();
     const expenses = await Promise.all(
-      rows.map(async (e) => ({ ...claimToWire(e), usdDisplay: await usdDisplayFor(e) })),
+      rows.map(async (e) => {
+        const usdDisplay = await usdDisplayFor(e);
+        let display: { amount: number; currency: string; converted: boolean };
+        if (e.currency === displayCurrency) {
+          display = { amount: +e.amount.toFixed(2), currency: displayCurrency, converted: false };
+        } else {
+          const conv = await convertUsdTo(usdDisplay.usdAmount, displayCurrency, e.expenseDate);
+          display = { amount: +conv.amount.toFixed(2), currency: displayCurrency, converted: true };
+        }
+        return { ...claimToWire(e), usdDisplay, display };
+      }),
     );
-    res.json({ expenses });
+    res.json({ expenses, displayCurrency });
   } catch (err) {
     next(err);
   }

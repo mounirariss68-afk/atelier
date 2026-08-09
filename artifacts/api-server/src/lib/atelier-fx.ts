@@ -88,6 +88,53 @@ export async function convertToUsd(
  * today]. Idempotent on (date, base, quote). Used by the seed script
  * AND by the API ops endpoint POST /wallet/fx/seed.
  */
+/** Currencies the display-preference picker offers (FX-covered set). */
+export const DISPLAY_CURRENCIES = Object.keys(FALLBACK_RATES);
+
+export interface FxDisplayConversion {
+  amount: number;
+  rate: number; // units of target per USD
+  rateDate: string;
+  source: "fx_table" | "fallback" | "identity";
+}
+
+/**
+ * Task #827 — convert a USD amount into a target display currency using
+ * the same rate table (rows are quote-per-USD, so target = usd * rate).
+ */
+export async function convertUsdTo(
+  usdAmount: number,
+  currency: string,
+  date: Date | string,
+): Promise<FxDisplayConversion> {
+  const cur = (currency || "USD").toUpperCase();
+  const requested = ymd(date);
+  if (cur === "USD") {
+    return { amount: usdAmount, rate: 1, rateDate: requested, source: "identity" };
+  }
+  const [row] = await db
+    .select()
+    .from(atelierFxRates)
+    .where(
+      and(
+        eq(atelierFxRates.base, "USD"),
+        eq(atelierFxRates.quote, cur),
+        lte(atelierFxRates.date, requested),
+      ),
+    )
+    .orderBy(desc(atelierFxRates.date))
+    .limit(1);
+  if (row) {
+    return { amount: usdAmount * row.rate, rate: row.rate, rateDate: row.date, source: "fx_table" };
+  }
+  const fb = FALLBACK_RATES[cur];
+  if (fb) {
+    return { amount: usdAmount * fb, rate: fb, rateDate: requested, source: "fallback" };
+  }
+  // Unknown target — refuse-to-fake: show USD unchanged.
+  return { amount: usdAmount, rate: 1, rateDate: requested, source: "identity" };
+}
+
 export async function seedFxRates(days = 60): Promise<number> {
   const writes: Array<{
     id: string;
