@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Network from "expo-network";
 
 import { apiJson, putFileToSignedUrl } from "@/lib/api";
+import { getFileSystem } from "@/lib/nativeModules";
 import type { AtelierSelfExpenseCreate } from "@workspace/api-client-react";
 
 const STORAGE_KEY = "atelier_expense_queue";
@@ -41,9 +42,9 @@ export async function isOnline(): Promise<boolean> {
 /** Copy a captured receipt into app storage so it survives after the picker temp files vanish. */
 async function persistLocalCopy(uri: string, mime?: string): Promise<string> {
   try {
-    const FileSystem = await import("expo-file-system/legacy");
-    const dir = FileSystem.documentDirectory;
-    if (!dir) return uri;
+    const FileSystem = getFileSystem();
+    const dir = FileSystem?.documentDirectory;
+    if (!FileSystem || !dir) return uri;
     // Task #396 — PDFs must keep their extension or the parse pipeline
     // (and upload content-type) misidentifies them.
     const ext = mime === "application/pdf" ? "pdf" : "jpg";

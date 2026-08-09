@@ -1,4 +1,5 @@
 import { triggerUnauthorized } from "@/lib/authEvents";
+import { getFileSystem } from "@/lib/nativeModules";
 import { getTokenSync } from "@/lib/token";
 
 export const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
@@ -168,7 +169,8 @@ export async function putFileToSignedUrl(
   uri: string,
   mime: string,
 ): Promise<void> {
-  const FileSystem = await import("expo-file-system/legacy");
+  const FileSystem = getFileSystem();
+  if (!FileSystem) throw new Error("File upload is not supported on web");
   await FileSystem.uploadAsync(uploadURL, uri, {
     httpMethod: "PUT",
     uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,

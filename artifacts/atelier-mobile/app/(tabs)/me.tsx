@@ -49,6 +49,7 @@ import { useI18n, useRTL } from "@/contexts/I18nContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE, authHeader } from "@/lib/api";
 import { openDocumentFile } from "@/lib/documentOpen";
+import { getFileSystem, getSharing } from "@/lib/nativeModules";
 import { runExclusivePick } from "@/lib/pickerGuard";
 import { TextInput } from "react-native";
 
@@ -106,8 +107,9 @@ function SelfBillingSection() {
     }
     setDownloading(inv.id);
     try {
-      const FileSystem = await import("expo-file-system/legacy");
-      const Sharing = await import("expo-sharing");
+      const FileSystem = getFileSystem();
+      const Sharing = getSharing();
+      if (!FileSystem || !Sharing) throw new Error("Native file modules unavailable");
       const dir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? "";
       const dest = `${dir}${Date.now()}_${inv.invoiceNumber.replace(/[^\w.\-]+/g, "_")}.pdf`;
       const result = await FileSystem.downloadAsync(url, dest, { headers: authHeader() });
@@ -380,8 +382,8 @@ export default function MeScreen() {
       if (side === "back" ? !doc.hasBackFile : !doc.hasFile) return;
       if (Platform.OS !== "web") setDownloadingId(`${doc.id}:${side}`);
       try {
-        const FileSystem = Platform.OS === "web" ? null : await import("expo-file-system/legacy");
-        const Sharing = Platform.OS === "web" ? null : await import("expo-sharing");
+        const FileSystem = Platform.OS === "web" ? null : getFileSystem();
+        const Sharing = Platform.OS === "web" ? null : getSharing();
         const result = await openDocumentFile(doc, side, {
           apiBase: API_BASE,
           buildDownloadPath: getAtelierDownloadMyDocumentUrl,
