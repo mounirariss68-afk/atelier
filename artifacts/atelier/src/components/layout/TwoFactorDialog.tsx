@@ -169,6 +169,14 @@ export function TwoFactorDialog({
             ) : (
               <p className="text-sm text-text-mute">Loading…</p>
             )}
+            {status && !status.enabled && (
+              <p className="text-xs text-text-mute" data-testid="text-2fa-app-recommendations">
+                You'll need an authenticator app. We recommend Microsoft Authenticator (the firm
+                runs on Microsoft 365) — Google Authenticator, Apple Passwords (built into
+                iPhone), 1Password and Bitwarden work just as well. Any standard authenticator
+                app will do.
+              </p>
+            )}
             <DialogFooter>
               <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 Close
@@ -236,7 +244,8 @@ export function TwoFactorDialog({
                 />
               )}
               <p className="text-xs text-text-mute text-center">
-                Scan with Google Authenticator, 1Password, etc. Or enter the key manually:
+                Scan with Microsoft Authenticator, Google Authenticator, Apple Passwords,
+                1Password or Bitwarden — any authenticator app works. Or enter the key manually:
               </p>
               <code
                 className="text-xs font-mono bg-bg px-2 py-1 rounded border border-border-soft break-all"
