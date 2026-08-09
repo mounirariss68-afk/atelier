@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -45,7 +46,7 @@ const logoDark = require("@/assets/images/cognirise-logo-dark-bg.png");
 export default function LoginScreen() {
   const c = useColors();
   const { t } = useI18n();
-  const { login } = useAuth();
+  const { login, loginTwoFactor } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [email, setEmail] = useState("");
@@ -55,6 +56,10 @@ export default function LoginScreen() {
   const [updateRequired, setUpdateRequired] = useState(false);
   // Task #820 — self-service forgot-password (request-only; the reset link
   // itself opens in the browser).
+  // Task #821 — two-step login: password OK → server issues a challenge and
+  // we ask for the authenticator / backup code.
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [code, setCode] = useState("");
   const [forgotMode, setForgotMode] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotBusy, setForgotBusy] = useState(false);
@@ -96,8 +101,33 @@ export default function LoginScreen() {
     setLoading(true);
     const res = await login(email.trim(), password);
     setLoading(false);
+    if (res.twoFactorRequired && res.challenge) {
+      setChallenge(res.challenge);
+      setCode("");
+      return;
+    }
+    if (res.ok && res.twoFactorEnrollRequired) {
+      // Policy nudge — enrolment itself lives in the web portal.
+      Alert.alert(t("login.enrollNudgeTitle"), t("login.enrollNudgeBody"));
+    }
     if (!res.ok) {
       hapticError();
+      setError(t(res.errorKey ?? "login.failed"));
+    }
+  };
+
+  const onSubmitCode = async () => {
+    if (!challenge) return;
+    setError(null);
+    setLoading(true);
+    const res = await loginTwoFactor(challenge, code.trim());
+    setLoading(false);
+    if (!res.ok) {
+      hapticError();
+      if (res.errorKey === "login.challengeExpired") {
+        setChallenge(null);
+        setPassword("");
+      }
       setError(t(res.errorKey ?? "login.failed"));
     }
   };
@@ -233,7 +263,66 @@ export default function LoginScreen() {
             }}
           >
             <FadeInView delay={120}>
-              {forgotMode ? (
+              {challenge ? (
+                <Card style={{ gap: 16, padding: 20 }}>
+                  <Text
+                    style={{
+                      color: c.text,
+                      fontFamily: "PlusJakartaSans_700Bold",
+                      fontSize: 17,
+                    }}
+                  >
+                    {t("login.twoFactorTitle")}
+                  </Text>
+                  <Text
+                    style={{
+                      color: c.mutedForeground,
+                      fontFamily: "PlusJakartaSans_400Regular",
+                      fontSize: 14,
+                      lineHeight: 21,
+                    }}
+                  >
+                    {t("login.twoFactorBody")}
+                  </Text>
+                  <Field
+                    label={t("login.twoFactorCode")}
+                    value={code}
+                    onChangeText={setCode}
+                    keyboardType="number-pad"
+                    autoComplete="one-time-code"
+                    textContentType="oneTimeCode"
+                    placeholder="123 456"
+                    onSubmitEditing={onSubmitCode}
+                    error={error}
+                  />
+                  <Button
+                    label={t("login.twoFactorVerify")}
+                    onPress={onSubmitCode}
+                    loading={loading}
+                    disabled={!code}
+                    icon="shield"
+                  />
+                  <Pressable
+                    onPress={() => {
+                      setChallenge(null);
+                      setCode("");
+                      setError(null);
+                    }}
+                    hitSlop={8}
+                  >
+                    <Text
+                      style={{
+                        color: c.mutedForeground,
+                        fontFamily: "PlusJakartaSans_600SemiBold",
+                        fontSize: 13,
+                        textAlign: "center",
+                      }}
+                    >
+                      {t("login.twoFactorBack")}
+                    </Text>
+                  </Pressable>
+                </Card>
+              ) : forgotMode ? (
                 <Card style={{ gap: 16, padding: 20 }}>
                   <Text
                     style={{

@@ -18,6 +18,8 @@ export interface AuthSession {
   email: string;
   expiresAt: Date;
   mustChangePassword: boolean;
+  // Task #821 — when this session last passed a TOTP/backup-code check.
+  totpVerifiedAt: Date | null;
 }
 
 declare global {
@@ -52,7 +54,7 @@ function hashToken(token: string): string {
 export async function createSession(
   userId: string,
   email: string,
-  opts?: { mustChangePassword?: boolean },
+  opts?: { mustChangePassword?: boolean; totpVerifiedAt?: Date | null },
 ): Promise<{ token: string; expiresAt: Date }> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -61,6 +63,7 @@ export async function createSession(
     userId,
     email,
     mustChangePassword: opts?.mustChangePassword ?? false,
+    totpVerifiedAt: opts?.totpVerifiedAt ?? null,
     expiresAt,
   });
   // Opportunistic sweep of expired rows (cheap; indexed on expires_at).
@@ -103,7 +106,17 @@ export async function lookupSession(token: string): Promise<AuthSession | null> 
     email: row.email,
     expiresAt: row.expiresAt,
     mustChangePassword: row.mustChangePassword,
+    totpVerifiedAt: row.totpVerifiedAt ?? null,
   };
+}
+
+/** Task #821 — stamp a fresh step-up verification on this session. */
+export async function markSessionTotpVerified(token: string): Promise<void> {
+  if (!token) return;
+  await db
+    .update(atelierAuthSessions)
+    .set({ totpVerifiedAt: new Date() })
+    .where(eq(atelierAuthSessions.tokenHash, hashToken(token)));
 }
 
 /**

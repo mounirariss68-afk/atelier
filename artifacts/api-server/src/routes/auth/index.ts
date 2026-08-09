@@ -5,6 +5,7 @@ import {
   atelierUsers,
   atelierAuditEvents,
   atelierLoginActivationTokens,
+  atelierAdminSettings,
 } from "@workspace/db";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
@@ -20,11 +21,22 @@ import {
   clearSessionMustChange,
   setSessionCookie,
   clearSessionCookie,
+  markSessionTotpVerified,
 } from "../../lib/auth/session";
 import { personaToWire } from "../atelier/personaCookie";
 import { isDemoUser } from "../../lib/auth/demoReadOnly";
 import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { validateNewPassword } from "../../lib/auth/password-policy";
+import {
+  generateTotpSecret,
+  encryptTotpSecret,
+  decryptTotpSecret,
+  verifyTotpCode,
+  otpauthUrl,
+  generateBackupCodes,
+  backupCodesRemaining,
+} from "../../lib/auth/totp";
+import { requireFreshTotp, verifyCredentialCode } from "../../lib/auth/step-up";
 import { sendPasswordResetEmail } from "../../lib/atelier-reset-email";
 import { logger } from "../../lib/logger";
 
@@ -87,7 +99,14 @@ async function audit(
     | "password_reset_completed"
     | "password_reset_failed"
     | "account_locked"
-    | "account_unlocked",
+    | "account_unlocked"
+    | "twofa_enrolled"
+    | "twofa_disabled"
+    | "twofa_challenge_success"
+    | "twofa_challenge_failed"
+    | "twofa_backup_code_used"
+    | "twofa_reset_by_partner"
+    | "twofa_policy_updated",
   opts: {
     actorId?: string | null;
     actorLabel: string;
@@ -137,7 +156,21 @@ async function audit(
                                 ? `Account ${opts.targetEmail ?? opts.actorLabel} locked after repeated failed sign-ins`
                                 : action === "account_unlocked"
                                   ? `${opts.actorLabel} unlocked account ${opts.targetEmail ?? ""}`.trim()
-                                  : `Failed sign-in attempt`,
+                                  : action === "twofa_enrolled"
+                                    ? `${opts.actorLabel} enabled two-factor authentication`
+                                    : action === "twofa_disabled"
+                                      ? `${opts.actorLabel} disabled two-factor authentication`
+                                      : action === "twofa_challenge_success"
+                                        ? `${opts.actorLabel} passed a two-factor check`
+                                        : action === "twofa_challenge_failed"
+                                          ? `Failed two-factor code attempt by ${opts.actorLabel}`
+                                          : action === "twofa_backup_code_used"
+                                            ? `${opts.actorLabel} used a two-factor backup code`
+                                            : action === "twofa_reset_by_partner"
+                                              ? `${opts.actorLabel} reset two-factor authentication for ${opts.targetEmail ?? "a colleague"}`
+                                              : action === "twofa_policy_updated"
+                                                ? `${opts.actorLabel} updated the two-factor requirement policy`
+                                                : `Failed sign-in attempt`,
     });
   } catch (err) {
     logger.warn({ err, action }, "auth audit write failed");
@@ -245,6 +278,23 @@ router.post("/login", async (req: Request, res: Response) => {
     res.status(401).json(GENERIC_FAIL);
     return;
   }
+  // Task #821 — two-step login: password OK but 2FA is enabled, so no
+  // session yet. Mint a short-lived single-use challenge token; the client
+  // finishes at POST /login/2fa with a TOTP or backup code.
+  if (cred.totpEnabled && !isDemoUser({ userId: cred.userId, email })) {
+    const { rawToken: challenge, expiresAt: challengeExpiresAt } = await mintLoginToken({
+      email,
+      userId: cred.userId,
+      purpose: "2fa",
+      ttlMs: TWOFA_CHALLENGE_TTL_MS,
+    });
+    res.json({
+      twoFactorRequired: true,
+      challenge,
+      expiresAt: challengeExpiresAt.toISOString(),
+    });
+    return;
+  }
   const { token, expiresAt } = await createSession(persona.id, email, {
     mustChangePassword: cred.mustChangePassword,
   });
@@ -259,6 +309,12 @@ router.post("/login", async (req: Request, res: Response) => {
     // Task #59 — "joiner" (first-ever login) vs "reset" (partner reset);
     // drives the copy on the forced-change interstitial.
     mustChangeReason: cred.mustChangePassword ? (cred.mustChangeReason ?? "reset") : null,
+    // Task #821 — org policy requires 2FA for this role but the user has
+    // not enrolled yet: clients show an enrolment prompt after sign-in.
+    ...((await twoFactorRequiredForRole(persona.orgId, persona.role)) &&
+    !isDemoUser({ userId: cred.userId, email })
+      ? { twoFactorEnrollRequired: true }
+      : {}),
     ...(isMobileClient ? { token, expiresAt: expiresAt.toISOString() } : {}),
   });
 });
@@ -359,6 +415,9 @@ router.post("/change-password", async (req: Request, res: Response) => {
     });
     return;
   }
+  // Task #821 — step-up: 2FA-enabled users must present a fresh code.
+  const stepUp = await requireFreshTotp(req, res, session);
+  if (!stepUp.ok) return;
   await db
     .update(atelierAuthCredentials)
     .set({
@@ -391,7 +450,7 @@ router.post("/change-password", async (req: Request, res: Response) => {
 
 async function lookupActivationToken(
   rawToken: string,
-  purpose: "activation" | "reset",
+  purpose: "activation" | "reset" | "2fa",
 ) {
   if (!/^[0-9a-f]{64}$/.test(rawToken)) return null;
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
@@ -411,7 +470,7 @@ async function lookupActivationToken(
 async function mintLoginToken(args: {
   email: string;
   userId: string;
-  purpose: "activation" | "reset";
+  purpose: "activation" | "reset" | "2fa";
   ttlMs: number;
   createdByUserId?: string | null;
 }): Promise<{ rawToken: string; expiresAt: Date }> {
@@ -820,6 +879,7 @@ router.get("/reset-targets", async (req: Request, res: Response) => {
       pendingReset,
       locked: isLockedOut(c),
       lockedUntil: isLockedOut(c) ? c.lockedUntil?.toISOString() : null,
+      twoFactorEnabled: c.totpEnabled,
     });
   }
   res.json({ targets });
@@ -861,6 +921,17 @@ router.post("/reset-colleague-password", async (req: Request, res: Response) => 
   if (isDemoUser({ userId: cred.userId, email: targetEmail })) {
     res.status(403).json({ error: "demo-account", message: "The demo account's password cannot be reset." });
     return;
+  }
+  // Task #821 — step-up: partners with 2FA must present a fresh code.
+  {
+    const token = sessionTokenFromRequest(req);
+    const session = token ? await lookupSession(token) : null;
+    if (!session) {
+      res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+      return;
+    }
+    const stepUp = await requireFreshTotp(req, res, session);
+    if (!stepUp.ok) return;
   }
   // Task #820 — no more on-screen temporary passwords. The old password is
   // invalidated (unusable random hash), every session dies, and the target
@@ -940,6 +1011,17 @@ router.post("/unlock-account", async (req: Request, res: Response) => {
     res.status(403).json({ error: "demo-account", message: "The demo account cannot be managed here." });
     return;
   }
+  // Task #821 — step-up: partners with 2FA must present a fresh code.
+  {
+    const token = sessionTokenFromRequest(req);
+    const session = token ? await lookupSession(token) : null;
+    if (!session) {
+      res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+      return;
+    }
+    const stepUp = await requireFreshTotp(req, res, session);
+    if (!stepUp.ok) return;
+  }
   await db
     .update(atelierAuthCredentials)
     .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
@@ -952,6 +1034,396 @@ router.post("/unlock-account", async (req: Request, res: Response) => {
     targetUserId: cred.userId,
   });
   res.json({ ok: true });
+});
+
+
+// ===========================================================================
+// Task #821 — two-factor authentication (TOTP + backup codes)
+// ===========================================================================
+
+const TWOFA_CHALLENGE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Org 2FA policy — stored in atelier_admin_settings value.require2faRoles:
+ * [] (off), ["*"] (everyone), or a list of persona roles.
+ */
+async function getRequire2faRoles(orgId: string): Promise<string[]> {
+  const [row] = await db
+    .select()
+    .from(atelierAdminSettings)
+    .where(eq(atelierAdminSettings.orgId, orgId));
+  const value = (row?.value ?? {}) as { require2faRoles?: unknown };
+  return Array.isArray(value.require2faRoles)
+    ? value.require2faRoles.filter((r): r is string => typeof r === "string")
+    : [];
+}
+
+async function twoFactorRequiredForRole(orgId: string, role: string): Promise<boolean> {
+  const roles = await getRequire2faRoles(orgId);
+  return roles.includes("*") || roles.includes(role);
+}
+
+/** Resolve the calling session + its credential row (shared by 2FA routes). */
+async function requireSessionCred(req: Request, res: Response) {
+  const token = sessionTokenFromRequest(req);
+  const session = token ? await lookupSession(token) : null;
+  if (!session || !token) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return null;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, session.email));
+  if (!cred || cred.userId !== session.userId) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return null;
+  }
+  return { token, session, cred };
+}
+
+// Current user's 2FA state (drives the profile security card).
+router.get("/2fa/status", async (req: Request, res: Response) => {
+  const ctx = await requireSessionCred(req, res);
+  if (!ctx) return;
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, ctx.session.userId), isNull(atelierUsers.deletedAt)));
+  const required = persona
+    ? await twoFactorRequiredForRole(persona.orgId, persona.role)
+    : false;
+  res.json({
+    enabled: ctx.cred.totpEnabled,
+    backupCodesRemaining: backupCodesRemaining(ctx.cred.totpBackupCodes),
+    required: required && !isDemoUser({ userId: ctx.cred.userId, email: ctx.cred.email }),
+  });
+});
+
+// Step 1 of enrolment: verify the current password, mint a secret (stored
+// encrypted, NOT yet enabled) and return the QR payload + manual key.
+router.post("/2fa/enroll", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const ctx = await requireSessionCred(req, res);
+  if (!ctx) return;
+  if (isDemoUser({ userId: ctx.cred.userId, email: ctx.cred.email })) {
+    res.status(403).json({ error: "demo-read-only", message: "The demo account cannot enrol in two-factor authentication." });
+    return;
+  }
+  if (ctx.cred.totpEnabled) {
+    res.status(409).json({ error: "already-enabled", message: "Two-factor authentication is already enabled." });
+    return;
+  }
+  const currentPassword = String(req.body?.currentPassword ?? "");
+  if (!currentPassword || !verifyPassword(currentPassword, ctx.cred.passwordHash)) {
+    res.status(403).json({ error: "wrong-password", message: "Current password is incorrect." });
+    return;
+  }
+  const secret = generateTotpSecret();
+  await db
+    .update(atelierAuthCredentials)
+    .set({ totpSecretEnc: encryptTotpSecret(secret), totpLastStep: null, updatedAt: new Date() })
+    .where(eq(atelierAuthCredentials.email, ctx.cred.email));
+  res.json({
+    ok: true,
+    manualKey: secret,
+    otpauthUrl: otpauthUrl({ secretB32: secret, email: ctx.cred.email }),
+  });
+});
+
+// Step 2 of enrolment: first valid code flips 2FA on and returns the
+// one-time backup codes (shown exactly once, stored only as hashes).
+router.post("/2fa/confirm", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const ctx = await requireSessionCred(req, res);
+  if (!ctx) return;
+  if (ctx.cred.totpEnabled || !ctx.cred.totpSecretEnc) {
+    res.status(409).json({ error: "no-pending-enrolment", message: "Start enrolment first." });
+    return;
+  }
+  const secret = decryptTotpSecret(ctx.cred.totpSecretEnc);
+  const step = secret ? verifyTotpCode(secret, String(req.body?.code ?? ""), null) : null;
+  if (step == null) {
+    await audit("twofa_challenge_failed", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+    res.status(403).json({ error: "invalid-code", message: "That code is incorrect. Check your authenticator app and try again." });
+    return;
+  }
+  const { codes, records } = generateBackupCodes();
+  await db
+    .update(atelierAuthCredentials)
+    .set({ totpEnabled: true, totpLastStep: step, totpBackupCodes: records, updatedAt: new Date() })
+    .where(eq(atelierAuthCredentials.email, ctx.cred.email));
+  await markSessionTotpVerified(ctx.token);
+  await audit("twofa_enrolled", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+  res.json({ ok: true, backupCodes: codes });
+});
+
+// Disable 2FA — requires the current password AND a fresh code (step-up).
+router.post("/2fa/disable", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const ctx = await requireSessionCred(req, res);
+  if (!ctx) return;
+  if (!ctx.cred.totpEnabled) {
+    res.status(409).json({ error: "not-enabled", message: "Two-factor authentication is not enabled." });
+    return;
+  }
+  const currentPassword = String(req.body?.currentPassword ?? "");
+  if (!currentPassword || !verifyPassword(currentPassword, ctx.cred.passwordHash)) {
+    res.status(403).json({ error: "wrong-password", message: "Current password is incorrect." });
+    return;
+  }
+  const stepUp = await requireFreshTotp(req, res, ctx.session);
+  if (!stepUp.ok) return;
+  await db
+    .update(atelierAuthCredentials)
+    .set({ totpEnabled: false, totpSecretEnc: null, totpLastStep: null, totpBackupCodes: null, updatedAt: new Date() })
+    .where(eq(atelierAuthCredentials.email, ctx.cred.email));
+  await audit("twofa_disabled", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+  res.json({ ok: true });
+});
+
+// Explicit step-up verification: stamps the session as freshly verified.
+router.post("/2fa/verify", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const ctx = await requireSessionCred(req, res);
+  if (!ctx) return;
+  if (!ctx.cred.totpEnabled) {
+    res.status(409).json({ error: "not-enabled", message: "Two-factor authentication is not enabled." });
+    return;
+  }
+  const result = await verifyCredentialCode(ctx.cred, String(req.body?.code ?? ""));
+  if (!result.ok) {
+    await audit("twofa_challenge_failed", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+    res.status(403).json({ error: "invalid-code", message: "That code is incorrect or already used." });
+    return;
+  }
+  await markSessionTotpVerified(ctx.token);
+  if (result.method === "backup") {
+    await audit("twofa_backup_code_used", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+  }
+  await audit("twofa_challenge_success", { actorId: ctx.session.userId, actorLabel: ctx.session.email, ip });
+  res.json({ ok: true });
+});
+
+// Step 2 of login. Single-use challenge token + TOTP/backup code -> session.
+// Wrong codes share the SAME persisted lockout counter as password attempts.
+router.post("/login/2fa", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many sign-in attempts. Try again in a few minutes." });
+    return;
+  }
+  const challenge = String(req.body?.challenge ?? "");
+  const code = String(req.body?.code ?? "");
+  const row = await lookupActivationToken(challenge, "2fa");
+  if (!row) {
+    res.status(401).json({ error: "challenge-expired", message: "Sign-in expired. Enter your email and password again." });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, row.email));
+  if (!cred || cred.disabled || !cred.totpEnabled || isLockedOut(cred)) {
+    await audit("login_failed", { actorLabel: row.email, ip });
+    res.status(401).json(GENERIC_FAIL);
+    return;
+  }
+  const result = await verifyCredentialCode(cred, code);
+  if (!result.ok) {
+    // Shared lockout counter with password attempts (atomic increment).
+    const [bumped] = await db
+      .update(atelierAuthCredentials)
+      .set({
+        failedLoginCount: sql`${atelierAuthCredentials.failedLoginCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAuthCredentials.email, cred.email))
+      .returning({ failedLoginCount: atelierAuthCredentials.failedLoginCount });
+    if ((bumped?.failedLoginCount ?? 0) >= LOCKOUT_THRESHOLD) {
+      await db
+        .update(atelierAuthCredentials)
+        .set({ failedLoginCount: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MS), updatedAt: new Date() })
+        .where(eq(atelierAuthCredentials.email, cred.email));
+      await audit("account_locked", { actorLabel: row.email, ip, targetEmail: cred.email, targetUserId: cred.userId });
+    }
+    await audit("twofa_challenge_failed", { actorLabel: row.email, ip });
+    res.status(401).json({ error: "invalid-code", message: "That code is incorrect or already used." });
+    return;
+  }
+  // Consume the challenge only on success (retries allowed until expiry).
+  // Conditional on usedAt IS NULL: of two concurrent valid submissions only
+  // one claims the challenge and mints a session.
+  const consumed = await db
+    .update(atelierLoginActivationTokens)
+    .set({ usedAt: new Date() })
+    .where(
+      and(
+        eq(atelierLoginActivationTokens.tokenHash, row.tokenHash),
+        isNull(atelierLoginActivationTokens.usedAt),
+      ),
+    )
+    .returning({ tokenHash: atelierLoginActivationTokens.tokenHash });
+  if (consumed.length === 0) {
+    res.status(401).json({ error: "challenge-expired", message: "Sign-in expired. Enter your email and password again." });
+    return;
+  }
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, cred.userId), isNull(atelierUsers.deletedAt)));
+  if (!persona) {
+    await audit("login_failed", { actorLabel: row.email, ip });
+    res.status(401).json(GENERIC_FAIL);
+    return;
+  }
+  if (cred.failedLoginCount > 0 || cred.lockedUntil) {
+    await db
+      .update(atelierAuthCredentials)
+      .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: new Date() })
+      .where(eq(atelierAuthCredentials.email, cred.email));
+  }
+  const { token, expiresAt } = await createSession(persona.id, row.email, {
+    mustChangePassword: cred.mustChangePassword,
+    totpVerifiedAt: new Date(),
+  });
+  setSessionCookie(res, token, expiresAt);
+  if (result.method === "backup") {
+    await audit("twofa_backup_code_used", { actorId: persona.id, actorLabel: persona.name, ip });
+  }
+  await audit("twofa_challenge_success", { actorId: persona.id, actorLabel: persona.name, ip });
+  await audit("login_success", { actorId: persona.id, actorLabel: persona.name, ip });
+  const isMobileClient = String(req.body?.client ?? "") === "mobile";
+  res.json({
+    user: personaToWire(persona),
+    mustChangePassword: cred.mustChangePassword,
+    mustChangeReason: cred.mustChangePassword ? (cred.mustChangeReason ?? "reset") : null,
+    ...(isMobileClient ? { token, expiresAt: expiresAt.toISOString() } : {}),
+  });
+});
+
+// Partner-initiated 2FA reset for a locked-out colleague (step-up gated).
+router.post("/reset-colleague-2fa", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const targetEmail = String(req.body?.email ?? "").trim().toLowerCase();
+  if (!targetEmail) {
+    res.status(400).json({ error: "invalid-body", message: "Target email is required." });
+    return;
+  }
+  if (targetEmail === actor.email) {
+    res.status(400).json({ error: "cannot-reset-self", message: "Disable your own two-factor from your profile instead." });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  if (!cred) {
+    res.status(404).json({ error: "not-found", message: "No login exists for that email." });
+    return;
+  }
+  if (isDemoUser({ userId: cred.userId, email: targetEmail })) {
+    res.status(403).json({ error: "demo-account", message: "The demo account cannot be managed here." });
+    return;
+  }
+  if (!cred.totpEnabled) {
+    res.status(409).json({ error: "not-enabled", message: "That account does not have two-factor enabled." });
+    return;
+  }
+  const token = sessionTokenFromRequest(req);
+  const session = token ? await lookupSession(token) : null;
+  if (!session) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return;
+  }
+  const stepUp = await requireFreshTotp(req, res, session);
+  if (!stepUp.ok) return;
+  await db
+    .update(atelierAuthCredentials)
+    .set({ totpEnabled: false, totpSecretEnc: null, totpLastStep: null, totpBackupCodes: null, updatedAt: new Date() })
+    .where(eq(atelierAuthCredentials.email, targetEmail));
+  // Their sessions die with the second factor: a fresh login (password-only
+  // now) is required, and the enrolment prompt fires again if policy applies.
+  await revokeAllSessions(cred.userId);
+  await audit("twofa_reset_by_partner", {
+    actorId: actor.userId,
+    actorLabel: actor.name,
+    ip,
+    targetEmail,
+    targetUserId: cred.userId,
+  });
+  res.json({ ok: true });
+});
+
+// Org-wide / per-role 2FA requirement policy (founding partners only).
+router.get("/2fa/policy", async (req: Request, res: Response) => {
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, actor.userId));
+  if (!persona) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return;
+  }
+  res.json({ require2faRoles: await getRequire2faRoles(persona.orgId) });
+});
+
+router.post("/2fa/policy", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  const actor = await requireFoundingPartner(req, res);
+  if (!actor) return;
+  const roles = req.body?.require2faRoles;
+  if (
+    !Array.isArray(roles) ||
+    roles.some((r) => typeof r !== "string" || r.length > 40) ||
+    roles.length > 20
+  ) {
+    res.status(400).json({ error: "invalid-body", message: "require2faRoles must be a list of role names (or [\"*\"] for everyone)." });
+    return;
+  }
+  const [persona] = await db
+    .select()
+    .from(atelierUsers)
+    .where(eq(atelierUsers.id, actor.userId));
+  if (!persona) {
+    res.status(401).json({ error: "unauthenticated", message: "Sign in required." });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(atelierAdminSettings)
+    .where(eq(atelierAdminSettings.orgId, persona.orgId));
+  const value = { ...((row?.value ?? {}) as Record<string, unknown>), require2faRoles: roles };
+  if (row) {
+    await db
+      .update(atelierAdminSettings)
+      .set({ value, updatedAt: new Date() })
+      .where(eq(atelierAdminSettings.orgId, persona.orgId));
+  } else {
+    await db.insert(atelierAdminSettings).values({ orgId: persona.orgId, value });
+  }
+  await audit("twofa_policy_updated", { actorId: actor.userId, actorLabel: actor.name, ip });
+  res.json({ require2faRoles: roles });
 });
 
 export default router;

@@ -40,6 +40,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { isSelfOnlyRole } from "@/lib/lens";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
+import { TwoFactorDialog } from "@/components/layout/TwoFactorDialog";
 
 /**
  * Task #497 — light/dark mode toggle. Sits in the right-side utility
@@ -68,6 +69,18 @@ export function TopNav() {
   const [location] = useLocation();
   const { logout } = useAuth();
   const [changePwOpen, setChangePwOpen] = React.useState(false);
+  const [twoFaOpen, setTwoFaOpen] = React.useState(false);
+  // Task #821 — policy nudge: sign-in flagged that this role must enrol.
+  React.useEffect(() => {
+    try {
+      if (sessionStorage.getItem("atelier-2fa-nudge") === "1") {
+        sessionStorage.removeItem("atelier-2fa-nudge");
+        setTwoFaOpen(true);
+      }
+    } catch {
+      // storage unavailable — no nudge
+    }
+  }, []);
   const { data: me } = useAtelierGetMe();
   // The persona list only feeds the dev-only persona switcher; skip the
   // org-directory fetch entirely for self-only roles (employee/contractor)
@@ -283,6 +296,13 @@ export function TopNav() {
                     Change Password
                   </DropdownMenuItem>
                   <DropdownMenuItem
+                    onClick={() => setTwoFaOpen(true)}
+                    data-testid="menu-two-factor"
+                    className="focus:bg-bg-elevate-2 focus:text-text cursor-pointer"
+                  >
+                    Two-Factor Authentication
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
                     onClick={() => void logout()}
                     data-testid="menu-sign-out"
                     className="focus:bg-bg-elevate-2 focus:text-danger cursor-pointer mt-1 border-t border-border-soft"
@@ -296,6 +316,7 @@ export function TopNav() {
         </div>
       </div>
       <ChangePasswordDialog open={changePwOpen} onOpenChange={setChangePwOpen} />
+      <TwoFactorDialog open={twoFaOpen} onOpenChange={setTwoFaOpen} />
     </header>
   );
 }

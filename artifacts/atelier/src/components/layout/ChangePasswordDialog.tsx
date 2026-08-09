@@ -30,6 +30,10 @@ export function ChangePasswordDialog({
   const [confirm, setConfirm] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Task #821 — step-up: when the server answers step-up-required we show a
+  // code field and retry with totpCode in the body.
+  const [needsCode, setNeedsCode] = React.useState(false);
+  const [totpCode, setTotpCode] = React.useState("");
 
   React.useEffect(() => {
     if (!open) {
@@ -38,6 +42,8 @@ export function ChangePasswordDialog({
       setConfirm("");
       setError(null);
       setSubmitting(false);
+      setNeedsCode(false);
+      setTotpCode("");
     }
   }, [open]);
 
@@ -58,10 +64,19 @@ export function ChangePasswordDialog({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+        body: JSON.stringify({
+          currentPassword: current,
+          newPassword: next,
+          ...(needsCode && totpCode.trim() ? { totpCode: totpCode.trim() } : {}),
+        }),
       });
-      const j = (await r.json().catch(() => ({}))) as { message?: string };
+      const j = (await r.json().catch(() => ({}))) as { message?: string; error?: string };
       if (!r.ok) {
+        if (j.error === "step-up-required") {
+          setNeedsCode(true);
+          setError("Enter a code from your authenticator app to confirm this change.");
+          return;
+        }
         setError(j.message ?? "Could not change password. Try again.");
         return;
       }
@@ -126,6 +141,20 @@ export function ChangePasswordDialog({
               data-testid="input-confirm-password"
             />
           </div>
+          {needsCode ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="stepup-code">Two-factor code</Label>
+              <Input
+                id="stepup-code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                required
+                data-testid="input-stepup-code"
+              />
+            </div>
+          ) : null}
           {error ? (
             <p className="text-sm text-danger" data-testid="text-password-error">
               {error}

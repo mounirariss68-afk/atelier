@@ -21,6 +21,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email";
 import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
+import { requireFreshTotpForActor } from "../../lib/auth/step-up";
 import { and, desc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import {
   db,
@@ -715,6 +716,13 @@ async function setDisabled(
   const markLeaver = parsedBody?.data?.markLeaver === true;
   const endDate =
     parsedBody?.data?.endDate?.trim() || new Date().toISOString().slice(0, 10);
+
+  // Task #821 — disabling someone's account is a sensitive action: actors
+  // with 2FA enabled must present a fresh code (or inline `totpCode`).
+  if (disabled) {
+    const stepUp = await requireFreshTotpForActor(req, res, { email: me.email });
+    if (!stepUp.ok) return;
+  }
 
   await db
     .update(atelierAuthCredentials)

@@ -28,6 +28,9 @@ export default function ChangePasswordScreen() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Task #821 — step-up: server may demand a fresh two-factor code.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   const onSubmit = async () => {
     setError(null);
@@ -41,12 +44,20 @@ export default function ChangePasswordScreen() {
     }
     setLoading(true);
     try {
-      await changePassword(current, next);
+      await changePassword(current, next, needsCode ? totpCode : undefined);
       hapticSuccess();
       if (!mustChangePassword) router.back();
     } catch (e) {
       hapticError();
-      if (e instanceof HttpError && e.status === 400) {
+      if (e instanceof HttpError && e.status === 403) {
+        const d = e.data as { error?: string; message?: string } | null;
+        if (d?.error === "step-up-required" || d?.error === "step-up-invalid-code") {
+          setNeedsCode(true);
+          setError(t("password.stepUpNeeded"));
+          return;
+        }
+        setError(d?.message ?? t("common.error"));
+      } else if (e instanceof HttpError && e.status === 400) {
         const d = e.data as { message?: string } | null;
         setError(d?.message ?? t("common.error"));
       } else {
@@ -139,6 +150,17 @@ export default function ChangePasswordScreen() {
             secureTextEntry
             placeholder="••••••••••"
           />
+          {needsCode ? (
+            <Field
+              label={t("password.twoFactorCode")}
+              value={totpCode}
+              onChangeText={setTotpCode}
+              keyboardType="number-pad"
+              autoComplete="one-time-code"
+              textContentType="oneTimeCode"
+              placeholder="123 456"
+            />
+          ) : null}
           {error ? (
             <Text
               style={{

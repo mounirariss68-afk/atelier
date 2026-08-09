@@ -4559,6 +4559,16 @@ export const atelierAuthCredentials = pgTable(
     // successful login, partner reset/unlock, or self-service reset.
     failedLoginCount: integer("failed_login_count").notNull().default(0),
     lockedUntil: timestamp("locked_until"),
+    // Task #821 — TOTP two-factor auth. The secret is AES-256-GCM encrypted
+    // at rest (never plaintext); enrolment stores it with enabled=false until
+    // the first code is confirmed. Backup codes are stored as scrypt hashes
+    // with a usedAt stamp (single-use). totpLastStep prevents replay of the
+    // last accepted 30-second code window.
+    totpEnabled: boolean("totp_enabled").notNull().default(false),
+    totpSecretEnc: text("totp_secret_enc"),
+    totpLastStep: integer("totp_last_step"),
+    // Array of { hash: string, usedAt: string | null }
+    totpBackupCodes: jsonb("totp_backup_codes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -4600,6 +4610,10 @@ export const atelierAuthSessions = pgTable(
     // Task #5 — copied from the credential at login; while true the global
     // auth gate blocks data routes until the password is changed.
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    // Task #821 — step-up verification: set every time this session passes a
+    // TOTP/backup-code check (at 2FA login or an explicit /2fa/verify).
+    // Sensitive actions require it to be fresh (within a short window).
+    totpVerifiedAt: timestamp("totp_verified_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     expiresAt: timestamp("expires_at").notNull(),
   },

@@ -92,6 +92,13 @@
       "when": 1778980100000,
       "tag": "0023_atelier_reference_data",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1778980101000,
+      "tag": "0054_atelier_two_factor",
+      "breakpoints": true
     }
   ]
 }

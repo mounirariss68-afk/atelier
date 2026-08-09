@@ -34,6 +34,7 @@
 - [Account-agent UI uses raw fetch](atelier-account-agent-ui.md) — bespoke /accounts/:id/agents/* run+dismiss routes aren't in openapi, so the Account AI tab calls them with raw fetch ({runId,output}); only reuse codegen hooks (useAtelierCreateActivity) for accept→task.
 - [Atelier account/contact merge](atelier-merge.md) — survivor=path id, dup=body, archives dup (soft), idempotent already_merged; both gate CREATE_ROLES+canSeeAccount; contactRelationships has no updatedAt.
 - [Atelier auth lockdown](atelier-auth-lockdown.md) — single global 401 gate (mount new routers after it); NODE_ENV=test harness bypass killed by REPLIT_DEPLOYMENT; boot seed is data-only.
+- [Atelier 2FA invariants](atelier-2fa.md) — code checks only via CAS-based verifyCredentialCode; step-up via requireFreshTotp (403 step-up-required); policy in admin settings; SESSION_SECRET rotation orphans enrolments.
 - [Atelier password user_managed flag](atelier-password-user-managed.md) — boot seed must skip user_managed=true credential rows; any new credential write surface must set the flag deliberately.
 - [Atelier two-persona baseline](atelier-two-persona-baseline.md) — only the 2 founders are seeded users; RBAC tests provision ephemeral p_test_* personas + grants and clean up in finally; seed doesn't truncate every table.
 - [Executive Mapper agent](atelier-executive-mapper.md) — reuses Cartographer queue/guard/applier; PDL title-keyword match, C-suite-first two-pass, capped enrich attempts; gov-body mode sweeps ministry ranks.

@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ShieldAlert, Shield, Globe, Download, Lock, KeyRound, FileCheck2, ListTodo } from "lucide-react";
+import { ShieldAlert, Shield, ShieldCheck, Globe, Download, Lock, KeyRound, FileCheck2, ListTodo } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -433,6 +433,9 @@ export default function Admin() {
 
         {/* Task #5 — founding-partner-only colleague password reset. */}
         {me.role === "founding_partner" && <PartnerAccessRecovery />}
+
+        {/* Task #821 — org-wide / per-role two-factor requirement. */}
+        {me.role === "founding_partner" && <TwoFactorPolicyCard />}
       </div>
     </div>
   );
@@ -454,10 +457,35 @@ function PartnerAccessRecovery() {
     pendingReset: boolean;
     locked?: boolean;
     lockedUntil?: string | null;
+    twoFactorEnabled?: boolean;
   };
   const [targets, setTargets] = React.useState<Target[] | null>(null);
   const [busyEmail, setBusyEmail] = React.useState<string | null>(null);
   const [confirmEmail, setConfirmEmail] = React.useState<string | null>(null);
+  // Task #821 — step-up: if the server demands a fresh 2FA code for these
+  // sensitive actions, we surface a code field and retry with totpCode.
+  const [stepUpCode, setStepUpCode] = React.useState("");
+  const [needStepUp, setNeedStepUp] = React.useState(false);
+  const [confirm2faEmail, setConfirm2faEmail] = React.useState<string | null>(null);
+
+  const stepUpBody = () =>
+    stepUpCode.trim() ? { totpCode: stepUpCode.trim() } : {};
+
+  const handleStepUp = (j: { error?: string; message?: string }) => {
+    if (j.error === "step-up-required" || j.error === "step-up-invalid-code") {
+      setNeedStepUp(true);
+      toast({
+        title: "Two-factor code needed",
+        description:
+          j.error === "step-up-invalid-code"
+            ? "That code was incorrect or already used — enter a fresh one."
+            : "Enter a code from your authenticator app below, then retry.",
+        variant: "destructive",
+      });
+      return true;
+    }
+    return false;
+  };
   const [result, setResult] = React.useState<{
     email: string;
     resetUrl: string;
@@ -483,14 +511,16 @@ function PartnerAccessRecovery() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, ...stepUpBody() }),
       });
       const j = (await r.json().catch(() => ({}))) as {
         resetUrl?: string;
         email?: { status?: string; note?: string };
         message?: string;
+        error?: string;
       };
       if (!r.ok || !j.resetUrl) {
+        if (handleStepUp(j)) return;
         toast({
           title: "Reset failed",
           description: j.message ?? "Could not reset access. Try again.",
@@ -515,6 +545,38 @@ function PartnerAccessRecovery() {
         description: "Network error. Try again.",
         variant: "destructive",
       });
+    } finally {
+      setBusyEmail(null);
+    }
+  };
+
+  const doReset2fa = async (email: string) => {
+    setBusyEmail(email);
+    setConfirm2faEmail(null);
+    try {
+      const r = await fetch("/api/auth/reset-colleague-2fa", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, ...stepUpBody() }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string; message?: string };
+      if (!r.ok) {
+        if (handleStepUp(j)) return;
+        toast({
+          title: "2FA reset failed",
+          description: j.message ?? "Could not reset two-factor. Try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({
+        title: "Two-factor reset",
+        description: `${email} was signed out everywhere and can sign in with their password, then re-enrol.`,
+      });
+      loadTargets();
+    } catch {
+      toast({ title: "2FA reset failed", description: "Network error. Try again.", variant: "destructive" });
     } finally {
       setBusyEmail(null);
     }
@@ -564,13 +626,16 @@ function PartnerAccessRecovery() {
                           method: "POST",
                           credentials: "include",
                           headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ email: t.email }),
-                        }).then((r) => {
+                          body: JSON.stringify({ email: t.email, ...stepUpBody() }),
+                        }).then(async (r) => {
                           if (r.ok) {
                             toast({ title: "Account unlocked" });
                             loadTargets();
                           } else {
-                            toast({ title: "Unlock failed", variant: "destructive" });
+                            const j = (await r.json().catch(() => ({}))) as { error?: string };
+                            if (!handleStepUp(j)) {
+                              toast({ title: "Unlock failed", variant: "destructive" });
+                            }
                           }
                         });
                       }}
@@ -602,19 +667,73 @@ function PartnerAccessRecovery() {
                     Cancel
                   </Button>
                 </div>
+              ) : confirm2faEmail === t.email ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-text-mute">
+                    Remove their authenticator? They sign in with password only until they
+                    re-enrol.
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={busyEmail !== null}
+                    onClick={() => void doReset2fa(t.email)}
+                    data-testid={`button-confirm-reset-2fa-${t.email}`}
+                  >
+                    {busyEmail === t.email ? "Resetting…" : "Confirm 2FA reset"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busyEmail !== null}
+                    onClick={() => setConfirm2faEmail(null)}
+                    data-testid={`button-cancel-reset-2fa-${t.email}`}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busyEmail !== null}
-                  onClick={() => setConfirmEmail(t.email)}
-                  data-testid={`button-reset-${t.email}`}
-                >
-                  Reset password
-                </Button>
+                <div className="flex items-center gap-2">
+                  {t.twoFactorEnabled && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busyEmail !== null}
+                      onClick={() => setConfirm2faEmail(t.email)}
+                      data-testid={`button-reset-2fa-${t.email}`}
+                    >
+                      Reset 2FA
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busyEmail !== null}
+                    onClick={() => setConfirmEmail(t.email)}
+                    data-testid={`button-reset-${t.email}`}
+                  >
+                    Reset password
+                  </Button>
+                </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+      {needStepUp && (
+        <div className="flex items-center gap-2" data-testid="panel-stepup">
+          <Input
+            className="max-w-[180px]"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="Two-factor code"
+            value={stepUpCode}
+            onChange={(e) => setStepUpCode(e.target.value)}
+            data-testid="input-admin-stepup-code"
+          />
+          <span className="text-xs text-text-mute">
+            Your account has 2FA — sensitive actions need a fresh code.
+          </span>
         </div>
       )}
       {result && (
@@ -664,6 +783,106 @@ function PartnerAccessRecovery() {
             Shown only once. Single use, valid 24 hours — it stops working as soon as they set a
             new password. Resetting again issues a fresh link and invalidates this one.
           </p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+
+/**
+ * Task #821 — firm-wide 2FA requirement policy. "Everyone" stores ["*"];
+ * otherwise a set of roles. Users covered by the policy who have not
+ * enrolled see a nudge at sign-in (never a hard lockout).
+ */
+function TwoFactorPolicyCard() {
+  const { toast } = useToast();
+  const ROLE_OPTIONS: { value: string; label: string }[] = [
+    { value: "founding_partner", label: "Founding partners" },
+    { value: "partner", label: "Partners" },
+    { value: "senior_manager", label: "Senior managers" },
+    { value: "hr", label: "HR" },
+    { value: "finance", label: "Finance" },
+    { value: "employee", label: "Employees" },
+    { value: "contractor", label: "Contractors" },
+    { value: "board_observer", label: "Board observers" },
+  ];
+  const [roles, setRoles] = React.useState<string[] | null>(null);
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    void fetch("/api/auth/2fa/policy", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { require2faRoles?: string[] } | null) =>
+        setRoles(j?.require2faRoles ?? []),
+      );
+  }, []);
+
+  const save = async (next: string[]) => {
+    setRoles(next);
+    setSaving(true);
+    try {
+      const r = await fetch("/api/auth/2fa/policy", {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ require2faRoles: next }),
+      });
+      if (!r.ok) {
+        toast({ title: "Could not save policy", variant: "destructive" });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const everyone = roles?.includes("*") ?? false;
+
+  return (
+    <Card className="p-6 space-y-4" data-testid="card-2fa-policy">
+      <h3 className="font-mono text-sm tracking-widest uppercase text-gold flex items-center gap-2">
+        <ShieldCheck className="w-4 h-4" /> Two-Factor Requirement
+      </h3>
+      <p className="text-xs text-text-mute">
+        People covered by this policy are prompted to set up two-factor authentication when
+        they sign in (they are not locked out). The demo account is always exempt.
+      </p>
+      {roles === null ? (
+        <Skeleton className="h-10 bg-bg-elevate" />
+      ) : (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={everyone}
+              disabled={saving}
+              onChange={(e) => void save(e.target.checked ? ["*"] : [])}
+              data-testid="checkbox-2fa-everyone"
+            />
+            Require for everyone
+          </label>
+          {!everyone && (
+            <div className="grid grid-cols-2 gap-1.5 pl-1">
+              {ROLE_OPTIONS.map((o) => (
+                <label key={o.value} className="flex items-center gap-2 text-sm text-text-mute">
+                  <input
+                    type="checkbox"
+                    checked={roles.includes(o.value)}
+                    disabled={saving}
+                    onChange={(e) =>
+                      void save(
+                        e.target.checked
+                          ? [...roles, o.value]
+                          : roles.filter((r) => r !== o.value),
+                      )
+                    }
+                    data-testid={`checkbox-2fa-role-${o.value}`}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </Card>
