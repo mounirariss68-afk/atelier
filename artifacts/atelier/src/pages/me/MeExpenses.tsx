@@ -179,15 +179,17 @@ function displayTotalOf(rows: Claim[]): { sum: number; approx: boolean } | null 
   return { sum, approx };
 }
 
+// Task #836 — Cognirise brand palette, same colors and ORDER as the mobile
+// ExpenseCharts (artifacts/atelier-mobile/components/ExpenseCharts.tsx), so a
+// category picks up the same color on both surfaces. Sampled from the logo
+// mark; hues read on both light and dark themes.
 const CHART_PALETTE = [
-  "var(--gold)",
-  "var(--gold-soft)",
-  "var(--gold-deep)",
-  "#5B8DEF",
-  "#3FBF8F",
-  "#E0B354",
-  "#9aa0a6",
-  "#C25E5E",
+  "#CD41B2", // magenta (brand core)
+  "#7C3BE0", // deep purple
+  "#F25081", // pink
+  "#B345F0", // violet
+  "#FF7B5A", // coral
+  "#8A2C77", // dark magenta (overflow/"Other")
 ];
 const EMPTY_CHART_CONFIG: ChartConfig = {};
 
@@ -290,7 +292,7 @@ function ExpenseCharts({ claims, displayCurrency }: { claims: Claim[]; displayCu
           <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9aa0a6" }} />
           <YAxis tick={{ fontSize: 10, fill: "#9aa0a6" }} width={52} />
           <Tooltip formatter={(v: number) => fmt(Number(v))} cursor={{ fill: "rgba(154,160,166,0.08)" }} />
-          <Bar dataKey="value" fill="var(--gold)" radius={[3, 3, 0, 0]} />
+          <Bar dataKey="value" fill={CHART_PALETTE[0]} radius={[3, 3, 0, 0]} />
         </BarChart>,
       )}
     </div>
