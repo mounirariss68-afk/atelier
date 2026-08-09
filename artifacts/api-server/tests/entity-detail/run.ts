@@ -37,6 +37,12 @@ import {
   atelierPovs,
 } from "@workspace/db";
 import { eq, like } from "drizzle-orm";
+import { atelierDocuments, atelierDocumentVersions } from "@workspace/db";
+import {
+  persistChunkEmbeddings,
+  purgeChunkEmbeddings,
+} from "../../src/lib/atelier-cli/attachments/retrieval.js";
+import { __docContentTesting } from "../../src/lib/atelier-cli/entity-detail-capabilities.js";
 
 let pass = 0;
 let fail = 0;
@@ -92,6 +98,12 @@ const INV2 = "inv_t853_paid"; // fully paid
 const INV3 = "inv_t853_current"; // issued, due in future
 const RCPT = "rcpt_t853_one";
 const CAPP = "capp_t853_one";
+const DOC = "doc_t853_msa";
+const DOC_OFF = "doc_t853_off"; // aiRetrieval disabled
+const DOC_NOVER = "doc_t853_nover"; // no current version
+const DVER = "dver_t853_v2"; // current version (chunked)
+const DVER_OLD = "dver_t853_v1"; // superseded version (chunked — must not surface)
+const DVER_OFF = "dver_t853_off";
 const FP = persona("founding_partner");
 const BOARD = persona("board_observer");
 const RESTRICTED = persona("recruiter");
@@ -180,7 +192,40 @@ async function seed(): Promise<void> {
   }]);
 }
 
+async function seedDocs(chunkText: string, oldChunkText: string): Promise<void> {
+  const base = { orgId: ORG, uploaderUserId: FP.id, uploaderLabel: "T853 FP" };
+  await db.insert(atelierDocuments).values([
+    { id: DOC, ...base, title: "Renewal MSA T853Doc", category: "contract", currentVersionId: DVER },
+    { id: DOC_OFF, ...base, title: "Opted-out Doc T853Doc", category: "other", currentVersionId: DVER_OFF, aiRetrieval: false },
+    { id: DOC_NOVER, ...base, title: "Versionless Doc T853Doc", category: "other", currentVersionId: null },
+  ]);
+  const vbase = { orgId: ORG, mime: "application/pdf", sizeBytes: 1000, uploaderUserId: FP.id };
+  await db.insert(atelierDocumentVersions).values([
+    { id: DVER_OLD, ...vbase, documentId: DOC, versionNumber: 1, fileName: "renewal-msa-v1.pdf", sha256: "sha_t853_a", blobRef: "enc:doc:t853a" },
+    { id: DVER, ...vbase, documentId: DOC, versionNumber: 2, fileName: "renewal-msa-v2.pdf", sha256: "sha_t853_b", blobRef: "enc:doc:t853b" },
+    { id: DVER_OFF, ...vbase, documentId: DOC_OFF, versionNumber: 1, fileName: "opted-out.pdf", sha256: "sha_t853_c", blobRef: "enc:doc:t853c" },
+  ]);
+  const mkChunks = (attId: string, text: string) => [
+    { chunkId: `${attId}#c000`, charStart: 0, charEnd: text.length, summary: text.slice(0, 60), text },
+  ];
+  await persistChunkEmbeddings({
+    orgId: ORG, attachmentId: DVER, fileName: "renewal-msa-v2.pdf", kind: "pdf",
+    uploaderUserId: FP.id, chunks: mkChunks(DVER, chunkText),
+  });
+  await persistChunkEmbeddings({
+    orgId: ORG, attachmentId: DVER_OLD, fileName: "renewal-msa-v1.pdf", kind: "pdf",
+    uploaderUserId: FP.id, chunks: mkChunks(DVER_OLD, oldChunkText),
+  });
+}
+
+async function cleanupDocs(): Promise<void> {
+  for (const v of [DVER, DVER_OLD, DVER_OFF]) await purgeChunkEmbeddings(v);
+  await db.delete(atelierDocumentVersions).where(like(atelierDocumentVersions.id, "dver_t853_%"));
+  await db.delete(atelierDocuments).where(like(atelierDocuments.id, "doc_t853_%"));
+}
+
 async function cleanup(): Promise<void> {
+  await cleanupDocs();
   await db.delete(atelierCashApplication).where(eq(atelierCashApplication.id, CAPP));
   await db.delete(atelierCashReceipt).where(eq(atelierCashReceipt.id, RCPT));
   await db.delete(atelierInvoice).where(like(atelierInvoice.id, "inv_t853_%"));
@@ -345,6 +390,68 @@ async function main() {
     await test("employee denied AR rollups outright", async () => {
       expectForbidden(await runTool("statement_of_account", EMP, { accountId: ACC }), "emp soa");
       expectForbidden(await runTool("pending_invoices", EMP, { accountId: ACC }), "emp pending");
+    });
+
+    console.log("[7] Document content depth (Task #859)");
+    const CHUNK_TEXT = "The renewal term is thirty-six months with a ninety day notice period T853.";
+    const OLD_CHUNK_TEXT = "Superseded old-version clause about pilots T853.";
+    await seedDocs(CHUNK_TEXT, OLD_CHUNK_TEXT);
+    await test("doc with chunks: content excerpts arrive ONLY via inert safeBlocks", async () => {
+      const d = dataOf(await runTool("entity_detail", FP, { id: DOC, kind: "document" }));
+      const detail = d.detail as Record<string, unknown>;
+      const content = (detail as { content: Record<string, unknown> }).content;
+      assert.equal(content.available, true, "content.available");
+      assert.ok((content.excerptCount as number) >= 1, "excerptCount");
+      assert.ok(Array.isArray(content.citations) && (content.citations as string[]).length >= 1);
+      // chunk bodies never raw in detail/content — only in safeBlocks
+      assert.ok(!JSON.stringify(detail).includes("thirty-six months"), "detail must not carry chunk text");
+      const sb = String((d as { safeBlocks?: unknown }).safeBlocks ?? "");
+      assert.ok(sb.includes("<attachment>"), "safeBlocks wrapped inert");
+      assert.ok(sb.includes("thirty-six months"), "safeBlocks carries chunk text");
+    });
+    await test("retrieval is keyed on the CURRENT version only", async () => {
+      const d = dataOf(await runTool("entity_detail", FP, { id: DOC, kind: "document" }));
+      const sb = String((d as { safeBlocks?: unknown }).safeBlocks ?? "");
+      assert.ok(!sb.includes("Superseded old-version clause"), "old-version chunks must not surface");
+      for (const c of ((d.detail as { content: { citations: string[] } }).content.citations)) {
+        assert.ok(c.startsWith("renewal-msa-v2.pdf#"), `citation from current version: ${c}`);
+      }
+    });
+    await test("free-text question steers retrieval (query path)", async () => {
+      const d = dataOf(
+        await runTool("entity_detail", FP, { query: "Renewal MSA T853Doc", kind: "document" }),
+      );
+      const content = (d.detail as { content: Record<string, unknown> }).content;
+      assert.equal(content.available, true);
+    });
+    await test("aiRetrieval=false → honest unavailability, no safeBlocks", async () => {
+      const d = dataOf(await runTool("entity_detail", FP, { id: DOC_OFF, kind: "document" }));
+      const content = (d.detail as { content: Record<string, unknown> }).content;
+      assert.equal(content.available, false);
+      assert.equal(content.reason, "ai_retrieval_disabled");
+      assert.equal((d as { safeBlocks?: unknown }).safeBlocks, undefined);
+    });
+    await test("no readable version → honest unavailability", async () => {
+      const d = dataOf(await runTool("entity_detail", FP, { id: DOC_NOVER, kind: "document" }));
+      const content = (d.detail as { content: Record<string, unknown> }).content;
+      assert.equal(content.available, false);
+      assert.equal(content.reason, "no_readable_version");
+    });
+    await test("retrieval failure → distinct retrieval_failed reason (not empty)", async () => {
+      __docContentTesting.forceRetrievalError = true;
+      try {
+        const d = dataOf(await runTool("entity_detail", FP, { id: DOC, kind: "document" }));
+        const content = (d.detail as { content: Record<string, unknown> }).content;
+        assert.equal(content.available, false);
+        assert.equal(content.reason, "retrieval_failed");
+        assert.equal((d as { safeBlocks?: unknown }).safeBlocks, undefined);
+      } finally {
+        __docContentTesting.forceRetrievalError = false;
+      }
+    });
+    await test("self-only persona still denied documents entirely", async () => {
+      const r = await runTool("entity_detail", EMP, { id: DOC, kind: "document" });
+      assert.equal(r.ok, false, "employee must not reach document contents");
     });
   } finally {
     await cleanup();

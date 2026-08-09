@@ -9,3 +9,8 @@ description: Invariants of the generic chat entity-detail provider registry + AR
 - Self-only (employee/contractor) widening is exactly: catalog returns me.* + `entity.detail`; inside run(), only account/engagement/deliverable providers with `selfOnlyAllowed` and staffed visibility (engagement grant or account-team row). AR rollups (`statement_of_account`, `pending_invoices`) deny self-only + restricted + board_observer, mirroring wallet AR routes.
 - `capabilitiesForPersona` takes a full persona object, not a role string — passing a string silently falls through to the default (unclamped) branch.
 - Deterministic suite: `pnpm --filter @workspace/api-server run test:entity-detail` (in-process, seeds org_t853 rows, cleans up).
+
+## Document depth layer (content retrieval)
+- The document provider's `fetch` accepts `opts.question` (the entity_detail free-text `query`, passed at all three fetch call sites); it runs `searchDocumentChunks` narrowed to `attachmentIds:[doc.currentVersionId]` (chunk rows are keyed on VERSION id).
+- **Why:** "what does this document say" follow-ups must quote content, not just versions/metadata.
+- Chunk bodies travel ONLY inside `data.safeBlocks` (wrapAttachment inert wrapper); `detail.content` carries citations/counts only. aiRetrieval=false or no current version → `content.available:false` with a reason, never an error.

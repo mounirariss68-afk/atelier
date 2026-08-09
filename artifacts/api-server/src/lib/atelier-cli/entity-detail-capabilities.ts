@@ -66,6 +66,8 @@ import {
   isBoardObserver,
 } from "../../routes/atelier/personaRoles.js";
 import { resolveSalesStage } from "../atelier-agents/pipeline.js";
+import { searchDocumentChunks } from "./attachments/retrieval.js";
+import { wrapAttachment } from "./prompt-guard.js";
 import type { CliPersona, ToolContext, ToolResult } from "./index.js";
 
 // ---------------------------------------------------------------------
@@ -135,8 +137,16 @@ export interface EntityDetailProvider {
   search(q: string, ctx: ToolContext): Promise<DetailCandidate[]>;
   /** ACL predicate — same helpers as the REST routes. */
   visible(id: string, ctx: ToolContext, access: EngAccess): Promise<boolean>;
-  /** Full card + depth block. Enforces ACL itself too (defense in depth). */
-  fetch(id: string, ctx: ToolContext, access: EngAccess): Promise<DetailFetch>;
+  /** Full card + depth block. Enforces ACL itself too (defense in depth).
+   *  `opts.question` carries the user's free-text ask (when the lookup
+   *  came in by name) so content-bearing providers (document) can run
+   *  targeted RAG retrieval instead of returning metadata only. */
+  fetch(
+    id: string,
+    ctx: ToolContext,
+    access: EngAccess,
+    opts?: { question?: string },
+  ): Promise<DetailFetch>;
 }
 
 const PROVIDERS: EntityDetailProvider[] = [];
@@ -233,6 +243,11 @@ async function staffedAccountIds(ctx: ToolContext, access: EngAccess): Promise<S
 }
 
 const isSelfOnly = (ctx: ToolContext) => SELF_ONLY_CHAT_ROLES.has(ctx.persona.role);
+
+/** Test seam (Task #859): lets the deterministic entity-detail suite
+ *  exercise the document provider's retrieval-failure branch without
+ *  breaking the embeddings/DB stack. Never set outside tests. */
+export const __docContentTesting = { forceRetrievalError: false };
 
 // ---------------------------------------------------------------------
 // providers
@@ -856,7 +871,7 @@ registerDetailProvider({
       doc as Parameters<typeof canSeeDocument>[2],
     );
   },
-  async fetch(id, ctx, access) {
+  async fetch(id, ctx, access, opts) {
     if (!(await this.visible(id, ctx, access))) {
       return { forbidden: "You don't have access to this document." };
     }
@@ -872,6 +887,58 @@ registerDetailProvider({
       .where(eq(atelierDocumentVersions.documentId, id))
       .orderBy(desc(atelierDocumentVersions.versionNumber))
       .limit(5);
+
+    // Depth layer (Task #859): pull actual document contents via the
+    // existing authorized RAG retrieval so "what does this document say"
+    // follow-ups can quote the file rather than just its metadata.
+    //   - Chunk rows are keyed on the current VERSION id.
+    //   - Provider ACL (canSeeDocument, checked above) gates the lookup;
+    //     searchDocumentChunks re-applies its own SQL ACL + the version
+    //     `retrievable` flag as defense in depth.
+    //   - Chunk bodies travel ONLY inside inert safeBlocks (never raw in
+    //     detail), matching the RAG lifecycle rules.
+    let content: Record<string, unknown>;
+    let safeBlocks: string | undefined;
+    if (!doc.aiRetrieval) {
+      content = { available: false, reason: "ai_retrieval_disabled" };
+    } else if (!doc.currentVersionId) {
+      content = { available: false, reason: "no_readable_version" };
+    } else {
+      const question = (opts?.question ?? "").trim();
+      let hits: Awaited<ReturnType<typeof searchDocumentChunks>> | null = null;
+      try {
+        if (__docContentTesting.forceRetrievalError) {
+          throw new Error("forced retrieval error (test seam)");
+        }
+        hits = await searchDocumentChunks({
+          persona: { id: ctx.persona.id, role: ctx.persona.role, orgId: ctx.persona.orgId },
+          query: question || doc.title,
+          limit: 6,
+          attachmentIds: [doc.currentVersionId],
+        });
+      } catch (err) {
+        // Honest availability: an embedding/DB failure is NOT the same as
+        // "this document has no retrievable content".
+        hits = null;
+        content = {
+          available: false,
+          reason: "retrieval_failed",
+          error: err instanceof Error ? err.message.slice(0, 200) : String(err),
+        };
+      }
+      if (hits === null) {
+        // content already set to retrieval_failed above
+      } else if (hits.length === 0) {
+        content = { available: false, reason: "no_retrievable_chunks" };
+      } else {
+        content = {
+          available: true,
+          excerptCount: hits.length,
+          citations: hits.map((h) => h.citation),
+        };
+        safeBlocks = hits.map((h) => wrapAttachment(h.citation, h.text)).join("\n\n");
+      }
+    }
     return {
       ok: true,
       data: {
@@ -888,7 +955,9 @@ registerDetailProvider({
           versions: versions.map((v) => ({ versionNumber: v.versionNumber, fileName: v.fileName, at: v.createdAt.toISOString() })),
           versionCount: versions.length,
           notes: doc.notes ?? null,
+          content,
         },
+        ...(safeBlocks ? { safeBlocks } : {}),
       },
     };
   },
@@ -980,7 +1049,7 @@ defineCapability({
       let firstForbidden: string | null = null;
       for (const p of probe) {
         if (!providerAllowed(p)) continue;
-        const r = await p.fetch(id, ctx, access).catch(() => null);
+        const r = await p.fetch(id, ctx, access, { question: query || undefined }).catch(() => null);
         if (r && "forbidden" in r) {
           if (hinted) return denyForbidden(r.forbidden);
           firstForbidden ??= r.forbidden;
@@ -1018,7 +1087,7 @@ defineCapability({
         return notFound(`${hinted.kind.replace(/_/g, " ")} matching "${query}"`);
       }
       if (vis.length === 1 || vis[0]!.score - (vis[1]?.score ?? 0) >= 0.25) {
-        const r = await hinted.fetch(vis[0]!.id, ctx, access);
+        const r = await hinted.fetch(vis[0]!.id, ctx, access, { question: query });
         if (r && "forbidden" in r) return denyForbidden(r.forbidden);
         if (r && "ok" in r) return { ok: true, data: r.data };
         return notFound(hinted.kind.replace(/_/g, " "));
@@ -1060,7 +1129,7 @@ defineCapability({
       merged.length === 1 || top.score - merged[1]!.score >= 0.25;
     if (clearWinner) {
       const p = detailProviderFor(top.kind)!;
-      const r = await p.fetch(top.id, ctx, access);
+      const r = await p.fetch(top.id, ctx, access, { question: query });
       if (r && "forbidden" in r) return denyForbidden(r.forbidden);
       if (r && "ok" in r) return { ok: true, data: r.data };
     }
