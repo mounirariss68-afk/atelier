@@ -1393,6 +1393,13 @@ export default function MeExpenses() {
                   <span className="text-text-mute">
                     {c.currency} {c.amount.toFixed(2)}
                   </span>
+                  {/* Task #832 — server-converted display-currency bridge next to the
+                      original amount (never converted client-side). */}
+                  {c.display?.converted && (
+                    <span className="text-xs text-text-faint" data-testid={`exp-display-amount-${c.id}`}>
+                      ≈ {c.display.currency} {c.display.amount.toFixed(2)}
+                    </span>
+                  )}
                   <MonoChip>{c.contextType}</MonoChip>
                   <span className="text-xs text-text-faint">{c.expenseDate}</span>
                 </div>
