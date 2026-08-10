@@ -64,7 +64,7 @@ import {
   PersonNameValidationError,
   type StructuredName,
 } from "../../lib/atelier-person-model.js";
-import { sendJoinerWelcomeEmail } from "../../lib/atelier-welcome-email.js";
+import { sendJoinerWelcomeEmail, sendPartnerRegistrationEmail } from "../../lib/atelier-welcome-email.js";
 import { emitSelfNotification } from "./meRoutes.js";
 import {
   ensureProvisioningRow,
@@ -1219,6 +1219,8 @@ interface ProvisionLoginArgs {
    * notification (partners never see the Me lens).
    */
   alliancePartnerFirmId?: string | null;
+  /** Task #874 — firm display name for the partner registration email. */
+  partnerFirmName?: string | null;
 }
 
 type ProvisionLoginResult =
@@ -1356,6 +1358,10 @@ export async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Pr
       email,
       userId,
       createdByUserId: me.id,
+      // Task #874 — partner logins get a registration-variant token: the
+      // link opens the public partner registration page (company + bank
+      // details + password) instead of the plain /activate password form.
+      purpose: isAlliancePartnerLogin ? "partner_registration" : "activation",
       expiresAt: activationExpiresAt,
     });
     // Mark the login.created step done (if the sequence has one).
@@ -1504,18 +1510,30 @@ export async function provisionPortalLogin(args: ProvisionLoginArgs): Promise<Pr
   } catch {
     // No/invalid Origin — omit the link.
   }
+  // Task #874 — partner logins get a registration link (company + bank
+  // details + password) instead of the plain activate link.
+  const activationPath = isAlliancePartnerLogin ? "/partner-register" : "/activate";
   const activationUrl = signInUrl
-    ? `${signInUrl}/activate?token=${activationToken}`
-    : `/activate?token=${activationToken}`;
-  const welcomeEmail = await sendJoinerWelcomeEmail({
-    fullName: person.fullName,
-    email,
-    activationUrl: signInUrl ? activationUrl : null,
-    activationValidity: "72 hours",
-    workerType: person.workerType === "employee" ? "employee" : "contractor",
-    signInUrl,
-    sender: { actor: { name: me.name, email: me.email } },
-  });
+    ? `${signInUrl}${activationPath}?token=${activationToken}`
+    : `${activationPath}?token=${activationToken}`;
+  const welcomeEmail = isAlliancePartnerLogin
+    ? await sendPartnerRegistrationEmail({
+        fullName: person.fullName,
+        email,
+        firmName: args.partnerFirmName ?? "your firm",
+        registrationUrl: signInUrl ? activationUrl : null,
+        validity: "72 hours",
+        sender: { actor: { name: me.name, email: me.email } },
+      })
+    : await sendJoinerWelcomeEmail({
+        fullName: person.fullName,
+        email,
+        activationUrl: signInUrl ? activationUrl : null,
+        activationValidity: "72 hours",
+        workerType: person.workerType === "employee" ? "employee" : "contractor",
+        signInUrl,
+        sender: { actor: { name: me.name, email: me.email } },
+      });
 
   // The activation URL is returned once so HR can share it through a
   // secure channel when email delivery isn't configured. It is a

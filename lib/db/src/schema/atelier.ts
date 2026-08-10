@@ -121,6 +121,11 @@ export const atelierUsers = pgTable(
   (t) => [
     index("idx_atelier_users_org").on(t.orgId),
     index("idx_atelier_users_role").on(t.role),
+    // Task #874 — one ACTIVE alliance-partner login per firm (v1), enforced
+    // at the DB so concurrent invites can't both win; routes map 23505 → 409.
+    uniqueIndex("uq_atelier_users_active_partner_firm")
+      .on(t.orgId, t.partnerFirmId)
+      .where(sql`${t.partnerFirmId} IS NOT NULL AND ${t.deletedAt} IS NULL`),
   ],
 );
 
@@ -2534,6 +2539,21 @@ export const atelierPartnerFirms = pgTable(
     insuranceStatus: text("insurance_status"), // PRD §2.1
     contactName: text("contact_name"),
     contactEmail: text("contact_email"),
+    // Task #874 — partner self-registration: company legal details submitted
+    // by the partner via the token-gated registration page.
+    legalName: text("legal_name"),
+    registrationNumber: text("registration_number"),
+    taxId: text("tax_id"),
+    registeredAddress: text("registered_address"),
+    registrationCompletedAt: timestamp("registration_completed_at"),
+    registrationCompletedByUserId: text("registration_completed_by_user_id"),
+    // Task #874 — APPROVED payable bank details. Written ONLY by the
+    // finance approval route over atelier_partner_firm_bank_change_requests
+    // (maker-checker) — never directly by the partner.
+    bankIban: text("bank_iban"),
+    bankSwift: text("bank_swift"),
+    bankName: text("bank_name"),
+    bankCurrency: text("bank_currency"),
     // Task #513 — unified partner-firm registry. The alliance-lens fields
     // previously on `atelier_alliance_partner_firms` (now retired) live
     // here so roster flows and the Partners lens read the same record.
@@ -2913,11 +2933,35 @@ export const atelierBankChangeRequests = pgTable(
   ],
 );
 
-// ============================================================
-// Task #51 — Me-lens self-service: dependents + emergency contacts.
-// Both are person-scoped exactly like atelier_person_documents
-// (personType employee | contractor). Owner-editable, HR-readable.
-// ============================================================
+export const atelierPartnerFirmBankChangeRequests = pgTable(
+  "atelier_partner_firm_bank_change_requests",
+  {
+    id: text("id").primaryKey(),
+    orgId: ORG("org_id"),
+    partnerFirmId: text("partner_firm_id").notNull(),
+    // The alliance-partner login (or internal user) who submitted it.
+    requestedByUserId: text("requested_by_user_id").notNull(),
+    previousIbanMasked: text("previous_iban_masked"),
+    newIban: text("new_iban").notNull(),
+    newSwift: text("new_swift"),
+    newBankName: text("new_bank_name"),
+    newCurrency: text("new_currency"),
+    reason: text("reason"),
+    status: text("status").notNull().default("pending"), // pending | approved | rejected
+    decidedByUserId: text("decided_by_user_id"),
+    decidedByName: text("decided_by_name"),
+    decidedAt: timestamp("decided_at"),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at"),
+  },
+  (t) => [
+    index("idx_atelier_pf_bankreq_org").on(t.orgId),
+    index("idx_atelier_pf_bankreq_firm").on(t.partnerFirmId),
+    index("idx_atelier_pf_bankreq_status").on(t.status),
+  ],
+);
 export const atelierDependents = pgTable(
   "atelier_dependents",
   {

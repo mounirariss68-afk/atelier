@@ -20,6 +20,7 @@ import NotFound from "@/pages/not-found";
 import SignIn from "@/pages/SignIn";
 import { PartnerPortalHome, PartnerPortalOpportunity } from "@/pages/PartnerPortal";
 import Activate from "@/pages/Activate";
+import PartnerRegister from "@/pages/PartnerRegister";
 import ResetPassword from "@/pages/ResetPassword";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import SupportPage from "@/pages/Support";
@@ -253,6 +254,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // joiner has no session yet). The page itself validates the token.
   if (typeof window !== "undefined" && window.location.pathname.startsWith("/activate")) {
     return <Activate />;
+  }
+  // Task #874 — public partner registration link (token-gated). Must render
+  // pre-auth: the invited partner has no session yet. The page validates
+  // the single-use token itself.
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/partner-register")) {
+    return <PartnerRegister />;
   }
   // Task #820 — self-service password reset (request form + tokened set
   // form). Must render pre-auth; the page itself validates the token.

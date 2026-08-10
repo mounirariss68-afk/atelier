@@ -57,6 +57,7 @@
     "test:change-password": "tsx ./tests/change-password/run.ts",
     "test:cli-catalog": "tsx ./tests/cli-catalog/run.ts",
     "test:partner-portal": "tsx ./tests/partner-portal/run.ts",
+    "test:partner-registration": "tsx ./tests/partner-registration/run.ts",
     "test:entity-detail": "tsx ./tests/entity-detail/run.ts",
     "test:who-works": "tsx ./tests/cli-catalog/who-works.ts",
     "test:workload-scope": "tsx ./tests/cli-catalog/workload-scope.ts",

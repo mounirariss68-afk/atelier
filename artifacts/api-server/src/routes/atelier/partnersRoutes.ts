@@ -253,6 +253,23 @@ async function getFirm(me: Me, id: string) {
   return row ?? null;
 }
 
+// Task #874 — payable bank details NEVER ride on general firm reads. The
+// Partners lens is visible to roles far broader than finance/leadership, so
+// every serialized firm row passes through this sanitizer; the only surface
+// exposing (masked) bank data is the finance/leadership review queue at
+// /partners/bank-changes.
+function sanitizeFirmWire<T extends Record<string, unknown>>(
+  f: T,
+): Omit<T, "bankIban" | "bankSwift" | "bankName" | "bankCurrency"> & {
+  bankDetailsOnFile: boolean;
+} {
+  const { bankIban, bankSwift, bankName, bankCurrency, ...rest } = f as Record<string, unknown>;
+  void bankSwift;
+  void bankName;
+  void bankCurrency;
+  return { ...(rest as Omit<T, "bankIban" | "bankSwift" | "bankName" | "bankCurrency">), bankDetailsOnFile: Boolean(bankIban) };
+}
+
 // List — includes live-resource counts so the directory shows staffing reality.
 // @cli-skip: Task #513 REST surface; chat parity tracked in docs/PARTNERS_BACKLOG.md
 router.get("/partners/firms", async (req, res, next) => {
@@ -280,7 +297,7 @@ router.get("/partners/firms", async (req, res, next) => {
     rows.sort((a, b) => a.name.localeCompare(b.name));
     res.json({
       items: rows.map((f) => ({
-        ...f,
+        ...sanitizeFirmWire(f),
         activeResourceCount: activeByFirm.get(f.id) ?? 0,
       })),
     });
@@ -299,7 +316,7 @@ router.get("/partners/firms/:id", async (req, res, next) => {
       res.status(404).json({ error: "partner-firm-not-found" });
       return;
     }
-    res.json(firm);
+    res.json(sanitizeFirmWire(firm));
   } catch (err) {
     next(err);
   }
@@ -477,7 +494,7 @@ router.post("/partners/firms", async (req, res, next) => {
         run: () => runAllianceCartographerAndQueue(id, me.id, { chainMapper: true }),
       });
     }
-    res.status(201).json(row);
+    res.status(201).json(sanitizeFirmWire(row));
   } catch (err) {
     next(err);
   }
@@ -563,7 +580,7 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
       }
     }
     if (Object.keys(changes).length === 0) {
-      res.json(firm);
+      res.json(sanitizeFirmWire(firm));
       return;
     }
     const [row] = await db
@@ -583,7 +600,7 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
     if (["name", "speciality", "capabilities"].some((k) => k in changes)) {
       void refreshPartnerFirmRag(firm.id);
     }
-    res.json(row);
+    res.json(sanitizeFirmWire(row));
   } catch (err) {
     next(err);
   }
@@ -1029,7 +1046,7 @@ router.post("/partners/targets/:id/promote", async (req, res, next) => {
         run: () => runAllianceCartographerAndQueue(firmId, me.id, { chainMapper: true }),
       });
     }
-    res.status(201).json({ firm, target: updatedTarget });
+    res.status(201).json({ firm: sanitizeFirmWire(firm), target: updatedTarget });
   } catch (err) {
     next(err);
   }

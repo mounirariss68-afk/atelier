@@ -6,6 +6,8 @@ import {
   atelierAuditEvents,
   atelierLoginActivationTokens,
   atelierAdminSettings,
+  atelierPartnerFirms,
+  atelierPartnerFirmBankChangeRequests,
 } from "@workspace/db";
 import { eq, ne, and, isNull, gte, lte, desc, sql } from "drizzle-orm";
 import { randomUUID, randomBytes, createHash } from "node:crypto";
@@ -501,7 +503,7 @@ router.post("/change-password", async (req: Request, res: Response) => {
 
 async function lookupActivationToken(
   rawToken: string,
-  purpose: "activation" | "reset" | "2fa",
+  purpose: "activation" | "reset" | "2fa" | "partner_registration",
 ) {
   if (!/^[0-9a-f]{64}$/.test(rawToken)) return null;
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
@@ -518,10 +520,10 @@ async function lookupActivationToken(
  * Mint a single-use login token (Task #820). Invalidates any earlier unused
  * token of the same purpose for the same email, so only the newest link works.
  */
-async function mintLoginToken(args: {
+export async function mintLoginToken(args: {
   email: string;
   userId: string;
-  purpose: "activation" | "reset" | "2fa";
+  purpose: "activation" | "reset" | "2fa" | "partner_registration";
   ttlMs: number;
   createdByUserId?: string | null;
 }): Promise<{ rawToken: string; expiresAt: Date }> {
@@ -635,6 +637,254 @@ router.post("/activate", async (req: Request, res: Response) => {
     if ((err as { activationRace?: boolean }).activationRace) {
       await audit("account_activation_failed", { actorLabel: row.email, ip, targetEmail: row.email });
       res.status(404).json({ error: "invalid-or-expired", message: "This activation link was already used." });
+      return;
+    }
+    throw err;
+  });
+  if (res.headersSent) return;
+  await audit("account_activated", {
+    actorId: row.userId,
+    actorLabel: row.email,
+    ip,
+    targetEmail: row.email,
+    targetUserId: row.userId,
+  });
+  res.json({ ok: true, email: row.email });
+});
+
+// ---- partner self-registration (Task #874) ------------------------------
+// A signed partner firm's invited user follows a single-use, 72-hour
+// "partner_registration" token to a public page where they submit their
+// firm's company legal details + bank details AND choose their password in
+// one flow. Company details write to the firm record; bank details land as
+// a PENDING change that finance must approve (maker-checker) before they
+// become payable.
+
+function maskIbanPublic(iban: string | null | undefined): string | null {
+  if (!iban) return null;
+  const v = iban.replace(/\s+/g, "");
+  if (v.length <= 4) return "••••";
+  return `••••${v.slice(-4)}`;
+}
+
+/** Resolve the alliance-partner user + live firm behind a registration token. */
+async function partnerRegistrationContext(row: { userId: string; email: string }) {
+  const [user] = await db
+    .select()
+    .from(atelierUsers)
+    .where(and(eq(atelierUsers.id, row.userId), isNull(atelierUsers.deletedAt)));
+  if (!user || user.role !== "alliance_partner" || !user.partnerFirmId) return null;
+  const [firm] = await db
+    .select()
+    .from(atelierPartnerFirms)
+    .where(
+      and(
+        eq(atelierPartnerFirms.id, user.partnerFirmId),
+        eq(atelierPartnerFirms.orgId, user.orgId),
+        isNull(atelierPartnerFirms.deletedAt),
+      ),
+    );
+  if (!firm) return null;
+  return { user, firm };
+}
+
+// Pre-auth: lets the registration page show who/which firm is registering.
+router.get("/partner-register-info", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const row = await lookupActivationToken(String(req.query?.token ?? ""), "partner_registration");
+  const ctx = row ? await partnerRegistrationContext(row) : null;
+  if (!row || !ctx) {
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This registration link is invalid, expired, or already used. Ask your Cognirise contact for a new one.",
+    });
+    return;
+  }
+  res.json({
+    ok: true,
+    email: row.email,
+    expiresAt: row.expiresAt.toISOString(),
+    firm: {
+      name: ctx.firm.name,
+      legalName: ctx.firm.legalName ?? null,
+      registrationNumber: ctx.firm.registrationNumber ?? null,
+      taxId: ctx.firm.taxId ?? null,
+      registeredAddress: ctx.firm.registeredAddress ?? null,
+      defaultCurrency: ctx.firm.bankCurrency ?? ctx.firm.defaultBillingCurrency ?? null,
+    },
+  });
+});
+
+router.post("/partner-register", async (req: Request, res: Response) => {
+  const ip = req.ip ?? "unknown";
+  if (!rateLimitOk(ip)) {
+    res.status(429).json({ error: "rate-limited", message: "Too many attempts. Try again in a few minutes." });
+    return;
+  }
+  const rawToken = String(req.body?.token ?? "");
+  const newPassword = String(req.body?.newPassword ?? "");
+  const company = (req.body?.company ?? {}) as Record<string, unknown>;
+  const bank = (req.body?.bank ?? {}) as Record<string, unknown>;
+  const str = (v: unknown, max = 500): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    return t ? t.slice(0, max) : null;
+  };
+  const row = await lookupActivationToken(rawToken, "partner_registration");
+  const ctx = row ? await partnerRegistrationContext(row) : null;
+  if (!row || !ctx) {
+    await audit("account_activation_failed", { actorLabel: "unknown", ip });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This registration link is invalid, expired, or already used. Ask your Cognirise contact for a new one.",
+    });
+    return;
+  }
+  const [cred] = await db
+    .select()
+    .from(atelierAuthCredentials)
+    .where(eq(atelierAuthCredentials.email, row.email));
+  if (!cred || cred.userId !== row.userId || cred.disabled) {
+    await audit("account_activation_failed", { actorLabel: row.email, ip, targetEmail: row.email });
+    res.status(404).json({
+      error: "invalid-or-expired",
+      message: "This registration link is no longer valid. Ask your Cognirise contact for a new one.",
+    });
+    return;
+  }
+  // ---- validation (reject BEFORE consuming the token) --------------------
+  const policy = validateNewPassword(newPassword, { email: row.email });
+  if (!policy.ok) {
+    res.status(400).json({ error: policy.error, message: policy.message });
+    return;
+  }
+  const legalName = str(company.legalName, 300);
+  if (!legalName) {
+    res.status(400).json({ error: "invalid-body", message: "Company legal name is required." });
+    return;
+  }
+  const registrationNumber = str(company.registrationNumber, 100);
+  const taxId = str(company.taxId, 100);
+  const registeredAddress = str(company.registeredAddress, 1000);
+  const iban = String(bank.iban ?? "").replace(/\s+/g, "").toUpperCase();
+  if (!/^[A-Z0-9]{8,34}$/.test(iban)) {
+    res.status(400).json({ error: "invalid-iban", message: "A valid IBAN (8–34 characters) is required." });
+    return;
+  }
+  const swift = str(bank.swift, 20)?.toUpperCase() ?? null;
+  const bankName = str(bank.bankName, 200);
+  if (!bankName) {
+    res.status(400).json({ error: "invalid-body", message: "Bank name is required." });
+    return;
+  }
+  const currencyRaw = str(bank.currency, 10)?.toUpperCase() ?? null;
+  if (!currencyRaw || !/^[A-Z]{3}$/.test(currencyRaw)) {
+    res.status(400).json({ error: "invalid-currency", message: "Currency must be a 3-letter code (e.g. AED, USD)." });
+    return;
+  }
+  const { user, firm } = ctx;
+  const bankReqId = `pfbankreq_${randomBytes(9).toString("base64url")}`;
+  await db.transaction(async (tx) => {
+    // Consume the token first; the used_at guard makes registration
+    // single-use even under concurrent requests.
+    const consumed = await tx
+      .update(atelierLoginActivationTokens)
+      .set({ usedAt: new Date() })
+      .where(
+        and(
+          eq(atelierLoginActivationTokens.tokenHash, row.tokenHash),
+          isNull(atelierLoginActivationTokens.usedAt),
+        ),
+      )
+      .returning({ tokenHash: atelierLoginActivationTokens.tokenHash });
+    if (consumed.length === 0) throw Object.assign(new Error("token-already-used"), { activationRace: true });
+    await tx
+      .update(atelierAuthCredentials)
+      .set({
+        passwordHash: hashPassword(newPassword),
+        userManaged: true,
+        mustChangePassword: false,
+        mustChangeReason: null,
+        failedLoginCount: 0,
+        lockedUntil: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierAuthCredentials.email, row.email));
+    // Company legal details write straight to the firm record.
+    await tx
+      .update(atelierPartnerFirms)
+      .set({
+        legalName,
+        registrationNumber,
+        taxId,
+        registeredAddress,
+        registrationCompletedAt: new Date(),
+        registrationCompletedByUserId: user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(atelierPartnerFirms.id, firm.id));
+    // Bank details are NEVER applied directly — pending finance approval.
+    // Supersede any earlier pending request from this firm (latest wins).
+    await tx
+      .update(atelierPartnerFirmBankChangeRequests)
+      .set({ status: "rejected", decisionNote: "Superseded by a newer submission.", decidedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(atelierPartnerFirmBankChangeRequests.partnerFirmId, firm.id),
+          eq(atelierPartnerFirmBankChangeRequests.status, "pending"),
+          isNull(atelierPartnerFirmBankChangeRequests.deletedAt),
+        ),
+      );
+    await tx.insert(atelierPartnerFirmBankChangeRequests).values({
+      id: bankReqId,
+      orgId: firm.orgId,
+      partnerFirmId: firm.id,
+      requestedByUserId: user.id,
+      previousIbanMasked: maskIbanPublic(firm.bankIban),
+      newIban: iban,
+      newSwift: swift,
+      newBankName: bankName,
+      newCurrency: currencyRaw,
+      reason: "Submitted via partner registration.",
+    });
+    await tx.insert(atelierAuditEvents).values([
+      {
+        id: `audit_${randomUUID()}`,
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actorType: "human",
+        actorId: user.id,
+        actorLabel: user.name,
+        action: "partner_firm.registration.completed",
+        payload: { userId: user.id, email: row.email, legalName, registrationNumber, taxId },
+        payloadSummary: `${user.name} completed partner registration for ${firm.name} (company details submitted).`,
+      },
+      {
+        id: `audit_${randomUUID()}`,
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actorType: "human",
+        actorId: user.id,
+        actorLabel: user.name,
+        action: "partner_firm.bank_change.requested",
+        payload: {
+          bankChangeRequestId: bankReqId,
+          newIbanMasked: maskIbanPublic(iban),
+          newSwift: swift,
+          newBankName: bankName,
+          newCurrency: currencyRaw,
+        },
+        payloadSummary: `${user.name} submitted bank details for ${firm.name} — pending finance approval.`,
+      },
+    ]);
+  }).catch(async (err: unknown) => {
+    if ((err as { activationRace?: boolean }).activationRace) {
+      await audit("account_activation_failed", { actorLabel: row.email, ip, targetEmail: row.email });
+      res.status(404).json({ error: "invalid-or-expired", message: "This registration link was already used." });
       return;
     }
     throw err;

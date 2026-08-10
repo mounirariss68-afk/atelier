@@ -32,12 +32,16 @@ import {
   atelierAccounts,
   atelierAuthCredentials,
   atelierLoginActivationTokens,
+  atelierPartnerFirmBankChangeRequests,
 } from "@workspace/db";
 import { audit } from "./engagementRoutes";
 import { isLeadership, isAlliancePartner } from "./personaRoles";
 import { revokeAllSessions } from "../../lib/auth/session.js";
 import { trustedRequestOrigin } from "../../lib/auth/trusted-origin";
 import { provisionPortalLogin } from "./rosterLifecycleRoutes";
+import { mintLoginToken } from "../auth/index.js";
+import { sendPartnerRegistrationEmail } from "../../lib/atelier-welcome-email.js";
+import { isFinance } from "./personaRoles";
 
 const router: IRouter = Router();
 
@@ -561,22 +565,67 @@ router.post("/partners/firms/:firmId/logins", async (req, res, next) => {
       });
       return;
     }
-    const result = await provisionPortalLogin({
-      me,
-      person: {
-        id: firm.id,
-        workerType: "partner_firm_resource",
-        fullName,
-        email,
-        personId: null,
-      },
-      onboarding: null,
-      skipMsProvisioning: true,
-      origin: req.headers.origin ? String(req.headers.origin) : null,
-      // Task #873 — role override: the login is an external
-      // alliance-partner portal account linked to the firm.
-      alliancePartnerFirmId: firm.id,
-    });
+    // Task #874 — invitations are for SIGNED partner firms only.
+    if (firm.partnershipStage !== "agreed" || firm.agreementStage !== "signed") {
+      res.status(422).json({
+        error: "firm-not-signed",
+        message: "Partner users can only be invited once the partnership agreement is signed.",
+      });
+      return;
+    }
+    // Task #874 — one active user per firm in v1.
+    const [activeLogin] = await db
+      .select({ id: atelierUsers.id, email: atelierUsers.email })
+      .from(atelierUsers)
+      .where(
+        and(
+          eq(atelierUsers.orgId, me.orgId),
+          eq(atelierUsers.role, "alliance_partner"),
+          eq(atelierUsers.partnerFirmId, firm.id),
+          isNull(atelierUsers.deletedAt),
+        ),
+      );
+    if (activeLogin) {
+      res.status(409).json({
+        error: "firm-login-exists",
+        message: `This firm already has an active portal user (${activeLogin.email}). Deactivate it first — one user per firm in v1.`,
+      });
+      return;
+    }
+    let result;
+    try {
+      result = await provisionPortalLogin({
+        me,
+        person: {
+          id: firm.id,
+          workerType: "partner_firm_resource",
+          fullName,
+          email,
+          personId: null,
+        },
+        onboarding: null,
+        skipMsProvisioning: true,
+        origin: req.headers.origin ? String(req.headers.origin) : null,
+        // Task #873 — role override: the login is an external
+        // alliance-partner portal account linked to the firm.
+        alliancePartnerFirmId: firm.id,
+        partnerFirmName: firm.name,
+      });
+    } catch (err: unknown) {
+      // Task #874 — the partial unique index uq_atelier_users_active_partner_firm
+      // is the race-safe enforcement of one-active-login-per-firm: concurrent
+      // invites (even with distinct emails) collide here; the loser gets 409.
+      const code = (err as { code?: string; cause?: { code?: string } })?.code
+        ?? (err as { cause?: { code?: string } })?.cause?.code;
+      if (code === "23505") {
+        res.status(409).json({
+          error: "firm-login-exists",
+          message: "This firm already has an active portal user — one user per firm in v1.",
+        });
+        return;
+      }
+      throw err;
+    }
     if (!result.ok) {
       res.status(result.status).json(result.body);
       return;
@@ -752,5 +801,343 @@ router.post(
     }
   },
 );
+
+// Task #874 — re-send the registration link for a firm's active login.
+// Minting supersedes any earlier unused token of the same purpose, so only
+// the newest link works (same discipline as activation links). Refused once
+// the partner has completed registration (credential is user-managed).
+// @cli-skip: security-sensitive external login administration — deliberate UI-only write
+router.post(
+  "/partners/firms/:firmId/logins/:userId/resend-registration",
+  async (req, res, next) => {
+    try {
+      const me = requireLeadership(req, res);
+      if (!me) return;
+      const [user] = await db
+        .select()
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.id, req.params.userId),
+            eq(atelierUsers.orgId, me.orgId),
+            eq(atelierUsers.role, "alliance_partner"),
+            eq(atelierUsers.partnerFirmId, req.params.firmId),
+            isNull(atelierUsers.deletedAt),
+          ),
+        );
+      if (!user) {
+        res.status(404).json({ error: "login-not-found" });
+        return;
+      }
+      const [firm] = await db
+        .select()
+        .from(atelierPartnerFirms)
+        .where(
+          and(
+            eq(atelierPartnerFirms.id, req.params.firmId),
+            eq(atelierPartnerFirms.orgId, me.orgId),
+            isNull(atelierPartnerFirms.deletedAt),
+          ),
+        );
+      if (!firm) {
+        res.status(404).json({ error: "partner-firm-not-found" });
+        return;
+      }
+      const [cred] = await db
+        .select()
+        .from(atelierAuthCredentials)
+        .where(eq(atelierAuthCredentials.userId, user.id));
+      if (!cred || cred.disabled) {
+        res.status(404).json({ error: "login-not-found" });
+        return;
+      }
+      // NOTE: provisionPortalLogin stamps the placeholder credential
+      // userManaged — the reliable "registration done" signal is the firm's
+      // registrationCompletedAt (set inside the registration transaction).
+      if (firm.registrationCompletedAt) {
+        res.status(409).json({
+          error: "already-registered",
+          message: "This partner has already completed registration.",
+        });
+        return;
+      }
+      const { rawToken, expiresAt } = await mintLoginToken({
+        email: user.email,
+        userId: user.id,
+        purpose: "partner_registration",
+        ttlMs: 72 * 60 * 60 * 1000,
+        createdByUserId: me.id,
+      });
+      let origin: string | null = null;
+      try {
+        const parsed = new URL(String(req.headers.origin ?? ""));
+        if (parsed.protocol === "https:" || parsed.protocol === "http:") origin = parsed.origin;
+      } catch {
+        // no valid origin — return a relative link only
+      }
+      const registrationUrl = origin
+        ? `${origin}/partner-register?token=${rawToken}`
+        : `/partner-register?token=${rawToken}`;
+      const emailStatus = await sendPartnerRegistrationEmail({
+        fullName: user.name,
+        email: user.email,
+        firmName: firm.name,
+        registrationUrl: origin ? registrationUrl : null,
+        validity: "72 hours",
+        sender: { actor: { name: me.name, email: me.email } },
+      });
+      await audit({
+        entityType: "partner_firm",
+        entityId: firm.id,
+        actor: me,
+        action: "partner_login.registration_resent",
+        payload: { userId: user.id, email: user.email },
+        summary: `${me.name} re-sent the registration link for ${user.name} (${firm.name}).`,
+      });
+      res.json({
+        ok: true,
+        registrationUrl,
+        expiresAt: expiresAt.toISOString(),
+        email: emailStatus,
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// ---------------------------------------------------------------------
+// Task #874 — firm bank-details maker-checker (finance/leadership).
+// Partner-submitted bank details land as PENDING rows; the approve route
+// below is the ONLY code path that writes the payable bank columns on the
+// firm record. Paths avoid /partners/firms/:id to dodge param-route capture.
+// ---------------------------------------------------------------------
+
+function requireFinanceOrLeadership(req: Request, res: Response): Me | null {
+  const me = ensurePersona(req, res);
+  if (!me) return null;
+  if (!isLeadership(me.role) && !isFinance(me.role)) {
+    res.status(403).json({ error: "finance-or-leadership-only" });
+    return null;
+  }
+  return me;
+}
+
+function maskIban(iban: string | null | undefined): string | null {
+  if (!iban) return null;
+  const v = iban.replace(/\s+/g, "");
+  if (v.length <= 4) return "••••";
+  return `••••${v.slice(-4)}`;
+}
+
+function bankReqWire(
+  r: typeof atelierPartnerFirmBankChangeRequests.$inferSelect,
+  firmName: string | null,
+) {
+  return {
+    id: r.id,
+    partnerFirmId: r.partnerFirmId,
+    firmName: firmName ?? "(deleted firm)",
+    previousIbanMasked: r.previousIbanMasked,
+    newIbanMasked: maskIban(r.newIban) ?? "••••",
+    newSwift: r.newSwift,
+    newBankName: r.newBankName,
+    newCurrency: r.newCurrency,
+    reason: r.reason,
+    status: r.status,
+    decidedByName: r.decidedByName,
+    decidedAt: r.decidedAt ? r.decidedAt.toISOString() : null,
+    decisionNote: r.decisionNote,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+// @cli-skip: internal finance review queue — UI-only surface (Task #874)
+router.get("/partners/bank-changes", async (req, res, next) => {
+  try {
+    const me = requireFinanceOrLeadership(req, res);
+    if (!me) return;
+    const rows = await db
+      .select({
+        req: atelierPartnerFirmBankChangeRequests,
+        firmName: atelierPartnerFirms.name,
+      })
+      .from(atelierPartnerFirmBankChangeRequests)
+      .leftJoin(
+        atelierPartnerFirms,
+        eq(atelierPartnerFirms.id, atelierPartnerFirmBankChangeRequests.partnerFirmId),
+      )
+      .where(
+        and(
+          eq(atelierPartnerFirmBankChangeRequests.orgId, me.orgId),
+          isNull(atelierPartnerFirmBankChangeRequests.deletedAt),
+        ),
+      )
+      .orderBy(desc(atelierPartnerFirmBankChangeRequests.createdAt));
+    rows.sort((a, b) => (a.req.status === "pending" ? 0 : 1) - (b.req.status === "pending" ? 0 : 1));
+    res.json({ items: rows.map((r) => bankReqWire(r.req, r.firmName)) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function loadPendingBankReq(me: Me, id: string) {
+  const [row] = await db
+    .select()
+    .from(atelierPartnerFirmBankChangeRequests)
+    .where(
+      and(
+        eq(atelierPartnerFirmBankChangeRequests.id, id),
+        eq(atelierPartnerFirmBankChangeRequests.orgId, me.orgId),
+        isNull(atelierPartnerFirmBankChangeRequests.deletedAt),
+      ),
+    );
+  return row ?? null;
+}
+
+// @cli-skip: security-sensitive payable-details approval — deliberate UI-only write (Task #874)
+router.post("/partners/bank-changes/:id/approve", async (req, res, next) => {
+  try {
+    const me = requireFinanceOrLeadership(req, res);
+    if (!me) return;
+    const reqRow = await loadPendingBankReq(me, req.params.id);
+    if (!reqRow) {
+      res.status(404).json({ error: "bank-change-not-found" });
+      return;
+    }
+    if (reqRow.status !== "pending") {
+      res.status(409).json({ error: "already-decided", status: reqRow.status });
+      return;
+    }
+    // Maker-checker: the submitter can never approve their own request.
+    if (reqRow.requestedByUserId === me.id) {
+      res.status(403).json({ error: "no-self-approval" });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
+    const [firm] = await db
+      .select()
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          eq(atelierPartnerFirms.id, reqRow.partnerFirmId),
+          eq(atelierPartnerFirms.orgId, me.orgId),
+          isNull(atelierPartnerFirms.deletedAt),
+        ),
+      );
+    if (!firm) {
+      res.status(404).json({ error: "partner-firm-not-found" });
+      return;
+    }
+    const won = await db.transaction(async (tx) => {
+      // Atomically CLAIM the pending row first (conditional on status) so
+      // two concurrent reviewers can't both decide it — only the winner
+      // proceeds to write the firm's payable bank columns.
+      const claimed = await tx
+        .update(atelierPartnerFirmBankChangeRequests)
+        .set({
+          status: "approved",
+          decidedByUserId: me.id,
+          decidedByName: me.name,
+          decidedAt: new Date(),
+          decisionNote: note,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(atelierPartnerFirmBankChangeRequests.id, reqRow.id),
+            eq(atelierPartnerFirmBankChangeRequests.status, "pending"),
+          ),
+        )
+        .returning({ id: atelierPartnerFirmBankChangeRequests.id });
+      if (claimed.length === 0) return false;
+      // This is the SOLE write path for the firm's payable bank columns.
+      await tx
+        .update(atelierPartnerFirms)
+        .set({
+          bankIban: reqRow.newIban,
+          bankSwift: reqRow.newSwift,
+          bankName: reqRow.newBankName,
+          bankCurrency: reqRow.newCurrency,
+          updatedAt: new Date(),
+        })
+        .where(eq(atelierPartnerFirms.id, firm.id));
+      return true;
+    });
+    if (!won) {
+      res.status(409).json({ error: "already-decided" });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: firm.id,
+      actor: me,
+      action: "partner_firm.bank_change.approved",
+      payload: {
+        bankChangeRequestId: reqRow.id,
+        newIbanMasked: maskIban(reqRow.newIban),
+        newSwift: reqRow.newSwift,
+        newBankName: reqRow.newBankName,
+        newCurrency: reqRow.newCurrency,
+      },
+      summary: `${me.name} approved the bank details for ${firm.name} — they are now payable.`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @cli-skip: security-sensitive payable-details rejection — deliberate UI-only write (Task #874)
+router.post("/partners/bank-changes/:id/reject", async (req, res, next) => {
+  try {
+    const me = requireFinanceOrLeadership(req, res);
+    if (!me) return;
+    const reqRow = await loadPendingBankReq(me, req.params.id);
+    if (!reqRow) {
+      res.status(404).json({ error: "bank-change-not-found" });
+      return;
+    }
+    if (reqRow.status !== "pending") {
+      res.status(409).json({ error: "already-decided", status: reqRow.status });
+      return;
+    }
+    const note = typeof req.body?.note === "string" ? req.body.note.trim().slice(0, 500) || null : null;
+    // Atomic claim: only transitions pending → rejected; a concurrent
+    // approve/reject that got there first wins and this returns 409.
+    const claimed = await db
+      .update(atelierPartnerFirmBankChangeRequests)
+      .set({
+        status: "rejected",
+        decidedByUserId: me.id,
+        decidedByName: me.name,
+        decidedAt: new Date(),
+        decisionNote: note,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(atelierPartnerFirmBankChangeRequests.id, reqRow.id),
+          eq(atelierPartnerFirmBankChangeRequests.status, "pending"),
+        ),
+      )
+      .returning({ id: atelierPartnerFirmBankChangeRequests.id });
+    if (claimed.length === 0) {
+      res.status(409).json({ error: "already-decided" });
+      return;
+    }
+    await audit({
+      entityType: "partner_firm",
+      entityId: reqRow.partnerFirmId,
+      actor: me,
+      action: "partner_firm.bank_change.rejected",
+      payload: { bankChangeRequestId: reqRow.id },
+      summary: `${me.name} rejected a partner-firm bank-details submission.`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
 
 export default router;

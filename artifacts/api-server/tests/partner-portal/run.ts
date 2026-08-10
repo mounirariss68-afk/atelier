@@ -30,7 +30,7 @@
 import "../crm/scratch-db.js";
 
 import type { AddressInfo } from "node:net";
-import { inArray, like, eq } from "drizzle-orm";
+import { and, inArray, isNull, like, eq } from "drizzle-orm";
 
 const STAMP = Date.now();
 const ORG = "aico";
@@ -100,8 +100,14 @@ async function main(): Promise<void> {
   const oppBId = `opp_test_pp_b_${STAMP}`;
   const firmAId = `pfrm_test_pp_a_${STAMP}`;
   const firmBId = `pfrm_test_pp_b_${STAMP}`;
+  // Task #874 — one active login per firm: provisioning probes need firms
+  // WITHOUT a pre-linked login.
+  const firmCId = `pfrm_test_pp_c_${STAMP}`;
+  const firmDId = `pfrm_test_pp_d_${STAMP}`;
+  const firmEId = `pfrm_test_pp_e_${STAMP}`;
   let provisionedUserId: string | null = null;
   let raceUserId: string | null = null;
+  let raceUserEIds: string[] = [];
 
   try {
     const personas = [
@@ -169,12 +175,18 @@ async function main(): Promise<void> {
     for (const [id, name] of [
       [firmAId, `PP Firm A ${STAMP}`],
       [firmBId, `PP Firm B ${STAMP}`],
+      [firmCId, `PP Firm C ${STAMP}`],
+      [firmDId, `PP Firm D ${STAMP}`],
+      [firmEId, `PP Firm E ${STAMP}`],
     ] as const) {
       await db.insert(atelierPartnerFirms).values({
         id,
         orgId: ORG,
         name,
         status: "active",
+        // Task #874 — login provisioning is now gated on signed firms.
+        partnershipStage: "agreed",
+        agreementStage: "signed",
         createdByUserId: FP_ID,
       });
     }
@@ -587,7 +599,7 @@ async function main(): Promise<void> {
     {
       // Email colliding with an EXISTING internal user must hard-409,
       // never attach an activation link to that user's identity.
-      const r = await call("POST", `/partners/firms/${firmBId}/logins`, FP_ID, {
+      const r = await call("POST", `/partners/firms/${firmCId}/logins`, FP_ID, {
         name: "Evil Twin",
         email: `${CONS_ID}@example.com`, // consultant persona's email
       });
@@ -602,8 +614,8 @@ async function main(): Promise<void> {
       // loser maps 23505 to 409, never a 500 or a duplicate identity).
       const raceEmail = `pp_race_${STAMP}@example.com`;
       const [ra, rb] = await Promise.all([
-        call("POST", `/partners/firms/${firmBId}/logins`, FP_ID, { name: "Race A", email: raceEmail }),
-        call("POST", `/partners/firms/${firmBId}/logins`, FP_ID, { name: "Race B", email: raceEmail }),
+        call("POST", `/partners/firms/${firmCId}/logins`, FP_ID, { name: "Race A", email: raceEmail }),
+        call("POST", `/partners/firms/${firmCId}/logins`, FP_ID, { name: "Race B", email: raceEmail }),
       ]);
       const statuses = [ra.status, rb.status].sort();
       check(
@@ -614,6 +626,37 @@ async function main(): Promise<void> {
       const raceRows = await db.select().from(atelierUsers).where(eq(atelierUsers.email, raceEmail));
       check("race leaves exactly one user row", raceRows.length === 1, `rows=${raceRows.length}`);
       raceUserId = raceRows[0]?.id ?? null;
+
+      // Task #874 review fix — DISTINCT-email race against one firm: the
+      // credential-email uniqueness can't save us here; the partial unique
+      // index uq_atelier_users_active_partner_firm must. Exactly one 201,
+      // one 409, and one active login for the firm.
+      const [ea, eb] = await Promise.all([
+        call("POST", `/partners/firms/${firmEId}/logins`, FP_ID, { name: "Race E1", email: `pp_race_e1_${STAMP}@example.com` }),
+        call("POST", `/partners/firms/${firmEId}/logins`, FP_ID, { name: "Race E2", email: `pp_race_e2_${STAMP}@example.com` }),
+      ]);
+      const eStatuses = [ea.status, eb.status].sort();
+      check(
+        "concurrent DISTINCT-email provisioning \u2192 one 201, one 409",
+        JSON.stringify(eStatuses) === JSON.stringify([201, 409]),
+        eStatuses.join(","),
+      );
+      const firmELogins = await db
+        .select()
+        .from(atelierUsers)
+        .where(
+          and(
+            eq(atelierUsers.orgId, ORG),
+            eq(atelierUsers.partnerFirmId, firmEId),
+            isNull(atelierUsers.deletedAt),
+          ),
+        );
+      check(
+        "distinct-email race leaves exactly ONE active login on the firm",
+        firmELogins.length === 1,
+        `rows=${firmELogins.length}`,
+      );
+      raceUserEIds = firmELogins.map((u) => u.id);
     }
 
     // =====================================================================
@@ -666,7 +709,7 @@ async function main(): Promise<void> {
     group("provisioning \u2014 shared helper + deactivation");
     // =====================================================================
     {
-      const r = await call("POST", `/partners/firms/${firmBId}/logins`, FP_ID, {
+      const r = await call("POST", `/partners/firms/${firmDId}/logins`, FP_ID, {
         name: `PP Provisioned ${STAMP}`,
         email: `pp_prov_${STAMP}@example.com`,
       });
@@ -683,12 +726,12 @@ async function main(): Promise<void> {
           .where(eq(atelierUsers.id, provisionedUserId));
         check(
           "provisioned user is alliance_partner linked to firm",
-          row?.role === "alliance_partner" && row?.partnerFirmId === firmBId,
+          row?.role === "alliance_partner" && row?.partnerFirmId === firmDId,
           JSON.stringify({ role: row?.role, firm: row?.partnerFirmId }),
         );
         const asProv = await call("GET", "/partner-portal/opportunities", provisionedUserId);
         check("provisioned login can read portal \u2192 200", asProv.status === 200, `status=${asProv.status}`);
-        const listLogins = await call("GET", `/partners/firms/${firmBId}/logins`, FP_ID);
+        const listLogins = await call("GET", `/partners/firms/${firmDId}/logins`, FP_ID);
         check(
           "FP lists firm logins",
           listLogins.status === 200 &&
@@ -751,7 +794,7 @@ async function main(): Promise<void> {
         }
         const deact = await call(
           "POST",
-          `/partners/firms/${firmBId}/logins/${provisionedUserId}/deactivate`,
+          `/partners/firms/${firmDId}/logins/${provisionedUserId}/deactivate`,
           FP_ID,
         );
         check("FP deactivates login \u2192 200", deact.status === 200 && deact.body?.ok === true);
@@ -777,7 +820,7 @@ async function main(): Promise<void> {
     // Cleanup — remove everything this probe created.
     try {
       await db.delete(atelierPartnerOppGrants).where(inArray(atelierPartnerOppGrants.opportunityId, [oppAId, oppBId]));
-      await db.delete(atelierPartnerFirms).where(inArray(atelierPartnerFirms.id, [firmAId, firmBId]));
+      await db.delete(atelierPartnerFirms).where(inArray(atelierPartnerFirms.id, [firmAId, firmBId, firmCId, firmDId, firmEId]));
       const { hardDeleteOpportunities } = await import(
         "../../src/lib/atelier-opportunity-delete.js"
       );
@@ -791,6 +834,7 @@ async function main(): Promise<void> {
         PX_ID,
         ...(provisionedUserId ? [provisionedUserId] : []),
         ...(raceUserId ? [raceUserId] : []),
+        ...raceUserEIds,
       ];
       await db.delete(atelierUsers).where(inArray(atelierUsers.id, ids));
       await db

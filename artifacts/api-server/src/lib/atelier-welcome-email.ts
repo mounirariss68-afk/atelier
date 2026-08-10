@@ -100,6 +100,71 @@ export function buildWelcomeEmail(args: WelcomeEmailArgs): {
  * "not_configured" means email delivery isn't set up (log-only mode), so
  * the temporary password must be shared manually.
  */
+/**
+ * Task #874 — registration email for a signed partner firm's invited user.
+ * The link opens the public, token-gated registration page where the
+ * partner submits company legal + bank details and sets their password.
+ */
+export async function sendPartnerRegistrationEmail(args: {
+  fullName: string;
+  email: string;
+  firmName: string;
+  registrationUrl: string | null;
+  validity: string;
+  sender: EmailSender;
+}): Promise<WelcomeEmailStatus> {
+  try {
+    const firstName = args.fullName.trim().split(/\s+/)[0] || "there";
+    const bodyHtml = `
+      <div style="background:#F3F4F8;border:1px solid #E4E7F0;border-radius:8px;padding:16px 20px;margin:0 0 20px;font-family:Menlo,Consolas,monospace;font-size:14px;color:#1c2440;">
+        <span style="color:#6b7490;">Email:</span> ${esc(args.email)}
+      </div>
+      <p style="margin:0 0 8px;font-family:${SANS};font-size:14px;color:#3a4360;">${
+        args.registrationUrl
+          ? `This registration link is valid for ${esc(args.validity)} and can be used once. Following it, you'll confirm ${esc(args.firmName)}'s company details, provide bank details for payments, and choose your own password — we never send passwords by email.`
+          : `Your Cognirise contact will share a one-time registration link with you. Following it, you'll confirm ${esc(args.firmName)}'s company details, provide bank details for payments, and choose your own password.`
+      }</p>
+      <p style="margin:16px 0 0;font-family:${SANS};font-size:14px;color:#3a4360;">Warm regards,<br/>The Cognirise team</p>`;
+    const textLines = [
+      `Dear ${firstName},`,
+      "",
+      `Cognirise has invited you to register ${args.firmName} on the partner portal.`,
+      "",
+      `Your sign-in email: ${args.email}`,
+      args.registrationUrl
+        ? `Complete your registration (valid ${args.validity}, single use): ${args.registrationUrl}`
+        : "Your Cognirise contact will share a one-time registration link with you.",
+      "",
+      "Warm regards, The Cognirise team",
+    ];
+    const built = buildCogniriseEmail({
+      title: "Complete your partner registration",
+      greeting: `Dear ${firstName},`,
+      paragraphs: [
+        `Cognirise has invited you to register ${args.firmName} on the partner portal. Your sign-in email is:`,
+      ],
+      bodyHtml,
+      cta: args.registrationUrl
+        ? { label: "Complete your registration", url: args.registrationUrl }
+        : undefined,
+      bodyText: textLines.join("\n"),
+    });
+    const result = await sendEmail({
+      sender: args.sender,
+      to: args.email,
+      subject: `Cognirise partner registration — ${args.firmName}`,
+      html: built.html,
+      text: built.text,
+      attachments: built.attachments,
+    });
+    if (result.via !== "resend") return result.ok ? "not_configured" : "failed";
+    return result.ok ? "sent" : "failed";
+  } catch (err) {
+    logger.warn({ err, to: args.email }, "Partner registration email failed");
+    return "failed";
+  }
+}
+
 export async function sendJoinerWelcomeEmail(
   args: WelcomeEmailArgs,
 ): Promise<WelcomeEmailStatus> {

@@ -492,6 +492,8 @@ function IdentifyView() {
   const { data: meForPortal } = useAtelierGetMe();
   const canManagePortal =
     meForPortal?.role === "founding_partner" || meForPortal?.role === "partner";
+  // Task #874 — bank-detail review is finance OR leadership (mirrors the API).
+  const canReviewBankChanges = canManagePortal || meForPortal?.role === "finance";
   // Task #723 — list/card toggle, persisted per page.
   const [viewMode, setViewMode] = useViewMode("partners-directory");
 
@@ -732,7 +734,10 @@ function IdentifyView() {
                 )}
                 {loginsOpenId === f.id && (
                   <div onClick={(e) => e.stopPropagation()}>
-                    <PortalLoginsPanel firmId={f.id} />
+                    <PortalLoginsPanel
+                      firmId={f.id}
+                      signed={f.partnershipStage === "agreed" && f.agreementStage === "signed"}
+                    />
                   </div>
                 )}
               </RecordCard>
@@ -741,6 +746,8 @@ function IdentifyView() {
         </div>
         {!adding && !editingId && <FormError msg={err} />}
       </section>
+
+      {canReviewBankChanges && <FirmBankChangesSection />}
 
       <TargetsSection firms={firms} />
     </div>
@@ -751,7 +758,7 @@ function IdentifyView() {
 // Leadership-only management of a firm's external Atelier logins
 // (role = alliance_partner, locked to /partner-portal + chat). Raw fetch:
 // these bespoke routes are not in the OpenAPI spec.
-function PortalLoginsPanel({ firmId }: { firmId: string }) {
+function PortalLoginsPanel({ firmId, signed }: { firmId: string; signed: boolean }) {
   type LoginRow = {
     id: string;
     name: string;
@@ -790,8 +797,27 @@ function PortalLoginsPanel({ firmId }: { firmId: string }) {
         setName("");
         setEmail("");
         if (typeof j.activationUrl === "string") setActivationUrl(j.activationUrl);
-        setMsg("Login created. Share the activation link with the partner.");
+        setMsg("Partner user invited. A registration link was emailed; you can also share it directly.");
         load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusy(false));
+  };
+
+  const resend = (userId: string) => {
+    setBusy(true);
+    setMsg(null);
+    setActivationUrl(null);
+    void fetch(`${QUALIFY_API}/partners/firms/${firmId}/logins/${userId}/resend-registration`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : "Resend failed.");
+        if (typeof j.registrationUrl === "string") setActivationUrl(j.registrationUrl);
+        setMsg("A fresh registration link was sent; earlier links no longer work.");
       })
       .catch((e: Error) => setMsg(e.message))
       .finally(() => setBusy(false));
@@ -853,58 +879,73 @@ function PortalLoginsPanel({ firmId }: { firmId: string }) {
               <span className="text-text-faint">{u.email}</span>
               <MonoChip tone={u.active ? "green" : "default"}>{u.active ? "active" : "deactivated"}</MonoChip>
               {u.active && (
-                <button
-                  type="button"
-                  className="text-gold hover:underline"
-                  disabled={busy}
-                  onClick={() => resetLink(u.id)}
-                  data-testid={`button-reset-link-${u.id}`}
-                >
-                  reset link
-                </button>
-              )}
-              {u.active && (
-                <button
-                  type="button"
-                  className="text-danger hover:underline"
-                  disabled={busy}
-                  onClick={() => deactivate(u.id)}
-                  data-testid={`button-deactivate-login-${u.id}`}
-                >
-                  deactivate
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="text-gold hover:underline"
+                    disabled={busy}
+                    onClick={() => resend(u.id)}
+                    data-testid={`button-resend-registration-${u.id}`}
+                  >
+                    resend link
+                  </button>
+                  <button
+                    type="button"
+                    className="text-gold hover:underline"
+                    disabled={busy}
+                    onClick={() => resetLink(u.id)}
+                    data-testid={`button-reset-link-${u.id}`}
+                  >
+                    reset link
+                  </button>
+                  <button
+                    type="button"
+                    className="text-danger hover:underline"
+                    disabled={busy}
+                    onClick={() => deactivate(u.id)}
+                    data-testid={`button-deactivate-login-${u.id}`}
+                  >
+                    deactivate
+                  </button>
+                </>
               )}
             </div>
           ))}
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
-          placeholder="Full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          data-testid={`input-portal-login-name-${firmId}`}
-        />
-        <input
-          className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          data-testid={`input-portal-login-email-${firmId}`}
-        />
-        <button
-          type="button"
-          className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
-          disabled={busy || !name.trim() || !email.includes("@")}
-          onClick={provision}
-          data-testid={`button-provision-login-${firmId}`}
-        >
-          create login
-        </button>
-      </div>
+      {signed ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+            placeholder="Full name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            data-testid={`input-portal-login-name-${firmId}`}
+          />
+          <input
+            className="bg-bg-deep border border-border rounded px-2 py-1 text-xs"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            data-testid={`input-portal-login-email-${firmId}`}
+          />
+          <button
+            type="button"
+            className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+            disabled={busy || !name.trim() || !email.includes("@")}
+            onClick={provision}
+            data-testid={`button-provision-login-${firmId}`}
+          >
+            invite partner user
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-text-faint" data-testid={`text-invite-unsigned-${firmId}`}>
+          Partner users can be invited once the partnership agreement is signed.
+        </p>
+      )}
       {activationUrl && (
-        <p className="text-xs text-text-mute break-all">Activation link: {activationUrl}</p>
+        <p className="text-xs text-text-mute break-all">Registration link: {activationUrl}</p>
       )}
       {msg && <p className="text-xs text-text-faint">{msg}</p>}
     </div>
@@ -2598,3 +2639,133 @@ function RenewView() {
 }
 
 const AGREEMENT_STAGES = ["preparing", "negotiating", "reviewing", "signing", "signed"] as const;
+
+function FirmBankChangesSection() {
+  type BankReq = {
+    id: string;
+    partnerFirmId: string;
+    firmName: string;
+    previousIbanMasked: string | null;
+    newIbanMasked: string;
+    newSwift: string | null;
+    newBankName: string | null;
+    newCurrency: string | null;
+    reason: string | null;
+    status: string;
+    decidedByName: string | null;
+    decidedAt: string | null;
+    decisionNote: string | null;
+    createdAt: string;
+  };
+  const [rows, setRows] = React.useState<BankReq[] | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [forbidden, setForbidden] = React.useState(false);
+
+  const load = React.useCallback(() => {
+    void fetch(`${QUALIFY_API}/partners/bank-changes`, { credentials: "include" })
+      .then(async (r) => {
+        if (r.status === 403) {
+          setForbidden(true);
+          return { items: [] };
+        }
+        if (!r.ok) throw new Error(String(r.status));
+        return (await r.json()) as { items: BankReq[] };
+      })
+      .then((j) => setRows(j.items))
+      .catch(() => setMsg("Couldn't load bank-detail submissions."));
+  }, []);
+  React.useEffect(() => load(), [load]);
+
+  const decide = (id: string, verb: "approve" | "reject") => {
+    setBusyId(id);
+    setMsg(null);
+    void fetch(`${QUALIFY_API}/partners/bank-changes/${id}/${verb}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({}),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!r.ok) throw new Error(typeof j.message === "string" ? j.message : `${verb} failed.`);
+        setMsg(verb === "approve" ? "Approved — the details are now payable." : "Rejected.");
+        load();
+      })
+      .catch((e: Error) => setMsg(e.message))
+      .finally(() => setBusyId(null));
+  };
+
+  if (forbidden) return null;
+  const pending = (rows ?? []).filter((r) => r.status === "pending");
+  const decided = (rows ?? []).filter((r) => r.status !== "pending").slice(0, 5);
+
+  return (
+    <section className="space-y-3" data-testid="section-firm-bank-changes">
+      <div className="text-xs font-mono uppercase tracking-widest text-text-faint">
+        Partner bank-detail submissions
+      </div>
+      <p className="text-xs text-text-mute">
+        Bank details submitted by partners during registration. Nothing becomes payable until a
+        reviewer approves it here (maker-checker, audited).
+      </p>
+      {rows == null ? (
+        <p className="text-xs text-text-faint">Loading…</p>
+      ) : pending.length === 0 && decided.length === 0 ? (
+        <p className="text-xs text-text-faint">No submissions yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {pending.map((r) => (
+            <Card key={r.id} className="p-3 space-y-1" data-testid={`card-bank-change-${r.id}`}>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-text font-medium">{r.firmName}</span>
+                <MonoChip tone="amber">pending</MonoChip>
+                <span className="text-text-faint">{r.createdAt.slice(0, 10)}</span>
+              </div>
+              <div className="text-xs text-text-mute">
+                IBAN {r.previousIbanMasked ?? "—"} → {r.newIbanMasked}
+                {r.newSwift ? ` · SWIFT ${r.newSwift}` : ""}
+                {r.newBankName ? ` · ${r.newBankName}` : ""}
+                {r.newCurrency ? ` · ${r.newCurrency}` : ""}
+              </div>
+              {r.reason && <div className="text-xs text-text-faint">{r.reason}</div>}
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-gold hover:text-gold/80 disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "approve")}
+                  data-testid={`button-approve-bank-change-${r.id}`}
+                >
+                  approve &amp; apply
+                </button>
+                <button
+                  type="button"
+                  className="text-xs font-mono uppercase tracking-widest text-danger hover:underline disabled:opacity-50"
+                  disabled={busyId === r.id}
+                  onClick={() => decide(r.id, "reject")}
+                  data-testid={`button-reject-bank-change-${r.id}`}
+                >
+                  reject
+                </button>
+              </div>
+            </Card>
+          ))}
+          {decided.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-2 text-xs px-1" data-testid={`row-bank-change-${r.id}`}>
+              <span className="text-text">{r.firmName}</span>
+              <MonoChip tone={r.status === "approved" ? "green" : "default"}>{r.status}</MonoChip>
+              <span className="text-text-faint">
+                {r.newIbanMasked}
+                {r.decidedByName ? ` · ${r.decidedByName}` : ""}
+                {r.decidedAt ? ` · ${r.decidedAt.slice(0, 10)}` : ""}
+              </span>
+              {r.decisionNote && <span className="text-text-faint">{r.decisionNote}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <p className="text-xs text-text-faint">{msg}</p>}
+    </section>
+  );
+}
