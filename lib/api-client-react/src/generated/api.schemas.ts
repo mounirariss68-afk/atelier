@@ -1051,6 +1051,22 @@ export const AtelierAccountSummaryCartographerStatus = {
   failed: "failed",
 } as const;
 
+/**
+ * Status of the latest Executive Mapper sweep for this account
+(auto-chained after account creation / Cartographer refreshes, or
+manually triggered). `idle` when no run has ever happened.
+
+ */
+export type AtelierAccountSummaryExecutiveMapperStatus =
+  (typeof AtelierAccountSummaryExecutiveMapperStatus)[keyof typeof AtelierAccountSummaryExecutiveMapperStatus];
+
+export const AtelierAccountSummaryExecutiveMapperStatus = {
+  idle: "idle",
+  running: "running",
+  succeeded: "succeeded",
+  failed: "failed",
+} as const;
+
 export interface AtelierAccountSummary {
   id: string;
   name: string;
@@ -1116,6 +1132,18 @@ spinner during the long background research run.
    * @nullable
    */
   cartographerPhase?: string | null;
+  /** Status of the latest Executive Mapper sweep for this account
+(auto-chained after account creation / Cartographer refreshes, or
+manually triggered). `idle` when no run has ever happened.
+ */
+  executiveMapperStatus?: AtelierAccountSummaryExecutiveMapperStatus;
+  /**
+   * Live phase label of an in-flight Executive Mapper sweep. Present
+only while `executiveMapperStatus` is `running`; `null` otherwise.
+
+   * @nullable
+   */
+  executiveMapperPhase?: string | null;
 }
 
 export type AtelierAccountHealthBand =

@@ -17,7 +17,7 @@
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CriticalRoleCoverageBlock, runExecutiveMapperSweep } from "./Account";
+import { CriticalRoleCoverageBlock, notifyExecutiveMapperSettled } from "./Account";
 
 let pass = 0;
 let fail = 0;
@@ -152,7 +152,10 @@ async function main(): Promise<void> {
     );
   });
 
-  await test("a successful Mapper run invalidates the coverage query", async () => {
+  // Task #868 — the sweep is now followed via the SHARED workspace status
+  // (account.executiveMapperStatus). When the page-level watcher sees the
+  // status settle, it calls notifyExecutiveMapperSettled with the detail.
+  await test("a successful Mapper settle invalidates the coverage query", () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { staleTime: Infinity, retry: false } },
     });
@@ -162,50 +165,23 @@ async function main(): Promise<void> {
       "precondition: coverage query starts un-invalidated",
     );
 
-    // Task #201 — the sweep is async: POST /run returns 202 immediately and
-    // the client polls /status until the run settles.
-    const calls: string[] = [];
-    const origFetch = globalThis.fetch;
-    globalThis.fetch = (async (input: RequestInfo | URL) => {
-      const url = String(input);
-      calls.push(url);
-      if (url.includes("/executive-mapper/status")) {
-        return new Response(
-          JSON.stringify({
-            status: "succeeded",
-            phase: null,
-            error: null,
-            proposedCount: 2,
-            openQuestions: [],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(JSON.stringify({ started: true, status: "running" }), {
-        status: 202,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
-
     const toasts: unknown[] = [];
-    try {
-      await runExecutiveMapperSweep({
-        accountId: ACCOUNT_ID,
-        qc,
-        pollIntervalMs: 5,
-        toast: ((t: unknown) => {
-          toasts.push(t);
-          return { id: "t1", dismiss: () => {}, update: () => {} };
-        }) as never,
-      });
-    } finally {
-      globalThis.fetch = origFetch;
-    }
+    notifyExecutiveMapperSettled({
+      s: {
+        status: "succeeded",
+        phase: null,
+        error: null,
+        proposedCount: 2,
+        openQuestions: [],
+      },
+      accountId: ACCOUNT_ID,
+      qc,
+      toast: ((t: unknown) => {
+        toasts.push(t);
+        return { id: "t1", dismiss: () => {}, update: () => {} };
+      }) as never,
+    });
 
-    assert(
-      calls.some((u) => u.includes(`/accounts/${ACCOUNT_ID}/executive-mapper/run`)),
-      "expected the Mapper run endpoint to be called",
-    );
     assert(
       qc.getQueryState(COVERAGE_KEY)?.isInvalidated === true,
       "coverage query must be invalidated after a Mapper run",
@@ -215,35 +191,35 @@ async function main(): Promise<void> {
       first !== undefined && first.variant !== "destructive",
       "run should succeed (non-destructive toast)",
     );
+    assert(
+      (first as { title?: string }).title === "2 executive updates proposed",
+      "toast should carry the proposed count",
+    );
     qc.clear();
   });
 
-  await test("a failed Mapper run does NOT invalidate the coverage query", async () => {
+  await test("a failed Mapper settle does NOT invalidate the coverage query", () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { staleTime: Infinity, retry: false } },
     });
     qc.setQueryData(COVERAGE_KEY, { runId: "run_old", runAt: runAt30d, coverage });
 
-    const origFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ error: "boom" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      })) as typeof fetch;
-
     const toasts: Array<{ variant?: string }> = [];
-    try {
-      await runExecutiveMapperSweep({
-        accountId: ACCOUNT_ID,
-        qc,
-        toast: ((t: { variant?: string }) => {
-          toasts.push(t);
-          return { id: "t1", dismiss: () => {}, update: () => {} };
-        }) as never,
-      });
-    } finally {
-      globalThis.fetch = origFetch;
-    }
+    notifyExecutiveMapperSettled({
+      s: {
+        status: "failed",
+        phase: null,
+        error: "boom",
+        proposedCount: null,
+        openQuestions: [],
+      },
+      accountId: ACCOUNT_ID,
+      qc,
+      toast: ((t: { variant?: string }) => {
+        toasts.push(t);
+        return { id: "t1", dismiss: () => {}, update: () => {} };
+      }) as never,
+    });
 
     assert(
       qc.getQueryState(COVERAGE_KEY)?.isInvalidated === false,

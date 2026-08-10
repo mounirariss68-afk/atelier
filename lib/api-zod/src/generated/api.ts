@@ -9957,6 +9957,18 @@ export const AtelierListAccountsResponseItem = zod.object({
     .describe(
       'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
     ),
+  executiveMapperStatus: zod
+    .enum(["idle", "running", "succeeded", "failed"])
+    .optional()
+    .describe(
+      "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+    ),
+  executiveMapperPhase: zod
+    .string()
+    .nullish()
+    .describe(
+      "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+    ),
 });
 export const AtelierListAccountsResponse = zod.array(
   AtelierListAccountsResponseItem,
@@ -10772,6 +10784,18 @@ export const AtelierMergeAccountsResponse = zod.object({
           .nullish()
           .describe(
             'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+          ),
+        executiveMapperStatus: zod
+          .enum(["idle", "running", "succeeded", "failed"])
+          .optional()
+          .describe(
+            "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+          ),
+        executiveMapperPhase: zod
+          .string()
+          .nullish()
+          .describe(
+            "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
           ),
       })
       .and(
@@ -11947,6 +11971,18 @@ export const AtelierGetAccountWorkspaceResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -13373,6 +13409,18 @@ export const AtelierUpdateAccountResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -14636,6 +14684,18 @@ export const AtelierRefreshAccountCartographerResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -16512,6 +16572,18 @@ export const AtelierDecideProfileUpdateResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -17684,6 +17756,18 @@ export const AtelierBulkDecideProfileUpdatesResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -18869,6 +18953,18 @@ export const AtelierCreateAccountInsightResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -20052,6 +20148,18 @@ export const AtelierUpdateAccountInsightResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -21218,6 +21326,18 @@ export const AtelierDeleteAccountInsightResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -22395,6 +22515,18 @@ export const AtelierAddAccountTeamMemberResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -23571,6 +23703,18 @@ export const AtelierUpdateAccountTeamMemberResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -24739,6 +24883,18 @@ export const AtelierRemoveAccountTeamMemberResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -25921,6 +26077,18 @@ export const AtelierCreateAccountActionResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -27099,6 +27267,18 @@ export const AtelierUpdateAccountActionResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -28265,6 +28445,18 @@ export const AtelierDeleteAccountActionResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -29441,6 +29633,18 @@ export const AtelierCreateAccountRiskResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -30619,6 +30823,18 @@ export const AtelierUpdateAccountRiskResponse = zod.object({
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
         ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
+        ),
     })
     .and(
       zod.object({
@@ -31785,6 +32001,18 @@ export const AtelierDeleteAccountRiskResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(
@@ -32960,6 +33188,18 @@ export const AtelierUpsertAccountGoalProgressResponse = zod.object({
         .nullish()
         .describe(
           'Current live phase label of an in-flight Account Cartographer run\n(e.g. \"Searching the web (2)\", \"Read 7 sources\",\n\"Synthesising the brief… (42s)\"). Present only while\n`cartographerStatus` is `running`; `null` otherwise. Lets the\naccount page show a meaningful, updating status instead of a bare\nspinner during the long background research run.\n',
+        ),
+      executiveMapperStatus: zod
+        .enum(["idle", "running", "succeeded", "failed"])
+        .optional()
+        .describe(
+          "Status of the latest Executive Mapper sweep for this account\n(auto-chained after account creation \/ Cartographer refreshes, or\nmanually triggered). `idle` when no run has ever happened.\n",
+        ),
+      executiveMapperPhase: zod
+        .string()
+        .nullish()
+        .describe(
+          "Live phase label of an in-flight Executive Mapper sweep. Present\nonly while `executiveMapperStatus` is `running`; `null` otherwise.\n",
         ),
     })
     .and(

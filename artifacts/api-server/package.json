@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:agents": "tsx ./tests/agents/run-fixtures.ts",
+    "test:exec-mapper-launch": "tsx ./tests/executive-mapper-launch/run.ts",
     "test:proposal-html": "tsx ./tests/proposal-html/run.ts",
     "test:spine-backfill": "tsx ./tests/spine-backfill/run.ts",
     "test:recipient-share": "tsx ./tests/recipient-share/run.ts",

@@ -11,6 +11,7 @@ import type { AtelierAccountHoldingStructure } from "./atelierAccountHoldingStru
 import type { AtelierAccountStatus } from "./atelierAccountStatus";
 import type { AtelierAccountSummaryCartographerStatus } from "./atelierAccountSummaryCartographerStatus";
 import type { AtelierAccountSummaryEntityRole } from "./atelierAccountSummaryEntityRole";
+import type { AtelierAccountSummaryExecutiveMapperStatus } from "./atelierAccountSummaryExecutiveMapperStatus";
 import type { AtelierAccountTier } from "./atelierAccountTier";
 
 export interface AtelierAccountSummary {
@@ -78,4 +79,16 @@ spinner during the long background research run.
    * @nullable
    */
   cartographerPhase?: string | null;
+  /** Status of the latest Executive Mapper sweep for this account
+(auto-chained after account creation / Cartographer refreshes, or
+manually triggered). `idle` when no run has ever happened.
+ */
+  executiveMapperStatus?: AtelierAccountSummaryExecutiveMapperStatus;
+  /**
+   * Live phase label of an in-flight Executive Mapper sweep. Present
+only while `executiveMapperStatus` is `running`; `null` otherwise.
+
+   * @nullable
+   */
+  executiveMapperPhase?: string | null;
 }

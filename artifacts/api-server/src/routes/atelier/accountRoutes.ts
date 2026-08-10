@@ -152,6 +152,7 @@ import {
 import {
   runExecutiveMapperAndQueue,
   chainExecutiveMapperAfterCartographer,
+  getExecutiveMapperLaunch,
 } from "../../lib/atelier-agents/executive-mapper-chain.js";
 import { contentDispositionFilename } from "../../lib/httpFilename.js";
 import {
@@ -338,6 +339,83 @@ async function loadCartographerStatus(
   return { status: null, phase: null };
 }
 
+// Task #868 — SINGLE status source for the Executive Mapper, merged the same
+// way as the bespoke status route: the in-process launch entry (covers the
+// pre-run-row window and errors thrown before a run row exists) with the
+// durable run row (covers page reloads and server restarts mid-run). Used by
+// BOTH the workspace shape (header chip / button) and the status route so
+// every UI surface reads one consistent state.
+async function loadExecutiveMapperStatus(accountId: string): Promise<{
+  status: "idle" | "running" | "succeeded" | "failed";
+  phase: string | null;
+  runId: string | null;
+  error: string | null;
+  proposedCount: number | null;
+  openQuestions: string[];
+}> {
+  const launch = getExecutiveMapperLaunch(accountId);
+  const [latest] = await db
+    .select({
+      id: atelierAgentRuns.id,
+      status: atelierAgentRuns.status,
+      statusMessage: atelierAgentRuns.statusMessage,
+    })
+    .from(atelierAgentRuns)
+    .where(
+      and(
+        eq(atelierAgentRuns.agentId, "executive_mapper"),
+        eq(atelierAgentRuns.targetId, accountId),
+        isNull(atelierAgentRuns.deletedAt),
+      ),
+    )
+    .orderBy(desc(atelierAgentRuns.createdAt))
+    .limit(1);
+  // In-process "running" wins even if the run row already reads complete —
+  // the governed-queue write happens after the row completes, and succeeded
+  // is only reported once the proposals are actually queued.
+  if (launch?.status === "running" || latest?.status === "running") {
+    return {
+      status: "running",
+      phase: latest?.status === "running" ? (latest.statusMessage ?? null) : null,
+      runId: latest?.status === "running" ? latest.id : null,
+      error: null,
+      proposedCount: null,
+      openQuestions: [],
+    };
+  }
+  if (launch) {
+    return {
+      status: launch.status,
+      phase: null,
+      runId: launch.runId,
+      error: launch.error,
+      proposedCount: launch.proposedCount,
+      openQuestions: launch.openQuestions,
+    };
+  }
+  if (!latest) {
+    return { status: "idle", phase: null, runId: null, error: null, proposedCount: null, openQuestions: [] };
+  }
+  if (latest.status === "error" || latest.status === "failed") {
+    return {
+      status: "failed",
+      phase: null,
+      runId: latest.id,
+      error: latest.statusMessage ?? "The executive mapping run failed.",
+      proposedCount: null,
+      openQuestions: [],
+    };
+  }
+  return {
+    status: "succeeded",
+    phase: null,
+    runId: latest.id,
+    error: null,
+    proposedCount: null,
+    openQuestions: [],
+  };
+}
+
 async function summariseAccount(
   a: typeof atelierAccounts.$inferSelect,
   access: EngAccess,
@@ -388,6 +466,9 @@ async function summariseAccount(
   );
   const { status: cartographerStatus, phase: cartographerPhase } =
     await loadCartographerStatus(a.id);
+  // Task #868 — Executive Mapper status rides on the workspace so the page's
+  // existing poll drives the header chip and the Map executives button.
+  const execMapper = await loadExecutiveMapperStatus(a.id);
   // Task #607 — the company's headline revenue is a money surface, so it
   // honours the same account-financials gate as the rest of the financial
   // signals (account-wide authority + not a restricted / board persona).
@@ -440,6 +521,8 @@ async function summariseAccount(
     pendingUpdateCount: pending.length,
     cartographerStatus,
     cartographerPhase,
+    executiveMapperStatus: execMapper.status,
+    executiveMapperPhase: execMapper.phase,
   };
 }
 
@@ -4537,18 +4620,19 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
     return;
   }
 
-  // Task #201 — ASYNC START-THEN-POLL. The sweep takes minutes; holding the
-  // request open used to 502 at the proxy. Record the launch, run in the
-  // background, and return immediately; the client polls the status route.
-  const execLaunchKey = launchKey("executive_mapper", a.id);
-  const existingLaunch = agentLaunches.get(execLaunchKey);
+  // Task #201/#868 — ASYNC START-THEN-POLL. The sweep takes minutes; holding
+  // the request open used to 502 at the proxy. Launch state is owned by the
+  // chain module (registered synchronously inside runExecutiveMapperAndQueue,
+  // so every entry point — this route, account-creation auto-run, the
+  // post-Cartographer chain — shares one registry); we return immediately and
+  // the client follows the shared workspace status.
   const alreadyRunning = () => {
     res.status(409).json({
       error: "executive-mapper-already-running",
       message: "An executive mapping sweep is already running for this account.",
     });
   };
-  if (existingLaunch?.status === "running") {
+  if (getExecutiveMapperLaunch(a.id)?.status === "running") {
     alreadyRunning();
     return;
   }
@@ -4569,52 +4653,20 @@ router.post("/accounts/:accountId/executive-mapper/run", async (req, res) => {
     return;
   }
 
-  agentLaunches.set(execLaunchKey, {
-    status: "running",
-    error: null,
-    runId: null,
-    proposedCount: null,
-    openQuestions: [],
-    startedAt: Date.now(),
+  // The "running" launch entry is registered synchronously inside this call
+  // (before its first await), so the 202 below can never race a stale "idle".
+  void runExecutiveMapperAndQueue(a.id, me.id).catch((err) => {
+    const raw = err instanceof Error ? err.message : String(err);
+    console.warn(`[atelier] executive mapper run failed for ${a.name}`, raw);
   });
-  const triggeredByUserId = me.id;
-  void (async () => {
-    try {
-      const result = await runExecutiveMapperAndQueue(a.id, triggeredByUserId);
-      agentLaunches.set(execLaunchKey, {
-        status: "succeeded",
-        error: null,
-        runId: result.runId,
-        proposedCount: result.proposedCount,
-        openQuestions: result.openQuestions,
-        startedAt: Date.now(),
-      });
-    } catch (err) {
-      const raw = err instanceof Error ? err.message : String(err);
-      const message =
-        raw === "executive-mapper-already-running"
-          ? "An executive mapping sweep is already running for this account."
-          : raw;
-      agentLaunches.set(execLaunchKey, {
-        status: "failed",
-        error: message,
-        runId: null,
-        proposedCount: null,
-        openQuestions: [],
-        startedAt: Date.now(),
-      });
-      console.warn(`[atelier] executive mapper run failed for ${a.name}`, raw);
-    }
-  })();
 
   res.status(202).json({ started: true, status: "running" });
 });
 
-// Task #201 — Executive Mapper run status. Bespoke raw-fetch route (not in
-// the OpenAPI spec) polled by the Map Executives button. Merges the
-// in-process launch entry (covers the pre-run-row window and errors thrown
-// before a run row exists) with the durable run row (covers page reloads and
-// server restarts mid-run).
+// Task #201/#868 — Executive Mapper run status. Bespoke raw-fetch route (not
+// in the OpenAPI spec) used by the account page for the settle-toast detail
+// fetch. Delegates to the same loadExecutiveMapperStatus helper that feeds
+// the workspace shape so every surface reads one consistent state.
 // @cli-skip: bespoke agent-read route, surfaced in the Account UI only
 router.get("/accounts/:accountId/executive-mapper/status", async (req, res) => {
   const me = ensurePersona(req, res);
@@ -4624,71 +4676,7 @@ router.get("/accounts/:accountId/executive-mapper/status", async (req, res) => {
     res.status(403).json({ error: "account-forbidden" });
     return;
   }
-  const launch = agentLaunches.get(launchKey("executive_mapper", req.params.accountId));
-  const [latest] = await db
-    .select({
-      id: atelierAgentRuns.id,
-      status: atelierAgentRuns.status,
-      statusMessage: atelierAgentRuns.statusMessage,
-    })
-    .from(atelierAgentRuns)
-    .where(
-      and(
-        eq(atelierAgentRuns.agentId, "executive_mapper"),
-        eq(atelierAgentRuns.targetId, req.params.accountId),
-        isNull(atelierAgentRuns.deletedAt),
-      ),
-    )
-    .orderBy(desc(atelierAgentRuns.createdAt))
-    .limit(1);
-  // In-process "running" wins even if the run row already reads complete —
-  // the governed-queue write happens after the row completes, and succeeded
-  // is only reported once the proposals are actually queued.
-  if (launch?.status === "running" || latest?.status === "running") {
-    res.json({
-      status: "running",
-      phase: latest?.status === "running" ? (latest.statusMessage ?? null) : null,
-      runId: latest?.status === "running" ? latest.id : null,
-      error: null,
-      proposedCount: null,
-      openQuestions: [],
-    });
-    return;
-  }
-  if (launch) {
-    res.json({
-      status: launch.status,
-      phase: null,
-      runId: launch.runId,
-      error: launch.error,
-      proposedCount: launch.proposedCount,
-      openQuestions: launch.openQuestions,
-    });
-    return;
-  }
-  if (!latest) {
-    res.json({ status: "idle", phase: null, runId: null, error: null, proposedCount: null, openQuestions: [] });
-    return;
-  }
-  if (latest.status === "error" || latest.status === "failed") {
-    res.json({
-      status: "failed",
-      phase: null,
-      runId: latest.id,
-      error: latest.statusMessage ?? "The executive mapping run failed.",
-      proposedCount: null,
-      openQuestions: [],
-    });
-    return;
-  }
-  res.json({
-    status: "succeeded",
-    phase: null,
-    runId: latest.id,
-    error: null,
-    proposedCount: null,
-    openQuestions: [],
-  });
+  res.json(await loadExecutiveMapperStatus(req.params.accountId));
 });
 
 // Task #206 — latest critical-role coverage summary from the most recent

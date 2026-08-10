@@ -7245,6 +7245,21 @@ components:
             `cartographerStatus` is `running`; `null` otherwise. Lets the
             account page show a meaningful, updating status instead of a bare
             spinner during the long background research run.
+        # Task #868 — Executive Mapper run status folded into the workspace so
+        # the account page has ONE shared source for the running chip and the
+        # Map executives button (auto-run after creation is otherwise invisible).
+        executiveMapperStatus:
+          type: string
+          enum: [idle, running, succeeded, failed]
+          description: |
+            Status of the latest Executive Mapper sweep for this account
+            (auto-chained after account creation / Cartographer refreshes, or
+            manually triggered). `idle` when no run has ever happened.
+        executiveMapperPhase:
+          type: ["string", "null"]
+          description: |
+            Live phase label of an in-flight Executive Mapper sweep. Present
+            only while `executiveMapperStatus` is `running`; `null` otherwise.
 
     AtelierContact:
       type: object

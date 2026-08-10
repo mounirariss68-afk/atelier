@@ -34,6 +34,7 @@
 - [Atelier 2FA invariants](atelier-2fa.md) — code checks only via CAS-based verifyCredentialCode; step-up via requireFreshTotp (403 step-up-required); policy in admin settings; SESSION_SECRET rotation orphans enrolments.
 - [Security log tenancy](atelier-security-log.md) — security console isolates tenants ONLY via explicit orgId predicates (global db, no RLS); every login_failed audit must pass targetEmail for org resolution.
 - [Atelier password user_managed flag](atelier-password-user-managed.md) — boot seed must skip user_managed=true credential rows; any new credential write surface must set the flag deliberately.
+- [Executive Mapper shared status](atelier-exec-mapper-status.md) — launch registry lives in the chain (sync-registered) so auto-runs surface; UI reads one workspace status, no per-mount pollers.
 - [Executive Mapper agent](atelier-executive-mapper.md) — reuses Cartographer queue/guard/applier; PDL title-keyword match, C-suite-first two-pass, capped enrich attempts; gov-body mode sweeps ministry ranks.
 - [Research recency layer](atelier-research-recency.md) — recency lives in shared perplexityResearch; new callers must pass entityLabel; staleness via checkDossierFreshness.
 - [Perplexity direct API only](perplexity-connection.md) — connector path deleted (proxy broken platform-side); direct api.perplexity.ai via PERPLEXITY_API_KEY, per-query timeout + one 429/5xx retry.

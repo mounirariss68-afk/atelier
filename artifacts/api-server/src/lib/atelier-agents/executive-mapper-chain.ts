@@ -43,26 +43,61 @@ async function loadAccount(id: string) {
 // visible across restarts / other entry points.
 const executiveMapperInFlight = new Set<string>();
 
+// Task #868 — in-process launch registry owned by the CHAIN, not the route,
+// so EVERY entry point (manual route, auto-run after account creation,
+// post-Cartographer chain, chat dispatch) registers the same state. It
+// bridges the pre-run-row window (the durable atelier_agent_runs row is only
+// inserted once the pipeline gets going) and captures errors thrown before a
+// run row exists. The workspace/status readers merge this with the run row.
+export type ExecutiveMapperLaunch = {
+  status: "running" | "succeeded" | "failed";
+  error: string | null;
+  runId: string | null;
+  proposedCount: number | null;
+  openQuestions: string[];
+  startedAt: number;
+};
+const executiveMapperLaunches = new Map<string, ExecutiveMapperLaunch>();
+
+export function getExecutiveMapperLaunch(
+  accountId: string,
+): ExecutiveMapperLaunch | null {
+  return executiveMapperLaunches.get(accountId) ?? null;
+}
+
 export async function runExecutiveMapperAndQueue(
   accountId: string,
   triggeredByUserId: string | null,
+  // Test seam only — lets lifecycle tests replace the multi-minute LLM
+  // pipeline. Production callers never pass this.
+  deps?: { runImpl?: typeof runExecutiveMapper },
 ): Promise<{
   runId: string;
   proposedCount: number;
   openQuestions: string[];
   criticalRoleCoverage: CriticalRoleCoverageEntry[] | null;
 }> {
-  const a = await loadAccount(accountId);
-  if (!a) throw new Error("account-not-found");
-
   // Concurrency guard: never stack a second sweep on an account that already
   // has one running (double-click, auto-run + manual overlap). Claim the
-  // in-process slot atomically FIRST, then double-check the DB.
-  if (executiveMapperInFlight.has(a.id)) {
+  // in-process slot atomically FIRST, then double-check the DB. The claim and
+  // the "running" launch entry are registered SYNCHRONOUSLY (before the first
+  // await) so a caller that fires-and-forgets and immediately serves a status
+  // read never observes a stale "idle".
+  if (executiveMapperInFlight.has(accountId)) {
     throw new Error("executive-mapper-already-running");
   }
-  executiveMapperInFlight.add(a.id);
+  executiveMapperInFlight.add(accountId);
+  executiveMapperLaunches.set(accountId, {
+    status: "running",
+    error: null,
+    runId: null,
+    proposedCount: null,
+    openQuestions: [],
+    startedAt: Date.now(),
+  });
   try {
+    const a = await loadAccount(accountId);
+    if (!a) throw new Error("account-not-found");
     const [inFlight] = await db
       .select({ id: atelierAgentRuns.id })
       .from(atelierAgentRuns)
@@ -76,15 +111,50 @@ export async function runExecutiveMapperAndQueue(
       )
       .limit(1);
     if (inFlight) throw new Error("executive-mapper-already-running");
-    return await runExecutiveMapperAndQueueInner(a, triggeredByUserId);
+    const result = await runExecutiveMapperAndQueueInner(
+      a,
+      triggeredByUserId,
+      deps,
+    );
+    executiveMapperLaunches.set(accountId, {
+      status: "succeeded",
+      error: null,
+      runId: result.runId,
+      proposedCount: result.proposedCount,
+      openQuestions: result.openQuestions,
+      startedAt: Date.now(),
+    });
+    return result;
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    if (raw === "executive-mapper-already-running") {
+      // A run visible in the DB (other process / pre-restart) is in flight —
+      // drop OUR provisional entry rather than recording a bogus failure over
+      // the real run's state.
+      executiveMapperLaunches.delete(accountId);
+    } else {
+      executiveMapperLaunches.set(accountId, {
+        status: "failed",
+        error:
+          raw === "account-not-found"
+            ? "The account no longer exists."
+            : raw,
+        runId: null,
+        proposedCount: null,
+        openQuestions: [],
+        startedAt: Date.now(),
+      });
+    }
+    throw err;
   } finally {
-    executiveMapperInFlight.delete(a.id);
+    executiveMapperInFlight.delete(accountId);
   }
 }
 
 async function runExecutiveMapperAndQueueInner(
   a: NonNullable<Awaited<ReturnType<typeof loadAccount>>>,
   triggeredByUserId: string | null,
+  deps?: { runImpl?: typeof runExecutiveMapper },
 ): Promise<{
   runId: string;
   proposedCount: number;
@@ -100,7 +170,7 @@ async function runExecutiveMapperAndQueueInner(
     .from(atelierContacts)
     .where(and(eq(atelierContacts.accountId, a.id), isNull(atelierContacts.deletedAt)));
 
-  const { runId, output } = await runExecutiveMapper({
+  const { runId, output } = await (deps?.runImpl ?? runExecutiveMapper)({
     accountId: a.id,
     accountName: a.brandName ?? a.name,
     accountBrandName: a.brandName ?? null,
