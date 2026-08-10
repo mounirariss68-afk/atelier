@@ -36722,6 +36722,12 @@ export const AtelierCreatePartnerFirmBody = zod.object({
     ])
     .nullish(),
   partnershipStage: zod.enum(["candidate", "agreed"]).optional(),
+  confirmDuplicate: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870).",
+    ),
 });
 
 /**

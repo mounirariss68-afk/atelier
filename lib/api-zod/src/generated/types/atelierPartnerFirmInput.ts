@@ -34,4 +34,6 @@ export interface AtelierPartnerFirmInput {
   tierChangeReason?: string | null;
   archetype?: AtelierPartnerFirmInputArchetype;
   partnershipStage?: AtelierPartnerFirmInputPartnershipStage;
+  /** Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870). */
+  confirmDuplicate?: boolean;
 }

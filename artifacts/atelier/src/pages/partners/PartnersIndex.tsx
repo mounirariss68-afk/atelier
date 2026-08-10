@@ -128,8 +128,19 @@ function useCanEdit(): boolean {
 
 function errMessage(e: unknown): string {
   if (e && typeof e === "object") {
-    const anyE = e as { body?: { error?: string; message?: string }; message?: string };
-    return anyE.body?.error ?? anyE.body?.message ?? anyE.message ?? "Request failed";
+    const anyE = e as {
+      body?: { error?: string; message?: string };
+      data?: { error?: string; message?: string };
+      message?: string;
+    };
+    return (
+      anyE.data?.message ??
+      anyE.data?.error ??
+      anyE.body?.message ??
+      anyE.body?.error ??
+      anyE.message ??
+      "Request failed"
+    );
   }
   return "Request failed";
 }
@@ -389,7 +400,7 @@ function FirmForm({
 function IdentifyView() {
   const canEdit = useCanEdit();
   const qc = useQueryClient();
-  const { data: firmsData } = useAtelierListPartnerFirms();
+  const { data: firmsData, error: firmsError, refetch: refetchFirms } = useAtelierListPartnerFirms();
   const firms = firmsData?.items ?? [];
 
   const invalidateFirms = () => {
@@ -399,9 +410,40 @@ function IdentifyView() {
   const [adding, setAdding] = React.useState(false);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  // Task #870 — duplicate-name guard + created-firm feedback.
+  const [dupPending, setDupPending] = React.useState<{ draft: FirmDraft; existingName: string } | null>(null);
+  const [createdFirm, setCreatedFirm] = React.useState<{ id: string; name: string } | null>(null);
 
   const create = useAtelierCreatePartnerFirm();
   const update = useAtelierUpdatePartnerFirm();
+
+  // Task #870 — create with duplicate-name handling: a structured 409 from
+  // the server surfaces a confirm-anyway card instead of a bare error.
+  const submitCreate = (d: FirmDraft, confirmDuplicate: boolean) => {
+    setErr(null);
+    create.mutate(
+      { data: { ...firmInputFrom(d), ...(confirmDuplicate ? { confirmDuplicate: true } : {}) } },
+      {
+        onSuccess: (row) => {
+          setAdding(false);
+          setErr(null);
+          setDupPending(null);
+          setCreatedFirm(row?.id && row?.name ? { id: row.id, name: row.name } : null);
+          invalidateFirms();
+        },
+        onError: (e) => {
+          const apiErr = e as { status?: number; data?: { error?: string; existingName?: string } | null };
+          if (apiErr.status === 409 && apiErr.data?.error === "duplicate-partner-firm-name") {
+            setDupPending({ draft: d, existingName: apiErr.data.existingName ?? d.name.trim() });
+          } else {
+            setDupPending(null);
+            setErr(errMessage(e));
+          }
+        },
+      },
+    );
+  };
+
   const archive = useAtelierArchivePartnerFirm();
   const [evalOpenId, setEvalOpenId] = React.useState<string | null>(null);
   const [quotesOpenId, setQuotesOpenId] = React.useState<string | null>(null);
@@ -427,20 +469,72 @@ function IdentifyView() {
           </div>
         </header>
 
+        {firmsError != null && (
+          <Card className="p-3 border-red-400/40 flex items-center justify-between gap-3" data-testid="firms-load-error">
+            <p className="text-xs text-red-400">
+              Couldn't load the partner directory: {errMessage(firmsError)}
+            </p>
+            <PillButton variant="ghost" onClick={() => void refetchFirms()} data-testid="button-retry-firms">
+              Retry
+            </PillButton>
+          </Card>
+        )}
+
+        {createdFirm && (
+          <Card className="p-3 border-gold/40 flex items-center justify-between gap-3" data-testid="firm-created-banner">
+            <p className="text-xs text-text">
+              Created partner firm <span className="text-gold font-medium">{createdFirm.name}</span>.
+            </p>
+            <div className="flex gap-2">
+              <PillButton
+                variant="ghost"
+                onClick={() => {
+                  document
+                    .querySelector(`[data-testid="card-firm-${createdFirm.id}"], [data-testid="row-firm-${createdFirm.id}"]`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                }}
+                data-testid="button-view-created-firm"
+              >
+                View firm
+              </PillButton>
+              <PillButton variant="ghost" onClick={() => setCreatedFirm(null)}>
+                Dismiss
+              </PillButton>
+            </div>
+          </Card>
+        )}
+
         {adding && (
-          <FirmForm
-            initial={emptyFirmDraft}
-            busy={create.isPending}
-            error={err}
-            submitLabel="Create firm"
-            onCancel={() => { setAdding(false); setErr(null); }}
-            onSubmit={(d) =>
-              create.mutate({ data: firmInputFrom(d) }, {
-                onSuccess: () => { setAdding(false); setErr(null); invalidateFirms(); },
-                onError: (e) => setErr(errMessage(e)),
-              })
-            }
-          />
+          <>
+            <FirmForm
+              initial={emptyFirmDraft}
+              busy={create.isPending}
+              error={err}
+              submitLabel="Create firm"
+              onCancel={() => { setAdding(false); setErr(null); setDupPending(null); }}
+              onSubmit={(d) => submitCreate(d, false)}
+            />
+            {dupPending && (
+              <Card className="p-3 border-amber-400/50 space-y-2" data-testid="firm-duplicate-warning">
+                <p className="text-xs text-amber-400">
+                  A partner firm named "{dupPending.existingName}" already exists. Create another
+                  firm with the same name anyway?
+                </p>
+                <div className="flex gap-2">
+                  <PillButton
+                    disabled={create.isPending}
+                    onClick={() => submitCreate(dupPending.draft, true)}
+                    data-testid="button-firm-create-anyway"
+                  >
+                    {create.isPending ? "Saving…" : "Create anyway"}
+                  </PillButton>
+                  <PillButton variant="ghost" onClick={() => setDupPending(null)}>
+                    Go back
+                  </PillButton>
+                </div>
+              </Card>
+            )}
+          </>
         )}
 
         {firms.length === 0 && !adding && (

@@ -104,11 +104,23 @@ export default function RosterInvitations(): React.ReactElement {
 
   const [draft, setDraft] = React.useState({ ...emptyDraft });
 
+  const [loadError, setLoadError] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+
   const reload = React.useCallback(() => {
     fetch("/api/atelier/roster/invitations", { credentials: "include" })
-      .then((r) => r.json())
-      .then((d) => setRows(d.invitations ?? []))
-      .catch(() => setRows([]));
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`Server error (${r.status})`);
+        return r.json();
+      })
+      .then((d) => {
+        setRows(d.invitations ?? []);
+        setLoadError(null);
+      })
+      .catch((e) => {
+        setRows([]);
+        setLoadError(e instanceof Error ? e.message : "Couldn't load invitations");
+      });
   }, []);
 
   React.useEffect(() => {
@@ -229,24 +241,42 @@ export default function RosterInvitations(): React.ReactElement {
           sourceId,
         }),
       });
-      const d = await r.json();
+      const d = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setError(d.message ?? d.error ?? "failed");
+        setError(d.message ?? d.error ?? `Invitation failed (${r.status})`);
         return;
       }
       setDraft({ ...emptyDraft });
       setSourceId("");
       reload();
+    } catch (e) {
+      // Transport failure (network down, server unreachable) — surface it.
+      setError(e instanceof Error ? e.message : "Network error — invitation not sent");
     } finally {
       setBusy(false);
     }
   };
 
   const action = async (id: string, kind: "resend" | "revoke" | "accept") => {
-    await fetch(`/api/atelier/roster/invitations/${id}/${kind}`, {
-      method: "POST",
-      credentials: "include",
-    });
+    setActionError(null);
+    try {
+      const r = await fetch(`/api/atelier/roster/invitations/${id}/${kind}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}) as { message?: string; error?: string });
+        setActionError(
+          d.message ?? d.error ?? `Couldn't ${kind} the invitation (${r.status})`,
+        );
+        return;
+      }
+    } catch (e) {
+      setActionError(
+        e instanceof Error ? e.message : `Network error — couldn't ${kind} the invitation`,
+      );
+      return;
+    }
     reload();
   };
 
@@ -459,8 +489,30 @@ export default function RosterInvitations(): React.ReactElement {
       </Card>
 
       <div className="space-y-2">
+        {actionError && (
+          <div
+            className="text-red-500 text-xs font-mono flex items-center gap-3"
+            data-testid="invitation-action-error"
+          >
+            <span>{actionError}</span>
+            <button className="underline" onClick={() => setActionError(null)}>
+              dismiss
+            </button>
+          </div>
+        )}
+        {loadError && (
+          <div
+            className="text-red-500 text-xs font-mono flex items-center gap-3"
+            data-testid="invitations-load-error"
+          >
+            <span>Couldn't load invitations: {loadError}</span>
+            <button className="underline" onClick={reload}>
+              retry
+            </button>
+          </div>
+        )}
         {rows === null && <div className="text-text-mute py-8">Loading…</div>}
-        {rows?.length === 0 && (
+        {rows?.length === 0 && !loadError && (
           <div className="text-text-mute py-8 italic">No invitations yet.</div>
         )}
         {rows?.map((r) => (

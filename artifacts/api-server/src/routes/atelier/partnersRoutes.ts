@@ -16,7 +16,7 @@
  * All writes are org-scoped and audited via the shared audit() helper.
  */
 import { Router, type IRouter, type Request, type Response } from "express";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
 import {
@@ -142,6 +142,9 @@ const firmBaseSchema = z.object({
     ])
     .nullish(),
   partnershipStage: z.enum(["candidate", "agreed"]).optional(),
+  // Task #870 — duplicate-name guard: set true to create despite an existing
+  // firm with the same (case-insensitive) name in this org.
+  confirmDuplicate: z.boolean().optional(),
 });
 
 // Task #538 — contact-list writes back every entry with a person record.
@@ -167,7 +170,10 @@ function normalizeContacts(
  * alone; new/unstamped entries get a person parsed from the free-text name
  * plus a deterministic `pfr_pfc_<entryId>` resource row.
  */
+type DbExec = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 async function stampContactPersons(
+  exec: DbExec,
   me: Me,
   firmId: string,
   contacts: NonNullable<ReturnType<typeof normalizeContacts>>,
@@ -178,19 +184,19 @@ async function stampContactPersons(
       out.push(entry);
       continue;
     }
-    const w = await writePersonFromFullName(db, {
+    const w = await writePersonFromFullName(exec, {
       orgId: me.orgId,
       fullName: entry.name,
       sourceKind: "partner_firm_contact",
       createdByUserId: me.id,
     });
     const rowId = `pfr_pfc_${entry.id}`;
-    const [existing] = await db
+    const [existing] = await exec
       .select({ id: atelierPartnerFirmResources.id })
       .from(atelierPartnerFirmResources)
       .where(and(eq(atelierPartnerFirmResources.id, rowId), eq(atelierPartnerFirmResources.orgId, me.orgId)));
     if (!existing) {
-      await db.insert(atelierPartnerFirmResources).values({
+      await exec.insert(atelierPartnerFirmResources).values({
         id: rowId,
         orgId: me.orgId,
         partnerFirmId: firmId,
@@ -348,47 +354,90 @@ router.post("/partners/firms", async (req, res, next) => {
     const parsed = firmBaseSchema.safeParse(req.body ?? {});
     if (!parsed.success) return invalidBody(res, parsed.error);
     const b = parsed.data;
+    // Task #870 — org-scoped duplicate-name guard. A structured 409 lets the
+    // UI warn and offer an explicit "create anyway" (confirmDuplicate: true).
+    const trimmedName = b.name.trim();
+    const [dupe] = await db
+      .select({ id: atelierPartnerFirms.id, name: atelierPartnerFirms.name })
+      .from(atelierPartnerFirms)
+      .where(
+        and(
+          firmScope(me),
+          sql`lower(${atelierPartnerFirms.name}) = ${trimmedName.toLowerCase()}`,
+        ),
+      );
+    if (dupe && !b.confirmDuplicate) {
+      res.status(409).json({
+        error: "duplicate-partner-firm-name",
+        message: `A partner firm named "${dupe.name}" already exists.`,
+        existingId: dupe.id,
+        existingName: dupe.name,
+      });
+      return;
+    }
     const id = rid("pfrm");
     const now = new Date().toISOString();
     const tierHistory = b.tier
       ? [{ fromTier: null, toTier: b.tier, at: now, byUserId: me.id, reason: b.tierChangeReason ?? null }]
       : [];
-    const [row] = await db
-      .insert(atelierPartnerFirms)
-      .values({
-        id,
-        orgId: me.orgId,
-        name: b.name,
-        kind: b.kind ?? null,
-        speciality: b.speciality ?? null,
-        country: b.country ?? null,
-        countryCode: b.countryCode ?? null,
-        tier: b.tier ?? null,
-        status: b.status ?? "active",
-        relationshipStrength: b.relationshipStrength ?? null,
-        anchorCognirise: b.anchorCognirise ?? null,
-        anchorPartner: b.anchorPartner ?? null,
-        lastTouchAt: b.lastTouchAt ?? null,
-        capabilities: b.capabilities ?? {},
-        contacts: await stampContactPersons(me, id, normalizeContacts(b.contacts) ?? []),
-        contactName: b.contactName ?? null,
-        contactEmail: b.contactEmail ?? null,
-        defaultPaymentTermsDays: b.defaultPaymentTermsDays ?? null,
-        defaultBillingCurrency: b.defaultBillingCurrency ?? null,
-        notes: b.notes ?? null,
-        archetype: b.archetype ?? null,
-        partnershipStage: b.partnershipStage ?? "candidate",
-        tierHistory,
-        createdByUserId: me.id,
-      })
-      .returning();
-    await audit({
-      entityType: "partner_firm",
-      entityId: id,
-      actor: me,
-      action: "partner_firm.create",
-      payload: { name: b.name, tier: b.tier ?? null },
-      summary: `Created partner firm "${b.name}"`,
+    // Task #870 — all-or-nothing create: the firm row is inserted FIRST, then
+    // contact person/resource stamping and the audit event, all in one
+    // transaction so a failure anywhere leaves no orphaned records behind.
+    const row = await db.transaction(async (tx) => {
+      const normalized = normalizeContacts(b.contacts) ?? [];
+      const [created] = await tx
+        .insert(atelierPartnerFirms)
+        .values({
+          id,
+          orgId: me.orgId,
+          name: b.name,
+          kind: b.kind ?? null,
+          speciality: b.speciality ?? null,
+          country: b.country ?? null,
+          countryCode: b.countryCode ?? null,
+          tier: b.tier ?? null,
+          status: b.status ?? "active",
+          relationshipStrength: b.relationshipStrength ?? null,
+          anchorCognirise: b.anchorCognirise ?? null,
+          anchorPartner: b.anchorPartner ?? null,
+          lastTouchAt: b.lastTouchAt ?? null,
+          capabilities: b.capabilities ?? {},
+          contacts: normalized,
+          contactName: b.contactName ?? null,
+          contactEmail: b.contactEmail ?? null,
+          defaultPaymentTermsDays: b.defaultPaymentTermsDays ?? null,
+          defaultBillingCurrency: b.defaultBillingCurrency ?? null,
+          notes: b.notes ?? null,
+          archetype: b.archetype ?? null,
+          partnershipStage: b.partnershipStage ?? "candidate",
+          tierHistory,
+          createdByUserId: me.id,
+        })
+        .returning();
+      let out = created;
+      if (normalized.length > 0) {
+        const stamped = await stampContactPersons(tx, me, id, normalized);
+        if (JSON.stringify(stamped) !== JSON.stringify(normalized)) {
+          const [updated] = await tx
+            .update(atelierPartnerFirms)
+            .set({ contacts: stamped })
+            .where(eq(atelierPartnerFirms.id, id))
+            .returning();
+          out = updated;
+        }
+      }
+      await tx.insert(atelierAuditEvents).values({
+        id: rid("aud"),
+        entityType: "partner_firm",
+        entityId: id,
+        actorType: "human",
+        actorId: me.id,
+        actorLabel: me.name,
+        action: "partner_firm.create",
+        payload: { name: b.name, tier: b.tier ?? null },
+        payloadSummary: `Created partner firm "${b.name}"`,
+      });
+      return out;
     });
     res.status(201).json(row);
   } catch (err) {
@@ -439,7 +488,7 @@ router.patch("/partners/firms/:id", async (req, res, next) => {
     assign("archetype", "archetype");
     assign("partnershipStage", "partnershipStage");
     if (b.contacts !== undefined) {
-      const to = await stampContactPersons(me, firm.id, normalizeContacts(b.contacts) ?? []);
+      const to = await stampContactPersons(db, me, firm.id, normalizeContacts(b.contacts) ?? []);
       patch.contacts = to;
       changes.contacts = { from: firm.contacts, to };
     }
@@ -2057,6 +2106,7 @@ router.post("/partners/firms/:id/proposals/:proposalId/decide", async (req, res,
       const fresh = await getFirm(me, req.params.id);
       if (fresh && Array.isArray(fresh.contacts)) {
         const stamped = await stampContactPersons(
+          db,
           me,
           fresh.id,
           fresh.contacts.map((c) => ({

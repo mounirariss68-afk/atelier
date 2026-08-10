@@ -5941,6 +5941,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AtelierError" }
+        "409":
+          description: A firm with the same name already exists (send confirmDuplicate to override)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AtelierError" }
   /atelier/partners/firms/{id}:
     get:
       operationId: atelierGetPartnerFirm
@@ -12683,6 +12688,9 @@ components:
         tierChangeReason: { type: string, nullable: true }
         archetype: { type: string, nullable: true, enum: [reference_brand, delivery_backbone, platform_capability, niche_subcontractor, market_access_jv, competitor_monitor, null] }
         partnershipStage: { type: string, enum: [candidate, agreed] }
+        confirmDuplicate:
+          type: boolean
+          description: Create the firm even though another firm with the same name exists in this org (duplicate-name guard, Task 870).
       required: [name]
     AtelierPartnerFitScorecardAdjust:
       type: object

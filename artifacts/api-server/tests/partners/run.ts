@@ -66,6 +66,8 @@ async function main(): Promise<void> {
     atelierAccounts,
     atelierOpportunities,
     atelierPartnerFirms,
+    atelierPartnerFirmResources,
+    atelierPersons,
     atelierPartnerTargets,
     atelierAllianceJointPipeline,
     atelierAllianceCertifications,
@@ -228,6 +230,83 @@ async function main(): Promise<void> {
     check("senior_manager can create firm", smCreated.status === 201, `status=${smCreated.status}`);
     const finCreated = await call("POST", "/partners/firms", FIN_ID, { name: `PN FIN Firm ${STAMP}` });
     check("finance can create firm", finCreated.status === 201, `status=${finCreated.status}`);
+
+    // =====================================================================
+    group("creation hardening \u2014 duplicate guard + transactional rollback (Task #870)");
+    // =====================================================================
+    // Duplicate guard: same name (case-insensitive) → structured 409.
+    const dup = await call("POST", "/partners/firms", FP_ID, {
+      name: firmInput.name.toUpperCase(),
+    });
+    check(
+      "duplicate name \u2192 409 duplicate-partner-firm-name with existingId",
+      dup.status === 409 &&
+        dup.body?.error === "duplicate-partner-firm-name" &&
+        dup.body?.existingId === firmId,
+      `status=${dup.status} body=${JSON.stringify(dup.body)?.slice(0, 200)}`,
+    );
+    // Explicit confirm-anyway path.
+    const dupConfirmed = await call("POST", "/partners/firms", FP_ID, {
+      name: firmInput.name,
+      confirmDuplicate: true,
+    });
+    check(
+      "confirmDuplicate \u2192 201 creates anyway",
+      dupConfirmed.status === 201 && !!dupConfirmed.body?.id,
+      `status=${dupConfirmed.status}`,
+    );
+
+    // Transactional rollback: force the contact-stamping resource insert to
+    // fail via a PK collision on a row owned by ANOTHER org (invisible to the
+    // org-scoped existence check) — the firm, person and audit rows must all
+    // roll back.
+    const conflictEntryId = `pn870_${STAMP}`;
+    await db.insert(atelierPartnerFirmResources).values({
+      id: `pfr_pfc_${conflictEntryId}`,
+      orgId: `other_org_${STAMP}`,
+      partnerFirmId: "pfrm_foreign",
+      fullName: "Foreign Org Row",
+      status: "active",
+    });
+    const rollbackName = `PN Rollback Firm ${STAMP}`;
+    const contactName = `Rollback Contact ${STAMP}`;
+    const failed = await call("POST", "/partners/firms", FP_ID, {
+      name: rollbackName,
+      contacts: [{ id: conflictEntryId, name: contactName }],
+    });
+    check("forced stamping failure \u2192 5xx (not silent success)", failed.status >= 500, `status=${failed.status}`);
+    const firmLeft = await db
+      .select({ id: atelierPartnerFirms.id })
+      .from(atelierPartnerFirms)
+      .where(like(atelierPartnerFirms.name, rollbackName));
+    check("rollback: no orphaned firm row", firmLeft.length === 0, `found=${firmLeft.length}`);
+    const personLeft = await db
+      .select({ id: atelierPersons.id })
+      .from(atelierPersons)
+      .where(like(atelierPersons.displayName, contactName));
+    check("rollback: no orphaned person row", personLeft.length === 0, `found=${personLeft.length}`);
+    const auditLeft = await db
+      .select({ id: atelierAuditEvents.id })
+      .from(atelierAuditEvents)
+      .where(like(atelierAuditEvents.payloadSummary, `%${rollbackName}%`));
+    check("rollback: no orphaned audit event", auditLeft.length === 0, `found=${auditLeft.length}`);
+    // Sanity: contacts on a SUCCESSFUL create are stamped with person +
+    // promoted resource rows (transaction commits everything together).
+    const okEntryId = `pn870ok_${STAMP}`;
+    const okCreate = await call("POST", "/partners/firms", FP_ID, {
+      name: `PN TxOk Firm ${STAMP}`,
+      contacts: [{ id: okEntryId, name: `TxOk Contact ${STAMP}` }],
+    });
+    const okContacts = okCreate.body?.contacts ?? [];
+    const okResource = await db
+      .select({ id: atelierPartnerFirmResources.id })
+      .from(atelierPartnerFirmResources)
+      .where(like(atelierPartnerFirmResources.id, `pfr_pfc_${okEntryId}`));
+    check(
+      "successful create stamps contact person + resource row",
+      okCreate.status === 201 && !!okContacts[0]?.personId && okResource.length === 1,
+      `status=${okCreate.status} contacts=${JSON.stringify(okContacts)?.slice(0, 150)} res=${okResource.length}`,
+    );
 
     if (firmId) {
       const got = await call("GET", `/partners/firms/${firmId}`, CONS_ID);
@@ -459,6 +538,8 @@ async function main(): Promise<void> {
       await db.delete(atelierAllianceJointPipeline).where(inArray(atelierAllianceJointPipeline.opportunityId, [oppId]));
       await db.delete(atelierAllianceCertifications).where(like(atelierAllianceCertifications.credential, `%${STAMP}%`));
       await db.delete(atelierAllianceConflicts).where(like(atelierAllianceConflicts.headline, `%${STAMP}%`));
+      await db.delete(atelierPartnerFirmResources).where(like(atelierPartnerFirmResources.id, `pfr_pfc_pn870%_${STAMP}`));
+      await db.delete(atelierPersons).where(like(atelierPersons.displayName, `%${STAMP}%`));
       await db.delete(atelierPartnerFirms).where(like(atelierPartnerFirms.name, `%${STAMP}%`));
       await db.delete(atelierPartnerTargets).where(like(atelierPartnerTargets.name, `%${STAMP}%`));
       const { hardDeleteOpportunities } = await import("../../src/lib/atelier-opportunity-delete.ts");
