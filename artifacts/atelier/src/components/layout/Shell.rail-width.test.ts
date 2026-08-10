@@ -96,29 +96,29 @@ test("loadRailWidth: garbage value falls back to default", () => {
   assert.equal(loadRailWidth(), RAIL_DEFAULT_WIDTH);
 });
 
-/* ───────────── Drag round-trip (rail anchored right) ───────────── */
+/* ───────────── Drag round-trip (rail anchored LEFT, Task #897) ───────────── */
 
-test("computeRailDragWidth: dragging LEFT widens the rail", () => {
-  // start=400, deltaX=-100 (cursor moved 100px to the left)
-  // expected next width = 400 - (-100) = 500
-  assert.equal(computeRailDragWidth(400, -100, 1280), 500);
+test("computeRailDragWidth: dragging RIGHT widens the rail", () => {
+  // start=400, deltaX=+100 (cursor moved 100px to the right)
+  // expected next width = 400 + 100 = 500
+  assert.equal(computeRailDragWidth(400, 100, 1280), 500);
 });
 
-test("computeRailDragWidth: dragging RIGHT shrinks the rail", () => {
-  // start=400, deltaX=+50 → next = 350
-  assert.equal(computeRailDragWidth(400, 50, 1280), 350);
+test("computeRailDragWidth: dragging LEFT shrinks the rail", () => {
+  // start=400, deltaX=-50 → next = 350
+  assert.equal(computeRailDragWidth(400, -50, 1280), 350);
 });
 
 test("computeRailDragWidth: clamps to min/max during drag", () => {
-  assert.equal(computeRailDragWidth(330, 500, 1280), RAIL_MIN_WIDTH);
-  assert.equal(computeRailDragWidth(700, -800, 1920), RAIL_MAX_WIDTH);
+  assert.equal(computeRailDragWidth(330, -500, 1280), RAIL_MIN_WIDTH);
+  assert.equal(computeRailDragWidth(700, 800, 1920), RAIL_MAX_WIDTH);
 });
 
 /* ───────────── Keyboard semantics ───────────── */
 
-test("applyRailKeyAction: ArrowLeft widens by 16, ArrowRight shrinks by 16", () => {
-  assert.equal(applyRailKeyAction("ArrowLeft", 400, 1280), 416);
-  assert.equal(applyRailKeyAction("ArrowRight", 400, 1280), 384);
+test("applyRailKeyAction: ArrowRight widens by 16, ArrowLeft shrinks by 16", () => {
+  assert.equal(applyRailKeyAction("ArrowRight", 400, 1280), 416);
+  assert.equal(applyRailKeyAction("ArrowLeft", 400, 1280), 384);
 });
 
 test("applyRailKeyAction: Home jumps to MIN, End jumps to MAX", () => {
@@ -132,8 +132,8 @@ test("applyRailKeyAction: End respects 60% viewport cap", () => {
 });
 
 test("applyRailKeyAction: arrows clamp at bounds", () => {
-  assert.equal(applyRailKeyAction("ArrowRight", RAIL_MIN_WIDTH, 1280), RAIL_MIN_WIDTH);
-  assert.equal(applyRailKeyAction("ArrowLeft", RAIL_MAX_WIDTH, 1920), RAIL_MAX_WIDTH);
+  assert.equal(applyRailKeyAction("ArrowLeft", RAIL_MIN_WIDTH, 1280), RAIL_MIN_WIDTH);
+  assert.equal(applyRailKeyAction("ArrowRight", RAIL_MAX_WIDTH, 1920), RAIL_MAX_WIDTH);
 });
 
 test("applyRailKeyAction: returns null for unrelated keys", () => {
@@ -155,8 +155,8 @@ function simulateSetRailWidth(n: number, vp: number): number {
 
 test("persistence: drag → store → reload restores the user's width", () => {
   delete memStore["atelier-rail-width"];
-  // 1. user drags from 320 → 480 (deltaX = -160)
-  const dragged = computeRailDragWidth(320, -160, 1280);
+  // 1. user drags from 320 → 480 (deltaX = +160, rail anchored left)
+  const dragged = computeRailDragWidth(320, 160, 1280);
   assert.equal(dragged, 480);
   // 2. setter persists clamped value
   const stored = simulateSetRailWidth(dragged, 1280);

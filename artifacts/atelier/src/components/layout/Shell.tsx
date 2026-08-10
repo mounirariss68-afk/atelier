@@ -175,7 +175,7 @@ export function TopNav() {
   ];
 
   return (
-    <header className="atelier-topnav sticky top-0 z-40 w-full border-b border-border bg-bg/80 backdrop-blur supports-[backdrop-filter]:bg-bg/60">
+    <header className="atelier-topnav sticky top-0 z-40 w-full border-b border-card-border bg-bg/50 backdrop-blur-xl supports-[backdrop-filter]:bg-bg/50 shadow-lg shadow-black/10">
       <div className="flex h-14 items-center px-4 md:px-6 gap-6">
         <Link href="/" className="flex items-center gap-3">
           <Logo size="sm" />
@@ -359,14 +359,15 @@ export function computeRailDragWidth(
   deltaX: number,
   viewportW: number,
 ): number {
-  return clampRailWidth(startWidth - deltaX, viewportW);
+  // Rail is anchored LEFT (Task #897): dragging right (+deltaX) widens.
+  return clampRailWidth(startWidth + deltaX, viewportW);
 }
 
 /** Pure helper: keyboard handler for the rail resize separator.
  * Returns the next clamped width, or `null` if the key is not a
  * recognised resize key (caller should not preventDefault). Convention:
  * Home → minimum width (start of range), End → maximum (end of range);
- * ArrowLeft widens by 16px (rail anchored right), ArrowRight shrinks. */
+ * ArrowRight widens by 16px (rail anchored left), ArrowLeft shrinks. */
 export function applyRailKeyAction(
   key: string,
   currentWidth: number,
@@ -374,9 +375,9 @@ export function applyRailKeyAction(
 ): number | null {
   const upper = Math.min(RAIL_MAX_WIDTH, Math.floor(viewportW * 0.6));
   switch (key) {
-    case "ArrowLeft":
-      return clampRailWidth(currentWidth + 16, viewportW);
     case "ArrowRight":
+      return clampRailWidth(currentWidth + 16, viewportW);
+    case "ArrowLeft":
       return clampRailWidth(currentWidth - 16, viewportW);
     case "Home":
       return RAIL_MIN_WIDTH;
@@ -628,14 +629,27 @@ export function RightRail() {
   return (
     <aside
       className={cn(
-        "fixed right-0 top-14 bottom-0 z-30 border-l border-border bg-bg-deep/80 backdrop-blur flex flex-col",
+        // Task #897 — rail moved to the LEFT edge, frosted glass panel.
+        "fixed left-0 top-14 bottom-0 z-30 border-r border-card-border bg-bg-deep/60 backdrop-blur-2xl shadow-2xl shadow-black/20 flex flex-col",
         collapsed ? "transition-[width] duration-300 ease-[--ease] w-12" : "",
       )}
       style={collapsed ? undefined : { width: `${width}px` }}
       data-testid="right-rail"
       data-rail-width={collapsed ? RAIL_COLLAPSED_WIDTH : width}
     >
-      {/* Task #515 — drag handle on the left edge (only when expanded). */}
+      {/* Task #897 — rounded glass identity box above the chat: logo + wordmark. */}
+      {!collapsed && (
+        <div
+          className="m-3 mb-0 flex items-center gap-3 rounded-xl border border-card-border bg-white/5 px-3 py-2.5 shrink-0"
+          data-testid="rail-logo-box"
+        >
+          <Logo variant="mark" size="sm" />
+          <span className="font-mono text-[11px] font-semibold tracking-widest uppercase text-text">
+            Atelier
+          </span>
+        </div>
+      )}
+      {/* Task #515 — drag handle on the outer (right) edge (only when expanded). */}
       {!collapsed && (
         <div
           role="separator"
@@ -652,7 +666,7 @@ export function RightRail() {
           onPointerDown={onHandlePointerDown}
           onKeyDown={onHandleKey}
           className={cn(
-            "absolute left-0 top-0 bottom-0 w-1.5 -translate-x-1/2 cursor-col-resize z-40",
+            "absolute right-0 top-0 bottom-0 w-1.5 translate-x-1/2 cursor-col-resize z-40",
             "hover:bg-gold/40 focus:bg-gold/60 focus:outline-none transition-colors",
             "before:content-[''] before:absolute before:inset-y-0 before:-left-2 before:-right-2",
           )}
@@ -726,7 +740,7 @@ export function RightRail() {
           onClick={() => setCollapsed(!collapsed)}
           className="text-text-mute hover:text-text transition-colors p-1"
         >
-          {collapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
 
@@ -904,13 +918,15 @@ function FloatingCliBubble() {
     }
     setDismissed(true);
   };
-  // Compute side-offset to clear the right rail. Task #515 — rail is
-  // user-resizable, so we read the live width from RailContext rather
-  // than hard-coding the previous w-80 (20rem).
+  // Compute side-offset to clear the rail. Task #897 — the rail is now
+  // anchored to the LEFT edge, so the default (LTR) bottom-right bubble
+  // no longer collides with it; only the RTL bubble (bottom-left) needs
+  // the rail offset. Rail is user-resizable (Task #515), so we read the
+  // live width from RailContext.
   const railOffsetPx = railCollapsed ? RAIL_COLLAPSED_WIDTH : railWidth;
   const sideStyle: React.CSSProperties = dir === "rtl"
     ? { left: `calc(${railOffsetPx}px + 1.5rem)` }
-    : { right: `calc(${railOffsetPx}px + 1.5rem)` };
+    : { right: "1.5rem" };
   // Bottom offset: clear the toast lane (toasts cap around 5–6rem tall
   // each, but most show one at a time; 6rem is a safe baseline) plus
   // the safe-area inset on tablets.
@@ -1115,12 +1131,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <main
               className={cn(
                 "flex-1 w-full pb-20",
-                collapsed ? "pr-12 transition-[padding] duration-300" : "pr-12",
+                collapsed ? "pl-12 transition-[padding] duration-300" : "pl-12",
               )}
               style={
                 collapsed
                   ? undefined
-                  : { paddingRight: `max(3rem, ${railWidth}px)` }
+                  : { paddingLeft: `max(3rem, ${railWidth}px)` }
               }
             >
               {children}

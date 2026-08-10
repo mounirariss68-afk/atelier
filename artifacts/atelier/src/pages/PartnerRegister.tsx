@@ -179,7 +179,7 @@ export default function PartnerRegister() {
   );
 
   return (
-    <div className="min-h-screen bg-bg text-text flex flex-col items-center py-16 px-4">
+    <div className="min-h-screen text-text flex flex-col items-center py-16 px-4">
       <div className="w-full max-w-md space-y-10">
         <div className="text-center space-y-6">
           <div className="flex justify-center">

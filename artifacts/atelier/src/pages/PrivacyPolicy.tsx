@@ -43,7 +43,7 @@ function Li({ children }: { children: React.ReactNode }) {
 
 export default function PrivacyPolicy() {
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="min-h-screen">
       <div className="mx-auto max-w-2xl px-6 py-12">
         <div className="mb-8 flex items-center gap-3">
           <Logo variant="themed" />

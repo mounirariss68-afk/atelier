@@ -724,11 +724,11 @@ export function CommandBar(props: CommandBarProps) {
       aria-label="Riser command bar"
       className={cn(
         embedded
-          ? "relative w-full h-full bg-bg-deep flex flex-col overflow-hidden text-text"
+          ? "relative w-full h-full bg-transparent flex flex-col overflow-hidden text-text"
           : cn(
               "relative w-full sm:w-[760px] sm:max-w-[calc(100vw-2rem)]",
               "h-[88vh] sm:h-[640px] sm:max-h-[calc(100vh-3rem)]",
-              "bg-bg-deep border border-border sm:rounded-xl shadow-2xl",
+              "bg-bg-deep/75 backdrop-blur-2xl border border-card-border sm:rounded-2xl shadow-2xl",
               "flex flex-col overflow-hidden text-text",
             ),
       )}
@@ -965,7 +965,7 @@ function Header({
   hideClose?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-2 border-b border-border bg-bg-elevate">
+    <div className="flex items-center gap-3 px-3 py-2 border-b border-card-border bg-bg-elevate/50">
       <Sparkles className="w-4 h-4 text-gold shrink-0" aria-hidden />
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold leading-tight">The Atelier</div>
@@ -1065,7 +1065,7 @@ function Composer({
   return (
     <div
       className={cn(
-        "border-t border-border bg-bg-elevate p-3 shrink-0 relative",
+        "border-t border-card-border bg-bg-elevate/50 p-3 shrink-0 relative",
         dragOver && "ring-2 ring-gold ring-inset",
       )}
       onDragOver={(e) => {
