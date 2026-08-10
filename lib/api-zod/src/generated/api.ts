@@ -9020,6 +9020,122 @@ export const AtelierListPovVersionsResponse = zod.array(
   AtelierListPovVersionsResponseItem,
 );
 
+/**
+ * @summary Edit a POV's title, objective, or outline (outline editable only while in outline status)
+ */
+export const AtelierUpdatePovParams = zod.object({
+  povId: zod.coerce.string(),
+});
+
+export const AtelierUpdatePovBody = zod.object({
+  title: zod.string().optional(),
+  objective: zod.string().optional(),
+  outline: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        heading: zod.string(),
+        intent: zod.string(),
+        factIds: zod.array(zod.string()),
+      }),
+    )
+    .optional(),
+});
+
+export const AtelierUpdatePovResponse = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  title: zod.string(),
+  audience: zod.string().nullish(),
+  objective: zod.string().nullish(),
+  status: zod.enum(["outline", "drafting", "drafted", "approved"]),
+  outline: zod.array(
+    zod.object({
+      id: zod.string(),
+      heading: zod.string(),
+      intent: zod.string(),
+      factIds: zod.array(zod.string()),
+    }),
+  ),
+  currentVersionId: zod.string().nullish(),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Regenerate the outline with optional feedback (outline status only)
+ */
+export const AtelierRegeneratePovOutlineParams = zod.object({
+  povId: zod.coerce.string(),
+});
+
+export const AtelierRegeneratePovOutlineBody = zod.object({
+  feedback: zod.string().optional(),
+});
+
+export const AtelierRegeneratePovOutlineResponse = zod.object({
+  id: zod.string(),
+  oppId: zod.string(),
+  title: zod.string(),
+  audience: zod.string().nullish(),
+  objective: zod.string().nullish(),
+  status: zod.enum(["outline", "drafting", "drafted", "approved"]),
+  outline: zod.array(
+    zod.object({
+      id: zod.string(),
+      heading: zod.string(),
+      intent: zod.string(),
+      factIds: zod.array(zod.string()),
+    }),
+  ),
+  currentVersionId: zod.string().nullish(),
+  runId: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Request changes to a drafted POV — produces a new numbered version
+ */
+export const AtelierRevisePovParams = zod.object({
+  povId: zod.coerce.string(),
+});
+
+export const AtelierRevisePovBody = zod.object({
+  feedback: zod.string(),
+  baseVersionId: zod.string().optional(),
+});
+
+export const AtelierRevisePovResponse = zod.object({
+  id: zod.string(),
+  povId: zod.string(),
+  versionNumber: zod.number(),
+  body: zod.string(),
+  sections: zod.array(
+    zod.object({
+      id: zod.string().optional(),
+      heading: zod.string().optional(),
+      body: zod.string().optional(),
+      citationIds: zod.array(zod.string()).optional(),
+    }),
+  ),
+  citations: zod
+    .array(
+      zod.object({
+        id: zod.string().optional(),
+        topic: zod.string(),
+        statement: zod.string(),
+        sourceUrl: zod.string().nullish(),
+        sourceTitle: zod.string().nullish(),
+        snippet: zod.string().nullish(),
+        confidence: zod.enum(["green", "amber", "red"]),
+      }),
+    )
+    .optional(),
+  citationCoverage: zod.number().nullish(),
+  notes: zod.string().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
 export const AtelierListOpportunityMeetingsParams = zod.object({
   oppId: zod.coerce.string(),
 });

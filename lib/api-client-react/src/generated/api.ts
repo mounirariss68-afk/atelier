@@ -265,6 +265,7 @@ import type {
   AtelierRateCardDetail,
   AtelierRateCardRow,
   AtelierRateCardRowInput,
+  AtelierRegeneratePovOutlineInput,
   AtelierRejectProposalSectionInput,
   AtelierRemindSignatureRequest200,
   AtelierReplaceBankSignatories200,
@@ -275,6 +276,7 @@ import type {
   AtelierReplaceMyDocumentScanBody,
   AtelierResearchFact,
   AtelierReviewReleaseInput,
+  AtelierRevisePovInput,
   AtelierRevokeDocumentAccess200,
   AtelierRosterPersonEdit,
   AtelierRosterPersonEditResponse,
@@ -331,6 +333,7 @@ import type {
   AtelierUpdateMyDocument200,
   AtelierUpdateMyEmergencyContact200,
   AtelierUpdateOpportunityInput,
+  AtelierUpdatePovInput,
   AtelierUploadCandidateDocumentBody,
   AtelierUploadDocumentVersion201,
   AtelierUploadDocumentVersionBody,
@@ -14515,6 +14518,268 @@ export function useAtelierListPovVersions<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Edit a POV's title, objective, or outline (outline editable only while in outline status)
+ */
+export const getAtelierUpdatePovUrl = (povId: string) => {
+  return `/api/atelier/povs/${povId}`;
+};
+
+export const atelierUpdatePov = async (
+  povId: string,
+  atelierUpdatePovInput: AtelierUpdatePovInput,
+  options?: RequestInit,
+): Promise<AtelierPov> => {
+  return customFetch<AtelierPov>(getAtelierUpdatePovUrl(povId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierUpdatePovInput),
+  });
+};
+
+export const getAtelierUpdatePovMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePov>>,
+    TError,
+    { povId: string; data: BodyType<AtelierUpdatePovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierUpdatePov>>,
+  TError,
+  { povId: string; data: BodyType<AtelierUpdatePovInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierUpdatePov"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierUpdatePov>>,
+    { povId: string; data: BodyType<AtelierUpdatePovInput> }
+  > = (props) => {
+    const { povId, data } = props ?? {};
+
+    return atelierUpdatePov(povId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierUpdatePovMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierUpdatePov>>
+>;
+export type AtelierUpdatePovMutationBody = BodyType<AtelierUpdatePovInput>;
+export type AtelierUpdatePovMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Edit a POV's title, objective, or outline (outline editable only while in outline status)
+ */
+export const useAtelierUpdatePov = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierUpdatePov>>,
+    TError,
+    { povId: string; data: BodyType<AtelierUpdatePovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierUpdatePov>>,
+  TError,
+  { povId: string; data: BodyType<AtelierUpdatePovInput> },
+  TContext
+> => {
+  return useMutation(getAtelierUpdatePovMutationOptions(options));
+};
+
+/**
+ * @summary Regenerate the outline with optional feedback (outline status only)
+ */
+export const getAtelierRegeneratePovOutlineUrl = (povId: string) => {
+  return `/api/atelier/povs/${povId}/outline/regenerate`;
+};
+
+export const atelierRegeneratePovOutline = async (
+  povId: string,
+  atelierRegeneratePovOutlineInput: AtelierRegeneratePovOutlineInput,
+  options?: RequestInit,
+): Promise<AtelierPov> => {
+  return customFetch<AtelierPov>(getAtelierRegeneratePovOutlineUrl(povId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierRegeneratePovOutlineInput),
+  });
+};
+
+export const getAtelierRegeneratePovOutlineMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRegeneratePovOutline>>,
+    TError,
+    { povId: string; data: BodyType<AtelierRegeneratePovOutlineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRegeneratePovOutline>>,
+  TError,
+  { povId: string; data: BodyType<AtelierRegeneratePovOutlineInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRegeneratePovOutline"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRegeneratePovOutline>>,
+    { povId: string; data: BodyType<AtelierRegeneratePovOutlineInput> }
+  > = (props) => {
+    const { povId, data } = props ?? {};
+
+    return atelierRegeneratePovOutline(povId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRegeneratePovOutlineMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRegeneratePovOutline>>
+>;
+export type AtelierRegeneratePovOutlineMutationBody =
+  BodyType<AtelierRegeneratePovOutlineInput>;
+export type AtelierRegeneratePovOutlineMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Regenerate the outline with optional feedback (outline status only)
+ */
+export const useAtelierRegeneratePovOutline = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRegeneratePovOutline>>,
+    TError,
+    { povId: string; data: BodyType<AtelierRegeneratePovOutlineInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRegeneratePovOutline>>,
+  TError,
+  { povId: string; data: BodyType<AtelierRegeneratePovOutlineInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRegeneratePovOutlineMutationOptions(options));
+};
+
+/**
+ * @summary Request changes to a drafted POV — produces a new numbered version
+ */
+export const getAtelierRevisePovUrl = (povId: string) => {
+  return `/api/atelier/povs/${povId}/revise`;
+};
+
+export const atelierRevisePov = async (
+  povId: string,
+  atelierRevisePovInput: AtelierRevisePovInput,
+  options?: RequestInit,
+): Promise<AtelierPovVersion> => {
+  return customFetch<AtelierPovVersion>(getAtelierRevisePovUrl(povId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(atelierRevisePovInput),
+  });
+};
+
+export const getAtelierRevisePovMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevisePov>>,
+    TError,
+    { povId: string; data: BodyType<AtelierRevisePovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof atelierRevisePov>>,
+  TError,
+  { povId: string; data: BodyType<AtelierRevisePovInput> },
+  TContext
+> => {
+  const mutationKey = ["atelierRevisePov"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof atelierRevisePov>>,
+    { povId: string; data: BodyType<AtelierRevisePovInput> }
+  > = (props) => {
+    const { povId, data } = props ?? {};
+
+    return atelierRevisePov(povId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AtelierRevisePovMutationResult = NonNullable<
+  Awaited<ReturnType<typeof atelierRevisePov>>
+>;
+export type AtelierRevisePovMutationBody = BodyType<AtelierRevisePovInput>;
+export type AtelierRevisePovMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Request changes to a drafted POV — produces a new numbered version
+ */
+export const useAtelierRevisePov = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof atelierRevisePov>>,
+    TError,
+    { povId: string; data: BodyType<AtelierRevisePovInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof atelierRevisePov>>,
+  TError,
+  { povId: string; data: BodyType<AtelierRevisePovInput> },
+  TContext
+> => {
+  return useMutation(getAtelierRevisePovMutationOptions(options));
+};
 
 export const getAtelierListOpportunityMeetingsUrl = (oppId: string) => {
   return `/api/atelier/opportunities/${oppId}/meetings`;

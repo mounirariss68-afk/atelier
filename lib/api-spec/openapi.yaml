@@ -3480,6 +3480,75 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/AtelierPovVersion"
+  /atelier/povs/{povId}:
+    patch:
+      operationId: atelierUpdatePov
+      tags: [atelier]
+      summary: Edit a POV's title, objective, or outline (outline editable only while in outline status)
+      parameters:
+        - in: path
+          name: povId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierUpdatePovInput"
+      responses:
+        "200":
+          description: Updated POV
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPov"
+  /atelier/povs/{povId}/outline/regenerate:
+    post:
+      operationId: atelierRegeneratePovOutline
+      tags: [atelier]
+      summary: Regenerate the outline with optional feedback (outline status only)
+      parameters:
+        - in: path
+          name: povId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierRegeneratePovOutlineInput"
+      responses:
+        "200":
+          description: POV with regenerated outline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPov"
+  /atelier/povs/{povId}/revise:
+    post:
+      operationId: atelierRevisePov
+      tags: [atelier]
+      summary: Request changes to a drafted POV — produces a new numbered version
+      parameters:
+        - in: path
+          name: povId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AtelierRevisePovInput"
+      responses:
+        "200":
+          description: New POV version incorporating the requested changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AtelierPovVersion"
   /atelier/opportunities/{oppId}/meetings:
     get:
       operationId: atelierListOpportunityMeetings
@@ -10946,6 +11015,27 @@ components:
         title: { type: string }
         audience: { type: string }
         objective: { type: string }
+
+    AtelierUpdatePovInput:
+      type: object
+      properties:
+        title: { type: string }
+        objective: { type: string }
+        outline:
+          type: array
+          items: { $ref: "#/components/schemas/AtelierPovOutlineSection" }
+
+    AtelierRegeneratePovOutlineInput:
+      type: object
+      properties:
+        feedback: { type: string }
+
+    AtelierRevisePovInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback: { type: string }
+        baseVersionId: { type: string }
 
     AtelierPovOutlineSection:
       type: object

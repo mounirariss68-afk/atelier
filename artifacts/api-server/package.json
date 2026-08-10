@@ -86,7 +86,8 @@
     "test:alliance": "tsx ./tests/alliance/run.ts",
     "test:expense-edit": "tsx ./tests/expense-edit/run.ts",
     "test:finance-chat-lookup": "tsx ./tests/crm/finance-chat-lookup-probe.ts",
-    "test:security-alerts": "tsx ./tests/security-alerts/run.ts"
+    "test:security-alerts": "tsx ./tests/security-alerts/run.ts",
+    "test:pov-revision": "tsx ./tests/crm/pov-revision-probe.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

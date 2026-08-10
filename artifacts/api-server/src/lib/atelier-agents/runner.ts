@@ -1046,6 +1046,10 @@ export async function runPovOutline(args: {
   promotedFacts: AgentFact[];
   triggeredByUserId: string | null;
   actorLabel: string;
+  /** Free-text reviewer feedback when regenerating an existing outline. */
+  revisionFeedback?: string;
+  /** The prior outline being revised (headings/intents), for context. */
+  priorOutline?: PovOutline["sections"];
 }): Promise<{ runId: string; outline: PovOutline; costUsd: number }> {
   const result = await runAgent(
     {
@@ -1064,15 +1068,21 @@ export async function runPovOutline(args: {
     },
     async (ctx) => {
       const system = loadPrompt("pov_author");
-      await ctx.progress(30, "Drafting outline");
+      await ctx.progress(30, args.revisionFeedback ? "Revising outline" : "Drafting outline");
+      const directive = args.revisionFeedback
+        ? "\n\n## Run-time directive\nRevise the PRIOR outline to address the reviewer feedback below, then return ONLY the Phase A outline JSON."
+        : "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.";
       const { value, costUsd } = await callClaudeJson<PovOutline>(
         "claude-haiku-4-5",
-        system + "\n\n## Run-time directive\nReturn ONLY the Phase A outline JSON.",
+        system + directive,
         JSON.stringify({
           opportunity: args.opportunityName,
           audience: args.audience,
           objective: args.objective,
           approvedFacts: args.promotedFacts,
+          ...(args.revisionFeedback
+            ? { reviewerFeedback: args.revisionFeedback, priorOutline: args.priorOutline ?? [] }
+            : {}),
         }),
       );
       return {
@@ -1093,6 +1103,10 @@ export async function runPovDraft(args: {
   promotedFacts: AgentFact[];
   triggeredByUserId: string | null;
   actorLabel: string;
+  /** Free-text reviewer feedback when revising an existing draft. */
+  revisionFeedback?: string;
+  /** The prior draft HTML being revised, for context. */
+  priorDraftHtml?: string;
 }): Promise<{ runId: string; draft: PovDraft; costUsd: number }> {
   const result = await runAgent(
     {
@@ -1111,11 +1125,20 @@ export async function runPovDraft(args: {
     },
     async (ctx) => {
       const system = loadPrompt("pov_author");
-      await ctx.progress(40, "Writing sections");
+      await ctx.progress(40, args.revisionFeedback ? "Revising sections" : "Writing sections");
+      const directive = args.revisionFeedback
+        ? "\n\n## Run-time directive\nRevise the PRIOR draft to address the reviewer feedback below. Execute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }."
+        : "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.";
       const { value, costUsd } = await callClaudeJson<PovDraft>(
         "claude-sonnet-4-5",
-        system + "\n\n## Run-time directive\nExecute Phase B (sections), then Phase C (critic), then Phase D (stylist) and return the final composite JSON: { sections, html, citationCoverage, voiceFlags, wordCount }.",
-        JSON.stringify({ outline: args.outline, facts: args.promotedFacts }),
+        system + directive,
+        JSON.stringify({
+          outline: args.outline,
+          facts: args.promotedFacts,
+          ...(args.revisionFeedback
+            ? { reviewerFeedback: args.revisionFeedback, priorDraftHtml: args.priorDraftHtml ?? "" }
+            : {}),
+        }),
       );
       await ctx.progress(85, "Stylist polish");
       return {

@@ -54,6 +54,9 @@ import {
   AtelierRunPursuitScoutBody,
   AtelierPromoteResearchFactBody,
   AtelierStartPovBody,
+  AtelierUpdatePovBody,
+  AtelierRegeneratePovOutlineBody,
+  AtelierRevisePovBody,
   AtelierSubmitMeetingBody,
   AtelierRecordAgentDecisionBody,
   AtelierCreateStageTransitionBody,
@@ -1301,6 +1304,18 @@ router.post("/povs/:povId/draft", async (req, res) => {
     res.status(404).json({ error: "pov-not-found" });
     return;
   }
+  // Replay guard: the draft chain may only run while the POV is still an
+  // outline. Once a draft exists the status is "drafted"/"approved", so a
+  // repeated call to this endpoint cannot mint further versions without a
+  // fresh outline approval — reviewers use the /revise route instead.
+  if (pov.status !== "outline") {
+    res.status(409).json({
+      error: "pov-already-drafted",
+      reason:
+        "This POV already has a draft. Use 'request changes' (revise) to create a new numbered version.",
+    });
+    return;
+  }
   // Outline-approval gate: a human must have recorded an `approve` decision
   // on the outline run before the section/critic/stylist chain may execute.
   if (!pov.runId) {
@@ -1438,6 +1453,296 @@ router.get("/povs/:povId/versions", async (req, res) => {
       createdAt: v.createdAt.toISOString(),
     })),
   );
+});
+
+// @cli-skip: pending Task #340 read-parity migration
+// Edit a POV's title / objective / outline. Title and objective may be edited
+// at any status; the outline may only be edited while the POV is still an
+// outline (after a draft exists the outline is frozen — use /revise).
+router.patch("/povs/:povId", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const parsed = AtelierUpdatePovBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  if (!pov || pov.deletedAt) {
+    res.status(404).json({ error: "pov-not-found" });
+    return;
+  }
+  const patch: Partial<typeof atelierPovs.$inferInsert> = {};
+  const changed: Record<string, unknown> = {};
+  if (typeof parsed.data.title === "string" && parsed.data.title.trim() && parsed.data.title !== pov.title) {
+    patch.title = parsed.data.title.trim();
+    changed.title = parsed.data.title.trim();
+  }
+  if (typeof parsed.data.objective === "string" && parsed.data.objective !== pov.objective) {
+    patch.objective = parsed.data.objective;
+    changed.objective = parsed.data.objective;
+  }
+  if (parsed.data.outline !== undefined) {
+    if (pov.status !== "outline") {
+      res.status(409).json({
+        error: "outline-frozen",
+        reason: "The outline can only be edited before a draft exists. Use 'request changes' to revise a drafted POV.",
+      });
+      return;
+    }
+    patch.outline = parsed.data.outline as never;
+    changed.outline = parsed.data.outline;
+  }
+  if (Object.keys(patch).length === 0) {
+    res.json(povWire(pov));
+    return;
+  }
+  patch.updatedAt = new Date();
+  const [updated] = await db
+    .update(atelierPovs)
+    .set(patch)
+    .where(eq(atelierPovs.id, pov.id))
+    .returning();
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "pov",
+    entityId: pov.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "pov.update",
+    payload: { changes: changed } as never,
+    payloadSummary: `${me.name} updated POV "${updated.title}".`,
+  });
+  res.json(povWire(updated));
+});
+
+// @cli-skip: pending Task #340 read-parity migration
+// Regenerate the outline (optionally incorporating reviewer feedback) while the
+// POV is still in outline status. A fresh outline run is recorded so a new
+// human approval is required before drafting.
+router.post("/povs/:povId/outline/regenerate", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const parsed = AtelierRegeneratePovOutlineBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  if (!pov || pov.deletedAt) {
+    res.status(404).json({ error: "pov-not-found" });
+    return;
+  }
+  if (pov.status !== "outline") {
+    res.status(409).json({
+      error: "pov-not-in-outline",
+      reason: "The outline can only be regenerated before a draft exists. Use 'request changes' to revise a drafted POV.",
+    });
+    return;
+  }
+  const opp = await loadOpp(pov.opportunityId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const factRows = await db
+    .select()
+    .from(atelierResearchFacts)
+    .where(
+      and(
+        eq(atelierResearchFacts.opportunityId, opp.id),
+        eq(atelierResearchFacts.promoted, true),
+        isNull(atelierResearchFacts.deletedAt),
+      ),
+    );
+  const promoted: AgentFact[] = factRows.map((f) => ({
+    id: f.id,
+    topic: f.topic,
+    statement: f.statement,
+    sourceUrl: f.sourceUrl ?? undefined,
+    sourceTitle: f.sourceTitle ?? undefined,
+    snippet: f.snippet ?? undefined,
+    confidence: f.confidence as "green" | "amber" | "red",
+  }));
+  if (promoted.length === 0) {
+    res.status(412).json({
+      error: "no-promoted-facts",
+      reason: "No research facts are promoted for this opportunity. Promote at least one fact before regenerating the outline.",
+    });
+    return;
+  }
+  const { runId, outline } = await runPovOutline({
+    opportunityId: opp.id,
+    opportunityName: opp.name,
+    audience: pov.audience ?? "",
+    objective: pov.objective ?? "",
+    promotedFacts: promoted,
+    triggeredByUserId: me.id,
+    actorLabel: "POV Author · Outliner (revision)",
+    revisionFeedback: parsed.data.feedback?.trim() || undefined,
+    priorOutline: (pov.outline as PovOutline["sections"]) ?? [],
+  });
+  const [updated] = await db
+    .update(atelierPovs)
+    .set({ outline: outline.sections as never, runId, updatedAt: new Date() })
+    .where(eq(atelierPovs.id, pov.id))
+    .returning();
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "pov",
+    entityId: pov.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "pov.outline.regenerate",
+    payload: { feedback: parsed.data.feedback ?? null } as never,
+    payloadSummary: `${me.name} regenerated the outline for POV "${updated.title}".`,
+  });
+  res.json(povWire(updated));
+});
+
+// @cli-skip: pending Task #340 read-parity migration
+// Request changes to a drafted POV — reruns the draft chain with reviewer
+// feedback and stores a new numbered version, keeping prior versions intact.
+router.post("/povs/:povId/revise", async (req, res) => {
+  const me = ensurePersona(req, res);
+  if (!me) return;
+  const parsed = AtelierRevisePovBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid-body" });
+    return;
+  }
+  const feedback = parsed.data.feedback.trim();
+  if (!feedback) {
+    res.status(400).json({ error: "invalid-body", reason: "Feedback is required to revise a POV." });
+    return;
+  }
+  const [pov] = await db.select().from(atelierPovs).where(eq(atelierPovs.id, req.params.povId));
+  if (!pov || pov.deletedAt) {
+    res.status(404).json({ error: "pov-not-found" });
+    return;
+  }
+  // A revision only makes sense once a draft exists.
+  if (pov.status !== "drafted" && pov.status !== "approved") {
+    res.status(409).json({
+      error: "no-draft-to-revise",
+      reason: "This POV has no draft yet. Approve the outline and generate a draft first.",
+    });
+    return;
+  }
+  const versions = await db
+    .select()
+    .from(atelierPovVersions)
+    .where(and(eq(atelierPovVersions.povId, pov.id), isNull(atelierPovVersions.deletedAt)))
+    .orderBy(desc(atelierPovVersions.versionNumber));
+  if (versions.length === 0) {
+    res.status(409).json({ error: "no-draft-to-revise", reason: "This POV has no draft version to revise." });
+    return;
+  }
+  const base =
+    (parsed.data.baseVersionId && versions.find((v) => v.id === parsed.data.baseVersionId)) ||
+    versions.find((v) => v.id === pov.currentVersionId) ||
+    versions[0];
+  const opp = await loadOpp(pov.opportunityId);
+  if (!opp) {
+    res.status(404).json({ error: "opportunity-not-found" });
+    return;
+  }
+  const factRows = await db
+    .select()
+    .from(atelierResearchFacts)
+    .where(
+      and(
+        eq(atelierResearchFacts.opportunityId, opp.id),
+        eq(atelierResearchFacts.promoted, true),
+        isNull(atelierResearchFacts.deletedAt),
+      ),
+    );
+  const promoted: AgentFact[] = factRows.map((f) => ({
+    id: f.id,
+    topic: f.topic,
+    statement: f.statement,
+    sourceUrl: f.sourceUrl ?? undefined,
+    sourceTitle: f.sourceTitle ?? undefined,
+    snippet: f.snippet ?? undefined,
+    confidence: f.confidence as "green" | "amber" | "red",
+  }));
+  if (promoted.length === 0) {
+    res.status(412).json({
+      error: "no-promoted-facts",
+      reason: "No research facts are promoted for this opportunity. Promote at least one fact before revising the POV.",
+    });
+    return;
+  }
+  const outline: PovOutline = {
+    title: pov.title,
+    thesis: pov.objective ?? "",
+    sections: (pov.outline as PovOutline["sections"]) ?? [],
+  };
+  const { runId, draft } = await runPovDraft({
+    opportunityId: opp.id,
+    opportunityName: opp.name,
+    outline,
+    promotedFacts: promoted,
+    triggeredByUserId: me.id,
+    actorLabel: "POV Author · Revision (Sections+Critic+Stylist)",
+    revisionFeedback: feedback,
+    priorDraftHtml: base.body ?? "",
+  });
+  const POV_MIN_CITATION_COVERAGE = 0.6;
+  if (typeof draft.citationCoverage === "number" && draft.citationCoverage < POV_MIN_CITATION_COVERAGE) {
+    res.status(422).json({
+      error: "insufficient-citation-coverage",
+      citationCoverage: draft.citationCoverage,
+      minimum: POV_MIN_CITATION_COVERAGE,
+      reason: `POV revision cites facts in only ${Math.round(draft.citationCoverage * 100)}% of sections (minimum ${Math.round(POV_MIN_CITATION_COVERAGE * 100)}%). Promote more facts or tighten the outline before revising.`,
+    });
+    return;
+  }
+  const next = (versions.reduce((m, v) => Math.max(m, v.versionNumber), 0) ?? 0) + 1;
+  const versionId = rid("povv");
+  const [version] = await db
+    .insert(atelierPovVersions)
+    .values({
+      id: versionId,
+      povId: pov.id,
+      versionNumber: next,
+      body: draft.html,
+      sections: draft.sections as never,
+      citations: promoted as never,
+      citationCoverage: draft.citationCoverage,
+      notes: draft.voiceFlags?.join(" · ") || null,
+      createdByUserId: me.id,
+    })
+    .returning();
+  // A new revision resets the POV to "drafted" so it must be re-approved.
+  await db
+    .update(atelierPovs)
+    .set({ status: "drafted", currentVersionId: versionId, runId, updatedAt: new Date() })
+    .where(eq(atelierPovs.id, pov.id));
+  await db.insert(atelierAuditEvents).values({
+    id: rid("aud"),
+    entityType: "pov",
+    entityId: pov.id,
+    actorType: "human",
+    actorId: me.id,
+    actorLabel: me.name,
+    action: "pov.revise",
+    payload: { feedback, baseVersionNumber: base.versionNumber, newVersionNumber: next } as never,
+    payloadSummary: `${me.name} revised POV "${pov.title}" → v${next}.`,
+  });
+  res.json({
+    id: version.id,
+    povId: version.povId,
+    versionNumber: version.versionNumber,
+    body: version.body,
+    sections: version.sections,
+    citations: version.citations,
+    citationCoverage: version.citationCoverage,
+    notes: version.notes,
+    createdAt: version.createdAt.toISOString(),
+  });
 });
 
 // =============================================================
@@ -1769,11 +2074,11 @@ router.post("/agent-runs/:runId/decision", async (req, res) => {
         .update(atelierMeetings)
         .set({ status: "official", committedAt: ts, committedByUserId: me.id, updatedAt: ts })
         .where(and(eq(atelierMeetings.runId, r.id), isNull(atelierMeetings.deletedAt)));
-    } else if (
-      r.agentId === "ag_pov_author" ||
-      r.agentId === "pov_author" ||
-      r.agentId === "ag_pov_draft"
-    ) {
+    } else if (r.agentId === "ag_pov_draft") {
+      // Only approving the *draft* run marks the POV approved. Approving the
+      // outline run (ag_pov_author) merely unlocks drafting — it must not flip
+      // the POV out of "outline" status, or the draft route's status guard
+      // would reject the very draft the approval was meant to authorise.
       await db
         .update(atelierPovs)
         .set({ status: "approved", updatedAt: ts })
@@ -2206,15 +2511,42 @@ router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
     return;
   }
 
-  // Fetch the most recent POV that has a drafted version.
-  const [pov] = await db
-    .select()
-    .from(atelierPovs)
-    .where(and(eq(atelierPovs.opportunityId, oppId), isNull(atelierPovs.deletedAt)))
-    .orderBy(desc(atelierPovs.createdAt))
-    .limit(1);
+  // Export the POV the user is looking at when `?povId=` is supplied; fall back
+  // to the most-recently-created POV only when no id is given. A `?versionId=`
+  // may pin a specific historical version, else the current pointer is used.
+  const reqPovId = typeof req.query.povId === "string" ? req.query.povId : null;
+  const reqVersionId = typeof req.query.versionId === "string" ? req.query.versionId : null;
 
-  if (!pov || !pov.currentVersionId) {
+  const pov = reqPovId
+    ? (
+        await db
+          .select()
+          .from(atelierPovs)
+          .where(
+            and(
+              eq(atelierPovs.id, reqPovId),
+              eq(atelierPovs.opportunityId, oppId),
+              isNull(atelierPovs.deletedAt),
+            ),
+          )
+          .limit(1)
+      )[0]
+    : (
+        await db
+          .select()
+          .from(atelierPovs)
+          .where(and(eq(atelierPovs.opportunityId, oppId), isNull(atelierPovs.deletedAt)))
+          .orderBy(desc(atelierPovs.createdAt))
+          .limit(1)
+      )[0];
+
+  if (!pov) {
+    res.status(404).json({ error: "no-pov-version" });
+    return;
+  }
+
+  const targetVersionId = reqVersionId ?? pov.currentVersionId;
+  if (!targetVersionId) {
     res.status(404).json({ error: "no-pov-version" });
     return;
   }
@@ -2222,7 +2554,13 @@ router.get("/opportunities/:oppId/pov.pdf", async (req, res) => {
   const [version] = await db
     .select()
     .from(atelierPovVersions)
-    .where(and(eq(atelierPovVersions.id, pov.currentVersionId), isNull(atelierPovVersions.deletedAt)));
+    .where(
+      and(
+        eq(atelierPovVersions.id, targetVersionId),
+        eq(atelierPovVersions.povId, pov.id),
+        isNull(atelierPovVersions.deletedAt),
+      ),
+    );
 
   if (!version) {
     res.status(404).json({ error: "no-pov-version" });

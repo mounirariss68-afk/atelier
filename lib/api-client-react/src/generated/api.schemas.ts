@@ -5971,6 +5971,11 @@ export interface AtelierPovOutlineSection {
   factIds: string[];
 }
 
+export interface AtelierUpdatePovInput {
+  title?: string;
+  objective?: string;
+  outline?: AtelierPovOutlineSection[];
+}
 export type AtelierPovStatus =
   (typeof AtelierPovStatus)[keyof typeof AtelierPovStatus];
 
@@ -9396,3 +9401,12 @@ export type AtelierListPartnerFirmQuotedDeals200 = {
 export type AtelierListJointPipelineParams = {
   opportunityId?: string;
 };
+
+export interface AtelierRegeneratePovOutlineInput {
+  feedback?: string;
+}
+
+export interface AtelierRevisePovInput {
+  feedback: string;
+  baseVersionId?: string;
+}

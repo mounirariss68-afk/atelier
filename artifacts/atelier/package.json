@@ -90,6 +90,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@types/qrcode": "1.5.5",
     "@workspace/chat-core": "workspace:*",
+    "dompurify": "^3.4.13",
     "libphonenumber-js": "^1.13.9",
     "mermaid": "^11.15.0",
     "pdfjs-dist": "^6.1.200",
